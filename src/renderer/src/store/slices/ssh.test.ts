@@ -53,6 +53,17 @@ describe('createSshSlice', () => {
         [removedPtyId]: { previousAccountLabel: 'Old', nextAccountLabel: 'New' },
         [otherPtyId]: { previousAccountLabel: 'Other old', nextAccountLabel: 'Other new' }
       },
+      pendingClaudePaneRestartIds: {
+        [removedPtyId]: true,
+        [otherPtyId]: true
+      },
+      claudeRestartNoticeByPtyId: {
+        [removedPtyId]: { previousAccountLabel: 'Claude old', nextAccountLabel: 'Claude new' },
+        [otherPtyId]: {
+          previousAccountLabel: 'Other Claude old',
+          nextAccountLabel: 'Other Claude new'
+        }
+      },
       sshConnectionStates: new Map([
         [targetId, { targetId, status: 'disconnected', error: null, reconnectAttempt: 0 }],
         [
@@ -126,6 +137,8 @@ describe('createSshSlice', () => {
     expect(state.lastKnownRelayPtyIdByTabId['tab-stale-last-known']).toBeUndefined()
     expect(state.pendingCodexPaneRestartIds[removedPtyId]).toBeUndefined()
     expect(state.codexRestartNoticeByPtyId[removedPtyId]).toBeUndefined()
+    expect(state.pendingClaudePaneRestartIds[removedPtyId]).toBeUndefined()
+    expect(state.claudeRestartNoticeByPtyId[removedPtyId]).toBeUndefined()
 
     expect(state.sshConnectionStates.get(otherTargetId)?.status).toBe('connected')
     expect(state.sshTargetLabels.get(otherTargetId)).toBe('Other target')
@@ -140,6 +153,11 @@ describe('createSshSlice', () => {
     expect(state.codexRestartNoticeByPtyId[otherPtyId]).toEqual({
       previousAccountLabel: 'Other old',
       nextAccountLabel: 'Other new'
+    })
+    expect(state.pendingClaudePaneRestartIds[otherPtyId]).toBe(true)
+    expect(state.claudeRestartNoticeByPtyId[otherPtyId]).toEqual({
+      previousAccountLabel: 'Other Claude old',
+      nextAccountLabel: 'Other Claude new'
     })
   })
 

@@ -71,6 +71,50 @@ import {
   type AgentStatusWorktreeShutdownReason
 } from './agent-status'
 
+type AccountRestartNotice = {
+  previousAccountLabel: string
+  nextAccountLabel: string
+}
+
+type AccountRestartNoticeInput = AccountRestartNotice & {
+  ptyId: string
+  forceRestart?: boolean
+}
+
+function applyAccountRestartNotices(
+  notices: AccountRestartNoticeInput[],
+  existingNoticesByPtyId: Record<string, AccountRestartNotice>,
+  existingPendingRestartIds: Record<string, true>
+): {
+  restartNoticeByPtyId: Record<string, AccountRestartNotice>
+  pendingPaneRestartIds: Record<string, true>
+} {
+  const next = { ...existingNoticesByPtyId }
+  const nextPendingPaneRestartIds = { ...existingPendingRestartIds }
+  for (const notice of notices) {
+    const existing = next[notice.ptyId]
+    const previousAccountLabel = existing?.previousAccountLabel ?? notice.previousAccountLabel
+
+    // Why: a live pane keeps the account it originally launched with until it
+    // restarts. Repeated switches must preserve that origin so A -> B -> A
+    // clears the stale marker instead of asking for an unnecessary restart.
+    if (!notice.forceRestart && previousAccountLabel === notice.nextAccountLabel) {
+      delete next[notice.ptyId]
+      delete nextPendingPaneRestartIds[notice.ptyId]
+      continue
+    }
+
+    next[notice.ptyId] = {
+      previousAccountLabel,
+      nextAccountLabel: notice.nextAccountLabel
+    }
+  }
+  return {
+    restartNoticeByPtyId: next,
+    pendingPaneRestartIds: nextPendingPaneRestartIds
+  }
+}
+
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
   for (const tab of tabs) {
@@ -354,10 +398,9 @@ export type TerminalSlice = {
   unreadAgentCompletionPanes: Record<string, true>
   suppressedPtyExitIds: Record<string, true>
   pendingCodexPaneRestartIds: Record<string, true>
-  codexRestartNoticeByPtyId: Record<
-    string,
-    { previousAccountLabel: string; nextAccountLabel: string }
-  >
+  codexRestartNoticeByPtyId: Record<string, AccountRestartNotice>
+  pendingClaudePaneRestartIds: Record<string, true>
+  claudeRestartNoticeByPtyId: Record<string, AccountRestartNotice>
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
@@ -529,10 +572,12 @@ export type TerminalSlice = {
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   queueCodexPaneRestarts: (ptyIds: string[]) => void
   consumePendingCodexPaneRestart: (ptyId: string) => boolean
-  markCodexRestartNotices: (
-    notices: { ptyId: string; previousAccountLabel: string; nextAccountLabel: string }[]
-  ) => void
+  markCodexRestartNotices: (notices: AccountRestartNoticeInput[]) => void
   clearCodexRestartNotice: (ptyId: string) => void
+  queueClaudePaneRestarts: (ptyIds: string[]) => void
+  consumePendingClaudePaneRestart: (ptyId: string) => boolean
+  markClaudeRestartNotices: (notices: AccountRestartNoticeInput[]) => void
+  clearClaudeRestartNotice: (ptyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
@@ -628,6 +673,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   suppressedPtyExitIds: {},
   pendingCodexPaneRestartIds: {},
   codexRestartNoticeByPtyId: {},
+  pendingClaudePaneRestartIds: {},
+  claudeRestartNoticeByPtyId: {},
   expandedPaneByTabId: {},
   canExpandPaneByTabId: {},
   terminalLayoutsByTabId: {},
@@ -1793,13 +1840,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       nextPtyIdsByTabId[tabId] = remainingPtyIds
       const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+      const nextPendingClaudePaneRestartIds = { ...s.pendingClaudePaneRestartIds }
+      const nextClaudeRestartNoticeByPtyId = { ...s.claudeRestartNoticeByPtyId }
       if (ptyId) {
         delete nextPendingCodexPaneRestartIds[ptyId]
         delete nextCodexRestartNoticeByPtyId[ptyId]
+        delete nextPendingClaudePaneRestartIds[ptyId]
+        delete nextClaudeRestartNoticeByPtyId[ptyId]
       } else {
         for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
           delete nextPendingCodexPaneRestartIds[currentPtyId]
           delete nextCodexRestartNoticeByPtyId[currentPtyId]
+          delete nextPendingClaudePaneRestartIds[currentPtyId]
+          delete nextClaudeRestartNoticeByPtyId[currentPtyId]
         }
       }
       // Why: when a specific ptyId is passed, the PTY actually exited (not
@@ -1817,7 +1870,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
-        codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
+        codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
+        pendingClaudePaneRestartIds: nextPendingClaudePaneRestartIds,
+        claudeRestartNoticeByPtyId: nextClaudeRestartNoticeByPtyId
       }
     })
 
@@ -1974,8 +2029,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
 
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+      const nextClaudeRestartNoticeByPtyId = { ...s.claudeRestartNoticeByPtyId }
       for (const ptyId of shutdownPtyIds) {
         delete nextCodexRestartNoticeByPtyId[ptyId]
+        delete nextClaudeRestartNoticeByPtyId[ptyId]
       }
       const nextLastKnownRelay =
         remainingPtyIds.length === 0
@@ -2020,6 +2077,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
         },
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
+        claudeRestartNoticeByPtyId: nextClaudeRestartNoticeByPtyId,
         ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
           ? { runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId }
           : {}),
@@ -2188,20 +2246,26 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...s.suppressedPtyExitIds,
         ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
       }
-      // Why: pendingCodexPaneRestartIds is keyed by ptyId — under sleep we
+      // Why: account restart queues are keyed by ptyId — under sleep we
       // preserve it so a mid-restart marker survives wake against the same
-      // identifier. codexRestartNoticeByPtyId is also keyed by the now-stale
+      // identifier. restart notices are also keyed by the now-stale
       // ptyId; on wake the post-spawn ptyId may differ, so the notice can't
       // be carried forward and is cleared in both cases.
       const nextPendingCodexPaneRestartIds = keepIdentifiers
         ? s.pendingCodexPaneRestartIds
         : { ...s.pendingCodexPaneRestartIds }
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+      const nextPendingClaudePaneRestartIds = keepIdentifiers
+        ? s.pendingClaudePaneRestartIds
+        : { ...s.pendingClaudePaneRestartIds }
+      const nextClaudeRestartNoticeByPtyId = { ...s.claudeRestartNoticeByPtyId }
       for (const ptyId of shutdownPtyIds) {
         if (!keepIdentifiers) {
           delete nextPendingCodexPaneRestartIds[ptyId]
+          delete nextPendingClaudePaneRestartIds[ptyId]
         }
         delete nextCodexRestartNoticeByPtyId[ptyId]
+        delete nextClaudeRestartNoticeByPtyId[ptyId]
       }
       // Why: setup-split and issue-command-split are transient one-shots that
       // drive new-tab UX. They are not sleep-recovery state; clear in both
@@ -2300,6 +2364,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         suppressedPtyExitIds: nextSuppressedPtyExitIds,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
+        pendingClaudePaneRestartIds: nextPendingClaudePaneRestartIds,
+        claudeRestartNoticeByPtyId: nextClaudeRestartNoticeByPtyId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
         terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
@@ -2422,31 +2488,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
     set((s) => {
-      const next = { ...s.codexRestartNoticeByPtyId }
-      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
-      for (const notice of notices) {
-        const existing = next[notice.ptyId]
-        const previousAccountLabel = existing?.previousAccountLabel ?? notice.previousAccountLabel
-
-        // Why: a live Codex pane stays on the account it originally launched
-        // with until that pane actually restarts. Repeated account switches
-        // must preserve that original pane account; otherwise A -> B -> A
-        // keeps showing a stale restart notice even though the pane never left
-        // account A and no longer needs a restart.
-        if (previousAccountLabel === notice.nextAccountLabel) {
-          delete next[notice.ptyId]
-          delete nextPendingCodexPaneRestartIds[notice.ptyId]
-          continue
-        }
-
-        next[notice.ptyId] = {
-          previousAccountLabel,
-          nextAccountLabel: notice.nextAccountLabel
-        }
-      }
+      const nextState = applyAccountRestartNotices(
+        notices,
+        s.codexRestartNoticeByPtyId,
+        s.pendingCodexPaneRestartIds
+      )
       return {
-        codexRestartNoticeByPtyId: next,
-        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+        codexRestartNoticeByPtyId: nextState.restartNoticeByPtyId,
+        pendingCodexPaneRestartIds: nextState.pendingPaneRestartIds
       }
     })
   },
@@ -2463,6 +2512,65 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return {
         codexRestartNoticeByPtyId: next,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+      }
+    })
+  },
+
+  queueClaudePaneRestarts: (ptyIds) => {
+    if (ptyIds.length === 0) {
+      return
+    }
+    set((s) => ({
+      pendingClaudePaneRestartIds: {
+        ...s.pendingClaudePaneRestartIds,
+        ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
+      }
+    }))
+  },
+
+  consumePendingClaudePaneRestart: (ptyId) => {
+    let wasQueued = false
+    set((s) => {
+      if (!s.pendingClaudePaneRestartIds[ptyId]) {
+        return {}
+      }
+      wasQueued = true
+      const next = { ...s.pendingClaudePaneRestartIds }
+      delete next[ptyId]
+      return { pendingClaudePaneRestartIds: next }
+    })
+    return wasQueued
+  },
+
+  markClaudeRestartNotices: (notices) => {
+    if (notices.length === 0) {
+      return
+    }
+    set((s) => {
+      const nextState = applyAccountRestartNotices(
+        notices,
+        s.claudeRestartNoticeByPtyId,
+        s.pendingClaudePaneRestartIds
+      )
+      return {
+        claudeRestartNoticeByPtyId: nextState.restartNoticeByPtyId,
+        pendingClaudePaneRestartIds: nextState.pendingPaneRestartIds
+      }
+    })
+  },
+
+  clearClaudeRestartNotice: (ptyId) => {
+    set((s) => {
+      if (!s.claudeRestartNoticeByPtyId[ptyId]) {
+        return {}
+      }
+      const next = { ...s.claudeRestartNoticeByPtyId }
+      const nextPendingClaudePaneRestartIds = { ...s.pendingClaudePaneRestartIds }
+      delete next[ptyId]
+      delete nextPendingClaudePaneRestartIds[ptyId]
+      return {
+        claudeRestartNoticeByPtyId: next,
+        pendingClaudePaneRestartIds: nextPendingClaudePaneRestartIds
       }
     })
   },

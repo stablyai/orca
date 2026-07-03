@@ -135,6 +135,10 @@ type StoreState = {
     string,
     { previousAccountLabel: string; nextAccountLabel: string }
   >
+  claudeRestartNoticeByPtyId: Record<
+    string,
+    { previousAccountLabel: string; nextAccountLabel: string }
+  >
   deferredSshReconnectTargets: string[]
   deferredSshSessionIdsByTabId: Record<string, string>
   removeDeferredSshReconnectTarget: ReturnType<typeof vi.fn>
@@ -701,6 +705,7 @@ describe('connectPanePty', () => {
       cacheTimerByKey: {},
       settings: { promptCacheTimerEnabled: true, experimentalTerminalAttention: true },
       codexRestartNoticeByPtyId: {},
+      claudeRestartNoticeByPtyId: {},
       deferredSshReconnectTargets: [],
       deferredSshSessionIdsByTabId: {},
       removeDeferredSshReconnectTarget: vi.fn(),
@@ -3196,6 +3201,49 @@ describe('connectPanePty', () => {
         }
       ),
       codexRestartNoticeByPtyId: {
+        'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
+      }
+    }
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(onDataHandler).toBeDefined()
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as (data: string) => void)('a')
+
+    expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
+  it('blocks stale Claude fallback input from the current worktree tab without enumerating all worktrees', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+
+    const transport = createMockTransport(null)
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: new Proxy(
+        {
+          'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }],
+          'wt-2': [{ id: 'tab-2', ptyId: 'pty-other' }]
+        },
+        {
+          ownKeys() {
+            throw new Error('tabsByWorktree should not be enumerated')
+          }
+        }
+      ),
+      claudeRestartNoticeByPtyId: {
         'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
       }
     }

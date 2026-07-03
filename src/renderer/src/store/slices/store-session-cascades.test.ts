@@ -247,6 +247,35 @@ describe('restartCodexTabs', () => {
     expect(state.suppressedPtyExitIds).toEqual({})
     expect(state.tabsByWorktree[wt1][0].generation).toBe(2)
   })
+
+  it('queues pane-scoped Claude restarts without remounting the whole tab', () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, title: 'claude', generation: 2 })]
+      },
+      ptyIdsByTabId: {
+        tab1: ['pty-a', 'pty-b']
+      },
+      pendingStartupByTabId: {}
+    })
+
+    store.getState().queueClaudePaneRestarts(['pty-b'])
+    const state = store.getState()
+
+    expect(state.pendingClaudePaneRestartIds).toEqual({ 'pty-b': true })
+    expect(state.pendingStartupByTabId).toEqual({})
+    expect(state.suppressedPtyExitIds).toEqual({})
+    expect(state.tabsByWorktree[wt1][0].generation).toBe(2)
+  })
 })
 
 describe('hydrateWorkspaceSession', () => {
