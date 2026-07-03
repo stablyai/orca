@@ -1,67 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import WebSocket from 'ws'
 import { CdpWsProxy } from './cdp-ws-proxy'
+import {
+  connect,
+  createMockWebContents,
+  getSendCommandCalls,
+  getSendCommandMethods,
+  sendAndReceive,
+  type MockWebContents
+} from './cdp-ws-proxy-test-harness'
 
 vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-type DebuggerListener = (...args: unknown[]) => void
-
-function createMockWebContents() {
-  const listeners = new Map<string, DebuggerListener[]>()
-  let debuggerAttached = false
-  let destroyed = false
-
-  const debuggerObj = {
-    isAttached: vi.fn(() => debuggerAttached),
-    attach: vi.fn(() => {
-      debuggerAttached = true
-    }),
-    detach: vi.fn(() => {
-      debuggerAttached = false
-    }),
-    sendCommand: vi.fn(
-      async (_method?: string, _params?: Record<string, unknown>, _sessionId?: string) => ({})
-    ),
-    on: vi.fn((event: string, handler: DebuggerListener) => {
-      const arr = listeners.get(event) ?? []
-      arr.push(handler)
-      listeners.set(event, arr)
-    }),
-    removeListener: vi.fn((event: string, handler: DebuggerListener) => {
-      const arr = listeners.get(event) ?? []
-      listeners.set(
-        event,
-        arr.filter((h) => h !== handler)
-      )
-    })
-  }
-
-  return {
-    webContents: {
-      debugger: debuggerObj,
-      isDestroyed: () => destroyed,
-      focus: vi.fn(),
-      reload: vi.fn(),
-      reloadIgnoringCache: vi.fn(),
-      getTitle: vi.fn(() => 'Example'),
-      getURL: vi.fn(() => 'https://example.com')
-    },
-    listeners,
-    destroy() {
-      destroyed = true
-    },
-    emit(event: string, ...args: unknown[]) {
-      for (const handler of listeners.get(event) ?? []) {
-        handler(...args)
-      }
-    }
-  }
-}
-
 describe('CdpWsProxy', () => {
-  let mock: ReturnType<typeof createMockWebContents>
+  let mock: MockWebContents
   let proxy: CdpWsProxy
   let endpoint: string
 
@@ -76,38 +30,14 @@ describe('CdpWsProxy', () => {
     await proxy.stop()
   })
 
-  function connect(): Promise<WebSocket> {
-    return new Promise((resolve) => {
-      const ws = new WebSocket(endpoint)
-      ws.on('open', () => resolve(ws))
-    })
+  function expectPdfStreamHandle(response: Record<string, unknown>): string {
+    const result = response.result as Record<string, unknown>
+    expect(result.data).toBe('')
+    expect(result.stream).toEqual(expect.stringMatching(/^orca-pdf-[\da-f-]{36}-\d+$/))
+    return result.stream as string
   }
 
-  function sendAndReceive(
-    ws: WebSocket,
-    msg: Record<string, unknown>
-  ): Promise<Record<string, unknown>> {
-    return new Promise((resolve) => {
-      ws.once('message', (data) => resolve(JSON.parse(data.toString())))
-      ws.send(JSON.stringify(msg))
-    })
-  }
-
-  type SendCommandCall = [string, Record<string, unknown>?, string?]
-
-  function getSendCommandCalls(): SendCommandCall[] {
-    const calls = mock.webContents.debugger.sendCommand.mock.calls as unknown as [
-      string,
-      Record<string, unknown>?,
-      string?
-    ][]
-    return calls
-  }
-
-  function getSendCommandMethods(): string[] {
-    const calls = getSendCommandCalls()
-    return calls.map((call) => call[0])
-  }
+  const defaultPdfMarginInches = 1 / 2.54
 
   it('starts on a random port and returns ws:// URL', () => {
     expect(endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
@@ -131,7 +61,7 @@ describe('CdpWsProxy', () => {
   it('correlates CDP request/response IDs', async () => {
     mock.webContents.debugger.sendCommand.mockResolvedValueOnce({ tree: 'nodes' })
 
-    const ws = connect()
+    const ws = connect(endpoint)
     const client = await ws
     const response = await sendAndReceive(client, {
       id: 42,
@@ -147,7 +77,7 @@ describe('CdpWsProxy', () => {
   it('returns error response when sendCommand fails', async () => {
     mock.webContents.debugger.sendCommand.mockRejectedValueOnce(new Error('Node not found'))
 
-    const client = await connect()
+    const client = await connect(endpoint)
     const response = await sendAndReceive(client, {
       id: 7,
       method: 'DOM.describeNode',
@@ -160,7 +90,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('returns an error instead of crashing when a command arrives after tab destruction', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
     mock.destroy()
 
     const response = await sendAndReceive(client, {
@@ -197,7 +127,7 @@ describe('CdpWsProxy', () => {
       })
       .mockResolvedValueOnce({ result: 'fast' })
 
-    const client = await connect()
+    const client = await connect(endpoint)
 
     const responses: Record<string, unknown>[] = []
     client.on('message', (data) => {
@@ -232,11 +162,11 @@ describe('CdpWsProxy', () => {
       )
       .mockResolvedValueOnce({ result: 'new-client' })
 
-    const firstClient = await connect()
+    const firstClient = await connect(endpoint)
     firstClient.send(JSON.stringify({ id: 1, method: 'DOM.enable', params: {} }))
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    const secondClient = await connect()
+    const secondClient = await connect(endpoint)
     const responses: Record<string, unknown>[] = []
     secondClient.on('message', (data) => {
       responses.push(JSON.parse(data.toString()))
@@ -258,7 +188,7 @@ describe('CdpWsProxy', () => {
   it('forwards sessionId to sendCommand for OOPIF support', async () => {
     mock.webContents.debugger.sendCommand.mockResolvedValueOnce({})
 
-    const client = await connect()
+    const client = await connect(endpoint)
     await sendAndReceive(client, {
       id: 1,
       method: 'DOM.enable',
@@ -277,7 +207,7 @@ describe('CdpWsProxy', () => {
   // ── Event forwarding ──
 
   it('forwards CDP events from debugger to client', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     const eventPromise = new Promise<Record<string, unknown>>((resolve) => {
       client.on('message', (data) => resolve(JSON.parse(data.toString())))
@@ -292,7 +222,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('forwards sessionId in events when present', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     const eventPromise = new Promise<Record<string, unknown>>((resolve) => {
       client.on('message', (data) => resolve(JSON.parse(data.toString())))
@@ -306,7 +236,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('does not focus the guest for Runtime.evaluate polling commands', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     await sendAndReceive(client, {
       id: 9,
@@ -319,7 +249,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('still focuses the guest for Input.insertText', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     await sendAndReceive(client, {
       id: 10,
@@ -328,315 +258,16 @@ describe('CdpWsProxy', () => {
     })
 
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
-    expect(getSendCommandMethods()).toEqual([
+    expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
       'Input.insertText'
     ])
     client.close()
-  })
-
-  it('replays DOM.focus before Input.insertText in the root session', async () => {
-    const client = await connect()
-
-    const focusResponse = await sendAndReceive(client, {
-      id: 14,
-      method: 'DOM.focus',
-      params: { backendNodeId: 99 }
-    })
-    const insertResponse = await sendAndReceive(client, {
-      id: 15,
-      method: 'Input.insertText',
-      params: { text: 'hello' }
-    })
-
-    expect(focusResponse.id).toBe(14)
-    expect(insertResponse.id).toBe(15)
-    expect(insertResponse.result).toEqual({})
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
-    expect(getSendCommandCalls()).toEqual([
-      ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
-      ['DOM.focus', { backendNodeId: 99 }],
-      ['DOM.focus', { backendNodeId: 99 }],
-      ['Input.insertText', { text: 'hello' }]
-    ])
-    client.close()
-  })
-
-  it('replays DOM.focus before Input.insertText for OOPIF sessions', async () => {
-    const client = await connect()
-
-    await sendAndReceive(client, {
-      id: 16,
-      method: 'DOM.focus',
-      params: { backendNodeId: 123 },
-      sessionId: 'oopif-session-123'
-    })
-    const insertResponse = await sendAndReceive(client, {
-      id: 17,
-      method: 'Input.insertText',
-      params: { text: 'frame text' },
-      sessionId: 'oopif-session-123'
-    })
-
-    expect(insertResponse.id).toBe(17)
-    expect(insertResponse.result).toEqual({})
-    expect(getSendCommandCalls()).toEqual([
-      ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
-      ['DOM.focus', { backendNodeId: 123 }, 'oopif-session-123'],
-      ['DOM.focus', { backendNodeId: 123 }, 'oopif-session-123'],
-      ['Input.insertText', { text: 'frame text' }, 'oopif-session-123']
-    ])
-    client.close()
-  })
-
-  it('does not replay DOM.focus after adjacent eval traffic', async () => {
-    const client = await connect()
-
-    await sendAndReceive(client, {
-      id: 18,
-      method: 'DOM.focus',
-      params: { backendNodeId: 44 }
-    })
-    await sendAndReceive(client, {
-      id: 19,
-      method: 'Runtime.callFunctionOn',
-      params: { functionDeclaration: '() => document.activeElement?.id' }
-    })
-    const insertResponse = await sendAndReceive(client, {
-      id: 20,
-      method: 'Input.insertText',
-      params: { text: 'after eval' }
-    })
-
-    expect(insertResponse.id).toBe(20)
-    expect(insertResponse.result).toEqual({})
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
-    expect(getSendCommandCalls()).toEqual([
-      ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
-      ['DOM.focus', { backendNodeId: 44 }],
-      ['Runtime.callFunctionOn', { functionDeclaration: '() => document.activeElement?.id' }],
-      ['Input.insertText', { text: 'after eval' }]
-    ])
-    client.close()
-  })
-
-  it('does not replay a failed DOM.focus on the next Input.insertText', async () => {
-    let domFocusAttempt = 0
-    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
-      const [method] = args as [string]
-      if (method === 'DOM.focus') {
-        domFocusAttempt += 1
-        if (domFocusAttempt === 1) {
-          throw new Error('Node not found')
-        }
-      }
-      return {}
-    })
-
-    const client = await connect()
-
-    const focusResponse = await sendAndReceive(client, {
-      id: 21,
-      method: 'DOM.focus',
-      params: { backendNodeId: 55 }
-    })
-    const insertResponse = await sendAndReceive(client, {
-      id: 22,
-      method: 'Input.insertText',
-      params: { text: 'fallback' }
-    })
-
-    expect(focusResponse).toEqual({
-      id: 21,
-      error: { code: -32000, message: 'Node not found' }
-    })
-    expect(insertResponse.id).toBe(22)
-    expect(insertResponse.result).toEqual({})
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
-    expect(getSendCommandCalls()).toEqual([
-      ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
-      ['DOM.focus', { backendNodeId: 55 }],
-      ['Input.insertText', { text: 'fallback' }]
-    ])
-    client.close()
-  })
-
-  it('returns the replay error when the stored DOM.focus fails before Input.insertText', async () => {
-    let domFocusAttempt = 0
-    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
-      const [method] = args as [string]
-      if (method === 'DOM.focus') {
-        domFocusAttempt += 1
-        if (domFocusAttempt === 2) {
-          throw new Error('Focus target went stale')
-        }
-      }
-      return {}
-    })
-
-    const client = await connect()
-
-    const focusResponse = await sendAndReceive(client, {
-      id: 23,
-      method: 'DOM.focus',
-      params: { backendNodeId: 77 }
-    })
-    const insertResponse = await sendAndReceive(client, {
-      id: 24,
-      method: 'Input.insertText',
-      params: { text: 'blocked' }
-    })
-
-    expect(focusResponse.id).toBe(23)
-    expect(focusResponse.result).toEqual({})
-    expect(insertResponse).toEqual({
-      id: 24,
-      error: { code: -32000, message: 'Focus target went stale' }
-    })
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
-    expect(getSendCommandCalls()).toEqual([
-      ['Page.enable', {}],
-      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
-      ['DOM.focus', { backendNodeId: 77 }],
-      ['DOM.focus', { backendNodeId: 77 }]
-    ])
-    client.close()
-  })
-
-  it('still replays DOM.focus when Input.insertText is dispatched while DOM.focus is still in flight', async () => {
-    let resolveFocus: (v: Record<string, unknown>) => void
-    const focusPromise = new Promise<Record<string, unknown>>((r) => {
-      resolveFocus = r
-    })
-    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
-      const [method] = args as [string]
-      if (method === 'DOM.focus') {
-        return focusPromise
-      }
-      return {}
-    })
-
-    const client = await connect()
-    const responses: Record<string, unknown>[] = []
-    client.on('message', (data) => {
-      responses.push(JSON.parse(data.toString()))
-    })
-
-    client.send(JSON.stringify({ id: 25, method: 'DOM.focus', params: { backendNodeId: 66 } }))
-    await new Promise((r) => setTimeout(r, 10))
-    // Why: dispatch the next message before the in-flight DOM.focus sendCommand
-    // resolves, reproducing the pipelining race the fix closes.
-    client.send(
-      JSON.stringify({ id: 26, method: 'Input.insertText', params: { text: 'pipelined' } })
-    )
-
-    await new Promise((r) => setTimeout(r, 20))
-    resolveFocus!({})
-    await new Promise((r) => setTimeout(r, 20))
-
-    expect(responses).toHaveLength(2)
-    const focusResponse = responses.find((r) => r.id === 25)
-    const insertResponse = responses.find((r) => r.id === 26)
-    expect(focusResponse?.result).toEqual({})
-    expect(insertResponse?.result).toEqual({})
-    expect(getSendCommandMethods()).toEqual([
-      'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
-      'DOM.focus',
-      'DOM.focus',
-      'Input.insertText'
-    ])
-    client.close()
-  })
-
-  it('clears the pending DOM.focus replay when Page.bringToFront intervenes', async () => {
-    const client = await connect()
-
-    await sendAndReceive(client, {
-      id: 27,
-      method: 'DOM.focus',
-      params: { backendNodeId: 88 }
-    })
-    await sendAndReceive(client, { id: 28, method: 'Page.bringToFront', params: {} })
-    const insertResponse = await sendAndReceive(client, {
-      id: 29,
-      method: 'Input.insertText',
-      params: { text: 'no replay' }
-    })
-
-    expect(insertResponse.id).toBe(29)
-    expect(insertResponse.result).toEqual({})
-    // Why: both Page.bringToFront and Input.insertText natively call focus(),
-    // independent of the (now-cleared) DOM.focus replay.
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(2)
-    expect(getSendCommandMethods()).toEqual([
-      'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
-      'DOM.focus',
-      'Input.insertText'
-    ])
-    client.close()
-  })
-
-  it('clears the pending DOM.focus replay when Page.captureScreenshot intervenes', async () => {
-    const client = await connect()
-
-    await sendAndReceive(client, {
-      id: 30,
-      method: 'DOM.focus',
-      params: { backendNodeId: 91 }
-    })
-    await sendAndReceive(client, { id: 31, method: 'Page.captureScreenshot', params: {} })
-    const insertResponse = await sendAndReceive(client, {
-      id: 32,
-      method: 'Input.insertText',
-      params: { text: 'no replay after screenshot' }
-    })
-
-    expect(insertResponse.id).toBe(32)
-    expect(insertResponse.result).toEqual({})
-    expect(getSendCommandMethods()).toEqual([
-      'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
-      'DOM.focus',
-      'Page.captureScreenshot',
-      'Input.insertText'
-    ])
-    client.close()
-  })
-
-  it('does not replay a pending DOM.focus across a client reconnect', async () => {
-    const first = await connect()
-    await sendAndReceive(first, { id: 33, method: 'DOM.focus', params: { backendNodeId: 12 } })
-    first.close()
-
-    // Why: a new client connection replaces the previous one; the stale focus
-    // stored by the departed client must not leak into the new client's insert.
-    const second = await connect()
-    const insertResponse = await sendAndReceive(second, {
-      id: 34,
-      method: 'Input.insertText',
-      params: { text: 'fresh client' }
-    })
-
-    expect(insertResponse.id).toBe(34)
-    expect(insertResponse.result).toEqual({})
-    expect(getSendCommandMethods()).toEqual([
-      'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
-      'DOM.focus',
-      'Input.insertText'
-    ])
-    second.close()
   })
 
   it('primes lifecycle events for Page.navigate', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     const response = await sendAndReceive(client, {
       id: 11,
@@ -646,7 +277,7 @@ describe('CdpWsProxy', () => {
 
     expect(response.id).toBe(11)
     expect(response.result).toEqual({})
-    expect(getSendCommandMethods()).toEqual([
+    expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
       'Network.enable',
@@ -658,7 +289,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('primes lifecycle events for Page.reload and preserves response id', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     const response = await sendAndReceive(client, {
       id: 12,
@@ -667,7 +298,7 @@ describe('CdpWsProxy', () => {
 
     expect(response.id).toBe(12)
     expect(response.result).toEqual({})
-    expect(getSendCommandMethods()).toEqual([
+    expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
       'Network.enable',
@@ -675,12 +306,12 @@ describe('CdpWsProxy', () => {
       'Page.setLifecycleEventsEnabled'
     ])
     expect(mock.webContents.reload).toHaveBeenCalledTimes(1)
-    expect(getSendCommandMethods()).not.toContain('Page.reload')
+    expect(getSendCommandMethods(mock)).not.toContain('Page.reload')
     client.close()
   })
 
   it('preserves explicit Page.navigate session during lifecycle priming', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     await sendAndReceive(client, {
       id: 14,
@@ -689,7 +320,7 @@ describe('CdpWsProxy', () => {
       sessionId: 'iframe-session-123'
     })
 
-    expect(getSendCommandCalls().slice(2)).toEqual([
+    expect(getSendCommandCalls(mock).slice(2)).toEqual([
       ['Network.enable', {}, 'iframe-session-123'],
       ['Page.enable', {}, 'iframe-session-123'],
       ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
@@ -699,7 +330,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('forwards explicit Page.reload session after lifecycle priming', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     await sendAndReceive(client, {
       id: 15,
@@ -708,7 +339,7 @@ describe('CdpWsProxy', () => {
       sessionId: 'iframe-session-123'
     })
 
-    expect(getSendCommandCalls().slice(2)).toEqual([
+    expect(getSendCommandCalls(mock).slice(2)).toEqual([
       ['Network.enable', {}, 'iframe-session-123'],
       ['Page.enable', {}, 'iframe-session-123'],
       ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
@@ -720,7 +351,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('rejects root Page.reload params that direct webContents reload cannot honor', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     const response = await sendAndReceive(client, {
       id: 16,
@@ -737,12 +368,12 @@ describe('CdpWsProxy', () => {
     })
     expect(mock.webContents.reload).not.toHaveBeenCalled()
     expect(mock.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
-    expect(getSendCommandMethods()).not.toContain('Network.enable')
+    expect(getSendCommandMethods(mock)).not.toContain('Network.enable')
     client.close()
   })
 
   it('still reloads when lifecycle priming stalls', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
     mock.webContents.debugger.sendCommand.mockImplementation((method?: string) => {
       if (method === 'Network.enable') {
         return new Promise(() => {})
@@ -761,7 +392,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('does not reload after the requesting client disconnects during priming', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
     mock.webContents.debugger.sendCommand.mockImplementation((method?: string) => {
       if (method === 'Network.enable') {
         return new Promise(() => {})
@@ -779,7 +410,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('forwards Runtime.evaluate without lifecycle priming', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
 
     const response = await sendAndReceive(client, {
       id: 13,
@@ -789,11 +420,214 @@ describe('CdpWsProxy', () => {
 
     expect(response.id).toBe(13)
     expect(response.result).toEqual({})
-    expect(getSendCommandMethods()).toEqual([
+    expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',
       'Runtime.evaluate'
     ])
+    client.close()
+  })
+
+  it('prints PDF data through native webContents printToPDF', async () => {
+    const client = await connect(endpoint)
+
+    const response = await sendAndReceive(client, {
+      id: 19,
+      method: 'Page.printToPDF',
+      params: {
+        landscape: true,
+        printBackground: true,
+        paperWidth: 8.5,
+        paperHeight: 11,
+        marginTop: 0.25,
+        marginBottom: 0.5,
+        marginLeft: 0.75,
+        marginRight: 1,
+        pageRanges: '1-2',
+        preferCSSPageSize: true
+      }
+    })
+
+    expect(response).toEqual({
+      id: 19,
+      result: { data: Buffer.from('%PDF-test').toString('base64') }
+    })
+    expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
+      landscape: true,
+      printBackground: true,
+      pageSize: { width: 8.5, height: 11 },
+      margins: {
+        marginType: 'custom',
+        top: 0.25,
+        bottom: 0.5,
+        left: 0.75,
+        right: 1
+      },
+      pageRanges: '1-2',
+      preferCSSPageSize: true
+    })
+    expect(getSendCommandMethods(mock)).not.toContain('Page.printToPDF')
+    client.close()
+  })
+
+  it('keeps default PDF margins for omitted sides', async () => {
+    const client = await connect(endpoint)
+
+    await sendAndReceive(client, {
+      id: 20,
+      method: 'Page.printToPDF',
+      params: {
+        marginTop: 0.25
+      }
+    })
+
+    expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
+      margins: {
+        marginType: 'custom',
+        top: 0.25,
+        bottom: defaultPdfMarginInches,
+        left: defaultPdfMarginInches,
+        right: defaultPdfMarginInches
+      }
+    })
+    client.close()
+  })
+
+  it('supports streamed Page.printToPDF results for Playwright page.pdf', async () => {
+    mock.webContents.printToPDF.mockResolvedValueOnce(Buffer.from('abcdef'))
+    const client = await connect(endpoint)
+
+    const printResponse = await sendAndReceive(client, {
+      id: 21,
+      method: 'Page.printToPDF',
+      params: { transferMode: 'ReturnAsStream' }
+    })
+    const handle = expectPdfStreamHandle(printResponse)
+
+    const firstRead = await sendAndReceive(client, {
+      id: 22,
+      method: 'IO.read',
+      params: { handle, size: 2 }
+    })
+    const secondRead = await sendAndReceive(client, {
+      id: 23,
+      method: 'IO.read',
+      params: { handle }
+    })
+    const closeResponse = await sendAndReceive(client, {
+      id: 24,
+      method: 'IO.close',
+      params: { handle }
+    })
+    const readAfterClose = await sendAndReceive(client, {
+      id: 25,
+      method: 'IO.read',
+      params: { handle }
+    })
+
+    expect(printResponse.id).toBe(21)
+    expect(firstRead).toEqual({
+      id: 22,
+      result: { base64Encoded: true, data: Buffer.from('ab').toString('base64'), eof: false }
+    })
+    expect(secondRead).toEqual({
+      id: 23,
+      result: { base64Encoded: true, data: Buffer.from('cdef').toString('base64'), eof: true }
+    })
+    expect(closeResponse).toEqual({ id: 24, result: {} })
+    expect(readAfterClose).toEqual({
+      id: 25,
+      error: { code: -32000, message: 'Invalid stream handle' }
+    })
+    client.close()
+  })
+
+  it('clears streamed PDF data when the client disconnects', async () => {
+    mock.webContents.printToPDF.mockResolvedValueOnce(Buffer.from('abcdef'))
+    const client = await connect(endpoint)
+
+    const printResponse = await sendAndReceive(client, {
+      id: 26,
+      method: 'Page.printToPDF',
+      params: { transferMode: 'ReturnAsStream' }
+    })
+    const handle = expectPdfStreamHandle(printResponse)
+
+    expect(printResponse.id).toBe(26)
+    client.close()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const nextClient = await connect(endpoint)
+    const staleRead = await sendAndReceive(nextClient, {
+      id: 27,
+      method: 'IO.read',
+      params: { handle }
+    })
+
+    expect(staleRead).toEqual({
+      id: 27,
+      error: { code: -32000, message: 'Invalid stream handle' }
+    })
+    nextClient.close()
+  })
+
+  it('does not register a PDF stream when the client disconnects mid-print', async () => {
+    let resolvePrint: (buf: Buffer) => void = () => {}
+    mock.webContents.printToPDF.mockImplementationOnce(
+      () =>
+        new Promise<Buffer>((resolve) => {
+          resolvePrint = resolve
+        })
+    )
+    const store = (proxy as unknown as { pdfStreams: { create: (b: Buffer) => string } }).pdfStreams
+    const createSpy = vi.spyOn(store, 'create')
+
+    const client = await connect(endpoint)
+    client.send(
+      JSON.stringify({
+        id: 30,
+        method: 'Page.printToPDF',
+        params: { transferMode: 'ReturnAsStream' }
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    client.close()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Print resolves only after the client is gone: no stream must be created.
+    resolvePrint(Buffer.from('%PDF-late'))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(createSpy).not.toHaveBeenCalled()
+    createSpy.mockRestore()
+  })
+
+  it('forwards non-PDF IO streams to the debugger', async () => {
+    mock.webContents.debugger.sendCommand
+      .mockResolvedValueOnce({ data: 'trace-data', eof: false })
+      .mockResolvedValueOnce({})
+    const client = await connect(endpoint)
+
+    const readResponse = await sendAndReceive(client, {
+      id: 28,
+      method: 'IO.read',
+      params: { handle: 'trace-stream', size: 64 }
+    })
+    const closeResponse = await sendAndReceive(client, {
+      id: 29,
+      method: 'IO.close',
+      params: { handle: 'trace-stream' }
+    })
+
+    expect(readResponse).toEqual({ id: 28, result: { data: 'trace-data', eof: false } })
+    expect(closeResponse).toEqual({ id: 29, result: {} })
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith('IO.read', {
+      handle: 'trace-stream',
+      size: 64
+    })
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith('IO.close', {
+      handle: 'trace-stream'
+    })
     client.close()
   })
 
@@ -802,7 +636,7 @@ describe('CdpWsProxy', () => {
   // ── Cleanup ──
 
   it('detaches debugger and closes server on stop', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
     await proxy.stop()
 
     expect(mock.webContents.debugger.detach).toHaveBeenCalled()
@@ -817,7 +651,7 @@ describe('CdpWsProxy', () => {
   })
 
   it('detaches client websocket listeners after client close', async () => {
-    const client = await connect()
+    const client = await connect(endpoint)
     const serverClient = (proxy as unknown as { client: WebSocket | null }).client
     expect(serverClient).toBeTruthy()
     const offSpy = vi.spyOn(serverClient!, 'off')
@@ -847,7 +681,7 @@ describe('CdpWsProxy', () => {
         })
     )
 
-    const client = await connect()
+    const client = await connect(endpoint)
     client.send(JSON.stringify({ id: 1, method: 'Page.enable', params: {} }))
 
     await new Promise((r) => setTimeout(r, 10))

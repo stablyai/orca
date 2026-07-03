@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
+import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
@@ -26,6 +27,7 @@ export class CdpWsProxy {
   private attached = false
   // Why: agent-browser filters events by sessionId from Target.attachToTarget.
   private clientSessionId: string | undefined = undefined
+  private readonly pdfStreams = new CdpPdfStreamStore()
 
   constructor(private readonly webContents: WebContents) {}
 
@@ -57,6 +59,7 @@ export class CdpWsProxy {
         const onClose = (): void => {
           detach()
           if (this.client === ws) {
+            this.pdfStreams.clear()
             this.client = null
           }
         }
@@ -109,6 +112,7 @@ export class CdpWsProxy {
     this.client = null
     // Why: a pending focus belongs to the departing client; never replay it for the next one.
     this.pendingDomFocusBySession.clear()
+    this.pdfStreams.clear()
     client?.close()
   }
 
@@ -306,6 +310,30 @@ export class CdpWsProxy {
     // Why: Page.captureScreenshot via debugger.sendCommand hangs on Electron webview guests.
     if (msg.method === 'Page.captureScreenshot') {
       this.handleScreenshot(client, clientId, msg.params)
+      return
+    }
+    // Why: CDP Page.printToPDF is not available for Electron webview guests.
+    // Electron's native printToPDF path is the reliable equivalent.
+    if (msg.method === 'Page.printToPDF') {
+      void this.handlePrintToPdf(client, clientId, msg.params ?? {})
+      return
+    }
+    if (msg.method === 'IO.read') {
+      const params = msg.params ?? {}
+      if (this.pdfStreams.ownsHandle(params)) {
+        this.handleStreamRead(client, clientId, params)
+        return
+      }
+      this.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
+      return
+    }
+    if (msg.method === 'IO.close') {
+      const params = msg.params ?? {}
+      if (this.pdfStreams.ownsHandle(params)) {
+        this.handleStreamClose(client, clientId, params)
+        return
+      }
+      this.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
     // Why: Input.insertText can still require native focus in Electron webviews.
@@ -514,6 +542,57 @@ export class CdpWsProxy {
       }
     }
     this.forwardCommand(client, clientId, 'Input.insertText', params, effectiveSessionId)
+  }
+
+  private async handlePrintToPdf(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>
+  ): Promise<void> {
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
+    try {
+      const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
+      // Why: printToPDF can resolve after the client disconnected (or was
+      // replaced). Bail before registering a stream so its buffer isn't
+      // orphaned in pdfStreams past the disconnect's clear() until the TTL.
+      if (!this.isActiveClient(client)) {
+        return
+      }
+      const buffer = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf)
+      if (params.transferMode === 'ReturnAsStream') {
+        const handle = this.pdfStreams.create(buffer)
+        this.sendResult(clientId, { data: '', stream: handle }, client)
+        return
+      }
+      this.sendResult(clientId, { data: buffer.toString('base64') }, client)
+    } catch (err) {
+      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
+  }
+
+  private handleStreamRead(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>
+  ): void {
+    const chunk = this.pdfStreams.read(params)
+    if (!chunk) {
+      this.sendError(clientId, 'Invalid stream handle', client)
+      return
+    }
+    this.sendResult(clientId, { base64Encoded: true, data: chunk.data, eof: chunk.eof }, client)
+  }
+
+  private handleStreamClose(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>
+  ): void {
+    this.pdfStreams.close(params)
+    this.sendResult(clientId, {}, client)
   }
 
   private handleScreenshot(

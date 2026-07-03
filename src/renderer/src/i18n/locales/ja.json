@@ -10216,8 +10216,8 @@
           "title": "カスタムネットワークアドレス",
           "description": "同じ Wi-Fi に接続していないときにスマートフォンから到達できるアドレスを指定します。たとえば Tailscale のホスト名や静的 IP です。",
           "label": "アドレス",
-          "placeholder": "my-mac.ts.net または 192.168.1.50",
-          "hint": "IP アドレスまたは Tailscale のホスト名（.ts.net で終わる）を入力してください。",
+          "placeholder": "my-mac.ts.net、home.example.com、または 192.168.1.50",
+          "hint": "IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :ポート を付けられます。",
           "cancel": "キャンセル",
           "use": "アドレスを使用"
         },

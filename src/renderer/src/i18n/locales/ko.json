@@ -10216,8 +10216,8 @@
           "title": "사용자 지정 네트워크 주소",
           "description": "같은 Wi-Fi에 있지 않을 때 휴대폰이 연결할 수 있는 주소를 알립니다. 예: Tailscale 호스트 이름 또는 고정 IP.",
           "label": "주소",
-          "placeholder": "my-mac.ts.net 또는 192.168.1.50",
-          "hint": "IP 주소 또는 Tailscale 호스트 이름(.ts.net으로 끝남)을 입력하세요.",
+          "placeholder": "my-mac.ts.net, home.example.com 또는 192.168.1.50",
+          "hint": "IP 주소 또는 호스트 이름(Tailscale MagicDNS 이름, DDNS 도메인 또는 LAN 호스트 이름)을 입력하세요. 필요하면 :포트를 붙일 수 있습니다.",
           "cancel": "취소",
           "use": "주소 사용"
         },

@@ -10216,8 +10216,8 @@
           "title": "Dirección de red personalizada",
           "description": "Anuncia una dirección que tu teléfono pueda alcanzar cuando no esté en la misma red Wi-Fi: por ejemplo, un nombre de host de Tailscale o una IP estática.",
           "label": "Dirección",
-          "placeholder": "my-mac.ts.net o 192.168.1.50",
-          "hint": "Introduce una dirección IP o un nombre de host de Tailscale (termina en .ts.net).",
+          "placeholder": "my-mac.ts.net, home.example.com o 192.168.1.50",
+          "hint": "Introduce una dirección IP o un nombre de host (un nombre MagicDNS de Tailscale, un dominio DDNS o un nombre de host de LAN), opcionalmente con :puerto.",
           "cancel": "Cancelar",
           "use": "Usar dirección"
         },

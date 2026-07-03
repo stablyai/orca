@@ -10216,8 +10216,8 @@
           "title": "Custom network address",
           "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
           "label": "Address",
-          "placeholder": "my-mac.ts.net or 192.168.1.50",
-          "hint": "Enter an IP address or a Tailscale hostname (ends in .ts.net).",
+          "placeholder": "my-mac.ts.net, home.example.com, or 192.168.1.50",
+          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.",
           "cancel": "Cancel",
           "use": "Use address"
         },

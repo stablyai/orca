@@ -10216,8 +10216,8 @@
           "title": "自定义网络地址",
           "description": "指定当手机不在同一 Wi-Fi 时可以访问的地址，例如 Tailscale 主机名或静态 IP。",
           "label": "地址",
-          "placeholder": "my-mac.ts.net 或 192.168.1.50",
-          "hint": "请输入 IP 地址或 Tailscale 主机名（以 .ts.net 结尾）。",
+          "placeholder": "my-mac.ts.net、home.example.com 或 192.168.1.50",
+          "hint": "请输入 IP 地址或主机名（Tailscale MagicDNS 名称、DDNS 域名或 LAN 主机名），可选择附加 :端口。",
           "cancel": "取消",
           "use": "使用地址"
         },
