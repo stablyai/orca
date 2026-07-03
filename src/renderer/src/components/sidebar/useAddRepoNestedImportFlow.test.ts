@@ -50,6 +50,7 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn()
 }))
 
+import { track } from '@/lib/telemetry'
 import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
 
 const scan: NestedRepoScanResult = {
@@ -117,6 +118,23 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
     expect(mocks.state.addNonGitFolder).toHaveBeenCalledWith('/workspace/platform', {
       runtimeEnvironmentId: 'env-1'
     })
+  })
+
+  it('tracks the open-as-folder recovery action with zero selection', async () => {
+    const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow()
+
+    await handleOpenNestedRootFolder()
+
+    expect(track).toHaveBeenCalledWith(
+      'add_repo_nested_import_action',
+      expect.objectContaining({
+        action: 'open_as_folder',
+        surface: 'sidebar',
+        runtime_kind: 'local',
+        found_count: 1,
+        selected_count: 0
+      })
+    )
   })
 
   it('uses the existing SSH non-git folder confirmation for SSH scans', async () => {

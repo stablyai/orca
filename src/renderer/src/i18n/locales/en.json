@@ -3523,7 +3523,9 @@
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
-          "24eda6c8b2": "Scanning... {{value0}}"
+          "24eda6c8b2": "Scanning... {{value0}}",
+          "6149d5203f": "No repositories are selected. Open the parent folder instead to use editor, terminal, and search without Git features.",
+          "e52454b7f6": "Open as Folder"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Stop scan",

@@ -243,6 +243,19 @@ export function useAddRepoNestedImportFlow({
     }
     const gen = ++nestedImportGenRef.current
     const path = nestedScan.selectedPath
+    if (nestedAttemptId) {
+      track(
+        'add_repo_nested_import_action',
+        buildNestedRepoImportActionTelemetry({
+          attemptId: nestedAttemptId,
+          surface: 'sidebar',
+          runtimeKind: nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId),
+          action: 'open_as_folder',
+          foundCount: nestedScan.repos.length,
+          selectedCount: nestedSelectedPaths.size
+        })
+      )
+    }
     setIsAdding(true)
     try {
       const state = useAppStore.getState()
@@ -272,7 +285,16 @@ export function useAddRepoNestedImportFlow({
         setIsAdding(false)
       }
     }
-  }, [activeRuntimeEnvironmentId, nestedConnectionId, nestedScan, setIsAdding])
+  }, [
+    activeRuntimeEnvironmentId,
+    getNestedRepoRuntimeKind,
+    nestedAttemptId,
+    nestedConnectionId,
+    nestedRuntimeKind,
+    nestedScan,
+    nestedSelectedPaths.size,
+    setIsAdding
+  ])
 
   return {
     handleImportNestedRepos,
