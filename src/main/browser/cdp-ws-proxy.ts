@@ -545,6 +545,11 @@ export class CdpWsProxy {
         this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
         return
       }
+      // Why: the replay DOM.focus also awaited a round-trip; bail if the client vanished
+      // during it so its insert never lands in the live page.
+      if (!this.isActiveClient(client)) {
+        return
+      }
     }
     this.forwardCommand(client, clientId, 'Input.insertText', params, effectiveSessionId)
   }

@@ -361,4 +361,34 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(methods.filter((m) => m === 'DOM.focus')).toHaveLength(1)
     expect(methods).not.toContain('Input.insertText')
   })
+
+  it('does not insert once the client disconnects during the DOM.focus replay', async () => {
+    let domFocusCalls = 0
+    let resolveReplay: (v: Record<string, unknown>) => void = () => {}
+    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
+      const [method] = args as [string]
+      if (method === 'DOM.focus') {
+        domFocusCalls += 1
+        // Why: let the first DOM.focus resolve so a replay is queued, then hang the
+        // replay so the client can disconnect while it is in flight.
+        if (domFocusCalls === 2) {
+          return new Promise<Record<string, unknown>>((resolve) => {
+            resolveReplay = resolve
+          })
+        }
+      }
+      return {}
+    })
+
+    const client = await connect(endpoint)
+    await sendAndReceive(client, { id: 37, method: 'DOM.focus', params: { backendNodeId: 9 } })
+    client.send(JSON.stringify({ id: 38, method: 'Input.insertText', params: { text: 'late' } }))
+    await new Promise((r) => setTimeout(r, 10))
+    client.close()
+    await new Promise((r) => setTimeout(r, 10))
+    resolveReplay({})
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(getSendCommandMethods(mock)).not.toContain('Input.insertText')
+  })
 })
