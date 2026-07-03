@@ -9,10 +9,8 @@ import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
 
 export class CdpWsProxy {
-  // Why: DOM.focus is only replayed for the immediately next Input.insertText.
-  // Page.bringToFront, Page.captureScreenshot, and the catch-all fallthrough in
-  // handleClientMessage all delete this entry, because the stored focus target
-  // may no longer be relevant once another command has intervened.
+  // Why: holds each session's last DOM.focus params to replay right before the next
+  // Input.insertText, countering the native webContents.focus() that would blur the target.
   private pendingDomFocusBySession = new Map<
     string | undefined,
     Promise<Record<string, unknown> | undefined>
@@ -289,8 +287,12 @@ export class CdpWsProxy {
       return
     }
     const effectiveSessionId = this.resolveDebuggerSessionId(msg.sessionId)
-    if (msg.method === 'Page.bringToFront') {
+    // Why: a stored focus is only valid for the immediately following Input.insertText;
+    // any other command may have moved DOM focus, so invalidate the replay in one place.
+    if (msg.method !== 'DOM.focus' && msg.method !== 'Input.insertText') {
       this.pendingDomFocusBySession.delete(effectiveSessionId)
+    }
+    if (msg.method === 'Page.bringToFront') {
       if (!this.webContents.isDestroyed()) {
         this.webContents.focus()
       }
@@ -303,7 +305,6 @@ export class CdpWsProxy {
     }
     // Why: Page.captureScreenshot via debugger.sendCommand hangs on Electron webview guests.
     if (msg.method === 'Page.captureScreenshot') {
-      this.pendingDomFocusBySession.delete(effectiveSessionId)
       this.handleScreenshot(client, clientId, msg.params)
       return
     }
@@ -317,7 +318,6 @@ export class CdpWsProxy {
       void this.forwardInsertText(client, clientId, msg.params ?? {}, effectiveSessionId)
       return
     }
-    this.pendingDomFocusBySession.delete(effectiveSessionId)
     // Why: agent-browser waits for network idle to detect navigation completion.
     // Electron webview CDP subscriptions silently lapse after cross-process swaps.
     // Page.reload needs the same priming: forwarding it unprimed closed the tab (#7031).
