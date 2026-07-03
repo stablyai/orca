@@ -788,6 +788,9 @@ export function createMainWindow(
       case 'openQuickOpen':
         mainWindow.webContents.send('ui:openQuickOpen')
         return
+      case 'toggleQuickCommandsMenu':
+        mainWindow.webContents.send('ui:toggleQuickCommandsMenu')
+        return
       case 'openNewWorkspace':
         mainWindow.webContents.send('ui:openNewWorkspace')
         return
@@ -859,6 +862,11 @@ export function createMainWindow(
         })
       }
       mainWindow.webContents.send('ui:dictationKeyDown')
+      return true
+    }
+
+    if (action.type === 'toggleQuickCommandsMenu' && isAutoRepeat) {
+      event.preventDefault()
       return true
     }
 

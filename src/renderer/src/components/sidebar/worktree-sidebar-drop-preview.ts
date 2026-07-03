@@ -99,6 +99,7 @@ export function computeWorktreeSidebarDropPreview(args: {
   rects: readonly WorktreeSidebarDragRect[]
   groupIds: readonly string[]
   draggedIds: readonly string[]
+  draggingWorktreeId?: string | null
 }): WorktreeSidebarDropPreview | null {
   const rects = getWorktreeSidebarDragUnitRects({
     rects: args.rects,
@@ -139,6 +140,7 @@ export function computeWorktreeSidebarDropPreview(args: {
   const previewOffsetsByWorktreeId = buildWorktreeDragPreviewOffsets({
     groupIds: args.groupIds,
     draggedIds: args.draggedIds,
+    draggingWorktreeId: args.draggingWorktreeId,
     dropIndex,
     rects
   })

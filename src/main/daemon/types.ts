@@ -324,6 +324,7 @@ export type SessionInfo = {
   state: SessionState
   shellState: ShellReadyState
   isAlive: boolean
+  terminalHandle?: string
   pid: number | null
   cwd: string | null
   cols: number

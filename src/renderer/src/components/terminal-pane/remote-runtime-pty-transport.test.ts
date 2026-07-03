@@ -551,12 +551,13 @@ describe('createRemoteRuntimePtyTransport', () => {
   })
 
   it('scopes ephemeral setup terminals to the floating-terminal selector (#6789)', async () => {
-    const { brandEphemeralSetupTerminalWorktreeId } = await import(
-      '../../../../shared/ephemeral-setup-terminal-worktree-id'
-    )
+    const { brandEphemeralSetupTerminalWorktreeId } =
+      await import('../../../../shared/ephemeral-setup-terminal-worktree-id')
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
-      worktreeId: brandEphemeralSetupTerminalWorktreeId('feature-wall-orchestration-skill-terminal'),
+      worktreeId: brandEphemeralSetupTerminalWorktreeId(
+        'feature-wall-orchestration-skill-terminal'
+      ),
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
@@ -991,12 +992,77 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(
         runtimeCall.mock.calls.filter((call) => call[0].method === 'session.tabs.list')
       ).toHaveLength(1)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(
+        runtimeCall.mock.calls.some((call) => call[0].method.startsWith('session.tabs.close'))
+      ).toBe(false)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('stops polling when a host session mirror never publishes a ready handle', async () => {
+  it('does not close a split parent when the requested leaf times out but a sibling is ready', async () => {
+    vi.useFakeTimers()
+    try {
+      const splitSnapshot = {
+        worktree: 'id:wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: 'group-1',
+        activeTabId: 'host-tab-1::leaf-2',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'host-tab-1::leaf-1',
+            parentTabId: 'host-tab-1',
+            leafId: 'leaf-1',
+            title: 'Terminal 1',
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-1'
+          },
+          {
+            type: 'terminal',
+            id: 'host-tab-1::leaf-2',
+            parentTabId: 'host-tab-1',
+            leafId: 'leaf-2',
+            title: 'Terminal 2',
+            isActive: true,
+            status: 'pending-handle',
+            terminal: null
+          }
+        ]
+      }
+      runtimeCall.mockImplementation((args) => {
+        if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
+          return Promise.resolve({ ok: true, result: splitSnapshot })
+        }
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-host-tab-1',
+        leafId: 'leaf-2'
+      })
+
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await expect(connect).resolves.toBeUndefined()
+      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(
+        runtimeCall.mock.calls.some((call) => call[0].method.startsWith('session.tabs.close'))
+      ).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops polling without closing the host tab when a mirror never publishes a ready handle', async () => {
     vi.useFakeTimers()
     try {
       const pendingSnapshot = {
@@ -1045,12 +1111,16 @@ describe('createRemoteRuntimePtyTransport', () => {
         (call) => call[0].method === 'session.tabs.list'
       )
       expect(listCalls.length).toBeGreaterThan(0)
-      expect(listCalls.length).toBeLessThanOrEqual(100)
+      expect(listCalls.length).toBeLessThanOrEqual(101)
       expect(runtimeCall).not.toHaveBeenCalledWith(
         expect.objectContaining({
           method: 'terminal.create'
         })
       )
+      const closeCalls = runtimeCall.mock.calls.filter((call) =>
+        String(call[0].method).startsWith('session.tabs.close')
+      )
+      expect(closeCalls).toEqual([])
     } finally {
       vi.useRealTimers()
     }

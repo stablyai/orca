@@ -27,6 +27,7 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
+const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
 
@@ -111,6 +112,18 @@ export class PiTitlebarExtensionService {
     }
   }
 
+  private writeOmpFallbackStatusExtension(source: string): string | undefined {
+    const fallbackDir = join(app.getPath('userData'), OMP_MANAGED_STATUS_EXTENSION_DIR)
+    try {
+      mkdirSync(fallbackDir, { recursive: true })
+    } catch {
+      return undefined
+    }
+
+    const fallbackPath = join(fallbackDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
+    return this.writeManagedExtension(fallbackPath, source) === 'written' ? fallbackPath : undefined
+  }
+
   private installManagedExtensions(
     sourceAgentDir: string,
     kind: PiAgentKind
@@ -131,15 +144,18 @@ export class PiTitlebarExtensionService {
       withOrcaManagedExtensionMarker(getPiPrefillExtensionSource(kind))
     )
     const statusExtensionPath = join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
-    const statusResult = this.writeManagedExtension(
-      statusExtensionPath,
-      withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
-    )
+    const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
+    const statusResult = this.writeManagedExtension(statusExtensionPath, statusSource)
 
     return {
       extensionDir: extensionsDir,
       sourceAgentDir,
-      statusExtensionPath: statusResult === 'written' ? statusExtensionPath : undefined
+      statusExtensionPath:
+        statusResult === 'written'
+          ? statusExtensionPath
+          : kind === 'omp'
+            ? this.writeOmpFallbackStatusExtension(statusSource)
+            : undefined
     }
   }
 

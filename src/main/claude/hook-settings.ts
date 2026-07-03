@@ -6,7 +6,7 @@ import {
   getSharedManagedScriptPath,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
+  wrapWindowsGitBashHookCommand,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -75,14 +75,9 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
 }
 
 export function getManagedCommand(scriptPath: string): string {
-  if (process.platform === 'win32') {
-    // Why: Claude Code runs hooks through Git Bash on Windows. Forward slashes
-    // alone don't survive a path with spaces — bash splits at the space and
-    // tries to execute `C:/Users/Jorge` as a command. Wrapping in
-    // `cmd.exe /d /c call "..."` keeps the path as one argument. #6078.
-    return wrapWindowsHookCommand(scriptPath)
-  }
-  return wrapPosixHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsGitBashHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {

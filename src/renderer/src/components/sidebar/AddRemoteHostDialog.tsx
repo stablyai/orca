@@ -86,7 +86,7 @@ export function AddRemoteHostDialog({
       toast.error(
         translate(
           'auto.components.sidebar.AddRemoteHostDialog.sshRelayGraceInvalid',
-          'Relay grace period must be between 60 and {{value0}} seconds.',
+          'Terminal timeout must be between 60 and {{value0}} seconds.',
           { value0: MAX_SSH_RELAY_GRACE_PERIOD_SECONDS }
         )
       )
@@ -234,7 +234,7 @@ export function AddRemoteHostDialog({
                 )
               : translate(
                   'auto.components.sidebar.AddRemoteHostDialog.sshDescription',
-                  'Add a machine you can log into over SSH.'
+                  'Add a persistent machine you can log into over SSH.'
                 )}
           </DialogDescription>
         </DialogHeader>

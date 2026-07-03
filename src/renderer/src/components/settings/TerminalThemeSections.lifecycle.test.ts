@@ -8,12 +8,15 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
     ...actual,
-    useState: <T>(initial: T) => [
-      themeTarget ?? initial,
-      (value: T) => {
-        themeTarget = value as 'dark' | 'light'
-      }
-    ]
+    useState: <T>(initial: T | (() => T)) => {
+      const initialValue = typeof initial === 'function' ? (initial as () => T)() : initial
+      return [
+        themeTarget ?? initialValue,
+        (value: T) => {
+          themeTarget = value as 'dark' | 'light'
+        }
+      ]
+    }
   }
 })
 
@@ -23,7 +26,10 @@ vi.mock('./TerminalSettingsPreview', () => ({
   }
 }))
 
-import { TerminalThemeCatalogSection } from './TerminalThemeSections'
+import {
+  resetTerminalThemeTargetMemoryForTests,
+  TerminalThemeCatalogSection
+} from './TerminalThemeSections'
 
 type ReactElementLike = {
   type: unknown
@@ -50,6 +56,7 @@ const warpThemesMock: UseWarpThemeImportReturn = {
 
 function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   return {
+    theme: 'system',
     terminalUseSeparateLightTheme: false,
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalThemeLight: 'Builtin Tango Light',
@@ -64,12 +71,13 @@ function renderCatalog(
   settings = makeSettings(),
   updateSettings = vi.fn(),
   target?: 'dark' | 'light',
-  preferredTarget?: 'dark' | 'light'
+  preferredTarget?: 'dark' | 'light',
+  systemPrefersDark = true
 ): React.JSX.Element {
   themeTarget = target
   return TerminalThemeCatalogSection({
     settings,
-    systemPrefersDark: true,
+    systemPrefersDark,
     themeSearch: '',
     setThemeSearch: () => {},
     updateSettings,
@@ -167,6 +175,7 @@ function findButtonTexts(node: unknown): string[] {
 describe('TerminalThemeCatalogSection', () => {
   beforeEach(() => {
     themeTarget = 'dark'
+    resetTerminalThemeTargetMemoryForTests()
     vi.clearAllMocks()
   })
 
@@ -178,6 +187,72 @@ describe('TerminalThemeCatalogSection', () => {
     expect(findElementByTypeName(element, 'TerminalSettingsPreview')?.props?.modeOverride).toBe(
       'dark'
     )
+  })
+
+  it('opens on the active light theme when the system appearance is light', () => {
+    const updateSettings = vi.fn()
+    const element = renderCatalog(
+      makeSettings({ terminalUseSeparateLightTheme: true }),
+      updateSettings,
+      undefined,
+      undefined,
+      false
+    )
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const preview = findElementByTypeName(element, 'TerminalSettingsPreview')
+    const selectTheme = picker?.props?.onSelectTheme as (theme: string) => void
+
+    expect(picker?.props?.selectedTheme).toBe('Builtin Tango Light')
+    expect(preview?.props?.modeOverride).toBe('light')
+
+    selectTheme('GitHub Light')
+
+    expect(updateSettings).toHaveBeenCalledWith({ terminalThemeLight: 'GitHub Light' })
+  })
+
+  it('reopens the manually edited light target while the active appearance is dark', () => {
+    const firstOpen = renderCatalog(
+      makeSettings({ terminalUseSeparateLightTheme: true }),
+      vi.fn(),
+      undefined,
+      undefined,
+      true
+    )
+    const targetControl = findElementByTypeName(firstOpen, 'SettingsSegmentedControl')
+    const selectTarget = targetControl?.props?.onChange as (target: 'dark' | 'light') => void
+
+    selectTarget('light')
+
+    const reopened = renderCatalog(
+      makeSettings({ terminalUseSeparateLightTheme: true }),
+      vi.fn(),
+      undefined,
+      undefined,
+      true
+    )
+    const picker = findElementByTypeName(reopened, 'ThemePicker')
+    const preview = findElementByTypeName(reopened, 'TerminalSettingsPreview')
+
+    expect(picker?.props?.selectedTheme).toBe('Builtin Tango Light')
+    expect(preview?.props?.modeOverride).toBe('light')
+  })
+
+  it('opens a customized light-only theme after reload even when the active appearance is dark', () => {
+    const element = renderCatalog(
+      makeSettings({
+        terminalUseSeparateLightTheme: true,
+        terminalThemeLight: 'GitHub Light'
+      }),
+      vi.fn(),
+      undefined,
+      undefined,
+      true
+    )
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const preview = findElementByTypeName(element, 'TerminalSettingsPreview')
+
+    expect(picker?.props?.selectedTheme).toBe('GitHub Light')
+    expect(preview?.props?.modeOverride).toBe('light')
   })
 
   it('keeps the light target enabled while separate light theme is disabled', () => {

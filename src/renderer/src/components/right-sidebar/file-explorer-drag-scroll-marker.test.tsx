@@ -78,6 +78,7 @@ function virtualRowsElement(nodes: TreeNode[]): React.JSX.Element {
     onDuplicate: vi.fn(),
     onAddFolderAsProject: vi.fn(),
     canAddFolderAsProject: () => false,
+    onOpenInTerminal: vi.fn(),
     onRequestDelete: vi.fn(),
     onCollapseFolderSubtree: vi.fn(),
     onFindInFolder: vi.fn(),

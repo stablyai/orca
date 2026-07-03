@@ -821,12 +821,16 @@ const api = {
     setActiveRendererPty: (id: string, active: boolean): void => {
       ipcRenderer.send('pty:setActiveRendererPty', { id, active })
     },
+    setRendererPtyVisible: (id: string, visible: boolean): void => {
+      ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
+    },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
+    hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
 
     getMainBufferSnapshot: (
       id: string,
@@ -880,11 +884,23 @@ const api = {
       ipcRenderer.invoke('pty:getSize', { id }),
 
     onData: (
-      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+      callback: (data: {
+        id: string
+        data: string
+        seq?: number
+        rawLength?: number
+        background?: boolean
+      }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { id: string; data: string; seq?: number; rawLength?: number }
+        data: {
+          id: string
+          data: string
+          seq?: number
+          rawLength?: number
+          background?: boolean
+        }
       ) => callback(data)
       ipcRenderer.on('pty:data', listener)
       return () => ipcRenderer.removeListener('pty:data', listener)
@@ -2951,6 +2967,11 @@ const api = {
       ipcRenderer.on('ui:openQuickOpen', listener)
       return () => ipcRenderer.removeListener('ui:openQuickOpen', listener)
     },
+    onToggleQuickCommandsMenu: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:toggleQuickCommandsMenu', listener)
+      return () => ipcRenderer.removeListener('ui:toggleQuickCommandsMenu', listener)
+    },
     onOpenNewWorkspace: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openNewWorkspace', listener)
@@ -3201,6 +3222,7 @@ const api = {
         requestId?: string
         worktreeId: string
         command?: string
+        cwd?: string
         env?: Record<string, string>
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string
@@ -3222,6 +3244,7 @@ const api = {
           requestId?: string
           worktreeId: string
           command?: string
+          cwd?: string
           env?: Record<string, string>
           launchConfig?: SleepingAgentLaunchConfig
           launchToken?: string
@@ -3603,7 +3626,12 @@ const api = {
 
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:listSessions', args)
+      ipcRenderer.invoke('aiVault:listSessions', args),
+    onWindowFocused: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('aiVault:windowFocused', listener)
+      return () => ipcRenderer.removeListener('aiVault:windowFocused', listener)
+    }
   },
 
   nativeChat: {

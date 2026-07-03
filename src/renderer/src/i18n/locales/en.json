@@ -2549,6 +2549,17 @@
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
             "c337c9d75c": "Close"
+          },
+          "TerminalSshReconnectOverlay": {
+            "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
+            "reconnectFailed": "The SSH connection to {{value0}} failed. Connect again to continue this terminal session.",
+            "connecting": "Connecting to {{value0}}. This terminal will resume after the host is available.",
+            "connected": "SSH is connected.",
+            "disconnected": "This terminal is waiting for {{value0}}. Connect to continue this SSH session.",
+            "connectFailed": "SSH connection failed",
+            "title": "SSH connection required",
+            "connectingButton": "Connecting...",
+            "connectButton": "Connect"
           }
         }
       },
@@ -2575,7 +2586,8 @@
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Drop it onto a local workspace instead."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
@@ -2892,7 +2904,9 @@
             "c35af53b73": "Sign in",
             "f19a63e7cd": "Sign in to see usage",
             "5c938d39ac": "% wk",
+            "54e8d6bb2d": "% Fable",
             "d79c3362c4": "% 5h",
+            "a79c64f87e": "Fable",
             "8295903d17": "Restart live Claude terminals before continuing old conversations after switching.",
             "c98ea88392": "No other accounts",
             "9332ba8684": "Switch to",
@@ -3056,6 +3070,7 @@
             "6d6df77f41": "No data available",
             "7f7f208060": "Monthly",
             "252c096536": "Weekly",
+            "a79c64f87e": "Fable",
             "94038ad2fa": "Session",
             "2c35eca8d4": "Unable to fetch usage",
             "1292d4f2ee": "Unavailable",
@@ -4104,7 +4119,8 @@
           "groupDeleteFailed": "Failed to delete group",
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
-          "sidebarRowMissing": "Target no longer exists"
+          "sidebarRowMissing": "Target no longer exists",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -4454,7 +4470,7 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "Host or SSH config alias is required.",
           "sshPortInvalid": "Port must be between 1 and 65535.",
-          "sshRelayGraceInvalid": "Relay grace period must be between 60 and {{value0}} seconds.",
+          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
           "sshSaved": "SSH host added.",
           "sshSaveFailed": "Failed to add SSH host.",
           "serverFieldsRequired": "Server name and pairing code are required.",
@@ -4463,7 +4479,7 @@
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
           "serverDescription": "Pair with Orca running on another computer.",
-          "sshDescription": "Add a machine you can log into over SSH.",
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
           "cancel": "Cancel",
           "saving": "Saving...",
           "save": "Save",
@@ -4476,6 +4492,7 @@
           "port": "Port",
           "identityFile": "Identity file",
           "identityFilePlaceholder": "~/.ssh/id_ed25519 (optional)",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay.",
           "serverName": "Server name",
           "serverNamePlaceholder": "Dev box",
           "pairingCode": "Pairing code",
@@ -5147,7 +5164,9 @@
           "8f1afdfbd8": "Diff Word Wrap",
           "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
           "bf16ef0af2": "Off",
-          "3f6892f307": "On"
+          "3f6892f307": "On",
+          "b82f86d7d2": "Rich Markdown Spellcheck",
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -6313,7 +6332,7 @@
           "2227ce47b6": "Failed to save target",
           "f602009125": "Target added",
           "b4ba0ce33d": "Target updated",
-          "3879cbaa52": "Relay grace period must be between 60 and {{value0}} seconds, or choose keep alive until reset",
+          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "Port must be between 1 and 65535",
           "0e5aa04161": "Host or SSH config alias is required",
           "f1fc50dad2": "Failed to load SSH targets",
@@ -6335,6 +6354,8 @@
           "106bd57f4a": "SSH Password"
         },
         "SshTargetCard": {
+          "a883f5a00f": "terminal timeout: {{value0}}",
+          "8ce71262f4": "terminals until reset",
           "ec6543cee9": "Connect",
           "0e53e9f8e8": "Test",
           "1810b51482": "Connecting",
@@ -6360,11 +6381,13 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "Cancel",
-          "1b19b00e93": "(7 days).",
-          "137e88ce8d": "How long the relay keeps terminals alive after disconnect. Default: 10800 (3 hours). Maximum:",
-          "b574994adc": "Remote terminals stay available until you end them or reset the relay.",
-          "71fc546097": "Keep alive until reset",
-          "92f80edbfd": "Relay Grace Period (seconds)",
+          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
+          "7c13f58c91": "Until reset",
+          "55c56cf2c7": "Timeout after disconnect (seconds)",
+          "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
+          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
+          "71fc546097": "Keep terminals alive until reset",
+          "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "Optional. Equivalent to ProxyJump / ssh -J.",
           "11bcb4507a": "bastion.example.com",
           "b2ab248ded": "Jump Host",
@@ -6384,7 +6407,11 @@
           "9518545cb6": "Add Target",
           "a62b4cb39a": "Save Changes",
           "29af933cd5": "New SSH Target",
-          "f2331ce599": "Edit SSH Target"
+          "f2331ce599": "Edit SSH Target",
+          "4a342f44c1": "Advanced Connection",
+          "e9609ddca6": "Proxy, jump host, and connection reuse",
+          "8c922dffba": "Reuse SSH connection for faster setup",
+          "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions."
         },
         "TasksPane": {
           "3a72b9745e": "Choose which task providers appear in the Tasks page and sidebar shortcuts.",
@@ -7429,7 +7456,9 @@
             "161a86a9da": "Confirm before closing pinned tabs",
             "8e593f04fc": "Show a confirmation dialog before a pinned tab is closed.",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "d2d2d929c0": "Rich Markdown Spellcheck",
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
         },
         "git": {
@@ -8796,7 +8825,8 @@
             "98a79948b3": "Copy",
             "b234ab25b4": "Could not copy the file to the clipboard",
             "f9d7ca753d": "Copy Paths",
-            "3161c4e425": "folder"
+            "3161c4e425": "folder",
+            "e887fa4b2e": "Open in Terminal"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -9543,7 +9573,8 @@
             "worktreeUnavailable": "Worktree is no longer available.",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -10185,8 +10216,8 @@
           "title": "Custom network address",
           "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
           "label": "Address",
-          "placeholder": "my-mac.ts.net or 192.168.1.50",
-          "hint": "Enter an IP address or a Tailscale hostname (ends in .ts.net).",
+          "placeholder": "my-mac.ts.net, home.example.com, or 192.168.1.50",
+          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.",
           "cancel": "Cancel",
           "use": "Use address"
         },

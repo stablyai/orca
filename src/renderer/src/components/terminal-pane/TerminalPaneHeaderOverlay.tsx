@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { PtyTransport } from './pty-transport'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 
@@ -183,6 +184,11 @@ export default function TerminalPaneHeaderOverlay({
                 value={renameValue}
                 onChange={(event) => onRenameValueChange(event.target.value)}
                 onKeyDown={(event) => {
+                  // Why: an Enter that only confirms a CJK IME candidate must
+                  // not commit the rename; wait for a non-composition Enter.
+                  if (isImeCompositionKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
                     onRenameSubmit()
                   } else if (event.key === 'Escape') {

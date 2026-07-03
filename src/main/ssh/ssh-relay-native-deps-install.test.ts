@@ -109,6 +109,7 @@ function makeMockConnection(capture: SftpWriteCapture): SshConnection {
     end: vi.fn()
   })
   return {
+    canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),
       stderr: { on: vi.fn() },

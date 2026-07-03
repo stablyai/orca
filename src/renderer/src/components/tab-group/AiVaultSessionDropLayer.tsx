@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
-import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/ai-vault-resume-target'
+import {
+  canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceTargetStatus
+} from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
@@ -181,6 +184,20 @@ export default function AiVaultSessionDropLayer({
           translate(
             'auto.components.tab.group.AiVaultSessionDropLayer.openSupportedWorkspace',
             'Open a local or SSH workspace before resuming a session.'
+          )
+        )
+        return true
+      }
+      if (
+        !canResumeAiVaultSessionOnTarget({
+          sessionFilePath: payload.sessionFilePath ?? null,
+          targetStatus
+        })
+      ) {
+        toast.error(
+          translate(
+            'auto.components.tab.group.AiVaultSessionDropLayer.localSessionSshWorkspaceUnsupported',
+            "This session's history is stored on this machine, so it can't resume in an SSH workspace. Drop it onto a local workspace instead."
           )
         )
         return true

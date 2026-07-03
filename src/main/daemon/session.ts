@@ -56,6 +56,7 @@ export type SessionOptions = {
   sessionId: string
   cols: number
   rows: number
+  terminalHandle?: string
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
@@ -76,6 +77,7 @@ type AttachedClient = {
 
 export class Session {
   readonly sessionId: string
+  readonly terminalHandle: string | null
   private _state: SessionState = 'running'
   private _shellState: ShellReadyState
   private _exitCode: number | null = null
@@ -97,6 +99,7 @@ export class Session {
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
+    this.terminalHandle = opts.terminalHandle ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
     const size = normalizePtySize(opts.cols, opts.rows)

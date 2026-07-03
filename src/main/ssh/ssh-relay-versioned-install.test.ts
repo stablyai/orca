@@ -88,6 +88,26 @@ describe('isRelayAlreadyInstalled', () => {
     expect(await isRelayAlreadyInstalled(conn, '/r')).toBe(false)
   })
 
+  it('keeps default probe failures as not installed for SSH session-limit-shaped errors', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    mockExec.mockRejectedValueOnce(sessionLimitError)
+
+    await expect(isRelayAlreadyInstalled(conn, '/r')).resolves.toBe(false)
+  })
+
+  it('rethrows SSH session-limit errors in strict mode', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    mockExec.mockRejectedValueOnce(sessionLimitError)
+
+    await expect(
+      isRelayAlreadyInstalled(conn, '/r', undefined, { rethrowSessionLimitErrors: true })
+    ).rejects.toBe(sessionLimitError)
+  })
+
   it('checks for relay.js AND .install-complete in addition to the dir', async () => {
     mockExec.mockResolvedValueOnce('OK')
     await isRelayAlreadyInstalled(conn, '/r')

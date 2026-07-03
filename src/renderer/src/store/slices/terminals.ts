@@ -11,7 +11,10 @@ import type {
   WorkspaceKey,
   WorkspaceSessionState
 } from '../../../../shared/types'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   folderWorkspaceKey,
@@ -290,6 +293,42 @@ function equalStringSets(a: readonly string[], b: readonly string[]): boolean {
   return a.every((value) => bSet.has(value))
 }
 
+function uniquePtyIds(ptyIds: readonly (string | null | undefined)[]): string[] {
+  return [...new Set(ptyIds.filter((ptyId): ptyId is string => Boolean(ptyId)))]
+}
+
+function resolvePrimaryLayoutPtyId(layout: TerminalLayoutSnapshot): string | null {
+  const ptyIdsByLeafId = layout.ptyIdsByLeafId ?? {}
+  const activePtyId = layout.activeLeafId ? ptyIdsByLeafId[layout.activeLeafId] : undefined
+  return activePtyId ?? Object.values(ptyIdsByLeafId)[0] ?? null
+}
+
+function withTerminalTabPtyId(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  tabId: string,
+  ptyId: string | null
+): Record<string, TerminalTab[]> {
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const index = tabs.findIndex((tab) => tab.id === tabId)
+    if (index === -1) {
+      continue
+    }
+    if (tabs[index]?.ptyId === ptyId) {
+      return tabsByWorktree
+    }
+    const nextTabs = [...tabs]
+    nextTabs[index] = { ...nextTabs[index]!, ptyId }
+    return { ...tabsByWorktree, [worktreeId]: nextTabs }
+  }
+  return tabsByWorktree
+}
+
+export type AutomaticAgentResumeClaim = {
+  worktreeId: string
+  launchAgent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
+}
+
 export type TerminalSlice = {
   tabsByWorktree: Record<string, TerminalTab[]>
   activeTabId: string | null
@@ -327,6 +366,10 @@ export type TerminalSlice = {
    *  split-button label across sessions. */
   recentQuickCommandIdByGroup: Record<string, string>
   setRecentQuickCommandForGroup: (groupId: string, quickCommandId: string) => void
+  /** Runtime-only claim for automatic sleeping-session recovery tabs. It
+   *  bridges the gap after startup payload consumption and before hooks go live. */
+  automaticAgentResumeClaimsByTabId: Record<string, AutomaticAgentResumeClaim>
+  claimAutomaticAgentResume: (tabId: string, claim: AutomaticAgentResumeClaim) => void
   pendingStartupByTabId: Record<
     string,
     {
@@ -337,8 +380,10 @@ export type TerminalSlice = {
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       launchConfig?: SleepingAgentLaunchConfig
+      resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      draftPrompt?: string
       /** Initial prompt-start status for agents that lack native prompt hooks. */
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       /** Show the restored-session banner when this startup command mounts. */
@@ -425,6 +470,7 @@ export type TerminalSlice = {
        *  `'chat'` so the tab opens in the native chat view; omitted otherwise
        *  so the tab keeps the implicit `'terminal'` default. */
       viewMode?: Tab['viewMode']
+      startupCwd?: string
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -490,6 +536,12 @@ export type TerminalSlice = {
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
+  syncPaneDetachPtyOwnership: (args: {
+    detachedPtyId: string | null
+    sourceLayout: TerminalLayoutSnapshot
+    sourceTabId: string
+    targetTabId: string
+  }) => void
   queueTabStartupCommand: (
     tabId: string,
     startup: {
@@ -498,8 +550,10 @@ export type TerminalSlice = {
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       launchConfig?: SleepingAgentLaunchConfig
+      resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      draftPrompt?: string
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
@@ -513,8 +567,10 @@ export type TerminalSlice = {
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
+    draftPrompt?: string
     initialAgentStatus?: { agent: TuiAgent; prompt: string }
     showSessionRestoredBanner?: boolean
     telemetry?: AgentStartedTelemetry
@@ -579,6 +635,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingInitialCwdByTabId: {},
   pendingSetupSplitByTabId: {},
   pendingIssueCommandSplitByTabId: {},
+  automaticAgentResumeClaimsByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
   defaultTerminalTabsAppliedByWorktreeId: {},
@@ -615,6 +672,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       recentQuickCommandIdByGroup: {
         ...s.recentQuickCommandIdByGroup,
         [groupId]: quickCommandId
+      }
+    }))
+  },
+
+  claimAutomaticAgentResume: (tabId, claim) => {
+    set((s) => ({
+      automaticAgentResumeClaimsByTabId: {
+        ...s.automaticAgentResumeClaimsByTabId,
+        [tabId]: claim
       }
     }))
   },
@@ -735,6 +801,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
       const quickCommandLabel = options?.quickCommandLabel?.trim()
+      const startupCwd = options?.startupCwd
       const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
       const isRemoteWorktree = Boolean(remoteConnectionId)
       const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
@@ -771,6 +838,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         sortOrder: existing.length,
         createdAt: Date.now(),
         ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
+        ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
         ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
         // Why: when Terminal.tsx's activation fallback auto-creates a tab for a
         // first-visit worktree, the resulting PTY spawn is caused by the user
@@ -1021,6 +1089,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
+      const nextAutomaticAgentResumeClaimsByTabId = { ...s.automaticAgentResumeClaimsByTabId }
+      delete nextAutomaticAgentResumeClaimsByTabId[tabId]
       const nextPendingInitialCwdByTabId = { ...s.pendingInitialCwdByTabId }
       delete nextPendingInitialCwdByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
@@ -1097,6 +1167,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
         pendingStartupByTabId: nextPendingStartupByTabId,
+        automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
         pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
@@ -2420,6 +2491,54 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  syncPaneDetachPtyOwnership: ({ detachedPtyId, sourceLayout, sourceTabId, targetTabId }) => {
+    set((s) => {
+      const layoutSourcePtyIds = uniquePtyIds(Object.values(sourceLayout.ptyIdsByLeafId ?? {}))
+      const existingSourcePtyIds = (s.ptyIdsByTabId[sourceTabId] ?? []).filter(
+        (ptyId) => ptyId !== detachedPtyId
+      )
+      const sourcePtyIds = layoutSourcePtyIds.length > 0 ? layoutSourcePtyIds : existingSourcePtyIds
+      const sourcePrimaryPtyId = resolvePrimaryLayoutPtyId(sourceLayout) ?? sourcePtyIds[0] ?? null
+      const nextPtyIdsByTabId = {
+        ...s.ptyIdsByTabId,
+        [sourceTabId]: sourcePtyIds
+      }
+      if (detachedPtyId) {
+        nextPtyIdsByTabId[targetTabId] = uniquePtyIds([
+          ...(nextPtyIdsByTabId[targetTabId] ?? []),
+          detachedPtyId
+        ])
+      }
+
+      const nextLastKnownRelayPtyIdByTabId = { ...s.lastKnownRelayPtyIdByTabId }
+      if (sourcePrimaryPtyId) {
+        nextLastKnownRelayPtyIdByTabId[sourceTabId] = sourcePrimaryPtyId
+      } else {
+        delete nextLastKnownRelayPtyIdByTabId[sourceTabId]
+      }
+      if (detachedPtyId) {
+        nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
+      }
+
+      // Why: pane-to-tab detach moves live PTY ownership without spawning or
+      // exiting processes, so sync identity maps directly without activity bumps.
+      const sourceTabsByWorktree = withTerminalTabPtyId(
+        s.tabsByWorktree,
+        sourceTabId,
+        sourcePrimaryPtyId
+      )
+      const nextTabsByWorktree = detachedPtyId
+        ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
+        : sourceTabsByWorktree
+
+      return {
+        ptyIdsByTabId: nextPtyIdsByTabId,
+        lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
+        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
+      }
+    })
+  },
+
   queueTabStartupCommand: (tabId, startup) => {
     // Why: launchToken is only meaningful for tracked launch-config reuse;
     // plain startup commands must not mint or carry a synthetic token.
@@ -2833,6 +2952,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
         defaultTerminalTabsAppliedByWorktreeId:
           session.defaultTerminalTabsAppliedByWorktreeId ?? {},
+        automaticAgentResumeClaimsByTabId: {},
         sleepingAgentSessionsByPaneKey,
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,

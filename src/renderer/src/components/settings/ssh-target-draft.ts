@@ -1,4 +1,5 @@
 import {
+  DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS,
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -14,6 +15,7 @@ export type EditingTarget = {
   identityFile: string
   proxyCommand: string
   jumpHost: string
+  systemSshConnectionReuse: boolean
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
 }
@@ -27,8 +29,9 @@ export const EMPTY_FORM: EditingTarget = {
   identityFile: '',
   proxyCommand: '',
   jumpHost: '',
-  relayGracePeriodSeconds: String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS),
-  relayKeepAliveUntilReset: false
+  systemSshConnectionReuse: true,
+  relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
+  relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
@@ -44,12 +47,14 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     identityFile: target.identityFile ?? '',
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
+    systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
     relayGracePeriodSeconds: String(
       target.relayGracePeriodSeconds === 0
-        ? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
-        : (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
+        ? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS
+        : (target.relayGracePeriodSeconds ?? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS)
     ),
-    relayKeepAliveUntilReset: target.relayGracePeriodSeconds === 0
+    relayKeepAliveUntilReset:
+      (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS) === 0
   }
 }
 

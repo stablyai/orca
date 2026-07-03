@@ -1886,7 +1886,7 @@ function Terminal(): React.JSX.Element | null {
                           key={`${tab.id}-${tab.generation ?? 0}`}
                           tabId={tab.id}
                           worktreeId={workspace.id}
-                          cwd={workspace.path}
+                          cwd={tab.startupCwd ?? workspace.path}
                           isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
                           // Why: the activity page hosts this existing pane via
                           // portal while the workspace surface remains hidden.
