@@ -206,7 +206,7 @@ describe('feature interaction writer boundaries', () => {
     const jiraWriter = "recordFeatureInteraction('jira-tasks')"
 
     expect(
-      sourceBetween(taskPageSource, 'const handleUseJiraItem', 'const handleJiraConnect')
+      sourceBetween(taskPageSource, 'const handleUseJiraItem', 'const taskPageListChromeHidden')
     ).toContain(jiraWriter)
   })
 

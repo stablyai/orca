@@ -17,12 +17,12 @@ import {
   updateIssue
 } from '../jira/issues'
 import type {
-  JiraConnectArgs,
   JiraCreateIssueArgs,
   JiraIssueFilter,
   JiraIssueUpdate,
   JiraSiteSelection
 } from '../../shared/types'
+import { normalizeConnectArgs } from './jira-connect-args-normalization'
 
 const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', 'done'])
 
@@ -47,6 +47,27 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined
 }
 
+function isNullableString(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string'
+}
+
+function getIssueUpdateValidationError(value: unknown): string | null {
+  if (!value || typeof value !== 'object') {
+    return 'Updates object is required.'
+  }
+  const input = value as Record<string, unknown>
+  if (input.assigneeUserId !== undefined && !isNullableString(input.assigneeUserId)) {
+    return 'Assignee user ID must be a string or null.'
+  }
+  if (input.assigneeAccountId !== undefined && !isNullableString(input.assigneeAccountId)) {
+    return 'Assignee account ID must be a string or null.'
+  }
+  if (input.assigneeUserId !== undefined && input.assigneeAccountId !== undefined) {
+    return 'Use only one Jira assignee identifier field.'
+  }
+  return null
+}
+
 function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -58,18 +79,16 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   if (input.labels !== undefined && normalizeStringArray(input.labels) === undefined) {
     return null
   }
-  if (
-    input.assigneeAccountId !== undefined &&
-    input.assigneeAccountId !== null &&
-    typeof input.assigneeAccountId !== 'string'
-  ) {
+  if (!isNullableString(input.assigneeUserId)) {
     return null
   }
-  if (
-    input.priorityId !== undefined &&
-    input.priorityId !== null &&
-    typeof input.priorityId !== 'string'
-  ) {
+  if (!isNullableString(input.assigneeAccountId)) {
+    return null
+  }
+  if (input.assigneeUserId !== undefined && input.assigneeAccountId !== undefined) {
+    return null
+  }
+  if (!isNullableString(input.priorityId)) {
     return null
   }
   if (input.transitionId !== undefined && typeof input.transitionId !== 'string') {
@@ -79,19 +98,12 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
 }
 
 export function registerJiraHandlers(): void {
-  ipcMain.handle('jira:connect', async (_event, args: JiraConnectArgs) => {
-    if (
-      typeof args?.siteUrl !== 'string' ||
-      typeof args?.email !== 'string' ||
-      typeof args?.apiToken !== 'string'
-    ) {
-      return { ok: false, error: 'Site URL, email, and API token are required.' }
+  ipcMain.handle('jira:connect', async (_event, args: unknown) => {
+    const normalized = normalizeConnectArgs(args)
+    if (!normalized) {
+      return { ok: false, error: 'Invalid Jira connection settings.' }
     }
-    const result = await connect({
-      siteUrl: args.siteUrl,
-      email: args.email,
-      apiToken: args.apiToken
-    })
+    const result = await connect(normalized)
     if (result.ok) {
       _resetPreflightCache()
     }
@@ -175,6 +187,10 @@ export function registerJiraHandlers(): void {
     async (_event, args: { key: string; updates: JiraIssueUpdate; siteId?: string }) => {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
         return { ok: false, error: 'Issue key is required.' }
+      }
+      const validationError = getIssueUpdateValidationError(args.updates)
+      if (validationError) {
+        return { ok: false, error: validationError }
       }
       const updates = normalizeIssueUpdate(args.updates)
       if (!updates) {

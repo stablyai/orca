@@ -9,7 +9,14 @@ import { JiraIntegrationCard } from './jira-integration-card'
 type StoreState = {
   jiraStatus: {
     connected: boolean
-    sites?: { id: string; displayName: string; siteUrl: string; email?: string }[]
+    sites?: {
+      id: string
+      displayName: string
+      siteUrl: string
+      email?: string
+      deploymentType?: 'cloud' | 'server'
+      authUsername?: string
+    }[]
   }
   jiraStatusChecked: boolean
   jiraStatusContextKey: string | null
@@ -115,5 +122,37 @@ describe('JiraIntegrationCard account scope', () => {
       repoId: null,
       sectionId: 'default-runtime'
     })
+  })
+
+  it('describes Jira Cloud and Server/Data Center setup when disconnected', async () => {
+    const state = installStore({ activeRuntimeEnvironmentId: null })
+    state.jiraStatus = { connected: false }
+
+    const rendered = await renderCard()
+
+    expect(rendered.textContent).toContain('Browse, create, and start work from Jira issues.')
+    expect(rendered.textContent).toContain('Connect a Jira Cloud or Server/Data Center site.')
+    expect(rendered.textContent).not.toContain('Connect a Jira Cloud site')
+  })
+
+  it('shows Server/Data Center auth username instead of Cloud email labels', async () => {
+    const state = installStore({ activeRuntimeEnvironmentId: null })
+    state.jiraStatus.sites = [
+      {
+        id: 'server-1',
+        displayName: 'Internal Jira',
+        siteUrl: 'https://jira.example.internal',
+        email: 'ada@example.internal',
+        deploymentType: 'server',
+        authUsername: 'ada'
+      }
+    ]
+
+    const rendered = await renderCard()
+
+    expect(rendered.textContent).toContain('https://jira.example.internal · ada')
+    expect(rendered.textContent).not.toContain(
+      'https://jira.example.internal · ada@example.internal'
+    )
   })
 })
