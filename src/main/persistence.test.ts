@@ -2828,6 +2828,24 @@ describe('Store', () => {
     expect(store.getSettings().terminalUseSeparateLightTheme).toBe(false)
   })
 
+  it('round-trips selected terminal theme names across reload', async () => {
+    const store = await createStore()
+
+    store.updateSettings({
+      terminalThemeDark: 'One Light',
+      terminalThemeLight: 'GitHub Light'
+    })
+    store.flush()
+
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.settings.terminalThemeDark).toBe('One Light')
+    expect(persisted.settings.terminalThemeLight).toBe('GitHub Light')
+
+    const reopened = await createStore()
+    expect(reopened.getSettings().terminalThemeDark).toBe('One Light')
+    expect(reopened.getSettings().terminalThemeLight).toBe('GitHub Light')
+  })
+
   // ── 5. addRepo and getRepo ──────────────────────────────────────────
 
   it('addRepo stores a repo retrievable by getRepo', async () => {
