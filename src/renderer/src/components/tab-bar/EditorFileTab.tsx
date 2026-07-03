@@ -30,6 +30,7 @@ import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 export default function EditorFileTab({
   file,
@@ -201,6 +202,12 @@ export default function EditorFileTab({
   }, [menuOpen])
 
   const dragListeners = isRenaming ? undefined : listeners
+  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
+  // another pane / split) does not switch the active tab mid-gesture.
+  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+    onActivate,
+    disabled: isRenaming
+  })
 
   const tabRoot = (
     <div
@@ -211,11 +218,10 @@ export default function EditorFileTab({
       {...dragListeners}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
-        if (isRenaming || e.button !== 0) {
-          return
-        }
-        onActivate()
-        dragListeners?.onPointerDown?.(e)
+        onTabPointerDown(
+          e,
+          dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
       }}
       onDoubleClick={() => {
         if (file.isPreview && onMakePermanent) {
