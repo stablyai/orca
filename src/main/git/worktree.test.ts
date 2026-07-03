@@ -320,6 +320,56 @@ branch refs/heads/main-2
     ])
   })
 
+  it('falls back on a localized (non-English) older-Git usage error via exit code 129', async () => {
+    // Git under a non-English locale translates the usage text, so stderr
+    // matching alone misses it; the 129 exit code must still trigger fallback.
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('git worktree list --porcelain -z'), {
+          code: 129,
+          stderr: 'Fehler: Unbekannter Schalter »z«\nAufruf: git worktree list [<Optionen>]\n'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+`
+      })
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo' }],
+      [['worktree', 'list', '--porcelain'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('does not retry without -z for non-usage Git failures', async () => {
+    // A fatal error (exit 128) is not an unsupported-flag signal, so the -z
+    // command must not be silently re-run without it.
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('git worktree list --porcelain -z'), {
+        code: 128,
+        stderr: 'fatal: unable to read tree\n'
+      })
+    )
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([])
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo' }]
+    ])
+  })
+
   it('returns an empty graph for paths Git reports as non-repositories', async () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: not a git repository'))
 

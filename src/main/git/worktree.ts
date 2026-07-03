@@ -104,15 +104,14 @@ function isNotGitRepositoryError(error: unknown): boolean {
 }
 
 function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  // Why: this fixed command's only compatibility-sensitive flag is `-z`;
-  // localized Git usage errors still exit 129 when older versions reject it.
+  // Older Git (<2.36) rejects `-z`, this command's only version-sensitive flag,
+  // so Git's usage exit 129 identifies it regardless of locale. The stderr
+  // matcher is a fallback for runners that drop the numeric exit code.
   if (getErrorCode(error) === '129') {
     return true
   }
 
-  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(
-    getErrorText(error)
-  )
+  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(getErrorText(error))
 }
 
 function isUnsupportedRevParsePathFormatError(error: unknown): boolean {
