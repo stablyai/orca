@@ -13,8 +13,14 @@ function compareDisplayName(a: Worktree, b: Worktree): number {
 }
 
 function getRecentActivity(worktree: Worktree): number {
-  const activity = worktree.lastActivityAt ?? worktree.lastOutputAt ?? 0
-  return Number.isFinite(activity) ? activity : 0
+  const lastActivityAt = worktree.lastActivityAt ?? 0
+  const lastOutputAt = worktree.lastOutputAt ?? 0
+  // Why: headless serve hosts only stamp lastActivityAt at creation, so live
+  // terminal output must still count as recency for mobile-only pairings.
+  return Math.max(
+    Number.isFinite(lastActivityAt) ? lastActivityAt : 0,
+    Number.isFinite(lastOutputAt) ? lastOutputAt : 0
+  )
 }
 
 function effectiveRecentActivity(worktree: Worktree, now: number): number {
@@ -33,6 +39,15 @@ function effectiveRecentActivity(worktree: Worktree, now: number): number {
 function compareByRecent(a: Worktree, b: Worktree, now: number): number {
   return (
     effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now) || compareDisplayName(a, b)
+  )
+}
+
+const AGENT_ATTENTION_STATUS_ORDER = { permission: 0, working: 1, done: 2, active: 3, inactive: 4 }
+
+function compareByAgentAttention(a: Worktree, b: Worktree, now: number): number {
+  return (
+    AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(a)] -
+      AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(b)] || compareByRecent(a, b, now)
   )
 }
 
@@ -69,30 +84,17 @@ export function sortWorktrees(
       const repoComparison = a.repo.localeCompare(b.repo)
       return repoComparison || compareDisplayName(a, b)
     }
-    if (mode === 'smart') {
-      const aRank =
-        typeof a.sortOrder === 'number' && Number.isFinite(a.sortOrder) ? a.sortOrder : 0
-      const bRank =
-        typeof b.sortOrder === 'number' && Number.isFinite(b.sortOrder) ? b.sortOrder : 0
-      if (aRank !== bRank) {
-        // Why: desktop persists its computed Agent activity order into sortOrder;
-        // mobile should render that source-of-truth before local fallback signals.
-        return bRank - aRank
-      }
-      return compareDisplayName(a, b)
+    const aRank = typeof a.sortOrder === 'number' && Number.isFinite(a.sortOrder) ? a.sortOrder : 0
+    const bRank = typeof b.sortOrder === 'number' && Number.isFinite(b.sortOrder) ? b.sortOrder : 0
+    if (aRank !== bRank) {
+      // Why: desktop persists its computed Agent activity order into sortOrder;
+      // mobile should render that source-of-truth before local fallback signals.
+      return bRank - aRank
     }
-    if (a.unread !== b.unread) {
-      return a.unread ? -1 : 1
-    }
-    const aStatus = getWorktreeStatus(a)
-    const bStatus = getWorktreeStatus(b)
-    const statusOrder = { permission: 0, working: 1, done: 2, active: 3, inactive: 4 }
-    if (statusOrder[aStatus] !== statusOrder[bStatus]) {
-      return statusOrder[aStatus] - statusOrder[bStatus]
-    }
-    const recentComparison = compareByRecent(a, b, now)
-    if (recentComparison !== 0) {
-      return recentComparison
+    if (aRank === 0) {
+      // Why: headless serve hosts never persist desktop smart ranks; unranked
+      // rows fall back to agent attention order instead of a frozen A-Z list.
+      return compareByAgentAttention(a, b, now)
     }
     return compareDisplayName(a, b)
   })

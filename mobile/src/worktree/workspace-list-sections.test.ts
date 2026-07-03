@@ -245,23 +245,71 @@ describe('buildSections', () => {
     ])
   })
 
-  it('matches desktop Recent sort using lastActivityAt instead of terminal output', () => {
-    const newerActivity = worktree({
-      worktreeId: 'newer-activity',
-      displayName: 'newer',
-      lastActivityAt: 200,
-      lastOutputAt: 1
-    })
-    const louderTerminal = worktree({
-      worktreeId: 'louder-terminal',
-      displayName: 'louder',
+  it('counts live terminal output as Recent activity for headless serve hosts', () => {
+    // Serve hosts only stamp lastActivityAt at creation, so output must rank.
+    const streamingOnServe = worktree({
+      worktreeId: 'streaming',
+      displayName: 'streaming',
       lastActivityAt: 100,
       lastOutputAt: 1_000
     })
+    const touchedOnDesktop = worktree({
+      worktreeId: 'touched',
+      displayName: 'touched',
+      lastActivityAt: 200,
+      lastOutputAt: 1
+    })
 
     expect(
-      sortWorktrees([louderTerminal, newerActivity], 'recent').map((item) => item.worktreeId)
-    ).toEqual(['newer-activity', 'louder-terminal'])
+      sortWorktrees([touchedOnDesktop, streamingOnServe], 'recent').map((item) => item.worktreeId)
+    ).toEqual(['streaming', 'touched'])
+  })
+
+  it('keeps desktop activity ranking in Recent when it is newest', () => {
+    const newerActivity = worktree({
+      worktreeId: 'newer-activity',
+      displayName: 'newer',
+      lastActivityAt: 2_000,
+      lastOutputAt: 1
+    })
+    const quietOlder = worktree({
+      worktreeId: 'quiet-older',
+      displayName: 'quiet',
+      lastActivityAt: 100,
+      lastOutputAt: 150
+    })
+
+    expect(
+      sortWorktrees([quietOlder, newerActivity], 'recent').map((item) => item.worktreeId)
+    ).toEqual(['newer-activity', 'quiet-older'])
+  })
+
+  it('falls back to agent attention order in Smart when no desktop ranks exist', () => {
+    // Display names are deliberately reverse-alphabetical to prove status ranks.
+    const idle = worktree({ worktreeId: 'idle', displayName: 'Aardvark' })
+    const needsPermission = worktree({
+      worktreeId: 'needs-permission',
+      displayName: 'Zebra',
+      status: 'permission'
+    })
+    const working = worktree({ worktreeId: 'working', displayName: 'Yak', status: 'working' })
+
+    expect(
+      sortWorktrees([idle, working, needsPermission], 'smart').map((item) => item.worktreeId)
+    ).toEqual(['needs-permission', 'working', 'idle'])
+  })
+
+  it('keeps desktop-ranked rows above unranked attention-fallback rows in Smart', () => {
+    const ranked = worktree({ worktreeId: 'ranked', displayName: 'Ranked', sortOrder: 5 })
+    const unrankedWorking = worktree({
+      worktreeId: 'unranked-working',
+      displayName: 'Working',
+      status: 'working'
+    })
+
+    expect(
+      sortWorktrees([unrankedWorking, ranked], 'smart').map((item) => item.worktreeId)
+    ).toEqual(['ranked', 'unranked-working'])
   })
 
   it('matches desktop Recent create grace for newly-created workspaces', () => {
