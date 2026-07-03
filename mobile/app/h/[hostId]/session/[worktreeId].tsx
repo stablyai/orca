@@ -96,6 +96,7 @@ import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/termi
 import { getTerminalLiveAccessoryRawSendTarget } from '../../../../src/terminal/terminal-live-accessory-raw-send-target'
 import {
   clearTerminalLiveInputFocusTimer,
+  focusTerminalLiveInputTarget,
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
@@ -3134,8 +3135,12 @@ export default function SessionScreen() {
     if (!canSend || !liveInputEnabled) {
       return
     }
-    liveInputRef.current?.focus()
-  }, [canSend, liveInputEnabled])
+    focusTerminalLiveInputTarget(liveInputRef.current, {
+      keyboardHeight,
+      refocus: () =>
+        scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
+    })
+  }, [canSend, keyboardHeight, liveInputEnabled])
 
   const clearSessionTabActionSheetKeyboardListener = useCallback(() => {
     sessionTabActionSheetKeyboardHideSubRef.current?.remove()
