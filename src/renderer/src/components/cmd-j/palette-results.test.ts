@@ -357,7 +357,10 @@ describe('Cmd+J project and repo-group search', () => {
     ])
   })
 
-  it('uses project header keys for multi-setup projects on one host', () => {
+  it('splits independent same-host checkouts of one project into per-setup keys', () => {
+    // Why: two `cloned` checkouts share the project's remote identity but are
+    // distinct user clones; the palette follows the sidebar and surfaces each as
+    // its own jump target rather than collapsing them. See #5374.
     const results = searchCmdJProjectResults({
       query: 'platform',
       projectGroups: [],
@@ -366,6 +369,27 @@ describe('Cmd+J project and repo-group search', () => {
       projectHostSetups: [
         setup('setup-1', 'project-1', 'local', 'repo-1'),
         setup('setup-2', 'project-1', 'local', 'repo-2')
+      ]
+    })
+
+    expect(results.map((result) => result.rowKey)).toEqual([
+      'project:project-1::setup:repo-1',
+      'project:project-1::setup:repo-2'
+    ])
+  })
+
+  it('keeps a provisioned runtime copy under one project key alongside a same-host checkout', () => {
+    // Why: a `provisioned` (recipe-created ephemeral) copy shares the project's
+    // remote identity but must not split the user's real checkout; it nests
+    // under the single project key. Mirrors the sidebar grouping. See #6320 / #5374.
+    const results = searchCmdJProjectResults({
+      query: 'platform',
+      projectGroups: [],
+      repos: [repo('repo-1', 'platform-a'), repo('repo-2', 'platform-runtime')],
+      projects: [project('project-1', 'Platform')],
+      projectHostSetups: [
+        setup('setup-1', 'project-1', 'local', 'repo-1'),
+        { ...setup('setup-2', 'project-1', 'local', 'repo-2'), setupMethod: 'provisioned' }
       ]
     })
 
