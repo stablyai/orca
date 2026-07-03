@@ -837,6 +837,7 @@ type GitStreamOptions = {
   env?: NodeJS.ProcessEnv
   wslDistro?: string
   signal?: AbortSignal
+  timeout?: number
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
   /**
@@ -881,6 +882,7 @@ export async function gitStreamStdout(
       let stdoutBytes = 0
       let stderr = ''
       let stderrBytes = 0
+      let timer: NodeJS.Timeout | null = null
       // Why: decode statefully so a multibyte UTF-8 character split across two
       // chunks (common with non-ASCII filenames) isn't corrupted into
       // replacement characters and mis-parsed.
@@ -893,6 +895,10 @@ export async function gitStreamStdout(
         child.off('error', onError)
         child.off('close', onClose)
         options.signal?.removeEventListener('abort', onAbort)
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
         // Flush any bytes the decoders were holding for an incomplete sequence.
         stdoutDecoder.end()
         stderrDecoder.end()
@@ -963,12 +969,19 @@ export async function gitStreamStdout(
         killSpawnedCommandTree(child)
         finish(createAbortError())
       }
+      function onTimeout(): void {
+        killSpawnedCommandTree(child)
+        finish(new Error('git timed out.'))
+      }
 
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)
       child.on('error', onError)
       child.on('close', onClose)
       options.signal?.addEventListener('abort', onAbort, { once: true })
+      if (options.timeout && options.timeout > 0) {
+        timer = setTimeout(onTimeout, options.timeout)
+      }
       if (options.signal?.aborted) {
         onAbort()
       }
