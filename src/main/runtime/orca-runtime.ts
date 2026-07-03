@@ -22440,6 +22440,12 @@ function decodeTerminalOutputPercentEscapes(value: string): string {
   })
 }
 
+// Why: extraction runs on the PTY hot path for every chunk, and the extension
+// regex backtracks quadratically on pathological separator runs. No candidate
+// can cross a newline (the regex classes exclude \r\n), so scan per line and
+// skip lines already too long to yield a storable candidate —
+// appendRecentPtyPathCandidates drops oversized candidates anyway, and the raw
+// recent-output buffer still covers provenance inside oversized lines.
 function extractTerminalOutputPathCandidates(data: string): string[] {
   const candidates: string[] = []
   const add = (value: string): void => {
@@ -22452,7 +22458,17 @@ function extractTerminalOutputPathCandidates(data: string): string[] {
       }
     }
   }
-  for (const match of data.matchAll(/file:\/\/([^/\s]*)(\/[^\s\x1b"'<>)]*)/gi)) {
+  for (const line of data.split(/[\r\n]+/)) {
+    if (line.length === 0 || line.length > RECENT_PTY_PATH_CANDIDATE_MAX_BYTES) {
+      continue
+    }
+    collectTerminalOutputLinePathCandidates(line, add)
+  }
+  return candidates
+}
+
+function collectTerminalOutputLinePathCandidates(line: string, add: (value: string) => void): void {
+  for (const match of line.matchAll(/file:\/\/([^/\s]*)(\/[^\s\x1b"'<>)]*)/gi)) {
     const authority = match[1] ?? ''
     const uriPath = match[2]
     if (uriPath) {
@@ -22460,23 +22476,22 @@ function extractTerminalOutputPathCandidates(data: string): string[] {
       add(isTerminalOutputLoopbackAuthority(authority) ? decoded : `//${authority}${decoded}`)
     }
   }
-  for (const match of data.matchAll(
+  for (const match of line.matchAll(
     /(?:\/(?:tmp|private\/tmp)\/|[A-Za-z]:[\\/])[^\r\n\x1b"'<>]+/g
   )) {
-    if (isInsideNonLocalFileUri(data, match.index)) {
+    if (isInsideNonLocalFileUri(line, match.index)) {
       continue
     }
     add(match[0])
   }
-  for (const match of data.matchAll(
+  for (const match of line.matchAll(
     /\/[^\r\n\x1b"'<>]*\.[A-Za-z0-9_+-]+(?:[#:\s][^\r\n\x1b"'<>]*)?/g
   )) {
-    if (isInsideNonLocalFileUri(data, match.index)) {
+    if (isInsideNonLocalFileUri(line, match.index)) {
       continue
     }
     add(match[0])
   }
-  return candidates
 }
 
 function normalizeTerminalOutputFileUriDrivePath(candidate: string): string | null {
@@ -22492,8 +22507,19 @@ function trimTerminalOutputPathCandidate(value: string): string {
   for (const match of candidate.matchAll(
     /.+?\.[A-Za-z0-9_+-]+(?:#L\d+(?:C\d+)?|(?::\d+)?(?::\d+)?)?(?=\s+|$)/gi
   )) {
-    const text = candidate.slice(0, match.index + match[0].length)
-    if (countTerminalOutputPathStarts(text) <= 1) {
+    const end = match.index + match[0].length
+    const text = candidate.slice(0, end)
+    if (countTerminalOutputPathStarts(text) > 1) {
+      continue
+    }
+    // Same rule as the tap parsers: a line-end extension token only extends
+    // the candidate when the added segment is path-like, so trailing prose
+    // ending in a filename is not swallowed into the candidate.
+    if (
+      end < candidate.length ||
+      selected === null ||
+      /[\\/]/.test(candidate.slice(selected.length, end))
+    ) {
       selected = text
     }
   }

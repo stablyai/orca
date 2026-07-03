@@ -50,12 +50,16 @@ export const TERMINAL_PATH_TAP_JS = String.raw`
 	  }
 
 	  function trimSpacedPathTrailingProse(range, col) {
+	    // A line-end extension token only extends the span when the added segment
+	    // is path-like (contains a separator) — prose must not be swallowed.
 	    var selected = null;
 	    var extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g;
 	    var match;
 	    while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
-	      var text = range.text.slice(0, match.index + match[0].length);
-	      if (countPathStarts(text) <= 1) {
+	      var end = match.index + match[0].length;
+	      var text = range.text.slice(0, end);
+	      if (countPathStarts(text) > 1) continue;
+	      if (end < range.text.length || selected === null || /[\\/]/.test(range.text.slice(selected.length, end))) {
 	        selected = text;
 	      }
 	    }

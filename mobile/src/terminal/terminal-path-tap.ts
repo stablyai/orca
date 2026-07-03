@@ -82,12 +82,23 @@ function trimSpacedPathTrailingProse(
   range: Span & { text: string },
   col?: number
 ): (Span & { text: string }) | null {
+  // Why: a line-end extension token only extends the span when the added
+  // segment is path-like (contains a separator) — "v1.2 reports/result.json"
+  // extends, prose like "failed to start app.py" must not be swallowed.
   let selected: string | null = null
   const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
   let match: RegExpExecArray | null
   while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
-    const text = range.text.slice(0, match.index + match[0].length)
-    if (countPathStarts(text) <= 1) {
+    const end = match.index + match[0].length
+    const text = range.text.slice(0, end)
+    if (countPathStarts(text) > 1) {
+      continue
+    }
+    if (
+      end < range.text.length ||
+      selected === null ||
+      /[\\/]/.test(range.text.slice(selected.length, end))
+    ) {
       selected = text
     }
   }

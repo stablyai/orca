@@ -57,6 +57,36 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
     expected: { pathText: '/tmp/v1.2 reports/result.json', line: null, column: null }
   },
   {
+    name: 'spaced path with dotted directory at line end',
+    lineText: 'wrote /tmp/v1.2 reports/result.json',
+    tapText: 'result',
+    expected: { pathText: '/tmp/v1.2 reports/result.json', line: null, column: null }
+  },
+  {
+    name: 'spaced path at line end',
+    lineText: 'wrote /tmp/final report.json',
+    tapText: 'report',
+    expected: { pathText: '/tmp/final report.json', line: null, column: null }
+  },
+  {
+    name: 'path followed by prose ending in a filename',
+    lineText: '/var/log/app.log failed to start app.py',
+    tapText: 'app.log',
+    expected: { pathText: '/var/log/app.log', line: null, column: null }
+  },
+  {
+    name: 'trailing prose filename stays its own tap target',
+    lineText: '/var/log/app.log failed to start app.py',
+    tapText: 'app.py',
+    expected: { pathText: 'app.py', line: null, column: null }
+  },
+  {
+    name: 'relative path followed by prose ending in a filename',
+    lineText: 'src/main.ts uses config.yaml',
+    tapText: 'main',
+    expected: { pathText: 'src/main.ts', line: null, column: null }
+  },
+  {
     name: 'spaced filename',
     lineText: 'wrote /tmp/final report.json for you',
     tapText: 'report',

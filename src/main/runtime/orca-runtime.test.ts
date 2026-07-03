@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { performance } from 'node:perf_hooks'
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -9420,6 +9421,36 @@ describe('OrcaRuntimeService', () => {
     expect(recentTerminalPathCandidatesIncludePath(candidates, '/tmp/v1.2', '/tmp/v1.2')).toBe(
       false
     )
+  })
+
+  it('does not swallow trailing prose ending in a filename into candidates', () => {
+    const candidates = appendRecentPtyPathCandidates(
+      undefined,
+      '/tmp/app.log failed to start app.py\n'
+    )
+
+    expect(
+      recentTerminalPathCandidatesIncludePath(candidates, '/tmp/app.log', '/tmp/app.log')
+    ).toBe(true)
+    expect(
+      recentTerminalPathCandidatesIncludePath(
+        candidates,
+        '/tmp/app.log failed to start app.py',
+        '/tmp/app.log failed to start app.py'
+      )
+    ).toBe(false)
+  })
+
+  it('bounds candidate extraction cost on pathological separator floods', () => {
+    const flood = '/'.repeat(64 * 1024)
+    const start = performance.now()
+    const candidates = appendRecentPtyPathCandidates(undefined, flood)
+    const elapsed = performance.now() - start
+
+    expect(candidates).toEqual([])
+    // Why: the extension regex is quadratic per line; unbounded this took
+    // seconds on the main-process PTY hot path. Loose bound to avoid CI flake.
+    expect(elapsed).toBeLessThan(500)
   })
 
   it('strips retained terminal path line and hash locators before matching', () => {
