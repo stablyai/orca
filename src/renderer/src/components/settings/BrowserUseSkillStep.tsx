@@ -5,22 +5,28 @@ import { translate } from '@/i18n/i18n'
 
 type Props = {
   command: string
+  installedCommand: string
   skillDetected: boolean
   skillLoading: boolean
   skillError: string | null
   disabled?: boolean
+  terminalShellOverride?: string
   preInstallNotice?: ReactNode
+  getPrerequisiteStatus?: () => Promise<Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>>
   onBeforeOpenTerminal?: () => void | Promise<void>
-  onRecheck: () => void | Promise<void>
+  onRecheck: () => void | Promise<unknown>
 }
 
 export function BrowserUseSkillStep({
   command,
+  installedCommand,
   skillDetected,
   skillLoading,
   skillError,
   disabled = false,
+  terminalShellOverride,
   preInstallNotice,
+  getPrerequisiteStatus,
   onBeforeOpenTerminal,
   onRecheck
 }: Props): React.JSX.Element {
@@ -36,15 +42,18 @@ export function BrowserUseSkillStep({
         "Enables agents to navigate and verify pages in Orca's browser."
       )}
       command={command}
+      installedCommand={installedCommand}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="settings-browser-use-skill-terminal"
+      terminalShellOverride={terminalShellOverride}
       installed={skillDetected}
       loading={skillLoading}
       error={skillError}
       installDisabled={disabled}
       leading={<StepBadge index={2} state={skillDetected ? 'done' : 'pending'} />}
       preInstallNotice={preInstallNotice}
+      getPrerequisiteStatus={getPrerequisiteStatus}
       onBeforeOpenTerminal={onBeforeOpenTerminal}
       onRecheck={onRecheck}
     />

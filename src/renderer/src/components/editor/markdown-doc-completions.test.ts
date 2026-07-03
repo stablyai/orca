@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { MarkdownDocument } from '../../../../shared/types'
 import {
   getMarkdownDocCompletionContext,
-  getMarkdownDocCompletionDocuments
+  getMarkdownDocCompletionDocuments,
+  isMarkdownDocCompletionQueryTooLarge,
+  MARKDOWN_DOC_COMPLETION_QUERY_MAX_BYTES
 } from './markdown-doc-completions'
 
 const documents: MarkdownDocument[] = [
@@ -34,6 +36,14 @@ describe('getMarkdownDocCompletionContext', () => {
     expect(getMarkdownDocCompletionContext('[[done|Alias')).toBeNull()
     expect(getMarkdownDocCompletionContext('plain text')).toBeNull()
   })
+
+  it('rejects oversized pasted partials before opening completions', () => {
+    expect(
+      getMarkdownDocCompletionContext(
+        `[[${'x'.repeat(MARKDOWN_DOC_COMPLETION_QUERY_MAX_BYTES + 1)}`
+      )
+    ).toBeNull()
+  })
 })
 
 describe('getMarkdownDocCompletionDocuments', () => {
@@ -44,5 +54,31 @@ describe('getMarkdownDocCompletionDocuments', () => {
 
   it('normalizes Windows-style partial paths', () => {
     expect(getMarkdownDocCompletionDocuments(documents, 'docs\\se')).toEqual([documents[0]])
+  })
+
+  it('returns no documents for oversized pasted partials before reading documents', () => {
+    const unreadableDocument = { ...documents[0] }
+    Object.defineProperty(unreadableDocument, 'name', {
+      get() {
+        throw new Error('document should not be scanned')
+      }
+    })
+
+    expect(
+      getMarkdownDocCompletionDocuments(
+        [unreadableDocument],
+        'x'.repeat(MARKDOWN_DOC_COMPLETION_QUERY_MAX_BYTES + 1)
+      )
+    ).toEqual([])
+  })
+})
+
+describe('isMarkdownDocCompletionQueryTooLarge', () => {
+  it('counts UTF-8 bytes rather than UTF-16 code units', () => {
+    expect(
+      isMarkdownDocCompletionQueryTooLarge(
+        'é'.repeat(MARKDOWN_DOC_COMPLETION_QUERY_MAX_BYTES / 2 + 1)
+      )
+    ).toBe(true)
   })
 })

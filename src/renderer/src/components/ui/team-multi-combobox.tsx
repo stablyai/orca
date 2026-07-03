@@ -11,6 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { LinearTeam } from '../../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { translate } from '@/i18n/i18n'
 
 type TeamMultiComboboxProps = {
@@ -19,6 +20,32 @@ type TeamMultiComboboxProps = {
   onChange: (next: ReadonlySet<string>) => void
   onSelectAll: () => void
   triggerClassName?: string
+}
+
+export const TEAM_MULTI_COMBOBOX_QUERY_MAX_BYTES = 2 * 1024
+
+export function isTeamMultiComboboxQueryTooLarge(
+  query: string,
+  maxBytes = TEAM_MULTI_COMBOBOX_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function filterTeamMultiComboboxTeams(
+  teams: readonly LinearTeam[],
+  query: string
+): readonly LinearTeam[] {
+  if (isTeamMultiComboboxQueryTooLarge(query)) {
+    return []
+  }
+  const trimmedQuery = query.trim()
+  if (!trimmedQuery) {
+    return teams
+  }
+  const lower = trimmedQuery.toLowerCase()
+  return teams.filter(
+    (team) => team.name.toLowerCase().includes(lower) || team.key.toLowerCase().includes(lower)
+  )
 }
 
 function renderTriggerLabel(teams: LinearTeam[], selected: ReadonlySet<string>): React.JSX.Element {
@@ -58,15 +85,7 @@ export default function TeamMultiCombobox({
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
 
-  const filteredTeams = useMemo(() => {
-    if (!query) {
-      return teams
-    }
-    const lower = query.toLowerCase()
-    return teams.filter(
-      (t) => t.name.toLowerCase().includes(lower) || t.key.toLowerCase().includes(lower)
-    )
-  }, [teams, query])
+  const filteredTeams = useMemo(() => filterTeamMultiComboboxTeams(teams, query), [teams, query])
 
   const allSelected = selected.size === teams.length && teams.length > 0
 

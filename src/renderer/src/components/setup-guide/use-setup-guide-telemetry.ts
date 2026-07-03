@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   FEATURE_WALL_SETUP_STEP_IDS,
+  getFirstIncompleteFeatureWallSetupStepId,
   getFeatureWallSetupSteps,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
@@ -45,8 +46,7 @@ export function useSetupGuideOpenCloseTelemetry(args: {
   })
 
   const completedCount = countCompletedSetupSteps(args.progress.stepDone)
-  const firstIncompleteStepId =
-    setupSteps.find((step) => !args.progress.stepDone[step.id])?.id ?? 'none'
+  const firstIncompleteStepId = getSetupGuideTelemetryFirstIncompleteStepId(args.progress)
 
   snapshotRef.current = {
     completedCount,
@@ -99,6 +99,14 @@ export function useSetupGuideOpenCloseTelemetry(args: {
       closeSession('interrupted')
     }
   }, [closeSession])
+}
+
+export function getSetupGuideTelemetryFirstIncompleteStepId(
+  progress: FeatureWallSetupProgress
+): FeatureWallSetupStepId | 'none' {
+  return countCompletedSetupSteps(progress.stepDone) >= FEATURE_WALL_SETUP_STEP_IDS.length
+    ? 'none'
+    : getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
 }
 
 export function useSetupGuideStepCompletionTelemetry(args: {

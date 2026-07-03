@@ -1,308 +1,262 @@
 import type React from 'react'
-import { useCallback } from 'react'
-import { Copy, FileJson, FolderOpen, MoreHorizontal, Play } from 'lucide-react'
-import { toast } from 'sonner'
+import { FileJson, FolderGit2, MessageSquare, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { HoverCardContent } from '@/components/ui/hover-card'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
+import { sessionDetailConversationTurns } from './ai-vault-session-display'
+import {
+  aiVaultWorktreeCompactPath,
+  aiVaultWorktreeStatusLabel,
+  shouldShowAiVaultWorktreeStatusBadge,
+  type AiVaultSessionWorktreeInfo
+} from './ai-vault-session-worktree'
 
-export function SessionDetailsHoverCard({
+export function SessionInlineDetails({
+  id,
   session,
-  resumeCommand
+  worktreeInfo,
+  resumeActions,
+  onResumeInWorktree,
+  onResumeInNewTab,
+  onOpenLog
 }: {
+  id: string
   session: AiVaultSession
-  resumeCommand: string
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+  resumeActions: {
+    worktree: { worktreeId: string | null; disabled: boolean }
+    newTab: { worktreeId: string | null; disabled: boolean }
+  }
+  onResumeInWorktree: () => void
+  onResumeInNewTab: () => void
+  onOpenLog: () => void
 }): React.JSX.Element {
-  const updatedAt = session.updatedAt ?? session.modifiedAt
+  const showResumeInWorktree = Boolean(resumeActions.worktree.worktreeId)
+  const showResumeInNewTab = !showResumeInWorktree || Boolean(resumeActions.newTab.worktreeId)
+  const detailTurns = sessionDetailConversationTurns(session, 3)
+  const worktreeDisplay = worktreeInfo
 
   return (
-    <HoverCardContent
-      side="left"
-      align="start"
-      sideOffset={8}
-      className="scrollbar-sleek max-h-[min(28rem,calc(100vh-2rem))] w-80 overflow-y-auto p-3"
+    <div
+      id={id}
+      className="mt-2 overflow-hidden rounded-lg border border-sidebar-border/80 bg-background/50 shadow-xs"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onDragStart={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      }}
     >
-      <div className="min-w-0">
-        <div className="flex items-start gap-2">
-          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-            <AgentIcon agent={session.agent} size={16} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="line-clamp-2 text-[13px] font-medium leading-5 text-popover-foreground">
-              {session.title}
-            </div>
-            <div className="mt-1 text-[11px] text-muted-foreground">
-              {agentLabel(session.agent)}
-            </div>
-          </div>
-        </div>
-
-        <TooltipProvider delayDuration={300}>
-          <div className="mt-3 space-y-1.5 text-[11px] leading-4">
-            <DetailLine
-              label={translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.updated',
-                'Updated'
-              )}
-              value={formatDateTime(updatedAt)}
-            />
-            <DetailLine
-              label={translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.created',
-                'Created'
-              )}
-              value={formatDateTime(session.createdAt)}
-            />
-            {session.branch ? (
-              <DetailLine
-                label={translate(
-                  'auto.components.right.sidebar.AiVaultSessionDetails.branch',
-                  'Branch'
-                )}
-                value={session.branch}
-              />
-            ) : null}
-            {session.model ? (
-              <DetailLine
-                label={translate(
-                  'auto.components.right.sidebar.AiVaultSessionDetails.model',
-                  'Model'
-                )}
-                value={session.model}
-              />
-            ) : null}
-            <DetailLine
-              label={translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.usage',
-                'Usage'
-              )}
-              value={translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.usageValue',
-                '{{value0}} msgs{{value1}}',
-                {
-                  value0: session.messageCount,
-                  value1:
-                    session.totalTokens > 0
-                      ? translate(
-                          'auto.components.right.sidebar.AiVaultSessionDetails.tokenSuffix',
-                          ' · {{value0}} tok',
-                          { value0: formatTokenCount(session.totalTokens) }
-                        )
-                      : ''
-                }
-              )}
-            />
-            <DetailLine
-              label={translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.session',
-                'Session'
-              )}
-              value={session.sessionId}
-              mono
-            />
-          </div>
-        </TooltipProvider>
-
-        <div className="mt-3 border-t border-border/60 pt-2">
-          <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.latestLog',
-              'Latest log'
-            )}
-          </div>
-          {session.previewMessages.length > 0 ? (
-            <div className="space-y-2">
-              {session.previewMessages.map((message, index) => (
-                <div key={`${message.role}:${index}`} className="min-w-0">
-                  <div className="mb-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
-                    {previewRoleLabel(message.role)}
-                  </div>
-                  <div className="line-clamp-3 whitespace-pre-wrap text-[11px] leading-4 text-popover-foreground/90">
-                    {message.text}
-                  </div>
-                </div>
+      <div className="space-y-3 p-3">
+        <SessionReceiptSection
+          icon={<MessageSquare className="size-3" />}
+          label={translate(
+            'auto.components.right.sidebar.AiVaultSessionDetails.latestTurns',
+            'Latest turns'
+          )}
+        >
+          {detailTurns.length > 0 ? (
+            <div className="space-y-1.5">
+              {detailTurns.map((turn, index) => (
+                <ConversationTurnCard
+                  key={`${turn.timestamp ?? 'turn'}-${index}`}
+                  role={turn.role}
+                  text={turn.text}
+                />
               ))}
             </div>
           ) : (
-            <div className="text-[11px] leading-4 text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.noReadablePreview',
-                'No readable message preview in this transcript.'
+            <SessionDetailEmptyState
+              message={translate(
+                'auto.components.right.sidebar.AiVaultSessionDetails.noPreviewAvailable',
+                'No conversation preview available'
               )}
-            </div>
+            />
           )}
-        </div>
+        </SessionReceiptSection>
 
-        <div className="mt-3 border-t border-border/60 pt-2">
-          <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.resumeCommand',
-              'Resume command'
-            )}
-          </div>
-          <div className="line-clamp-3 break-all font-mono text-[10.5px] leading-4 text-popover-foreground/85">
-            {resumeCommand}
-          </div>
-        </div>
-      </div>
-    </HoverCardContent>
-  )
-}
-
-function DetailLine({
-  label,
-  value,
-  mono = false
-}: {
-  label: string
-  value: string
-  mono?: boolean
-}): React.JSX.Element {
-  const handleCopy = useCallback(() => {
-    void window.api.ui.writeClipboardText(value).then(() => {
-      toast.success(
-        translate('auto.components.right.sidebar.AiVaultPanel.valueCopied', '{{value0}} copied', {
-          value0: label
-        })
-      )
-    })
-  }, [label, value])
-
-  return (
-    <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2">
-      <span className="text-muted-foreground">{label}</span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className={cn(
-              'min-w-0 truncate text-left text-popover-foreground/90 transition-colors hover:text-popover-foreground',
-              mono && 'font-mono'
-            )}
-            aria-label={translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.copyDetailValue',
-              'Copy {{value0}}',
-              { value0: label }
+        {worktreeDisplay ? (
+          <SessionReceiptSection
+            icon={<FolderGit2 className="size-3" />}
+            label={translate(
+              'auto.components.right.sidebar.AiVaultSessionDetails.worktree',
+              'Worktree'
             )}
           >
-            {value}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent
-          side="top"
-          sideOffset={4}
-          className="pointer-events-none max-w-[min(20rem,calc(100vw-2rem))] break-all"
+            <WorktreeMetadataLines worktreeInfo={worktreeDisplay} />
+          </SessionReceiptSection>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
+        {showResumeInWorktree ? (
+          <Button
+            type="button"
+            variant="default"
+            size="xs"
+            disabled={resumeActions.worktree.disabled}
+            draggable={false}
+            onClick={(event) => {
+              event.stopPropagation()
+              onResumeInWorktree()
+            }}
+            className="h-7 shrink-0 px-2.5 text-[11px]"
+          >
+            <Play className="size-3.5" />
+            {translate(
+              'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
+              'Resume in Worktree'
+            )}
+          </Button>
+        ) : null}
+        {showResumeInNewTab ? (
+          <Button
+            type="button"
+            variant={showResumeInWorktree ? 'secondary' : 'default'}
+            size="xs"
+            disabled={resumeActions.newTab.disabled}
+            draggable={false}
+            onClick={(event) => {
+              event.stopPropagation()
+              onResumeInNewTab()
+            }}
+            className="h-7 shrink-0 px-2.5 text-[11px]"
+          >
+            <Play className="size-3.5" />
+            {translate(
+              'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
+              'Resume in New Tab'
+            )}
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          draggable={false}
+          onClick={(event) => {
+            event.stopPropagation()
+            onOpenLog()
+          }}
+          className="h-7 shrink-0 px-2.5 text-[11px] text-muted-foreground"
         >
-          {value}
-        </TooltipContent>
-      </Tooltip>
+          <FileJson className="size-3.5" />
+          {translate('auto.components.right.sidebar.AiVaultSessionDetails.viewLog', 'View Log')}
+        </Button>
+      </div>
     </div>
   )
 }
 
-export function MetaDot(): React.JSX.Element {
-  return <span className="shrink-0 text-muted-foreground/45">·</span>
-}
-
-export function SessionActionsMenu({
-  session,
-  onResume,
-  onCopyResume,
-  onCopyId,
-  onCopyPath,
-  onOpenLog,
-  onRevealLog,
-  onOpenCwd,
-  resumeDisabled
+function SessionReceiptSection({
+  icon,
+  label,
+  children
 }: {
-  session: AiVaultSession
-  onResume: () => void
-  onCopyResume: () => void
-  onCopyId: () => void
-  onCopyPath: () => void
-  onOpenLog: () => void
-  onRevealLog: () => void
-  onOpenCwd?: () => void
-  resumeDisabled: boolean
+  icon: React.ReactNode
+  label: string
+  children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.sessionActions',
-            '{{value0}} session actions',
-            { value0: agentLabel(session.agent) }
-          )}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <MoreHorizontal className="size-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem disabled={resumeDisabled} onSelect={onResume}>
-          <Play className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.resumeInNewTab',
-            'Resume in New Tab'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onCopyResume}>
-          <Copy className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.copyResumeCommand',
-            'Copy Resume Command'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onOpenLog}>
-          <FileJson className="size-3.5" />
-          {translate('auto.components.right.sidebar.AiVaultSessionDetails.openLog', 'Open Log')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onRevealLog}>
-          <FolderOpen className="size-3.5" />
-          {translate('auto.components.right.sidebar.AiVaultSessionDetails.revealLog', 'Reveal Log')}
-        </DropdownMenuItem>
-        {onOpenCwd ? (
-          <DropdownMenuItem onSelect={onOpenCwd}>
-            <FolderOpen className="size-3.5" />
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.openWorkingDirectory',
-              'Open Working Directory'
-            )}
-          </DropdownMenuItem>
+    <section className="space-y-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <span className="text-muted-foreground/80">{icon}</span>
+        <span>{label}</span>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function ConversationTurnCard({
+  role,
+  text
+}: {
+  role: AiVaultSession['previewMessages'][number]['role']
+  text: string
+}): React.JSX.Element {
+  const isUserTurn = role === 'user'
+
+  return (
+    <div
+      className={cn(
+        'rounded-md border px-2.5 py-2',
+        isUserTurn
+          ? 'border-border/70 bg-foreground/[0.04]'
+          : 'border-sidebar-border/70 bg-sidebar-accent/25'
+      )}
+    >
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        {conversationRoleLabel(role)}
+      </div>
+      <p className="line-clamp-4 text-[12px] leading-[1.35] text-foreground/90 [overflow-wrap:anywhere]">
+        {text}
+      </p>
+    </div>
+  )
+}
+
+function WorktreeMetadataLines({
+  worktreeInfo
+}: {
+  worktreeInfo: AiVaultSessionWorktreeInfo
+}): React.JSX.Element {
+  const compactPath = aiVaultWorktreeCompactPath(worktreeInfo.path)
+  const pathLine =
+    compactPath && compactPath !== worktreeInfo.label ? compactPath : worktreeInfo.path
+  const showPathLine = Boolean(pathLine) && pathLine !== worktreeInfo.label
+
+  return (
+    <div className="grid min-w-0 gap-1 text-[11px] leading-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        {shouldShowAiVaultWorktreeStatusBadge(worktreeInfo.status) ? (
+          <>
+            <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+              {aiVaultWorktreeStatusLabel(worktreeInfo.status)}
+            </span>
+            <span className="shrink-0 text-muted-foreground/45">·</span>
+          </>
         ) : null}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onCopyId}>
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.copySessionId',
-            'Copy Session ID'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onCopyPath}>
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.copyLogPath',
-            'Copy Log Path'
-          )}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <span className="min-w-0 text-[12px] font-medium leading-4 text-foreground">
+          {worktreeInfo.label}
+        </span>
+      </div>
+      {showPathLine ? (
+        <WorktreePathHint compactPath={pathLine} fullPath={worktreeInfo.path} />
+      ) : null}
+    </div>
+  )
+}
+
+function WorktreePathHint({
+  compactPath,
+  fullPath
+}: {
+  compactPath: string
+  fullPath: string
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="min-w-0 truncate font-mono text-[11px] leading-4 text-muted-foreground">
+          {compactPath}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4} className="max-w-sm break-all font-mono text-xs">
+        {fullPath}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function SessionDetailEmptyState({ message }: { message: string }): React.JSX.Element {
+  return (
+    <div className="rounded-md border border-dashed border-sidebar-border/80 px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
+      {message}
+    </div>
   )
 }
 
@@ -331,33 +285,6 @@ export function SessionTime({
       <time dateTime={date.toISOString()}>{formatTimeAgo(timestamp)}</time>
     </span>
   )
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.unknown', 'Unknown')
-  }
-  const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp)) {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.unknown', 'Unknown')
-  }
-  return new Date(timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-}
-
-function previewRoleLabel(role: AiVaultSession['previewMessages'][number]['role']): string {
-  if (role === 'user') {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.user', 'User')
-  }
-  if (role === 'assistant') {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.assistant', 'Assistant')
-  }
-  if (role === 'tool') {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.tool', 'Tool')
-  }
-  if (role === 'system') {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.system', 'System')
-  }
-  return translate('auto.components.right.sidebar.AiVaultSessionDetails.log', 'Log')
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -404,12 +331,18 @@ function formatTimeAgo(timestamp: number): string {
   )
 }
 
-export function formatTokenCount(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}m`
+function conversationRoleLabel(role: AiVaultSession['previewMessages'][number]['role']): string {
+  if (role === 'user') {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')
   }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
+  if (role === 'assistant') {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.agentRole', 'Agent')
   }
-  return String(value)
+  if (role === 'tool') {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.toolRole', 'Tool')
+  }
+  if (role === 'system') {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.systemRole', 'System')
+  }
+  return translate('auto.components.right.sidebar.AiVaultSessionDetails.sessionRole', 'Session')
 }

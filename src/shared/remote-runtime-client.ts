@@ -2,7 +2,7 @@
  * same E2EE handshake and response validation state; keep them together until
  * the terminal transport is fully migrated and a stable shared connection
  * abstraction emerges. */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
 import {
@@ -20,18 +20,14 @@ import {
   RuntimeRpcEnvelopeSchema,
   type RuntimeRpcResponse
 } from './runtime-rpc-envelope'
+// Re-export so existing value importers of `RemoteRuntimeClientError` are
+// unaffected; the class lives in a ws-free module so type-only consumers
+// (and mobile's typecheck) don't compile this file's Node-only deps.
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+
+export { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
 type HandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
-
-export class RemoteRuntimeClientError extends Error {
-  readonly code: string
-
-  constructor(code: string, message: string) {
-    super(message)
-    this.name = 'RemoteRuntimeClientError'
-    this.code = code
-  }
-}
 
 function ignoreSettledRemoteRuntimeSocketError(): void {}
 
@@ -93,7 +89,9 @@ export async function sendRemoteRuntimeRequest<TResult>(
       }
     }
 
-    const timeout = setTimeout(() => {
+    let timeout = setTimeout(onTimeout, timeoutMs)
+
+    function onTimeout(): void {
       finish({
         ok: false,
         error: new RemoteRuntimeClientError(
@@ -101,7 +99,19 @@ export async function sendRemoteRuntimeRequest<TResult>(
           'Timed out waiting for the remote Orca runtime to respond.'
         )
       })
-    }, timeoutMs)
+    }
+
+    function refreshTimeout(): void {
+      const refreshableTimeout = timeout as { refresh?: () => void }
+      if (typeof refreshableTimeout.refresh === 'function') {
+        refreshableTimeout.refresh()
+        return
+      }
+      // Why: mobile typechecks shared code with DOM timer types, where
+      // setTimeout returns a number and Node's Timeout.refresh is absent.
+      clearTimeout(timeout)
+      timeout = setTimeout(onTimeout, timeoutMs)
+    }
 
     const finish = (
       result: { ok: true; response: RuntimeRpcResponse<TResult> } | { ok: false; error: Error }
@@ -309,7 +319,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
         return
       }
       if (isKeepaliveFrame(raw)) {
-        timeout.refresh()
+        refreshTimeout()
         return
       }
       const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)

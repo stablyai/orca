@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
   CUSTOM_AGENT_ID,
@@ -17,6 +17,10 @@ import {
   parsePiModels,
   resolveCommitMessageAgentChoice
 } from './commit-message-agent-spec'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('exposes the installed local agents as commit-message agents', () => {
@@ -289,6 +293,57 @@ describe('model discovery parsers', () => {
       { id: 'Claude Opus 4.6 (Thinking)', label: 'Claude Opus 4.6 (Thinking)' },
       { id: 'GPT-OSS 120B (Medium)', label: 'GPT-OSS 120B (Medium)' }
     ])
+  })
+
+  it('parses CRLF-heavy dynamic model outputs without full line-array splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const noise = 'ignored model with spaces\r\n'.repeat(10_000)
+    const blankNoise = '\r\n'.repeat(10_000)
+
+    expect(parseLineModels(`${noise}opencode/gpt-5.4-mini\r\nopenai/gpt-5.5\r\n`)).toEqual([
+      {
+        id: 'opencode/gpt-5.4-mini',
+        label: 'Opencode GPT 5.4 Mini',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' },
+          { id: 'xhigh', label: 'Extra High' }
+        ],
+        defaultThinkingLevel: 'low'
+      },
+      {
+        id: 'openai/gpt-5.5',
+        label: 'Openai GPT 5.5',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' },
+          { id: 'xhigh', label: 'Extra High' }
+        ],
+        defaultThinkingLevel: 'low'
+      }
+    ])
+    expect(
+      parsePiModels(
+        `${noise}provider model context max-out thinking images\r\ngithub-copilot gpt-5.4-mini 400K 128K yes yes\r\n`
+      )[0]?.id
+    ).toBe('github-copilot/gpt-5.4-mini')
+    expect(parseCursorModels(`${noise}auto - Auto\r\ngpt-5.2 - GPT-5.2\r\n`)).toHaveLength(2)
+    expect(parseAntigravityModels(`${blankNoise}Gemini 3.5 Flash (Medium)\r\n`)).toEqual([
+      { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' }
+    ])
+
+    const usedFullLineSplit = splitSpy.mock.calls.some(
+      ([separator]) =>
+        (typeof separator === 'string' && separator === '\n') ||
+        (separator instanceof RegExp && separator.source === '\\r?\\n')
+    )
+    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
+      ([separator]) => separator instanceof RegExp && separator.source === '\\s+'
+    )
+    expect(usedFullLineSplit).toBe(false)
+    expect(usedWhitespaceFieldSplit).toBe(false)
   })
 })
 

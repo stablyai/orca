@@ -1,8 +1,3 @@
-/* eslint-disable max-lines -- Why: this module deliberately co-locates the
-   renderer-local view-model types, the merge function, and its supporting
-   string-manipulation helpers because they exist solely to feed the popover
-   in ResourceUsageStatusSegment.tsx. Splitting would scatter logic that has
-   exactly one consumer. See docs/resource-usage-merge-spec.md. */
 /**
  * Resource Manager popover merge helper.
  *
@@ -22,90 +17,21 @@
  * See docs/resource-usage-merge-spec.md for the full design.
  */
 
-import type {
-  MemorySnapshot,
-  SessionMemory,
-  TerminalTab,
-  WorktreeMemory
-} from '../../../../shared/types'
+import type { MemorySnapshot, SessionMemory, WorktreeMemory } from '../../../../shared/types'
 import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
 import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
 } from '../../../../shared/worktree-id'
-
-// ─── View-model types (renderer-local) ──────────────────────────────
-
-/** `null` === "no local sample" (e.g. SSH PTY); UI renders as em-dash. */
-export type Metric = number | null
-
-export type DaemonSession = {
-  id: string
-  cwd: string
-  title: string
-}
-
-export type UnifiedSessionRow = {
-  sessionId: string
-  paneKey: string | null
-  pid: number
-  label: string
-  bound: boolean
-  tabId: string | null
-  cpu: Metric
-  memory: Metric
-  hasLocalSamples: boolean
-}
-
-export type UnifiedWorktreeRow = {
-  worktreeId: string
-  worktreeName: string
-  repoId: string
-  repoName: string
-  cpu: Metric
-  memory: Metric
-  history: number[]
-  hasLocalSamples: boolean
-  /** Why: the chip in ResourceUsageStatusSegment now keys on this — the repo
-   *  has an SSH connectionId — instead of `!hasLocalSamples`, which used to
-   *  mislabel warm-reattached *local* PTYs as REMOTE. */
-  isRemote: boolean
-  sessions: UnifiedSessionRow[]
-}
-
-export type UnifiedProjectGroup = {
-  repoId: string
-  repoName: string
-  cpu: Metric
-  memory: Metric
-  /** Why: renamed in spirit but kept as `hasRemoteChildren` for callsite
-   *  stability — the repo-level chip predicate is now "the repo's
-   *  connectionId is non-null", which is the only way a repo can have
-   *  remote children. */
-  hasRemoteChildren: boolean
-  worktrees: UnifiedWorktreeRow[]
-}
-
-// ─── Inputs that the renderer already has on hand ───────────────────
-
-export type MergeContext = {
-  /** From useAppStore: maps tabId → worktreeId for tab-walk resolution. */
-  tabsByWorktree: Record<string, TerminalTab[]>
-  /** From useAppStore: maps tabId → ptyIds[] for the bound check. */
-  ptyIdsByTabId: Record<string, string[]>
-  /** From useAppStore: per-tab live pane titles (for label resolution). */
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  /** From useAppStore: false until the renderer has booted enough state to
-   *  trust the bound/orphan distinction. Mirrors the existing gate. */
-  workspaceSessionReady: boolean
-  /** Repo display names by repo id. Used for new groups synthesized from
-   *  daemon sessions whose repo isn't in the snapshot (typical SSH case). */
-  repoDisplayNameById: Map<string, string>
-  /** Repo connectionId by repo id (null/missing == local). Drives the
-   *  `· remote` chip predicate, decoupling label from data-coverage. */
-  repoConnectionIdById: Map<string, string | null>
-}
+import type {
+  DaemonSession,
+  MergeContext,
+  UnifiedProjectGroup,
+  UnifiedSessionRow,
+  UnifiedWorktreeRow
+} from './resource-usage-merge-types'
+import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -199,34 +125,6 @@ function resolveDaemonSessionLabel(
   return 'unknown'
 }
 
-// Why: the previous implementation did O(N) linear scans over
-// ptyIdsByTabId / tabsByWorktree for *every* session it processed. With a
-// large workspace that's S * (T + W) work per merge — and the merge runs on
-// every snapshot poll plus every store mutation. Pre-build O(1) lookup
-// indices once per merge instead.
-type MergeIndex = {
-  ptyIdToTabId: Map<string, string>
-  tabIdToWorktreeId: Map<string, string>
-}
-
-function buildMergeIndex(ctx: MergeContext): MergeIndex {
-  const ptyIdToTabId = new Map<string, string>()
-  for (const [tabId, ptyIds] of Object.entries(ctx.ptyIdsByTabId)) {
-    for (const ptyId of ptyIds) {
-      if (ptyId) {
-        ptyIdToTabId.set(ptyId, tabId)
-      }
-    }
-  }
-  const tabIdToWorktreeId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(ctx.tabsByWorktree)) {
-    for (const tab of tabs) {
-      tabIdToWorktreeId.set(tab.id, worktreeId)
-    }
-  }
-  return { ptyIdToTabId, tabIdToWorktreeId }
-}
-
 // ─── Public merge function ─────────────────────────────────────────
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
@@ -239,13 +137,11 @@ export function mergeSnapshotAndSessions(
 ): UnifiedProjectGroup[] {
   const repos = new Map<string, UnifiedProjectGroup>()
   const seenSessionIds = new Set<string>()
-  const index = buildMergeIndex(ctx)
-  // Why: bound = the daemon session id appears as a pty id under some tab.
-  // ptyIdToTabId already encodes that membership in O(1), so the bound set
-  // is just its keys.
-  const boundPtyIds = ctx.workspaceSessionReady
-    ? new Set(index.ptyIdToTabId.keys())
-    : new Set<string>()
+  // Why: pre-build O(1) lookup indices once per merge. This includes live
+  // ptyIdsByTabId plus deferred-reattach wake hints, so restored inactive
+  // sessions do not appear as Resource Manager orphans before their pane mounts.
+  const index = buildResourceSessionBindingIndex(ctx)
+  const boundPtyIds = index.boundPtyIds
 
   function isRepoRemote(repoId: string): boolean {
     // Why: missing entry === we don't know about this repo (typically the

@@ -12,6 +12,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 
 export type AgentCapabilityInstallStatusTone = 'ready' | 'pending' | 'checking' | 'error'
@@ -40,13 +41,17 @@ export type AgentCapabilitySetupStatus = {
 }
 
 export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
   const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUsePermissionStatus = useComputerUsePermissionStatus(computerUseSkill.installed)

@@ -20,6 +20,7 @@ type AddRepoNestedImportStepProps = {
   onGroupNameChange: (value: string) => void
   onSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
   onImport: (mode: 'group' | 'separate') => void
+  onOpenAsFolder: () => void
   onStopScan: () => void
 }
 
@@ -32,11 +33,16 @@ export function AddRepoNestedImportStep({
   onGroupNameChange,
   onSelectedPathsChange,
   onImport,
+  onOpenAsFolder,
   onStopScan
 }: AddRepoNestedImportStepProps): React.JSX.Element {
   const folderName = getRuntimePathBasename(scan.selectedPath) || scan.selectedPath
   const groupNameInputId = useId()
-  const [pendingImportMode, setPendingImportMode] = useState<'group' | 'separate' | null>(null)
+  const [pendingImportMode, setPendingImportMode] = useState<
+    'folder' | 'group' | 'separate' | null
+  >(null)
+  const noRepositoriesSelected = selectedPaths.size === 0
+  const showOpenAsFolderSpinner = isAdding && pendingImportMode === 'folder'
   const showSeparateSpinner = isAdding && pendingImportMode === 'separate'
   const showGroupSpinner = isAdding && pendingImportMode === 'group'
 
@@ -49,6 +55,10 @@ export function AddRepoNestedImportStep({
   const handleImport = (mode: 'group' | 'separate'): void => {
     setPendingImportMode(mode)
     onImport(mode)
+  }
+  const handleOpenAsFolder = (): void => {
+    setPendingImportMode('folder')
+    onOpenAsFolder()
   }
   const repoCountLabel =
     scan.repos.length === 1
@@ -105,13 +115,13 @@ export function AddRepoNestedImportStep({
           <p className="text-sm font-medium text-foreground">
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.fb33359f69',
-              'Is this a monorepo?'
+              'Group these repositories?'
             )}
           </p>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.d75170194e',
-              "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder."
+              'Choose this if these projects belong together — a monorepo, or just a set of related repos. Orca will group them and let you work from the parent folder.'
             )}
           </p>
         </div>
@@ -137,10 +147,31 @@ export function AddRepoNestedImportStep({
             placeholder={folderName}
           />
         </div>
+        {noRepositoriesSelected ? (
+          <p className="shrink-0 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.AddRepoNestedImportStep.6149d5203f',
+              'No repositories are selected. Open the parent folder instead to use editor, terminal, and search without Git features.'
+            )}
+          </p>
+        ) : null}
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {noRepositoriesSelected ? (
+            <Button
+              onClick={handleOpenAsFolder}
+              disabled={isAdding || scanInProgress}
+              variant="secondary"
+            >
+              {showOpenAsFolderSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {translate(
+                'auto.components.sidebar.AddRepoNestedImportStep.e52454b7f6',
+                'Open as Folder'
+              )}
+            </Button>
+          ) : null}
           <Button
             onClick={() => handleImport('separate')}
-            disabled={isAdding || scanInProgress || selectedPaths.size === 0}
+            disabled={isAdding || scanInProgress || noRepositoriesSelected}
             variant="outline"
           >
             {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -151,12 +182,12 @@ export function AddRepoNestedImportStep({
           </Button>
           <Button
             onClick={() => handleImport('group')}
-            disabled={isAdding || scanInProgress || selectedPaths.size === 0}
+            disabled={isAdding || scanInProgress || noRepositoriesSelected}
           >
             {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
-              'Import as group'
+              'Yes, import as group'
             )}
           </Button>
         </div>

@@ -185,12 +185,14 @@ export default function PairConfirmScreen() {
             <Text style={styles.subtitle}>
               You opened a pairing link from your desktop. Confirm to add it to your hosts.
             </Text>
-            <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
-              <Text style={styles.primaryButtonText}>Pair</Text>
-            </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={cancel}>
-              <Text style={styles.secondaryButtonText}>Cancel</Text>
-            </Pressable>
+            <View style={styles.actionStack}>
+              <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
+                <Text style={styles.primaryButtonText}>Pair</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} onPress={cancel}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+            </View>
           </>
         )}
 
@@ -212,9 +214,11 @@ export default function PairConfirmScreen() {
                 <ConnectionLog entries={logs} title="Pairing log" />
               </View>
             )}
-            <Pressable style={styles.primaryButton} onPress={cancel}>
-              <Text style={styles.primaryButtonText}>Back to home</Text>
-            </Pressable>
+            <View style={styles.actionStack}>
+              <Pressable style={styles.primaryButton} onPress={cancel}>
+                <Text style={styles.primaryButtonText}>Back to home</Text>
+              </Pressable>
+            </View>
           </>
         )}
       </View>
@@ -257,9 +261,17 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
     marginBottom: spacing.xl,
-    textAlign: 'center'
+    textAlign: 'center',
+    maxWidth: 520,
+    alignSelf: 'center'
+  },
+  actionStack: {
+    width: '100%',
+    maxWidth: 360,
+    alignSelf: 'center'
   },
   primaryButton: {
+    width: '100%',
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
@@ -273,6 +285,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   secondaryButton: {
+    width: '100%',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
     borderRadius: radii.button,

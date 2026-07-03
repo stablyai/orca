@@ -5,6 +5,11 @@ import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo, Repo } from '../../../../shared/types'
 import type { GitHubPRMergeMethod } from '../../../../shared/types'
+import {
+  mergeGitHubHostedReview,
+  setGitHubHostedReviewAutoMerge,
+  updateGitHubHostedReviewState
+} from './hosted-review-github-actions'
 import { translate } from '@/i18n/i18n'
 
 export type HostedReviewActionInfo = Pick<
@@ -14,7 +19,11 @@ export type HostedReviewActionInfo = Pick<
   Partial<
     Pick<
       HostedReviewInfo,
-      'reviewDecision' | 'autoMergeEnabled' | 'mergeQueueRequired' | 'mergeStateStatus'
+      | 'reviewDecision'
+      | 'autoMergeEnabled'
+      | 'autoMergeAllowed'
+      | 'mergeQueueRequired'
+      | 'mergeStateStatus'
     >
   >
 
@@ -64,9 +73,8 @@ export function useHostedReviewActions({
               iid: review.number,
               method
             })
-          : await window.api.gh.mergePR({
-              repoPath: repo.path,
-              repoId: repo.id,
+          : await mergeGitHubHostedReview({
+              repo,
               prNumber: review.number,
               method,
               prRepo: githubPR?.prRepo ?? null
@@ -82,15 +90,7 @@ export function useHostedReviewActions({
         setMerging(false)
       }
     },
-    [
-      githubPR?.prRepo,
-      isGitLab,
-      defaultMergeMethod,
-      onRefreshReview,
-      repo.id,
-      repo.path,
-      review.number
-    ]
+    [githubPR?.prRepo, isGitLab, defaultMergeMethod, onRefreshReview, repo, review.number]
   )
 
   const handleAutoMerge = useCallback(async () => {
@@ -101,11 +101,11 @@ export function useHostedReviewActions({
     setMerging(true)
     setActionError(null)
     try {
-      const result = await window.api.gh.setPRAutoMerge({
-        repoPath: repo.path,
-        repoId: repo.id,
+      const result = await setGitHubHostedReviewAutoMerge({
+        repo,
         prNumber: review.number,
         enabled,
+        method: enabled ? defaultMergeMethod : undefined,
         prRepo: githubPR?.prRepo ?? null
       })
       if (!result.ok) {
@@ -122,9 +122,9 @@ export function useHostedReviewActions({
     githubPR?.prRepo,
     isGitLab,
     autoMergeAction,
+    defaultMergeMethod,
     onRefreshReview,
-    repo.id,
-    repo.path,
+    repo,
     review.number
   ])
 
@@ -169,11 +169,10 @@ export function useHostedReviewActions({
                 repoId: repo.id,
                 iid: review.number
               })
-          : await window.api.gh.updatePRState({
-              repoPath: repo.path,
-              repoId: repo.id,
+          : await updateGitHubHostedReviewState({
+              repo,
               prNumber: review.number,
-              updates: { state: nextState }
+              nextState
             })
         if (!result.ok) {
           setActionError(result.error)
@@ -207,8 +206,7 @@ export function useHostedReviewActions({
       confirm,
       isGitLab,
       onRefreshReview,
-      repo.id,
-      repo.path,
+      repo,
       review.number,
       reviewLabel,
       shortLabel,

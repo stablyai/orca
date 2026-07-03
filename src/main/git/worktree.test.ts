@@ -18,7 +18,14 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { addSparseWorktree, addWorktree, parseWorktreeList, removeWorktree } from './worktree'
+import {
+  addSparseWorktree,
+  addWorktree,
+  listWorktreeGraph,
+  moveWorktree,
+  parseWorktreeList,
+  removeWorktree
+} from './worktree'
 
 describe('parseWorktreeList', () => {
   it('parses regular and bare worktree blocks from porcelain output', () => {
@@ -226,6 +233,147 @@ bare
         isMainWorktree: false
       }
     ])
+  })
+})
+
+describe('listWorktreeGraph', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileSyncMock.mockReset()
+    translateWslOutputPathsMock.mockClear()
+  })
+
+  it('returns the worktree graph without sparse-checkout annotation probes', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+    })
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/repo-feature',
+        head: 'def456',
+        branch: 'refs/heads/feature/test',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
+      cwd: '/repo'
+    })
+  })
+
+  it('falls back when older Git rejects worktree list -z with usage exit code', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('git usage error'), {
+          code: 129,
+          stderr: 'usage: git worktree list [<options>]\n'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-main-2
+HEAD def456
+branch refs/heads/main-2
+`
+      })
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/repo-main-2',
+        head: 'def456',
+        branch: 'refs/heads/main-2',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo' }],
+      [['worktree', 'list', '--porcelain'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('falls back on a localized (non-English) older-Git usage error via exit code 129', async () => {
+    // Git under a non-English locale translates the usage text, so stderr
+    // matching alone misses it; the 129 exit code must still trigger fallback.
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('git worktree list --porcelain -z'), {
+          code: 129,
+          stderr: 'Fehler: Unbekannter Schalter »z«\nAufruf: git worktree list [<Optionen>]\n'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+`
+      })
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo' }],
+      [['worktree', 'list', '--porcelain'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('does not retry without -z for non-usage Git failures', async () => {
+    // A fatal error (exit 128) is not an unsupported-flag signal, so the -z
+    // command must not be silently re-run without it.
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('git worktree list --porcelain -z'), {
+        code: 128,
+        stderr: 'fatal: unable to read tree\n'
+      })
+    )
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([])
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('returns an empty graph for paths Git reports as non-repositories', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: not a git repository'))
+
+    await expect(listWorktreeGraph('/not-a-repo')).resolves.toEqual([])
   })
 })
 
@@ -1181,7 +1329,6 @@ describe('addWorktree', () => {
   it('unsets branch base config during sparse setup cleanup after creation succeeds', async () => {
     const beforeRemoval =
       'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
-    const afterPrune = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     resolveRemoteBase()
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     resolveCreationBaseConfigWrite()
@@ -1190,8 +1337,6 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local --unset-all branch.<branch>.base
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // worktree list before remove
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // worktree list after prune
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -D (rollback force-deletes the fresh branch)
 
     await expect(
@@ -1215,10 +1360,31 @@ describe('addWorktree', () => {
   })
 })
 
+describe('moveWorktree', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('runs `git worktree move` from the repo with old and new paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    await moveWorktree('/repo', '/ws/cunner', '/ws/worktree-creation-spinner')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['worktree', 'move', '/ws/cunner', '/ws/worktree-creation-spinner'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('propagates git failures so the caller can fall back', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: destination exists'))
+    await expect(moveWorktree('/repo', '/ws/cunner', '/ws/taken')).rejects.toThrow(
+      'destination exists'
+    )
+  })
+})
+
 describe('removeWorktree', () => {
   const beforeRemoval =
     'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
-  const afterPrune = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
 
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -1229,8 +1395,6 @@ describe('removeWorktree', () => {
   it('uses safe `branch -d` and preserves a branch with unmerged commits', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // list after prune
     // Git refuses to delete an unmerged branch with `-d`.
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not fully merged')) // branch -d
 
@@ -1247,8 +1411,6 @@ describe('removeWorktree', () => {
   it('deletes the branch when `branch -d` succeeds (fully merged)', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: afterPrune }) // list after prune
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
 
     await removeWorktree('/repo', '/repo-feature', false)
@@ -1258,6 +1420,43 @@ describe('removeWorktree', () => {
       '-d',
       '--',
       'feature/test'
+    ])
+  })
+
+  it('reuses known removed worktree metadata instead of relisting before removal', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
+
+    await removeWorktree('/repo', '/repo-feature', false, {
+      knownRemovedWorktree: {
+        branch: 'refs/heads/feature/test',
+        head: 'def456'
+      }
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
+      ['worktree', 'remove', '/repo-feature'],
+      ['branch', '-d', '--', 'feature/test']
+    ])
+  })
+
+  it('prunes and retries branch deletion only when Git reports a checked-out branch', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      new Error("error: cannot delete branch 'feature/test' used by worktree at '/repo-stale'")
+    ) // branch -d hits stale worktree metadata
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d retry succeeds
+
+    await expect(removeWorktree('/repo', '/repo-feature', false)).resolves.toEqual({})
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
+      ['worktree', 'list', '--porcelain', '-z'],
+      ['worktree', 'remove', '/repo-feature'],
+      ['branch', '-d', '--', 'feature/test'],
+      ['worktree', 'prune'],
+      ['branch', '-d', '--', 'feature/test']
     ])
   })
 })

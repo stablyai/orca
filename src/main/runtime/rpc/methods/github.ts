@@ -52,7 +52,8 @@ const SlugAssignableUsers = SlugRepo.extend({
 const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
-  fallbackPRNumber: z.number().int().positive().nullable().optional()
+  fallbackPRNumber: z.number().int().positive().nullable().optional(),
+  acceptMergedFallbackPR: z.boolean().optional()
 })
 
 const Issue = RepoSelector.extend({
@@ -126,6 +127,7 @@ const MergePr = RepoSelector.extend({
 const SetPrAutoMerge = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   enabled: z.boolean(),
+  method: z.enum(['merge', 'squash', 'rebase']).optional(),
   prRepo: SlugRepo.nullable().optional()
 })
 
@@ -358,7 +360,8 @@ export const GITHUB_METHODS: RpcMethod[] = [
         params.repo,
         params.branch,
         params.linkedPRNumber,
-        params.fallbackPRNumber
+        params.fallbackPRNumber,
+        params.acceptMergedFallbackPR
       )
   }),
   defineMethod({
@@ -463,6 +466,7 @@ export const GITHUB_METHODS: RpcMethod[] = [
         params.repo,
         params.prNumber,
         params.enabled,
+        params.method,
         params.prRepo ?? null
       )
   }),

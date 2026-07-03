@@ -134,4 +134,35 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
 
     expect(result).toEqual({ ok: true })
   })
+
+  it('passes WSL managed Codex homes as Linux paths for WSL-local commit generation', async () => {
+    const result = await prepareLocalCommitMessageAgentEnv(
+      'codex',
+      {
+        prepareForCodexLaunch: (target) => {
+          expect(target).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+          return '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.codex'
+        }
+      },
+      { runtime: 'wsl', wslDistro: 'Ubuntu' }
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      env: expect.objectContaining({
+        CODEX_HOME: '/home/tester/.codex'
+      })
+    })
+  })
+
+  it('does not hydrate host shell config roots for WSL-local commit generation', async () => {
+    process.env.OPENCODE_CONFIG_DIR = 'C:\\Users\\tester\\opencode'
+
+    const result = await prepareLocalCommitMessageAgentEnv('opencode', undefined, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(result).toEqual({ ok: true })
+  })
 })

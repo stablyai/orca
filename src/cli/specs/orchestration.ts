@@ -70,8 +70,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
     usage:
-      'orca orchestration task-create --spec <text> [--deps <json_array>] [--parent <task_id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'spec', 'deps', 'parent']
+      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'spec', 'task-title', 'display-name', 'deps', 'parent']
   },
   {
     path: ['orchestration', 'task-list'],

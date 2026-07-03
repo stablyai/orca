@@ -158,7 +158,7 @@ describe('buildWorktreeSectionActivitySummaries', () => {
     })
   })
 
-  it('keeps pinned workspace activity on the pinned header only', () => {
+  it('counts pinned workspace activity on pinned and natural headers', () => {
     const repo = makeRepo({ projectGroupId: 'group-1' })
     const worktree = makeWorktree({ repoId: repo.id, isPinned: true })
     const now = Date.now()
@@ -190,7 +190,11 @@ describe('buildWorktreeSectionActivitySummaries', () => {
     expect(summaries.get(PINNED_GROUP_KEY)).toEqual({
       runningCount: 1
     })
-    expect(summaries.get(`repo:${repo.id}`)).toBeUndefined()
-    expect(summaries.get(getProjectGroupHeaderKey('group-1'))).toBeUndefined()
+    expect(summaries.get(`repo:${repo.id}`)).toEqual({
+      runningCount: 1
+    })
+    expect(summaries.get(getProjectGroupHeaderKey('group-1'))).toEqual({
+      runningCount: 1
+    })
   })
 })

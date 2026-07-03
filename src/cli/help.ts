@@ -20,6 +20,9 @@ Environments:
   environment show          Show one saved remote Orca runtime
   environment rm            Remove a saved remote Orca runtime
 
+Environment Recipes:
+  vm recipe doctor          Validate a per-workspace environment recipe
+
 Automations:
   automations list          List scheduled Orca automations
   automations show          Show one Orca automation
@@ -186,7 +189,7 @@ Browser Automation:
 
 Common Commands:
   orca open [--json]
-  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
+  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
   orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
@@ -228,9 +231,9 @@ Common Commands:
 
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
-  --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --worktree <selector>     Worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
-  --parent-worktree <selector> Parent worktree selector; create infers a child of the caller/current worktree by default
+  --parent-worktree <selector> Parent worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
 Terminal Send Options:
@@ -252,6 +255,11 @@ Behavior:
   Most commands require a running Orca runtime. If Orca is not open yet, run \`orca open\` first.
   Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.
   Use selectors for discovery and handles for repeated live terminal operations.
+
+Agent Sessions And Worktrees:
+  \`worktree create --agent\` creates a new checkout with an agent.
+  To start a fresh agent in the current worktree, use:
+    orca terminal create --worktree active --command "codex"
 
 Browser Workflow:
   1. Create or navigate:  orca tab create --url https://example.com
@@ -302,6 +310,7 @@ Examples:
   $ orca worktree ps --limit 10
   $ orca file open-changed --mode diff
   $ orca file open src/App.tsx
+  $ orca terminal create --worktree active --command "codex"
   $ orca terminal list --worktree path:/Users/me/orca/workspaces/orca/cli-test-1 --json
   $ orca terminal send --terminal term_123 --text "hi" --enter
   $ orca terminal wait --terminal term_123 --for exit --timeout-ms 60000 --json
@@ -426,6 +435,15 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear create' && flag === 'parent-current') {
     return '--parent-current      Use the current linked issue as parent'
   }
+  if (command === 'worktree create' && flag === 'parent-worktree') {
+    return '--parent-worktree <selector> Parent selector such as active/current, id:<id>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<id>'
+  }
+  if (command === 'orchestration task-create' && flag === 'task-title') {
+    return '--task-title <text>  Concise title for the orchestration task'
+  }
+  if (command === 'orchestration task-create' && flag === 'display-name') {
+    return '--display-name <text> UI label shown for dispatched worker rows'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }
@@ -473,7 +491,7 @@ export function formatFlagHelp(flag: string): string {
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
     'parent-worktree':
-      '--parent-worktree <selector> Parent selector; create infers the caller/current worktree by default',
+      '--parent-worktree <selector> Parent worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     path: '--path <path>          Path argument for the command',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',
     query: '--query <text>        Search text for matching refs',
@@ -487,6 +505,7 @@ export function formatFlagHelp(flag: string): string {
     text: '--text <text>          Text payload to send or type',
     'text-stdin': '--text-stdin          Read text payload from stdin',
     'task-id': '--task-id <id>        Task id to include in orchestration payload JSON',
+    'task-title': '--task-title <text>    Concise title for an orchestration task',
     'dispatch-id': '--dispatch-id <id>    Dispatch id to include in orchestration payload JSON',
     'files-modified': '--files-modified <csv> Comma-separated files for orchestration payload JSON',
     'report-path': '--report-path <path>  Report path to include in orchestration payload JSON',
@@ -496,7 +515,7 @@ export function formatFlagHelp(flag: string): string {
     'to-x': '--to-x <x>             Destination window-local x coordinate',
     'to-y': '--to-y <y>             Destination window-local y coordinate',
     worktree:
-      '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+      '--worktree <selector>  Worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     workspace: '--workspace <selector> Existing worktree selector for automation runs',
     'workspace-status':
       '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',

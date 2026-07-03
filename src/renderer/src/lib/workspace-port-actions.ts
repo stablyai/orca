@@ -12,6 +12,7 @@ import type {
   WorkspacePortKillResult,
   WorkspacePortScanResult
 } from '../../../shared/workspace-ports'
+import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
 import { browserUrlForPort } from './workspace-port-urls'
 
 export { addressForPort } from './workspace-port-urls'
@@ -46,6 +47,37 @@ export function shouldOpenWorkspacePortInOrcaBrowser(
   return settings?.openLinksInApp === true
 }
 
+function isMacShortcutPlatform(): boolean {
+  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+}
+
+export function getPortSystemBrowserHint(isMac: boolean = isMacShortcutPlatform()): string {
+  return isMac ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
+}
+
+export function getPortOpenBrowserTooltipLabel(openLabel: string, isMac?: boolean): string {
+  return `${openLabel}. ${getPortSystemBrowserHint(isMac)}`
+}
+
+type PortOpenClickEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
+
+export function resolvePortOpenInOrcaBrowser({
+  settings,
+  event,
+  isMac
+}: {
+  settings: { openLinksInApp?: boolean } | null | undefined
+  event?: PortOpenClickEvent | null
+  isMac: boolean
+}): boolean {
+  // Why: Shift+Cmd/Ctrl is the external-browser escape hatch; no pointer
+  // event means context-menu and keyboard opens should keep the saved setting.
+  if (event?.shiftKey && (isMac ? event.metaKey : event.ctrlKey)) {
+    return false
+  }
+  return shouldOpenWorkspacePortInOrcaBrowser(settings)
+}
+
 export function workspacePortOwnerWorktreeId(port: WorkspacePort): string | null {
   return port.kind === 'workspace' ? port.owner.worktreeId : null
 }
@@ -62,8 +94,17 @@ export async function openWorkspacePortInBrowser(args: {
   createBrowserTab: BrowserTabCreator
   setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
   openInOrcaBrowser?: boolean
+  localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const url = browserUrlForPort(args.port)
+  const rawUrl = browserUrlForPort(args.port)
+  let url = rawUrl
+  if (args.runtimeTarget.kind === 'local' && args.localhostLabelRoute) {
+    try {
+      url = (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
+    } catch {
+      url = rawUrl
+    }
+  }
   if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
     try {
       await window.api.shell.openUrl(url)

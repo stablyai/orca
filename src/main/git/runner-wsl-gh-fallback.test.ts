@@ -74,7 +74,7 @@ describe('ghExecFileAsync WSL fallback', () => {
         '--',
         'bash',
         '-c',
-        "cd '/home/jinwoo/stably/noqa' && gh 'issue' 'list' '--repo' 'stablyhq/noqa' '--json' 'number,title'"
+        "cd '/home/jinwoo/stably/noqa' && 'gh' 'issue' 'list' '--repo' 'stablyhq/noqa' '--json' 'number,title'"
       ],
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
@@ -285,7 +285,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "gh 'api' 'rate_limit'"],
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "'gh' 'api' 'rate_limit'"],
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
     )
@@ -347,7 +347,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "glab 'api' 'projects'"],
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "'glab' 'api' 'projects'"],
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
     )

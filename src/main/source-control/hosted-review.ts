@@ -1,9 +1,6 @@
 import type { HostedReviewInfo } from '../../shared/hosted-review'
-import {
-  getForgeProviderById,
-  getForgeProviderForRepository,
-  type ForgeProviderId
-} from './forge-provider'
+import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
+import type { HostedReviewExecutionOptions } from './hosted-review-git-options'
 
 function reviewLinkForProvider(
   input: Parameters<typeof getHostedReviewForBranch>[0],
@@ -26,17 +23,20 @@ function reviewLinkForProvider(
   }
 }
 
-export async function getHostedReviewForBranch(input: {
-  repoPath: string
-  connectionId?: string | null
-  branch: string
-  linkedGitHubPR?: number | null
-  fallbackGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
-}): Promise<HostedReviewInfo | null> {
+export async function getHostedReviewForBranch(
+  input: {
+    repoPath: string
+    connectionId?: string | null
+    branch: string
+    linkedGitHubPR?: number | null
+    fallbackGitHubPR?: number | null
+    linkedGitLabMR?: number | null
+    linkedBitbucketPR?: number | null
+    linkedAzureDevOpsPR?: number | null
+    linkedGiteaPR?: number | null
+    currentHeadOid?: string | null
+  } & HostedReviewExecutionOptions
+): Promise<HostedReviewInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
   // Why: detached HEAD cannot use branch lookup, but provider-specific exact
   // ids can still resolve the review without probing an empty branch name.
@@ -54,7 +54,8 @@ export async function getHostedReviewForBranch(input: {
 
   const provider = await getForgeProviderForRepository({
     repoPath: input.repoPath,
-    connectionId: input.connectionId
+    connectionId: input.connectionId,
+    ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
   })
   if (!provider) {
     return null
@@ -63,14 +64,8 @@ export async function getHostedReviewForBranch(input: {
     repoPath: input.repoPath,
     connectionId: input.connectionId,
     branch: branchName,
+    ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {}),
+    githubCurrentHeadOid: input.currentHeadOid ?? null,
     ...reviewLinkForProvider(input, provider.id)
   })
-}
-
-export async function getHostedReviewByNumber(input: {
-  repoPath: string
-  provider: ForgeProviderId
-  number: number
-}): Promise<HostedReviewInfo | null> {
-  return getForgeProviderById(input.provider).getReviewByNumber(input)
 }

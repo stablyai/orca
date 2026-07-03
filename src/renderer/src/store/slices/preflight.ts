@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand'
-import type { PreflightStatus } from '../../../../preload/api-types'
+import type { PreflightRuntimeContext, PreflightStatus } from '../../../../preload/api-types'
 import type { AppState } from '../types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
@@ -29,14 +29,16 @@ function getErrorMessage(error: unknown): string {
 function buildPreflightArgs(
   force: boolean,
   context: LocalPreflightContext
-): { force?: boolean; wslDistro?: string | null; wslDefault?: boolean } | undefined {
+): (PreflightRuntimeContext & { force?: boolean }) | undefined {
   const wslDistro = context?.wslDistro
   const wslDefault = context?.wslDefault === true
-  if (!force && !wslDistro && !wslDefault) {
+  const projectRuntime = context?.projectRuntime
+  if (!force && !wslDistro && !wslDefault && !projectRuntime) {
     return undefined
   }
   return {
     ...(force ? { force: true } : {}),
+    ...(projectRuntime ? { projectRuntime } : {}),
     ...(wslDistro ? { wslDistro } : {}),
     ...(wslDefault ? { wslDefault: true } : {})
   }

@@ -31,6 +31,18 @@ describe('getRuntimeEnvironmentIdForRepo', () => {
     ).toBeNull()
   })
 
+  it('keeps SSH-owned repos on local IPC while a runtime is focused', () => {
+    expect(
+      getRuntimeEnvironmentIdForRepo(
+        {
+          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+          repos: [{ id: 'repo-1', connectionId: 'ssh-1', executionHostId: null }]
+        },
+        'repo-1'
+      )
+    ).toBeNull()
+  })
+
   it('falls back to the focused runtime for legacy repos without an owner', () => {
     expect(
       getRuntimeEnvironmentIdForRepo(
@@ -41,6 +53,36 @@ describe('getRuntimeEnvironmentIdForRepo', () => {
         'repo-1'
       )
     ).toBe('focused-runtime')
+  })
+
+  it('uses the focused host row when duplicate repo ids exist', () => {
+    expect(
+      getRuntimeEnvironmentIdForRepo(
+        {
+          settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+          repos: [
+            { id: 'repo-1', connectionId: null, executionHostId: 'local' },
+            { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
+          ]
+        },
+        'repo-1'
+      )
+    ).toBe('owner-runtime')
+  })
+
+  it('does not silently choose a duplicate repo row when the focused host does not match', () => {
+    expect(
+      getRuntimeEnvironmentIdForRepo(
+        {
+          settings: { activeRuntimeEnvironmentId: 'other-runtime' },
+          repos: [
+            { id: 'repo-1', connectionId: null, executionHostId: 'local' },
+            { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
+          ]
+        },
+        'repo-1'
+      )
+    ).toBe('other-runtime')
   })
 
   it('returns settings scoped to an explicit local repo owner', () => {

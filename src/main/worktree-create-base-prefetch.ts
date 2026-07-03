@@ -1,5 +1,6 @@
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Repo } from '../shared/types'
+import { hasLocalCommitObject } from './git/commit-object-ref'
 import { getDefaultBaseRef } from './git/repo'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { prefetchRemoteWorktreeCreateBase } from './ipc/worktree-remote'
@@ -23,10 +24,6 @@ type WorktreeCreateBasePrefetchRuntime = {
   fetchRemoteWithCache: (repoPath: string, remote: string) => Promise<void>
 }
 
-function getFallbackRemoteForBase(baseBranch: string): string {
-  return baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-}
-
 async function prefetchLocalWorktreeCreateBase(
   repo: Repo,
   baseBranch: string | undefined,
@@ -34,6 +31,11 @@ async function prefetchLocalWorktreeCreateBase(
 ): Promise<void> {
   const resolvedBaseBranch = baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
   if (!resolvedBaseBranch) {
+    return
+  }
+  if (await hasLocalCommitObject(repo.path, resolvedBaseBranch)) {
+    // Why: hosted-review start points can be verified commit SHAs; a broad
+    // remote fetch cannot make an already-local object fresher.
     return
   }
   const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, resolvedBaseBranch)
@@ -44,7 +46,7 @@ async function prefetchLocalWorktreeCreateBase(
 
   // Why: keep optimistic prefetch on the same best-effort fallback path as
   // create so the real create can reuse the runtime's remote fetch cache.
-  await runtime.fetchRemoteWithCache(repo.path, getFallbackRemoteForBase(resolvedBaseBranch))
+  await runtime.fetchRemoteWithCache(repo.path, 'origin')
 }
 
 export async function prefetchWorktreeCreateBase(args: {

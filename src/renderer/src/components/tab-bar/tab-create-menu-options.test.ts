@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  TAB_CREATE_MENU_QUERY_MAX_BYTES,
   buildTabCreateMenuOptions,
-  findMatchingTabCreateMenuOptions
+  findMatchingTabCreateMenuOptions,
+  isTabCreateMenuQueryTooLarge,
+  type TabCreateMenuOption
 } from './tab-create-menu-options'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('tab create menu options', () => {
   const defaultOptions = buildTabCreateMenuOptions({
@@ -68,5 +75,37 @@ describe('tab create menu options', () => {
   it('returns no matches for an empty query', () => {
     expect(findMatchingTabCreateMenuOptions('', defaultOptions)).toEqual([])
     expect(findMatchingTabCreateMenuOptions('   ', defaultOptions)).toEqual([])
+  })
+
+  it('matches accepted pasted queries without whitespace regex replacement', () => {
+    const replace = vi.spyOn(String.prototype, 'replace')
+    const nonBreakingSpace = String.fromCharCode(160)
+    const query = ['\tnew', nonBreakingSpace, '  terminal\n'].join('')
+
+    expect(
+      findMatchingTabCreateMenuOptions(query, defaultOptions).map((option) => option.kind)
+    ).toEqual(['new-terminal'])
+    expect(
+      replace.mock.calls.filter(
+        ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+      )
+    ).toHaveLength(0)
+  })
+
+  it('rejects oversized pasted queries before scoring menu options', () => {
+    const oversizedQuery = 'secret-tab-create-menu'.repeat(TAB_CREATE_MENU_QUERY_MAX_BYTES)
+    const option = {
+      id: 'new-terminal',
+      kind: 'new-terminal',
+      get label(): string {
+        throw new Error('oversized tab-create menu queries must not scan labels')
+      },
+      get keywords(): readonly string[] {
+        throw new Error('oversized tab-create menu queries must not scan keywords')
+      }
+    } as TabCreateMenuOption
+
+    expect(isTabCreateMenuQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(findMatchingTabCreateMenuOptions(oversizedQuery, [option])).toEqual([])
   })
 })

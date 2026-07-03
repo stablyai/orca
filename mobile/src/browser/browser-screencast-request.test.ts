@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { buildMobileBrowserScreencastRequest } from './browser-screencast-request'
 
 describe('buildMobileBrowserScreencastRequest', () => {
-  it('requests sharp frames without changing the remote browser viewport', () => {
+  it('defaults to web view without changing the remote browser viewport', () => {
     const request = buildMobileBrowserScreencastRequest({ width: 390, height: 640 }, 3)
 
     expect(request).toEqual({
@@ -17,6 +17,19 @@ describe('buildMobileBrowserScreencastRequest', () => {
     expect(Object.keys(request ?? {})).not.toEqual(
       expect.arrayContaining(['viewportWidth', 'viewportHeight', 'deviceScaleFactor', 'mobile'])
     )
+  })
+
+  it('requests mobile view with phone-sized viewport emulation', () => {
+    const request = buildMobileBrowserScreencastRequest({ width: 390, height: 640 }, 3, 'mobile')
+
+    expect(request).toMatchObject({
+      maxWidth: 975,
+      maxHeight: 1600,
+      viewportWidth: 390,
+      viewportHeight: 640,
+      deviceScaleFactor: 2,
+      mobile: true
+    })
   })
 
   it('caps large phone layouts to the stream frame budget', () => {

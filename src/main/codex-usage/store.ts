@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this store owns Codex analytics persistence, scan policy, and renderer query semantics. Keeping them together prevents the Codex range/scope rules from drifting away from the scanner’s event model. */
 import { app } from 'electron'
-import { dirname, join } from 'path'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -358,7 +358,7 @@ export class CodexUsageStore {
       mkdirSync(dir, { recursive: true })
     }
     const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
+    writeFileSync(tmpFile, JSON.stringify(this.state), 'utf-8')
     renameSync(tmpFile, usageFile)
   }
 
@@ -414,7 +414,7 @@ export class CodexUsageStore {
 
     this.state.scanState.lastScanStartedAt = Date.now()
     this.state.scanState.lastScanError = null
-    this.writeToDisk()
+    // Why: start-only writes rewrite the full usage cache before scan results change.
 
     this.scanPromise = (async () => {
       try {

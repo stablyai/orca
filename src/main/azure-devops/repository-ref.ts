@@ -10,6 +10,10 @@ export type AzureDevOpsRepoRef = {
   organization?: string | null
 }
 
+type LocalGitExecOptions = {
+  wslDistro?: string
+}
+
 const REPO_REF_CACHE_MAX_ENTRIES = 512
 const repoRefCache = new Map<string, AzureDevOpsRepoRef | null>()
 
@@ -204,9 +208,11 @@ export function parseAzureDevOpsRepoRef(remoteUrl: string): AzureDevOpsRepoRef |
 export async function getAzureDevOpsRepoRefForRemote(
   repoPath: string,
   remoteName: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<AzureDevOpsRepoRef | null> {
-  const cacheKey = `${connectionId ?? 'local'}\0${repoPath}\0${remoteName}`
+  const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
+  const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
   if (repoRefCache.has(cacheKey)) {
     return repoRefCache.get(cacheKey)!
   }
@@ -218,7 +224,8 @@ export async function getAzureDevOpsRepoRefForRemote(
     const { stdout } = sshGitProvider
       ? await sshGitProvider.exec(['remote', 'get-url', remoteName], repoPath)
       : await gitExecFileAsync(['remote', 'get-url', remoteName], {
-          cwd: repoPath
+          cwd: repoPath,
+          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
         })
     const result = parseAzureDevOpsRepoRef(stdout)
     rememberRepoRefCacheEntry(cacheKey, result)
@@ -236,7 +243,8 @@ export async function getAzureDevOpsRepoRefForRemote(
 
 export async function getAzureDevOpsRepoRef(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<AzureDevOpsRepoRef | null> {
-  return getAzureDevOpsRepoRefForRemote(repoPath, 'origin', connectionId)
+  return getAzureDevOpsRepoRefForRemote(repoPath, 'origin', connectionId, localGitOptions)
 }

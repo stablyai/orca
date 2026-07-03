@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getExecutionHostLabel, type ExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
@@ -12,6 +12,8 @@ const FULL_HOST_MODEL_RUNTIME_CAPABILITIES = [
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 ]
+
+const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 function repo(id: string): Repo {
   return {
@@ -52,7 +54,7 @@ function host(
   return {
     id,
     kind: id === 'local' ? 'local' : id.startsWith('ssh:') ? 'ssh' : 'runtime',
-    label: id === 'local' ? 'Local Mac' : id.replace(/^ssh:|^runtime:/, ''),
+    label: id === 'local' ? LOCAL_HOST_LABEL : id.replace(/^ssh:|^runtime:/, ''),
     detail: id === 'local' ? 'This computer' : 'Host',
     health: id === 'local' ? 'local' : 'available',
     ...overrides
@@ -71,7 +73,7 @@ describe('buildProjectHostSetupOptions', () => {
     })
 
     expect(options.map((option) => option.id)).toEqual(['local', 'remote'])
-    expect(options[0]).toMatchObject({ label: 'Local Mac', repoId: 'local-repo' })
+    expect(options[0]).toMatchObject({ label: LOCAL_HOST_LABEL, repoId: 'local-repo' })
     expect(options[1]).toMatchObject({ label: 'builder', repoId: 'remote-repo' })
   })
 
@@ -105,6 +107,56 @@ describe('buildProjectHostSetupOptions', () => {
     ])
   })
 
+  it('omits ephemeral VM runtime setups from reusable project host choices', () => {
+    const ephemeralHostId = 'runtime:90d880b2-de1b-44be-b7b8-8e15274e184e' as ExecutionHostId
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo'), repo('vm-repo')],
+      hosts: [
+        host('local'),
+        host(ephemeralHostId, {
+          label: '90d880b2-de1b-44be-b7b8-8e15274e184e',
+          source: 'ephemeral-vm',
+          capabilities: FULL_HOST_MODEL_RUNTIME_CAPABILITIES
+        })
+      ],
+      projectHostSetups: [
+        setup('local', 'project-1', 'local', 'local-repo'),
+        setup('vm', 'project-1', ephemeralHostId, 'vm-repo', {
+          path: '/vercel/sandbox/orca',
+          displayName: 'orca'
+        })
+      ]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL })
+    ])
+  })
+
+  it('omits runtime-owned SSH (per-workspace-env) setups even when their host is filtered out', () => {
+    // The execution-host registry filters runtime-owned targets, so the setup's host is absent
+    // here — guard on the hostId so the hidden target never becomes a selectable run-target.
+    const runtimeSshHostId = 'ssh:runtime-ssh-orca-e37aa3a9' as ExecutionHostId
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo'), repo('vm-repo')],
+      hosts: [host('local')],
+      projectHostSetups: [
+        setup('local', 'project-1', 'local', 'local-repo'),
+        setup('vm', 'project-1', runtimeSshHostId, 'vm-repo', {
+          path: '/workspace/orca',
+          displayName: 'orca'
+        })
+      ]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL })
+    ])
+    expect(options.some((o) => String(o.hostId).includes('runtime-ssh-'))).toBe(false)
+  })
+
   it('omits setups that are not ready or cannot create through an eligible repo', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
@@ -130,7 +182,7 @@ describe('buildProjectHostSetupOptions', () => {
     })
 
     expect(options).toEqual([
-      expect.objectContaining({ id: 'local', kind: 'ready', label: 'Local Mac' }),
+      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL }),
       expect.objectContaining({
         id: 'needs-setup:ssh:builder',
         kind: 'needs-setup',
@@ -163,7 +215,7 @@ describe('buildProjectHostSetupOptions', () => {
     })
 
     expect(options).toEqual([
-      expect.objectContaining({ id: 'local', kind: 'ready', label: 'Local Mac' }),
+      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL }),
       expect.objectContaining({
         id: 'needs-setup:runtime:gpu',
         kind: 'needs-setup',
@@ -258,7 +310,7 @@ describe('buildProjectHostSetupOptions', () => {
     })
 
     expect(options).toEqual([
-      expect.objectContaining({ id: 'local', kind: 'ready', label: 'Local Mac' }),
+      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL }),
       expect.objectContaining({
         id: 'needs-setup:runtime:gpu',
         kind: 'needs-setup',

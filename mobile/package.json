@@ -4,14 +4,16 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
+    "start": "node scripts/start-expo.mjs",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "test": "vitest run",
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "mock-server": "npx tsx scripts/mock-server.ts"
+    "mock-server": "npx tsx scripts/mock-server.ts",
+    "repro:workspace-picker-lag": "npx tsx scripts/repro-workspace-picker-lag.ts",
+    "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
@@ -24,7 +26,11 @@
     "expo-constants": "^55.0.16",
     "expo-crypto": "^55.0.14",
     "expo-dev-client": "~55.0.35",
+    "expo-document-picker": "^55.0.13",
+    "expo-file-system": "55.0.19",
     "expo-haptics": "^55.0.14",
+    "expo-image-manipulator": "^55.0.17",
+    "expo-image-picker": "^55.0.20",
     "expo-linking": "^55.0.15",
     "expo-modules-core": "~55.0.25",
     "expo-network": "~55.0.14",
@@ -47,19 +53,22 @@
     "react-native-webview": "^13.16.1",
     "react-native-worklets": "^0.8.3",
     "tweetnacl": "^1.0.3",
-    "ws": "^8.20.1",
+    "ws": "^8.21.0",
     "zod": "~4.4.3",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
     "@types/react-native": "^0.73.0",
+    "@types/react-test-renderer": "19.1.0",
     "@types/ws": "^8.18.1",
     "expo-module-scripts": "^55.0.2",
     "oxfmt": "^0.52.0",
-    "oxlint": "^1.67.0",
-    "tsx": "^4.21.0",
+    "oxlint": "^1.71.0",
+    "react-test-renderer": "19.2.6",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.5"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
   }
 }

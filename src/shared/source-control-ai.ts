@@ -1148,12 +1148,6 @@ export function resolveSourceControlAiForOperation(
   const legacy = input.settings.commitMessageAi
   const source = normalizeSourceControlAiSettings(input.settings.sourceControlAi, legacy)
   const repoOverrides = normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)
-  if (!(repoOverrides?.enabled ?? source.enabled)) {
-    return {
-      ok: false,
-      error: 'Enable Source Control AI in Settings -> Git.'
-    }
-  }
 
   const prCreationDefaults = resolvePrCreationDefaults(
     source,

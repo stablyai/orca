@@ -1,10 +1,11 @@
 import React, { useCallback } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import type { TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
@@ -116,6 +117,7 @@ function QuickLaunchAgentMenuItemsInner({
   const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
 
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
@@ -197,6 +199,8 @@ function QuickLaunchAgentMenuItemsInner({
       {agents.map((agent) => {
         const entry = getCatalogEntry(agent)
         const label = entry?.label ?? agent
+        const showsDefaultAgentShortcut =
+          newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
           <DropdownMenuItem
             key={agent}
@@ -209,7 +213,10 @@ function QuickLaunchAgentMenuItemsInner({
             )}
           >
             <AgentIcon agent={agent} size={14} />
-            {label}
+            <span className="flex-1">{label}</span>
+            {showsDefaultAgentShortcut ? (
+              <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
         )
       })}

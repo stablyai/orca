@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
@@ -14,6 +15,14 @@ import type {
 
 export type WorkspaceSpaceSortKey = 'size' | 'name' | 'repo' | 'activity'
 export type WorkspaceSpaceSortDirection = 'asc' | 'desc'
+export const WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isWorkspaceSpaceFilterQueryTooLarge(
+  query: string,
+  maxBytes = WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
 
 export type WorkspaceSpaceDeleteReadiness = {
   isActive: boolean
@@ -208,7 +217,11 @@ export function filterWorkspaceSpaceRows(
   query: string,
   onlyDeletable: boolean
 ): WorkspaceSpaceWorktree[] {
-  const normalizedQuery = query.trim().toLowerCase()
+  if (isWorkspaceSpaceFilterQueryTooLarge(query)) {
+    return []
+  }
+  const trimmedQuery = query.trim()
+  const normalizedQuery = trimmedQuery.toLowerCase()
   return rows.filter((row) => {
     if (onlyDeletable && !row.canDelete) {
       return false

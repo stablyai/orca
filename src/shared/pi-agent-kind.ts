@@ -1,15 +1,28 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getCommandTokenPathBasename, getFirstCommandToken } from './command-token-scanner'
 
 /**
  * Pi-compatible agent kinds. Both Pi and OMP (omp.sh) consume the same
  * `PI_CODING_AGENT_DIR` env contract and the same extension API, but each
  * defaults its on-disk config dir to a different `~/.<kind>/agent` path.
- * The Orca per-PTY overlay needs to know which agent is being launched so it
- * mirrors the user's actual source dir for THAT agent, with no cross-agent
- * fallback (otherwise switching agents in the same workspace silently shadows
- * the other agent's user extensions).
+ * Orca's managed extension installer needs to know which agent is being
+ * launched so it targets the user's actual source dir for THAT agent, with no
+ * cross-agent fallback
+ * (otherwise switching agents in the same workspace silently shadows the
+ * other agent's user extensions).
  */
 export type PiAgentKind = 'pi' | 'omp'
+
+/**
+ * True when `agentType` names a Pi-compatible (goal/mission) kind. These agents
+ * emit milestone `agent_end` events between steps while still working, so they
+ * are treated differently from agents that only signal completion at turn end.
+ */
+export function isPiCompatibleAgentType(
+  agentType: string | null | undefined
+): agentType is PiAgentKind {
+  return agentType === 'pi' || agentType === 'omp'
+}
 
 const OMP_LAUNCH_CMD = TUI_AGENT_CONFIG.omp.launchCmd
 
@@ -26,7 +39,7 @@ const PATH_PREFIX = `(?:[^\\s;&|('"\`]*[\\\\/])?`
 function makeLaunchCmdRegex(launchCmd: string): RegExp {
   // Why: launchCmd may be a multi-token string ("hermes --tui"); only the
   // first token is the binary name. Use that for matching.
-  const binary = launchCmd.split(/\s+/, 1)[0]
+  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCmd))
   const escaped = binary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(
     `${BOUNDARY_BEFORE}${PATH_PREFIX}${escaped}(?:\\.cmd|\\.exe|\\.sh)?${BOUNDARY_AFTER}`,
@@ -41,12 +54,12 @@ const OMP_REGEX = makeLaunchCmdRegex(OMP_LAUNCH_CMD)
  *
  * Returns 'omp' when the command launches OMP (`omp` / `omp.sh`), otherwise
  * defaults to 'pi'. Defaulting to 'pi' preserves prior behavior for the
- * non-launch case (e.g. bare shells that may later invoke `pi`) where the
- * `~/.pi/agent` overlay was always materialized.
+ * non-launch case (e.g. bare shells that may later invoke `pi`) where Orca
+ * prepared Pi integration by default.
  *
- * NEVER cross-fall-back: a missing source dir for the resolved kind is the
- * overlay's "no source, just Orca extensions" branch - the other agent's
- * dir MUST NOT be substituted.
+ * NEVER cross-fall-back: a missing source dir for the resolved kind means
+ * "create that kind's extension dir only" - the other agent's dir MUST NOT
+ * be substituted.
  */
 export function detectPiAgentKindFromCommand(command: string | undefined): PiAgentKind {
   if (typeof command === 'string' && OMP_REGEX.test(command)) {

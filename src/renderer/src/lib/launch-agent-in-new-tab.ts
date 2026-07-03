@@ -3,14 +3,16 @@ import { useAppStore } from '@/store'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
-  type AgentDraftLaunchPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
@@ -21,12 +23,11 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
-
-const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -69,40 +70,6 @@ export type LaunchAgentInNewTabResult = {
   pasteDraftAfterLaunch: boolean
 } | null
 
-function seedCommandCodeSubmittedPromptStatus(tabId: string, prompt: string): void {
-  const state = useAppStore.getState()
-  const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
-  if (!leafId) {
-    return
-  }
-  try {
-    state.setAgentStatus(makePaneKey(tabId, leafId), {
-      state: 'working',
-      prompt,
-      agentType: 'command-code'
-    })
-  } catch {
-    // Best-effort UI seed. Real hooks still own refinement/completion.
-  }
-}
-
-function canUseInlineDraftLaunchPlan(
-  plan: AgentDraftLaunchPlan,
-  platform: NodeJS.Platform
-): boolean {
-  if (platform !== 'win32') {
-    return true
-  }
-  const envChars = Object.entries(plan.env ?? {}).reduce(
-    (total, [key, value]) => total + key.length + value.length,
-    0
-  )
-  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
-  // generated drafts should use the existing post-ready paste path instead of
-  // failing the PTY spawn before the agent starts.
-  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
-}
-
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
  * with an initial prompt.
@@ -135,10 +102,23 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
-    launchPlatform = CLIENT_PLATFORM,
+    launchPlatform,
     onPromptDelivered
   } = args
   const store = useAppStore.getState()
+  const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
+  const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
+  const resolvedLaunchPlatform =
+    launchPlatform ??
+    (repo
+      ? getAgentLaunchPlatformForRepo(
+          repo,
+          repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
+        )
+      : CLIENT_PLATFORM)
+  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+  // `orca-ide` rename must not be applied for remote launches.
+  const isRemote = repo ? repoIsRemote(repo) : false
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const effectiveAgentArgs =
     agentArgs !== undefined
@@ -166,7 +146,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
+      isRemote,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
@@ -179,16 +160,21 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
+      isRemote,
       agentArgs: effectiveAgentArgs,
       agentEnv
     })
-    if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, launchPlatform)) {
+    if (draftLaunchPlan) {
       startupPlan = {
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
+        launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.startupCommandDelivery
+          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+          : {}),
         ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
       }
     } else {
@@ -196,7 +182,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         agent,
         prompt: '',
         cmdOverrides,
-        platform: launchPlatform,
+        platform: resolvedLaunchPlatform,
+        isRemote,
         agentArgs: effectiveAgentArgs,
         agentEnv,
         allowEmptyPromptLaunch: true
@@ -208,7 +195,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
+      isRemote,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
@@ -219,7 +207,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
+      isRemote,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: !hasPrompt
@@ -241,7 +230,17 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       environmentId: runtimeEnvironmentId,
       targetGroupId: groupId,
       activate: true,
-      ...(hasPrompt ? { command: startupPlan.launchCommand } : { agent })
+      ...(hasPrompt
+        ? {
+            command: startupPlan.launchCommand,
+            ...(startupPlan.env ? { env: startupPlan.env } : {}),
+            launchConfig: startupPlan.launchConfig,
+            launchAgent: agent,
+            ...(startupPlan.startupCommandDelivery
+              ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+              : {})
+          }
+        : { agent })
     }).then((created) => {
       // Why: created means the host accepted the launch, not that a local tab
       // exists; keep pruning stale local rows until the snapshot mirrors.
@@ -269,21 +268,19 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // lands after mount the agent binary never starts; the user sees a bare shell.
   // Since both calls happen synchronously in the same React batch, the queue
   // is in place by the time the pane commits.
-  //
-  // The telemetry payload is threaded through the queue → pty-connection →
-  // pty-transport → pty:spawn IPC → main, where main fires `agent_started`
-  // only after the spawn succeeds. `request_kind: 'new'` because
-  // quick-launch always opens a fresh session.
-  //
-  // Why: stamp the launched agent on the tab so the tab bar shows the provider
-  // icon immediately, before the agent's first hook event arrives.
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
-    quickCommandLabel
+    quickCommandLabel,
+    ...initialAgentTabViewModeProps(store.settings)
   })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    launchAgent: agent,
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
     ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
       ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
       : {}),
@@ -346,7 +343,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         if (agent === 'command-code' && submitPastedPrompt) {
           // Why: Command Code has no prompt-submit hook; when Orca submits a
           // generated prompt after readiness, seed working at delivery time.
-          seedCommandCodeSubmittedPromptStatus(tabId, pasteDraftAfterLaunch)
+          seedCommandCodeSubmittedPromptStatus(tabId, trimmedPrompt)
         }
         onPromptDelivered?.()
       }

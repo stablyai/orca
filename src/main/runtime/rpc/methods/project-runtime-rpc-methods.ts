@@ -34,6 +34,19 @@ const ProjectHostSetupClone = z.object({
   displayName: OptionalString
 })
 
+const LocalWindowsRuntimePreference = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('inherit-global') }),
+  z.object({ kind: z.literal('windows-host') }),
+  z.object({ kind: z.literal('wsl'), distro: requiredString('Missing WSL distro') })
+])
+
+const ProjectUpdate = z.object({
+  projectId: requiredString('Missing project ID'),
+  updates: z.object({
+    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional()
+  })
+})
+
 const ProjectHostSetupCreate = z.object({
   projectId: requiredString('Missing project ID'),
   hostId: requiredString('Missing host ID').transform((value, ctx) => {
@@ -77,12 +90,25 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'project.list',
     params: null,
-    handler: (_params, { runtime }) => ({ projects: runtime.listProjects() })
+    handler: (_params, { runtime }) => {
+      runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return { projects: runtime.listProjects() }
+    }
+  }),
+  defineMethod({
+    name: 'project.update',
+    params: ProjectUpdate,
+    handler: (params, { runtime }) => ({
+      project: runtime.updateProject(params.projectId, params.updates)
+    })
   }),
   defineMethod({
     name: 'projectHostSetup.list',
     params: null,
-    handler: (_params, { runtime }) => ({ setups: runtime.listProjectHostSetups() })
+    handler: (_params, { runtime }) => {
+      runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return { setups: runtime.listProjectHostSetups() }
+    }
   }),
   defineMethod({
     name: 'projectHostSetup.create',

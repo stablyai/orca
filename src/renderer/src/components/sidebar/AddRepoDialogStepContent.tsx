@@ -41,7 +41,6 @@ type AddRepoDialogStepContentProps = {
   nestedGroupName: string
   createName: string
   createParent: string
-  createKind: 'git' | 'folder'
   createError: string | null
   isCreating: boolean
   hostSelector?: ReactNode
@@ -73,9 +72,9 @@ type AddRepoDialogStepContentProps = {
   onNestedGroupNameChange: (name: string) => void
   onNestedSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
   onImportNestedRepos: (mode: 'group' | 'separate') => void
+  onOpenNestedRootFolder: () => void
   onCreateNameChange: (name: string) => void
   onCreateParentChange: (parent: string) => void
-  onCreateKindChange: (kind: 'git' | 'folder') => void
   onPickCreateParent: () => void
   onCreate: () => void
 }
@@ -111,7 +110,6 @@ export function AddRepoDialogStepContent({
   nestedGroupName,
   createName,
   createParent,
-  createKind,
   createError,
   isCreating,
   hostSelector,
@@ -143,9 +141,9 @@ export function AddRepoDialogStepContent({
   onNestedGroupNameChange,
   onNestedSelectedPathsChange,
   onImportNestedRepos,
+  onOpenNestedRootFolder,
   onCreateNameChange,
   onCreateParentChange,
-  onCreateKindChange,
   onPickCreateParent,
   onCreate
 }: AddRepoDialogStepContentProps): React.JSX.Element | null {
@@ -241,6 +239,7 @@ export function AddRepoDialogStepContent({
         onGroupNameChange={onNestedGroupNameChange}
         onSelectedPathsChange={onNestedSelectedPathsChange}
         onImport={onImportNestedRepos}
+        onOpenAsFolder={onOpenNestedRootFolder}
         onStopScan={onStopNestedScan}
       />
     )
@@ -251,7 +250,6 @@ export function AddRepoDialogStepContent({
       <CreateStep
         createName={createName}
         createParent={createParent}
-        createKind={createKind}
         createError={createError}
         isCreating={isCreating}
         defaultParent={createDefaultParent}
@@ -263,7 +261,6 @@ export function AddRepoDialogStepContent({
         sshTargetId={selectedSshTargetId}
         onNameChange={onCreateNameChange}
         onParentChange={onCreateParentChange}
-        onKindChange={onCreateKindChange}
         onPickParent={onPickCreateParent}
         onCreate={onCreate}
       />

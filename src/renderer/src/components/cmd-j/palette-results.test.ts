@@ -1,12 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import path from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Globe, Settings } from 'lucide-react'
 import type { CmdJQuickAction } from './quick-actions'
 import {
+  CMD_J_PALETTE_QUERY_MAX_BYTES,
   buildCmdJActionResults,
   buildCmdJSettingsResults,
-  rankCmdJMiddleResults
+  isCmdJPaletteQueryTooLarge,
+  rankCmdJMiddleResults,
+  type CmdJActionResult,
+  type CmdJSettingsResult
 } from './palette-results'
+import { hasCmdJProjectSearchCandidates, searchCmdJProjectResults } from './palette-project-results'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../../shared/types'
 
 const noopRun: CmdJQuickAction['run'] = async () => ({ status: 'ok' })
 const available: CmdJQuickAction['isAvailable'] = () => ({ available: true })
@@ -157,6 +164,10 @@ function top(query: string): string | undefined {
   })[0]?.id
 }
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('Cmd+J palette middle-band ranking', () => {
   it.each([
     ['new terminal', 'new-terminal-tab'],
@@ -200,5 +211,263 @@ describe('Cmd+J palette middle-band ranking', () => {
   it('does not match settings on one-character or description-only queries', () => {
     expect(top('t')).toBeUndefined()
     expect(top('cookie import')).toBeUndefined()
+  })
+
+  it('normalizes accepted multiline pasted queries without regex replacement', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+
+    expect(top('  new\n\tterminal  ')).toBe('new-terminal-tab')
+
+    const usedWhitespaceReplace = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+    )
+    expect(usedWhitespaceReplace).toBe(false)
+  })
+
+  it('rejects oversized pasted queries before reading candidate keywords', () => {
+    const oversizedQuery = 'secret-palette-query'.repeat(CMD_J_PALETTE_QUERY_MAX_BYTES)
+    const setting = {
+      id: 'settings:throwing',
+      kind: 'settings',
+      title: 'Throwing Setting',
+      description: '',
+      icon: Settings,
+      sectionId: 'general',
+      order: 0,
+      get configKeywords(): string[] {
+        throw new Error('oversized palette queries must not scan settings keywords')
+      }
+    } as CmdJSettingsResult
+    const action = {
+      id: 'throwing-action',
+      kind: 'action',
+      title: 'Throwing Action',
+      description: '',
+      icon: Globe,
+      order: 0,
+      isAvailable: available,
+      run: noopRun,
+      get verbKeywords(): string[] {
+        throw new Error('oversized palette queries must not scan action keywords')
+      }
+    } as CmdJActionResult
+
+    expect(isCmdJPaletteQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(
+      rankCmdJMiddleResults({
+        query: oversizedQuery,
+        settingsResults: [setting],
+        actionResults: [action]
+      })
+    ).toEqual([])
+  })
+})
+
+function repo(id: string, displayName: string, projectGroupId?: string | null): Repo {
+  return {
+    id,
+    path: path.join('/repos', displayName),
+    displayName,
+    badgeColor: '#999999',
+    addedAt: 1,
+    projectGroupId
+  } as Repo
+}
+
+function project(id: string, displayName: string): Project {
+  return {
+    id,
+    displayName,
+    badgeColor: '#999999',
+    sourceRepoIds: [],
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+function setup(id: string, projectId: string, hostId: string, repoId: string): ProjectHostSetup {
+  return {
+    id,
+    projectId,
+    hostId: hostId as ProjectHostSetup['hostId'],
+    repoId,
+    path: path.join('/repos', repoId),
+    displayName: repoId,
+    setupState: 'ready',
+    setupMethod: 'cloned',
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+function projectGroup(id: string, name: string, parentGroupId: string | null = null): ProjectGroup {
+  return {
+    id,
+    name,
+    parentPath: null,
+    parentGroupId,
+    createdFrom: 'manual',
+    tabOrder: 1,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+describe('Cmd+J project and repo-group search', () => {
+  it('finds a Project Group by name', () => {
+    const [result] = searchCmdJProjectResults({
+      query: 'infra',
+      projectGroups: [projectGroup('group-1', 'Infrastructure')],
+      repos: [],
+      projects: [],
+      projectHostSetups: []
+    })
+
+    expect(result).toMatchObject({
+      kind: 'project-group',
+      title: 'Infrastructure',
+      description: 'Repo group',
+      rowKey: 'project-group:group-1'
+    })
+  })
+
+  it('finds a Project by project name and a repo-backed fallback by repo name', () => {
+    const projectResults = searchCmdJProjectResults({
+      query: 'api',
+      projectGroups: [],
+      repos: [repo('repo-1', 'legacy-api'), repo('repo-2', 'source-folder')],
+      projects: [project('project-1', 'API Service')],
+      projectHostSetups: [setup('setup-1', 'project-1', 'local', 'repo-1')]
+    })
+    const fallbackResults = searchCmdJProjectResults({
+      query: 'source',
+      projectGroups: [],
+      repos: [repo('repo-1', 'legacy-api'), repo('repo-2', 'source-folder')],
+      projects: [project('project-1', 'API Service')],
+      projectHostSetups: [setup('setup-1', 'project-1', 'local', 'repo-1')]
+    })
+
+    expect(projectResults.map((result) => [result.title, result.rowKey])).toEqual([
+      ['API Service', 'project:project-1']
+    ])
+    expect(fallbackResults.map((result) => [result.title, result.rowKey])).toEqual([
+      ['source-folder', 'repo:repo-2']
+    ])
+  })
+
+  it('splits independent same-host checkouts of one project into per-setup keys', () => {
+    // Why: two `cloned` checkouts share the project's remote identity but are
+    // distinct user clones; the palette follows the sidebar and surfaces each as
+    // its own jump target rather than collapsing them. See #5374.
+    const results = searchCmdJProjectResults({
+      query: 'platform',
+      projectGroups: [],
+      repos: [repo('repo-1', 'platform-a'), repo('repo-2', 'platform-b')],
+      projects: [project('project-1', 'Platform')],
+      projectHostSetups: [
+        setup('setup-1', 'project-1', 'local', 'repo-1'),
+        setup('setup-2', 'project-1', 'local', 'repo-2')
+      ]
+    })
+
+    expect(results.map((result) => result.rowKey)).toEqual([
+      'project:project-1::setup:repo-1',
+      'project:project-1::setup:repo-2'
+    ])
+  })
+
+  it('keeps a provisioned runtime copy under one project key alongside a same-host checkout', () => {
+    // Why: a `provisioned` (recipe-created ephemeral) copy shares the project's
+    // remote identity but must not split the user's real checkout; it nests
+    // under the single project key. Mirrors the sidebar grouping. See #6320 / #5374.
+    const results = searchCmdJProjectResults({
+      query: 'platform',
+      projectGroups: [],
+      repos: [repo('repo-1', 'platform-a'), repo('repo-2', 'platform-runtime')],
+      projects: [project('project-1', 'Platform')],
+      projectHostSetups: [
+        setup('setup-1', 'project-1', 'local', 'repo-1'),
+        { ...setup('setup-2', 'project-1', 'local', 'repo-2'), setupMethod: 'provisioned' }
+      ]
+    })
+
+    expect(results.map((result) => result.rowKey)).toEqual(['project:project-1'])
+  })
+
+  it('suppresses raw Project records without renderable repo header targets', () => {
+    const results = searchCmdJProjectResults({
+      query: 'orphan',
+      projectGroups: [],
+      repos: [],
+      projects: [project('project-1', 'Orphan Project')],
+      projectHostSetups: []
+    })
+
+    expect(results).toEqual([])
+  })
+
+  it('suppresses repo-backed projects when the sidebar cannot render their header row', () => {
+    const results = searchCmdJProjectResults({
+      query: 'archived',
+      projectGroups: [],
+      repos: [repo('repo-1', 'archived-service')],
+      projects: [project('project-1', 'Archived Service')],
+      projectHostSetups: [setup('setup-1', 'project-1', 'local', 'repo-1')],
+      renderableRepoIds: new Set()
+    })
+
+    expect(results).toEqual([])
+  })
+
+  it('reports searchable project candidates even when a query has no match', () => {
+    expect(
+      hasCmdJProjectSearchCandidates({
+        projectGroups: [projectGroup('group-1', 'Infrastructure')],
+        repos: [],
+        projects: [],
+        projectHostSetups: []
+      })
+    ).toBe(true)
+    expect(
+      searchCmdJProjectResults({
+        query: 'zzzz',
+        projectGroups: [projectGroup('group-1', 'Infrastructure')],
+        repos: [],
+        projects: [],
+        projectHostSetups: []
+      })
+    ).toEqual([])
+  })
+
+  it('rejects oversized project queries before reading names', () => {
+    const oversizedQuery = 'secret-palette-query'.repeat(CMD_J_PALETTE_QUERY_MAX_BYTES)
+    const throwingGroup = {
+      get id() {
+        throw new Error('oversized palette queries must not scan project groups')
+      },
+      get name() {
+        throw new Error('oversized palette queries must not scan project groups')
+      }
+    } as unknown as ProjectGroup
+    const throwingRepo = {
+      get id() {
+        throw new Error('oversized palette queries must not scan repos')
+      },
+      get displayName() {
+        throw new Error('oversized palette queries must not scan repos')
+      }
+    } as unknown as Repo
+
+    expect(
+      searchCmdJProjectResults({
+        query: oversizedQuery,
+        projectGroups: [throwingGroup],
+        repos: [throwingRepo],
+        projects: [],
+        projectHostSetups: []
+      })
+    ).toEqual([])
   })
 })

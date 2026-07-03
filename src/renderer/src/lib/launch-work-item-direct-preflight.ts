@@ -1,6 +1,6 @@
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSetupConfig } from '@/lib/new-workspace'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import type {
   GitHubPrStartPoint,
   GlobalSettings,
@@ -16,22 +16,22 @@ type PreflightSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | nu
 export async function resolveDirectPrStartPoint(
   repoId: string,
   prNumber: number,
-  settings: PreflightSettings
+  settings: PreflightSettings,
+  hints: {
+    branchName?: string
+    headRefName?: string
+    baseRefName?: string
+    isCrossRepository?: boolean
+  } = {}
 ): Promise<GitHubPrStartPoint> {
-  const target = getActiveRuntimeTarget(settings)
-  const result =
-    target.kind === 'local'
-      ? await window.api.worktrees.resolvePrBase({ repoId, prNumber })
-      : await callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
-          target,
-          'worktree.resolvePrBase',
-          { repo: repoId, prNumber },
-          { timeoutMs: 30_000 }
-        )
-  if ('error' in result) {
-    throw new Error(result.error)
-  }
-  return result
+  return resolveGitHubPrStartPointForRepo({
+    repoId,
+    prNumber,
+    settings,
+    headRefName: hints.headRefName ?? hints.branchName,
+    baseRefName: hints.baseRefName,
+    isCrossRepository: hints.isCrossRepository
+  })
 }
 
 export async function resolveDirectSetupDecision(

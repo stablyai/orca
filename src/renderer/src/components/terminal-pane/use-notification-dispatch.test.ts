@@ -52,17 +52,22 @@ vi.mock('@/lib/desktop-notification-sound', () => ({
   playDesktopNotificationSound
 }))
 
-function makeAgentStatus(paneKey: string): AgentStatusEntry {
+function makeAgentStatus(
+  paneKey: string,
+  overrides: Partial<AgentStatusEntry> = {}
+): AgentStatusEntry {
+  const now = Date.now()
   return {
     state: 'done',
     prompt: 'codex-hook-notify',
-    updatedAt: Date.now(),
-    stateStartedAt: Date.now(),
+    updatedAt: now,
+    stateStartedAt: now,
     agentType: 'codex',
     paneKey,
     terminalTitle: 'codex',
     stateHistory: [],
-    lastAssistantMessage: 'Done.'
+    lastAssistantMessage: 'Done.',
+    ...overrides
   }
 }
 
@@ -77,6 +82,11 @@ function stubDocumentFocus({
     visibilityState,
     hasFocus: vi.fn(() => focused)
   })
+}
+
+function getLastNotificationDispatchArg(): Record<string, unknown> | undefined {
+  const dispatch = window.api.notifications.dispatch as unknown as ReturnType<typeof vi.fn>
+  return dispatch.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined
 }
 
 describe('dispatchTerminalNotification', () => {
@@ -401,9 +411,10 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
   })
 
-  it('uses the accepted hook snapshot when the live store row is gone before dispatch', () => {
+  it('uses accepted hook snapshot timing for the notification id when the live store row is gone before dispatch', () => {
     mockState.ptyIdsByTabId = {}
     mockState.agentStatusByPaneKey = {}
+    const stateStartedAt = Date.now() - 1_000
 
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
@@ -413,13 +424,19 @@ describe('dispatchTerminalNotification', () => {
         state: 'done',
         prompt: 'codex-hook-notify',
         agentType: 'codex',
-        lastAssistantMessage: 'Done.'
+        lastAssistantMessage: 'Done.',
+        stateStartedAt
       }
     })
 
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
+        notificationId: buildAgentNotificationId({
+          worktreeId: 'wt-primary',
+          paneKey,
+          stateStartedAt
+        }),
         worktreeId: 'wt-primary',
         paneKey,
         agentType: 'codex',
@@ -428,12 +445,144 @@ describe('dispatchTerminalNotification', () => {
         agentLastAssistantMessage: 'Done.'
       })
     )
-    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
-      expect.not.objectContaining({ notificationId: expect.any(String) })
-    )
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
     expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('does not reuse a fresh stale agent snapshot when the terminal title names another agent', () => {
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      agentType: 'codex',
+      terminalTitle: 'Codex',
+      lastAssistantMessage: 'Codex done.'
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: '✳ Claude Code',
+      paneKey
+    })
+
+    const dispatchArgs = getLastNotificationDispatchArg()
+    expect(dispatchArgs).toEqual(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey,
+        terminalTitle: '✳ Claude Code'
+      })
+    )
+    expect(dispatchArgs?.agentType).toBeUndefined()
+    expect(dispatchArgs?.agentLastAssistantMessage).toBeUndefined()
+  })
+
+  it('does not reuse an event snapshot when the terminal title names another agent', () => {
+    mockState.agentStatusByPaneKey = {}
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: '✳ Claude Code',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'codex prompt',
+        agentType: 'codex',
+        lastAssistantMessage: 'Codex done.',
+        stateStartedAt: Date.now()
+      }
+    })
+
+    const dispatchArgs = getLastNotificationDispatchArg()
+    expect(dispatchArgs).toEqual(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey,
+        terminalTitle: '✳ Claude Code'
+      })
+    )
+    expect(dispatchArgs?.notificationId).toBeUndefined()
+    expect(dispatchArgs?.agentType).toBeUndefined()
+    expect(dispatchArgs?.agentPrompt).toBeUndefined()
+    expect(dispatchArgs?.agentLastAssistantMessage).toBeUndefined()
+  })
+
+  it('does not reuse an untyped fresh agent snapshot when the terminal title names an agent', () => {
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      agentType: undefined,
+      terminalTitle: 'unknown',
+      lastAssistantMessage: 'Previous agent done.'
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'Claude Code',
+      paneKey
+    })
+
+    const dispatchArgs = getLastNotificationDispatchArg()
+    expect(dispatchArgs).toEqual(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey,
+        terminalTitle: 'Claude Code'
+      })
+    )
+    expect(dispatchArgs?.agentType).toBeUndefined()
+    expect(dispatchArgs?.agentLastAssistantMessage).toBeUndefined()
+  })
+
+  it('keeps a fresh agent snapshot when the terminal title matches the stored agent', () => {
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      agentType: 'codex',
+      terminalTitle: 'Codex',
+      lastAssistantMessage: 'Codex done.'
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: '⠋ Codex',
+      paneKey
+    })
+
+    const dispatchArgs = getLastNotificationDispatchArg()
+    expect(dispatchArgs).toEqual(
+      expect.objectContaining({
+        agentType: 'codex',
+        agentLastAssistantMessage: 'Codex done.'
+      })
+    )
+  })
+
+  it('drops a delayed completion snapshot when the pane has already started a newer turn', () => {
+    const previousDoneStartedAt = Date.now() - 10_000
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      prompt: 'new prompt already running',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      lastAssistantMessage: undefined
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'previous prompt',
+        agentType: 'codex',
+        lastAssistantMessage: 'Done.',
+        stateStartedAt: previousDoneStartedAt
+      }
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markAgentCompletionPaneUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
 
   it('drops accepted hook snapshots for an intentionally suppressed pty', () => {
@@ -451,6 +600,42 @@ describe('dispatchTerminalNotification', () => {
         agentType: 'codex',
         lastAssistantMessage: 'Done.'
       }
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('drops final-flush notifications for suppressed live ptys', () => {
+    mockState.suppressedPtyExitIds = { 'pty-1': true }
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'terminal-bell',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('drops layout-fallback notifications when all tab PTYs are suppressed', () => {
+    mockState.suppressedPtyExitIds = { 'pty-1': true }
+    mockState.terminalLayoutsByTabId['tab-1'] = {
+      root: { type: 'leaf', leafId: 'leaf-1' },
+      activeLeafId: 'leaf-1',
+      expandedLeafId: null,
+      ptyIdsByLeafId: {}
+    }
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'terminal-bell',
+      terminalTitle: 'codex',
+      paneKey
     })
 
     expect(window.api.notifications.dispatch).not.toHaveBeenCalled()

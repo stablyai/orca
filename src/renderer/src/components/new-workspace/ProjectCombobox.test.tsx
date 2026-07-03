@@ -39,16 +39,30 @@ let root: Root
 
 const projects: NewWorkspaceProjectOption[] = [
   {
+    kind: 'project',
     id: 'github:stablyai/orca',
+    projectId: 'github:stablyai/orca',
     displayName: 'orca',
     badgeColor: '#111111',
     detail: 'stablyai/orca'
   },
   {
+    kind: 'project',
     id: 'github:stablyai/noqa',
+    projectId: 'github:stablyai/noqa',
     displayName: 'noqa',
     badgeColor: '#222222',
     detail: 'stablyai/noqa'
+  },
+  {
+    kind: 'project-group',
+    id: 'project-group:folder-group',
+    projectGroupId: 'folder-group',
+    displayName: 'Platform',
+    badgeColor: '#333333',
+    detail: '/tmp/platform',
+    parentPath: '/tmp/platform',
+    connectionId: null
   }
 ]
 
@@ -97,5 +111,31 @@ describe('ProjectCombobox', () => {
     })
 
     expect(onValueChange).toHaveBeenCalledWith('github:stablyai/noqa')
+  })
+
+  it('renders and selects project-group options', () => {
+    const onValueChange = vi.fn()
+
+    act(() => {
+      root.render(
+        <ProjectCombobox
+          options={projects}
+          value="project-group:folder-group"
+          onValueChange={onValueChange}
+        />
+      )
+    })
+
+    const trigger = container.querySelector('[data-project-combobox-root="true"][role="combobox"]')
+    expect(trigger?.textContent).toContain('Platform')
+    expect(container.textContent).toContain('/tmp/platform')
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>('[data-command-value="project-group:folder-group"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onValueChange).toHaveBeenCalledWith('project-group:folder-group')
   })
 })

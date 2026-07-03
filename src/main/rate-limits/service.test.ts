@@ -3,7 +3,7 @@ stale-data handling, account-switch generation, and OpenCode config-change
 semantics covered in service.ts, which already carries the same pragma.
 Keeping them in one file makes the ordering contract reviewable as a unit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
@@ -82,6 +82,10 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
 type RateLimitWindow = Parameters<RateLimitService['attach']>[0]
 
 class FakeRateLimitWindow extends EventEmitter {
+  focused = true
+  minimized = false
+  visible = true
+
   webContents = {
     send: vi.fn()
   }
@@ -91,15 +95,15 @@ class FakeRateLimitWindow extends EventEmitter {
   }
 
   isVisible(): boolean {
-    return true
+    return this.visible
   }
 
   isMinimized(): boolean {
-    return false
+    return this.minimized
   }
 
   isFocused(): boolean {
-    return true
+    return this.focused
   }
 }
 
@@ -195,7 +199,7 @@ describe('RateLimitService', () => {
     }
   })
 
-  it('can defer the startup fetch until the attached window becomes active', async () => {
+  it('fetches usage on the first active window event after deferred startup', async () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
     const service = new RateLimitService()
@@ -208,14 +212,39 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
     expect(fetchCodexRateLimits).not.toHaveBeenCalled()
 
-    window.emit('show')
+    window.emit('focus')
+    await Promise.resolve()
+    await Promise.resolve()
 
-    await vi.waitFor(() => {
-      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
-    })
+    expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
 
     service.stop()
+  })
+
+  it('performs a one-shot active-window fetch when startup focus was missed', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+      expect(fetchCodexRateLimits).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps recent stale data across repeated failures', async () => {
@@ -306,10 +335,11 @@ describe('RateLimitService', () => {
 
   it('fetches Gemini and OpenCode Go alongside Claude and Codex', async () => {
     const service = new RateLimitService()
-    service.setSettingsResolver(() => ({
-      opencodeSessionCookie: 'session=abc123',
-      opencodeWorkspaceId: ''
+    service.setOpenCodeGoConfigResolver(() => ({
+      sessionCookie: 'session=abc123',
+      workspaceIdOverride: ''
     }))
+    service.setGeminiCliOAuthEnabledResolver(() => true)
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
@@ -323,10 +353,12 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
       authPreparation: undefined,
-      allowPtyFallback: false
+      allowPtyFallback: false,
+      allowUsagePanelSupplement: true
     })
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith('session=abc123', undefined)
 
@@ -428,9 +460,74 @@ describe('RateLimitService', () => {
         wslLinuxConfigDir: '/home/jin/.claude',
         stripAuthEnv: true
       }),
-      allowPtyFallback: false
+      allowPtyFallback: true,
+      allowUsagePanelSupplement: true
     })
     expect(service.getState().claudeTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+  })
+
+  it('does not use Claude PTY fallback for system-default usage refreshes', async () => {
+    const service = new RateLimitService()
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/tmp/.claude',
+      runtime: 'host',
+      wslDistro: null,
+      wslLinuxConfigDir: null,
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }))
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
+      authPreparation: expect.objectContaining({ provenance: 'system' }),
+      allowPtyFallback: false,
+      allowUsagePanelSupplement: true
+    })
+  })
+
+  it('does not use Claude PTY fallback when Claude auth preparation is unavailable', async () => {
+    const service = new RateLimitService()
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
+      authPreparation: undefined,
+      allowPtyFallback: false,
+      allowUsagePanelSupplement: true
+    })
+  })
+
+  it('does not use Claude PTY fallback for WSL system-default usage refreshes', async () => {
+    const service = new RateLimitService()
+    service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.claude',
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      wslLinuxConfigDir: '/home/jin/.claude',
+      envPatch: {},
+      stripAuthEnv: true,
+      provenance: 'wsl:Ubuntu:system'
+    }))
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
+      authPreparation: expect.objectContaining({ provenance: 'wsl:Ubuntu:system' }),
+      allowPtyFallback: false,
+      allowUsagePanelSupplement: true
+    })
   })
 
   it('does not cache host Codex usage under an outgoing WSL account', async () => {
@@ -488,7 +585,7 @@ describe('RateLimitService', () => {
     })
 
     expect(fetchClaudeRateLimits).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowPtyFallback: false })
+      expect.objectContaining({ allowPtyFallback: true, allowUsagePanelSupplement: true })
     )
 
     expect(service.getState().inactiveClaudeAccounts).not.toEqual(
@@ -522,6 +619,19 @@ describe('RateLimitService', () => {
         isFetching: false
       }
     ])
+  })
+
+  it('allows usage-panel Fable supplements for inactive Claude account previews', async () => {
+    const service = new RateLimitService()
+    const account = { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    service.setInactiveClaudeAccountsResolver(() => [account])
+    vi.mocked(fetchManagedAccountUsage).mockResolvedValueOnce(okProvider('claude', 33, Date.now()))
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(fetchManagedAccountUsage).toHaveBeenCalledWith(account, {
+      allowUsagePanelSupplement: true
+    })
   })
 
   it('does not start overlapping inactive Codex preview fetches', async () => {
@@ -649,7 +759,10 @@ describe('RateLimitService', () => {
 
   it('isolates provider failures so one error does not block others', async () => {
     const service = new RateLimitService()
-    service.setSettingsResolver(() => ({ opencodeSessionCookie: '', opencodeWorkspaceId: '' }))
+    service.setOpenCodeGoConfigResolver(() => ({
+      sessionCookie: '',
+      workspaceIdOverride: ''
+    }))
 
     vi.mocked(fetchClaudeRateLimits).mockRejectedValueOnce(new Error('claude down'))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
@@ -672,7 +785,10 @@ describe('RateLimitService', () => {
   it('discards stale data when a provider becomes unavailable', async () => {
     const service = new RateLimitService()
     let cookie = 'session=valid'
-    service.setSettingsResolver(() => ({ opencodeSessionCookie: cookie, opencodeWorkspaceId: '' }))
+    service.setOpenCodeGoConfigResolver(() => ({
+      sessionCookie: cookie,
+      workspaceIdOverride: ''
+    }))
 
     // 1. Success fetch
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10, Date.now()))
@@ -707,9 +823,9 @@ describe('RateLimitService', () => {
   it('discards stale data when Workspace ID override is changed', async () => {
     const service = new RateLimitService()
     let workspaceId = 'wrk_A'
-    service.setSettingsResolver(() => ({
-      opencodeSessionCookie: 'session=valid',
-      opencodeWorkspaceId: workspaceId
+    service.setOpenCodeGoConfigResolver(() => ({
+      sessionCookie: 'session=valid',
+      workspaceIdOverride: workspaceId
     }))
 
     // 1. Success fetch for Workspace A

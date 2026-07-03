@@ -8,9 +8,12 @@ import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
+import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
+import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
+import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -72,7 +75,13 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
+registerNimLanguage(monaco)
+installMonacoDelayerCancellationGuard()
 installMonacoDiffEditorDisposalGuard(monaco)
+// Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is
+// blocked in Orca's sandboxed renderer. Route it through the trusted IPC bridge
+// so right-click Paste works like Cmd+V (which already works via native events).
+installMonacoContextMenuPaste(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })

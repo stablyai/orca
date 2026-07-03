@@ -1,4 +1,5 @@
 import type { TuiAgent } from './types'
+import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
   | 'argv'
@@ -7,13 +8,18 @@ export type AgentPromptInjectionMode =
   | 'flag-interactive'
   | 'stdin-after-start'
 
-export type DraftPasteReadySignal = 'render-quiet-after-bracketed-paste' | 'codex-composer-prompt'
+export type DraftPasteReadySignal =
+  | 'render-quiet-after-bracketed-paste'
+  | 'codex-composer-prompt'
+  | 'render-cursor-after-bracketed-paste'
 
 export type TuiAgentConfig = {
   detectCmd: string
   /** Additional executable names that identify the same agent on PATH. */
   detectCmdAliases?: readonly string[]
   launchCmd: string
+  /** Platform-specific launch command when the public binary name differs. */
+  launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
   /** Why: flag that launches the TUI with the given text already in the
@@ -70,6 +76,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'orca',
     detectCmdAliases: ['orca-dev', 'orca-ide'],
     launchCmd: 'orca claude-teams',
+    launchCmdByPlatform: {
+      linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,
+      win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
+    },
     expectedProcess: 'claude',
     promptInjectionMode: 'stdin-after-start'
   },
@@ -94,11 +104,33 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'autohand',
     promptInjectionMode: 'stdin-after-start'
   },
+  ante: {
+    detectCmd: 'ante',
+    launchCmd: 'ante',
+    expectedProcess: 'ante',
+    // Why: `ante --prompt` is Ante's documented headless mode (runs the task
+    // once and exits), so Orca launches the bare interactive TUI and injects
+    // the composed prompt after startup to keep the hosted session alive.
+    promptInjectionMode: 'stdin-after-start'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
     expectedProcess: 'opencode',
-    promptInjectionMode: 'flag-prompt'
+    promptInjectionMode: 'flag-prompt',
+    // Why: opencode enables bracketed paste before its composer mounts; wait
+    // for post-\x1b[?2004h show-cursor (\x1b[?25h) so paste hits mounted input.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+  },
+  'mimo-code': {
+    detectCmd: 'mimo',
+    launchCmd: 'mimo',
+    expectedProcess: 'mimo',
+    promptInjectionMode: 'flag-prompt',
+    // Why: mimo-code shares opencode's flag-prompt paste route, so it gets the
+    // same cursor-gated signal by parity (its startup stream is not separately
+    // validated); the quiet-window fallback bounds the risk if it differs.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
   pi: {
     detectCmd: 'pi',
@@ -255,9 +287,11 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   'qwen-code': {
-    detectCmd: 'qwen-code',
-    launchCmd: 'qwen-code',
-    expectedProcess: 'qwen-code',
+    // Why: the upstream package is QwenLM/qwen-code, but its installed CLI
+    // executable on PATH is `qwen`, so detect/launch/recognition must use that.
+    detectCmd: 'qwen',
+    launchCmd: 'qwen',
+    expectedProcess: 'qwen',
     promptInjectionMode: 'stdin-after-start'
   },
   rovo: {
@@ -306,11 +340,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'devin',
     launchCmd: 'devin',
     expectedProcess: 'devin',
-    // Why: `devin -- <prompt>` auto-submits the prompt (the issue's claim
-    // that it pre-fills without submitting is incorrect per the official
-    // docs at docs.devin.ai/cli/reference/commands). `stdin-after-start`
-    // launches the REPL first, then pastes via bracketed paste so the
-    // user can review before submitting — same as aider, goose, amp, etc.
+    // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli).
+    // `stdin-after-start` starts the REPL with no argv prompt; Orca then sends
+    // `followupPrompt` to the PTY as plain input + Enter after startup (not
+    // bracketed paste). Use `draftPrompt` / agent-paste-draft for review-before-send.
     promptInjectionMode: 'stdin-after-start'
   }
 }
@@ -321,4 +354,18 @@ export function isTuiAgent(value: unknown): value is TuiAgent {
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
   return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
+}
+
+export function getTuiAgentLaunchCommand(
+  config: TuiAgentConfig,
+  platform: NodeJS.Platform,
+  opts?: { isRemote?: boolean }
+): string {
+  // Why: the SSH relay shim is always named `orca` on Unix, so the local-only
+  // `orca-ide` rename (avoids shadowing the GNOME Orca screen reader) must not
+  // leak to Linux remotes — the remote has no such desktop binary on PATH.
+  if (opts?.isRemote && platform === 'linux') {
+    return config.launchCmd
+  }
+  return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
 }

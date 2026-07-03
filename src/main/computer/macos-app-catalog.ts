@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { execFile } from 'node:child_process'
 import type { ComputerAppInfo } from '../../shared/runtime-types'
 
 type MacOSRunningApp = ComputerAppInfo & {

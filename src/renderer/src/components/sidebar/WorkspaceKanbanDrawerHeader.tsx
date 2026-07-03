@@ -10,6 +10,8 @@ import { translate } from '@/i18n/i18n'
 type WorkspaceKanbanDrawerHeaderProps = {
   selectedCount: number
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  syncTaskStatusFromWorkspaceBoard: boolean
+  onSyncTaskStatusFromWorkspaceBoardChange: (enabled: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -23,6 +25,8 @@ type WorkspaceKanbanDrawerHeaderProps = {
 export default function WorkspaceKanbanDrawerHeader({
   selectedCount,
   workspaceStatuses,
+  syncTaskStatusFromWorkspaceBoard,
+  onSyncTaskStatusFromWorkspaceBoardChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -69,6 +73,8 @@ export default function WorkspaceKanbanDrawerHeader({
         />
         <WorkspaceKanbanSettingsMenu
           workspaceStatuses={workspaceStatuses}
+          syncTaskStatusFromWorkspaceBoard={syncTaskStatusFromWorkspaceBoard}
+          onSyncTaskStatusFromWorkspaceBoardChange={onSyncTaskStatusFromWorkspaceBoardChange}
           onRenameStatus={onRenameStatus}
           onChangeStatusColor={onChangeStatusColor}
           onChangeStatusIcon={onChangeStatusIcon}

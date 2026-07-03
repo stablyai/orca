@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/types'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultUIState } from '../../../../shared/constants'
+import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph'
+import { closeMobileSessionTabInStore } from '../../runtime/mobile-session-tab-close'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -102,7 +104,7 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeOpenFile, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -293,6 +295,133 @@ describe('TabsSlice', () => {
     it('returns null for nonexistent tab', () => {
       const result = store.getState().closeUnifiedTab('nonexistent')
       expect(result).toBeNull()
+    })
+
+    it('removes a mobile-closed markdown tab from open files so it is not republished', () => {
+      const groupId = 'editor-group'
+      const file = makeOpenFile({
+        id: '/tmp/feature/README.md',
+        filePath: '/tmp/feature/README.md',
+        relativePath: 'README.md',
+        language: 'markdown',
+        worktreeId: WT
+      })
+      const tab = makeUnifiedTab({
+        id: 'readme-unified',
+        entityId: file.id,
+        contentType: 'editor',
+        label: 'README.md',
+        worktreeId: WT,
+        groupId
+      })
+      store.setState({
+        openFiles: [file],
+        unifiedTabsByWorktree: { [WT]: [tab] },
+        groupsByWorktree: {
+          [WT]: [
+            makeTabGroup({
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: tab.id,
+              tabOrder: [tab.id],
+              recentTabIds: [tab.id]
+            })
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        activeFileId: file.id,
+        activeFileIdByWorktree: { [WT]: file.id },
+        activeWorktreeId: WT,
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' }
+      })
+
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
+        { id: tab.id, type: 'markdown', filePath: file.filePath }
+      ])
+
+      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id)).toBe(true)
+
+      expect(store.getState().openFiles).toEqual([])
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
+    })
+
+    it('removes a mobile-closed regular file tab from open files so fallback closes do not resurrect', () => {
+      const groupId = 'editor-group'
+      const file = makeOpenFile({
+        id: '/tmp/feature/src/app.ts',
+        filePath: '/tmp/feature/src/app.ts',
+        relativePath: 'src/app.ts',
+        language: 'typescript',
+        worktreeId: WT
+      })
+      const tab = makeUnifiedTab({
+        id: 'app-unified',
+        entityId: file.id,
+        contentType: 'editor',
+        label: 'app.ts',
+        worktreeId: WT,
+        groupId
+      })
+      store.setState({
+        openFiles: [file],
+        unifiedTabsByWorktree: { [WT]: [tab] },
+        groupsByWorktree: {
+          [WT]: [
+            makeTabGroup({
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: tab.id,
+              tabOrder: [tab.id],
+              recentTabIds: [tab.id]
+            })
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        activeFileId: file.id,
+        activeFileIdByWorktree: { [WT]: file.id },
+        activeWorktreeId: WT,
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' }
+      })
+
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
+        { id: tab.id, type: 'file', filePath: file.filePath }
+      ])
+
+      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id)).toBe(true)
+
+      expect(store.getState().openFiles).toEqual([])
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
+    })
+
+    it('closes a mobile fallback file-id tab after the unified wrapper is already gone', () => {
+      const file = makeOpenFile({
+        id: '/tmp/feature/src/app.ts',
+        filePath: '/tmp/feature/src/app.ts',
+        relativePath: 'src/app.ts',
+        language: 'typescript',
+        worktreeId: WT
+      })
+      store.setState({
+        openFiles: [file],
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: { [WT]: [] },
+        activeFileId: file.id,
+        activeFileIdByWorktree: { [WT]: file.id },
+        activeWorktreeId: WT,
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' }
+      })
+
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
+        { id: file.id, type: 'file', filePath: file.filePath }
+      ])
+
+      expect(closeMobileSessionTabInStore(store.getState(), WT, file.id)).toBe(true)
+
+      expect(store.getState().openFiles).toEqual([])
+      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
     })
 
     it('activates the previously-active tab (MRU) instead of the visual neighbor', () => {
@@ -722,6 +851,48 @@ describe('TabsSlice', () => {
   // on that group's active terminal tab. Without this, the bell lingers
   // until the tab is clicked a second time.
   describe('focusGroup', () => {
+    it('does not broadcast active-surface writes when the focused group is already current', () => {
+      const editorFileId = '/tmp/feature/src/main.ts'
+      const tab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'editor-tab-1',
+        entityId: editorFileId,
+        label: 'main.ts'
+      })
+      const groupId = store.getState().groupsByWorktree[WT][0].id
+      store.setState({
+        activeWorktreeId: WT,
+        openFiles: [makeOpenFile({ id: editorFileId, worktreeId: WT })],
+        activeGroupIdByWorktree: { [WT]: groupId },
+        activeFileId: editorFileId,
+        activeFileIdByWorktree: { [WT]: editorFileId },
+        activeBrowserTabId: null,
+        activeBrowserTabIdByWorktree: { [WT]: null },
+        activeTabId: null,
+        activeTabIdByWorktree: { [WT]: null },
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              ...store.getState().groupsByWorktree[WT][0],
+              activeTabId: tab.id
+            }
+          ]
+        }
+      })
+      const before = store.getState()
+      const listener = vi.fn()
+      const unsubscribe = store.subscribe(listener)
+
+      store.getState().focusGroup(WT, groupId)
+      unsubscribe()
+
+      expect(listener).not.toHaveBeenCalled()
+      expect(store.getState().activeGroupIdByWorktree).toBe(before.activeGroupIdByWorktree)
+      expect(store.getState().activeFileIdByWorktree).toBe(before.activeFileIdByWorktree)
+      expect(store.getState().activeTabTypeByWorktree).toBe(before.activeTabTypeByWorktree)
+    })
+
     // Why: focusGroup is fired on every pointerdown within a split group's
     // chrome (onPointerDown + onFocusCapture in TabGroupPanel). Clearing the
     // tab-level bell here is fine — the user is now looking at this group.
@@ -846,9 +1017,7 @@ describe('TabsSlice', () => {
       const state = store.getState()
       const moved = state.unifiedTabsByWorktree[WT].find((item) => item.id === tab.id)
       expect(moved?.groupId).toBe(targetGroupId)
-      expect(
-        state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)?.tabOrder
-      ).toEqual([])
+      expect(state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)).toBeUndefined()
       expect(
         state.groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
       ).toEqual([tab.id])
@@ -1071,6 +1240,40 @@ describe('TabsSlice', () => {
       expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([onlyTab.id])
       expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
     })
+
+    it('treats splitting the only tab onto the adjacent sibling edge as a no-op', () => {
+      store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const right = store.getState().createUnifiedTab(WT, 'terminal', {
+        id: 'terminal-1',
+        label: 'Terminal 1'
+      })
+      const leftGroupId = store.getState().groupsByWorktree[WT][0].id
+
+      expect(
+        store.getState().dropUnifiedTab(right.id, {
+          groupId: leftGroupId,
+          splitDirection: 'right'
+        })
+      ).toBe(true)
+
+      const rightGroupId = store
+        .getState()
+        .unifiedTabsByWorktree[WT].find((tab) => tab.id === right.id)?.groupId
+      expect(rightGroupId).toBeTruthy()
+
+      const moved = store.getState().dropUnifiedTab(right.id, {
+        groupId: leftGroupId,
+        splitDirection: 'right'
+      })
+
+      expect(moved).toBe(false)
+      expect(
+        store.getState().unifiedTabsByWorktree[WT].find((tab) => tab.id === right.id)?.groupId
+      ).toBe(rightGroupId)
+    })
   })
 
   // ─── setTabLabel / setTabCustomLabel / setUnifiedTabColor ─────────
@@ -1160,6 +1363,36 @@ describe('TabsSlice', () => {
       store.getState().unpinTab(t2.id)
 
       expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([t3.id, t2.id, t1.id])
+    })
+
+    it('syncs isPinned to the TerminalTab in tabsByWorktree (reconcile echo guard)', () => {
+      // Why: reconcile derives a remote tab's pin from tabsByWorktree[*].isPinned;
+      // if pin/unpin only touched unifiedTabsByWorktree, an unrelated host
+      // snapshot would recompute isPinned:false and un-pin during the echo window.
+      const tab = store.getState().createUnifiedTab(WT, 'terminal')
+      store.setState((state) => ({
+        tabsByWorktree: {
+          ...state.tabsByWorktree,
+          [WT]: [
+            {
+              id: tab.id,
+              ptyId: null,
+              worktreeId: WT,
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        }
+      }))
+
+      store.getState().pinTab(tab.id)
+      expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(true)
+
+      store.getState().unpinTab(tab.id)
+      expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(false)
     })
   })
 
@@ -1890,6 +2123,32 @@ describe('TabsSlice', () => {
         type: 'leaf',
         groupId: restoredGroup?.id
       })
+    })
+
+    it('keeps a sole terminal renderable after its PTY exits so a failed direnv does not strand the worktree', () => {
+      // Why (regression): a PR worktree's only terminal can die on startup (a
+      // failing .envrc/direnv). pty-connection keeps that dead pane mounted
+      // instead of bouncing to Landing; this asserts the supporting invariant —
+      // once a terminal is promoted to a unified tab, clearing its PTY does NOT
+      // make it an orphan, so reconcile still reports it renderable (count 1).
+      // If this regressed to 0, the worktree would auto-respawn or get torn
+      // down (setActiveWorktree(null)), reintroducing the Landing bounce.
+      const tab = store
+        .getState()
+        .createTab(WT, undefined, undefined, { pendingActivationSpawn: true })
+      store.getState().updateTabPtyId(tab.id, 'pty-died')
+      // First reconcile promotes the legacy runtime tab into the unified model.
+      expect(store.getState().reconcileWorktreeTabModel(WT).renderableTabCount).toBe(1)
+
+      // The newborn PTY exits: pty-connection clears the binding but keeps the pane.
+      store.getState().clearTabPtyId(tab.id, 'pty-died')
+      const clearedTab = store.getState().tabsByWorktree[WT]?.find((t) => t.id === tab.id)
+      expect(store.getState().ptyIdsByTabId[tab.id] ?? []).toEqual([])
+      expect(clearedTab?.ptyId ?? null).toBeNull()
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe(tab.id)
     })
   })
 })

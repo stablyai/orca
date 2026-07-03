@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { type DashboardAgentRow } from './useDashboardData'
+import type { DashboardAgentRow } from './useDashboardData'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import {

@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { TreeNode } from './file-explorer-types'
 import { createFileExplorerRowProjection } from './file-explorer-row-projection'
-import { resolveFileExplorerNavigationTarget } from './file-explorer-keyboard-navigation'
+import {
+  applyFileExplorerNavigation,
+  resolveFileExplorerNavigationTarget
+} from './file-explorer-keyboard-navigation'
 
 function row(path: string, depth: number, isDirectory = false): TreeNode {
   return {
@@ -29,6 +32,18 @@ const isCollapsed = (): false => false
 function isExpandedSet(paths: string[]): (path: string) => boolean {
   const set = new Set(paths)
   return (path) => set.has(path)
+}
+
+function keyboardEvent(key: string): KeyboardEvent {
+  return {
+    key,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn()
+  } as unknown as KeyboardEvent
 }
 
 describe('resolveFileExplorerNavigationTarget', () => {
@@ -244,5 +259,36 @@ describe('resolveFileExplorerNavigationTarget', () => {
         })
       ).toEqual({ type: 'no-op' })
     })
+  })
+})
+
+describe('applyFileExplorerNavigation', () => {
+  it('does not persist folder toggles when directory toggling is disabled', () => {
+    const projection = makeProjection(SAMPLE_ROWS)
+    const event = keyboardEvent('ArrowLeft')
+    const toggleDir = vi.fn()
+
+    expect(
+      applyFileExplorerNavigation(
+        {
+          rowProjection: projection,
+          activeWorktreeId: 'wt-1',
+          selectedNode: SAMPLE_ROWS[0],
+          isExpanded: isExpandedSet(['/repo/src']),
+          canToggleDirectories: false,
+          findFocusedIndex: () => 0,
+          handlers: {
+            moveSelection: vi.fn(),
+            toggleDir,
+            scrollToIndex: vi.fn(),
+            focusRowAtIndex: vi.fn()
+          }
+        },
+        event
+      )
+    ).toBe(true)
+    expect(event.preventDefault).toHaveBeenCalled()
+    expect(event.stopPropagation).toHaveBeenCalled()
+    expect(toggleDir).not.toHaveBeenCalled()
   })
 })

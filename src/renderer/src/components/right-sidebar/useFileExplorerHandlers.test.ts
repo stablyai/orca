@@ -3,6 +3,13 @@ import type { TreeNode } from './file-explorer-types'
 import { activateFileExplorerNode } from './useFileExplorerHandlers'
 
 describe('activateFileExplorerNode', () => {
+  const directoryNode: TreeNode = {
+    name: 'src',
+    path: '/repo/src',
+    relativePath: 'src',
+    isDirectory: true,
+    depth: 0
+  }
   const symlinkNode: TreeNode = {
     name: 'linked-docs',
     path: '/repo/linked-docs',
@@ -11,6 +18,26 @@ describe('activateFileExplorerNode', () => {
     isSymlink: true,
     depth: 0
   }
+
+  it('selects filtered folders without mutating persisted expansion', async () => {
+    const toggleDir = vi.fn()
+    const setSelectedPath = vi.fn()
+
+    await activateFileExplorerNode({
+      node: directoryNode,
+      activeWorktreeId: 'wt-1',
+      openFile: vi.fn(),
+      toggleDir,
+      canToggleDirectories: false,
+      loadDir: vi.fn(),
+      statPath: vi.fn(),
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath
+    })
+
+    expect(setSelectedPath).toHaveBeenCalledWith('/repo/src')
+    expect(toggleDir).not.toHaveBeenCalled()
+  })
 
   it('expands a symlink only after explicit activation proves it is a directory', async () => {
     const loadDir = vi.fn().mockResolvedValue(true)
@@ -45,6 +72,7 @@ describe('activateFileExplorerNode', () => {
     await activateFileExplorerNode({
       node: symlinkNode,
       activeWorktreeId: 'wt-1',
+      runtimeEnvironmentId: 'runtime-env-1',
       openFile,
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
@@ -58,10 +86,42 @@ describe('activateFileExplorerNode', () => {
         filePath: '/repo/linked-docs',
         relativePath: 'linked-docs',
         worktreeId: 'wt-1',
+        runtimeEnvironmentId: 'runtime-env-1',
         language: expect.any(String),
         mode: 'edit'
       },
-      { preview: true }
+      { preview: true, suppressActiveRuntimeFallback: false }
+    )
+  })
+
+  it('opens local files without runtime fallback when no runtime owner is set', async () => {
+    const fileNode: TreeNode = {
+      name: 'README.md',
+      path: '/repo/README.md',
+      relativePath: 'README.md',
+      isDirectory: false,
+      depth: 0
+    }
+    const openFile = vi.fn()
+
+    await activateFileExplorerNode({
+      node: fileNode,
+      activeWorktreeId: 'wt-1',
+      runtimeEnvironmentId: null,
+      openFile,
+      toggleDir: vi.fn(),
+      loadDir: vi.fn(),
+      statPath: vi.fn(),
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+
+    expect(openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/README.md',
+        runtimeEnvironmentId: undefined
+      }),
+      { preview: true, suppressActiveRuntimeFallback: true }
     )
   })
 })

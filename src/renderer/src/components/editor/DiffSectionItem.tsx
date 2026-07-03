@@ -30,6 +30,10 @@ import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut } from './editor-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
+import { disposeUnattachedMonacoModelPaths } from './diff-monaco-model-disposal'
+import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
+import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
+import { submitDiffSectionComment } from './diff-section-comment-submit'
 
 export function DiffSectionItem({
   section,
@@ -61,7 +65,11 @@ export function DiffSectionItem({
   isBranchMode: boolean
   sideBySide: boolean
   isDark: boolean
-  settings: { terminalFontSize?: number; terminalFontFamily?: string } | null
+  settings: {
+    terminalFontSize?: number
+    terminalFontFamily?: string
+    diffWordWrap?: boolean
+  } | null
   sectionHeight: number | undefined
   worktreeId?: string
   loadSection: (index: number) => void
@@ -125,19 +133,16 @@ export function DiffSectionItem({
     startLine?: number
     top: number
     left?: number
+    lineHeight: number
   } | null>(null)
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
   const disposeDiffModels = useCallback(() => {
     window.setTimeout(() => {
-      const originalModel = monaco.editor.getModel(monaco.Uri.parse(`${modelPathBase}:original`))
-      const modifiedModel = monaco.editor.getModel(monaco.Uri.parse(`${modelPathBase}:modified`))
-      if (!originalModel?.isAttachedToEditor()) {
-        originalModel?.dispose()
-      }
-      if (!modifiedModel?.isAttachedToEditor()) {
-        modifiedModel?.dispose()
-      }
+      disposeUnattachedMonacoModelPaths(monaco, [
+        `${modelPathBase}:original`,
+        `${modelPathBase}:modified`
+      ])
     }, 0)
   }, [modelPathBase])
   const disposeDiffModelsRef = useRef(disposeDiffModels)
@@ -182,7 +187,8 @@ export function DiffSectionItem({
         top,
         left: modifiedEditor
           ? (getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current) ?? undefined)
-          : undefined
+          : undefined,
+        lineHeight: modifiedEditor?.getOption(monaco.editor.EditorOption.lineHeight) ?? 0
       }),
     onDeleteComment: (id) => {
       if (worktreeId) {
@@ -199,17 +205,16 @@ export function DiffSectionItem({
       return
     }
     const update = (): void => {
-      const top = getDiffCommentPopoverTop(
-        modifiedEditor,
-        popover.lineNumber,
-        modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
-      )
+      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
+      const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
       if (top == null) {
         setPopover(null)
         return
       }
       const left = getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current)
-      setPopover((prev) => (prev ? { ...prev, top, left: left == null ? prev.left : left } : prev))
+      setPopover((prev) =>
+        prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
+      )
     }
     const scrollSub = modifiedEditor.onDidScrollChange(update)
     const contentSub = modifiedEditor.onDidContentSizeChange(update)
@@ -242,43 +247,30 @@ export function DiffSectionItem({
     if (!popover) {
       return
     }
-    if (onAddLineComment) {
-      const ok = await onAddLineComment(section, {
-        lineNumber: popover.lineNumber,
-        startLine: popover.startLine,
-        body
-      })
-      if (ok) {
-        setPopover(null)
-      }
-      return
-    }
-    if (!worktreeId) {
-      return
-    }
-    // Why: await persistence before closing the popover. If addDiffComment
-    // resolves to null, the store rolled back the optimistic insert; keeping
-    // the popover open preserves the user's draft so they can retry instead
-    // of silently losing their text.
-    const result = await addDiffComment({
-      worktreeId,
-      filePath: section.path,
-      source: 'diff',
-      startLine: popover.startLine,
-      lineNumber: popover.lineNumber,
+    const submitted = await submitDiffSectionComment({
+      addDiffComment,
       body,
-      side: 'modified'
+      onAddLineComment,
+      popover,
+      section,
+      worktreeId
     })
-    if (result) {
+    if (submitted) {
       setPopover(null)
-    } else {
-      console.error('Failed to add diff comment — draft preserved')
     }
   }
 
-  const { lineStats, sectionBodyHeight, useIntrinsicImageHeight } = useDiffSectionLayoutMetrics({
-    section,
-    sectionHeight
+  const { lineStats, sectionBodyHeight, useIntrinsicImageHeight, isLargeDiffLimited } =
+    useDiffSectionLayoutMetrics({
+      section,
+      sectionHeight
+    })
+
+  useDiffSectionFallbackCleanup({
+    disposeDiffModels,
+    index,
+    isLargeDiffLimited,
+    setSectionHeights
   })
 
   const handleMount: DiffOnMount = (editor, _monaco) => {
@@ -373,7 +365,16 @@ export function DiffSectionItem({
           changed = true
           // Why: virtualized rows unmount when scrolled away, so the draft must
           // live in section state instead of only in Monaco's mounted model.
-          return { ...s, modifiedContent: current, dirty }
+          return {
+            ...s,
+            modifiedContent: current,
+            dirty,
+            largeDiffRenderLimit: getLiveDiffSectionRenderLimit({
+              section: s,
+              modifiedEditor: modified,
+              modifiedContent: current
+            })
+          }
         })
         return changed ? next : prev
       })
@@ -424,10 +425,14 @@ export function DiffSectionItem({
           modelPathBase={modelPathBase}
           isEditable={isEditable}
           diffEditorFontSize={diffEditorFontSize}
+          diffWordWrap={settings?.diffWordWrap}
           terminalFontFamily={settings?.terminalFontFamily}
           onCancelComment={() => setPopover(null)}
           onSubmitComment={handleSubmitComment}
           onRetrySection={retrySection}
+          onSaveLimitedDiff={() => {
+            void handleSectionSaveRef.current(index)
+          }}
           onMount={handleMount}
         />
       )}

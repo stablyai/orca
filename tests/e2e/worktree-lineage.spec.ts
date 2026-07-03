@@ -7,9 +7,10 @@ import {
   seedWorkspaceAgentStatus,
   seedWorkspaceLiveTerminal
 } from './worktree-lineage-state'
+import { worktreeRow } from './worktree-row-locators'
 
 function worktreeOption(page: Page, worktreeId: string) {
-  return page.locator(`[id="worktree-list-option-${encodeURIComponent(worktreeId)}"]`)
+  return worktreeRow(page, worktreeId)
 }
 
 test.describe('Worktree Lineage', () => {
@@ -36,10 +37,12 @@ test.describe('Worktree Lineage', () => {
 
     const positions = await orcaPage.evaluate(
       ({ parentId, childId }) => {
-        const parent = document.getElementById(
-          `worktree-list-option-${encodeURIComponent(parentId)}`
-        )
-        const child = document.getElementById(`worktree-list-option-${encodeURIComponent(childId)}`)
+        const rowFor = (worktreeId: string) =>
+          [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+            (element) => element.dataset.worktreeId === worktreeId
+          )
+        const parent = rowFor(parentId)
+        const child = rowFor(childId)
         if (!parent || !child) {
           return null
         }
@@ -128,10 +131,12 @@ test.describe('Worktree Lineage', () => {
 
     const positions = await orcaPage.evaluate(
       ({ parentId, childId }) => {
-        const parent = document.getElementById(
-          `worktree-list-option-${encodeURIComponent(parentId)}`
-        )
-        const child = document.getElementById(`worktree-list-option-${encodeURIComponent(childId)}`)
+        const rowFor = (worktreeId: string) =>
+          [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+            (element) => element.dataset.worktreeId === worktreeId
+          )
+        const parent = rowFor(parentId)
+        const child = rowFor(childId)
         if (!parent || !child) {
           return null
         }

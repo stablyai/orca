@@ -48,6 +48,8 @@ const makeWorktree = (id: string): Worktree => ({
 
 const makeWorktreeRow = (id: string): Extract<Row, { type: 'item' }> => ({
   type: 'item',
+  rowKey: `all:${id}`,
+  sectionKey: 'all',
   worktree: makeWorktree(id),
   repo,
   depth: 0,

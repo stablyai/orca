@@ -104,6 +104,7 @@ export type LinearIssueWriteRecord = {
   team: { id: string; key: string; name: string }
   state: { id: string; name: string } | null
   parent: { id: string; identifier: string } | null
+  project?: { id: string; name: string } | null
   assignee?: { id: string; displayName: string } | null
   priority?: number | null
   estimate?: number | null
@@ -242,6 +243,7 @@ const AGENT_ISSUE_WRITE_FIELDS = `
   team { id key name }
   state { id name }
   parent { id identifier }
+  project { id name }
   assignee { id displayName }
   priority
   estimate
@@ -1113,6 +1115,7 @@ export async function createIssueForAgent(
   options: {
     id: string
     parentId?: string | null
+    projectId?: string | null
     stateId?: string
     assigneeId?: string | null
     priority?: number
@@ -1134,6 +1137,7 @@ export async function createIssueForAgent(
       title,
       ...(description ? { description } : {}),
       ...(options.parentId ? { parentId: options.parentId } : {}),
+      ...(options.projectId ? { projectId: options.projectId } : {}),
       ...(options.stateId ? { stateId: options.stateId } : {}),
       ...(options.assigneeId !== undefined ? { assigneeId: options.assigneeId } : {}),
       ...(options.priority !== undefined ? { priority: options.priority } : {}),

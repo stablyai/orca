@@ -28,7 +28,7 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
   const ranges: IRange[] = []
   let insideFence = false
 
-  content.split('\n').forEach((line, lineIndex) => {
+  forEachMarkdownLine(content, (line, lineNumber) => {
     if (/^\s*(```|~~~)/.test(line)) {
       insideFence = !insideFence
       return
@@ -52,9 +52,9 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
         const target = getMarkdownDocLinkTarget(line.slice(start + 2, end))
         if (target) {
           ranges.push({
-            startLineNumber: lineIndex + 1,
+            startLineNumber: lineNumber,
             startColumn: start + 1,
-            endLineNumber: lineIndex + 1,
+            endLineNumber: lineNumber,
             endColumn: end + 3
           })
         }
@@ -64,6 +64,23 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
   })
 
   return ranges
+}
+
+function forEachMarkdownLine(
+  content: string,
+  visit: (line: string, lineNumber: number) => void
+): void {
+  let lineStart = 0
+  let lineNumber = 1
+  for (let index = 0; index <= content.length; index += 1) {
+    if (index < content.length && content.charCodeAt(index) !== 10) {
+      continue
+    }
+    const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
+    visit(content.slice(lineStart, lineEnd), lineNumber)
+    lineStart = index + 1
+    lineNumber += 1
+  }
 }
 
 export type MarkdownDocLinkDecorationController = {

@@ -2,13 +2,16 @@ import {
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingMatchOptions,
-  type KeybindingOverrides
+  type KeybindingOverrides,
+  type PhysicalModifierToken
 } from '../../../shared/keybindings'
 
-type FloatingWorkspaceShortcutEvent = Pick<
-  KeyboardEvent,
-  'altKey' | 'code' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey' | 'target'
->
+// Partial<> on the key/modifier fields so a synthetic double-tap input (which
+// carries no key/modifier flags) satisfies this shape; target stays required.
+type FloatingWorkspaceShortcutEvent = Partial<
+  Pick<KeyboardEvent, 'altKey' | 'code' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>
+> &
+  Pick<KeyboardEvent, 'target'> & { doubleTapModifier?: PhysicalModifierToken }
 
 const FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
 const FLOATING_WORKSPACE_PANEL_SHORTCUT_ACTIONS: readonly KeybindingActionId[] = [

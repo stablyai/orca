@@ -29,9 +29,6 @@ export default function SetupGuideModal(): JSX.Element | null {
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
   const isOpen = activeModal === 'setup-guide'
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
-  const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(
-    () => setupSteps[0]?.id ?? 'default-agent'
-  )
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
@@ -39,6 +36,9 @@ export default function SetupGuideModal(): JSX.Element | null {
     isOpen,
     orchestrationSkillInstalled,
     browserUseSkillInstalled
+  )
+  const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(() =>
+    getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
   )
   const requestedStepId = isFeatureWallSetupStepId(modalData.setupStepId)
     ? modalData.setupStepId

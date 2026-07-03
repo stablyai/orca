@@ -44,6 +44,7 @@ export type ClaudeRuntimeAuthPreparation = {
   wslLinuxConfigDir?: string | null
   envPatch: ClaudeEnvPatch
   stripAuthEnv: boolean
+  managedRefreshDeferredByLivePty?: boolean
   provenance: string
 }
 
@@ -101,6 +102,7 @@ export class ClaudeRuntimeAuthService {
   private hasLastWrittenOauthAccount = false
   private lastWrittenOauthAccount: unknown = null
   private skipNextReadBackForAccountId: string | null = null
+  private managedRefreshDeferredByLivePtyAccountId: string | null = null
 
   constructor(private readonly store: Store) {
     this.initializeLastSyncedState()
@@ -110,19 +112,23 @@ export class ClaudeRuntimeAuthService {
   async prepareForClaudeLaunch(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection(target)
-    return this.getPreparation(target)
+    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+    await this.syncForCurrentSelection(effectiveTarget)
+    return this.getPreparation(effectiveTarget)
   }
 
   async prepareForRateLimitFetch(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection(target)
-    return this.getPreparation(target)
+    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+    await this.syncForCurrentSelection(effectiveTarget)
+    return this.getPreparation(effectiveTarget)
   }
 
   async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
-    await this.serializeMutation(() => this.doSyncForCurrentSelection(target))
+    await this.serializeMutation(() =>
+      this.doSyncForCurrentSelection(target ?? this.getDefaultAccountSelectionTarget())
+    )
   }
 
   async forceMaterializeCurrentSelectionForRollback(): Promise<void> {
@@ -177,6 +183,7 @@ export class ClaudeRuntimeAuthService {
       settings.claudeManagedAccounts,
       this.lastSyncedAccountId
     )
+    this.managedRefreshDeferredByLivePtyAccountId = null
     const previousManagedCredentialsJson = previousAccount
       ? await this.readManagedCredentials(previousAccount)
       : null
@@ -412,7 +419,11 @@ export class ClaudeRuntimeAuthService {
     // entirely while a Claude PTY is live: that process owns the credentials
     // and refreshing here would race its own rotation (double-rotation
     // invalidates one copy) — the read-back above preserves its refresh instead.
-    if (!hasLiveClaudePtys()) {
+    const liveClaudePtys = hasLiveClaudePtys()
+    if (liveClaudePtys && isOauthTokenExpiring(credentialsJson)) {
+      this.managedRefreshDeferredByLivePtyAccountId = activeAccount.id
+    }
+    if (!liveClaudePtys) {
       const refreshed = await this.refreshManagedAccountTokenIfNeeded(
         activeAccount,
         credentialsJson
@@ -617,13 +628,7 @@ export class ClaudeRuntimeAuthService {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
     const normalizedTarget = this.resolveWslDefaultTarget(
-      target ??
-        (process.platform === 'win32' && settings.terminalWindowsShell === 'wsl.exe'
-          ? ({
-              runtime: 'wsl',
-              wslDistro: settings.terminalWindowsWslDistro ?? null
-            } satisfies ClaudeAccountSelectionTarget)
-          : ({ runtime: 'host' } satisfies ClaudeAccountSelectionTarget))
+      target ?? this.getDefaultAccountSelectionTarget(settings)
     )
     const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
     const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
@@ -677,6 +682,11 @@ export class ClaudeRuntimeAuthService {
       wslLinuxConfigDir: null,
       envPatch: paths.envPatch,
       stripAuthEnv: Boolean(activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'),
+      managedRefreshDeferredByLivePty: Boolean(
+        activeAccountId &&
+        activeAccount?.managedAuthRuntime !== 'wsl' &&
+        this.managedRefreshDeferredByLivePtyAccountId === activeAccountId
+      ),
       provenance:
         activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'
           ? `managed:${activeAccountId}`
@@ -692,6 +702,17 @@ export class ClaudeRuntimeAuthService {
       return null
     }
     return accounts.find((account) => account.id === activeAccountId) ?? null
+  }
+
+  private getDefaultAccountSelectionTarget(
+    settings = this.store.getSettings()
+  ): ClaudeAccountSelectionTarget {
+    if (process.platform === 'win32' && settings.localAccountRuntime === 'wsl') {
+      // Why: account auth defaults follow account runtime settings, not hidden
+      // legacy terminal WSL settings that can outlive the Terminal UI control.
+      return { runtime: 'wsl', wslDistro: settings.localAccountWslDistro ?? null }
+    }
+    return { runtime: 'host' }
   }
 
   private resolveWslDefaultTarget(

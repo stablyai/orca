@@ -32,10 +32,15 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
-import type { NativeFileDropPayload } from '../../shared/native-file-drop'
+import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import {
+  scheduleWorktreeBaseDirectoryWatcherSync,
+  setWorktreeBaseDirectoryWatcherSyncContext
+} from '../ipc/worktree-base-directory-watcher'
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
@@ -53,11 +58,15 @@ export function attachMainWindowServices(
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
+    onBeforeUpdateQuit?: () => void | Promise<void>
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store, runtime)
+  // Why: repo/settings mutations resync watchers through this attached main-window context.
+  setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
+  scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
   registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,
@@ -109,7 +118,13 @@ export function attachMainWindowServices(
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-    onBeforeQuit: () => store.flush(),
+    onBeforeQuit: async () => {
+      try {
+        await options?.onBeforeUpdateQuit?.()
+      } finally {
+        store.flush()
+      }
+    },
     setLastUpdateCheckAt: (timestamp) => {
       store.updateUI({ lastUpdateCheckAt: timestamp })
     },
@@ -209,7 +224,12 @@ function registerRuntimeWindowLifecycle(
     }
   }
   runtime.setNotifier({
-    worktreesChanged: (repoId) => send('worktrees:changed', { repoId }),
+    worktreesChanged: (repoId, renamed) => {
+      // Why: clear detected-worktree scan caches before renderer listeners
+      // handle this event, preventing stale TTL reads after mutations.
+      runWorktreeChangeInvalidators(repoId)
+      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
+    },
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
@@ -229,7 +249,14 @@ function registerRuntimeWindowLifecycle(
       })
     },
     createTerminal: (worktreeId, opts) =>
-      send('ui:createTerminal', { worktreeId, command: opts.command, title: opts.title }),
+      send('ui:createTerminal', {
+        worktreeId,
+        command: opts.command,
+        ...(opts.cwd ? { cwd: opts.cwd } : {}),
+        ...(opts.env ? { env: opts.env } : {}),
+        title: opts.title,
+        ...(opts.presentation ? { presentation: opts.presentation } : {})
+      }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
@@ -238,10 +265,12 @@ function registerRuntimeWindowLifecycle(
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
         const handler = (
-          _event: Electron.IpcMainEvent,
+          event: Electron.IpcMainEvent,
           reply: { requestId: string; tabId?: string; title?: string; error?: string }
         ): void => {
-          if (reply.requestId !== requestId) {
+          // Why: requestId is renderer-supplied; only the targeted main window
+          // may satisfy the reveal and provide the tab handle.
+          if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }
           clearTimeout(timer)
@@ -258,7 +287,12 @@ function registerRuntimeWindowLifecycle(
           worktreeId,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
+          ...(opts.cwd ? { cwd: opts.cwd } : {}),
+          ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+          ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+          ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           activate: opts.activate !== false,
+          ...(opts.presentation ? { presentation: opts.presentation } : {}),
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
           // with the paneKey baked into the PTY env at spawn time, so hook
           // events route to the right slot.
@@ -345,9 +379,17 @@ function registerRuntimeWindowLifecycle(
 
 function registerFileDropRelay(mainWindow: BrowserWindow): void {
   const channel = 'terminal:file-dropped-from-preload'
+  const mainWebContents = mainWindow.webContents
   ipcMain.removeAllListeners(channel)
-  const relayFileDrop = (_event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
-    if (mainWindow.isDestroyed()) {
+  const relayFileDrop = (event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
+    if (
+      mainWindow.isDestroyed() ||
+      mainWebContents.isDestroyed() ||
+      event.sender !== mainWebContents
+    ) {
+      return
+    }
+    if (!isNativeFileDropPayload(args)) {
       return
     }
 

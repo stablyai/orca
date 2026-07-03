@@ -45,6 +45,7 @@ const projectsCreateHostSetup = vi.fn()
 const projectsSetupExistingFolder = vi.fn()
 const projectsUpdateHostSetup = vi.fn()
 const projectsDeleteHostSetup = vi.fn()
+const projectsUpdate = vi.fn()
 const projectGroupsMoveProject = vi.fn()
 const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -64,6 +65,7 @@ beforeEach(() => {
   projectsSetupExistingFolder.mockReset()
   projectsUpdateHostSetup.mockReset()
   projectsDeleteHostSetup.mockReset()
+  projectsUpdate.mockReset()
   projectGroupsMoveProject.mockReset()
   ptyKill.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -84,6 +86,7 @@ beforeEach(() => {
         reorder: reposReorder
       },
       projects: {
+        update: projectsUpdate,
         createHostSetup: projectsCreateHostSetup,
         setupExistingFolder: projectsSetupExistingFolder,
         updateHostSetup: projectsUpdateHostSetup,
@@ -114,59 +117,6 @@ describe('repo slice runtime routing', () => {
     ])
     expect(reposList).toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('hydrates projects from local IPC when the project API is available', async () => {
-    const project: Project = {
-      id: 'project-1',
-      displayName: 'Project',
-      badgeColor: '#000',
-      sourceRepoIds: ['local-repo'],
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const setup: ProjectHostSetup = {
-      id: 'setup-1',
-      projectId: project.id,
-      hostId: 'local',
-      repoId: 'local-repo',
-      path: '/local',
-      displayName: 'Local',
-      setupState: 'ready',
-      setupMethod: 'legacy-repo',
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const projectsList = vi.fn().mockResolvedValue([project])
-    const listHostSetups = vi.fn().mockResolvedValue([setup])
-    ;(
-      window.api as typeof window.api & {
-        projects?: {
-          list: typeof projectsList
-          listHostSetups: typeof listHostSetups
-          createHostSetup: typeof projectsCreateHostSetup
-          setupExistingFolder: typeof projectsSetupExistingFolder
-          updateHostSetup: typeof projectsUpdateHostSetup
-          deleteHostSetup: typeof projectsDeleteHostSetup
-        }
-      }
-    ).projects = {
-      list: projectsList,
-      listHostSetups,
-      createHostSetup: projectsCreateHostSetup,
-      setupExistingFolder: projectsSetupExistingFolder,
-      updateHostSetup: projectsUpdateHostSetup,
-      deleteHostSetup: projectsDeleteHostSetup
-    }
-    reposList.mockResolvedValue([localRepo])
-    const store = createTestStore()
-
-    await store.getState().fetchRepos()
-
-    expect(store.getState().projects).toEqual([project])
-    expect(store.getState().projectHostSetups).toEqual([setup])
-    expect(projectsList).toHaveBeenCalled()
-    expect(listHostSetups).toHaveBeenCalled()
   })
 
   it('fetches repos from the active remote runtime environment', async () => {
@@ -201,6 +151,23 @@ describe('repo slice runtime routing', () => {
       timeoutMs: 15_000
     })
     expect(reposList).not.toHaveBeenCalled()
+  })
+
+  it('stamps runtime-fetched SSH repos with the runtime owner', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-ssh-repo',
+      ok: true,
+      result: { repos: [{ ...remoteRepo, connectionId: 'ssh-1' }] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await store.getState().fetchRepos()
+
+    expect(store.getState().repos).toEqual([
+      { ...remoteRepo, connectionId: 'ssh-1', executionHostId: 'runtime:env-1' }
+    ])
   })
 
   it('updates repos through the active remote runtime environment', async () => {
@@ -699,6 +666,59 @@ describe('repo slice runtime routing', () => {
     expect(store.getState().activeRepoId).toBeNull()
     expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('drops persisted visit timestamps for removed unhydrated SSH repos', async () => {
+    const store = createTestStore()
+    const sshWorktreeId = `${sshRepo.id}::/home/orca/wt`
+    const localWorktreeId = `${localRepo.id}::/local/wt`
+    store.setState({
+      repos: [sshRepo, localRepo],
+      activeRepoId: sshRepo.id,
+      lastVisitedAtByWorktreeId: {
+        [sshWorktreeId]: 100,
+        [localWorktreeId]: 200
+      }
+    })
+
+    await store.getState().removeProject(sshRepo.id)
+
+    expect(store.getState().repos).toEqual([localRepo])
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
+  })
+
+  it('drops persisted visit timestamps for removed unhydrated runtime repos', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-remove-runtime-unhydrated',
+      ok: true,
+      result: { removed: true },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    const remoteWorktreeId = `${remoteRepo.id}::/srv/orca/wt`
+    const localWorktreeId = `${localRepo.id}::/local/wt`
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [remoteRepo, localRepo],
+      activeRepoId: remoteRepo.id,
+      lastVisitedAtByWorktreeId: {
+        [remoteWorktreeId]: 100,
+        [localWorktreeId]: 200
+      }
+    })
+
+    await store.getState().removeProject(remoteRepo.id)
+
+    expect(store.getState().repos).toEqual([localRepo])
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.rm',
+      params: { repo: remoteRepo.id },
+      timeoutMs: 15_000
+    })
+    expect(reposRemove).not.toHaveBeenCalled()
   })
 
   it('evicts GitHub caches for removed repos using repo id and legacy path keys', async () => {

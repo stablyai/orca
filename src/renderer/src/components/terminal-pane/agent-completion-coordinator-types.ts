@@ -2,10 +2,19 @@ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-t
 import type { GlobalSettings } from '../../../../shared/types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
+export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
+  stateStartedAt?: number
+}
+
 export type AgentCompletionDispatchMeta = {
   source: 'hook' | 'title' | 'process-exit'
   quietedHookDone: boolean
-  agentStatus?: ParsedAgentStatusPayload
+  agentStatus?: AgentCompletionStatusSnapshot
+}
+
+export type AgentAttentionDispatchMeta = {
+  source: 'hook'
+  agentStatus: AgentCompletionStatusSnapshot
 }
 
 export type AgentCompletionCoordinatorOptions = {
@@ -17,15 +26,17 @@ export type AgentCompletionCoordinatorOptions = {
     ptyId: string
   ) => Promise<RuntimeTerminalProcessInspection>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
+  dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
+  shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
 }
 
 export type AgentCompletionCoordinator = {
   observeTitle: (title: string) => void
   observeClassifiedTitleCompletion: (title: string) => void
   observeTitleWorking: () => void
-  observeHookStatus: (payload: ParsedAgentStatusPayload) => void
+  observeHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   startProcessTracking: () => void
   hasPendingHookDoneCompletion: () => boolean
   resetCompletionState: (options?: { requireFreshWorking?: boolean }) => void

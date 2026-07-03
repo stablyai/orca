@@ -1,7 +1,7 @@
 // Composition root for the error-tracking lane (telemetry-error-tracking.md
-// §Architecture). Wires the local NDJSON sink + the optional OTLP exporter
-// into the active tracer, and exposes a single init/shutdown pair the main
-// process calls from `src/main/index.ts`.
+// §Architecture). Wires the local NDJSON sink into the active tracer, and
+// exposes a single init/shutdown pair the main process calls from
+// `src/main/index.ts`.
 //
 // Architectural rule (load-bearing): nothing in `src/main/telemetry/`
 // imports from this directory and vice versa — the two lanes never share a
@@ -12,7 +12,7 @@
 //
 // Consent boundaries (telemetry-error-tracking.md §Consent boundaries):
 //
-//   DO_NOT_TRACK=1            → disable OTLP + bundle button. KEEP local file.
+//   DO_NOT_TRACK=1            → disable bundle button. KEEP local file.
 //                                Local file writes never leave the machine,
 //                                so they are not "tracking" in the DNT sense.
 //   ORCA_TELEMETRY_DISABLED=1 → identical to DO_NOT_TRACK for this lane.
@@ -32,7 +32,6 @@ import { app } from 'electron'
 import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
 import {
-  clearRotatedFamily,
   createLocalFileSink,
   DEFAULT_MAX_FILES,
   getRotatedFamilySize,
@@ -50,8 +49,7 @@ import {
   type UploadBundleOptions,
   type UploadBundleResult
 } from './diagnostic-bundle-upload'
-import { createOtlpExporterFromEnv, type OtlpExporter } from './otlp-exporter'
-import { setActiveSink, type TracerSink } from './tracer'
+import { setActiveSink } from './tracer'
 
 const CI_ENV_VARS = [
   'CI',
@@ -67,12 +65,8 @@ const CI_ENV_VARS = [
 export type ObservabilityConsent = {
   /** Whether the local NDJSON sink is active. */
   readonly localFileEnabled: boolean
-  /** Whether an OTLP exporter was instantiated for this session. */
-  readonly otlpEnabled: boolean
   /** Whether the diagnostic-bundle button should be available. */
   readonly bundleEnabled: boolean
-  /** Display string shown in the Privacy pane's OTLP status row. */
-  readonly otlpStatus: string
   /** Reason any of the lanes are disabled, for debug surfaces. */
   readonly disabledReason?:
     | 'do_not_track'
@@ -107,18 +101,14 @@ export function resolveObservabilityConsent(): ObservabilityConsent {
   if (ci) {
     return {
       localFileEnabled: false,
-      otlpEnabled: false,
       bundleEnabled: false,
-      otlpStatus: 'Disabled in CI',
       disabledReason: 'ci'
     }
   }
   if (diagnosticsDisabled) {
     return {
       localFileEnabled: false,
-      otlpEnabled: false,
       bundleEnabled: false,
-      otlpStatus: 'Disabled by ORCA_DIAGNOSTICS_DISABLED',
       disabledReason: 'orca_diagnostics_disabled'
     }
   }
@@ -127,24 +117,14 @@ export function resolveObservabilityConsent(): ObservabilityConsent {
     // file never leaves the machine.
     return {
       localFileEnabled: true,
-      otlpEnabled: false,
       bundleEnabled: false,
-      otlpStatus: dnt ? 'Disabled by DO_NOT_TRACK' : 'Disabled by ORCA_TELEMETRY_DISABLED',
       disabledReason: dnt ? 'do_not_track' : 'orca_telemetry_disabled'
     }
   }
 
-  // Normal path: everything is on, but the OTLP exporter only initializes
-  // if the user has set ORCA_OTLP_TRACES_URL.
-  const tracesUrl = process.env.ORCA_OTLP_TRACES_URL
   return {
     localFileEnabled: true,
-    otlpEnabled: tracesUrl !== undefined && tracesUrl.length > 0,
-    bundleEnabled: true,
-    otlpStatus:
-      tracesUrl !== undefined && tracesUrl.length > 0
-        ? `Enabled — exporting to ${tracesUrl}`
-        : 'Disabled (set ORCA_OTLP_TRACES_URL to enable)'
+    bundleEnabled: true
   }
 }
 
@@ -176,77 +156,14 @@ export function getTraceFilePath(): string {
 // ── Module-level state ───────────────────────────────────────────────────
 
 let sink: LocalFileSink | null = null
-let otlp: OtlpExporter | null = null
 let consent: ObservabilityConsent | null = null
 
-/** Composite tracer sink that fans out to local file and (optionally) OTLP.
- *  The two are independent — an OTLP failure does not affect the local file
- *  and vice versa. */
-function makeCompositeSink(localSink: LocalFileSink, exporter: OtlpExporter | null): TracerSink {
-  return {
-    push(record: unknown): void {
-      // The tracer pushes already-redacted span records here. Both
-      // destinations are best-effort; either failing must not propagate.
-      try {
-        localSink.push(record)
-      } catch {
-        /* swallow — error-tracking lane must never crash main */
-      }
-      if (exporter) {
-        try {
-          // Records emitted by `tracer.ts` carry `type: 'effect-span'` plus
-          // the RedactableSpan fields. The OTLP exporter expects the
-          // RedactableSpan shape; strip the envelope before forwarding.
-          const r = record as { type?: string } & Record<string, unknown>
-          if (r.type === 'effect-span') {
-            const { type: _t, ...spanFields } = r
-            void _t
-            exporter.exportSpan(spanFields as Parameters<OtlpExporter['exportSpan']>[0])
-          }
-        } catch {
-          /* swallow */
-        }
-      }
-    },
-    flush(): void {
-      try {
-        localSink.flush()
-      } catch {
-        /* */
-      }
-      if (exporter) {
-        // Async flush — fire-and-forget on this synchronous path. The
-        // shutdown path awaits the OTLP flush separately.
-        void exporter.flush()
-      }
-    },
-    close(): void {
-      try {
-        localSink.close()
-      } catch {
-        /* */
-      }
-      if (exporter) {
-        // Fire-and-forget flush before close — prevents queued-span loss when
-        // callers invoke close() without separately awaiting flush(). Same
-        // fire-and-forget pattern documented above in flush().
-        void exporter.flush()
-        exporter.close()
-      }
-    }
-  }
-}
-
-/** Create the local file sink, install the composite (local + optional OTLP)
- *  as the active tracer sink, and update module-level `sink`. The OTLP
- *  exporter is reused from the current module-level `otlp` reference — only
- *  the local sink is recreated. Used by both `initObservability` (where
- *  `otlp` is freshly created) and `clearLocalTraces` (where `otlp` is
- *  already running and must be preserved across the sink swap). */
+/** Create the local file sink, install it as the active tracer sink, and
+ *  update module-level `sink`. */
 function installLocalSink(): void {
   const localSink = createLocalFileSink({ filePath: getTraceFilePath() })
   sink = localSink
-  setActiveSink(makeCompositeSink(localSink, otlp))
+  setActiveSink(localSink)
 }
 
 export function initObservability(): ObservabilityConsent {
@@ -257,24 +174,14 @@ export function initObservability(): ObservabilityConsent {
     // tracer's active sink unset, so all spans are no-ops.
     return c
   }
-  otlp = c.otlpEnabled ? createOtlpExporterFromEnv() : null
   installLocalSink()
   return c
 }
 
 export async function shutdownObservability(): Promise<void> {
-  // Order matters: tracer first (so no new pushes after this point), then
-  // bounded OTLP flush, then the local sink close (synchronous fsync).
+  // Order matters: tracer first so no new pushes arrive while the local sink
+  // is closing and flushing buffered lines.
   setActiveSink(null)
-  if (otlp) {
-    try {
-      await otlp.flush()
-    } catch {
-      /* swallow */
-    }
-    otlp.close()
-    otlp = null
-  }
   if (sink) {
     sink.close()
     sink = null
@@ -290,9 +197,7 @@ export function getObservabilityConsent(): ObservabilityConsent | null {
 
 export type DiagnosticsStatus = {
   readonly localFileEnabled: boolean
-  readonly otlpEnabled: boolean
   readonly bundleEnabled: boolean
-  readonly otlpStatus: string
   readonly traceFilePath: string
   readonly traceFamilySize: number
   readonly disabledReason?: ObservabilityConsent['disabledReason']
@@ -304,39 +209,10 @@ export function getDiagnosticsStatus(): DiagnosticsStatus {
   const traceFamilySize = c.localFileEnabled ? getRotatedFamilySize(traceFilePath) : 0
   return {
     localFileEnabled: c.localFileEnabled,
-    otlpEnabled: c.otlpEnabled,
     bundleEnabled: c.bundleEnabled,
-    otlpStatus: c.otlpStatus,
     traceFilePath,
     traceFamilySize,
     ...(c.disabledReason ? { disabledReason: c.disabledReason } : {})
-  }
-}
-
-/** Wrapper around `local-file-sink.clearRotatedFamily` that fully tears down
- *  and rebuilds the active sink around the unlink.
- *
- *  Why the close-then-unlink-then-recreate dance:
- *  The local file sink holds an open fd from `openSync(filePath, 'a')`. If we
- *  unlink while that fd is still open, two bad things happen:
- *    - POSIX: the kernel keeps the inode alive as long as the fd is open, so
- *      subsequent `writeSync` calls land in an orphaned inode invisible to
- *      the user but still consuming disk until the process exits.
- *    - Windows: `unlinkSync` on the active file fails with EBUSY (silently
- *      swallowed inside `clearRotatedFamily`), so the active file is NOT
- *      cleared — the user clicks "Clear" and nothing happens.
- *  Both failures are silent. The fix is to fully close the sink (which
- *  flushes and releases the fd) before unlinking, then recreate the sink so
- *  a fresh fd points at a brand-new empty file. The OTLP exporter is left
- *  running across the swap. */
-export function clearLocalTraces(): void {
-  if (sink) {
-    sink.close()
-    sink = null
-  }
-  clearRotatedFamily(getTraceFilePath())
-  if (consent?.localFileEnabled) {
-    installLocalSink()
   }
 }
 

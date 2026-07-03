@@ -1,5 +1,5 @@
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
-import type { RemoteRuntimeClientError } from './remote-runtime-client'
+import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
 export type SharedControlConnectionState =
   | 'closed'

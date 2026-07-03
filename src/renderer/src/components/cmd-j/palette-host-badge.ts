@@ -13,7 +13,7 @@ export type PaletteHostBadge = {
 
 // Why: Cmd+J only needs a host label when there's a live remote to disambiguate
 // from. A merely-configured-but-disconnected SSH/runtime host shouldn't tag every
-// row with "Local Mac", so we require an actually-reachable non-local host —
+// row with the local host label, so we require an actually-reachable non-local host —
 // unlike the sidebar gate, which lists disconnected hosts so users can connect.
 function hasActiveRemoteHost(hostOptions: readonly SidebarHostOption[]): boolean {
   return hostOptions.some(

@@ -1,8 +1,12 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { getProcessTableSnapshot } from '../../shared/process-table-snapshot'
+import {
+  resolveWindowsAgentForegroundProcess,
+  shouldInspectWindowsAgentForeground,
+  type AgentForegroundResolutionOptions
+} from './windows-agent-foreground-process'
 
-const execFileAsync = promisify(execFile)
+export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
 
 type ProcessRow = {
   pid: number
@@ -28,18 +32,18 @@ function parsePsRows(stdout: string): ProcessRow[] {
   return rows
 }
 
-function collectDescendants(
-  rows: ProcessRow[],
+function collectDescendants<Row extends { pid: number; ppid: number }>(
+  rows: Row[],
   rootPid: number
-): (ProcessRow & { depth: number })[] {
-  const childrenByParent = new Map<number, ProcessRow[]>()
+): (Row & { depth: number })[] {
+  const childrenByParent = new Map<number, Row[]>()
   for (const row of rows) {
     const children = childrenByParent.get(row.ppid) ?? []
     children.push(row)
     childrenByParent.set(row.ppid, children)
   }
 
-  const descendants: (ProcessRow & { depth: number })[] = []
+  const descendants: (Row & { depth: number })[] = []
   const stack = (childrenByParent.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
@@ -60,17 +64,25 @@ function candidateScore(row: ProcessRow & { depth: number }): number {
 
 export async function resolveAgentForegroundProcess(
   shellPid: number | null | undefined,
-  fallbackProcess: string | null
+  fallbackProcess: string | null,
+  options: AgentForegroundResolutionOptions = {}
 ): Promise<string | null> {
-  if (process.platform === 'win32' || !shellPid) {
+  if (!shellPid) {
     return fallbackProcess
   }
 
+  if (process.platform === 'win32') {
+    if (!fallbackProcess || !shouldInspectWindowsAgentForeground(fallbackProcess)) {
+      return fallbackProcess
+    }
+    return (
+      (await resolveWindowsAgentForegroundProcess(shellPid, fallbackProcess, options)) ??
+      fallbackProcess
+    )
+  }
+
   try {
-    const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,stat=,command='], {
-      encoding: 'utf8',
-      timeout: 3000
-    })
+    const stdout = await getProcessTableSnapshot()
     return resolveAgentForegroundProcessFromPs(stdout, shellPid) ?? fallbackProcess
   } catch {
     // Fall through to node-pty's process name. Foreground process inspection is

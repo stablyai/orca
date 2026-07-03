@@ -16,6 +16,7 @@ import {
   SettingsSwitchRow
 } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 
 export type AutoSaveDelayDraftState = {
   sourceDelayMs: number
@@ -249,6 +250,58 @@ export function GeneralEditorSettingsSection({
 
       <SearchableSetting
         title={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.8f1afdfbd8',
+          'Diff Word Wrap'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.4aa4d9fb73',
+          'Wrap long lines in diff editors instead of requiring horizontal scrolling.'
+        )}
+        keywords={['diff', 'word wrap', 'wrap', 'markdown', 'long lines']}
+        className="flex items-center justify-between gap-4 py-2"
+      >
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <Label>
+            {translate(
+              'auto.components.settings.GeneralEditorSettingsSection.8f1afdfbd8',
+              'Diff Word Wrap'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.GeneralEditorSettingsSection.4aa4d9fb73',
+              'Wrap long lines in diff editors instead of requiring horizontal scrolling.'
+            )}
+          </p>
+        </div>
+        <SettingsSegmentedControl
+          ariaLabel={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.8f1afdfbd8',
+            'Diff Word Wrap'
+          )}
+          value={settings.diffWordWrap ? 'on' : 'off'}
+          onChange={(option) => updateSettings({ diffWordWrap: option === 'on' })}
+          options={[
+            {
+              value: 'off',
+              label: translate(
+                'auto.components.settings.GeneralEditorSettingsSection.bf16ef0af2',
+                'Off'
+              )
+            },
+            {
+              value: 'on',
+              label: translate(
+                'auto.components.settings.GeneralEditorSettingsSection.3f6892f307',
+                'On'
+              )
+            }
+          ]}
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate(
           'auto.components.settings.GeneralEditorSettingsSection.1de48ad940',
           'Default Diff File Tree'
         )}
@@ -325,6 +378,8 @@ export function GeneralEditorSettingsSection({
           onChange={() => updateSettings({ editorMinimapEnabled: !settings.editorMinimapEnabled })}
         />
       </SearchableSetting>
+
+      <RichMarkdownSpellcheckSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

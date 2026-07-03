@@ -1,11 +1,14 @@
 import { useAppStore } from '@/store'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator'
-import type { AgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator-types'
+import type {
+  AgentCompletionCoordinator,
+  AgentCompletionStatusSnapshot
+} from '@/components/terminal-pane/agent-completion-coordinator-types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import { createCodexAutoApprovalHookCompletionSuppressor } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 
 type CoordinatorEntry = {
   worktreeId: string
@@ -157,7 +160,19 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       })
     },
-    isLive: () => paneCanReceiveHookCompletion(paneKey)
+    dispatchAttention: (title, meta) => {
+      // Why: native notification settings still label this channel as "agent
+      // task complete"; the snapshot state makes the banner read "needs input".
+      dispatchTerminalNotification(worktreeId, {
+        source: 'agent-task-complete',
+        terminalTitle: title,
+        paneKey,
+        suppressOsNotification: !isAgentTaskCompleteNotificationEnabled(),
+        agentStatusSnapshot: meta.agentStatus
+      })
+    },
+    isLive: () => paneCanReceiveHookCompletion(paneKey),
+    shouldSuppressHookCompletion: createCodexAutoApprovalHookCompletionSuppressor(paneKey)
   })
 }
 
@@ -168,7 +183,7 @@ export function observeAgentHookCompletionForNotification({
 }: {
   paneKey: string
   worktreeId: string
-  payload: ParsedAgentStatusPayload
+  payload: AgentCompletionStatusSnapshot
 }): void {
   pruneClosedPaneCoordinators()
   if (!paneCanReceiveHookCompletion(paneKey)) {

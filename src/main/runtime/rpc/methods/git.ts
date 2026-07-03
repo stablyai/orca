@@ -7,19 +7,23 @@ import {
   GitBranchDiff,
   GitBulkPaths,
   GitCheckIgnored,
+  GitCheckout,
   GitCommit,
   GitCommitCompare,
   GitCommitDiff,
   GitDiscoverCommitMessageModels,
   GitDiff,
   GitFilePath,
+  GitForkSync,
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   GitHistory,
   GitPush,
   GitRebaseFromBase,
+  GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitStatusParams,
+  GitSubmoduleStatus,
   GitTargetedRemote,
   WorktreeSelector
 } from './git-params'
@@ -84,16 +88,35 @@ export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.status',
     params: GitStatusParams,
-    handler: async (params, { runtime }) =>
-      params.includeIgnored === undefined
+    handler: async (params, { runtime }) => {
+      const options =
+        params.includeIgnored === undefined &&
+        params.bypassEffectiveUpstreamNegativeCache === undefined
+          ? undefined
+          : {
+              ...(params.includeIgnored === undefined
+                ? {}
+                : { includeIgnored: params.includeIgnored }),
+              ...(params.bypassEffectiveUpstreamNegativeCache === true
+                ? { bypassEffectiveUpstreamNegativeCache: true }
+                : {})
+            }
+      return options === undefined
         ? runtime.getRuntimeGitStatus(params.worktree)
-        : runtime.getRuntimeGitStatus(params.worktree, { includeIgnored: params.includeIgnored })
+        : runtime.getRuntimeGitStatus(params.worktree, options)
+    }
   }),
   defineMethod({
     name: 'git.checkIgnored',
     params: GitCheckIgnored,
     handler: async (params, { runtime }) =>
       runtime.checkRuntimeGitIgnoredPaths(params.worktree, params.paths)
+  }),
+  defineMethod({
+    name: 'git.submoduleStatus',
+    params: GitSubmoduleStatus,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitSubmoduleStatus(params.worktree, params.submodulePath, params.area)
   }),
   defineMethod({
     name: 'git.history',
@@ -118,6 +141,17 @@ export const GIT_METHODS: RpcMethod[] = [
     name: 'git.abortRebase',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.checkout',
+    params: GitCheckout,
+    handler: async (params, { runtime }) =>
+      runtime.checkoutRuntimeGitBranch(params.worktree, params.branch)
+  }),
+  defineMethod({
+    name: 'git.localBranches',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
   }),
   defineMethod({
     name: 'git.diff',
@@ -157,6 +191,12 @@ export const GIT_METHODS: RpcMethod[] = [
       params.pushTarget === undefined
         ? runtime.fetchRuntimeGit(params.worktree)
         : runtime.fetchRuntimeGit(params.worktree, params.pushTarget)
+  }),
+  defineMethod({
+    name: 'git.forkSync',
+    params: GitForkSync,
+    handler: async (params, { runtime }) =>
+      runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
   }),
   defineMethod({
     name: 'git.pull',
@@ -258,7 +298,9 @@ export const GIT_METHODS: RpcMethod[] = [
         base: params.base,
         title: params.title,
         body: params.body,
-        draft: params.draft
+        draft: params.draft,
+        provider: params.provider,
+        useTemplate: params.useTemplate
       }
       const override = buildCommitMessageGenerationOverride(params)
       if (override === undefined) {
@@ -314,5 +356,11 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+  }),
+  defineMethod({
+    name: 'git.remoteCommitUrl',
+    params: GitRemoteCommitUrl,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitRemoteCommitUrl(params.worktree, params.sha)
   })
 ]

@@ -13,6 +13,7 @@ type TerminalPaneViewProps = {
   active: boolean
   keyboardLift: number
   terminalTheme?: MobileTerminalTheme
+  textScale: number
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
@@ -23,6 +24,9 @@ type TerminalPaneViewProps = {
   onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput: (handle: string, bytes: string) => void
   onTerminalTap: (handle: string) => void
+  onFileTap: (handle: string, pathText: string, line: number | null, column: number | null) => void
+  onOpenUrl: (handle: string, url: string) => void
+  onTextScaleChange: (scale: number) => void
 }
 
 export function TerminalPaneView({
@@ -30,6 +34,7 @@ export function TerminalPaneView({
   active,
   keyboardLift,
   terminalTheme,
+  textScale,
   onRef,
   onWebReady,
   onSelectionMode,
@@ -39,7 +44,10 @@ export function TerminalPaneView({
   onKeyboardAvoidanceMetrics,
   onHaptic,
   onTerminalInput,
-  onTerminalTap
+  onTerminalTap,
+  onFileTap,
+  onOpenUrl,
+  onTextScaleChange
 }: TerminalPaneViewProps) {
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
@@ -63,6 +71,7 @@ export function TerminalPaneView({
         ref={setRef}
         style={styles.terminalWebView}
         terminalTheme={terminalTheme}
+        textScale={textScale}
         onWebReady={() => onWebReady(handle)}
         onSelectionMode={(a) => onSelectionMode(handle, a)}
         onSelectionCopy={(t) => onSelectionCopy(handle, t)}
@@ -72,6 +81,9 @@ export function TerminalPaneView({
         onHaptic={onHaptic}
         onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
         onTerminalTap={() => onTerminalTap(handle)}
+        onFileTap={(pathText, line, column) => onFileTap(handle, pathText, line, column)}
+        onOpenUrl={(url) => onOpenUrl(handle, url)}
+        onTextScaleChange={onTextScaleChange}
       />
     </View>
   )

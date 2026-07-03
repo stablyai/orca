@@ -4,6 +4,7 @@ import {
   parseGitLabIssueOrMRLink,
   parseGitLabIssueOrMRNumber
 } from './gitlab-links'
+import { WORK_ITEM_LINK_QUERY_MAX_BYTES } from './work-item-link-query-bounds'
 
 describe('parseGitLabIssueOrMRNumber', () => {
   it('parses bare numbers, # prefix, and ! prefix', () => {
@@ -62,18 +63,38 @@ describe('parseGitLabIssueOrMRNumber', () => {
 describe('parseGitLabIssueOrMRLink', () => {
   it('extracts slug + number + type for issues and MRs', () => {
     expect(parseGitLabIssueOrMRLink('https://gitlab.com/stablyai/orca/-/issues/923')).toEqual({
-      slug: { path: 'stablyai/orca' },
+      slug: { host: 'gitlab.com', path: 'stablyai/orca' },
       number: 923,
       type: 'issue'
     })
     expect(
       parseGitLabIssueOrMRLink('https://gitlab.com/stablyai/orca/-/merge_requests/77')
-    ).toEqual({ slug: { path: 'stablyai/orca' }, number: 77, type: 'mr' })
+    ).toEqual({ slug: { host: 'gitlab.com', path: 'stablyai/orca' }, number: 77, type: 'mr' })
+  })
+
+  it('preserves self-hosted GitLab hosts in the slug', () => {
+    expect(parseGitLabIssueOrMRLink('https://gitlab.internal/team/api/-/merge_requests/8')).toEqual(
+      {
+        slug: { host: 'gitlab.internal', path: 'team/api' },
+        number: 8,
+        type: 'mr'
+      }
+    )
+  })
+
+  it('preserves explicit ports on self-hosted GitLab hosts', () => {
+    expect(parseGitLabIssueOrMRLink('https://gitlab.example.com:8443/team/api/-/issues/7')).toEqual(
+      {
+        slug: { host: 'gitlab.example.com:8443', path: 'team/api' },
+        number: 7,
+        type: 'issue'
+      }
+    )
   })
 
   it('preserves full nested group paths in the slug', () => {
     expect(parseGitLabIssueOrMRLink('https://gitlab.com/g/sub/proj/-/issues/1')).toEqual({
-      slug: { path: 'g/sub/proj' },
+      slug: { host: 'gitlab.com', path: 'g/sub/proj' },
       number: 1,
       type: 'issue'
     })
@@ -81,30 +102,34 @@ describe('parseGitLabIssueOrMRLink', () => {
 
   it('treats /-/work_items/<iid> as an issue work item', () => {
     expect(parseGitLabIssueOrMRLink('https://gitlab.com/stablyai/orca/-/work_items/923')).toEqual({
-      slug: { path: 'stablyai/orca' },
+      slug: { host: 'gitlab.com', path: 'stablyai/orca' },
       number: 923,
       type: 'issue'
     })
     expect(
       parseGitLabIssueOrMRLink('https://gitlab.example.com:8443/team/api/-/work_items/7')
-    ).toEqual({ slug: { path: 'team/api' }, number: 7, type: 'issue' })
+    ).toEqual({
+      slug: { host: 'gitlab.example.com:8443', path: 'team/api' },
+      number: 7,
+      type: 'issue'
+    })
   })
 
   it('extracts slug, number, and type from URLs with trailing page segments', () => {
     expect(parseGitLabIssueOrMRLink('https://gitlab.com/g/p/-/merge_requests/77/diffs')).toEqual({
-      slug: { path: 'g/p' },
+      slug: { host: 'gitlab.com', path: 'g/p' },
       number: 77,
       type: 'mr'
     })
     expect(
       parseGitLabIssueOrMRLink('https://gitlab.com/g/p/-/merge_requests/77/diffs.diff?diff_id=1')
     ).toEqual({
-      slug: { path: 'g/p' },
+      slug: { host: 'gitlab.com', path: 'g/p' },
       number: 77,
       type: 'mr'
     })
     expect(parseGitLabIssueOrMRLink('https://gitlab.com/g/p/-/issues/923/designs')).toEqual({
-      slug: { path: 'g/p' },
+      slug: { host: 'gitlab.com', path: 'g/p' },
       number: 923,
       type: 'issue'
     })
@@ -150,5 +175,20 @@ describe('normalizeGitLabLinkQuery', () => {
 
   it('returns empty for empty input', () => {
     expect(normalizeGitLabLinkQuery('   ')).toEqual({ query: '', directNumber: null })
+  })
+
+  it('rejects oversized pasted link queries without echoing their content', () => {
+    const secret = 'gitlab-link-secret'
+    const result = normalizeGitLabLinkQuery(secret + 'x'.repeat(WORK_ITEM_LINK_QUERY_MAX_BYTES))
+
+    expect(result).toEqual({ query: '', directNumber: null, tooLarge: true })
+  })
+
+  it('rejects oversized whitespace before trimming link queries', () => {
+    expect(normalizeGitLabLinkQuery(' '.repeat(WORK_ITEM_LINK_QUERY_MAX_BYTES + 1))).toEqual({
+      query: '',
+      directNumber: null,
+      tooLarge: true
+    })
   })
 })

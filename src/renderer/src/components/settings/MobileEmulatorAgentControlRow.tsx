@@ -1,23 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
 import { Import, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
-import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME
+  ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
+  ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
-import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
+import { useMobileEmulatorAgentSetupState } from '../emulator-pane/use-mobile-emulator-agent-setup-state'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 import { StepBadge } from './BrowserUseStepBadge'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
 import { Button } from '../ui/button'
@@ -31,84 +24,13 @@ const EMULATOR_CLI_COMMANDS = [
   'orca emulator type "hello" --json'
 ] as const
 
-function getCliActionLabel(status: CliInstallStatus | null, busy: boolean): string {
-  if (busy) {
-    return 'Registering...'
-  }
-  if (isOrcaCliAvailableOnPath(status)) {
-    return 'Enabled'
-  }
-  if (status?.state === 'installed') {
-    return 'Fix PATH'
-  }
-  return 'Enable'
-}
-
 export function MobileEmulatorAgentControlRow(): React.JSX.Element {
-  const [cliInstallStatus, setCliInstallStatus] = useState<CliInstallStatus | null>(null)
-  const [cliLoading, setCliLoading] = useState(true)
-  const [cliBusy, setCliBusy] = useState(false)
-  const mountedRef = useMountedRef()
-  const {
-    installed: cliSkillInstalled,
-    loading: cliSkillLoading,
-    error: cliSkillError,
-    refresh: refreshCliSkill
-  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-
-  const refreshCliStatus = useCallback(async (): Promise<void> => {
-    setCliLoading(true)
-    try {
-      setCliInstallStatus(await window.api.cli.getInstallStatus())
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.MobileEmulatorAgentControlRow.1861982430',
-                'Failed to load CLI status.'
-              )
-        )
-      }
-      setCliInstallStatus(null)
-    } finally {
-      if (mountedRef.current) {
-        setCliLoading(false)
-      }
-    }
-  }, [mountedRef])
-
-  useEffect(() => {
-    void refreshCliStatus()
-  }, [refreshCliStatus])
-
-  const cliEnabled = isOrcaCliAvailableOnPath(cliInstallStatus)
-  const cliSupported = cliInstallStatus?.supported ?? false
-  const completedCount = [cliEnabled, cliSkillInstalled].filter(Boolean).length
-  const step2Blocked = !cliEnabled && !cliSkillInstalled
+  const setup = useMobileEmulatorAgentSetupState(true)
+  const cliSkillInstallCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)
+  const cliSkillUpdateCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)
 
   const handleEnableCli = async (): Promise<void> => {
-    setCliBusy(true)
-    try {
-      const next = await ensureOrcaCliAvailableForAgentSkillTerminal({
-        onStatusChange: setCliInstallStatus
-      })
-      if (mountedRef.current && isOrcaCliAvailableOnPath(next)) {
-        toast.success(
-          translate(
-            'auto.components.settings.MobileEmulatorAgentControlRow.cdeaed9e37',
-            'Registered the Orca CLI in PATH.'
-          )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setCliBusy(false)
-      }
-    }
+    await setup.handleEnableCli()
   }
 
   return (
@@ -130,18 +52,21 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
         </div>
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            completedCount === 2
+            setup.completedCount === 2
               ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
               : 'bg-muted text-muted-foreground'
           }`}
         >
-          {completedCount}/2
+          {setup.completedCount}/2
         </span>
       </div>
 
       <div className="mt-3 divide-y divide-border/40">
         <div className="flex items-start gap-3 py-3">
-          <StepBadge index={1} state={cliEnabled ? 'done' : cliBusy ? 'in-progress' : 'pending'} />
+          <StepBadge
+            index={1}
+            state={setup.cliEnabled ? 'done' : setup.cliBusy ? 'in-progress' : 'pending'}
+          />
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-sm font-medium">
               {translate(
@@ -155,17 +80,36 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
                 'Registers the Orca CLI command so agents can control the active emulator from their shell.'
               )}
             </p>
-            {cliInstallStatus?.commandPath && cliEnabled ? (
+            {setup.cliInstallStatus?.commandPath && setup.cliEnabled ? (
               <p className="text-[11px] text-muted-foreground">
                 {translate(
                   'auto.components.settings.MobileEmulatorAgentControlRow.aaf62a3dd2',
                   'Installed at'
                 )}{' '}
-                <code className="rounded bg-muted px-1 py-0.5">{cliInstallStatus.commandPath}</code>
+                <code className="rounded bg-muted px-1 py-0.5">
+                  {setup.cliInstallStatus.commandPath}
+                </code>
               </p>
             ) : null}
-            {!cliEnabled && cliInstallStatus?.detail ? (
-              <p className="text-[11px] text-muted-foreground">{cliInstallStatus.detail}</p>
+            {!setup.cliEnabled && setup.cliInstallStatus?.detail ? (
+              <p className="text-[11px] text-muted-foreground">{setup.cliInstallStatus.detail}</p>
+            ) : null}
+            {setup.cliBusy ? (
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                {translate(
+                  'auto.components.settings.MobileEmulatorAgentControlRow.3d34423e88',
+                  'Registering the Orca CLI'
+                )}{' '}
+                {setup.cliInstallStatus?.commandPath ? (
+                  <code className="rounded bg-muted px-1 py-0.5">
+                    {setup.cliInstallStatus.commandPath}
+                  </code>
+                ) : null}{' '}
+                {translate(
+                  'auto.components.settings.MobileEmulatorAgentControlRow.3be27641c9',
+                  'so emulator commands can run from agent shells.'
+                )}
+              </p>
             ) : null}
           </div>
           <TooltipProvider delayDuration={250}>
@@ -175,25 +119,29 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
                   <Button
                     type="button"
                     size="sm"
-                    variant={cliEnabled ? 'outline' : 'default'}
-                    disabled={cliLoading || cliBusy || !cliSupported || cliEnabled}
+                    variant={setup.cliEnabled ? 'outline' : 'default'}
+                    disabled={
+                      setup.cliLoading || setup.cliBusy || !setup.cliSupported || setup.cliEnabled
+                    }
                     onClick={() => void handleEnableCli()}
                   >
-                    {cliLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                    {getCliActionLabel(cliInstallStatus, cliBusy)}
+                    {setup.cliLoading || setup.cliBusy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : null}
+                    {setup.cliActionLabel}
                   </Button>
                 </span>
               </TooltipTrigger>
-              {!cliSupported && !cliLoading && cliInstallStatus?.detail ? (
+              {!setup.cliSupported && !setup.cliLoading && setup.cliInstallStatus?.detail ? (
                 <TooltipContent side="left" sideOffset={6}>
-                  {cliInstallStatus.detail}
+                  {setup.cliInstallStatus.detail}
                 </TooltipContent>
               ) : null}
             </Tooltip>
           </TooltipProvider>
         </div>
 
-        <div className={cn('py-3', step2Blocked && 'opacity-60')}>
+        <div className={cn('py-3', setup.step2Blocked && 'opacity-60')}>
           <AgentSkillSetupPanel
             variant="inline"
             title={translate(
@@ -204,22 +152,25 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               'auto.components.settings.MobileEmulatorAgentControlRow.d94ca6a623',
               'Enables agents to use Orca CLI commands, including mobile emulator control.'
             )}
-            command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+            command={cliSkillInstallCommand}
+            installedCommand={cliSkillUpdateCommand}
             terminalTitle="Orca CLI skill setup"
             terminalAriaLabel="Orca CLI skill install terminal"
             terminalWorktreeId="settings-mobile-emulator-orca-cli-skill-terminal"
-            installed={cliSkillInstalled}
-            loading={cliSkillLoading}
-            error={cliSkillError}
-            installDisabled={step2Blocked}
-            leading={<StepBadge index={2} state={cliSkillInstalled ? 'done' : 'pending'} />}
+            installed={setup.cliSkillInstalled}
+            loading={setup.cliSkillLoading}
+            error={setup.cliSkillError}
+            installDisabled={setup.step2Blocked}
+            leading={<StepBadge index={2} state={setup.cliSkillInstalled ? 'done' : 'pending'} />}
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+            openingHint={translate(
+              'auto.components.settings.MobileEmulatorAgentControlRow.3941719a56',
+              'Checking Orca CLI before opening skill setup.'
+            )}
             onBeforeOpenTerminal={async () => {
-              await ensureOrcaCliAvailableForAgentSkillTerminal({
-                onStatusChange: setCliInstallStatus
-              })
+              await ensureOrcaCliAvailableForAgentSkillTerminal()
             }}
-            onRecheck={refreshCliSkill}
+            onRecheck={setup.refreshCliSkill}
           />
         </div>
 

@@ -5,8 +5,8 @@
  * These functions have no side-effects and depend only on their arguments,
  * making them easy to test independently.
  */
-import * as path from 'path'
-import { existsSync } from 'fs'
+import { existsSync } from 'node:fs'
+import * as path from 'node:path'
 import { isBinaryBuffer } from '../shared/binary-buffer'
 import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
 
@@ -147,10 +147,20 @@ function getErrorText(error: unknown): string {
   return String(error)
 }
 
+function getErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
+}
+
 export function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
-    getErrorText(error)
-  )
+  // `-z` is this command's only flag older Git (<2.36) lacks, so its usage exit
+  // 129 signals the rejection in any locale; key for SSH remotes on old Git.
+  if (getErrorCode(error) === '129') {
+    return true
+  }
+
+  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(getErrorText(error))
 }
 
 export function parseWorktreeList(
@@ -252,36 +262,4 @@ export function bufferToBlob(
     return { content: previewable ? buffer.toString('base64') : '', isBinary: true }
   }
   return { content: buffer.toString('utf-8'), isBinary: false }
-}
-
-/**
- * Build a diff result object from original/modified content.
- * Used by both working-tree diffs and branch diffs.
- */
-export function buildDiffResult(
-  originalContent: string,
-  modifiedContent: string,
-  originalIsBinary: boolean,
-  modifiedIsBinary: boolean,
-  filePath?: string
-) {
-  if (originalIsBinary || modifiedIsBinary) {
-    const ext = filePath ? path.extname(filePath).toLowerCase() : ''
-    const mimeType = PREVIEWABLE_MIME[ext]
-    return {
-      kind: 'binary' as const,
-      originalContent,
-      modifiedContent,
-      originalIsBinary,
-      modifiedIsBinary,
-      ...(mimeType ? { isImage: true, mimeType } : {})
-    }
-  }
-  return {
-    kind: 'text' as const,
-    originalContent,
-    modifiedContent,
-    originalIsBinary: false,
-    modifiedIsBinary: false
-  }
 }

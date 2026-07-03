@@ -33,9 +33,13 @@ describe('parseOsc52', () => {
   })
 
   it('tolerates whitespace in the base64 payload', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
     const encoded = b64('multi-line data that got wrapped')
     const wrapped = `${encoded.slice(0, 10)}\n${encoded.slice(10)}`
     const result = parseOsc52(`c;${wrapped}`)
+    const replaceCalls = replaceSpy.mock.calls.length
+
+    expect(replaceCalls).toBe(0)
     expect(result).toEqual({
       kind: 'write',
       selections: 'c',

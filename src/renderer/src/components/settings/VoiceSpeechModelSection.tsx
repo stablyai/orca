@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { toast } from 'sonner'
 import type { VoiceSettings } from '../../../../shared/speech-types'
 import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
@@ -29,6 +30,7 @@ export function VoiceSpeechModelSection({
   onOpenOpenAiDialog,
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
+  const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<Set<string>>(() => new Set())
   const getModelState = (id: string): SpeechModelState | undefined =>
     modelStates.find((s) => s.id === id)
 
@@ -73,6 +75,7 @@ export function VoiceSpeechModelSection({
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
             const isCloud = manifest.provider === 'openai'
+            const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
             return (
@@ -146,10 +149,34 @@ export function VoiceSpeechModelSection({
                     {manifest.description}
                   </p>
                 </div>
-                {!isCloud && isReady && !isActive ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
+                {!isCloud && isReady ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={translate(
+                      'auto.components.settings.VoicePane.6fa734ed95',
+                      'Delete {{value0}}',
+                      {
+                        value0: manifest.label
+                      }
+                    )}
+                    disabled={deletePending}
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      if (deletePending) {
+                        return
+                      }
+                      setPendingDeleteModelIds((prev) => {
+                        const next = new Set(prev)
+                        next.add(manifest.id)
+                        return next
+                      })
                       void window.api.speech
                         .deleteModel(manifest.id)
                         .then(onRefreshModelStates)
@@ -161,13 +188,24 @@ export function VoiceSpeechModelSection({
                             )
                           )
                         )
+                        .finally(() =>
+                          setPendingDeleteModelIds((prev) => {
+                            const next = new Set(prev)
+                            next.delete(manifest.id)
+                            return next
+                          })
+                        )
                     }}
-                    className="shrink-0 p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all rounded"
+                    className="shrink-0 text-muted-foreground can-hover:opacity-0 group-hover:opacity-100 hover:text-destructive disabled:opacity-60 disabled:hover:text-muted-foreground"
                   >
-                    <Trash2 className="size-3" />
-                  </button>
+                    {deletePending ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3" />
+                    )}
+                  </Button>
                 ) : !isCloud && !isReady && !isDownloading ? (
-                  <span className="shrink-0 p-1 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="shrink-0 p-1 text-muted-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity">
                     <Download className="size-3" />
                   </span>
                 ) : null}

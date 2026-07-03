@@ -7,16 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 
 const prefersReducedMotionMock = vi.hoisted(() => vi.fn(() => false))
-const shortcutKeysMock = vi.hoisted(() => vi.fn(() => ['⌘', 'J']))
-const formatShortcutKeysMock = vi.hoisted(() => vi.fn(() => ['⌘', 'J']))
+const shortcutMock = vi.hoisted(() => vi.fn(() => ({ keys: ['⌘', 'J'], doubleTap: false })))
+const formatShortcutMock = vi.hoisted(() => vi.fn(() => [{ keys: ['⌘', 'J'], doubleTap: false }]))
 
 vi.mock('@/components/feature-wall/feature-wall-modal-helpers', () => ({
   usePrefersReducedMotion: prefersReducedMotionMock
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutKeys: shortcutKeysMock,
-  formatShortcutKeys: formatShortcutKeysMock
+  useShortcutKeyDetails: shortcutMock,
+  formatShortcutKeyComboDetails: formatShortcutMock
 }))
 
 async function renderVisual(): Promise<{ container: HTMLDivElement; root: Root }> {
@@ -34,8 +34,8 @@ async function renderVisual(): Promise<{ container: HTMLDivElement; root: Root }
 describe('CmdJPaletteFeatureTipVisual', () => {
   beforeEach(() => {
     prefersReducedMotionMock.mockReturnValue(false)
-    shortcutKeysMock.mockReturnValue(['⌘', 'J'])
-    formatShortcutKeysMock.mockReturnValue(['⌘', 'J'])
+    shortcutMock.mockReturnValue({ keys: ['⌘', 'J'], doubleTap: false })
+    formatShortcutMock.mockReturnValue([{ keys: ['⌘', 'J'], doubleTap: false }])
   })
 
   afterEach(() => {
@@ -53,6 +53,7 @@ describe('CmdJPaletteFeatureTipVisual', () => {
     expect(html).toContain('auth-redirect')
     expect(html).not.toContain('payments-api')
     expect(html).not.toContain('animate-spin')
+    expect(html).not.toContain('animate-cmd-j-tip-caret')
     expect(html).not.toContain('animate-cmd-j-tip-result-in')
   })
 
@@ -83,13 +84,38 @@ describe('CmdJPaletteFeatureTipVisual', () => {
     expect(clearTimeoutSpy).toHaveBeenCalled()
   })
 
+  it('settles after the one-shot demo instead of looping idle timers', async () => {
+    vi.useFakeTimers()
+
+    const { container, root } = await renderVisual()
+    await act(async () => {
+      vi.runAllTimers()
+    })
+
+    expect(container.textContent).toContain('auth')
+    expect(container.textContent).toContain('auth-redirect')
+    expect(container.textContent).not.toContain('payments-api')
+    expect(vi.getTimerCount()).toBe(0)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('does not render infinite animation classes in the default preview', () => {
+    const html = renderToStaticMarkup(<CmdJPaletteFeatureTipVisual />)
+
+    expect(html).not.toContain('animate-spin')
+    expect(html).not.toContain('animate-cmd-j-tip-caret')
+  })
+
   it('falls back to default per-key chips when the live binding is unassigned', () => {
-    shortcutKeysMock.mockReturnValue([])
-    formatShortcutKeysMock.mockReturnValue(['Ctrl', 'Shift', 'J'])
+    shortcutMock.mockReturnValue({ keys: [], doubleTap: false })
+    formatShortcutMock.mockReturnValue([{ keys: ['Ctrl', 'Shift', 'J'], doubleTap: false }])
 
     const html = renderToStaticMarkup(<CmdJPaletteFeatureTipVisual />)
 
-    expect(formatShortcutKeysMock).toHaveBeenCalledWith('worktree.palette')
+    expect(formatShortcutMock).toHaveBeenCalledWith('worktree.palette')
     expect(html).toContain('Ctrl')
     expect(html).toContain('Shift')
     expect(html).toContain('J')
@@ -104,12 +130,21 @@ describe('CmdJPaletteFeatureTipVisual', () => {
   })
 
   it('renders the live binding as separate shortcut key chips with plus separators', () => {
-    shortcutKeysMock.mockReturnValue(['⌘', 'J'])
+    shortcutMock.mockReturnValue({ keys: ['⌘', 'J'], doubleTap: false })
 
     const html = renderToStaticMarkup(<CmdJPaletteFeatureTipVisual />)
 
     expect(html).toContain('⌘')
     expect(html).toContain('J')
     expect(html).toContain('+')
+  })
+
+  it('renders double-tap shortcut chips without plus separators', () => {
+    shortcutMock.mockReturnValue({ keys: ['⇧', '⇧'], doubleTap: true })
+
+    const html = renderToStaticMarkup(<CmdJPaletteFeatureTipVisual />)
+
+    expect(html).toContain('⇧')
+    expect(html).not.toContain('+')
   })
 })

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES,
   AI_VAULT_SESSION_DRAG_TYPE,
   clearAiVaultSessionDragData,
   hasAiVaultSessionDragData,
@@ -46,7 +47,14 @@ describe('Session History session drag data', () => {
       agent: 'claude',
       sessionId: 'session-1',
       title: 'Fix terminal split',
-      command: "cd '/repo' && claude --resume session-1"
+      command: "cd '/repo' && claude --resume session-1",
+      sessionFilePath: '/Users/ada/.claude/projects/-repo/session-1.jsonl',
+      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      launchConfig: {
+        agentCommand: 'claude --dangerously-skip-permissions',
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+      }
     }
 
     writeAiVaultSessionDragData(transfer, payload)
@@ -54,6 +62,24 @@ describe('Session History session drag data', () => {
     expect(transfer.effectAllowed).toBe('copy')
     expect(hasAiVaultSessionDragData(transfer)).toBe(true)
     expect(readAiVaultSessionDragData(transfer)).toEqual(payload)
+  })
+
+  it('rejects blank session file paths', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'claude',
+        sessionId: 'session-1',
+        title: 'Blank session file path',
+        command: 'claude --resume session-1',
+        sessionFilePath: '   '
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
   })
 
   it('rejects malformed payloads', () => {
@@ -64,6 +90,78 @@ describe('Session History session drag data', () => {
     )
 
     expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects array-shaped env records', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'claude',
+        sessionId: 'session-1',
+        title: 'Malformed env',
+        command: 'claude --resume session-1',
+        env: ['ANTHROPIC_BASE_URL=https://claude.example.test']
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects array-shaped launch config env records', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'claude',
+        sessionId: 'session-1',
+        title: 'Malformed launch config env',
+        command: 'claude --resume session-1',
+        launchConfig: {
+          agentArgs: '',
+          agentEnv: ['ANTHROPIC_BASE_URL=https://claude.example.test']
+        }
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects oversized serialized payloads before parsing', () => {
+    const transfer = createTransfer()
+    const secret = 'ai-vault-drag-secret'
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      secret + 'x'.repeat(AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES)
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects multibyte oversized payloads before parsing', () => {
+    const transfer = createTransfer()
+    transfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '😀'.repeat(4097))
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('does not retain an oversized internal payload for the hidden-data fallback', () => {
+    const source = createTransfer()
+    writeAiVaultSessionDragData(source, {
+      agent: 'claude',
+      sessionId: 'session-oversized',
+      title: 'Oversized payload',
+      command: 'x'.repeat(AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES)
+    })
+
+    const dropTransfer = new TypeOnlyDataTransfer() as unknown as DataTransfer
+    dropTransfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '')
+
+    expect(readAiVaultSessionDragData(dropTransfer)).toBeNull()
   })
 
   it('falls back to the active renderer drag payload when Chromium hides custom data', () => {

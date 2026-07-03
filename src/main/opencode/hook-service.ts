@@ -3,7 +3,7 @@
    file; splitting the plugin source across TS modules would obscure the
    runtime artifact and scatter tightly coupled string-template logic. */
 import { app } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import {
   existsSync,
   mkdirSync,
@@ -13,8 +13,8 @@ import {
   statSync,
   unlinkSync,
   writeFileSync
-} from 'fs'
-import { createHash } from 'crypto'
+} from 'node:fs'
+import { createHash } from 'node:crypto'
 import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
@@ -58,7 +58,11 @@ function toSafeDirName(id: string): string {
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
-function getOpenCodePluginSource(): string {
+export function getOpenCodePluginSource(): string {
+  return getOpenCodeFamilyPluginSource('/hook/opencode')
+}
+
+export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
   // Why: the plugin runs inside the OpenCode Node process and POSTs to the
   // unified agent-hooks server shared with Claude/Codex/Gemini. It reads the
   // same ORCA_PANE_KEY / ORCA_TAB_ID / ORCA_WORKTREE_ID / ORCA_AGENT_HOOK_*
@@ -260,9 +264,10 @@ function getOpenCodePluginSource(): string {
     '  const coords = resolveHookCoords();',
     '  const paneKey = process.env.ORCA_PANE_KEY;',
     '  if (!coords.port || !coords.token || !paneKey) return;',
-    '  const url = `http://127.0.0.1:${coords.port}/hook/opencode`;',
+    `  const url = \`http://127.0.0.1:\${coords.port}${hookPathname}\`;`,
     '  const body = JSON.stringify({',
     '    paneKey,',
+    '    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || "",',
     '    tabId: process.env.ORCA_TAB_ID || "",',
     '    worktreeId: process.env.ORCA_WORKTREE_ID || "",',
     '    env: coords.env,',

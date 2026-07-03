@@ -28,7 +28,10 @@ export function deriveTaskPagePRCheckSummary(checks: PRCheckDetail[]): GitHubPRC
     } else if (
       conclusion === 'failure' ||
       conclusion === 'timed_out' ||
-      conclusion === 'cancelled'
+      conclusion === 'cancelled' ||
+      // Why: action_required (e.g. a workflow awaiting approval) blocks merge; it
+      // must count as failed so the summary never reads "passing" while blocked.
+      conclusion === 'action_required'
     ) {
       failed += 1
     } else if (isPendingCheck(check)) {

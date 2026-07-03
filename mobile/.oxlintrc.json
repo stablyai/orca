@@ -10,7 +10,8 @@
     "prefer-template": "off",
     "no-useless-return": "off",
     "unicorn/prefer-at": "off",
-    "unicorn/prefer-ternary": "off"
+    "unicorn/prefer-ternary": "off",
+    "unicorn/prefer-node-protocol": "off"
   },
   "overrides": [
     {
@@ -22,19 +23,25 @@
     {
       "files": ["app/h/*/session/*.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 4988, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 5015, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
       "files": ["src/terminal/TerminalWebView.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 2054, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 379, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["src/terminal/terminal-webview-html.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1778, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
       "files": ["app/h/*/source-control/*.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 2004, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 2152, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
@@ -52,7 +59,7 @@
     {
       "files": ["app/index.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 1419, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 1422, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

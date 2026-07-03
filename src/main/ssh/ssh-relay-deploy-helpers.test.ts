@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
@@ -173,6 +173,25 @@ describe('execCommand', () => {
     expect(channel.stderr.listenerCount('data')).toBe(0)
   })
 
+  it('includes stdout in nonzero-exit errors when stderr is empty', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'npm install node-pty 2>&1')
+
+    await Promise.resolve()
+    channel.emit('data', Buffer.from('gyp ERR! stack Error: not found: make\n'))
+    channel.emit('close', 1)
+
+    await expect(commandPromise).rejects.toThrow('gyp ERR! stack Error: not found: make')
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
   it('cleans command channel listeners when a command times out', async () => {
     vi.useFakeTimers()
     try {
@@ -196,6 +215,55 @@ describe('execCommand', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('closes and rejects with AbortError when a command is aborted', async () => {
+    const channel = createMockChannel()
+    const controller = new AbortController()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'sleep 60', {
+      signal: controller.signal
+    })
+
+    await Promise.resolve()
+    controller.abort()
+
+    await expect(commandPromise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(channel.close).toHaveBeenCalledOnce()
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('handles aborts that happen while the SSH exec channel is still opening', async () => {
+    const channel = createMockChannel()
+    const controller = new AbortController()
+    let resolveExec: (channel: ClientChannel) => void = () => {}
+    const conn = {
+      exec: vi.fn().mockReturnValue(
+        new Promise<ClientChannel>((resolve) => {
+          resolveExec = resolve
+        })
+      )
+    }
+
+    const commandPromise = execCommand(conn as never, 'sleep 60', {
+      signal: controller.signal
+    })
+    controller.abort()
+    resolveExec(channel)
+
+    await expect(commandPromise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(channel.close).toHaveBeenCalledOnce()
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
   })
 
   it('uses custom command timeouts without forwarding them to SSH exec', async () => {

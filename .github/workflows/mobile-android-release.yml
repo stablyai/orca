@@ -1,0 +1,131 @@
+name: Mobile Android Release
+
+# Why a separate workflow from iOS: iOS releases go through App Store review,
+# which can take days. Decoupling the triggers lets an Android release ship
+# immediately without waiting on iOS, and vice versa.
+on:
+  push:
+    tags:
+      - 'mobile-android-v*'
+  workflow_dispatch:
+    inputs:
+      bump_patch_version:
+        description: 'Bump the mobile marketing version patch number before release'
+        required: false
+        default: false
+        type: boolean
+      release_version:
+        description: 'Optional exact mobile marketing version override, e.g. 0.0.15'
+        required: false
+        type: string
+      bump_android_version_code:
+        description: 'Increment the Android versionCode before release'
+        required: false
+        default: false
+        type: boolean
+      android_version_code:
+        description: 'Optional exact Android versionCode override'
+        required: false
+        type: string
+      publish_github_release:
+        description: 'Create or update the mobile-android-v<version> GitHub Release'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  android-build:
+    runs-on: ubuntu-latest
+
+    # Why: the "Create GitHub Release" step below uses the default GITHUB_TOKEN
+    # to call `gh release create`, which requires contents:write. Without this,
+    # the job builds the APK fine but fails at release time with
+    # "HTTP 403: Resource not accessible by integration".
+    permissions:
+      contents: write
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve release version and version code
+        id: release
+        env:
+          MOBILE_ANDROID_RELEASE_VERSION: ${{ github.event.inputs.release_version }}
+          MOBILE_ANDROID_BUMP_PATCH_VERSION: ${{ github.event.inputs.bump_patch_version }}
+          MOBILE_ANDROID_VERSION_CODE: ${{ github.event.inputs.android_version_code }}
+          MOBILE_ANDROID_BUMP_VERSION_CODE: ${{ github.event.inputs.bump_android_version_code }}
+          MOBILE_ANDROID_PUBLISH_RELEASE: ${{ github.event.inputs.publish_github_release }}
+        run: node scripts/prepare-android-release.mjs
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Expo prebuild
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build Android release APK
+        run: cd android && ./gradlew assembleRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-mobile-apk
+          path: mobile/android/app/build/outputs/apk/release/*.apk
+
+      - name: Ensure GitHub release tag
+        if: steps.release.outputs.publish_release == 'true' && !startsWith(github.ref, 'refs/tags/mobile-android-v')
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists"
+            exit 0
+          fi
+
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag"
+
+      - name: Create GitHub Release
+        if: steps.release.outputs.publish_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber \
+              android/app/build/outputs/apk/release/*.apk
+          else
+            gh release create "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Orca Mobile Android $tag" \
+              --prerelease \
+              --latest=false \
+              --generate-notes \
+              android/app/build/outputs/apk/release/*.apk
+          fi

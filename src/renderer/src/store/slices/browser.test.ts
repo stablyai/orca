@@ -619,6 +619,45 @@ describe('createBrowserSlice runtime guard', () => {
     expect(tab.sessionProfileId).toBe('remote-default')
   })
 
+  it('stores a runtime-resolved browser partition without a renderer profile mirror', () => {
+    const store = createTestStore()
+    store.setState({ browserSessionProfiles: [] })
+
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      sessionProfileId: 'profile-isolated',
+      sessionPartition: 'persist:orca-browser-session-profile-isolated'
+    })
+
+    expect(tab.sessionProfileId).toBe('profile-isolated')
+    expect(tab.sessionPartition).toBe('persist:orca-browser-session-profile-isolated')
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]?.sessionPartition).toBe(
+      'persist:orca-browser-session-profile-isolated'
+    )
+  })
+
+  it('stores a runtime-resolved partition when switching browser tab profiles', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      sessionProfileId: null,
+      sessionPartition: 'persist:orca-browser'
+    })
+
+    store
+      .getState()
+      .switchBrowserTabProfile(
+        tab.id,
+        'profile-isolated',
+        'persist:orca-browser-session-profile-isolated'
+      )
+
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toEqual(
+      expect.objectContaining({
+        sessionProfileId: 'profile-isolated',
+        sessionPartition: 'persist:orca-browser-session-profile-isolated'
+      })
+    )
+  })
+
   it('creates new browser tabs through the owning runtime for desktop remote worktrees', async () => {
     const store = createTestStore()
     store.setState({
@@ -674,8 +713,11 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
   })
 
-  it('creates a local fallback tab when runtime browser creation fails', async () => {
+  it('does not create a local fallback tab when remote browser creation fails', async () => {
     const store = createTestStore()
+    // Why: a remote-owned workspace must stay remote-owned. If the remote host
+    // cannot create the page, we must NOT silently open a local desktop tab —
+    // that produces confusing split ownership (issue #5321 UX requirement).
     createWebRuntimeSessionBrowserTabMock.mockResolvedValueOnce(false)
     store.setState({
       activeWorktreeId: 'wt-remote',
@@ -690,19 +732,26 @@ describe('createBrowserSlice runtime guard', () => {
       url: 'about:blank',
       targetGroupId: 'group-1'
     })
-    expect(store.getState().createUnifiedTab).toHaveBeenCalledWith(
-      'wt-remote',
-      'browser',
-      expect.objectContaining({ targetGroupId: 'group-1' })
+    // No local tab created, no unified tab, no feature interaction recorded.
+    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
+    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
+    expect(store.getState().recordFeatureInteraction).not.toHaveBeenCalledWith(
+      'browser-tab-created'
     )
-    const [tab] = store.getState().browserTabsByWorktree['wt-remote'] ?? []
-    expect(tab).toBeDefined()
-    expect(store.getState().browserPagesByWorkspace[tab!.id]?.[0]).toMatchObject({
-      browserRuntimeEnvironmentId: null,
-      url: 'about:blank',
-      title: 'New Tab'
+  })
+
+  it('does not create a local fallback tab when remote browser creation throws', async () => {
+    const store = createTestStore()
+    createWebRuntimeSessionBrowserTabMock.mockRejectedValueOnce(new Error('remote down'))
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
     })
-    expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
+    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
   })
 
   it('does not import local browser cookies while a runtime environment is active', async () => {

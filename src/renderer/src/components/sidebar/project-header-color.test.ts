@@ -39,6 +39,16 @@ describe('resolveProjectGroupHeaderColor', () => {
     ).toBe(REPO_COLORS[5])
   })
 
+  it('returns the repo color for provider-backed project headers', () => {
+    expect(
+      resolveProjectGroupHeaderColor({
+        groupBy: 'repo',
+        headerKey: 'project:github:stablyai/orca',
+        badgeColor: REPO_COLORS[6]
+      })
+    ).toBe(REPO_COLORS[6])
+  })
+
   it('falls back to gray for unknown project group headers', () => {
     expect(
       resolveProjectGroupHeaderColor({

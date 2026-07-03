@@ -4,14 +4,14 @@ fixture setup and mock plumbing can be shared. Splitting by line count would
 duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
 setup. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { EventEmitter } from 'events'
-import { existsSync } from 'fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { EventEmitter } from 'node:events'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
-import { isGitRepo } from '../git/repo'
+import { getGitRepoRoot, isGitRepo } from '../git/repo'
 
 const {
   handleMock,
@@ -19,7 +19,10 @@ const {
   mockGitProvider,
   mockFilesystemProvider,
   mockMultiplexer,
-  gitSpawnMock
+  gitSpawnMock,
+  listWorktreeGraphMock,
+  invalidateAuthorizedRootsCacheMock,
+  prepareLocalWorktreeRootForRepoMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   mockStore: {
@@ -28,6 +31,9 @@ const {
     removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn(),
+    getProjects: vi.fn().mockReturnValue([]),
+    getProjectHostSetups: vi.fn().mockReturnValue([]),
+    updateProjectHostSetup: vi.fn(),
     getProjectGroups: vi.fn().mockReturnValue([]),
     createProjectGroup: vi.fn(),
     updateProjectGroup: vi.fn(),
@@ -40,6 +46,7 @@ const {
     isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null }),
     exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
     clone: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+    listWorktrees: vi.fn().mockResolvedValue([]),
     getHostPlatform: vi.fn().mockReturnValue({
       relayPlatform: 'linux-x64',
       os: 'linux',
@@ -62,7 +69,10 @@ const {
     request: vi.fn(),
     notify: vi.fn()
   },
-  gitSpawnMock: vi.fn()
+  gitSpawnMock: vi.fn(),
+  listWorktreeGraphMock: vi.fn(),
+  invalidateAuthorizedRootsCacheMock: vi.fn(),
+  prepareLocalWorktreeRootForRepoMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -83,6 +93,7 @@ vi.mock('../git/repo', async () => {
     ...actual,
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo: vi.fn().mockReturnValue(true),
+    getGitRepoRoot: vi.fn((path: string) => path),
     getGitUsername: vi.fn().mockReturnValue(''),
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
@@ -96,8 +107,16 @@ vi.mock('../git/runner', () => ({
   gitSpawn: gitSpawnMock
 }))
 
+vi.mock('../git/worktree', () => ({
+  listWorktreeGraph: listWorktreeGraphMock
+}))
+
 vi.mock('./filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+}))
+
+vi.mock('../worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -147,6 +166,10 @@ describe('projectGroups IPC validation', () => {
     mockStore.updateProjectGroup.mockReset()
     mockStore.deleteProjectGroup.mockReset()
     mockStore.moveProjectToGroup.mockReset()
+    mockStore.addRepo.mockReset()
+    mockStore.getProjects.mockReset().mockReturnValue([])
+    mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
+    mockStore.updateProjectHostSetup.mockReset()
     mockStore.getRepos.mockReset()
     mockStore.getRepos.mockReturnValue([])
     mockFilesystemProvider.readDir.mockReset()
@@ -157,10 +180,18 @@ describe('projectGroups IPC validation', () => {
     mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
     mockGitProvider.isGitRepoAsync.mockReset()
     mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    mockGitProvider.listWorktrees.mockReset()
+    mockGitProvider.listWorktrees.mockResolvedValue([])
+    listWorktreeGraphMock.mockReset()
+    listWorktreeGraphMock.mockResolvedValue([])
     vi.mocked(isGitRepo).mockReset()
     vi.mocked(isGitRepo).mockReturnValue(true)
+    vi.mocked(getGitRepoRoot).mockReset()
+    vi.mocked(getGitRepoRoot).mockImplementation((path: string) => path)
     mockMultiplexer.notify.mockReset()
     mockMultiplexer.request.mockReset()
+    invalidateAuthorizedRootsCacheMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -627,6 +658,75 @@ describe('projectGroups IPC validation', () => {
     })
   })
 
+  it('resolves SSH linked worktree imports through the SSH provider worktree graph', async () => {
+    const selectedPath = '/srv/platform/demo/brash-binder'
+    const secondSelectedPath = '/srv/platform/demo/quick-howler'
+    const mainPath = '/srv/source/demo-project'
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === selectedPath || path === secondSelectedPath,
+      rootPath: '/srv/provider/root'
+    }))
+    mockGitProvider.listWorktrees.mockResolvedValue([
+      {
+        path: mainPath,
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: selectedPath,
+        head: 'feature-head',
+        branch: 'refs/heads/brash-binder',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: secondSelectedPath,
+        head: 'feature-head',
+        branch: 'refs/heads/quick-howler',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === `${selectedPath}/.git` || path === `${secondSelectedPath}/.git`) {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform/demo'
+        ? [
+            { name: 'brash-binder', isDirectory: true, isSymlink: false },
+            { name: 'quick-howler', isDirectory: true, isSymlink: false }
+          ]
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform/demo',
+      groupName: '',
+      projectPaths: [selectedPath, secondSelectedPath],
+      connectionId: 'conn-1',
+      mode: 'separate'
+    })
+
+    expect(result).toMatchObject({ importedCount: 1, alreadyKnownCount: 1, failedCount: 0 })
+    expect(mockGitProvider.listWorktrees).toHaveBeenCalledWith(selectedPath)
+    expect(mockGitProvider.listWorktrees).toHaveBeenCalledTimes(1)
+    expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: mainPath,
+        connectionId: 'conn-1'
+      })
+    )
+    expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
+      rootPath: mainPath
+    })
+  })
+
   it('imports a small selection from a large nested SSH scan', async () => {
     const group = {
       id: 'group-1',
@@ -693,6 +793,67 @@ describe('projectGroups IPC validation', () => {
     )
   })
 
+  it('imports selected local linked worktrees as one project rooted at the main worktree', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-nested-linked-worktrees-'))
+    try {
+      const parentPath = join(tempRoot, 'paseo-worktrees', 'demo-project')
+      const mainPath = join(tempRoot, 'source', 'demo-project')
+      const firstWorktreePath = join(parentPath, 'brash-binder')
+      const secondWorktreePath = join(parentPath, 'quick-howler')
+      await mkdir(join(firstWorktreePath, '.git'), { recursive: true })
+      await mkdir(join(secondWorktreePath, '.git'), { recursive: true })
+      await mkdir(mainPath, { recursive: true })
+      vi.mocked(isGitRepo).mockReturnValue(false)
+      vi.mocked(isGitRepo).mockImplementation((path: string) =>
+        [firstWorktreePath, secondWorktreePath, mainPath].includes(path)
+      )
+      listWorktreeGraphMock.mockResolvedValue([
+        {
+          path: mainPath,
+          head: 'main-head',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: firstWorktreePath,
+          head: 'feature-head',
+          branch: 'refs/heads/brash-binder',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          path: secondWorktreePath,
+          head: 'feature-head',
+          branch: 'refs/heads/quick-howler',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+      const result = await handlers.get('projectGroups:importNested')!(null, {
+        parentPath,
+        groupName: '',
+        projectPaths: [firstWorktreePath, secondWorktreePath],
+        mode: 'separate'
+      })
+
+      expect(result).toMatchObject({
+        importedCount: 1,
+        alreadyKnownCount: 1,
+        failedCount: 0
+      })
+      expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+      expect(mockStore.addRepo).toHaveBeenCalledWith(expect.objectContaining({ path: mainPath }))
+      expect(listWorktreeGraphMock).toHaveBeenCalledTimes(1)
+      expect((result as { projects: { projectId?: string }[] }).projects[0].projectId).toBe(
+        (result as { projects: { projectId?: string }[] }).projects[1].projectId
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('sanitizes unexpected nested import errors before returning results', async () => {
     const group = {
       id: 'group-1',
@@ -752,6 +913,7 @@ describe('repos:getGitUsername', () => {
     mockStore.getRepo.mockReset()
     mockGitProvider.exec.mockReset()
     mockWindow.webContents.send.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -845,6 +1007,7 @@ describe('repos:addRemote', () => {
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -1543,8 +1706,13 @@ describe('repos:add + repos:clone', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
     mockStore.updateRepo.mockReset()
+    mockStore.getProjects.mockReset().mockReturnValue([])
+    mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
+    mockStore.updateProjectHostSetup.mockReset()
     mockWindow.webContents.send.mockReset()
     gitSpawnMock.mockReset()
+    invalidateAuthorizedRootsCacheMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = createMockCloneProcess()
       queueMicrotask(() => proc.emit('close', 0, null))
@@ -1582,6 +1750,52 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
   })
 
+  it('prepares the worktree root when adding a local git repo', async () => {
+    await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'git' })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(
+      mockStore,
+      expect.objectContaining({ path: '/tmp/from-add', kind: 'git' })
+    )
+  })
+
+  it('canonicalizes local git repos:add to the detected root path', async () => {
+    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add/packages/web',
+      kind: 'git'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/tmp/from-add',
+        displayName: 'from-add'
+      })
+    )
+    expect(result).toHaveProperty('repo.path', '/tmp/from-add')
+  })
+
+  it('dedupes local git repos:add after canonical root resolution', async () => {
+    const existing = {
+      id: 'repo-add-existing-root',
+      path: '/tmp/from-add',
+      displayName: 'from-add',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add/packages/web',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({ repo: existing })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
   it('returns existing badgeColor unchanged on repos:add dedupe', async () => {
     const existing = {
       id: 'repo-add-existing',
@@ -1601,6 +1815,132 @@ describe('repos:add + repos:clone', () => {
     expect(result).toEqual({ repo: existing })
     expect(result).toHaveProperty('repo.badgeColor', '#22c55e')
     expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'show')
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prepares the worktree root when repos:add returns an existing local git repo', async () => {
+    const existing = {
+      id: 'repo-add-existing-git',
+      path: '/tmp/from-add-existing-git',
+      displayName: 'from-add-existing-git',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add-existing-git',
+      kind: 'git'
+    })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, existing)
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prepares the aligned worktree root when project setup uses an existing local git repo', async () => {
+    const existing = {
+      id: 'repo-setup-existing-git',
+      path: '/tmp/from-setup-existing-git',
+      displayName: 'from-setup-existing-git',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const aligned = { ...existing, projectHostSetupMethod: 'imported-existing-folder' }
+    const project = { id: 'project-1', displayName: 'Project' }
+    const setup = {
+      id: 'setup-1',
+      projectId: project.id,
+      repoId: existing.id,
+      hostId: 'local',
+      path: existing.path,
+      displayName: existing.displayName,
+      setupState: 'ready',
+      setupMethod: 'imported-existing-folder'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getProjects.mockReturnValue([project])
+    mockStore.getProjectHostSetups.mockReturnValue([setup])
+    mockStore.updateRepo.mockReturnValue(aligned)
+
+    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: project.id,
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, aligned)
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prepares and invalidates roots when repos:update changes worktree base path', () => {
+    const updated = {
+      id: 'repo-update-root',
+      path: '/tmp/repo-update-root',
+      displayName: 'repo-update-root',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      worktreeBasePath: '../worktrees'
+    }
+    mockStore.updateRepo.mockReturnValue(updated)
+
+    const result = handlers.get('repos:update')!(null, {
+      repoId: updated.id,
+      updates: { worktreeBasePath: ' ../worktrees ' }
+    })
+
+    expect(result).toBe(updated)
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+      worktreeBasePath: '../worktrees'
+    })
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, updated)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
+  it('prepares and invalidates roots when project host setup update changes worktree base path', () => {
+    const repo = {
+      id: 'repo-setup-update-root',
+      path: '/tmp/repo-setup-update-root',
+      displayName: 'repo-setup-update-root',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      worktreeBasePath: '../worktrees'
+    }
+    const result = {
+      project: { id: 'project-1', displayName: 'Project' },
+      setup: { id: 'setup-1', projectId: 'project-1', repoId: repo.id, hostId: 'local' },
+      repo
+    }
+    mockStore.updateProjectHostSetup.mockReturnValue(result)
+
+    expect(
+      handlers.get('projectHostSetups:update')!(null, {
+        setupId: 'setup-1',
+        updates: { worktreeBasePath: '../worktrees' }
+      })
+    ).toBe(result)
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, repo)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
+  it('dedupes repos:add by normalized local path on Windows', async () => {
+    const existing = {
+      id: 'repo-add-windows-existing',
+      path: 'C:\\Users\\Ava\\Repo',
+      displayName: 'Repo',
+      kind: 'folder',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: 'c:/Users/Ava/Repo',
+      kind: 'folder'
+    })
+
+    expect(result).toEqual({ repo: existing })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -1651,6 +1991,8 @@ describe('repos:add + repos:clone', () => {
     })
     expect(result).toEqual(upgraded)
     expect(result).toHaveProperty('badgeColor', '#8b5cf6')
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, upgraded)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -2021,6 +2363,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     // Reset exec to default: later SSH tests replace this with custom mocks, and
     // without this reset any future test added to this block would inherit the
     // last test's exec mock — latent fragility we guard against here.
@@ -2208,6 +2551,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -2399,17 +2743,22 @@ describe('repos:searchBaseRefs SSH relay', () => {
 
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream/main' })
 
-    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv] = mockGitProvider.exec.mock.calls.find(
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(3)
+    const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
-    )!
-    expect(argv).toContain('refs/remotes/*upstream*/*main*')
-    expect(argv).toContain('refs/heads/*upstream*/*main*')
+    )
+    expect(forEachRefCalls).toHaveLength(2)
+    const segmentedArgv = forEachRefCalls[0][0] as string[]
+    const branchRootArgv = forEachRefCalls[1][0] as string[]
+    expect(segmentedArgv).toContain('refs/remotes/*upstream*/*main*')
+    expect(segmentedArgv).toContain('refs/heads/*upstream*/*main*')
+    expect(branchRootArgv).toContain('refs/remotes/*/upstream/main*')
+    expect(branchRootArgv).toContain('refs/heads/upstream/main*')
     // Regression guard: the literal slash must never appear inside a
     // single segmented glob (would be `refs/remotes/*upstream/main*`),
     // which fnmatch cannot match because `*` doesn't cross `/`.
-    expect(argv).not.toContain('refs/remotes/*upstream/main*/*')
-    expect(argv).not.toContain('refs/remotes/*/*upstream/main*')
+    expect(segmentedArgv).not.toContain('refs/remotes/*upstream/main*/*')
+    expect(segmentedArgv).not.toContain('refs/remotes/*/*upstream/main*')
     expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 

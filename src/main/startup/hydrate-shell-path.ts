@@ -1,5 +1,5 @@
-import { spawn } from 'child_process'
-import { delimiter } from 'path'
+import { spawn } from 'node:child_process'
+import { delimiter } from 'node:path'
 import type { ShellHydrationFailureReason } from '../../shared/types'
 
 // Why: GUI-launched Electron on macOS/Linux inherits a minimal PATH from launchd

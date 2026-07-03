@@ -3,12 +3,8 @@
    single-source view of how snapshot + daemon-session inputs combine. */
 import { describe, expect, it } from 'vitest'
 import type { MemorySnapshot, TerminalTab, WorktreeMemory } from '../../../../shared/types'
-import {
-  mergeSnapshotAndSessions,
-  UNATTRIBUTED_REPO_ID,
-  type DaemonSession,
-  type MergeContext
-} from './mergeSnapshotAndSessions'
+import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
+import type { DaemonSession, MergeContext } from './resource-usage-merge-types'
 
 function emptyAppMemory() {
   return {
@@ -188,6 +184,27 @@ describe('mergeSnapshotAndSessions', () => {
     expect(out[0].worktrees[0].worktreeId).toBe('orca::/correct/path')
     expect(out[0].worktrees[0].sessions[0].tabId).toBe(tabId)
     expect(out[0].worktrees[0].sessions[0].bound).toBe(true)
+  })
+
+  it('treats startup deferred reattach tab ptyId wake hints as bound sessions', () => {
+    const tabId = 'tab-restored'
+    const sessionId = 'orca::/Users/me/Triton@@deferred'
+    const ds: DaemonSession[] = [{ id: sessionId, cwd: '/Users/me/Triton', title: 'orca/Triton' }]
+    const restoredTab = { ...makeTab(tabId, 'Restored'), ptyId: sessionId }
+    const ctx = baseCtx({
+      tabsByWorktree: {
+        'orca::/Users/me/Triton': [restoredTab]
+      },
+      ptyIdsByTabId: { [tabId]: [] }
+    })
+
+    const out = mergeSnapshotAndSessions(null, ds, ctx)
+
+    expect(out[0].worktrees[0].sessions[0]).toMatchObject({
+      sessionId,
+      bound: true,
+      tabId
+    })
   })
 
   it('repo aggregate sums only worktrees with numeric metrics; remote-by-connectionId flags chip', () => {

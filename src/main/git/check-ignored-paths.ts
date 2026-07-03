@@ -1,3 +1,5 @@
+import type { GitRuntimeOptions } from './git-runtime-options'
+import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
 
 const CHECK_IGNORE_CHUNK_SIZE = 100
@@ -10,12 +12,13 @@ function parseCheckIgnoreOutput(stdout: string): string[] {
 
 async function runCheckIgnoreChunk(
   worktreePath: string,
-  relativePaths: string[]
+  relativePaths: string[],
+  options: GitRuntimeOptions = {}
 ): Promise<string[]> {
   try {
     const { stdout } = await gitExecFileAsync(
       ['-c', 'core.quotePath=false', 'check-ignore', '--', ...relativePaths],
-      { cwd: worktreePath }
+      gitOptionsForWorktree(worktreePath, options)
     )
     return parseCheckIgnoreOutput(stdout)
   } catch (error) {
@@ -29,12 +32,13 @@ async function runCheckIgnoreChunk(
 
 export async function checkIgnoredPaths(
   worktreePath: string,
-  relativePaths: string[]
+  relativePaths: string[],
+  options: GitRuntimeOptions = {}
 ): Promise<string[]> {
   const ignored = new Set<string>()
   for (let i = 0; i < relativePaths.length; i += CHECK_IGNORE_CHUNK_SIZE) {
     const chunk = relativePaths.slice(i, i + CHECK_IGNORE_CHUNK_SIZE)
-    for (const ignoredPath of await runCheckIgnoreChunk(worktreePath, chunk)) {
+    for (const ignoredPath of await runCheckIgnoreChunk(worktreePath, chunk, options)) {
       ignored.add(ignoredPath)
     }
   }

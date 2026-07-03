@@ -60,7 +60,23 @@ describe('getWorktreeCardPrDisplay', () => {
     expect(getWorktreeCardPrDisplay(undefined, null)).toBeNull()
   })
 
-  it('ignores cached branch PR details when the worktree is unlinked', () => {
+  it('ignores linked-lookup PR details when the worktree is unlinked', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: 'github:123'
+      })
+    ).toBeNull()
+  })
+
+  it('shows branch-discovered GitHub PR details when the worktree is unlinked', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: ''
+      })
+    ).toBe(pr)
+  })
+
+  it('treats missing cache hints as unsafe for unlinked GitHub PR details', () => {
     expect(getWorktreeCardPrDisplay(pr, null)).toBeNull()
   })
 

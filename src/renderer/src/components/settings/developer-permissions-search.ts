@@ -118,7 +118,7 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
     ),
     description: translate(
       'auto.components.settings.developer.permissions.search.05ab708ee5',
-      'Open the macOS privacy pane for broad terminal file access.'
+      'Open the macOS privacy pane for protected project and worktree file access.'
     ),
     keywords: [
       translate(

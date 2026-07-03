@@ -22,12 +22,14 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   // callback on first `ensurePtyDispatcher()`. We simulate the main process
   // delivering IPC events by invoking that captured callback directly.
   let dispatcherCallback:
-    | ((payload: { id: string; data: string; rawLength?: number }) => void)
+    | ((payload: { id: string; data: string; rawLength?: number; background?: boolean }) => void)
     | null = null
+  let exitDispatcherCallback: ((payload: { id: string; code: number }) => void) | null = null
 
   beforeEach(() => {
     vi.resetModules()
     dispatcherCallback = null
+    exitDispatcherCallback = null
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -40,7 +42,14 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
           kill: vi.fn(),
           ackData: vi.fn(),
           onData: vi.fn(
-            (cb: (payload: { id: string; data: string; rawLength?: number }) => void) => {
+            (
+              cb: (payload: {
+                id: string
+                data: string
+                rawLength?: number
+                background?: boolean
+              }) => void
+            ) => {
               // Only the first subscriber wins in production — the dispatcher
               // calls onData exactly once (ensurePtyDispatcher guards with the
               // `ptyDispatcherAttached` flag). Subsequent transport calls go
@@ -53,7 +62,12 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
             }
           ),
           onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {})
+          onExit: vi.fn((cb: (payload: { id: string; code: number }) => void) => {
+            if (!exitDispatcherCallback) {
+              exitDispatcherCallback = cb
+            }
+            return () => {}
+          })
         }
       }
     } as unknown as typeof window
@@ -74,9 +88,9 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     ensurePtyDispatcher()
     ptyDataHandlers.set('pty-pi', handler)
 
-    dispatcherCallback?.({ id: 'pty-pi', data: 'chunk', rawLength: 10 } as never)
+    dispatcherCallback?.({ id: 'pty-pi', data: 'chunk', rawLength: 10, background: true } as never)
 
-    expect(handler).toHaveBeenCalledWith('chunk', { rawLength: 10 })
+    expect(handler).toHaveBeenCalledWith('chunk', { rawLength: 10, background: true })
     expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-pi', 10)
     ptyDataHandlers.delete('pty-pi')
   })
@@ -253,5 +267,59 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     expect(seenTitles).toContain('Codex ready')
 
     transport.disconnect()
+  })
+
+  it('replays PTY data that arrives before connect() registers the pane handler', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onData = vi.fn()
+    let resolveSpawn: (value: { id: string }) => void = () => {}
+
+    ;(window.api.pty.spawn as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+
+    const transport = createIpcPtyTransport()
+    const connectPromise = transport.connect({ url: '', callbacks: { onData } })
+
+    dispatcherCallback?.({ id: 'pty-early', data: 'setup starts here\r\n', rawLength: 19 })
+    expect(onData).not.toHaveBeenCalled()
+    expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-early', 19)
+
+    resolveSpawn({ id: 'pty-early' })
+    await connectPromise
+
+    expect(onData).toHaveBeenCalledWith('setup starts here\r\n', { rawLength: 19 })
+
+    transport.disconnect()
+  })
+
+  it('replays pre-handler PTY data before a pre-handler exit', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const events: string[] = []
+    let resolveSpawn: (value: { id: string }) => void = () => {}
+
+    ;(window.api.pty.spawn as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+
+    const transport = createIpcPtyTransport()
+    const connectPromise = transport.connect({
+      url: '',
+      callbacks: {
+        onData: (data) => events.push(`data:${data}`),
+        onExit: (code) => events.push(`exit:${code}`)
+      }
+    })
+
+    dispatcherCallback?.({ id: 'pty-fast-exit', data: 'last line\r\n', rawLength: 11 })
+    exitDispatcherCallback?.({ id: 'pty-fast-exit', code: 3 })
+    resolveSpawn({ id: 'pty-fast-exit' })
+    await connectPromise
+
+    expect(events).toEqual(['data:last line\r\n', 'exit:3'])
   })
 })

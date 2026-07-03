@@ -1,8 +1,16 @@
 /* eslint-disable max-lines -- Why: the web preload adapter is the browser-side
    replacement for Electron preload, so the compatibility surface is necessarily
    centralized at this boundary. */
-import type { PreloadApi, PreflightStatus, RefreshAgentsResult } from '../../../preload/api-types'
+import type {
+  PreloadApi,
+  PreflightStatus,
+  RefreshAgentsResult,
+  NativeChatApi,
+  NativeChatReadSessionResult,
+  NativeChatAppendedMessages
+} from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
@@ -21,6 +29,7 @@ import type {
   StatsSummary,
   Worktree,
   WorktreeLineage,
+  WorkspaceLineage,
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/types'
@@ -30,7 +39,9 @@ import {
   getDefaultSettings,
   getDefaultUIState,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
   normalizeAgentActivityDisplayMode,
+  normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
 } from '../../../shared/constants'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
@@ -74,6 +85,19 @@ import {
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
+import {
+  assertClipboardTextWriteWithinLimitWithYield,
+  assertClipboardTextWithinLimitWithYield,
+  type ReadClipboardTextOptions
+} from '../../../shared/clipboard-text'
+import {
+  CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
+  CLIPBOARD_IMAGE_MAX_PIXELS,
+  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
+  CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
+  assertClipboardImageByteLengthWithinLimit,
+  assertClipboardImageDimensionsWithinLimit
+} from '../../../shared/clipboard-image'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
 import {
   normalizeFeatureInteractions,
@@ -93,7 +117,9 @@ const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
-const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
+export const MAX_CLIPBOARD_IMAGE_SOURCE_BYTES = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
+export const MAX_CLIPBOARD_IMAGE_PIXELS = CLIPBOARD_IMAGE_MAX_PIXELS
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
@@ -118,9 +144,15 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
+function assertClipboardImageBlobWithinLimit(blob: Blob): void {
+  assertClipboardImageByteLengthWithinLimit(blob.size)
+}
+
 async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
+  assertClipboardImageBlobWithinLimit(blob)
   const bitmap = await createImageBitmap(blob)
   try {
+    assertClipboardImageDimensionsWithinLimit(bitmap)
     const canvas = document.createElement('canvas')
     canvas.width = bitmap.width
     canvas.height = bitmap.height
@@ -133,6 +165,12 @@ async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
       canvas.toBlob((png) => {
         if (!png) {
           reject(new Error('Clipboard image could not be encoded as PNG'))
+          return
+        }
+        try {
+          assertClipboardImageBlobWithinLimit(png)
+        } catch (error) {
+          reject(error)
           return
         }
         resolve(png)
@@ -157,6 +195,7 @@ async function readClipboardImagePngBase64(): Promise<string | null> {
       continue
     }
     const blob = await item.getType(imageType)
+    assertClipboardImageBlobWithinLimit(blob)
     const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
     return blobToBase64(pngBlob)
   }
@@ -425,6 +464,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
+      startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
@@ -432,17 +472,32 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       pickFloatingMarkdownDocument: () => Promise.resolve(null),
       pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
     },
+    starNag: {
+      onShow: () => noopUnsubscribe,
+      onHide: () => noopUnsubscribe,
+      dismiss: () => Promise.resolve(),
+      later: () => Promise.resolve(),
+      complete: () => Promise.resolve(),
+      disable: () => Promise.resolve(),
+      openWeb: () => Promise.resolve(),
+      starOrca: () => Promise.resolve(false),
+      forceShow: () => Promise.resolve(),
+      agentValueMoment: () => Promise.resolve({ status: 'skipped' }),
+      showAgentValueMoment: () => Promise.resolve(),
+      onboardingCompleted: () => Promise.resolve()
+    },
     platform: {
       get: () => ({
         platform: getBrowserPlatform(),
-        osRelease: ''
+        osRelease: '',
+        displayServer: null
       })
     },
     e2e: {
       getConfig: () => createE2EConfig({})
     },
     settings: {
-      get: async () => getStoredSettings(),
+      get: async () => getRuntimeBackedStoredSettings(),
       set: async (updates) => {
         if (updates.activeRuntimeEnvironmentId === null) {
           disconnectActiveRuntimeEnvironment()
@@ -455,7 +510,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
         writeJson(SETTINGS_STORAGE_KEY, next)
-        return next
+        return syncRuntimeBackedSettings(sanitizedUpdates, next)
       },
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
@@ -484,20 +539,15 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getStatus: () =>
         Promise.resolve({
           localFileEnabled: false,
-          otlpEnabled: false,
           bundleEnabled: false,
-          otlpStatus: 'Unavailable on web',
           traceFilePath: '',
           traceFamilySize: 0
         }),
-      openTraceFolder: () => Promise.resolve(),
-      clearTraces: () => Promise.resolve(),
-      collectBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
-      openBundlePreview: () =>
-        Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
+      collectBundle: () => Promise.reject(new Error('Review files are unavailable on web.')),
+      openBundlePreview: () => Promise.reject(new Error('Review files are unavailable on web.')),
       discardBundlePreview: () => Promise.resolve(),
-      uploadBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
-      deleteBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.'))
+      uploadBundle: () => Promise.reject(new Error('Sending diagnostics is unavailable on web.')),
+      deleteBundle: () => Promise.reject(new Error('Sent diagnostics are unavailable on web.'))
     },
     session: {
       // hostId mirrors the desktop bridge: omitted/'local' targets the existing
@@ -551,6 +601,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       }
     },
     runtime: createRuntimeApi(),
+    nativeChat: createNativeChatApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),
@@ -581,7 +632,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           sessions: [],
           issues: [],
           scannedAt: new Date().toISOString()
-        })
+        }),
+      onWindowFocused: () => () => {}
     },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
@@ -615,7 +667,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
-      drop: () => {}
+      drop: () => {},
+      dropByTabPrefix: () => {}
     },
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
@@ -936,6 +989,72 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
   }
 }
 
+// Why: the desktop reads native-chat transcripts over IPC; the web client has
+// no IPC, so route readSession/subscribe through the runtime RPC (the same
+// methods the mobile app uses). Without this, window.api.nativeChat was
+// undefined on web and the chat view showed no messages.
+function createNativeChatApi(): NativeChatApi {
+  return {
+    readSession: (agent, sessionId, limit, transcriptPath) =>
+      callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
+        agent,
+        sessionId,
+        limit,
+        transcriptPath
+      }),
+    subscribe: (args, onAppended) => {
+      // No paired runtime yet: nothing to subscribe to, and
+      // requireActiveEnvironment() would throw. Return a no-op teardown so the
+      // chat view mounts cleanly until a runtime is paired (only the not-paired
+      // case is swallowed — real subscribe errors still surface via .catch).
+      const environment = requireActiveEnvironmentOrNull()
+      if (!environment) {
+        return () => {}
+      }
+      let handle: { unsubscribe: () => void } | null = null
+      let cancelled = false
+      void getClientForEnvironment(environment)
+        .subscribe(
+          'nativeChat.subscribe',
+          { agent: args.agent, sessionId: args.sessionId, transcriptPath: args.transcriptPath },
+          {
+            onResponse: (response) => {
+              if (cancelled || !response.ok) {
+                return
+              }
+              const result = response.result as {
+                type?: string
+                messages?: NativeChatAppendedMessages
+              }
+              if (result?.type === 'appended' && Array.isArray(result.messages)) {
+                onAppended(result.messages)
+              }
+            }
+          },
+          {
+            // Why: send nativeChat.unsubscribe on teardown so the server reaps
+            // the transcript fs-watcher on view-toggle, not just on socket close
+            // (the watcher-leak fix). Uses the same agent:sessionId cleanup token
+            // mobile sends, via the shared key-builder so it can't drift.
+            buildUnsubscribe: () => buildNativeChatUnsubscribe(args.agent, args.sessionId)
+          }
+        )
+        .then((h) => {
+          if (cancelled) {
+            h.unsubscribe()
+          } else {
+            handle = h
+          }
+        })
+        .catch(() => {})
+      return () => {
+        cancelled = true
+        handle?.unsubscribe()
+      }
+    }
+  }
+}
+
 function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
   return {
     syncWindowGraph: async (_graph: RuntimeSyncWindowGraph) => getRemoteRuntimeStatus(),
@@ -1011,6 +1130,7 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     update: async ({ repoId, updates }) =>
       (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
     pickFolder: () => Promise.resolve(null),
+    pickFolders: () => Promise.resolve([]),
     pickDirectory: () => Promise.resolve(null),
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()
@@ -1100,6 +1220,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         repo: args.repoId,
         name: args.name,
         baseBranch: args.baseBranch,
+        compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
@@ -1117,8 +1238,23 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         setupDecision: args.setupDecision,
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+        ...(args.startup
+          ? {
+              startupCommand: args.startup.command,
+              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+              ...(args.startup.launchConfig
+                ? { startupLaunchConfig: args.startup.launchConfig }
+                : {}),
+              ...(args.startup.startupCommandDelivery
+                ? { startupCommandDelivery: args.startup.startupCommandDelivery }
+                : {}),
+              activate: true
+            }
+          : {}),
+        parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
-        manualOrder: args.manualOrder
+        manualOrder: args.manualOrder,
+        automationProvenanceRequest: args.automationProvenanceRequest
       })
     },
     // Why: the runtime create path emits no two-phase progress, so the web
@@ -1130,18 +1266,20 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         baseBranch
       })
     },
-    resolvePrBase: async ({ repoId, prNumber, headRefName, isCrossRepository }) =>
+    resolvePrBase: async ({ repoId, prNumber, headRefName, baseRefName, isCrossRepository }) =>
       callRuntimeResult('worktree.resolvePrBase', {
         repo: repoId,
         prNumber,
         headRefName,
+        baseRefName,
         isCrossRepository
       }),
-    resolveMrBase: async ({ repoId, mrIid, sourceBranch, isCrossRepository }) =>
+    resolveMrBase: async ({ repoId, mrIid, sourceBranch, targetBranch, isCrossRepository }) =>
       callRuntimeResult('worktree.resolveMrBase', {
         repo: repoId,
         mrIid,
         sourceBranch,
+        targetBranch,
         isCrossRepository
       }),
     remove: async ({ worktreeId, force }) => {
@@ -1157,19 +1295,24 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchName,
         expectedHead
       }),
-    updateMeta: async ({ worktreeId, updates }) =>
-      (
+    updateMeta: async ({ worktreeId, updates }) => {
+      const rpcUpdates =
+        Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
+        updates.pushTarget === undefined
+          ? { ...updates, pushTarget: null }
+          : updates
+      return (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...updates
+          ...rpcUpdates
         })
-      ).worktree,
+      ).worktree
+    },
     listLineage: async () =>
-      (
-        await callRuntimeResult<{ lineage: Record<string, WorktreeLineage> }>(
-          'worktree.lineageList'
-        )
-      ).lineage,
+      await callRuntimeResult<{
+        lineage: Record<string, WorktreeLineage>
+        workspaceLineage?: Record<string, WorkspaceLineage>
+      }>('worktree.lineageList'),
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
@@ -1207,6 +1350,21 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       })
     },
     downloadFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    saveDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    startDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    appendDownloadedFileChunk: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    finishDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    cancelDownloadedFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
     listMarkdownDocuments: async ({ rootPath }) => {
@@ -1328,6 +1486,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         includeIgnored
       })
     },
+    submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.submoduleStatus', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        submodulePath,
+        area
+      })
+    },
     checkIgnored: async ({ worktreePath, paths }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.checkIgnored', {
@@ -1401,6 +1567,17 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
       })
+    },
+    syncFork: async ({ worktreePath, expectedUpstream }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult(
+        'git.forkSync',
+        {
+          worktree: toRuntimeWorktreeSelector(worktree.id),
+          expectedUpstream
+        },
+        60_000
+      )
     },
     push: async ({ worktreePath, publish, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -1501,6 +1678,13 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         relativePath,
         line
       })
+    },
+    remoteCommitUrl: async ({ worktreePath, sha }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.remoteCommitUrl', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        sha
+      })
     }
   }
 }
@@ -1524,8 +1708,6 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     onActivateView: () => noopUnsubscribe,
     onPaneFocus: () => noopUnsubscribe,
     onOpenLinkInOrcaTab: () => noopUnsubscribe,
-    acceptDownload: () =>
-      Promise.resolve({ ok: false, reason: 'Downloads are handled by the server browser.' }),
     cancelDownload: () => Promise.resolve(false),
     setGrabMode: () =>
       Promise.resolve({
@@ -1612,12 +1794,17 @@ function createGitHubApi(): WebGitHubApi {
     prForBranch: (args) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
+      const acceptMergedFallbackPR =
+        candidate.linkedPRNumber == null &&
+        candidate.fallbackPRNumber != null &&
+        candidate.fallbackPRSource != null
       const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
         repoId: candidate.repoId,
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
-        fallbackPRNumber: candidate.fallbackPRNumber ?? null
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        ...(acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {})
       })
       return pr
         ? { kind: 'found', pr, fetchedAt: Date.now() }
@@ -1635,6 +1822,7 @@ function createGitHubApi(): WebGitHubApi {
       }),
     workItemDetails: (args) =>
       route<WebGitHubResult<'workItemDetails'>>(GITHUB_WEB_RPC_METHODS.workItemDetails, args),
+    notifyWorkItemMutated: () => Promise.resolve(false),
     prFileContents: (args) =>
       route<WebGitHubResult<'prFileContents'>>(GITHUB_WEB_RPC_METHODS.prFileContents, args),
     listIssues: (args) =>
@@ -1931,10 +2119,17 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return optimistic
       }
     },
-    readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
+    readClipboardText: async (options?: ReadClipboardTextOptions) =>
+      assertClipboardTextWithinLimitWithYield(
+        await (navigator.clipboard?.readText?.() ?? ''),
+        options
+      ),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    saveClipboardImageAsTempFile: async (args?: { connectionId?: string | null }) => {
+    saveClipboardImageAsTempFile: async (args?: {
+      connectionId?: string | null
+      runtimeEnvironmentId?: string | null
+    }) => {
       if (!requireActiveEnvironmentOrNull()) {
         return null
       }
@@ -1944,10 +2139,20 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
-    writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
+    writeClipboardText: async (text) => {
+      await assertClipboardTextWriteWithinLimitWithYield(text)
+      await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
+    },
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
+    writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
+    performNativePaste: () => {
+      document.execCommand?.('paste')
+    },
+    onExportPdfRequested: () => noopUnsubscribe,
+    onAppMenuPaste: () => noopUnsubscribe,
+    onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
       zoomLevel = level
@@ -1957,15 +2162,20 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
+    // No desktop main process to push state changes; the web client re-reads
+    // via ui.get on interaction instead.
+    onStateChanged: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
     onToggleRightSidebar: () => noopUnsubscribe,
     onToggleWorktreePalette: () => noopUnsubscribe,
     onToggleFloatingTerminal: () => noopUnsubscribe,
     onTerminalShortcutCaptured: () => noopUnsubscribe,
     onOpenQuickOpen: () => noopUnsubscribe,
+    onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
+    onOpenWorkspaceBoard: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
@@ -1982,6 +2192,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFocusBrowserAddressBar: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
+    onBrowserHistoryNavigate: () => noopUnsubscribe,
     onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,
@@ -1993,7 +2204,6 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
-    onExportPdfRequested: () => noopUnsubscribe,
     onActivateWorktree: () => noopUnsubscribe,
     onCreateTerminal: () => noopUnsubscribe,
     onRequestTerminalCreate: () => noopUnsubscribe,
@@ -2057,6 +2267,20 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     pathSource: 'sync_seed_only',
     pathFailureReason: 'spawn_error'
   }
+  type WindowsTerminalCapabilityBridgeResult = {
+    wslAvailable: boolean
+    wslDistros: string[]
+    pwshAvailable: boolean
+    gitBashAvailable: boolean
+    hostPlatform: NodeJS.Platform | null
+  }
+  const fallbackWindowsTerminalCapabilities = {
+    wslAvailable: false,
+    wslDistros: [],
+    pwshAvailable: false,
+    gitBashAvailable: false,
+    hostPlatform: null
+  }
   return {
     check: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
@@ -2079,7 +2303,14 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     detectRemoteAgents: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => [])
-        : []
+        : [],
+    detectRemoteWindowsTerminalCapabilities: async (args) =>
+      requireActiveEnvironmentOrNull()
+        ? callRuntimeResult<WindowsTerminalCapabilityBridgeResult>(
+            'preflight.detectRemoteWindowsTerminalCapabilities',
+            args
+          ).catch(() => fallbackWindowsTerminalCapabilities)
+        : Promise.resolve(fallbackWindowsTerminalCapabilities)
   }
 }
 
@@ -2123,6 +2354,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
       | 'grok'
       | 'copilot'
       | 'hermes'
+      | 'devin'
   ) =>
     Promise.resolve({
       agent,
@@ -2143,7 +2375,8 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     commandCodeStatus: () => status('command-code'),
     grokStatus: () => status('grok'),
     copilotStatus: () => status('copilot'),
-    hermesStatus: () => status('hermes')
+    hermesStatus: () => status('hermes'),
+    devinStatus: () => status('devin')
   }
 }
 
@@ -2191,8 +2424,8 @@ function createComputerUsePermissionsApi(): NonNullable<
 
 function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
   return {
-    discover: () =>
-      callRuntimeResult<SkillDiscoveryResult>('skills.discover', undefined, 15_000).catch(() => ({
+    discover: (target) =>
+      callRuntimeResult<SkillDiscoveryResult>('skills.discover', target, 15_000).catch(() => ({
         skills: [],
         sources: [],
         scannedAt: Date.now()
@@ -2229,6 +2462,9 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),
     refreshCodexForTarget: () => Promise.resolve(empty),
+    // Why: web clients do not own local Codex auth, so reset-credit
+    // redemption remains desktop-only and reports the safe no-credit outcome.
+    consumeCodexResetCredit: () => Promise.resolve({ outcome: 'noCredit', state: empty }),
     refreshClaudeForTarget: () => Promise.resolve(empty),
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
@@ -2246,6 +2482,7 @@ function createAccountsApi(): never {
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
+    cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)
@@ -2305,10 +2542,13 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     ackColdRestore: () => {},
     ackData: () => {},
     setActiveRendererPty: () => {},
+    setRendererPtyVisible: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
+    getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
+    hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({
@@ -2337,7 +2577,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     settlePaneSerializer: () => Promise.resolve(),
     clearPendingPaneSerializer: () => Promise.resolve(),
     management: {
-      listSessions: () => Promise.resolve({ sessions: [] }),
+      listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0 }),
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false })
@@ -2423,10 +2663,10 @@ async function callRuntimeResult<TResult>(
 
 async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
-  args?: { connectionId?: string | null }
+  args?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
 ): Promise<string> {
   if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
-    throw new Error('Clipboard image is too large')
+    throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
   }
   const connectionId = args?.connectionId ?? null
   const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
@@ -2588,6 +2828,66 @@ function getStoredSettings(): GlobalSettings {
   )
 }
 
+async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
+  const local = getStoredSettings()
+  if (!requireActiveEnvironmentOrNull()) {
+    return local
+  }
+  try {
+    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
+      'settings.get',
+      undefined,
+      15_000
+    )
+    const runtimeSettings: Partial<GlobalSettings> = {}
+    if (typeof result.settings.experimentalNewWorktreeCardStyle === 'boolean') {
+      runtimeSettings.experimentalNewWorktreeCardStyle =
+        result.settings.experimentalNewWorktreeCardStyle
+    }
+    if (typeof result.settings.compactWorktreeCards === 'boolean') {
+      runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
+    }
+    const next = mergeSettings(local, runtimeSettings)
+    writeJson(SETTINGS_STORAGE_KEY, next)
+    return next
+  } catch {
+    // Why: unpaired/offline web clients keep a local settings fallback.
+    return local
+  }
+}
+
+async function syncRuntimeBackedSettings(
+  updates: Partial<GlobalSettings>,
+  localNext: GlobalSettings
+): Promise<GlobalSettings> {
+  if (!requireActiveEnvironmentOrNull()) {
+    return localNext
+  }
+  const runtimeUpdates: Partial<GlobalSettings> = {}
+  if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
+    runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
+  }
+  if (typeof updates.compactWorktreeCards === 'boolean') {
+    runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
+  }
+  if (Object.keys(runtimeUpdates).length === 0) {
+    return localNext
+  }
+  try {
+    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
+      'settings.update',
+      runtimeUpdates,
+      15_000
+    )
+    const next = mergeSettings(localNext, result.settings)
+    writeJson(SETTINGS_STORAGE_KEY, next)
+    return next
+  } catch {
+    // Why: unpaired/offline web clients still need local settings persistence.
+    return localNext
+  }
+}
+
 function getStoredOnboarding(): OnboardingState {
   const storedRaw = window.localStorage.getItem(ONBOARDING_STORAGE_KEY)
   if (storedRaw) {
@@ -2655,11 +2955,19 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(defaults, stored)
-  }
   const storedSettings = getStoredSettings()
-  return mergeWebUIState(defaults, {
+  const base = {
+    ...defaults,
+    // Why: when runtime ui.get is unavailable, web fallback must mirror the
+    // main-process missing-property seed from the legacy card layout mode.
+    worktreeCardProperties: getWorktreeCardModeProperties(
+      storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
+    )
+  }
+  if (typeof stored.rightSidebarOpen === 'boolean') {
+    return mergeWebUIState(base, stored)
+  }
+  return mergeWebUIState(base, {
     ...stored,
     // Why: web fallback lacks main-process normalization, so migrate the
     // retired setting only when the local UI preference is still absent.
@@ -2679,6 +2987,11 @@ function mergeWebUIState(
   return {
     ...base,
     ...safeUpdates,
+    worktreeCardProperties: normalizeWorktreeCardProperties(
+      safeUpdates.worktreeCardProperties ?? base.worktreeCardProperties
+    ),
+    _worktreeCardModeDefaulted:
+      safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
     )

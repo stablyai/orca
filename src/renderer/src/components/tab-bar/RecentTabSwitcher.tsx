@@ -34,7 +34,11 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
   if (item.type === 'browser') {
     return <Globe2 className={className} />
   }
-  if (item.contentType === 'diff' || item.contentType === 'conflict-review') {
+  if (
+    item.contentType === 'diff' ||
+    item.contentType === 'conflict-review' ||
+    item.contentType === 'check-details'
+  ) {
     return <GitCompare className={className} />
   }
   return <FileText className={className} />

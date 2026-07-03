@@ -37,6 +37,15 @@ export const LINEAR_TEAM_LOOKUP_FLAGS = new Set([
   'team',
   'workspace'
 ])
+export const LINEAR_PROJECT_LIST_FLAGS = new Set([
+  'help',
+  'json',
+  'pairing-code',
+  'environment',
+  'query',
+  'limit',
+  'workspace'
+])
 export const LINEAR_LIST_FLAGS = new Set([
   'help',
   'json',

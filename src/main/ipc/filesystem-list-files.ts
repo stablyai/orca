@@ -1,18 +1,20 @@
-import { sep } from 'path'
-import type { ChildProcess } from 'child_process'
+import { sep } from 'node:path'
+import type { ChildProcess } from 'node:child_process'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
-import { gitSpawn, wslAwareSpawn } from '../git/runner'
+import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
+import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
 import {
   buildExcludePathPrefixes,
-  buildGitLsFilesArgsForQuickOpen,
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine,
+  type RgOutputMode,
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../../shared/quick-open-filter'
+import { listFilesWithGit } from './filesystem-list-files-git-fallback'
 
 export async function listQuickOpenFiles(
   rootPath: string,
@@ -20,6 +22,11 @@ export async function listQuickOpenFiles(
   excludePaths?: string[]
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+  const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
+    store,
+    rootPath,
+    authorizedRootPath
+  )
 
   // Why: when the main worktree sits at the repo root, linked worktrees are
   // nested subdirectories. Without excluding them, rg/git lists files from
@@ -31,17 +38,16 @@ export async function listQuickOpenFiles(
   // spawn('rg') emits 'close' before 'error' on some platforms, causing
   // the handler to resolve with empty results before the git fallback
   // can run.
-  const rgAvailable = await checkRgAvailable(authorizedRootPath)
+  const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
   if (!rgAvailable) {
-    return listFilesWithGit(authorizedRootPath, excludePathPrefixes)
+    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions)
   }
 
   const files = new Set<string>()
   const children: ChildProcess[] = []
-  // Why: when rg runs inside WSL, output paths are Linux-native
-  // (e.g. /home/user/repo/src/file.ts). Translate them back to Windows
-  // UNC paths up-front before the shared line normalizer runs.
-  const wslInfo = parseWslPath(authorizedRootPath)
+  // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
+  // their distro in the path; Windows-path repos carry it in project runtime.
+  const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
 
   const { primary, ignoredPass } = buildRgArgsForQuickOpen({
     // Why: rg evaluates root-relative exclude globs against cwd only when the
@@ -62,8 +68,13 @@ export async function listQuickOpenFiles(
 
       const processLine = (rawLine: string): void => {
         const translated =
-          wslInfo && rawLine.startsWith('/') ? toWindowsWslPath(rawLine, wslInfo.distro) : rawLine
-        const relPath = normalizeQuickOpenRgLine(translated, { kind: 'cwd-relative' })
+          wslDistroForOutput && rawLine.startsWith('/')
+            ? toWindowsWslPath(rawLine, wslDistroForOutput)
+            : rawLine
+        const relPath = normalizeQuickOpenRgLine(
+          translated,
+          getQuickOpenRgOutputMode(rawLine, translated, authorizedRootPath)
+        )
         if (relPath === null) {
           return
         }
@@ -79,6 +90,7 @@ export async function listQuickOpenFiles(
 
       const child = wslAwareSpawn('rg', args, {
         cwd: authorizedRootPath,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       children.push(child)
@@ -179,100 +191,18 @@ export async function listQuickOpenFiles(
   return Array.from(files)
 }
 
-/**
- * Fallback file lister using git ls-files. Used when rg is not available.
- *
- * Why two git ls-files calls: the first lists tracked + untracked-but-not-ignored
- * files (mirrors rg --files --hidden with gitignore respect). The second
- * surfaces ignored files (mirrors the second rg call with --no-ignore-vcs).
- */
-function listFilesWithGit(
-  rootPath: string,
-  excludePathPrefixes: readonly string[]
-): Promise<string[]> {
-  const files = new Set<string>()
-  const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
-
-  const runGitLsFiles = (args: string[]): Promise<void> => {
-    return new Promise((resolve) => {
-      let buf = ''
-      let done = false
-
-      const processPath = (path: string): void => {
-        if (!path) {
-          return
-        }
-        // Why: git exclude pathspecs prune most hits, but post-filter is
-        // still required because pathspec semantics differ subtly from the
-        // rg globs and exist as a correctness backstop.
-        if (shouldExcludeQuickOpenRelPath(path, excludePathPrefixes)) {
-          return
-        }
-        if (shouldIncludeQuickOpenPath(path)) {
-          files.add(path)
-        }
-      }
-
-      // Why: git ls-files outputs paths relative to cwd, so we set cwd to
-      // rootPath and use the output directly — no prefix stripping needed.
-      const child = gitSpawn(['ls-files', ...args], {
-        cwd: rootPath,
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-      let timer: ReturnType<typeof setTimeout>
-      const handleStdoutData = (chunk: string): void => {
-        buf += chunk
-        let start = 0
-        let nulIdx = buf.indexOf('\0', start)
-        while (nulIdx !== -1) {
-          processPath(buf.substring(start, nulIdx))
-          start = nulIdx + 1
-          nulIdx = buf.indexOf('\0', start)
-        }
-        buf = start < buf.length ? buf.substring(start) : ''
-      }
-      const handleStderrData = (): void => {
-        /* drain */
-      }
-      const handleError = (): void => {
-        buf = ''
-        finish()
-      }
-      const handleClose = (): void => {
-        if (buf) {
-          processPath(buf)
-        }
-        finish()
-      }
-      const finish = (): void => {
-        if (done) {
-          return
-        }
-        done = true
-        clearTimeout(timer)
-        // Why: child.kill() is advisory. If git ignores it, detach our
-        // closures so repeated Quick Open attempts do not retain old scans.
-        child.stdout!.off('data', handleStdoutData)
-        child.stderr!.off('data', handleStderrData)
-        child.off('error', handleError)
-        child.off('close', handleClose)
-        resolve()
-      }
-
-      child.stdout!.setEncoding('utf-8')
-      child.stdout!.on('data', handleStdoutData)
-      child.stderr!.on('data', handleStderrData)
-      child.once('error', handleError)
-      child.once('close', handleClose)
-      timer = setTimeout(() => {
-        buf = ''
-        child.kill()
-        finish()
-      }, 10000)
-    })
+function getQuickOpenRgOutputMode(
+  rawLine: string,
+  translatedLine: string,
+  rootPath: string
+): RgOutputMode {
+  if (
+    translatedLine !== rawLine ||
+    rawLine.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/.test(rawLine) ||
+    rawLine.startsWith('\\\\')
+  ) {
+    return { kind: 'absolute', rootPath }
   }
-
-  return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)]).then(() =>
-    Array.from(files)
-  )
+  return { kind: 'cwd-relative' }
 }

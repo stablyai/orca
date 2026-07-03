@@ -13,7 +13,7 @@ import type {
 } from '../../shared/types'
 import { mapGitLabIssueInfo } from './mappers'
 // prettier-ignore
-import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListIssuesError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, type ProjectRef } from './gl-utils'
+import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListIssuesError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, type LocalGitExecOptions, type ProjectRef } from './gl-utils'
 
 // Why: parallel to GitHub's IssueListResult — distinguishes a successful-
 // empty listing from a failed fetch.
@@ -41,10 +41,11 @@ function encodedProject(projectPath: string): string {
 export async function getIssue(
   repoPath: string,
   issueNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabIssueInfo | null> {
   const knownHosts = await getGlabKnownHosts(connectionId)
-  const projectRef = await getIssueProjectRef(repoPath, knownHosts, connectionId)
+  const projectRef = await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions)
   // Why: don't fall back to a cwd-inferred `glab issue view` when the project
   // can't be resolved — on an SSH connection cwd is not the repo dir, so glab
   // hits a non-repo dir and fails with `git: exit status 128`. Return null
@@ -61,7 +62,7 @@ export async function getIssue(
         ...glabHostnameArgs(projectRef, connectionId),
         `projects/${encodedProject(projectRef.path)}/issues/${issueNumber}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = JSON.parse(stdout)
     return mapGitLabIssueInfo(data)
@@ -88,14 +89,16 @@ export async function listIssues(
   preference?: IssueSourcePreference,
   state: IssueListState = 'opened',
   assignee?: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<IssueListResult> {
   const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
     knownHosts,
-    connectionId
+    connectionId,
+    localGitOptions
   )
   // Why: when the project can't be resolved we must NOT fall back to an
   // unscoped `glab issue list` that infers the project from cwd. For a repo
@@ -123,7 +126,7 @@ export async function listIssues(
         ...glabHostnameArgs(projectRef, connectionId),
         `projects/${encodedProject(projectRef.path)}/issues?per_page=${limit}&order_by=updated_at&sort=desc${stateParam}${scopeParam}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = JSON.parse(stdout) as Record<string, unknown>[]
     // Why: GitLab's project issues endpoint returns true issues only
@@ -152,7 +155,8 @@ export async function createIssue(
   title: string,
   body: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
@@ -163,7 +167,8 @@ export async function createIssue(
     repoPath,
     preference,
     knownHosts,
-    connectionId
+    connectionId,
+    localGitOptions
   )
   if (!projectRef) {
     return {
@@ -186,7 +191,7 @@ export async function createIssue(
         // Why: GitLab uses `description` (not `body`) for issue text.
         `description=${body}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = JSON.parse(stdout) as { iid?: number; web_url?: string; url?: string }
     if (typeof data.iid !== 'number') {
@@ -218,11 +223,20 @@ export async function updateIssue(
   updates: GitLabIssueUpdate,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRefOverride?: ProjectRef | null
+  projectRefOverride?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const projectRef =
     projectRefOverride ??
-    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(connectionId), connectionId)).source
+    (
+      await resolveIssueSource(
+        repoPath,
+        preference,
+        await getGlabKnownHosts(connectionId),
+        connectionId,
+        localGitOptions
+      )
+    ).source
   if (!projectRef) {
     return {
       ok: false,
@@ -247,7 +261,7 @@ export async function updateIssue(
           repoFlag,
           ...glabHostnameArgs(projectRef, connectionId)
         ],
-        glabRepoExecOptions(repoPath, connectionId)
+        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
@@ -273,7 +287,7 @@ export async function updateIssue(
           '-f',
           `description=${updates.body}`
         ],
-        glabRepoExecOptions(repoPath, connectionId)
+        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
@@ -318,7 +332,10 @@ export async function updateIssue(
   if (hasEditArgs) {
     await acquire()
     try {
-      await glabExecFileAsync(editArgs, glabRepoExecOptions(repoPath, connectionId))
+      await glabExecFileAsync(
+        editArgs,
+        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+      )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
       errors.push(classifyGlabError(stderr).message)
@@ -343,11 +360,20 @@ export async function addIssueComment(
   body: string,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRefOverride?: ProjectRef | null
+  projectRefOverride?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabCommentResult> {
   const projectRef =
     projectRefOverride ??
-    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(connectionId), connectionId)).source
+    (
+      await resolveIssueSource(
+        repoPath,
+        preference,
+        await getGlabKnownHosts(connectionId),
+        connectionId,
+        localGitOptions
+      )
+    ).source
   if (!projectRef) {
     return {
       ok: false,
@@ -366,7 +392,7 @@ export async function addIssueComment(
         '-f',
         `body=${body}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = JSON.parse(stdout) as {
       id?: number
@@ -398,14 +424,16 @@ export async function addIssueComment(
 export async function listLabels(
   repoPath: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<string[]> {
   const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
     knownHosts,
-    connectionId
+    connectionId,
+    localGitOptions
   )
   if (!projectRef) {
     return []
@@ -421,7 +449,7 @@ export async function listLabels(
         '--jq',
         '.[].name'
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     return stdout
       .trim()
@@ -437,14 +465,16 @@ export async function listLabels(
 export async function listAssignableUsers(
   repoPath: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabAssignableUser[]> {
   const knownHosts = await getGlabKnownHosts(connectionId)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
     knownHosts,
-    connectionId
+    connectionId,
+    localGitOptions
   )
   if (!projectRef) {
     return []
@@ -464,7 +494,7 @@ export async function listAssignableUsers(
         '--jq',
         '.[] | {id, username, name, avatar_url, state}'
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     type RESTMember = {
       id?: number

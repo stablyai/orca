@@ -17,7 +17,7 @@ describe('right sidebar file/git runtime ownership boundaries', () => {
     'src/renderer/src/components/right-sidebar/useFileDuplicate.ts',
     'src/renderer/src/components/right-sidebar/useFileExplorerVisibleRowProjection.ts',
     'src/renderer/src/components/right-sidebar/useGitStatusPolling.ts',
-    'src/renderer/src/components/right-sidebar/Search.tsx',
+    'src/renderer/src/components/right-sidebar/useFileSearchRunner.ts',
     'src/renderer/src/components/quick-open-file-list.ts'
   ])('%s routes file/git requests by the selected worktree owner', (path) => {
     const text = source(path)

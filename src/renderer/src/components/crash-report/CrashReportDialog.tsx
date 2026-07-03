@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT,

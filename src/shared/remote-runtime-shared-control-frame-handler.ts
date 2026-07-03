@@ -1,5 +1,5 @@
 import { parseAuthenticatedFrame, parseReadyFrame } from './remote-runtime-request-frames'
-import type { RemoteRuntimeClientError } from './remote-runtime-client'
+import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { dispatchSharedControlFrame } from './remote-runtime-shared-control-frame-dispatch'
 import { parseSharedControlFrame } from './remote-runtime-shared-control-protocol'
 import { resolveSharedControlReadyWaiters } from './remote-runtime-shared-control-state'

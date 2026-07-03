@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { FilePlus, FolderPlus } from 'lucide-react'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +32,12 @@ export function FileExplorerBackgroundMenu({
   worktreePath: string
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
 }): React.JSX.Element {
+  useEffect(() => {
+    const close = (): void => onOpenChange(false)
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
+    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, close)
+  }, [onOpenChange])
+
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>

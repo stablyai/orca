@@ -1,12 +1,12 @@
-import { EventEmitter } from 'events'
-import { PassThrough } from 'stream'
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawn } from 'child_process'
+import { spawn } from 'node:child_process'
 import {
   classifyMacSystemResolverHealth,
   readCurrentProcessMacSystemResolverHealth
 } from './macos-system-resolver-health'
-import type { ChildProcessWithoutNullStreams } from 'child_process'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 vi.mock('child_process', () => ({
   spawn: vi.fn()

@@ -6,7 +6,7 @@ import type {
   MobileSyntaxSegment
 } from '../../../../src/session/mobile-file-syntax'
 import type { TerminalRecord } from '../../../../src/session/mobile-terminal-records'
-import type { DiffComment } from '../../../../../src/shared/types'
+import type { DiffComment, TuiAgent } from '../../../../../src/shared/types'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 
 export type Terminal = TerminalRecord
@@ -23,6 +23,7 @@ export type MobileSessionTab =
       status?: 'pending-handle' | 'ready'
       terminal: string | null
       agentStatus?: AgentStatusEntry | null
+      launchAgent?: TuiAgent
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }
@@ -83,6 +84,8 @@ export type FileDocState =
   | { status: 'loading' }
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
+  | { status: 'ready'; kind: 'image'; dataUri: string }
+  | { status: 'ready'; kind: 'html'; content: string }
   | { status: 'error'; message: string }
 
 export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>

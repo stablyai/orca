@@ -2,14 +2,14 @@ export function getGitCloneFailureMessage(
   stderr: string,
   options: { clonePath?: string | null } = {}
 ): string {
-  const lines = stderr
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map((line) => stripAnsi(line).trim())
-    .filter(Boolean)
+  let fallbackLine: string | null = null
 
-  for (let index = lines.length - 1; index >= 0; index--) {
-    const line = lines[index]
+  for (const rawLine of iterateLinesFromEnd(stderr)) {
+    const line = stripAnsi(rawLine).trim()
+    if (!line) {
+      continue
+    }
+    fallbackLine ??= line
     const fatalIndex = line.indexOf('fatal:')
     if (fatalIndex !== -1) {
       return formatGitCloneFailureLine(line.slice(fatalIndex), options)
@@ -20,7 +20,28 @@ export function getGitCloneFailureMessage(
     }
   }
 
-  return formatGitCloneFailureLine(lines.at(-1) ?? 'unknown error', options)
+  return formatGitCloneFailureLine(fallbackLine ?? 'unknown error', options)
+}
+
+function* iterateLinesFromEnd(value: string): Generator<string> {
+  let lineEnd = value.length
+  let index = value.length - 1
+
+  while (index >= 0) {
+    const code = value.charCodeAt(index)
+    if (code !== 10 && code !== 13) {
+      index--
+      continue
+    }
+
+    const delimiterStart =
+      code === 10 && index > 0 && value.charCodeAt(index - 1) === 13 ? index - 1 : index
+    yield value.slice(index + 1, lineEnd)
+    lineEnd = delimiterStart
+    index = delimiterStart - 1
+  }
+
+  yield value.slice(0, lineEnd)
 }
 
 function stripAnsi(value: string): string {

@@ -72,7 +72,7 @@ export function DiffSectionHeader({
       <div className="flex items-center gap-1 shrink-0 ml-2">
         {trailingContent}
         <button
-          className="p-0.5 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+          className="p-0.5 rounded text-muted-foreground hover:text-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={onOpenSection}
           title={openSectionTitle}
         >

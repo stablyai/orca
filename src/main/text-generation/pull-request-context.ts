@@ -27,11 +27,13 @@ function summarizeGitError(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Git command failed.'
   }
-  const lines = error.message
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  return lines.at(-1) ?? error.message
+  for (const rawLine of iterateGitOutputLinesFromEnd(error.message)) {
+    const line = rawLine.trim()
+    if (line.length > 0) {
+      return line
+    }
+  }
+  return error.message
 }
 
 async function requiredExec(execGit: GitExec, args: string[], label: string): Promise<string> {
@@ -55,10 +57,56 @@ type RemoteBranch = {
 }
 
 function splitGitLines(output: string): string[] {
-  return output
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
+  const lines: string[] = []
+  for (const rawLine of iterateGitOutputLines(output)) {
+    const line = rawLine.trim()
+    if (line.length > 0) {
+      lines.push(line)
+    }
+  }
+  return lines
+}
+
+function* iterateGitOutputLines(output: string): Generator<string> {
+  let lineStart = 0
+
+  for (let index = 0; index < output.length; index++) {
+    const code = output.charCodeAt(index)
+    if (code !== 10 && code !== 13) {
+      continue
+    }
+
+    yield output.slice(lineStart, index)
+    if (code === 13 && output.charCodeAt(index + 1) === 10) {
+      index++
+    }
+    lineStart = index + 1
+  }
+
+  if (lineStart <= output.length) {
+    yield output.slice(lineStart)
+  }
+}
+
+function* iterateGitOutputLinesFromEnd(output: string): Generator<string> {
+  let lineEnd = output.length
+  let index = output.length - 1
+
+  while (index >= 0) {
+    const code = output.charCodeAt(index)
+    if (code !== 10 && code !== 13) {
+      index--
+      continue
+    }
+
+    const delimiterStart =
+      code === 10 && index > 0 && output.charCodeAt(index - 1) === 13 ? index - 1 : index
+    yield output.slice(index + 1, lineEnd)
+    lineEnd = delimiterStart
+    index = delimiterStart - 1
+  }
+
+  yield output.slice(0, lineEnd)
 }
 
 async function getRemoteState(execGit: GitExec): Promise<RemoteState> {

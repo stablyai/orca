@@ -19,10 +19,14 @@ import {
   type AccountsSnapshot,
   type ProviderKey,
   getActiveProviderRateLimits,
+  getUsageBarState,
+  hasActiveProviderUsage,
+  hasRenderableUsage,
   UsageBar
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
+import { pickResumeWorktree } from '../src/worktree/resume-worktree'
 import type { RpcClient } from '../src/transport/rpc-client'
 import {
   useAllHostClients,
@@ -73,6 +77,10 @@ type WorktreeSummary = {
   displayName: string
   liveTerminalCount: number
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
+  // The worktree the desktop currently has focused (exactly one is true).
+  isActive?: boolean
+  // Last terminal-output time (ms); breaks ties when nothing is focused.
+  lastOutputAt?: number
 }
 
 type HostWorktreeInfo = {
@@ -179,7 +187,9 @@ function fetchWorktreeInfo(
   }
 
   client
-    .sendRequest('worktree.ps')
+    // Why: worktree.ps defaults to 200 and silently truncates; request the full
+    // set so the host worktree count and active count are accurate.
+    .sendRequest('worktree.ps', { limit: 10000 })
     .then((response) => {
       if (disposed()) {
         return
@@ -190,7 +200,8 @@ function fetchWorktreeInfo(
         setCachedWorktrees(hostId, worktrees)
         const activeStatuses = new Set(['working', 'active', 'permission'])
         const active = worktrees.filter((w) => w.status && activeStatuses.has(w.status))
-        const lastActive = active.length > 0 ? active[0] : (worktrees[0] ?? null)
+        // Mirror the desktop's focused workspace (see pickResumeWorktree).
+        const lastActive = pickResumeWorktree(worktrees)
         setInfo((prev) => ({
           ...prev,
           [hostId]: {
@@ -601,9 +612,10 @@ export default function HomeScreen() {
       if (!snap) {
         continue
       }
-      const hasClaude = snap.claude.accounts.length > 0
-      const hasCodex = snap.codex.accounts.length > 0
-      if (hasClaude || hasCodex) {
+      // Why: also show hosts whose only usage is the system-default login
+      // (no Orca-managed accounts but live rate-limit data for the active
+      // target), otherwise system-default users see no usage section at all.
+      if (hasRenderableUsage(snap, 'claude') || hasRenderableUsage(snap, 'codex')) {
         items.push({ host, snapshot: snap })
       }
     }
@@ -971,16 +983,16 @@ export default function HomeScreen() {
                             provider === 'claude'
                               ? snapshot.claude.accounts
                               : snapshot.codex.accounts
-                          if (accounts.length === 0) {
+                          const limits = getActiveProviderRateLimits(snapshot, provider)
+                          // Why: with no managed accounts, still render a
+                          // "System default" row when the active target has
+                          // live usage data; the row label already falls back
+                          // to "System default" below.
+                          if (accounts.length === 0 && !hasActiveProviderUsage(limits)) {
                             return null
                           }
-                          const limits = getActiveProviderRateLimits(snapshot, provider)
-                          const isFetching =
-                            limits?.status === 'fetching' || limits?.status === 'idle'
-                          const unavailable =
-                            limits == null ||
-                            limits.status === 'unavailable' ||
-                            limits.status === 'error'
+                          const sessionBar = getUsageBarState(limits, 'session')
+                          const weeklyBar = getUsageBarState(limits, 'weekly')
                           return (
                             <View key={provider} style={styles.accountsRow}>
                               <View style={styles.accountsIcon}>
@@ -997,15 +1009,15 @@ export default function HomeScreen() {
                                 <View style={styles.accountsBars}>
                                   <UsageBar
                                     label="5h"
-                                    usedPercent={limits?.session?.usedPercent ?? null}
-                                    unavailable={unavailable}
-                                    loading={isFetching && limits?.session == null}
+                                    usedPercent={sessionBar.usedPercent}
+                                    unavailable={sessionBar.unavailable}
+                                    loading={sessionBar.loading}
                                   />
                                   <UsageBar
                                     label="7d"
-                                    usedPercent={limits?.weekly?.usedPercent ?? null}
-                                    unavailable={unavailable}
-                                    loading={isFetching && limits?.weekly == null}
+                                    usedPercent={weeklyBar.usedPercent}
+                                    unavailable={weeklyBar.unavailable}
+                                    loading={weeklyBar.loading}
                                   />
                                 </View>
                               </View>

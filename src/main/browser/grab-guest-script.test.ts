@@ -128,12 +128,16 @@ describe('buildGuestOverlayScript', () => {
     expect(script).toContain('!SAFE_URL_PROTOCOLS.has(u.protocol)')
   })
 
-  it('arm script slices text nodes before normalizing bounded text', () => {
+  it('arm script folds bounded text without joining text-node chunks', () => {
     const script = buildGuestOverlayScript('arm')
 
-    expect(script).toContain("normalizeText((node.nodeValue || '').slice(0, remaining))")
+    expect(script).toContain(
+      "appendNormalizedText(acc, (node.nodeValue || '').slice(0, remaining), max)"
+    )
+    expect(script).toContain('appendNormalizedText(acc, value, BUDGET.selectedTextMaxLength)')
     expect(script).toContain('value = value.slice(start, end)')
-    expect(script).not.toContain('normalizeText(node.nodeValue ||')
+    expect(script).not.toContain("chunks.join(' ')")
+    expect(script).not.toContain('replace(/\\s+/g')
     expect(script).not.toContain("(el.textContent || '').trim()")
     expect(script).not.toContain('ref.textContent')
   })
@@ -144,5 +148,13 @@ describe('buildGuestOverlayScript', () => {
     expect(script).toContain('previousElementSibling')
     expect(script).toContain('nextElementSibling')
     expect(script).not.toContain('Array.from(parent.children)')
+  })
+
+  it('arm script tokenizes aria-labelledby without regex splitting', () => {
+    const script = buildGuestOverlayScript('arm')
+
+    expect(script).toContain('getAriaLabelledByIds')
+    expect(script).toContain('isAriaLabelledBySeparator')
+    expect(script).not.toContain('ariaLabelledBy.split(/\\s+/)')
   })
 })

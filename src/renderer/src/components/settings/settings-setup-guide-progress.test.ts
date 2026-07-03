@@ -22,13 +22,12 @@ describe('settings setup guide progress', () => {
       ready: true,
       doneCount: 0,
       total: FEATURE_WALL_SETUP_STEPS.length,
-      firstIncompleteStepId: 'split-terminal'
+      firstIncompleteStepId: 'notifications'
     })
   })
 
-  it('does not mark Settings complete when only the old five-step subset is done', () => {
+  it('does not mark Settings complete when only the old setup subset is done', () => {
     const stepDone = {
-      'split-terminal': true,
       'two-worktrees': true,
       notifications: true,
       'default-agent': true,
@@ -37,9 +36,9 @@ describe('settings setup guide progress', () => {
 
     expect(getSettingsSetupGuideProgress({ ready: true, stepDone })).toEqual({
       ready: true,
-      doneCount: 5,
+      doneCount: 4,
       total: FEATURE_WALL_SETUP_STEPS.length,
-      firstIncompleteStepId: 'browser'
+      firstIncompleteStepId: 'agent-capabilities'
     })
   })
 
@@ -74,7 +73,7 @@ describe('settings setup guide progress', () => {
     const progress = getSettingsSetupGuideProgress({
       ready: false,
       stepDone: {
-        'split-terminal': true
+        'two-worktrees': true
       }
     })
 

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this file is a command adapter for one external surface, Agent Browser automation. It stays separate from OrcaRuntimeService so runtime state does not grow further while browser routing remains easy to scan in one place. */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { ipcMain, webContents, type BrowserWindow } from 'electron'
 import type {
   BrowserBackResult,
@@ -50,6 +50,7 @@ import type {
   BrowserWaitResult
 } from '../../shared/runtime-types'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { BrowserBackend } from '../browser/browser-backend'
 import { browserManager } from '../browser/browser-manager'
 import { BrowserError } from '../browser/cdp-bridge'
 import {
@@ -142,6 +143,20 @@ export type RuntimeBrowserCommandHost = {
   resolveWorktreeSelector(selector: string): Promise<{ id: string }>
   getAuthoritativeWindow(): BrowserWindow
   getAvailableAuthoritativeWindow(): BrowserWindow | null
+  // Why: headless serve has no renderer window; browser pages are backed by a
+  // main-process offscreen backend instead. Null when offscreen browsing is
+  // unavailable (e.g. environment can't support it), which keeps capability
+  // reporting honest.
+  getOffscreenBrowserBackend(): BrowserBackend | null
+  // Why: the session-tab snapshot is the source of truth for which tab is
+  // focused. A headless browser create must mark itself active there so paired
+  // clients keep focus on the new tab instead of the reconcile snapping back to
+  // a terminal (whose activeTabType the snapshot still reports).
+  markHeadlessBrowserSessionTabActive?(
+    worktreeId: string | undefined,
+    browserPageId: string,
+    targetGroupId?: string
+  ): void
 }
 
 export class RuntimeBrowserCommands {
@@ -1033,7 +1048,13 @@ export class RuntimeBrowserCommands {
   }
 
   async browserMouseClick(
-    params: { x: number; y: number; button?: string; radius?: number } & BrowserCommandTargetParams
+    params: {
+      x: number
+      y: number
+      button?: string
+      radius?: number
+      modifiers?: ('cmd' | 'ctrl' | 'alt' | 'shift')[]
+    } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().mouseClick(
@@ -1042,7 +1063,8 @@ export class RuntimeBrowserCommands {
       params.button,
       target.worktreeId,
       target.browserPageId,
-      clampOptionalNumber(params.radius, 0, 64)
+      clampOptionalNumber(params.radius, 0, 64),
+      params.modifiers
     )
   }
 
@@ -1306,21 +1328,43 @@ export class RuntimeBrowserCommands {
     worktree?: string
     profileId?: string
     waitForRegistration?: boolean
+    activate?: boolean
+    targetGroupId?: string
   }): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const worktreeId = params.worktree
       ? (await this.host.resolveWorktreeSelector(params.worktree)).id
       : undefined
-    if (!this.host.getAvailableAuthoritativeWindow()) {
+    const sessionPartition = browserSessionRegistry.resolveKnownPartition(params.profileId)
+    if (!sessionPartition) {
       throw new BrowserError(
-        'browser_error',
-        'Browser tab creation requires a desktop renderer; headless orca serve does not support browser panes yet.'
+        'invalid_argument',
+        `Browser profile ${params.profileId} was not found`
+      )
+    }
+    // Why: a desktop renderer mounts a <webview>; a headless serve has none and
+    // backs the page with a main-process offscreen WebContents instead. Both
+    // register into BrowserManager so all downstream commands resolve uniformly.
+    if (!this.host.getAvailableAuthoritativeWindow()) {
+      const offscreen = this.host.getOffscreenBrowserBackend()
+      if (!offscreen) {
+        throw new BrowserError('browser_error', 'This host does not support browser panes.')
+      }
+      return this.createBrowserTabOffscreen(
+        offscreen,
+        url,
+        worktreeId,
+        params.profileId,
+        params.activate,
+        params.targetGroupId
       )
     }
     const { browserPageId } = await this.createBrowserTabInRenderer(
       url,
       worktreeId,
-      params.profileId
+      params.profileId,
+      params.profileId ? sessionPartition : undefined,
+      params.activate
     )
 
     // Why: the renderer creates the Zustand tab immediately, but the webview must
@@ -1424,7 +1468,8 @@ export class RuntimeBrowserCommands {
       win.webContents.send('browser:requestTabSetProfile', {
         requestId,
         browserPageId,
-        profileId: profile.id
+        profileId: profile.id,
+        sessionPartition: profile.partition
       })
     })
 
@@ -1484,7 +1529,8 @@ export class RuntimeBrowserCommands {
     const created = await this.createBrowserTabInRenderer(
       sourceTab.url,
       sourceTab.worktreeId ?? target.worktreeId,
-      profile.id
+      profile.id,
+      profile.partition
     )
     // Why: parity with browserTabCreate. Wait for the cloned tab's webview to
     // register so the returned browserPageId is operable by the next CLI call.
@@ -1629,6 +1675,23 @@ export class RuntimeBrowserCommands {
       }
     }
 
+    // Why: headless serve owns its pages via the offscreen backend, with no
+    // renderer to ask. Destroy the offscreen page directly when that backend is
+    // the one serving this host (no renderer window).
+    const offscreen = this.host.getAvailableAuthoritativeWindow()
+      ? null
+      : this.host.getOffscreenBrowserBackend()
+    if (offscreen) {
+      // Why: for implicit close (no --page/--index) resolve the active page like
+      // the renderer path does, so we don't report success while closing nothing.
+      const resolvedTabId = tabId ?? bridge.getActivePageId(worktreeId)
+      if (!resolvedTabId) {
+        return { closed: false }
+      }
+      await offscreen.closeTab(resolvedTabId)
+      return { closed: true }
+    }
+
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
     await new Promise<void>((resolve, reject) => {
@@ -1697,10 +1760,41 @@ export class RuntimeBrowserCommands {
     return this.enrichBrowserTabInfo(tab)
   }
 
-  private async createBrowserTabInRenderer(
+  // Why: headless serve path. The offscreen backend registers the page
+  // synchronously, so there is no webview-mount wait. The page already loaded the
+  // URL during createTab, so we only sync the bridge's active tab and notify the
+  // (absent) renderer is skipped — nav state is read from the live WebContents.
+  private async createBrowserTabOffscreen(
+    offscreen: BrowserBackend,
     url: string,
     worktreeId?: string,
-    profileId?: string
+    profileId?: string,
+    activate?: boolean,
+    targetGroupId?: string
+  ): Promise<{ browserPageId: string }> {
+    const { browserPageId } = await offscreen.createTab({ url, worktreeId, profileId })
+    const bridge = this.host.getAgentBrowserBridge()
+    const wcId = bridge?.getRegisteredTabs(worktreeId).get(browserPageId)
+    if (bridge && wcId != null) {
+      bridge.setActiveTab(wcId, worktreeId)
+    }
+    // Why: only a user-initiated create (activate:true, e.g. the UI or a mobile
+    // HTML-link tap) should steal focus by marking the tab active in the session
+    // snapshot. Background/agent creates (CLI `tab create`, automation) must NOT,
+    // or they'd yank a connected client/mobile to the new tab. Mirrors the
+    // renderer path, which forwards `activate` and never force-focuses otherwise.
+    if (activate === true) {
+      this.host.markHeadlessBrowserSessionTabActive?.(worktreeId, browserPageId, targetGroupId)
+    }
+    return { browserPageId }
+  }
+
+  private async createBrowserTabInRenderer(
+    url: string,
+    worktreeId: string | undefined,
+    profileId: string | undefined,
+    sessionPartition: string | undefined,
+    activate?: boolean
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
@@ -1712,10 +1806,10 @@ export class RuntimeBrowserCommands {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         reply: { requestId: string; browserPageId?: string; error?: string }
       ): void => {
-        if (reply.requestId !== requestId) {
+        if (event.sender !== win.webContents || reply.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -1731,7 +1825,14 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
-        sessionProfileId: profileId
+        // Why: leave sessionProfileId/sessionPartition undefined when no explicit
+        // profile was chosen so the renderer still applies the user's configured
+        // default-profile inheritance. Only thread the resolved partition when a
+        // profile is named — sending null here would suppress inheritance and
+        // force the shared default partition.
+        sessionProfileId: profileId,
+        sessionPartition,
+        activate
       })
     })
 

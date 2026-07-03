@@ -47,19 +47,12 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
     title: translate('auto.components.settings.privacy.search.6d258d2ed6', 'Diagnostics'),
     description: translate(
       'auto.components.settings.privacy.search.8b08f32366',
-      'Trace files and OTLP export controls.'
+      'App diagnostics and support sharing controls.'
     ),
     keywords: [
       ...translateSearchKeyword(
         'auto.components.settings.privacy.search.c0494ff48a',
         'diagnostics'
-      ),
-      ...translateSearchKeyword('auto.components.settings.privacy.search.40de3c2f19', 'trace'),
-      ...translateSearchKeyword('auto.components.settings.privacy.search.685c68a81f', 'logs'),
-      ...translateSearchKeyword('auto.components.settings.privacy.search.9ea93ce3d6', 'otlp'),
-      ...translateSearchKeyword(
-        'auto.components.settings.privacy.search.4a583f3a2f',
-        'opentelemetry'
       ),
       ...translateSearchKeyword('auto.components.settings.privacy.search.1686c07fee', 'support')
     ]

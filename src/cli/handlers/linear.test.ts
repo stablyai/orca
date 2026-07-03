@@ -165,6 +165,35 @@ describe('orca linear CLI handlers', () => {
     })
   })
 
+  it('maps project list to agent project RPC with capped limit', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_projects', {
+        projects: [],
+        meta: {
+          query: 'launch',
+          workspaceId: 'all',
+          limit: 50,
+          returned: 0,
+          hasMore: false,
+          partial: false,
+          workspaceErrors: []
+        }
+      })
+    )
+
+    await main(
+      ['linear', 'project', 'list', '--query', 'launch', '--workspace', 'all', '--limit', '500'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('linear.agentProjectList', {
+      query: 'launch',
+      limit: 50,
+      workspaceId: 'all'
+    })
+  })
+
   it('keeps boolean flags between Linear and search from consuming the subcommand', async () => {
     queueFixtures(
       callMock,
@@ -396,6 +425,8 @@ describe('orca linear CLI handlers', () => {
         'Triage bug',
         '--team',
         'ENG',
+        '--project',
+        'project-1',
         '--state',
         'Todo',
         '--assignee',
@@ -420,6 +451,7 @@ describe('orca linear CLI handlers', () => {
       expect.objectContaining({
         title: 'Triage bug',
         teamInput: 'ENG',
+        projectInput: 'project-1',
         state: 'Todo',
         assignee: 'me',
         priority: 2,

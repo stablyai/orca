@@ -21,6 +21,7 @@ export const LINEAR_ERROR_CODES = [
   'linear_invalid_assignee',
   'linear_invalid_label',
   'linear_invalid_parent',
+  'linear_invalid_project',
   'linear_team_required',
   'linear_invalid_url',
   'linear_body_too_large',
@@ -73,6 +74,7 @@ export type {
   LinearIssueCommentNode,
   LinearIssueContextResult,
   LinearIssueListResult,
+  LinearProjectListResult,
   LinearIssueRelation,
   LinearIssueSummary,
   LinearNamedEntity,
@@ -107,6 +109,12 @@ export type LinearIssueListFilter = 'assigned' | 'created' | 'all' | 'completed'
 export type LinearIssueListRequest = {
   filter?: LinearIssueListFilter
   teamInput?: string
+  limit?: number
+  workspaceId?: string | 'all'
+}
+
+export type LinearProjectListRequest = {
+  query?: string
   limit?: number
   workspaceId?: string | 'all'
 }
@@ -149,6 +157,7 @@ export type LinearCreateRequest = {
   estimate?: number
   dueDate?: string
   labels?: string[]
+  projectInput?: string
   parentInput?: string
   parentCurrent?: boolean
   workspaceId?: string

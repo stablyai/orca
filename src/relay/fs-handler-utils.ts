@@ -5,8 +5,8 @@
  * These functions depend only on their arguments (plus `rg` being on PATH),
  * so they are straightforward to test independently.
  */
-import { spawn, execFile } from 'child_process'
-import { open } from 'fs/promises'
+import { spawn, execFile } from 'node:child_process'
+import { open } from 'node:fs/promises'
 import {
   buildRgArgs,
   createAccumulator,
@@ -14,6 +14,7 @@ import {
   ingestRgJsonLine,
   SEARCH_TIMEOUT_MS as SHARED_SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
+import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
 import type { SearchResult as SharedSearchResult } from '../shared/types'
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -31,14 +32,7 @@ export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
 export const DEFAULT_MAX_RESULTS = 2000
 
 export const IMAGE_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
+  ...IMAGE_FILE_MIME_TYPES,
   '.pdf': 'application/pdf'
 }
 

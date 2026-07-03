@@ -21,6 +21,7 @@ describe('client UI RPC methods', () => {
       visibleTaskProviders: ['github', 'gitlab'],
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
+      compactWorktreeCards: true,
       githubProjects: {
         pinned: [],
         recent: [],
@@ -50,6 +51,8 @@ describe('client UI RPC methods', () => {
       visibleTaskProviders: ['github', 'linear'],
       defaultRepoSelection: ['repo-1', 'repo-2'],
       defaultLinearTeamSelection: ['team-1', 'team-2'],
+      experimentalNewWorktreeCardStyle: true,
+      compactWorktreeCards: true,
       githubProjects: {
         pinned: [],
         recent: [],
@@ -72,6 +75,8 @@ describe('client UI RPC methods', () => {
         defaultTaskSource: 'linear',
         visibleTaskProviders: ['github', 'linear'],
         defaultTaskViewPreset: 'my-prs',
+        experimentalNewWorktreeCardStyle: true,
+        compactWorktreeCards: true,
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
@@ -84,6 +89,8 @@ describe('client UI RPC methods', () => {
       defaultTaskSource: 'linear',
       visibleTaskProviders: ['github', 'linear'],
       defaultTaskViewPreset: 'my-prs',
+      experimentalNewWorktreeCardStyle: true,
+      compactWorktreeCards: true,
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
@@ -131,6 +138,7 @@ describe('client UI RPC methods', () => {
       rightSidebarTab: 'checks',
       rightSidebarExplorerView: 'search',
       showActiveOnly: true,
+      hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     }
     const runtime = {
@@ -146,6 +154,7 @@ describe('client UI RPC methods', () => {
         rightSidebarExplorerView: 'search',
         showActiveOnly: true,
         hideSleepingWorkspaces: true,
+        hideAutomationGeneratedWorkspaces: true,
         filterRepoIds: ['repo-1']
       })
     )
@@ -156,6 +165,7 @@ describe('client UI RPC methods', () => {
       rightSidebarExplorerView: 'search',
       showActiveOnly: true,
       hideSleepingWorkspaces: true,
+      hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     })
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })
@@ -164,7 +174,8 @@ describe('client UI RPC methods', () => {
   it('accepts persisted literal UI arrays and nested UI state', async () => {
     const updated: PersistedUIState = {
       ...getDefaultUIState(),
-      worktreeCardProperties: ['status', 'inline-agents'],
+      worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
+      _worktreeCardModeDefaulted: true,
       statusBarItems: ['codex'],
       taskResumeState: {
         githubMode: 'items',
@@ -199,7 +210,8 @@ describe('client UI RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const payload = {
-      worktreeCardProperties: ['status', 'inline-agents'],
+      worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
+      _worktreeCardModeDefaulted: true,
       statusBarItems: ['codex'],
       taskResumeState: {
         githubMode: 'items',
@@ -229,7 +241,10 @@ describe('client UI RPC methods', () => {
     }
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 
-    expect(runtime.updateUIState).toHaveBeenCalledWith(payload)
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      ...payload,
+      worktreeCardProperties: ['status', 'unread', 'branch', 'automation', 'inline-agents']
+    })
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })
   })
 
@@ -264,6 +279,86 @@ describe('client UI RPC methods', () => {
     )
 
     expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.updateUIState).not.toHaveBeenCalled()
+  })
+
+  it('rejects unknown worktree card properties', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { worktreeCardProperties: ['status', 'pr-status'] })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.updateUIState).not.toHaveBeenCalled()
+  })
+
+  it('rejects star-nag persisted state mutations from remote clients', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', {
+        starNagBaselineAgents: 10,
+        starNagAppVersion: '1.2.3',
+        starNagAgentValueMomentAppVersion: '1.2.3',
+        starNagNextThreshold: 70,
+        starNagCompleted: true,
+        starNagDeferredUntil: null
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.updateUIState).not.toHaveBeenCalled()
+  })
+
+  it('strips retired worktree card properties from legacy clients', async () => {
+    const updated: PersistedUIState = {
+      ...getDefaultUIState(),
+      worktreeCardProperties: ['status', 'issue']
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { worktreeCardProperties: ['status', 'unread', 'ci', 'pr', 'issue'] })
+    )
+
+    expect(runtime.updateUIState).toHaveBeenCalledWith({
+      worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr']
+    })
+    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+  })
+
+  it('rejects each star-nag persisted state mutation field from remote clients', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+    const forbiddenPayloads = [
+      { starNagBaselineAgents: 10 },
+      { starNagAppVersion: '1.2.3' },
+      { starNagAgentValueMomentAppVersion: '1.2.3' },
+      { starNagNextThreshold: 70 },
+      { starNagCompleted: true },
+      { starNagDeferredUntil: null }
+    ]
+
+    for (const payload of forbiddenPayloads) {
+      const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
+      expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    }
     expect(runtime.updateUIState).not.toHaveBeenCalled()
   })
 

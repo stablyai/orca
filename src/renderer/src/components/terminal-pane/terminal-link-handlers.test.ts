@@ -7,6 +7,7 @@ import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
   getTerminalHtmlFileOpenHint,
+  getTerminalUrlOpenHint,
   installFilePathLinkClickFallback,
   isTerminalLinkActivation,
   openFilePathLinkAtBufferPosition,
@@ -156,11 +157,86 @@ describe('isTerminalLinkActivation', () => {
 })
 
 describe('handleOscLink', () => {
-  it('ignores http links without the platform modifier', () => {
+  it('ignores http links without the platform modifier on desktop', () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
 
-    handleOscLink('https://example.com', { metaKey: false, ctrlKey: false }, deps)
+    expect(
+      handleOscLink('https://example.com', { metaKey: false, ctrlKey: false, preventDefault }, deps)
+    ).toBe(false)
+
     expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('routes http links with the platform modifier on desktop', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
+
+    expect(
+      handleOscLink('https://example.com', { metaKey: true, ctrlKey: false, preventDefault }, deps)
+    ).toBe(true)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(preventDefault).toHaveBeenCalled()
+  })
+
+  it('ignores non-primary OSC link clicks', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
+
+    handleOscLink(
+      'https://example.com',
+      {
+        button: 1,
+        metaKey: false,
+        ctrlKey: false,
+        preventDefault
+      },
+      deps
+    )
+    handleOscLink(
+      'https://example.com',
+      {
+        button: 2,
+        metaKey: false,
+        ctrlKey: false,
+        preventDefault
+      },
+      deps
+    )
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('does not steal macOS ctrl-click context-menu gestures for OSC links', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
+
+    handleOscLink(
+      'https://example.com',
+      {
+        button: 0,
+        metaKey: false,
+        ctrlKey: true,
+        preventDefault
+      },
+      deps
+    )
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
   })
 
   it('routes to the system browser when openLinksInApp is off', () => {
@@ -288,7 +364,8 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -344,7 +421,8 @@ describe('handleOscLink', () => {
 
     expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts')
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -377,22 +455,38 @@ describe('handleOscLink', () => {
     setPlatform('Macintosh')
     expect(getTerminalFileOpenHint()).toBe('⌘+click to open or ⇧⌘+click for default app')
     expect(getTerminalHtmlFileOpenHint()).toBe('⌘+click to open or ⇧⌘+click for default browser')
+    expect(getTerminalUrlOpenHint()).toBe('⌘+click to open or ⇧⌘+click for system browser')
 
     setPlatform('Windows')
     expect(getTerminalFileOpenHint()).toBe('Ctrl+click to open or Shift+Ctrl+click for default app')
     expect(getTerminalHtmlFileOpenHint()).toBe(
       'Ctrl+click to open or Shift+Ctrl+click for default browser'
     )
+    expect(getTerminalUrlOpenHint()).toBe(
+      'Ctrl+click to open or Shift+Ctrl+click for system browser'
+    )
   })
 
-  it('opens local file URL links in Orca when the platform modifier is pressed', async () => {
+  it('ignores local file URL links without the platform modifier on desktop', async () => {
     setPlatform('Windows')
 
-    handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: false }, deps)
-    // Without modifier, nothing happens
-    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: false }, deps)).toBe(
+      false
+    )
 
-    handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: true }, deps)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('opens local file URL links in Orca with the platform modifier on desktop', async () => {
+    setPlatform('Windows')
+
+    expect(handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: true }, deps)).toBe(
+      true
+    )
 
     // openDetectedFilePath is async (fire-and-forget), so flush the microtask queue
     // before asserting on positive behavior.
@@ -400,7 +494,8 @@ describe('handleOscLink', () => {
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -424,7 +519,8 @@ describe('handleOscLink', () => {
       targetPath: 'C:/repo/src/index.ts'
     })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -452,7 +548,8 @@ describe('handleOscLink', () => {
       targetPath: '//server/share/repo/test.txt'
     })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
+      expect.objectContaining({ filePath: '//server/share/repo/test.txt' }),
+      { forceContentReload: true }
     )
   })
 
@@ -483,7 +580,8 @@ describe('handleOscLink', () => {
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -524,7 +622,8 @@ describe('handleOscLink', () => {
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -556,7 +655,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '//server/Share/Repo/src/app.ts',
         relativePath: 'src/app.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -588,7 +688,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/tmp/project/docs/README.md',
         relativePath: 'project/docs/README.md'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -614,7 +715,8 @@ describe('handleOscLink', () => {
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/alice/file.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -646,7 +748,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/tmp/src/main.ts',
         relativePath: 'src/main.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -679,7 +782,8 @@ describe('handleOscLink', () => {
         filePath: '/tmp/src/main.ts',
         relativePath: 'src/main.ts',
         runtimeEnvironmentId: 'env-1'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -703,7 +807,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/home/me/repo/src/main.ts',
         relativePath: 'src/main.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -723,7 +828,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/home/me/repo/report.html',
         relativePath: 'report.html'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -872,7 +978,8 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledTimes(1)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/second.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/second.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -946,7 +1053,8 @@ describe('createFilePathLinkProvider range bounds', () => {
       ['/repo/package.json', true],
       ['/repo/Folder With Space/content.js', true],
       ['/repo/My Folder', true]
-    ])
+    ]),
+    depsOverrides: Partial<Parameters<typeof createFilePathLinkProvider>[1]> = {}
   ) {
     const pane = makePane(rows)
     const managerRef = {
@@ -961,7 +1069,8 @@ describe('createFilePathLinkProvider range bounds', () => {
         startupCwd: '/repo',
         managerRef,
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-        pathExistsCache
+        pathExistsCache,
+        ...depsOverrides
       },
       linkTooltip,
       getTerminalFileOpenHint()
@@ -1320,7 +1429,8 @@ describe('createFilePathLinkProvider range bounds', () => {
     // existence probe; openDetectedFilePath still stats before routing.
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/package.json' })
+      expect.objectContaining({ filePath: '/tmp/package.json' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1393,7 +1503,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' })
+      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1417,7 +1528,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' })
+      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1483,6 +1595,23 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(links.map((link) => link.text)).toEqual(['/repo/My Folder'])
   })
 
+  it('uses the pane-specific cwd instead of a stale lifecycle startup cwd', async () => {
+    vi.mocked(window.api.shell.pathExists).mockImplementation(async (pathValue) => {
+      return pathValue === '/repo/package.json'
+    })
+    const { provider } = createProviderSetup([makeBufferLine('package.json')], new Map(), {
+      startupCwd: '/repo/packages/web',
+      getPaneLinkCwd: () => '/repo'
+    })
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links.map((link) => link.text)).toEqual(['package.json'])
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith('/repo/package.json')
+  })
+
   it('opens an existing extensionless spaced prefix from direct fallback cache', async () => {
     setPlatform('Macintosh')
     const line = 'see /repo/My Folder now'
@@ -1506,7 +1635,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/repo/My Folder' })
+      expect.objectContaining({ filePath: '/repo/My Folder' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1615,6 +1745,39 @@ describe('createFilePathLinkProvider range bounds', () => {
     disposable.dispose()
   })
 
+  it('ignores regular URLs from a direct ordinary-click fallback on desktop', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
+    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
   it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false }
@@ -1648,6 +1811,34 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     disposable.dispose()
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
+  it('does not steal macOS ctrl-click context-menu gestures in the URL fallback', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 90,
+      clientY: 25,
+      preventDefault,
+      stopPropagation: vi.fn()
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
   })
 
   it('asks for the first-use preference from the direct URL click fallback', async () => {

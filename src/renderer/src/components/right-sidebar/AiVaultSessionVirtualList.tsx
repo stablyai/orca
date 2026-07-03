@@ -1,12 +1,24 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list-virtual-rows'
 import { EmptyState, SessionLoadingState, VaultGroupHeader } from './AiVaultPanelControls'
 import { VaultSessionRow } from './AiVaultSessionRow'
 import type { AiVaultSessionGroup } from './ai-vault-session-filters'
+import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
+import {
+  aiVaultSessionResumeLabel,
+  type AiVaultSessionResumeActions,
+  type AiVaultSessionResumeState
+} from './ai-vault-session-resume'
+import {
+  canJumpToAiVaultSessionWorktree,
+  isAiVaultSessionInCurrentWorktree,
+  type AiVaultSessionWorktreeInfo
+} from './ai-vault-session-worktree'
 import {
   extractVaultVirtualRowIndexes,
   getVaultStickyHeaderIndexes,
@@ -15,6 +27,7 @@ import {
 } from './ai-vault-virtual-rows'
 
 const VAULT_ROW_OVERSCAN = 8
+const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
 
 type AiVaultListRow =
   | { type: 'group'; group: AiVaultSessionGroup }
@@ -27,9 +40,14 @@ export function AiVaultSessionVirtualList({
   sessionsCount,
   filteredSessionsCount,
   error,
-  resumeDisabled,
-  buildResumeCommand,
+  buildResumeStartup,
+  getOriginalPaneTarget,
+  getWorktreeInfo,
+  getSessionResumeState,
+  getSessionResumeActions,
   onToggleGroup,
+  onJumpToOriginalPane,
+  onJumpToWorktree,
   onResume,
   onCopyResume,
   onCopyId,
@@ -44,11 +62,16 @@ export function AiVaultSessionVirtualList({
   sessionsCount: number
   filteredSessionsCount: number
   error: string | null
-  resumeDisabled: boolean
-  buildResumeCommand: (session: AiVaultSession) => string
+  buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
+  getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
+  getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
+  getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
   onToggleGroup: (key: string) => void
-  onResume: (session: AiVaultSession) => void
-  onCopyResume: (session: AiVaultSession) => void
+  onJumpToOriginalPane: (session: AiVaultSession) => void
+  onJumpToWorktree: (worktreeId: string) => void
+  onResume: (session: AiVaultSession, worktreeId: string) => void
+  onCopyResume: (session: AiVaultSession, worktreeId?: string | null) => void
   onCopyId: (session: AiVaultSession) => void
   onCopyPath: (session: AiVaultSession) => void
   onOpenLog: (session: AiVaultSession) => void
@@ -58,6 +81,7 @@ export function AiVaultSessionVirtualList({
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
+  const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(() => new Set())
 
   const vaultRows = useMemo(() => {
     const rows: AiVaultListRow[] = []
@@ -77,8 +101,16 @@ export function AiVaultSessionVirtualList({
   const virtualizer = useVirtualizer({
     count: vaultRows.length,
     getScrollElement: () => listScrollRef.current,
-    estimateSize: (index) =>
-      vaultRows[index]?.type === 'group' ? VAULT_GROUP_HEADER_ROW_HEIGHT : VAULT_SESSION_ROW_HEIGHT,
+    estimateSize: (index) => {
+      const row = vaultRows[index]
+      if (row?.type === 'group') {
+        return VAULT_GROUP_HEADER_ROW_HEIGHT
+      }
+      if (row?.type === 'session' && expandedSessionIds.has(row.session.id)) {
+        return VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT
+      }
+      return VAULT_SESSION_ROW_HEIGHT
+    },
     overscan: VAULT_ROW_OVERSCAN,
     // Why: keep the active group header mounted so CSS sticky can pin it while
     // its sessions scroll underneath in the virtual list.
@@ -97,6 +129,18 @@ export function AiVaultSessionVirtualList({
       return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
     }
   })
+
+  const toggleSessionDetails = useCallback((sessionId: string) => {
+    setExpandedSessionIds((current) => {
+      const next = new Set(current)
+      if (next.has(sessionId)) {
+        next.delete(sessionId)
+      } else {
+        next.add(sessionId)
+      }
+      return next
+    })
+  }, [])
 
   const virtualItems = virtualizer.getVirtualItems()
   activeStickyHeaderIndexRef.current = getActiveStickyHeaderIndexForScroll({
@@ -139,9 +183,16 @@ export function AiVaultSessionVirtualList({
               activeStickyHeaderIndex={activeStickyHeaderIndexRef.current}
               measureElement={virtualizer.measureElement}
               collapsedGroups={collapsedGroups}
-              resumeDisabled={resumeDisabled}
-              buildResumeCommand={buildResumeCommand}
+              expandedSessionIds={expandedSessionIds}
+              buildResumeStartup={buildResumeStartup}
+              getOriginalPaneTarget={getOriginalPaneTarget}
+              getWorktreeInfo={getWorktreeInfo}
+              getSessionResumeState={getSessionResumeState}
+              getSessionResumeActions={getSessionResumeActions}
               onToggleGroup={onToggleGroup}
+              onToggleSessionDetails={toggleSessionDetails}
+              onJumpToOriginalPane={onJumpToOriginalPane}
+              onJumpToWorktree={onJumpToWorktree}
               onResume={onResume}
               onCopyResume={onCopyResume}
               onCopyId={onCopyId}
@@ -164,9 +215,16 @@ function AiVaultVirtualRow({
   activeStickyHeaderIndex,
   measureElement,
   collapsedGroups,
-  resumeDisabled,
-  buildResumeCommand,
+  expandedSessionIds,
+  buildResumeStartup,
+  getOriginalPaneTarget,
+  getWorktreeInfo,
+  getSessionResumeState,
+  getSessionResumeActions,
   onToggleGroup,
+  onToggleSessionDetails,
+  onJumpToOriginalPane,
+  onJumpToWorktree,
   onResume,
   onCopyResume,
   onCopyId,
@@ -181,11 +239,18 @@ function AiVaultVirtualRow({
   activeStickyHeaderIndex: number | null
   measureElement: (node: Element | null) => void
   collapsedGroups: ReadonlySet<string>
-  resumeDisabled: boolean
-  buildResumeCommand: (session: AiVaultSession) => string
+  expandedSessionIds: ReadonlySet<string>
+  buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
+  getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
+  getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
+  getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
   onToggleGroup: (key: string) => void
-  onResume: (session: AiVaultSession) => void
-  onCopyResume: (session: AiVaultSession) => void
+  onToggleSessionDetails: (sessionId: string) => void
+  onJumpToOriginalPane: (session: AiVaultSession) => void
+  onJumpToWorktree: (worktreeId: string) => void
+  onResume: (session: AiVaultSession, worktreeId: string) => void
+  onCopyResume: (session: AiVaultSession, worktreeId?: string | null) => void
   onCopyId: (session: AiVaultSession) => void
   onCopyPath: (session: AiVaultSession) => void
   onOpenLog: (session: AiVaultSession) => void
@@ -197,6 +262,19 @@ function AiVaultVirtualRow({
   }
 
   const isActiveStickyHeader = row.type === 'group' && activeStickyHeaderIndex === index
+  const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
+  const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
+  // Why: omit the jump affordance when the session already lives in the
+  // worktree on screen — jumping there is a no-op the "Current worktree" badge
+  // already conveys.
+  const showJumpToWorktree = !isAiVaultSessionInCurrentWorktree(worktreeInfo)
+  const worktreeJumpId =
+    showJumpToWorktree && canJumpToAiVaultSessionWorktree(worktreeInfo)
+      ? worktreeInfo?.worktreeId
+      : null
+  const resumeState = row.type === 'session' ? getSessionResumeState(row.session) : null
+  const resumeActions = row.type === 'session' ? getSessionResumeActions(row.session) : null
+  const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState) : ''
 
   return (
     <div
@@ -217,10 +295,39 @@ function AiVaultVirtualRow({
       ) : (
         <VaultSessionRow
           session={row.session}
-          resumeCommand={buildResumeCommand(row.session)}
-          resumeDisabled={resumeDisabled}
-          onResume={() => onResume(row.session)}
-          onCopyResume={() => onCopyResume(row.session)}
+          resumeStartup={buildResumeStartup(row.session, resumeState?.worktreeId)}
+          worktreeInfo={worktreeInfo}
+          detailsExpanded={expandedSessionIds.has(row.session.id)}
+          resumeDisabled={resumeState?.blocked ?? true}
+          resumeLabel={resumeLabel}
+          resumeActions={
+            resumeActions ?? {
+              worktree: { worktreeId: null, disabled: true },
+              newTab: { worktreeId: null, disabled: true }
+            }
+          }
+          onToggleDetails={() => onToggleSessionDetails(row.session.id)}
+          onJumpToOriginalPane={
+            originalPaneTarget ? () => onJumpToOriginalPane(row.session) : undefined
+          }
+          showJumpToWorktree={showJumpToWorktree}
+          onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
+          onResume={() => {
+            if (resumeState?.worktreeId) {
+              onResume(row.session, resumeState.worktreeId)
+            }
+          }}
+          onResumeInWorktree={() => {
+            if (resumeActions?.worktree.worktreeId) {
+              onResume(row.session, resumeActions.worktree.worktreeId)
+            }
+          }}
+          onResumeInNewTab={() => {
+            if (resumeActions?.newTab.worktreeId) {
+              onResume(row.session, resumeActions.newTab.worktreeId)
+            }
+          }}
+          onCopyResume={() => onCopyResume(row.session, resumeState?.worktreeId)}
           onCopyId={() => onCopyId(row.session)}
           onCopyPath={() => onCopyPath(row.session)}
           onOpenLog={() => onOpenLog(row.session)}

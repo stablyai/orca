@@ -18,9 +18,51 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
   3: 'Medium',
   4: 'Low'
 }
+const LINEAR_INLINE_FIELD_MAX_CHARS = 800
 
 function normalizeInline(value: string): string {
-  return value.replace(/\s+/g, ' ').trim()
+  return foldLinearInlineWhitespace(value, LINEAR_INLINE_FIELD_MAX_CHARS)
+}
+
+// Why: Linear fields can contain pasted text, but the final context snapshot
+// is capped; inline metadata should not allocate a full regex-normalized copy.
+function foldLinearInlineWhitespace(value: string, maxChars: number): string {
+  const suffix = ` ${TRUNCATED_MARKER}`
+  const bodyLimit = Math.max(0, maxChars - suffix.length)
+  let normalized = ''
+  let pendingWhitespace = false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (isLinearInlineWhitespace(code)) {
+      pendingWhitespace = normalized.length > 0
+      continue
+    }
+    if (pendingWhitespace) {
+      normalized += ' '
+      pendingWhitespace = false
+    }
+    normalized += value.charAt(index)
+    if (normalized.length > bodyLimit) {
+      return `${normalized.slice(0, bodyLimit).trimEnd()}${suffix}`
+    }
+  }
+  return normalized
+}
+
+function isLinearInlineWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }
 
 function truncateText(value: string, maxChars: number): string {
@@ -44,20 +86,18 @@ function applyTotalCap(value: string, maxChars: number): string {
     return suffix.trim().slice(0, maxChars)
   }
 
-  const lines = value.split('\n')
-  let output = ''
-  for (const line of lines) {
-    const next = output ? `${output}\n${line}` : line
-    if (next.length > budget) {
-      if (!output) {
-        output = line.slice(0, budget).trimEnd()
-      }
-      break
-    }
-    output = next
-  }
+  return `${value.slice(0, findLinearContextCapEnd(value, budget)).trimEnd()}${suffix}`
+}
 
-  return `${output.trimEnd()}${suffix}`
+function findLinearContextCapEnd(value: string, budget: number): number {
+  let lastLineBreak = -1
+  const scanEnd = Math.min(value.length, budget + 1)
+  for (let index = 0; index < scanEnd; index += 1) {
+    if (value.charCodeAt(index) === 10) {
+      lastLineBreak = index
+    }
+  }
+  return lastLineBreak > 0 ? lastLineBreak : budget
 }
 
 function getPriorityLabel(priority: number): string {
@@ -108,10 +148,7 @@ function sortComments(comments: LinearComment[]): LinearComment[] {
 }
 
 function indentBlock(value: string): string {
-  return value
-    .split('\n')
-    .map((line) => `  ${line}`)
-    .join('\n')
+  return `  ${value.replace(/\n/g, '\n  ')}`
 }
 
 export function buildLinearIssueContextSnapshot(

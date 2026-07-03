@@ -1,5 +1,6 @@
 import type {
   CreateWorktreeResult,
+  CreateWorktreeArgs,
   CreateSparseCheckoutRequest,
   DetectedWorktree,
   DetectedWorktreeListResult,
@@ -10,6 +11,7 @@ import type {
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
+  WorkspaceLineage,
   WorktreeStartupLaunch,
   Worktree,
   WorktreeBaseStatusEvent,
@@ -38,10 +40,16 @@ export type WorktreeMetaUpdateOptions = {
   shouldApply?: WorktreeMetaUpdateGuard
 }
 
+export type WorktreeRenameRequest = {
+  worktreeId: string
+  rowKey?: string
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
   worktreeLineageById: Record<string, WorktreeLineage>
+  workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   /**
@@ -61,7 +69,7 @@ export type WorktreeSlice = {
   activePendingCreationId: string | null
   // Why: signals the matching worktree card's inline title editor to open. The
   // workspace.rename shortcut sets this; the card clears it on consume.
-  renamingWorktreeId: string | null
+  renamingWorktreeId: WorktreeRenameRequest | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
   remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
@@ -110,6 +118,7 @@ export type WorktreeSlice = {
     worktreeId: string,
     args: { parentWorktreeId?: string; noParent?: boolean }
   ) => Promise<void>
+  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,
@@ -139,24 +148,30 @@ export type WorktreeSlice = {
     linkedLinearIssueOrganizationUrlKey?: string | null,
     linkedBitbucketPR?: number | null,
     linkedAzureDevOpsPR?: number | null,
-    linkedGiteaPR?: number | null
+    linkedGiteaPR?: number | null,
+    compareBaseRef?: string,
+    // Why: reserved for automation-dispatch flows so host-side provenance can
+    // be minted securely; regular create callers should omit this.
+    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
-  /** Merge a status patch (phase/error/status/loaderVisible) into an existing
-   *  pending entry. */
+  /** Merge a status patch into an existing pending entry. */
   updatePendingWorktreeCreation: (
     creationId: string,
     patch: {
       phase?: WorktreeCreationPhase
       status?: 'creating' | 'error'
+      startedAt?: number
       error?: string
       loaderVisible?: boolean
+      request?: PendingWorktreeCreation['request']
+      provisioningLog?: string
     }
   ) => void
-  /** Drop a pending entry (on success or dismiss), clearing the active surface
-   *  if it pointed at this creation. */
-  removePendingWorktreeCreation: (creationId: string) => void
+  /** Drop a pending entry, clearing the active surface if it pointed at this
+   *  creation. VM cleanup is for cancellation/dismissal, not successful handoff. */
+  removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
@@ -176,13 +191,14 @@ export type WorktreeSlice = {
     updates: Partial<WorktreeMeta>,
     options?: WorktreeMetaUpdateOptions
   ) => Promise<void>
+  ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>
   /**
-   * Pin/unpin worktrees, then reveal the first changed one. The reveal is the
-   * point: pinning moves the row to the Pinned section (unpinning moves it
-   * back), so without it the viewport stays put and the user loses the row.
+   * Pin/unpin worktrees, then reveal the first changed one. The reveal keeps
+   * the shortcut action visible even though pinned worktrees also remain in
+   * their normal sidebar groups.
    */
   setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
   markWorktreeUnread: (worktreeId: string) => void
@@ -216,7 +232,7 @@ export type WorktreeSlice = {
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
   setActiveFolderWorkspace: (folderWorkspaceId: string) => void
-  setRenamingWorktreeId: (worktreeId: string | null) => void
+  setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
   /**
@@ -225,6 +241,13 @@ export type WorktreeSlice = {
    * one-shot at hydration time. See design §4.4.
    */
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
+  /**
+   * Re-key every worktree-scoped map + pointer from `oldWorktreeId` to
+   * `newWorktreeId` after a folder rename changed the worktree's path-derived id.
+   * The inverse of purge: move state instead of dropping it, so the live worktree
+   * keeps its tabs, terminals, and selections. No-op when the ids match.
+   */
+  migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
     identity: { head?: string; branch?: string | null }

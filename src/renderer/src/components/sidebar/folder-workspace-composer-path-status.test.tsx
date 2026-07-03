@@ -49,12 +49,12 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('does not block creation with an expired negative path status', () => {
+  it('blocks creation while an expired path status refresh is pending', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(20_000)
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
     const cacheKey = useAppStore.getState().getFolderWorkspacePathStatusCacheKey(request)
-    const fetchFolderWorkspacePathStatus = vi.fn()
+    const fetchFolderWorkspacePathStatus = vi.fn().mockResolvedValue(null)
     useAppStore.setState({
       projectGroups: [projectGroup],
       fetchFolderWorkspacePathStatus,
@@ -84,14 +84,99 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
           __folderWorkspaceComposerPathStatusResult?: { pathStatusBlocksCreate: boolean }
         }
       ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
-    ).toBe(false)
+    ).toBe(true)
     expect(
       (
         globalThis as {
           __folderWorkspaceComposerPathStatusResult?: { pathStatusProjectError: string | null }
         }
       ).__folderWorkspaceComposerPathStatusResult?.pathStatusProjectError
-    ).toBeNull()
+    ).toContain('/workspace/platform')
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(
+      (
+        globalThis as {
+          __folderWorkspaceComposerPathStatusResult?: { pathStatusBlocksCreate: boolean }
+        }
+      ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
+    ).toBe(true)
+    expect(
+      (
+        globalThis as {
+          __folderWorkspaceComposerPathStatusResult?: { pathStatusProjectError: string | null }
+        }
+      ).__folderWorkspaceComposerPathStatusResult?.pathStatusProjectError
+    ).toContain('/workspace/platform')
+    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, { force: true })
+  })
+
+  it('unblocks creation when the first path status check settles without cache', async () => {
+    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
+    const fetchFolderWorkspacePathStatus = vi.fn().mockResolvedValue(null)
+    useAppStore.setState({
+      projectGroups: [projectGroup],
+      fetchFolderWorkspacePathStatus,
+      folderWorkspacePathStatuses: {}
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(<HookProbe />)
+    })
+
+    expect(
+      (
+        globalThis as {
+          __folderWorkspaceComposerPathStatusResult?: { pathStatusBlocksCreate: boolean }
+        }
+      ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
+    ).toBe(true)
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(
+      (
+        globalThis as {
+          __folderWorkspaceComposerPathStatusResult?: { pathStatusBlocksCreate: boolean }
+        }
+      ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
+    ).toBe(false)
+    expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, { force: true })
+  })
+
+  it('blocks creation while the first path status check is unknown', () => {
+    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
+    const fetchFolderWorkspacePathStatus = vi.fn()
+    useAppStore.setState({
+      projectGroups: [projectGroup],
+      fetchFolderWorkspacePathStatus,
+      folderWorkspacePathStatuses: {}
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(<HookProbe />)
+    })
+
+    expect(
+      (
+        globalThis as {
+          __folderWorkspaceComposerPathStatusResult?: { pathStatusBlocksCreate: boolean }
+        }
+      ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
+    ).toBe(true)
     expect(fetchFolderWorkspacePathStatus).toHaveBeenCalledWith(request, { force: true })
   })
 
@@ -102,7 +187,7 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
     const cacheKey = useAppStore.getState().getFolderWorkspacePathStatusCacheKey(request)
     useAppStore.setState({
       projectGroups: [projectGroup],
-      fetchFolderWorkspacePathStatus: vi.fn(),
+      fetchFolderWorkspacePathStatus: vi.fn().mockResolvedValue(null),
       folderWorkspacePathStatuses: {
         [cacheKey]: {
           status: {
@@ -132,7 +217,7 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
     ).toBe(false)
   })
 
-  it('rerenders when a cached blocking path status expires', () => {
+  it('blocks while refreshing after a cached blocking path status expires', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(20_000)
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
@@ -177,6 +262,31 @@ describe('useFolderWorkspaceComposerPathStatus', () => {
           __folderWorkspaceComposerPathStatusResult?: { pathStatusBlocksCreate: boolean }
         }
       ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
-    ).toBe(false)
+    ).toBe(true)
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(
+      (
+        globalThis as {
+          __folderWorkspaceComposerPathStatusResult?: { pathStatusBlocksCreate: boolean }
+        }
+      ).__folderWorkspaceComposerPathStatusResult?.pathStatusBlocksCreate
+    ).toBe(true)
+  })
+
+  it('tracks settled path status refreshes by cache key and expiry generation', () => {
+    const source = useFolderWorkspaceComposerPathStatus.toString()
+    expect(source).toContain('activePathStatusRefreshIdRef')
+    expect(source).toContain('activePathStatusRefreshIdRef.current !== refreshId')
+    expect(source).toContain('completedPathStatusRefreshKeys')
+    expect(source).toContain('`${pathStatusCacheKey}:${cacheExpiryTick}`')
+    expect(source).toContain('new Set(current).add(pathStatusRefreshKey)')
+    expect(source).toContain('!completedPathStatusRefreshKeys.has(pathStatusRefreshKey)')
+    expect(source).toContain('cachedBlockingPathStatus')
+    expect(source).toContain('cachedPathStatusEntry.status.reason === "ambiguous-connection"')
   })
 })

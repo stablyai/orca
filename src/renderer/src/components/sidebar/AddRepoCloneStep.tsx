@@ -55,10 +55,7 @@ export function CloneStep({
       <>
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.sidebar.AddRepoSteps.a93ef169b5',
-              'Browse host filesystem'
-            )}
+            {translate('auto.components.sidebar.AddRepoSteps.a93ef169b5', 'Browse host filesystem')}
           </DialogTitle>
           <DialogDescription>
             {translate(

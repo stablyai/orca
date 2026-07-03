@@ -17,12 +17,6 @@ import { getNotificationSoundOptions } from '@/components/notification-sound-opt
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
-export type NotificationDraft = {
-  agentTaskComplete: boolean
-  terminalBell: boolean
-  notifyWhenFocused: boolean
-}
-
 type NotificationStepProps = {
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void

@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
@@ -307,16 +307,41 @@ export function enableMainProcessGpuFeatures(): void {
     return
   }
 
+  // Why: Blink force-loses the oldest WebGL context past 16 per renderer, and
+  // each attached terminal pane holds one — a busy worktree (tabs × splits)
+  // can exceed that, silently downgrading evicted panes to the DOM renderer.
+  // 128 covers real layouts while keeping a bound so context leaks surface.
+  app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
+
+  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
+  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
+  const isLinuxX11Override =
+    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
+  const isLinuxWaylandSession =
+    process.platform === 'linux' &&
+    !isLinuxX11Override &&
+    (Boolean(process.env.WAYLAND_DISPLAY) ||
+      process.env.XDG_SESSION_TYPE === 'wayland' ||
+      ozonePlatformHint === 'wayland' ||
+      ozonePlatform === 'wayland')
+  if (isLinuxWaylandSession) {
+    // Why: #5319 reproduces when Wayland loses the eager GPU channel. Keep
+    // acceleration available, but drop the GPU sandbox and let Chromium open
+    // the GPU channel lazily on this compositor path.
+    app.commandLine.appendSwitch('disable-gpu-sandbox')
+  }
+
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
     // Why: mirror VS Code's conservative Electron GPU-channel startup flags
     // instead of opting into Vulkan/SkiaGraphite/unsafe WebGPU globally.
     // Terminal acceleration is controlled by xterm WebGL in the renderer.
-    'EarlyEstablishGpuChannel',
-    'EstablishGpuChannelAsync',
+    ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
     existingFeatures
   ]
     .filter(Boolean)
     .join(',')
-  app.commandLine.appendSwitch('enable-features', features)
+  if (features) {
+    app.commandLine.appendSwitch('enable-features', features)
+  }
 }

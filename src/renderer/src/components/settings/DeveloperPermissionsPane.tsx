@@ -105,7 +105,7 @@ const PERMISSIONS: PermissionDefinition[] = [
     get description() {
       return translate(
         'auto.components.settings.DeveloperPermissionsPane.7ca17b62c8',
-        'Persistent access to protected folders from terminal sessions.'
+        'Recommended when projects, worktrees, or symlinked files touch macOS-protected folders.'
       )
     },
     actionLabel: 'Open Settings',

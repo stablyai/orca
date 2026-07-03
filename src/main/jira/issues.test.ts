@@ -18,10 +18,10 @@ vi.mock('./client', () => ({
   jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
 }))
 
-function makeEntry(): JiraClientForSite {
+function makeEntry(id = 'site-1'): JiraClientForSite {
   return {
     site: {
-      id: 'site-1',
+      id,
       siteUrl: 'https://example.atlassian.net',
       email: 'ada@example.com',
       displayName: 'Example Jira',
@@ -58,6 +58,71 @@ describe('Jira issue operations', () => {
         title: 'Fix auth'
       })
     ).rejects.toThrow(error.message)
+  })
+
+  it('rejects single-site search failures so the UI can surface them', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden'))
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'site-1')).rejects.toThrow('Forbidden')
+  })
+
+  it('includes Jira status codes in surfaced single-site search failures', async () => {
+    const error = Object.assign(new Error('Forbidden'), { status: 403 })
+    getClientsMock.mockReturnValue([makeEntry('site-1')])
+    jiraRequestMock.mockRejectedValueOnce(error)
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'site-1')).rejects.toThrow(
+      'Error 403: Forbidden'
+    )
+  })
+
+  it('keeps healthy sites when one site fails under an "all" search', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValueOnce({
+      issues: [{ id: '1', key: 'BRV-1', fields: { summary: 'Healthy' } }]
+    })
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).resolves.toMatchObject([
+      { key: 'BRV-1', title: 'Healthy' }
+    ])
+  })
+
+  it('keeps healthy sites when the saved selection fans out without an explicit site', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock.mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValueOnce({
+      issues: [{ id: '1', key: 'BRV-1', fields: { summary: 'Healthy' } }]
+    })
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20)).resolves.toMatchObject([
+      { key: 'BRV-1', title: 'Healthy' }
+    ])
+  })
+
+  it('surfaces an error when every site fails under an "all" search', async () => {
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    jiraRequestMock
+      .mockRejectedValueOnce(new Error('Forbidden'))
+      .mockRejectedValueOnce(new Error('Service Unavailable'))
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).rejects.toThrow('Forbidden')
+  })
+
+  it('prefers operational failures when every "all" search site fails', async () => {
+    const authError = new Error('Unauthorized')
+    const operationalError = new Error('Service Unavailable')
+    getClientsMock.mockReturnValue([makeEntry('site-1'), makeEntry('site-2')])
+    isAuthErrorMock.mockImplementation((error) => error === authError)
+    jiraRequestMock.mockRejectedValueOnce(authError).mockRejectedValueOnce(operationalError)
+    const { searchIssues } = await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'all')).rejects.toThrow('Service Unavailable')
+    expect(clearTokenMock).toHaveBeenCalledWith('site-1')
   })
 
   it('paginates Jira project search results before sorting them', async () => {
@@ -197,6 +262,107 @@ describe('Jira issue operations', () => {
       summary: 'Fix Jira create',
       customfield_10010: { id: 'option-1' }
     })
+  })
+
+  it('maps Jira ADF descriptions into Markdown blocks and lists', async () => {
+    const { mapJiraIssue } = await import('./issues')
+
+    const issue = mapJiraIssue(makeEntry().site, {
+      id: 'issue-33',
+      key: 'PM-33',
+      fields: {
+        summary: 'BE - Tests E2E/Cleanup',
+        description: {
+          type: 'doc',
+          version: 1,
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'História' },
+                { type: 'hardBreak' },
+                { type: 'text', text: 'Coverage ownership' }
+              ]
+            },
+            {
+              type: 'bulletList',
+              content: [
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'admin - JOAO' }]
+                    }
+                  ]
+                },
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'attachment batch - JOAO' }]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              type: 'orderedList',
+              content: [
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'API module' }]
+                    }
+                  ]
+                },
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'UI module' }]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'Done' }]
+            }
+          ]
+        },
+        project: { id: '10000', key: 'PM', name: 'Project Management' },
+        issuetype: { id: '10001', name: 'Task' },
+        status: {
+          id: '1',
+          name: 'To Do',
+          statusCategory: { key: 'new', name: 'To Do' }
+        },
+        labels: [],
+        created: '2026-06-18T00:00:00.000Z',
+        updated: '2026-06-18T00:00:00.000Z'
+      }
+    })
+
+    expect(issue.description).toBe(
+      [
+        'História',
+        'Coverage ownership',
+        '',
+        '- admin - JOAO',
+        '- attachment batch - JOAO',
+        '',
+        '1. API module',
+        '2. UI module',
+        '',
+        'Done'
+      ].join('\n')
+    )
   })
 
   it('maps comments from the Jira comments page key', async () => {

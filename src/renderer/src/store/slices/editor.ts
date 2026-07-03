@@ -5,6 +5,11 @@ import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
+import {
+  buildCheckRunDetailsTabId,
+  getCheckRunDetailsTabLabel,
+  type OpenCheckRunDetailsState
+} from '@/components/editor/check-run-details-tab'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
@@ -30,13 +35,15 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
-import {
-  formatSubmodulePushFailureDetail,
-  stripCredentialsFromMessage
-} from '../../../../shared/git-remote-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
+import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
+import {
+  isNonFastForwardRemoteError,
+  resolveRemoteOperationErrorMessage
+} from '@/lib/source-control-remote-error'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import {
   fastForwardRuntimeGit,
@@ -52,7 +59,9 @@ import {
   statRuntimePath
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
@@ -87,6 +96,7 @@ export type DiffSource =
   | 'staged'
   | 'branch'
   | 'commit'
+  | 'combined-all'
   | 'combined-uncommitted'
   | 'combined-branch'
   | 'combined-commit'
@@ -112,6 +122,33 @@ type BranchCompareLike = Pick<
   'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'
 >
 
+function getKnownGitHead(head: string | null | undefined): string | undefined {
+  const trimmed = head?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+function createLoadingBranchCompareSummary(baseRef: string): GitBranchCompareSummary {
+  return {
+    baseRef,
+    baseOid: null,
+    compareRef: 'HEAD',
+    headOid: null,
+    mergeBase: null,
+    changedFiles: 0,
+    status: 'loading'
+  }
+}
+
+function branchCompareMatchesStatusHead(
+  summary: GitBranchCompareSummary,
+  statusHead: string
+): boolean {
+  const summaryHead = getKnownGitHead(summary.headOid)
+  // Why: git status reports '(initial)' for unborn branches, while branch
+  // compare represents that same state as a null headOid.
+  return summaryHead === statusHead || (statusHead === '(initial)' && summary.headOid === null)
+}
+
 type CommitCompareLike = Pick<
   GitCommitCompareSummary,
   'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
@@ -121,7 +158,7 @@ type CommitCompareLike = Pick<
 }
 
 type CombinedDiffAlternate = {
-  source: 'combined-uncommitted' | 'combined-branch'
+  source: 'combined-all' | 'combined-branch'
   branchCompare?: BranchCompareSnapshot
 }
 
@@ -216,7 +253,18 @@ export type OpenFile = {
    * tab from the tree bumps this so the panel refetches instead of reusing a
    * stale snapshot. */
   diffContentReloadNonce?: number
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
+  /** Why: terminal/agent links can be the user's manual recovery path when a
+   * remote watcher misses an external write. Bumping this refetches clean tabs. */
+  fileContentReloadNonce?: number
+  /** Why: CI check full-details tabs are virtual editor tabs backed by fetched
+   *  PR check-run metadata instead of a file on disk. */
+  checkRunDetails?: OpenCheckRunDetailsState
+  /** Why: on the web client an editor tab can either be mirrored from the host
+   *  runtime's session snapshot or opened locally by the web user. Only mirrored
+   *  tabs may be culled when they vanish from a later host snapshot; locally
+   *  opened tabs have no host counterpart and must survive snapshot syncs. */
+  mirroredFromRuntimeSession?: boolean
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
@@ -231,7 +279,12 @@ export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 export type EditorViewMode = 'edit' | 'changes'
 
 /** Enough state to restore a tab via `openFile` after `closeFile` (id is always filePath). */
-export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
+// Why: omit mirroredFromRuntimeSession so a user-reopened tab is never treated
+// as host-owned; otherwise the web session sync could cull it on the next snapshot.
+export type ClosedEditorTabSnapshot = Omit<
+  OpenFile,
+  'id' | 'isDirty' | 'mirroredFromRuntimeSession'
+>
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
@@ -239,10 +292,25 @@ type EditorOpenTargetOptions = {
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null
+  forceContentReload?: boolean
 }
 
 type GitRuntimeOperationOptions = {
   runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  applyUpstreamStatus?: boolean
+}
+
+function resolveDiffRuntimeEnvironmentId(
+  state: AppState,
+  worktreeId: string,
+  explicitRuntimeEnvironmentId: string | null | undefined
+): string | null | undefined {
+  if (explicitRuntimeEnvironmentId !== undefined) {
+    return explicitRuntimeEnvironmentId
+  }
+  // Why: Source Control callers often know only the worktree. Runtime-host
+  // diffs still need their owner stamped so content loads through runtime RPC.
+  return getRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? undefined
 }
 
 export type PendingEditorReveal = {
@@ -333,11 +401,16 @@ export type EditorSlice = {
   markdownFrontmatterVisible: Record<string, boolean>
   setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
 
+  // Markdown table of contents
+  markdownTocPanelWidth: number
+  setMarkdownTocPanelWidth: (width: number) => void
+
   // Right sidebar
   rightSidebarOpen: boolean
   rightSidebarWidth: number
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
+  rightSidebarRouteRequestId: number
   rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
   activityBarPosition: ActivityBarPosition
@@ -381,6 +454,7 @@ export type EditorSlice = {
       targetGroupId?: string
       recordReplacedPreview?: boolean
       suppressActiveRuntimeFallback?: boolean
+      forceContentReload?: boolean
     }
   ) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
@@ -444,7 +518,8 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     alternate?: CombinedDiffAlternate,
-    areaFilter?: string
+    areaFilter?: string,
+    entriesSnapshot?: GitStatusEntry[]
   ) => void
   openConflictFile: (
     worktreeId: string,
@@ -466,6 +541,19 @@ export type EditorSlice = {
     entries: ConflictReviewEntry[],
     source: ConflictReviewState['source']
   ) => void
+  openCheckRunDetails: (
+    worktreeId: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+  ) => void
+  patchOpenCheckRunDetails: (
+    worktreeId: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+  ) => void
+  reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,
@@ -487,6 +575,7 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  gitStatusHeadByWorktree: Record<string, string>
   // Why: when status was truncated at the entry limit (a repo with an enormous
   // un-ignored folder), the SCM view shows a "too many changes" state and
   // polling pauses. `{ limit }` when huge, absent otherwise.
@@ -523,7 +612,7 @@ export type EditorSlice = {
     connectionId?: string,
     pushTarget?: GitPushTarget,
     options?: GitRuntimeOperationOptions
-  ) => Promise<void>
+  ) => Promise<GitUpstreamStatus | null>
   pushBranch: (
     worktreeId: string,
     worktreePath: string,
@@ -571,12 +660,19 @@ export type EditorSlice = {
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
   gitBranchCompareRequestKeyByWorktree: Record<string, string>
-  beginGitBranchCompareRequest: (worktreeId: string, requestKey: string, baseRef: string) => void
+  gitBranchCompareRequestStatusHeadByWorktree: Record<string, string | null>
+  beginGitBranchCompareRequest: (
+    worktreeId: string,
+    requestKey: string,
+    baseRef: string,
+    options?: { preserveExistingSummary?: boolean }
+  ) => void
   setGitBranchCompareResult: (
     worktreeId: string,
     requestKey: string,
     result: { summary: GitBranchCompareSummary; entries: GitBranchChangeEntry[] }
   ) => void
+  clearGitBranchCompare: (worktreeId: string) => void
 
   // File search state
   fileSearchStateByWorktree: Record<
@@ -618,7 +714,7 @@ function openWorkspaceEditorItem(
   fileId: string,
   worktreeId: string,
   label: string,
-  contentType: 'editor' | 'diff' | 'conflict-review',
+  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
   isPreview?: boolean,
   targetGroupId?: string
 ): string {
@@ -647,7 +743,12 @@ function openWorkspaceEditorItem(
 }
 
 function isEditorTabContentType(contentType: Tab['contentType']): boolean {
-  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+  return (
+    contentType === 'editor' ||
+    contentType === 'diff' ||
+    contentType === 'conflict-review' ||
+    contentType === 'check-details'
+  )
 }
 
 function getReplaceablePreviewFileId(
@@ -858,6 +959,19 @@ function withDiffContentReloadRequest(file: OpenFile): OpenFile {
   }
 }
 
+function shouldRequestExistingFileContentReload(
+  existing: OpenFile,
+  nextMode: OpenFile['mode'],
+  options: EditorOpenTargetOptions | undefined
+): boolean {
+  return (
+    options?.forceContentReload === true &&
+    !existing.isDirty &&
+    (existing.mode === 'edit' || existing.mode === 'markdown-preview') &&
+    (nextMode === 'edit' || nextMode === 'markdown-preview')
+  )
+}
+
 function isEditorFileIdOccupiedByOtherOwner(
   file: Pick<
     OpenFile,
@@ -878,6 +992,12 @@ function matchesEditorMode(
   modes: readonly OpenFile['mode'][] | undefined
 ): boolean {
   return !modes || modes.includes(file.mode)
+}
+
+function getReusableOpenFileModes(mode: OpenFile['mode']): readonly OpenFile['mode'][] {
+  // Why: the same path can be open as both a diff and an editable file; matching
+  // by path alone collapses those distinct visible tabs onto one OpenFile.
+  return [mode]
 }
 
 function resolveEditorFileIdForOwner(
@@ -1099,246 +1219,6 @@ function migrateHydratedEditorTabsAndGroups(
   }
 }
 
-const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
-const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
-
-// Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
-// server-side pre-receive hook message) should not blow up the toast. Cap the
-// detail length so the toast stays readable; the underlying error is still
-// rethrown for console/logs if a caller needs the full payload.
-function truncateDetail(detail: string): string {
-  if (detail.length <= REMOTE_OPERATION_DETAIL_MAX_LENGTH) {
-    return detail
-  }
-  return `${detail.slice(0, REMOTE_OPERATION_DETAIL_MAX_LENGTH).trimEnd()}...`
-}
-
-function extractPublishFailureDetail(message: string): string | null {
-  const normalized = message.replace(/\r\n/g, '\n')
-  const lines = normalized
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  const fatalLine = lines.find((line) => line.startsWith('fatal:'))
-  if (fatalLine) {
-    return truncateDetail(stripCredentialsFromMessage(fatalLine.slice('fatal:'.length).trim()))
-  }
-  const remoteLine = lines.find((line) => line.startsWith('remote:'))
-  if (remoteLine) {
-    return truncateDetail(stripCredentialsFromMessage(remoteLine.slice('remote:'.length).trim()))
-  }
-  return null
-}
-
-function resolveSubmodulePushFailureMessage(
-  message: string,
-  operationLabel: string
-): string | null {
-  const detail = formatSubmodulePushFailureDetail(message)
-  return detail ? `${operationLabel} failed. ${truncateDetail(detail)}` : null
-}
-
-function isNonFastForwardRemoteError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false
-  }
-  return (
-    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message) ||
-    formatSubmodulePushFailureDetail(error.message)?.includes('has remote changes') === true
-  )
-}
-
-export function resolveRemoteOperationErrorMessage(
-  error: unknown,
-  options?: {
-    publish?: boolean
-    isPush?: boolean
-    isForcePush?: boolean
-    isSync?: boolean
-    isFetch?: boolean
-    isFastForward?: boolean
-    isRebase?: boolean
-  }
-): string {
-  if (!(error instanceof Error)) {
-    return REMOTE_OPERATION_FAILED_MESSAGE
-  }
-
-  if (/unmerged files|needs merge|you have not concluded your merge/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — resolve existing conflicts first.'
-    }
-    return options?.isSync
-      ? 'Sync blocked — resolve existing merge conflicts first.'
-      : 'Pull blocked — resolve existing merge conflicts first.'
-  }
-
-  if (/automatic merge failed|CONFLICT \(|fix conflicts/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase stopped with conflicts. Resolve them in Source Control, then continue the rebase.'
-    }
-    return options?.isSync
-      ? 'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
-      : 'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
-  }
-
-  if (options?.publish) {
-    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Publish Branch')
-    if (submoduleMessage) {
-      return submoduleMessage
-    }
-  }
-
-  if (options?.isSync) {
-    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Sync')
-    if (submoduleMessage) {
-      return submoduleMessage
-    }
-  }
-
-  if (options?.isForcePush) {
-    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Force Push')
-    if (submoduleMessage) {
-      return submoduleMessage
-    }
-  }
-
-  if (options?.isPush) {
-    const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Push')
-    if (submoduleMessage) {
-      return submoduleMessage
-    }
-  }
-
-  // Why: under sync, the inner push runs *after* a successful pull, so a
-  // non-fast-forward at that point means the remote raced ahead between
-  // fetch and push — not "user forgot to pull". Saying "Pull first" would
-  // be wrong (sync just did). Branch isSync above the shared NFF path so
-  // sync gets a sync-shaped message instead of inheriting the push wording.
-  if (
-    options?.isSync &&
-    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
-  ) {
-    return 'Sync failed — remote moved while syncing. Try again.'
-  }
-
-  // Why: force-with-lease rejection means the remote moved since our last
-  // snapshot; telling the user to pull would defeat the explicit force-push
-  // path and can reintroduce commits they meant to replace.
-  if (
-    options?.isForcePush &&
-    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message)
-  ) {
-    return 'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
-  }
-
-  // Why: non-fast-forward/rejected detection is shared across publish and push so
-  // both paths surface the same actionable toast regardless of operation type.
-  if (/non-fast-forward|fetch first|updates were rejected/i.test(error.message)) {
-    return 'Push rejected — remote has changes. Pull first, then try again.'
-  }
-
-  // Why: `git pull` / merge refuses to run when the working tree has changes
-  // that would be overwritten; surface a single readable line instead of the
-  // multi-line git stderr (which lists every affected path).
-  if (
-    /local changes.*would be overwritten|Please commit your changes or stash them/i.test(
-      error.message
-    )
-  ) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — commit or stash your local changes first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — commit or stash your local changes first.'
-    }
-    return 'Pull blocked — commit or stash your local changes first.'
-  }
-
-  if (/Pull would overwrite local changes/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — commit or stash your local changes first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — commit or stash your local changes first.'
-    }
-    return 'Pull blocked — commit or stash your local changes first.'
-  }
-
-  if (/Pull would overwrite untracked files/i.test(error.message)) {
-    if (options?.isRebase) {
-      return 'Rebase blocked — move, remove, or add untracked files first.'
-    }
-    if (options?.isFastForward) {
-      return 'Fast-forward blocked — move, remove, or add untracked files first.'
-    }
-    return 'Pull blocked — move, remove, or add untracked files first.'
-  }
-
-  if (options?.publish) {
-    // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
-    // keeps the toast human-readable while preserving the actionable fatal reason.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Publish Branch failed. ${detail}. Check your remote access and try again.`
-    }
-
-    return 'Publish Branch failed. Check your remote access and try again.'
-  }
-
-  if (options?.isSync) {
-    // Why: the user invoked Sync — surface "Sync failed" rather than leaking
-    // the inner-step name ("Push failed"). Detail extraction matches push so
-    // auth / protected-branch reasons stay actionable.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Sync failed. ${detail}. Check your remote access and try again.`
-    }
-    return 'Sync failed. Check your connection and try again.'
-  }
-
-  if (options?.isForcePush) {
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Force Push failed. ${detail}. Check your remote access and try again.`
-    }
-    return 'Force Push failed. Check your connection and try again.'
-  }
-
-  if (options?.isPush) {
-    // Why: surfacing fatal/remote lines from git is more actionable than a generic
-    // connection message for auth errors, protected branches, etc.
-    const detail = extractPublishFailureDetail(error.message)
-    if (detail) {
-      return `Push failed. ${detail}. Check your remote access and try again.`
-    }
-    return 'Push failed. Check your connection and try again.'
-  }
-
-  if (options?.isFetch) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Fetch failed. ${detail}`
-  }
-
-  if (options?.isFastForward) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Fast-forward failed. ${detail}`
-  }
-
-  if (options?.isRebase) {
-    const detail =
-      extractPublishFailureDetail(error.message) ??
-      truncateDetail(stripCredentialsFromMessage(error.message))
-    return `Rebase failed. ${detail}`
-  }
-
-  return error.message
-}
-
 function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
   const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
@@ -1451,11 +1331,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
     }),
 
+  // Markdown table of contents
+  markdownTocPanelWidth: 240,
+  setMarkdownTocPanelWidth: (width) =>
+    set((s) => ({
+      markdownTocPanelWidth: clampMarkdownTocPanelWidth(width, undefined, s.markdownTocPanelWidth)
+    })),
+
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
   rightSidebarTab: 'explorer',
   rightSidebarExplorerView: 'files',
+  rightSidebarRouteRequestId: 0,
   rightSidebarTabByWorktree: {},
   rightSidebarExplorerViewByWorktree: {},
   activityBarPosition: 'top',
@@ -1463,13 +1351,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
   setRightSidebarTab: (tab) =>
-    set({
+    set((s) => ({
       rightSidebarTab: tab,
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(tab === 'explorer' ? { rightSidebarExplorerView: 'files' as const } : {})
-    }),
+    })),
   setRightSidebarExplorerView: (view) =>
     set((s) => ({
       rightSidebarExplorerView: view,
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(s.activeWorktreeId
         ? {
             rightSidebarExplorerViewByWorktree: {
@@ -1484,6 +1374,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files',
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(s.activeWorktreeId
         ? {
             rightSidebarExplorerViewByWorktree: {
@@ -1499,6 +1390,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         rightSidebarOpen: true,
         rightSidebarTab: 'explorer' as const,
         rightSidebarExplorerView: 'search' as const,
+        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
         ...(s.activeWorktreeId
           ? {
               rightSidebarExplorerViewByWorktree: {
@@ -1588,6 +1480,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files',
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       rightSidebarExplorerViewByWorktree: {
         ...s.rightSidebarExplorerViewByWorktree,
         [worktreeId]: 'files'
@@ -1618,8 +1511,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     let editorItemWorktreeId = file.worktreeId
     let editorItemFileId = file.filePath
     let editorItemLabel = file.relativePath
-    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' =
-      file.mode === 'conflict-review' ? 'conflict-review' : file.mode === 'diff' ? 'diff' : 'editor'
+    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' | 'check-details' =
+      file.mode === 'conflict-review'
+        ? 'conflict-review'
+        : file.mode === 'check-details'
+          ? 'check-details'
+          : file.mode === 'diff'
+            ? 'diff'
+            : 'editor'
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const worktreeId = file.worktreeId
@@ -1630,11 +1529,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             (options?.suppressActiveRuntimeFallback
               ? null
               : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+      const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
       const existing = s.openFiles.find(
         (f) =>
-          f.filePath === file.filePath && isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
+          f.filePath === file.filePath &&
+          matchesEditorMode(f, reusableOpenFileModes) &&
+          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
       )
-      const id = resolveEditorFileIdForOwner(s, file.filePath, worktreeId, runtimeEnvironmentId)
+      const id = resolveEditorFileIdForOwner(
+        s,
+        file.filePath,
+        worktreeId,
+        runtimeEnvironmentId,
+        reusableOpenFileModes
+      )
       editorItemFileId = id
       const isPreview = options?.preview ?? false
       const recordReplacedPreview = options?.recordReplacedPreview ?? false
@@ -1649,6 +1557,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (existing) {
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
+        const fileContentReloadNonce = shouldRequestExistingFileContentReload(
+          existing,
+          file.mode,
+          options
+        )
+          ? (existing.fileContentReloadNonce ?? 0) + 1
+          : existing.fileContentReloadNonce
         const needsExistingUpdate =
           existing.mode !== file.mode ||
           existing.diffSource !== file.diffSource ||
@@ -1662,7 +1577,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.language !== file.language ||
           existing.relativePath !== file.relativePath ||
           existing.worktreeId !== file.worktreeId ||
-          existing.runtimeEnvironmentId !== runtimeEnvironmentId
+          existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
+          existing.fileContentReloadNonce !== fileContentReloadNonce
         if (!needsExistingUpdate) {
           return activeResult
         }
@@ -1686,7 +1602,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   conflict: file.conflict,
                   skippedConflicts: file.skippedConflicts,
                   conflictReview: file.conflictReview,
-                  isPreview: updatedPreview
+                  isPreview: updatedPreview,
+                  fileContentReloadNonce
                 }
               : f
           ),
@@ -1782,7 +1699,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           // semantically *wants* silent eviction) is unaffected.
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
           if (recordReplacedPreview && replacedPreview.id !== id) {
-            const { id: _rid, isDirty: _rdirty, ...snap } = replacedPreview
+            const {
+              id: _rid,
+              isDirty: _rdirty,
+              mirroredFromRuntimeSession: _rmirrored,
+              ...snap
+            } = replacedPreview
             const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
             nextRecentlyClosed = {
               ...s.recentlyClosedEditorTabsByWorktree,
@@ -2024,6 +1946,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const hasDraft = !!get().editorDrafts[fileId]
     const shouldDeleteFromDisk = shouldDeleteUntouchedUntitledFile(preClose, hasDraft)
 
+    // Why: closeFile is the single chokepoint every editor close funnels through
+    // (tab strips, bulk close, save/discard, floating panel). Mirrored tabs are
+    // host-owned, so the host must close its copy too or its next snapshot
+    // re-mirrors the file and the tab reopens. No-op for the host's own files.
+    notifyHostOfMirroredEditorClose(get(), preClose?.worktreeId, fileId)
+
     set((s) => {
       const closedFile = s.openFiles.find((f) => f.id === fileId)
       const idx = s.openFiles.findIndex((f) => f.id === fileId)
@@ -2147,7 +2075,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         !shouldDeleteFromDisk &&
         closedFile.mode !== 'markdown-preview'
       ) {
-        const { id: _id, isDirty: _dirty, ...snap } = closedFile
+        const {
+          id: _id,
+          isDirty: _dirty,
+          mirroredFromRuntimeSession: _mirrored,
+          ...snap
+        } = closedFile
         const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
@@ -2206,7 +2139,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           entry.entityId === fileId &&
           (entry.contentType === 'editor' ||
             entry.contentType === 'diff' ||
-            entry.contentType === 'conflict-review')
+            entry.contentType === 'conflict-review' ||
+            entry.contentType === 'check-details')
       )
       if (unifiedTab) {
         get().closeUnifiedTab(unifiedTab.id)
@@ -2242,6 +2176,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         shouldDeleteUntouchedUntitledFile(f, !!state.editorDrafts[f.id]) &&
         (!activeWorktreeId || f.worktreeId === activeWorktreeId)
     )
+    const closingFiles = state.openFiles.filter(
+      (file) => !activeWorktreeId || file.worktreeId === activeWorktreeId
+    )
+    // Why: close-all bypasses closeFile's per-tab path, so mirrored host-owned
+    // editors must be notified here or the next host snapshot reopens them.
+    for (const file of closingFiles) {
+      notifyHostOfMirroredEditorClose(state, file.worktreeId, file.id)
+    }
 
     const closingItemIds = Object.values(state.unifiedTabsByWorktree ?? {})
       .flat()
@@ -2249,7 +2191,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         (item) =>
           (item.contentType === 'editor' ||
             item.contentType === 'diff' ||
-            item.contentType === 'conflict-review') &&
+            item.contentType === 'conflict-review' ||
+            item.contentType === 'check-details') &&
           (!activeWorktreeId || item.worktreeId === activeWorktreeId)
       )
       .map((item) => item.id)
@@ -2298,23 +2241,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const shouldDeactivateWorktree =
         browserTabsForWorktree.length === 0 && terminalTabsForWorktree.length === 0
 
-      // Why: remove all closed editor file IDs from tab bar order so stale
-      // entries don't cause position shifts on subsequent tab operations.
+      // Why: mirrored editor tabs use host tab ids in tab order, while local
+      // editor entries may still use file ids. Remove both close-all shapes.
       const closedFileIds = new Set(
         s.openFiles.filter((f) => f.worktreeId === activeWorktreeId).map((f) => f.id)
       )
+      const closedTabOrderIds = new Set([...closedFileIds, ...closingItemIds])
       const nextTabBarOrderByWorktree = s.tabBarOrderByWorktree
         ? {
             ...s.tabBarOrderByWorktree,
             [activeWorktreeId]: (s.tabBarOrderByWorktree[activeWorktreeId] ?? []).filter(
-              (entryId) => !closedFileIds.has(entryId)
+              (entryId) => !closedTabOrderIds.has(entryId)
             )
           }
         : s.tabBarOrderByWorktree
 
       const closingFiles = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
       let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
-      for (const f of [...closingFiles].reverse()) {
+      for (const f of [...closingFiles].toReversed()) {
         // Why: untitled non-dirty files are deleted from disk after close —
         // skip them so the reopen stack doesn't reference vanished paths.
         // Preview tabs are ephemeral views that shouldn't pollute the stack.
@@ -2324,7 +2268,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ) {
           continue
         }
-        const { id: _id, isDirty: _dirty, ...snap } = f
+        const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
         nextRecentClosed = [snap as ClosedEditorTabSnapshot, ...nextRecentClosed].slice(
           0,
           MAX_RECENT_CLOSED_EDITOR_TABS
@@ -2485,10 +2429,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
     const isPreview = options?.preview ?? false
-    const runtimeEnvironmentId = options?.runtimeEnvironmentId
     let editorItemTargetGroupId = options?.targetGroupId
     let editorItemFileId = ''
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
       const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
       editorItemFileId = id
@@ -2529,7 +2477,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         skippedConflicts: undefined,
         conflictReview: undefined,
         isPreview: isPreview || undefined,
-        runtimeEnvironmentId: options?.runtimeEnvironmentId
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2577,6 +2525,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
@@ -2589,7 +2542,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
-          isPreview: updatedPreview
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -2613,7 +2567,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2661,6 +2616,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
@@ -2673,7 +2633,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
-          isPreview: updatedPreview
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -2697,7 +2658,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2736,7 +2698,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     )
   },
 
-  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) => {
+  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter, entriesSnapshot) => {
     const id = areaFilter
       ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
       : `${worktreeId}::all-diffs::uncommitted`
@@ -2746,12 +2708,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ] ?? 'All Changes')
       : 'All Changes'
     set((s) => {
-      const relevantEntries = (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
-        if (areaFilter) {
-          return entry.area === areaFilter
-        }
-        return entry.area !== 'untracked'
-      })
+      const branchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+      const branchCompare =
+        !areaFilter &&
+        branchSummary?.status === 'ready' &&
+        branchSummary.baseOid &&
+        branchSummary.headOid &&
+        branchSummary.mergeBase
+          ? toBranchCompareSnapshot(branchSummary)
+          : undefined
+      const branchEntriesSnapshot = branchCompare
+        ? (s.gitBranchChangesByWorktree[worktreeId] ?? [])
+        : undefined
+      const relevantEntries =
+        entriesSnapshot ??
+        (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
+          return areaFilter === undefined || entry.area === areaFilter
+        })
       const skippedConflicts = relevantEntries
         .filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind)
         .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))
@@ -2767,6 +2740,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             areaFilter
           ] ?? 'All Changes')
         : 'All Changes'
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -2774,12 +2748,16 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             f.id === id
               ? {
                   ...f,
+                  diffSource: branchCompare ? 'combined-all' : 'combined-uncommitted',
+                  branchCompare,
+                  branchEntriesSnapshot,
                   uncommittedEntriesSnapshot,
                   combinedAlternate: alternate,
                   combinedAreaFilter: areaFilter,
                   skippedConflicts,
                   conflictReview: undefined,
-                  conflict: undefined
+                  conflict: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -2797,13 +2775,16 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: 'plaintext',
         isDirty: false,
         mode: 'diff',
-        diffSource: 'combined-uncommitted',
+        diffSource: branchCompare ? 'combined-all' : 'combined-uncommitted',
+        branchCompare,
+        branchEntriesSnapshot,
         uncommittedEntriesSnapshot,
         combinedAlternate: alternate,
         combinedAreaFilter: areaFilter,
         skippedConflicts,
         conflictReview: undefined,
-        conflict: undefined
+        conflict: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3085,10 +3066,157 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     void openWorkspaceEditorItem(get(), id, worktreeId, 'Conflict Review', 'conflict-review')
   },
 
+  // Why: the checks sidebar only has room for inline summaries; full logs and
+  // annotations belong in the center editor pane like diff tabs.
+  openCheckRunDetails: (worktreeId, contextKey, check, state) => {
+    const id = buildCheckRunDetailsTabId(worktreeId, check)
+    const label = getCheckRunDetailsTabLabel(check)
+    const checkRunDetails: OpenCheckRunDetailsState = {
+      contextKey,
+      check,
+      details: state.details,
+      loading: state.loading,
+      error: state.error
+    }
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  mode: 'check-details' as const,
+                  relativePath: label,
+                  language: 'plaintext',
+                  checkRunDetails
+                }
+              : f
+          ),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+
+      const newFile: OpenFile = {
+        id,
+        filePath: id,
+        relativePath: label,
+        worktreeId,
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'check-details',
+        checkRunDetails
+      }
+
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, label, 'check-details')
+  },
+
+  // Why: sidebar detail fetches can finish after a full-details tab is already
+  // open; this updates the tab snapshot without stealing focus from the user.
+  patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
+    const id = buildCheckRunDetailsTabId(worktreeId, check)
+    const nextCheckRunDetails: OpenCheckRunDetailsState = {
+      contextKey,
+      check,
+      details: state.details,
+      loading: state.loading,
+      error: state.error
+    }
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (!existing?.checkRunDetails) {
+        return s
+      }
+      const current = existing.checkRunDetails
+      if (
+        current.contextKey === nextCheckRunDetails.contextKey &&
+        current.check.status === nextCheckRunDetails.check.status &&
+        current.check.conclusion === nextCheckRunDetails.check.conclusion &&
+        current.loading === nextCheckRunDetails.loading &&
+        current.error === nextCheckRunDetails.error &&
+        current.details === nextCheckRunDetails.details
+      ) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
+        )
+      }
+    })
+  },
+
+  reloadOpenCheckRunDetailsTab: async (fileId) => {
+    const state = get()
+    const file = state.openFiles.find((candidate) => candidate.id === fileId)
+    const checkRunDetails = file?.checkRunDetails
+    if (!file || file.mode !== 'check-details' || !checkRunDetails) {
+      return
+    }
+    const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
+    const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
+    const repo = state.repos.find((candidate) => candidate.id === repoId)
+    if (!repo?.path) {
+      return
+    }
+    const { contextKey, check } = checkRunDetails
+    const patch = (next: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>): void => {
+      get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, next)
+    }
+    patch({ details: checkRunDetails.details, loading: true, error: null })
+    try {
+      const details = await get().fetchPRCheckDetails(
+        repo.path,
+        {
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo: null
+        },
+        { repoId: repo.id }
+      )
+      patch({
+        details,
+        loading: false,
+        error: details
+          ? null
+          : translate(
+              'auto.store.slices.editor.checkRunDetailsUnavailable',
+              'No details are available for this check.'
+            )
+      })
+    } catch (error) {
+      patch({
+        details: null,
+        loading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.store.slices.editor.checkRunDetailsLoadFailed',
+                'Failed to load check details.'
+              )
+      })
+    }
+  },
+
   openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
     const branchCompare = toBranchCompareSnapshot(compare)
     const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
@@ -3102,7 +3230,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   combinedAlternate: alternate,
                   conflict: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -3126,7 +3255,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         combinedAlternate: alternate,
         conflict: undefined,
         skippedConflicts: undefined,
-        conflictReview: undefined
+        conflictReview: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3152,6 +3282,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       ? `Commit ${commitCompare.compareRef}: ${subject}`
       : `Commit ${commitCompare.compareRef}`
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -3164,7 +3295,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   commitEntriesSnapshot: entries,
                   conflict: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -3188,7 +3320,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         commitEntriesSnapshot: entries,
         conflict: undefined,
         skippedConflicts: undefined,
-        conflictReview: undefined
+        conflictReview: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3210,6 +3343,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitStatusHeadByWorktree: {},
   gitStatusHugeByWorktree: {},
   gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
@@ -3311,6 +3445,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const prevHuge = s.gitStatusHugeByWorktree[worktreeId]
       const nextHuge = status.didHitLimit ? { limit: nextEntries.length } : undefined
       const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
+      const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
+      const nextStatusHead = getKnownGitHead(status.head)
+      const statusHeadUnchanged = prevStatusHead === nextStatusHead
+
+      const prevBranchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+      // Why: a compare request can finish after git status has observed a new
+      // HEAD; reject that stale snapshot before it can render a false clean state.
+      const shouldInvalidateBranchCompare =
+        !statusHeadUnchanged &&
+        nextStatusHead !== undefined &&
+        prevBranchSummary?.status === 'ready' &&
+        !branchCompareMatchesStatusHead(prevBranchSummary, nextStatusHead)
 
       if (
         statusUnchanged &&
@@ -3318,7 +3464,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         openFilesUnchanged &&
         operationUnchanged &&
         ignoredUnchanged &&
-        hugeUnchanged
+        hugeUnchanged &&
+        statusHeadUnchanged &&
+        !shouldInvalidateBranchCompare
       ) {
         return s
       }
@@ -3333,9 +3481,29 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               return copy
             })()
 
+      const nextStatusHeadMap = statusHeadUnchanged
+        ? s.gitStatusHeadByWorktree
+        : nextStatusHead
+          ? { ...s.gitStatusHeadByWorktree, [worktreeId]: nextStatusHead }
+          : (() => {
+              const copy = { ...s.gitStatusHeadByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
+      const nextBranchCompareSummaries = shouldInvalidateBranchCompare
+        ? {
+            ...s.gitBranchCompareSummaryByWorktree,
+            [worktreeId]: createLoadingBranchCompareSummary(prevBranchSummary.baseRef)
+          }
+        : s.gitBranchCompareSummaryByWorktree
+      const nextBranchChanges = shouldInvalidateBranchCompare
+        ? { ...s.gitBranchChangesByWorktree, [worktreeId]: [] }
+        : s.gitBranchChangesByWorktree
+
       return {
         openFiles: nextOpenFiles,
         gitStatusHugeByWorktree: nextHugeMap,
+        gitStatusHeadByWorktree: nextStatusHeadMap,
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
@@ -3347,7 +3515,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },
         trackedConflictPathsByWorktree: trackedUnchanged
           ? s.trackedConflictPathsByWorktree
-          : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked }
+          : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked },
+        gitBranchCompareSummaryByWorktree: nextBranchCompareSummaries,
+        gitBranchChangesByWorktree: nextBranchChanges
       }
     }),
   setConflictOperation: (worktreeId, operation) =>
@@ -3418,8 +3588,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
   fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
-      const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
       const status = await getRuntimeGitUpstreamStatus(
         {
           settings: runtimeSettings,
@@ -3429,7 +3599,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         },
         pushTarget
       )
-      get().setUpstreamStatus(worktreeId, status)
+      if (options?.applyUpstreamStatus !== false) {
+        get().setUpstreamStatus(worktreeId, status)
+      }
+      return status
     } catch (error) {
       // Why: on error we leave the prior status in place rather than writing a
       // synthetic {hasUpstream:false} — that would flash 'Publish Branch' on a
@@ -3437,7 +3610,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // re-publish, clobbering the upstream relationship. If the branch is
       // genuinely newly unpublished, the polling effect will eventually correct
       // the status on success.
+      if (pushTarget) {
+        // Why: an old automatic poll cache entry must not suppress the next
+        // retry after a post-push/fetch refresh fails transiently.
+        invalidateAutomaticPushTargetUpstreamStatusCache({
+          settings: runtimeSettings,
+          worktreeId,
+          worktreePath,
+          connectionId,
+          pushTarget
+        })
+      }
       console.error('fetchUpstreamStatus failed', error)
+      return null
     }
   },
   pushBranch: async (
@@ -3660,28 +3845,42 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   gitBranchChangesByWorktree: {},
   gitBranchCompareSummaryByWorktree: {},
   gitBranchCompareRequestKeyByWorktree: {},
-  beginGitBranchCompareRequest: (worktreeId, requestKey, baseRef) =>
+  gitBranchCompareRequestStatusHeadByWorktree: {},
+  beginGitBranchCompareRequest: (worktreeId, requestKey, baseRef, options) =>
     set((s) => ({
       gitBranchCompareRequestKeyByWorktree: {
         ...s.gitBranchCompareRequestKeyByWorktree,
         [worktreeId]: requestKey
       },
-      gitBranchCompareSummaryByWorktree: {
-        ...s.gitBranchCompareSummaryByWorktree,
-        [worktreeId]: {
-          baseRef,
-          baseOid: null,
-          compareRef: 'HEAD',
-          headOid: null,
-          mergeBase: null,
-          changedFiles: 0,
-          status: 'loading'
-        }
-      }
+      gitBranchCompareRequestStatusHeadByWorktree: {
+        ...s.gitBranchCompareRequestStatusHeadByWorktree,
+        [worktreeId]: getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId]) ?? null
+      },
+      ...(options?.preserveExistingSummary
+        ? {}
+        : {
+            gitBranchCompareSummaryByWorktree: {
+              ...s.gitBranchCompareSummaryByWorktree,
+              [worktreeId]: createLoadingBranchCompareSummary(baseRef)
+            }
+          })
     })),
   setGitBranchCompareResult: (worktreeId, requestKey, result) =>
     set((s) => {
       if (s.gitBranchCompareRequestKeyByWorktree[worktreeId] !== requestKey) {
+        return s
+      }
+      const statusHead = getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId])
+      const requestStatusHead = s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId]
+      // Why: polling refreshes can leave the prior UI visible while a compare
+      // request is in flight; never let a pre-status-change result overwrite
+      // a newer status snapshot.
+      if (
+        result.summary.status !== 'loading' &&
+        statusHead !== undefined &&
+        requestStatusHead !== statusHead &&
+        !branchCompareMatchesStatusHead(result.summary, statusHead)
+      ) {
         return s
       }
       const prevEntries = s.gitBranchChangesByWorktree[worktreeId]
@@ -3711,6 +3910,34 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         gitBranchCompareSummaryByWorktree: summaryUnchanged
           ? s.gitBranchCompareSummaryByWorktree
           : { ...s.gitBranchCompareSummaryByWorktree, [worktreeId]: result.summary }
+      }
+    }),
+  // Why: when the compare base resolves to "no base" (e.g. the prefer-upstream
+  // setting is on and the branch has no upstream), drop any stale summary so the
+  // committed-changes section and "vs" row disappear instead of lingering.
+  clearGitBranchCompare: (worktreeId) =>
+    set((s) => {
+      if (
+        s.gitBranchCompareSummaryByWorktree[worktreeId] === undefined &&
+        s.gitBranchChangesByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestKeyByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId] === undefined
+      ) {
+        return s
+      }
+      const nextSummary = { ...s.gitBranchCompareSummaryByWorktree }
+      const nextChanges = { ...s.gitBranchChangesByWorktree }
+      const nextRequestKey = { ...s.gitBranchCompareRequestKeyByWorktree }
+      const nextRequestHead = { ...s.gitBranchCompareRequestStatusHeadByWorktree }
+      delete nextSummary[worktreeId]
+      delete nextChanges[worktreeId]
+      delete nextRequestKey[worktreeId]
+      delete nextRequestHead[worktreeId]
+      return {
+        gitBranchCompareSummaryByWorktree: nextSummary,
+        gitBranchChangesByWorktree: nextChanges,
+        gitBranchCompareRequestKeyByWorktree: nextRequestKey,
+        gitBranchCompareRequestStatusHeadByWorktree: nextRequestHead
       }
     }),
 
@@ -4242,6 +4469,7 @@ function areUpstreamStatusesEqual(
     prev.upstreamName === next.upstreamName &&
     prev.ahead === next.ahead &&
     prev.behind === next.behind &&
+    prev.hasConfiguredPushTarget === next.hasConfiguredPushTarget &&
     prev.behindCommitsArePatchEquivalent === next.behindCommitsArePatchEquivalent
   )
 }
@@ -4259,7 +4487,7 @@ function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    if (file.mode === 'conflict-review') {
+    if (file.mode === 'conflict-review' || file.mode === 'check-details') {
       return [file]
     }
 

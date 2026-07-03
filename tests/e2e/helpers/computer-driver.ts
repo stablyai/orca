@@ -1,8 +1,8 @@
-import { execFile, spawn, type ChildProcess } from 'child_process'
-import { mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { promisify } from 'util'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
 import {
   ensureOrcaRuntimeLaunched,
   parseJsonOutput,
