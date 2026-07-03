@@ -2541,13 +2541,19 @@ export type PreloadApi = {
         requestId: string
         url: string
         worktreeId?: string
-        sessionProfileId?: string
+        sessionProfileId?: string | null
+        sessionPartition?: string
         activate?: boolean
       }) => void
     ) => () => void
     replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
     onRequestTabSetProfile: (
-      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+      callback: (data: {
+        requestId: string
+        browserPageId: string
+        profileId: string
+        sessionPartition?: string
+      }) => void
     ) => () => void
     replyTabSetProfile: (reply: { requestId: string; error?: string }) => void
     onRequestTabClose: (
