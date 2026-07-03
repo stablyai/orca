@@ -117,6 +117,14 @@ describe('parseManualNetworkAddress', () => {
         expect(parseManualNetworkAddress(bad).ok).toBe(false)
       }
     })
+
+    it('accepts a bare single-label numeric hostname', () => {
+      // The IPv4-typo guard only rejects *dotted* all-numeric strings, so a
+      // bare numeric label stays a legal RFC 1123 hostname (the main process
+      // resolves it the same way).
+      expect(parseManualNetworkAddress('123')).toEqual({ ok: true, address: '123' })
+      expect(parseManualNetworkAddress('123:8080').ok).toBe(true)
+    })
   })
 
   describe('port suffix', () => {

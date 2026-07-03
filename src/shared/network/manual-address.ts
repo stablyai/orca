@@ -44,7 +44,9 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   // mistyped IPv4 address, not a hostname, even though bare numeric labels
   // are technically legal per RFC 1123. Falling through to HOSTNAME_REGEX
   // for these would silently "accept" IP typos as unresolvable hostnames.
-  if (/^[0-9]+(?:\.[0-9]+)*$/.test(host)) {
+  // The trailing `+` requires at least one dot, so a bare numeric label
+  // (`123`) still falls through and validates as a legal hostname.
+  if (/^[0-9]+(?:\.[0-9]+)+$/.test(host)) {
     return { ok: false, error: ERROR_MESSAGE }
   }
   if (HOSTNAME_REGEX.test(host)) {
@@ -61,7 +63,7 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
 // of being misparsed as a port.
 function splitHostPort(value: string): { host: string; port: string | null } {
   const firstColon = value.indexOf(':')
-  if (firstColon === -1 || value.indexOf(':', firstColon + 1) !== -1) {
+  if (firstColon === -1 || value.includes(':', firstColon + 1)) {
     return { host: value, port: null }
   }
   return { host: value.slice(0, firstColon), port: value.slice(firstColon + 1) }
