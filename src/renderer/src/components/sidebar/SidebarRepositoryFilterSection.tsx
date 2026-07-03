@@ -11,6 +11,10 @@ import {
   CommandList
 } from '@/components/ui/command'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import {
+  getDuplicateRepoDisplayNames,
+  normalizeRepoDisplayNameKey
+} from '@/lib/duplicate-repo-display-names'
 import { searchRepos } from '@/lib/repo-search'
 import type { Repo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
@@ -57,6 +61,9 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   }, [repos, filterRepoIds])
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
+  // Why: derive duplicates from the full repo list so a surviving same-name row
+  // keeps its path subtitle even after its sibling moves into selected pills.
+  const duplicateDisplayNames = useMemo(() => getDuplicateRepoDisplayNames(repos), [repos])
   const selectedRepos = useMemo(
     () => repos.filter((repo) => selectedRepoIdSet.has(repo.id)),
     [repos, selectedRepoIdSet]
@@ -179,32 +186,42 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
                   'No projects match'
                 )}
           </CommandEmpty>
-          {availableRepos.map((repo) => (
-            <CommandItem
-              key={repo.id}
-              value={repo.id}
-              keywords={[repo.displayName, repo.path]}
-              onSelect={() => handleSelectRepo(repo.id)}
-              className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
-            >
-              <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
-                <RepoBadgeLabel
-                  name={repo.displayName}
-                  color={repo.badgeColor}
-                  className="max-w-full"
-                />
-                {repo.connectionId && (
-                  <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
-                    <Server className="size-2.5" />
-                    {translate(
-                      'auto.components.sidebar.SidebarRepositoryFilterSection.2656053db4',
-                      'SSH'
+          {availableRepos.map((repo) => {
+            const showPath = duplicateDisplayNames.has(
+              normalizeRepoDisplayNameKey(repo.displayName)
+            )
+            return (
+              <CommandItem
+                key={repo.id}
+                value={repo.id}
+                keywords={[repo.displayName, repo.path]}
+                onSelect={() => handleSelectRepo(repo.id)}
+                className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <RepoBadgeLabel
+                      name={repo.displayName}
+                      color={repo.badgeColor}
+                      className="max-w-full"
+                    />
+                    {repo.connectionId && (
+                      <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
+                        <Server className="size-2.5" />
+                        {translate(
+                          'auto.components.sidebar.SidebarRepositoryFilterSection.2656053db4',
+                          'SSH'
+                        )}
+                      </span>
                     )}
                   </span>
-                )}
-              </span>
-            </CommandItem>
-          ))}
+                  {showPath && (
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{repo.path}</p>
+                  )}
+                </div>
+              </CommandItem>
+            )
+          })}
         </CommandList>
       </Command>
     </>

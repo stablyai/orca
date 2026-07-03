@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
@@ -69,12 +70,19 @@ function getProjectModel({
   }
 }
 
-function getProjectDetail(project: Project, readySetupCount: number): string {
+function getProjectDetail(
+  project: Project,
+  readySetupCount: number,
+  representativePath: string | undefined
+): string {
   if (project.providerIdentity) {
     return `${project.providerIdentity.owner}/${project.providerIdentity.repo}`
   }
   if (readySetupCount > 1) {
     return `${readySetupCount} hosts configured`
+  }
+  if (representativePath) {
+    return representativePath
   }
   return 'Project'
 }
@@ -86,6 +94,7 @@ export function buildNewWorkspaceProjectOptions(
   const { projects, projectHostSetups } = getProjectModel(input)
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
   const readySetupCountsByProjectId = new Map<string, number>()
+  const representativePathByProjectId = new Map<string, string>()
 
   for (const setup of projectHostSetups) {
     if (setup.setupState !== 'ready' || !eligibleRepoIds.has(setup.repoId)) {
@@ -95,6 +104,15 @@ export function buildNewWorkspaceProjectOptions(
       setup.projectId,
       (readySetupCountsByProjectId.get(setup.projectId) ?? 0) + 1
     )
+    // Why: Path fallback disambiguates same-named local projects (issue #6235).
+    const trimmedPath = setup.path?.trim()
+    if (
+      trimmedPath &&
+      (!representativePathByProjectId.has(setup.projectId) ||
+        setup.hostId === LOCAL_EXECUTION_HOST_ID)
+    ) {
+      representativePathByProjectId.set(setup.projectId, trimmedPath)
+    }
   }
 
   return projects
@@ -105,7 +123,11 @@ export function buildNewWorkspaceProjectOptions(
       projectId: project.id,
       displayName: project.displayName,
       badgeColor: project.badgeColor,
-      detail: getProjectDetail(project, readySetupCountsByProjectId.get(project.id) ?? 0)
+      detail: getProjectDetail(
+        project,
+        readySetupCountsByProjectId.get(project.id) ?? 0,
+        representativePathByProjectId.get(project.id)
+      )
     }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
 }

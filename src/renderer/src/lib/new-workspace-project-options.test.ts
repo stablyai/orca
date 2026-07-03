@@ -35,6 +35,18 @@ function project(overrides: Partial<Project> = {}): Project {
   }
 }
 
+function localProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: 'repo:local-app',
+    displayName: 'orca',
+    badgeColor: '#111111',
+    sourceRepoIds: ['local-repo'],
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
 function setup(overrides: Partial<ProjectHostSetup>): ProjectHostSetup {
   return {
     id: overrides.id ?? 'local-setup',
@@ -88,6 +100,116 @@ describe('buildNewWorkspaceProjectOptions', () => {
         detail: 'stablyai/orca'
       }
     ])
+  })
+
+  it('uses a single ready local project setup path as the detail', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        localProject({
+          id: 'repo:local-app'
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'local-setup',
+          projectId: 'repo:local-app',
+          repoId: 'local-repo',
+          path: '/tmp/local-app'
+        })
+      ],
+      eligibleRepos: [repo('local-repo')]
+    })
+
+    expect(options).toHaveLength(1)
+    expect(options[0]?.detail).toBe('/tmp/local-app')
+    expect(options[0]?.detail).not.toBe('Project')
+  })
+
+  it('keeps the multi-host detail when a local project has multiple ready setups', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        localProject({
+          id: 'repo:local-app',
+          sourceRepoIds: ['local-repo', 'ssh-repo']
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'local-setup',
+          projectId: 'repo:local-app',
+          repoId: 'local-repo',
+          path: '/tmp/local-app'
+        }),
+        setup({
+          id: 'ssh-setup',
+          hostId: 'ssh:builder',
+          projectId: 'repo:local-app',
+          repoId: 'ssh-repo',
+          path: '/srv/local-app'
+        })
+      ],
+      eligibleRepos: [repo('local-repo'), repo('ssh-repo', { connectionId: 'ssh:builder' })]
+    })
+
+    expect(options).toHaveLength(1)
+    expect(options[0]?.detail).toBe('2 hosts configured')
+  })
+
+  it('keeps GitHub project owner and repo detail', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [project()],
+      projectHostSetups: [
+        setup({ id: 'local-setup', repoId: 'local-repo', path: '/tmp/local-app' })
+      ],
+      eligibleRepos: [repo('local-repo')]
+    })
+
+    expect(options).toHaveLength(1)
+    expect(options[0]?.detail).toBe('stablyai/orca')
+  })
+
+  it('falls back to Project when the only ready setup path is empty', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        localProject({
+          id: 'repo:local-app'
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'local-setup',
+          projectId: 'repo:local-app',
+          repoId: 'local-repo',
+          path: '   '
+        })
+      ],
+      eligibleRepos: [repo('local-repo')]
+    })
+
+    expect(options).toHaveLength(1)
+    expect(options[0]?.detail).toBe('Project')
+  })
+
+  it('trims whitespace around the representative path detail', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        localProject({
+          id: 'repo:local-app'
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'local-setup',
+          projectId: 'repo:local-app',
+          repoId: 'local-repo',
+          path: '  /tmp/local-app  '
+        })
+      ],
+      eligibleRepos: [repo('local-repo')]
+    })
+
+    expect(options).toHaveLength(1)
+    expect(options[0]?.detail).toBe('/tmp/local-app')
   })
 
   it('excludes projects that do not have a ready eligible setup', () => {

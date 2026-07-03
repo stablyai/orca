@@ -19,6 +19,10 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  getDuplicateRepoDisplayNames,
+  normalizeRepoDisplayNameKey
+} from '@/lib/duplicate-repo-display-names'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
@@ -105,6 +109,9 @@ const SidebarFilter = React.memo(function SidebarFilter({
     (hideAutomationGeneratedWorkspaces ? 1 : 0) +
     selectedCount
 
+  // Why: derive duplicates from the full repo list so same-name path subtitles
+  // stay visible even when the rendered list is narrowed by search.
+  const duplicateDisplayNames = useMemo(() => getDuplicateRepoDisplayNames(repos), [repos])
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
   const commandValue =
     commandValueOverride && filteredRepos.some((repo) => repo.id === commandValueOverride)
@@ -274,6 +281,9 @@ const SidebarFilter = React.memo(function SidebarFilter({
                 </CommandEmpty>
                 {filteredRepos.map((r) => {
                   const checked = selectedRepoIdSet.has(r.id)
+                  const showPath = duplicateDisplayNames.has(
+                    normalizeRepoDisplayNameKey(r.displayName)
+                  )
                   return (
                     <CommandItem
                       key={r.id}
@@ -281,19 +291,26 @@ const SidebarFilter = React.memo(function SidebarFilter({
                       onSelect={() => handleToggleRepo(r.id)}
                       className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
                     >
-                      <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
-                        <RepoBadgeLabel
-                          name={r.displayName}
-                          color={r.badgeColor}
-                          className="max-w-full"
-                        />
-                        {r.connectionId && (
-                          <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
-                            <Server className="size-2.5" />
-                            {translate('auto.components.sidebar.SidebarFilter.81ded53722', 'SSH')}
-                          </span>
+                      <div className="min-w-0 flex-1">
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <RepoBadgeLabel
+                            name={r.displayName}
+                            color={r.badgeColor}
+                            className="max-w-full"
+                          />
+                          {r.connectionId && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
+                              <Server className="size-2.5" />
+                              {translate('auto.components.sidebar.SidebarFilter.81ded53722', 'SSH')}
+                            </span>
+                          )}
+                        </span>
+                        {showPath && (
+                          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                            {r.path}
+                          </p>
                         )}
-                      </span>
+                      </div>
                       {checked && (
                         <Check className="size-3 shrink-0 text-primary" strokeWidth={3} />
                       )}
