@@ -3,6 +3,7 @@ injection, fallback patching, WSL translation, cleanup, and GC with a TOCTOU age
 guard — covering each path in one test file keeps assertions co-located with the
 shared mock harness rather than splitting across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setAppEnvironment } from '../shared/app-environment'
 
 const {
   existsSyncMock,
@@ -69,6 +70,20 @@ describe('terminal-history', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getPathMock.mockReturnValue('/fake/userData')
+    // terminal-history resolves userData via the AppEnvironment abstraction;
+    // delegate to the live getPathMock so per-test mockReturnValue overrides
+    // (e.g. the WSL path cases) are honored.
+    setAppEnvironment({
+      getPath: () => getPathMock(),
+      getAppPath: () => '/fake/app',
+      getVersion: () => '0.0.0-test',
+      isPackaged: () => false,
+      onWillQuit: () => {},
+      quit: () => {},
+      exit: () => {},
+      relaunch: () => {},
+      getAppMetrics: () => []
+    })
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, size: 100 })
   })

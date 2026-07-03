@@ -169,6 +169,39 @@ describe('publishCompleteDraftReleases', () => {
     )
   })
 
+  it('can prepare complete release-cut drafts without exposing them publicly', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      jsonResponse([
+        {
+          id: 7,
+          draft: true,
+          tag_name: 'v1.4.2-rc.7',
+          created_at: '2026-05-15T07:31:19Z',
+          author: { login: 'github-actions[bot]' }
+        }
+      ])
+    )
+    const verifyReleaseAssets = vi.fn()
+    const log = vi.fn()
+
+    const result = await publishCompleteDraftReleases({
+      repo: 'stablyai/orca',
+      token: 'token',
+      fetchImpl,
+      verifyReleaseAssets,
+      isDraftBuiltFromCurrentRef: vi.fn(async () => true),
+      publish: false,
+      log
+    })
+
+    expect(result).toEqual({
+      published: ['v1.4.2-rc.7'],
+      skipped: []
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(log).toHaveBeenCalledWith('Complete RC draft release v1.4.2-rc.7 is ready to publish')
+  })
+
   it('skips stale complete drafts before publishing', async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(
       jsonResponse([
@@ -218,10 +251,16 @@ describe('writeGithubOutputs', () => {
       expect(readFileSync(outputPath, 'utf8')).toBe(
         `${[
           'published_count=1',
+          'publishable_count=1',
           'skipped_count=1',
           'latest_published_tag=v1.4.2-rc.7',
+          'latest_publishable_tag=v1.4.2-rc.7',
           'published_tags=v1.4.2-rc.7',
-          'skipped_tags=v1.4.2-rc.8'
+          'publishable_tags=v1.4.2-rc.7',
+          'published_tags_json=["v1.4.2-rc.7"]',
+          'publishable_tags_json=["v1.4.2-rc.7"]',
+          'skipped_tags=v1.4.2-rc.8',
+          'skipped_tags_json=["v1.4.2-rc.8"]'
         ].join('\n')}\n`
       )
     } finally {

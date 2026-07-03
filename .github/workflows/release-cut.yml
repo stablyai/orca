@@ -16,7 +16,8 @@ name: Cut Release
 #   5. Write package.json, commit (detached), tag, push tag.
 #   6. If ref was the tip of origin/main, fast-forward main to include the
 #      version-bump commit so developers see the right version locally.
-#   7. Build and publish artifacts from the tag.
+#   7. Build artifacts from the tag, publish the matching npm server package,
+#      then publish the GitHub Release.
 
 on:
   workflow_dispatch:
@@ -67,7 +68,8 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
-      latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
+      latest_publishable_rc_tag: ${{ steps.publish_drafts.outputs.latest_publishable_tag }}
+      publishable_rc_tags_json: ${{ steps.publish_drafts.outputs.publishable_tags_json }}
     steps:
       - name: Checkout ref
         uses: actions/checkout@v6
@@ -180,13 +182,16 @@ jobs:
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
 
-      - name: Publish complete release-cut RC drafts from prior runs
+      - name: Find complete release-cut RC drafts from prior runs
         id: publish_drafts
         # Why: this must run even when the current slot already cut a tag; a
-        # later cron retry may be the first chance to unstick a complete RC draft.
+        # later cron retry may be the first chance to unstick a complete RC
+        # draft. Keep it prepare-only here so npm can publish the matching RC
+        # before we expose the GitHub Release publicly.
         if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_DRAFT_RELEASES: 'false'
         run: node config/scripts/publish-complete-draft-releases.mjs
 
       - name: Compute next version
@@ -194,7 +199,7 @@ jobs:
         # Why: if an RC run only had complete drafts to publish, stop there
         # instead of immediately cutting another RC after the recovered one.
         # Stable dispatches should still cut the requested stable release.
-        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && steps.publish_drafts.outputs.published_count != '0' && steps.publish_drafts.outputs.skipped_count == '0')
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && steps.publish_drafts.outputs.publishable_count != '0' && steps.publish_drafts.outputs.skipped_count == '0')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
@@ -1154,6 +1159,7 @@ jobs:
       - cut
       - build
       - build-mac
+      - publish-orca-server
       - terminal-rendering-golden
     runs-on: ubuntu-latest
     permissions:
@@ -1219,15 +1225,50 @@ jobs:
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
 
+  publish-orca-server-published-rc-drafts:
+    needs:
+      - cut
+    # Why: publish-complete-draft-releases can find one or more recovered RC
+    # drafts before this run cuts a new tag. Publish the matching npm RCs before
+    # exposing those drafts publicly.
+    if: ${{ needs.cut.outputs.publishable_rc_tags_json != '' && needs.cut.outputs.publishable_rc_tags_json != '[]' }}
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        tag: ${{ fromJSON(needs.cut.outputs.publishable_rc_tags_json) }}
+    uses: ./.github/workflows/publish-orca-server.yml
+    with:
+      tag: ${{ matrix.tag }}
+      publish_github_release_after_npm: true
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-orca-server:
+    needs:
+      - cut
+      - build
+      - build-mac
+      - terminal-rendering-golden
+    # Why: make npm part of the release gate. The GitHub Release is only made
+    # public after the same desktop tag has been published to npm.
+    if: ${{ needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
+    uses: ./.github/workflows/publish-orca-server.yml
+    with:
+      tag: ${{ needs.cut.outputs.tag }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   homebrew-bump-published-rc-draft:
     needs:
       - cut
-    # Why: publish-complete-draft-releases can expose a recovered RC without
-    # running the build/publish jobs; still advance the RC cask to that tag.
-    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
+      - publish-orca-server-published-rc-drafts
+    # Why: publish-orca-server-published-rc-drafts can expose a recovered RC
+    # without running the build/publish jobs; still advance the RC cask to that tag.
+    if: ${{ needs.cut.outputs.latest_publishable_rc_tag != '' && needs.publish-orca-server-published-rc-drafts.result == 'success' }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
-      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
+      tag: ${{ needs.cut.outputs.latest_publishable_rc_tag }}
     secrets: inherit
 
   homebrew-bump:

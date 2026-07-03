@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: persistence keeps schema defaults, migration,
 load/save, and flush logic in one file so the full storage contract is reviewable
 as a unit instead of being scattered across modules. */
-import { app, safeStorage } from 'electron'
+import { getAppEnvironment } from '../shared/app-environment'
+import { getSecretStore } from '../shared/secret-store'
 import {
   readFileSync,
   writeFileSync,
@@ -222,23 +223,25 @@ import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 
 function encrypt(plaintext: string): string {
-  if (!plaintext || !safeStorage.isEncryptionAvailable()) {
+  const secretStore = getSecretStore()
+  if (!plaintext || !secretStore.isEncryptionAvailable()) {
     return plaintext
   }
   try {
-    return safeStorage.encryptString(plaintext).toString('base64')
+    return secretStore.encryptString(plaintext).toString('base64')
   } catch (err) {
     console.error('[persistence] Encryption failed:', err)
-    return plaintext
+    throw new Error('[persistence] Refusing to persist secret unencrypted', { cause: err })
   }
 }
 
 function decrypt(ciphertext: string): string {
-  if (!ciphertext || !safeStorage.isEncryptionAvailable()) {
+  const secretStore = getSecretStore()
+  if (!ciphertext || !secretStore.isEncryptionAvailable()) {
     return ciphertext
   }
   try {
-    return safeStorage.decryptString(Buffer.from(ciphertext, 'base64'))
+    return secretStore.decryptString(Buffer.from(ciphertext, 'base64'))
   } catch {
     // Why: if decryption fails, it likely means the value was stored as
     // plaintext (pre-encryption build) or the OS keychain changed. Fall
@@ -316,7 +319,7 @@ let _dataFile: string | null = null
 let _userDataDir: string | null = null
 
 export function initDataPath(): void {
-  const userDataDir = app.getPath('userData')
+  const userDataDir = getAppEnvironment().getPath('userData')
   _userDataDir = userDataDir
   _dataFile = join(userDataDir, 'orca-data.json')
 }
@@ -324,7 +327,7 @@ export function initDataPath(): void {
 function getDataFile(): string {
   if (!_dataFile) {
     // Safety fallback — should not be hit in normal startup.
-    const userDataDir = app.getPath('userData')
+    const userDataDir = getAppEnvironment().getPath('userData')
     _userDataDir = userDataDir
     _dataFile = join(userDataDir, 'orca-data.json')
   }
@@ -447,7 +450,7 @@ function readGithubCacheSnapshot(): PersistedState['githubCache'] | null {
 export function getCanonicalUserDataPath(): string {
   if (!_userDataDir) {
     // Safety fallback — should not be hit in normal startup.
-    _userDataDir = app.getPath('userData')
+    _userDataDir = getAppEnvironment().getPath('userData')
   }
   return _userDataDir
 }

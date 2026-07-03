@@ -6,7 +6,8 @@
   "author": "stablyai",
   "bin": {
     "orca": "./out/cli/index.js",
-    "orca-dev": "./config/scripts/orca-dev.mjs"
+    "orca-dev": "./config/scripts/orca-dev.mjs",
+    "orca-server": "./out/server/orca-server.js"
   },
   "main": "./out/main/index.js",
   "scripts": {
@@ -39,6 +40,9 @@
     "dev-stable-name": "pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs --stable-name",
     "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1",
     "build:relay": "node config/scripts/build-relay.mjs",
+    "build:server": "node config/scripts/build-server.mjs",
+    "build:server:report": "node config/scripts/build-server.mjs --report",
+    "build:server:prebuilds": "node config/scripts/build-server-prebuilds.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",
     "build:native": "node config/scripts/build-native-for-platform.mjs",
     "smoke:computer": "node config/scripts/computer-use-smoke.mjs",

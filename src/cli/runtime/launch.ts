@@ -2,6 +2,25 @@ import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { RuntimeClientError } from './types'
 
+export type ServeOrcaAppOptions = {
+  json?: boolean
+  port?: string | null
+  pairingAddress?: string | null
+  userDataPath?: string | null
+  noPairing?: boolean
+  mobilePairing?: boolean
+  recipeJson?: boolean
+  projectRoot?: string | null
+}
+
+type ServeOrcaAppHook = (args: ServeOrcaAppOptions) => Promise<number>
+
+// Why: @stablyai/orca-server injects a Node-backed `serve` implementation here
+// so the shared CLI can start the headless runtime without launching Electron.
+declare global {
+  var __ORCA_NODE_SERVER_SERVE__: ServeOrcaAppHook | undefined
+}
+
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
   if (typeof overrideCommand === 'string' && overrideCommand.trim().length > 0) {
@@ -56,17 +75,18 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
   child.unref()
 }
 
-export function serveOrcaApp(
-  args: {
-    json?: boolean
-    port?: string | null
-    pairingAddress?: string | null
-    noPairing?: boolean
-    mobilePairing?: boolean
-    recipeJson?: boolean
-    projectRoot?: string | null
-  } = {}
-): Promise<number> {
+export function serveOrcaApp(args: ServeOrcaAppOptions = {}): Promise<number> {
+  const nodeServerServe = globalThis.__ORCA_NODE_SERVER_SERVE__
+  if (nodeServerServe) {
+    return nodeServerServe(args)
+  }
+  if (args.userDataPath) {
+    throw new RuntimeClientError(
+      'unsupported_argument',
+      '`orca serve --user-data` is only supported by @stablyai/orca-server.'
+    )
+  }
+
   const executable = resolveForegroundOrcaExecutable()
   const childArgs = [...getExecutableAppArgs(), '--serve']
   if (args.json) {

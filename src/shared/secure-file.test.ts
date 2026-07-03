@@ -1,5 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +8,8 @@ import {
   __resetSecureFileWindowsUserSidForTests,
   hardenExistingSecureFile,
   hardenSecurePath,
-  writeSecureFile
+  writeSecureFile,
+  writeSecureFileExclusive
 } from './secure-file'
 
 const posixModeIt = process.platform === 'win32' ? it.skip : it
@@ -262,6 +263,17 @@ describe('hardenSecurePath', () => {
     expect(syncTargets.filter((entry) => entry === userDataPath)).toHaveLength(0)
     // The final published target's ACL must have been applied via the synchronous path.
     expect(getPowerShellCalls().map(getPowerShellTarget)).not.toContain(targetPath)
+  })
+
+  it('does not replace an existing file during an exclusive secure write', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    tempDirs.push(userDataPath)
+    const targetPath = join(userDataPath, 'secret.json')
+
+    writeSecureFile(targetPath, 'first')
+
+    expect(() => writeSecureFileExclusive(targetPath, 'second')).toThrow()
+    expect(readFileSync(targetPath, 'utf8')).toBe('first')
   })
 
   // Nit #1 (review): the synchronous file path must cache as hardened ONLY on confirmed

@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: Linear credential storage and client
    selection share one module so keychain-safe status reads and token mutation
    stay in one consistency boundary. */
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../../shared/secret-store'
 import { LinearClient, AuthenticationLinearError } from '@linear/sdk'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -318,13 +318,14 @@ function clearLegacyViewerOnDisk(): void {
 }
 
 function writeEncryptedToken(path: string, apiKey: string): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(apiKey)
+  const secretStore = getSecretStore()
+  if (secretStore.isEncryptionAvailable()) {
+    const encrypted = secretStore.encryptString(apiKey)
     writeFileSync(path, encrypted, { mode: 0o600 })
     return
   }
 
-  console.warn('[linear] safeStorage encryption unavailable — storing token in plaintext')
+  console.warn('[linear] secret encryption unavailable — storing token in plaintext')
   writeFileSync(path, apiKey, { encoding: 'utf-8', mode: 0o600 })
 }
 

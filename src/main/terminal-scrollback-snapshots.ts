@@ -10,7 +10,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../shared/app-environment'
 import type { WorkspaceSessionState } from '../shared/types'
 import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
@@ -21,7 +21,7 @@ const SNAPSHOT_DIR_NAME = 'terminal-scrollback'
 const REF_PREFIX = 'v1'
 
 function getSnapshotRoot(): string {
-  return join(app.getPath('userData'), SNAPSHOT_DIR_NAME)
+  return join(getAppEnvironment().getPath('userData'), SNAPSHOT_DIR_NAME)
 }
 
 export function makeTerminalScrollbackSnapshotRef(tabId: string, leafId: string): string {

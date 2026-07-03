@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../shared/secret-store'
 import {
   credentialDecryptionMessage,
   type IntegrationCredentialService
@@ -33,9 +33,10 @@ export function readStoredCredentialToken(
     return null
   }
 
-  if (safeStorage.isEncryptionAvailable()) {
+  const secretStore = getSecretStore()
+  if (secretStore.isEncryptionAvailable()) {
     try {
-      return usableToken(safeStorage.decryptString(raw))
+      return usableToken(secretStore.decryptString(raw))
     } catch {
       return readPlaintextLegacyCredential(service, raw)
     }

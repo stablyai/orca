@@ -23,6 +23,25 @@ vi.mock('electron', () => ({
   }
 }))
 
+// Production now resolves userData via AppEnvironment, not electron's app directly.
+// Install an AppEnvironment whose getPath delegates to the same mutable appState
+// the electron mock returns. Must run *after* every vi.resetModules() via dynamic
+// import — a static top-level install would wire a stale module copy.
+async function installAppEnvironmentDelegatingToMock(): Promise<void> {
+  const { setAppEnvironment } = await import('../../shared/app-environment')
+  setAppEnvironment({
+    getPath: () => appState.userData,
+    getAppPath: () => process.cwd(),
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    quit: () => {},
+    exit: () => {},
+    relaunch: () => {},
+    getAppMetrics: () => []
+  })
+}
+
 describe('mobile pairing userData path stability', () => {
   let root: string
   // The path persistence captures early, before app.setName().
@@ -31,13 +50,14 @@ describe('mobile pairing userData path stability', () => {
   // distinct directory standing in for the post-rename resolution.
   let lateDir: string
 
-  beforeEach(() => {
+  beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'orca-pairing-path-'))
     canonicalDir = join(root, 'userdata-early')
     lateDir = join(root, 'userdata-late')
     mkdirSync(canonicalDir, { recursive: true })
     mkdirSync(lateDir, { recursive: true })
     vi.resetModules()
+    await installAppEnvironmentDelegatingToMock()
   })
 
   afterEach(() => {
@@ -202,6 +222,7 @@ describe('mobile pairing userData path stability', () => {
 
     // Second launch (e.g. after an update): fresh module state, path captured again.
     vi.resetModules()
+    await installAppEnvironmentDelegatingToMock()
     appState.userData = canonicalDir
     const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
     initDataPath()

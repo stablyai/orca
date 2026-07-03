@@ -90,13 +90,16 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
       })
     })
   })
-  vi.doMock('electron', () => ({
-    safeStorage: {
-      isEncryptionAvailable: () => options.encryptionAvailable ?? false,
-      encryptString: (value: string) => Buffer.from(value),
-      decryptString: options.decryptString ?? ((value: Buffer) => value.toString('utf-8'))
-    }
-  }))
+  // The client now reads/writes tokens through the SecretStore singleton instead
+  // of electron's safeStorage, so route the store to the same mock semantics.
+  // Why: vi.resetModules() gives client.ts a fresh secret-store copy with its own
+  // singleton, so install the store via the post-reset module instance.
+  const secretStore = await import('../../shared/secret-store')
+  secretStore.setSecretStore({
+    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+    encryptString: (value: string) => Buffer.from(value),
+    decryptString: options.decryptString ?? ((value: Buffer) => value.toString('utf-8'))
+  })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }

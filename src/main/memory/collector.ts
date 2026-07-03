@@ -28,7 +28,7 @@ import {
   getProcessOutputFields,
   iterateProcessOutputLines
 } from '../../shared/process-output-field-scanner'
-import { app } from 'electron'
+import { getAppEnvironment, type AppProcessMetric } from '../../shared/app-environment'
 import type {
   AppMemory,
   MemorySnapshot,
@@ -321,7 +321,7 @@ export function collectSubtree(index: ProcIndex, root: number): number[] {
 type AppBucketsRaw = Omit<AppMemory, 'history'>
 
 function electronMetricMemoryBytes(
-  proc: ReturnType<typeof app.getAppMetrics>[number],
+  proc: AppProcessMetric,
   processIndex: ProcIndex
 ): number {
   const hostMemory = processIndex.byPid.get(proc.pid)?.memory
@@ -339,7 +339,7 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
   const renderer = { cpu: 0, memory: 0 }
   const other = { cpu: 0, memory: 0 }
 
-  for (const proc of app.getAppMetrics()) {
+  for (const proc of getAppEnvironment().getAppMetrics()) {
     const cpu = clampNumber(proc.cpu?.percentCPUUsage)
     const memoryBytes = electronMetricMemoryBytes(proc, processIndex)
 

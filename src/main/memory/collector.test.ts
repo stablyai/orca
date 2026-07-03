@@ -31,6 +31,21 @@ vi.mock('./pty-registry', () => ({
 
 async function loadCollector() {
   vi.resetModules()
+  // Why: vi.resetModules() gives app-environment a fresh, uninitialized
+  // singleton, so install the fake after the reset (not at top level) and
+  // delegate getAppMetrics to the test's appMetricsMock.
+  const { setAppEnvironment } = await import('../../shared/app-environment')
+  setAppEnvironment({
+    getPath: () => '/tmp/orca',
+    getAppPath: () => '/tmp/orca',
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    quit: () => {},
+    exit: () => {},
+    relaunch: () => {},
+    getAppMetrics: () => appMetricsMock()
+  })
   return await import('./collector')
 }
 

@@ -6,11 +6,12 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]',
+      'orca serve [--port <port>] [--pairing-address <host>] [--user-data <dir>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'port',
       'pairing-address',
+      'user-data',
       'mobile-pairing',
       'no-pairing',
       'project-root',
@@ -19,6 +20,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Runs in the foreground and prints the runtime endpoint. Stop it with Ctrl+C.',
       'Use --pairing-address when clients should connect through a LAN, Tailscale, SSH-forward, or public tunnel address.',
+      '--user-data is supported by @stablyai/orca-server; desktop serve uses the app userData directory.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'

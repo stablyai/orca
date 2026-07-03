@@ -31,6 +31,27 @@ vi.mock('electron', () => ({
 
 async function importFreshLocalPtyShellReady(): Promise<typeof LocalPtyShellReadyModule> {
   vi.resetModules()
+  // Why: the module now resolves userData via the shared AppEnvironment singleton,
+  // which vi.resetModules() clears to null. Install (after the reset, on the fresh
+  // module instance) an environment whose getPath('userData') delegates to the same
+  // mock the electron `app` stub uses, so wrapper-root paths track each test's dir.
+  const { setAppEnvironment } = await import('../../shared/app-environment')
+  setAppEnvironment({
+    getPath: (name) => {
+      if (name === 'userData') {
+        return getUserDataPathMock()
+      }
+      throw new Error(`unexpected getPath(${name})`)
+    },
+    getAppPath: () => process.cwd(),
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    quit: () => {},
+    exit: () => {},
+    relaunch: () => {},
+    getAppMetrics: () => []
+  })
   return import('./local-pty-shell-ready')
 }
 

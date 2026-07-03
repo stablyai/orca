@@ -2,6 +2,8 @@
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 
+const DEFAULT_COMMAND_NAME = 'orca'
+
 const ROOT_HELP_TEXT = `orca
 
 Usage: orca <command> [options]
@@ -189,7 +191,7 @@ Browser Automation:
 
 Common Commands:
   orca open [--json]
-  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
+  orca serve [--port <port>] [--pairing-address <host>] [--user-data <dir>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
   orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
@@ -327,14 +329,15 @@ Examples:
   $ orca tab list --json`
 
 export function printHelp(specs: CommandSpec[], commandPath: string[] = []): void {
+  const commandName = getCliCommandName()
   const exactSpec = findCommandSpec(specs, commandPath)
   if (exactSpec) {
-    console.log(formatCommandHelp(exactSpec))
+    console.log(formatCommandHelp(exactSpec, commandName))
     return
   }
 
   if (isCommandGroup(commandPath)) {
-    console.log(formatGroupHelp(specs, commandPath[0]))
+    console.log(formatGroupHelp(specs, commandPath[0], commandName))
     return
   }
 
@@ -342,11 +345,17 @@ export function printHelp(specs: CommandSpec[], commandPath: string[] = []): voi
     console.log(`Unknown command: ${commandPath.join(' ')}\n`)
   }
 
-  console.log(ROOT_HELP_TEXT)
+  console.log(formatRootHelp(commandName))
 }
 
-export function formatCommandHelp(spec: CommandSpec): string {
-  const lines = [`orca ${spec.path.join(' ')}`, '', `Usage: ${spec.usage}`, '', spec.summary]
+export function formatCommandHelp(spec: CommandSpec, commandName = getCliCommandName()): string {
+  const lines = [
+    `${commandName} ${spec.path.join(' ')}`,
+    '',
+    `Usage: ${formatCliCommandText(spec.usage, commandName)}`,
+    '',
+    spec.summary
+  ]
   const displayedFlags = supportsBrowserPageFlag(spec.path)
     ? [...spec.allowedFlags, 'page']
     : spec.allowedFlags
@@ -354,35 +363,73 @@ export function formatCommandHelp(spec: CommandSpec): string {
   if (displayedFlags.length > 0) {
     lines.push('', 'Options:')
     for (const flag of displayedFlags) {
-      lines.push(`  ${formatCommandFlagHelp(flag, spec.path)}`)
+      lines.push(`  ${formatCliCommandText(formatCommandFlagHelp(flag, spec.path), commandName)}`)
     }
   }
 
   if (spec.notes && spec.notes.length > 0) {
     lines.push('', 'Notes:')
     for (const note of spec.notes) {
-      lines.push(`  ${note}`)
+      lines.push(`  ${formatCliCommandText(note, commandName)}`)
     }
   }
 
   if (spec.examples && spec.examples.length > 0) {
     lines.push('', 'Examples:')
     for (const example of spec.examples) {
-      lines.push(`  $ ${example}`)
+      lines.push(`  $ ${formatCliCommandText(example, commandName)}`)
     }
   }
 
   return lines.join('\n')
 }
 
-export function formatGroupHelp(specs: CommandSpec[], group: string): string {
+export function formatGroupHelp(
+  specs: CommandSpec[],
+  group: string,
+  commandName = getCliCommandName()
+): string {
   const groupSpecs = specs.filter((spec) => spec.path[0] === group)
-  const lines = [`orca ${group}`, '', `Usage: orca ${group} <command> [options]`, '', 'Commands:']
+  const lines = [
+    `${commandName} ${group}`,
+    '',
+    `Usage: ${commandName} ${group} <command> [options]`,
+    '',
+    'Commands:'
+  ]
   for (const spec of groupSpecs) {
     lines.push(`  ${spec.path.slice(1).join(' ').padEnd(18)} ${spec.summary}`)
   }
-  lines.push('', `Run \`orca ${group} <command> --help\` for command-specific usage.`)
+  lines.push('', `Run \`${commandName} ${group} <command> --help\` for command-specific usage.`)
   return lines.join('\n')
+}
+
+function getCliCommandName(): string {
+  const configured = process.env.ORCA_CLI_COMMAND_NAME?.trim()
+  return configured || DEFAULT_COMMAND_NAME
+}
+
+function formatRootHelp(commandName: string): string {
+  return formatCliCommandText(ROOT_HELP_TEXT, commandName)
+}
+
+function formatCliCommandText(text: string, commandName: string): string {
+  if (commandName === DEFAULT_COMMAND_NAME) {
+    return text
+  }
+  return (
+    text
+      .replace(/^orca\b/gm, commandName)
+      .replace(/^orca$/gm, commandName)
+      .replace(/^Usage: orca\b/gm, `Usage: ${commandName}`)
+      .replace(/^  orca\b/gm, `  ${commandName}`)
+      .replace(/^    orca\b/gm, `    ${commandName}`)
+      .replace(/\$ orca\b/g, `$ ${commandName}`)
+      .replace(/`orca\b/g, `\`${commandName}`)
+      // Why: some root-help workflow snippets are prose-aligned commands, not
+      // shell examples; keep npm help on the Linux-safe `orca-ide` bin.
+      .replace(/(^|:[ \t]+|[ \t]{2,})orca (?=[a-z][a-z-]*(?:[ \t]|$))/gm, `$1${commandName} `)
+  )
 }
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {

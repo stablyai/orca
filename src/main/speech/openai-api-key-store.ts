@@ -1,7 +1,7 @@
-import { safeStorage } from 'electron'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { getSecretStore } from '../../shared/secret-store'
 
 type StoredOpenAiKey = {
   encryptedKeyBase64: string
@@ -53,15 +53,14 @@ export function saveOpenAiSpeechApiKey(apiKey: string): void {
     throw new Error('OpenAI API key is required')
   }
   ensureOrcaDir()
-  if (safeStorage.isEncryptionAvailable()) {
-    writeFileSync(getOpenAiKeyPath(), safeStorage.encryptString(trimmed), { mode: 0o600 })
+  const secretStore = getSecretStore()
+  if (secretStore.isEncryptionAvailable()) {
+    writeFileSync(getOpenAiKeyPath(), secretStore.encryptString(trimmed), { mode: 0o600 })
     cachedOpenAiSpeechApiKey = trimmed
     return
   }
 
-  console.warn(
-    '[speech] safeStorage encryption unavailable — storing OpenAI speech key in plaintext'
-  )
+  console.warn('[speech] secret encryption unavailable — storing OpenAI speech key in plaintext')
   writeFileSync(getOpenAiKeyPath(), trimmed, { encoding: 'utf8', mode: 0o600 })
   cachedOpenAiSpeechApiKey = trimmed
 }
@@ -77,15 +76,19 @@ export function readOpenAiSpeechApiKey(): string {
   }
   try {
     const raw = readFileSync(keyPath)
+    const secretStore = getSecretStore()
     const legacyJson = readLegacyJsonStoredOpenAiKey()
     if (legacyJson) {
-      cachedOpenAiSpeechApiKey = safeStorage.decryptString(
+      if (!secretStore.isEncryptionAvailable()) {
+        throw new Error('OpenAI API key could not be decrypted')
+      }
+      cachedOpenAiSpeechApiKey = secretStore.decryptString(
         Buffer.from(legacyJson.encryptedKeyBase64, 'base64')
       )
       return cachedOpenAiSpeechApiKey
     }
-    cachedOpenAiSpeechApiKey = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
+    cachedOpenAiSpeechApiKey = secretStore.isEncryptionAvailable()
+      ? secretStore.decryptString(raw)
       : raw.toString('utf8')
     return cachedOpenAiSpeechApiKey
   } catch {

@@ -40,6 +40,11 @@ import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
+import { setAppEnvironment } from '../shared/app-environment'
+import { setSecretStore } from '../shared/secret-store'
+import { ElectronAppEnvironment } from './runtime/electron-app-environment'
+import { ElectronSecretStore } from './runtime/electron-secret-store'
+import { installElectronManagedFetch } from './network/electron-managed-fetch'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
 import { ensureMainI18n, setMainUiLanguage } from './i18n/main-i18n'
@@ -517,6 +522,13 @@ if (hasSingleInstanceLock) {
   installDevParentDisconnectQuit(shouldCoupleToDevParent)
   installDevParentWatchdog(shouldCoupleToDevParent)
   installDevParentSignalQuit(shouldCoupleToDevParent)
+  // Why: install the Electron-backed AppEnvironment / SecretStore / managed
+  // fetch before any consumer (initDataPath below is the first). The headless
+  // node entrypoint installs Node-backed implementations instead, which is how
+  // the runtime core stays free of direct `electron` imports.
+  setAppEnvironment(new ElectronAppEnvironment())
+  setSecretStore(new ElectronSecretStore())
+  installElectronManagedFetch()
   // Why: must run after configureDevUserDataPath (which redirects userData to
   // orca-dev in dev mode) but before app.setName('Orca') inside whenReady
   // (which would change the resolved path on case-sensitive filesystems).

@@ -2,8 +2,9 @@
    browser session profiles, partition allowlisting, cookie import staging, and
    per-partition permission/download policies. Splitting further would scatter the
    security boundary across modules. */
-import { app, session } from 'electron'
+import { session } from 'electron'
 import type { Session } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { randomUUID } from 'node:crypto'
 import {
   copyFileSync,
@@ -60,7 +61,7 @@ class BrowserSessionRegistry {
   // status. Cookies themselves persist in the Electron partition's SQLite DB,
   // but the registry is in-memory only.
   private get metadataPath(): string {
-    return join(app.getPath('userData'), 'browser-session-meta.json')
+    return join(getAppEnvironment().getPath('userData'), 'browser-session-meta.json')
   }
 
   private loadPersistedSource(): BrowserSessionProfile['source'] {
@@ -69,7 +70,7 @@ class BrowserSessionRegistry {
 
   private static partitionCookiesPath(partition: string): string {
     const partitionName = partition.replace('persist:', '')
-    return join(app.getPath('userData'), 'Partitions', partitionName, 'Cookies')
+    return join(getAppEnvironment().getPath('userData'), 'Partitions', partitionName, 'Cookies')
   }
 
   // Why: write-to-temp-then-rename is atomic on all supported platforms.
@@ -147,7 +148,7 @@ class BrowserSessionRegistry {
   // cookies are not invalidated by Electron's default UA.
   //
   // Why this also refreshes defaultSource: the singleton constructor runs at
-  // module-import time, which may be before app.isReady(). app.getPath('userData')
+  // module-import time, which may be before app.isReady(). getAppEnvironment().getPath('userData')
   // is not guaranteed before ready, so the constructor's loadPersistedSource()
   // silently returns null. Re-reading here after app readiness ensures the
   // default profile's source is populated.

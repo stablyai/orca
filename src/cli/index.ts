@@ -13,6 +13,12 @@ import { printHelp } from './help'
 import { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 
+// Why: the npm server bin imports this module and invokes main() after wiring
+// its Node-backed serve hook, so import-time auto-run must be suppressible.
+declare global {
+  var __ORCA_CLI_DISABLE_AUTO_MAIN__: boolean | undefined
+}
+
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
 
@@ -130,6 +136,6 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
   }
 }
 
-if (require.main === module) {
+if (require.main === module && globalThis.__ORCA_CLI_DISABLE_AUTO_MAIN__ !== true) {
   void main()
 }

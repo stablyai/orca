@@ -25,6 +25,21 @@ vi.mock('../git/repo', () => ({
 
 async function createStore() {
   vi.resetModules()
+  // Why: resetModules gives the shared app-environment singleton a fresh
+  // (uninitialized) instance, so install one delegating to the per-test dir
+  // (matching the electron mock's getPath) before initDataPath resolves userData.
+  const { setAppEnvironment } = await import('../../shared/app-environment')
+  setAppEnvironment({
+    getPath: () => testState.dir,
+    getAppPath: () => testState.dir,
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    quit: () => {},
+    exit: () => {},
+    relaunch: () => {},
+    getAppMetrics: () => []
+  })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
   return new Store()

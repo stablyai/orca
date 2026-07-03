@@ -111,6 +111,28 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     return { ...actual, homedir: () => tempHome }
   })
 
+  // Why: client.ts now reaches the OS keychain through the SecretStore
+  // abstraction, not electron's safeStorage. Install the store after
+  // resetModules so the fresh module copy (not a stale top-level import) carries
+  // it. Mirror the old safeStorage mock semantics so the existing ciphertext /
+  // decrypt-failure assertions still hold.
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+    encryptString: (value: string) => Buffer.from(value),
+    decryptString: options.decryptString ?? ((value: Buffer) => value.toString('utf-8'))
+  })
+
+  // Why: client.ts now sends HTTP through managedFetch (default global fetch),
+  // not electron's net.fetch. Install a managed fetch that delegates to the
+  // existing netFetchMock, and a proxy primer that drives resolveProxyMock with
+  // the request URL, matching the production electron primer the tests assert.
+  const { setManagedFetch, setProxyPrimer } = await import('../../shared/managed-fetch')
+  setManagedFetch((url, init) => netFetchMock(url, init))
+  setProxyPrimer(async (url) => {
+    await resolveProxyMock(url)
+  })
+
   return import('./client')
 }
 

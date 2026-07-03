@@ -5,13 +5,13 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { net, safeStorage, session } from 'electron'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
   readStoredCredentialToken
 } from '../integration-credential-file'
-import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { getSecretStore } from '../../shared/secret-store'
+import { managedFetch } from '../../shared/managed-fetch'
 import { withSpan } from '../observability/tracer'
 import type {
   JiraConnectArgs,
@@ -213,11 +213,12 @@ function writeSiteFile(file: JiraSiteFile): void {
 }
 
 function writeEncryptedToken(path: string, apiToken: string): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    writeFileSync(path, safeStorage.encryptString(apiToken), { mode: 0o600 })
+  const secretStore = getSecretStore()
+  if (secretStore.isEncryptionAvailable()) {
+    writeFileSync(path, secretStore.encryptString(apiToken), { mode: 0o600 })
     return
   }
-  console.warn('[jira] safeStorage encryption unavailable — storing token in plaintext')
+  console.warn('[jira] secret encryption unavailable — storing token in plaintext')
   writeFileSync(path, apiToken, { encoding: 'utf-8', mode: 0o600 })
 }
 
@@ -328,19 +329,12 @@ async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
     'jira.request',
     async (span) => {
       span.setAttribute('jira.siteUrl', new URL(url).origin)
-      await ensureElectronProxyFromEnvironment({
-        proxySession: session.defaultSession,
-        probeUrl: url
-      }).catch((error) => {
-        span.addEvent('jira.proxySetupFailed', {
-          errorName: error instanceof Error ? error.name : typeof error,
-          errorMessage: error instanceof Error ? error.message : String(error)
-        })
-      })
       try {
-        // Why: Electron's network stack follows Chromium proxy/session state,
-        // avoiding undici's stale keep-alive sockets after VPN path changes.
-        return await net.fetch(url, init)
+        // Why: managedFetch routes through Electron's net.fetch on desktop
+        // (Chromium proxy/session state, no stale keep-alive after VPN changes)
+        // and Node's global fetch on the headless server. Proxy priming runs
+        // inside managedFetch via the installed primer.
+        return await managedFetch(url, init)
       } catch (error) {
         span.setAttribute(
           'jira.transportErrorName',

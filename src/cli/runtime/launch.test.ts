@@ -28,6 +28,38 @@ describe('serveOrcaApp', () => {
     vi.restoreAllMocks()
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
+    delete globalThis.__ORCA_NODE_SERVER_SERVE__
+  })
+
+  it('delegates serve to the node-server hook when bundled for the npm server package', async () => {
+    const serveHook = vi.fn().mockResolvedValue(0)
+    globalThis.__ORCA_NODE_SERVER_SERVE__ = serveHook
+
+    await expect(
+      serveOrcaApp({
+        json: true,
+        port: '6768',
+        pairingAddress: '100.64.1.20',
+        userDataPath: '/srv/orca-data',
+        noPairing: true
+      })
+    ).resolves.toBe(0)
+
+    expect(serveHook).toHaveBeenCalledWith({
+      json: true,
+      port: '6768',
+      pairingAddress: '100.64.1.20',
+      userDataPath: '/srv/orca-data',
+      noPairing: true
+    })
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects --user-data on the Electron foreground serve path', async () => {
+    expect(() => serveOrcaApp({ userDataPath: '/srv/orca-data' })).toThrow(
+      '`orca serve --user-data` is only supported by @stablyai/orca-server.'
+    )
+    expect(spawnMock).not.toHaveBeenCalled()
   })
 
   it('pins the Electron child cwd to the app root instead of the caller cwd', async () => {

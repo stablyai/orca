@@ -2,7 +2,11 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setAppEnvironment } from '../../shared/app-environment'
 import { delimiter, join, posix } from 'node:path'
+
+// Mutable isPackaged the AppEnvironment install reads; dev-mode tests flip it.
+let appEnvIsPackaged = true
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
@@ -319,6 +323,21 @@ describe('registerPtyHandlers', () => {
       handlers.delete(channel)
     })
     getPathMock.mockReturnValue('/tmp/orca-user-data')
+    // pty.ts resolves userData + isPackaged via the AppEnvironment abstraction;
+    // delegate to the live mocks (getPathMock + the mutable isPackaged the
+    // dev-mode tests flip) so spawn-env assertions hold.
+    appEnvIsPackaged = true
+    setAppEnvironment({
+      getPath: () => getPathMock(),
+      getAppPath: () => '/tmp/orca-app',
+      getVersion: () => '0.0.0-test',
+      isPackaged: () => appEnvIsPackaged,
+      onWillQuit: () => {},
+      quit: () => {},
+      exit: () => {},
+      relaunch: () => {},
+      getAppMetrics: () => []
+    })
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
     readFileSyncMock.mockReturnValue('')
@@ -1797,26 +1816,22 @@ describe('registerPtyHandlers', () => {
       })
 
       it('injects dev-mode ORCA_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
-        // Why: the mocked `app` (see vi.mock at the top of the file) is a
-        // plain object, so we can flip isPackaged for the scope of the test.
-        const { app } = await import('electron')
-        const mockedApp = app as unknown as { isPackaged: boolean }
-        const prev = mockedApp.isPackaged
-        mockedApp.isPackaged = false
+        // Why: flip the AppEnvironment's isPackaged to exercise the dev path
+        // (the abstraction now owns isPackaged, replacing the old electron mock).
+        const prev = appEnvIsPackaged
+        appEnvIsPackaged = false
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
           expect(env.PATH).toContain(join('/tmp/orca-user-data', 'cli', 'bin'))
         } finally {
-          mockedApp.isPackaged = prev
+          appEnvIsPackaged = prev
         }
       })
 
       it('preserves the inherited PATH when dev-mode daemon env omits PATH', async () => {
-        const { app } = await import('electron')
-        const mockedApp = app as unknown as { isPackaged: boolean }
-        const prev = mockedApp.isPackaged
-        mockedApp.isPackaged = false
+        const prev = appEnvIsPackaged
+        appEnvIsPackaged = false
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
             PATH: '/system/bin'
@@ -1826,7 +1841,7 @@ describe('registerPtyHandlers', () => {
             `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
           )
         } finally {
-          mockedApp.isPackaged = prev
+          appEnvIsPackaged = prev
         }
       })
 

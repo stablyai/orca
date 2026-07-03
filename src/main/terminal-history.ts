@@ -9,7 +9,7 @@ import {
   rmSync,
   statSync
 } from 'node:fs'
-import { app } from 'electron'
+import { getAppEnvironment } from '../shared/app-environment'
 import { parseWslPath, toLinuxPath } from './wsl'
 
 // ─── Constants ─────────────────────────────────────────────────────
@@ -77,11 +77,11 @@ function historyFilename(shell: ShellKind): string | null {
 // ─── Directory Management ──────────────────────────────────────────
 
 function getHistoryRoot(): string {
-  return join(app.getPath('userData'), HISTORY_DIR_NAME)
+  return join(getAppEnvironment().getPath('userData'), HISTORY_DIR_NAME)
 }
 
 function getHistoryRootWsl(distro: string): string {
-  return join(app.getPath('userData'), HISTORY_DIR_NAME_WSL, distro)
+  return join(getAppEnvironment().getPath('userData'), HISTORY_DIR_NAME_WSL, distro)
 }
 
 /** Ensure the history directory exists for a given worktree hash.
@@ -226,7 +226,7 @@ export function deleteWorktreeHistoryDir(worktreeId: string): void {
   // Also clean up WSL directories if any exist.
   if (process.platform === 'win32') {
     try {
-      const wslRoot = join(app.getPath('userData'), HISTORY_DIR_NAME_WSL)
+      const wslRoot = join(getAppEnvironment().getPath('userData'), HISTORY_DIR_NAME_WSL)
       if (existsSync(wslRoot)) {
         for (const distro of readdirSync(wslRoot)) {
           const wslDir = join(wslRoot, distro, worktreeHash)
@@ -325,7 +325,7 @@ export function runHistoryGc(liveWorktreeIds: Set<string>): void {
     const main = gcScanRoot(getHistoryRoot(), liveWorktreeIds)
 
     // Also scan WSL history directories (each distro has its own subdirectory).
-    const wslRoot = join(app.getPath('userData'), HISTORY_DIR_NAME_WSL)
+    const wslRoot = join(getAppEnvironment().getPath('userData'), HISTORY_DIR_NAME_WSL)
     let wslTotals = { totalDirs: 0, orphaned: 0, pruned: 0, totalSizeKB: 0 }
     if (existsSync(wslRoot)) {
       try {

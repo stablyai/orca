@@ -10,9 +10,9 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type WebContents,
-  ipcMain,
-  app
+  ipcMain
 } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
@@ -1307,8 +1307,8 @@ export function registerPtyHandlers(
           getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
         )
         const env = buildPtyHostEnv(id, baseEnv, {
-          isPackaged: app.isPackaged,
-          userDataPath: app.getPath('userData'),
+          isPackaged: getAppEnvironment().isPackaged(),
+          userDataPath: getAppEnvironment().getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv: ctx?.isWsl === true && !selectedCodexHomePath,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
@@ -2073,12 +2073,12 @@ export function registerPtyHandlers(
         shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd) &&
         !selectedCodexHomePath
       if (isDaemonHostSpawn && sessionId) {
-        if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
+        if (!isSafePtySessionId(sessionId, getAppEnvironment().getPath('userData'))) {
           throw new Error('Invalid PTY session id')
         }
         env = buildPtyHostEnv(sessionId, env ?? {}, {
-          isPackaged: app.isPackaged,
-          userDataPath: app.getPath('userData'),
+          isPackaged: getAppEnvironment().isPackaged(),
+          userDataPath: getAppEnvironment().getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
@@ -2777,7 +2777,7 @@ export function registerPtyHandlers(
         // hook state and stale pre-migration Pi overlay cleanup; reject
         // traversal/path separators before a crafted IPC payload can escape
         // the expected roots.
-        if (!isSafePtySessionId(sessionIdForEnv, app.getPath('userData'))) {
+        if (!isSafePtySessionId(sessionIdForEnv, getAppEnvironment().getPath('userData'))) {
           throw new Error('Invalid PTY session id')
         }
         // Why: clone before mutating so we don't leak injections back into
@@ -2785,8 +2785,8 @@ export function registerPtyHandlers(
         env = { ...baseEnv }
         try {
           buildPtyHostEnv(sessionIdForEnv, env, {
-            isPackaged: app.isPackaged,
-            userDataPath: app.getPath('userData'),
+            isPackaged: getAppEnvironment().isPackaged(),
+            userDataPath: getAppEnvironment().getPath('userData'),
             selectedCodexHomePath,
             skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,

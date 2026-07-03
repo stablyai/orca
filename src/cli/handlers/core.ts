@@ -120,6 +120,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         typeof flags.get('pairing-address') === 'string'
           ? (flags.get('pairing-address') as string)
           : null,
+      userDataPath:
+        typeof flags.get('user-data') === 'string' ? (flags.get('user-data') as string) : null,
       noPairing: flags.get('no-pairing') === true,
       mobilePairing: flags.get('mobile-pairing') === true,
       recipeJson: flags.get('recipe-json') === true,

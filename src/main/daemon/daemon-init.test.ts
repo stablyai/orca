@@ -352,6 +352,22 @@ async function importFresh() {
   daemonClientMock.mockClear()
   probeSocketExistsMock.mockClear()
   writeFileSyncMock.mockClear()
+  // Why: daemon-init resolves paths via the AppEnvironment abstraction now.
+  // vi.resetModules() above gives the abstraction module a fresh singleton, so
+  // re-install an environment that delegates to this file's existing app mocks
+  // (getPath/getAppPath/isPackaged/getVersion) to preserve the assertions.
+  const appEnvModule = await import('../../shared/app-environment')
+  appEnvModule.setAppEnvironment({
+    getPath: getPathMock,
+    getAppPath: getAppPathMock,
+    isPackaged: isPackagedMock,
+    getVersion: () => '1.2.3',
+    onWillQuit: () => {},
+    quit: () => {},
+    exit: () => {},
+    relaunch: () => {},
+    getAppMetrics: () => []
+  })
   // Why: importing daemon-init *after* resetModules means the module-level
   // `spawner`/`adapter`/`restartInFlight` start fresh for every test, which is
   // the only way to reliably exercise the "first-time init" path and the

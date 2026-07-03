@@ -121,6 +121,15 @@ function installModuleMocks(
     setupClientHintsOverride: setupClientHintsOverrideMock
   }))
 
+  // The registry resolves userData via the AppEnvironment abstraction (not
+  // electron.app directly anymore). Mock it to return the test USER_DATA so the
+  // meta/partition paths match the seeded fs state.
+  vi.doMock('../../shared/app-environment', () => ({
+    getAppEnvironment: () => ({ getPath: () => USER_DATA }),
+    hasAppEnvironment: () => true,
+    setAppEnvironment: vi.fn()
+  }))
+
   return {
     sessionFromPartitionMock,
     setupClientHintsOverrideMock,

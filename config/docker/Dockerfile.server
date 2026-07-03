@@ -1,0 +1,58 @@
+# Headless Orca runtime server — pure-Node, no Electron.
+#
+# Two stages:
+#   slim  — the pure-API server (terminals, git, agents, pairing). No X11.
+#   full  — slim + Xvfb + chromium for browser panes (optional).
+#
+# The slim image is the recommended target for lightweight / ephemeral VMs:
+# install fast, expose a pairing URL, no display server required.
+
+# ---- slim (pure-Node API server) ----
+FROM node:24-slim AS slim
+
+# Runtime deps only: git + ssh client for source control, ca-certs for TLS,
+# python3/build-essential ONLY as a node-pty source-build fallback (the prebuilt
+# matrix should make compiling unnecessary on supported platforms).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates git openssh-client python3 build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
+# The published @stablyai/orca-server package carries the bundled `orca-ide` CLI,
+# server runtime, and node-pty prebuilt matrix; its postinstall selects the
+# matching binary (or compiles as a last resort using the toolchain above).
+RUN npm install -g @stablyai/orca-server
+RUN mkdir -p /data /work && chown -R node:node /data /work
+
+ENV ORCA_SERVE_HOST=0.0.0.0 \
+    ORCA_SERVE_PORT=6768 \
+    ORCA_USER_DATA_PATH=/data \
+    ORCA_IS_PACKAGED=1
+
+EXPOSE 6768
+VOLUME ["/data", "/work"]
+WORKDIR /work
+
+# Pairing/E2EE protects the API/WS; do not run an open port unauthenticated.
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD orca-ide status || exit 1
+
+# The WebSocket transport binds 0.0.0.0 by default, so the server is reachable
+# from outside the container. --json makes the pairing URL machine-readable.
+USER node
+ENTRYPOINT ["orca-ide", "serve", "--port", "6768", "--json"]
+
+# ---- full (adds Xvfb + chromium for browser panes) ----
+FROM slim AS full
+USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      xvfb chromium libnss3 libgtk-3-0 libxss1 python3-gi at-spi2-core \
+  && rm -rf /var/lib/apt/lists/*
+
+# The offscreen browser backend auto-installs once a display is present. Run
+# chromium with --no-sandbox inside the container (or grant SYS_ADMIN + seccomp).
+ENV DISPLAY=:99
+COPY config/docker/orca-server-with-xvfb.sh /usr/local/bin/orca-server-with-xvfb
+RUN chmod +x /usr/local/bin/orca-server-with-xvfb
+USER node
+ENTRYPOINT ["/usr/local/bin/orca-server-with-xvfb"]

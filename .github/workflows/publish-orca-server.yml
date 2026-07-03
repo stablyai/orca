@@ -1,0 +1,282 @@
+name: Publish @stablyai/orca-server
+
+# Publishes the headless, Electron-free Orca runtime server to npm.
+#
+# Builds the node-pty prebuilt matrix (the one ABI-sensitive native module) across
+# linux x64/arm64 (glibc + musl) and macOS x64/arm64, collects them into the
+# server bundle, verifies the tarball, then publishes @stablyai/orca-server.
+#
+# Trigger: release-cut.yml calls this with the desktop release tag after the
+# desktop artifacts are ready, before the GitHub Release is made public. Manual
+# dispatch is for backfills/retries against an existing desktop tag.
+# Auth: NODE_AUTH_TOKEN from the NPM_TOKEN repo secret (must exist in this repo,
+# same as stablyai/stably's release-cli). Stable tags publish under `latest`;
+# RC tags publish under `alpha`.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Desktop release tag to publish, e.g. v1.4.116 or v1.4.116-rc.0'
+        required: true
+        type: string
+      publish_github_release_after_npm:
+        description: 'Publish the matching GitHub draft release after npm succeeds'
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      NPM_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Desktop release tag to publish, e.g. v1.4.116 or v1.4.116-rc.0'
+        required: true
+        type: string
+      publish_github_release_after_npm:
+        description: 'Publish the matching GitHub draft release after npm succeeds'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24
+  PNPM_VERSION: 10.24.0
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag }}
+
+jobs:
+  resolve:
+    if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      npm_dist_tag: ${{ steps.release.outputs.npm_dist_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Resolve npm version from desktop release tag
+        id: release
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            npm_dist_tag=alpha
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            npm_dist_tag=latest
+          else
+            echo "::error::Tag $TAG does not match a desktop stable or RC release tag."
+            exit 1
+          fi
+
+          version="${TAG#v}"
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "$package_version" != "$version" ]]; then
+            echo "::error::package.json version $package_version does not match release tag $TAG."
+            exit 1
+          fi
+
+          echo "tag=$TAG" >>"$GITHUB_OUTPUT"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "npm_dist_tag=$npm_dist_tag" >>"$GITHUB_OUTPUT"
+          echo "Publishing @stablyai/orca-server@$version under npm dist-tag $npm_dist_tag"
+
+  # ---- Build one node-pty prebuilt slot per platform/arch/libc ----
+  prebuilds:
+    needs: resolve
+    if: github.repository == 'stablyai/orca'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { runner: ubuntu-latest, slot: linux-x64-glibc, kind: glibc }
+          - { runner: ubuntu-24.04-arm, slot: linux-arm64-glibc, kind: glibc }
+          - { runner: ubuntu-latest, slot: linux-x64-musl, kind: musl }
+          - { runner: ubuntu-24.04-arm, slot: linux-arm64-musl, kind: musl }
+          - { runner: macos-14, slot: darwin-arm64, kind: darwin }
+          - { runner: macos-15-intel, slot: darwin-x64, kind: darwin }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.resolve.outputs.tag }}
+
+      - uses: actions/setup-node@v6
+        if: matrix.kind != 'musl'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # glibc + darwin: build natively on the host runner.
+      - name: Build prebuilt (host toolchain)
+        if: matrix.kind != 'musl'
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y build-essential python3
+          fi
+          corepack enable
+          corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+          pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
+          node config/scripts/build-server-prebuilds.mjs --slot=${{ matrix.slot }}
+
+      # musl: build inside an Alpine container (checkout already done on host —
+      # GH cannot run JS actions in an Alpine container on arm64 runners).
+      - name: Build prebuilt (musl / Alpine container)
+        if: matrix.kind == 'musl'
+        run: |
+          docker run --rm -v "$PWD":/w -w /w node:24-alpine sh -euc '
+            apk add --no-cache build-base python3 git bash >/dev/null
+            corepack enable
+            corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
+            pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
+            node config/scripts/build-server-prebuilds.mjs --slot=${{ matrix.slot }}
+          '
+
+      - name: Show prebuilt
+        run: |
+          ls -la out/server/prebuilds/${{ matrix.slot }}/
+          file out/server/prebuilds/${{ matrix.slot }}/pty.node || true
+
+      - name: Upload prebuilt slot
+        uses: actions/upload-artifact@v4
+        with:
+          name: orca-server-prebuilt-${{ matrix.slot }}
+          path: out/server/prebuilds/${{ matrix.slot }}/**
+          if-no-files-found: error
+
+  # ---- Collect all slots, build the bundle, verify the tarball, publish ----
+  publish:
+    needs:
+      - resolve
+      - prebuilds
+    if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.resolve.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
+
+      - name: Build server bundle (electron-free)
+        run: pnpm run build:server
+
+      - name: Verify server package version matches release tag
+        env:
+          ORCA_SERVER_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          actual="$(node -p "require('./out/server/package.json').version")"
+          if [[ "$actual" != "$ORCA_SERVER_VERSION" ]]; then
+            echo "::error::Server package version $actual does not match release version $ORCA_SERVER_VERSION."
+            exit 1
+          fi
+
+      - name: Download all prebuilt slots
+        uses: actions/download-artifact@v4
+        with:
+          pattern: orca-server-prebuilt-*
+          path: /tmp/prebuilts
+
+      - name: Assemble prebuilds into the bundle dir
+        run: |
+          mkdir -p out/server/prebuilds
+          for d in /tmp/prebuilts/orca-server-prebuilt-*; do
+            slot="${d##*/orca-server-prebuilt-}"
+            mkdir -p "out/server/prebuilds/$slot"
+            cp -r "$d"/* "out/server/prebuilds/$slot/"
+          done
+          echo "Assembled slots:"; ls out/server/prebuilds
+
+      - name: Verify tarball ships bundle + all prebuilts (incl. spawn-helper)
+        working-directory: out/server
+        run: |
+          TARBALL=$(npm pack --pack-destination /tmp | tail -n1)
+          echo "tarball: $TARBALL"
+          LIST=$(tar -tzf "/tmp/$TARBALL")
+          echo "$LIST" | grep -q '^package/orca-ide.js$' || { echo "MISSING CLI bundle"; exit 1; }
+          ! echo "$LIST" | grep -q '^package/orca.js$' || { echo "UNSAFE orca bin bundle present"; exit 1; }
+          echo "$LIST" | grep -q '^package/orca-server.js$' || { echo "MISSING bundle"; exit 1; }
+          echo "$LIST" | grep -q '^package/scripts/install-node-pty-prebuilt.mjs$' || { echo "MISSING installer"; exit 1; }
+          for slot in linux-x64-glibc linux-arm64-glibc linux-x64-musl linux-arm64-musl darwin-arm64 darwin-x64; do
+            echo "$LIST" | grep -q "^package/prebuilds/$slot/pty.node$" || { echo "MISSING $slot/pty.node"; exit 1; }
+          done
+          # spawn-helper is required on every Unix slot (node-pty posix_spawns it)
+          for slot in linux-x64-glibc linux-arm64-glibc linux-x64-musl linux-arm64-musl darwin-arm64 darwin-x64; do
+            echo "$LIST" | grep -q "^package/prebuilds/$slot/spawn-helper$" || { echo "MISSING $slot/spawn-helper"; exit 1; }
+          done
+          echo "✓ tarball contains bundle, installer, and all 6 prebuilt slots"
+
+      - name: Check whether npm version already exists
+        id: npm-version
+        env:
+          ORCA_SERVER_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          if npm view "@stablyai/orca-server@$ORCA_SERVER_VERSION" version >/tmp/orca-server-npm-version 2>/dev/null; then
+            echo "already_published=true" >>"$GITHUB_OUTPUT"
+            echo "@stablyai/orca-server@$ORCA_SERVER_VERSION is already published."
+          else
+            echo "already_published=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: steps.npm-version.outputs.already_published != 'true'
+        working-directory: out/server
+        run: npm publish --access public --tag "$NPM_DIST_TAG"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_DIST_TAG: ${{ needs.resolve.outputs.npm_dist_tag }}
+
+      - name: Ensure npm dist-tag points at release version
+        run: npm dist-tag add "@stablyai/orca-server@$ORCA_SERVER_VERSION" "$NPM_DIST_TAG"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ORCA_SERVER_VERSION: ${{ needs.resolve.outputs.version }}
+          NPM_DIST_TAG: ${{ needs.resolve.outputs.npm_dist_tag }}
+
+      - name: Publish recovered GitHub draft release
+        # Why: recovered RC drafts are intentionally exposed only after their
+        # matching npm package exists, and this runs per tag so one failed RC
+        # cannot hold back another already-synced RC.
+        if: ${{ inputs.publish_github_release_after_npm }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          NPM_DIST_TAG: ${{ needs.resolve.outputs.npm_dist_tag }}
+        run: |
+          set -euo pipefail
+          prerelease=false
+          if [[ "$NPM_DIST_TAG" == "alpha" ]]; then
+            prerelease=true
+          fi
+          gh release edit "$TAG" \
+            --draft=false \
+            --prerelease="$prerelease" \
+            --repo "$GITHUB_REPOSITORY"

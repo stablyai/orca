@@ -21,6 +21,14 @@ async function loadStoreModule() {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }
   })
+  // vi.resetModules() gives the store a fresh secret-store instance, so wire the
+  // SecretStore here (post-reset) to keep the existing safeStorageMock assertions valid.
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => safeStorageMock.isEncryptionAvailable(),
+    encryptString: (s) => safeStorageMock.encryptString(s),
+    decryptString: (b) => safeStorageMock.decryptString(b)
+  })
   return import('./openai-api-key-store')
 }
 
@@ -75,6 +83,17 @@ describe('OpenAI speech API key store', () => {
     store.saveOpenAiSpeechApiKey('saved-key')
 
     expect(store.readOpenAiSpeechApiKey()).toBe('saved-key')
+    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+  })
+
+  it('rejects legacy encrypted JSON when encryption is unavailable', async () => {
+    writeStoredOpenAiKey(
+      JSON.stringify({ encryptedKeyBase64: Buffer.from('key').toString('base64') })
+    )
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const store = await loadStoreModule()
+
+    expect(() => store.readOpenAiSpeechApiKey()).toThrow('OpenAI API key could not be decrypted')
     expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
   })
 

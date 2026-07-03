@@ -79,6 +79,7 @@ export async function publishCompleteDraftReleases({
   fetchImpl = fetch,
   verifyReleaseAssets = verifyRequiredReleaseAssets,
   isDraftBuiltFromCurrentRef = ({ tag }) => isTagBuiltFromCurrentRef(tag),
+  publish = true,
   log = console.log
 }) {
   if (!repo) {
@@ -114,22 +115,28 @@ export async function publishCompleteDraftReleases({
       continue
     }
 
-    // Why: only release-cut-authored RC drafts with a complete asset set are
-    // resumed here; incomplete drafts stay private for the normal rebuild path.
-    await githubJson(
-      fetchImpl,
-      `https://api.github.com/repos/${repo}/releases/${release.id}`,
-      token,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({
-          draft: false,
-          prerelease: isRcTag(tag)
-        })
-      }
-    )
+    if (publish) {
+      // Why: only release-cut-authored RC drafts with a complete asset set are
+      // resumed here; incomplete drafts stay private for the normal rebuild path.
+      await githubJson(
+        fetchImpl,
+        `https://api.github.com/repos/${repo}/releases/${release.id}`,
+        token,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            draft: false,
+            prerelease: isRcTag(tag)
+          })
+        }
+      )
+    }
     published.push(tag)
-    log(`Published complete RC draft release ${tag}`)
+    log(
+      publish
+        ? `Published complete RC draft release ${tag}`
+        : `Complete RC draft release ${tag} is ready to publish`
+    )
   }
 
   if (published.length === 0 && skipped.length === 0) {
@@ -147,10 +154,16 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
     outputPath,
     `${[
       `published_count=${published.length}`,
+      `publishable_count=${published.length}`,
       `skipped_count=${skipped.length}`,
       `latest_published_tag=${published.at(-1) ?? ''}`,
+      `latest_publishable_tag=${published.at(-1) ?? ''}`,
       `published_tags=${published.join(',')}`,
-      `skipped_tags=${skipped.map((item) => item.tag).join(',')}`
+      `publishable_tags=${published.join(',')}`,
+      `published_tags_json=${JSON.stringify(published)}`,
+      `publishable_tags_json=${JSON.stringify(published)}`,
+      `skipped_tags=${skipped.map((item) => item.tag).join(',')}`,
+      `skipped_tags_json=${JSON.stringify(skipped.map((item) => item.tag))}`
     ].join('\n')}\n`
   )
 }
@@ -158,7 +171,8 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
 async function main() {
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
-  const result = await publishCompleteDraftReleases({ repo, token })
+  const publish = process.env.PUBLISH_DRAFT_RELEASES !== 'false'
+  const result = await publishCompleteDraftReleases({ repo, token, publish })
   writeGithubOutputs(result)
 }
 

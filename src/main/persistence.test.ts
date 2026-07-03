@@ -2,6 +2,8 @@
 migration, mutation, and flush behavior in one file so schema changes are
 reviewed against the full storage contract instead of being scattered. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { setAppEnvironment } from '../shared/app-environment'
+import { setSecretStore } from '../shared/secret-store'
 import {
   writeFileSync,
   readFileSync,
@@ -138,6 +140,33 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 /** Reset modules and dynamically import Store so the data-file path picks up the current testState.dir */
 async function createStore() {
   vi.resetModules()
+  // Why: resetModules gives persistence.ts a fresh app-environment/secret-store
+  // singleton, so re-install them (post-reset) before initDataPath resolves the
+  // userData path or the Store touches encrypted settings.
+  const appEnv = await import('../shared/app-environment')
+  appEnv.setAppEnvironment({
+    getPath: () => testState.dir,
+    getAppPath: () => testState.dir,
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    quit: () => {},
+    exit: () => {},
+    relaunch: () => {},
+    getAppMetrics: () => []
+  })
+  const secretStore = await import('../shared/secret-store')
+  secretStore.setSecretStore({
+    isEncryptionAvailable: () => true,
+    encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext: Buffer) => {
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('encrypted:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('encrypted:'.length)
+    }
+  })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
   return new Store()
@@ -328,6 +357,31 @@ describe('Store', () => {
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
+    // persistence resolves userData + secrets via the host abstractions; install
+    // ones matching the prior electron mocks (path -> testState.dir; the secret
+    // store preserves the `encrypted:` prefix semantics the assertions rely on).
+    setAppEnvironment({
+      getPath: () => testState.dir,
+      getAppPath: () => testState.dir,
+      getVersion: () => '0.0.0-test',
+      isPackaged: () => false,
+      onWillQuit: () => {},
+      quit: () => {},
+      exit: () => {},
+      relaunch: () => {},
+      getAppMetrics: () => []
+    })
+    setSecretStore({
+      isEncryptionAvailable: () => true,
+      encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+      decryptString: (ciphertext: Buffer) => {
+        const decoded = ciphertext.toString('utf-8')
+        if (!decoded.startsWith('encrypted:')) {
+          throw new Error('invalid ciphertext')
+        }
+        return decoded.slice('encrypted:'.length)
+      }
+    })
   })
 
   afterEach(() => {
@@ -5243,6 +5297,38 @@ describe('Store', () => {
 
     const reloaded = await createStore()
     expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
+  })
+
+  it('refuses to persist Kagi session links as plaintext when encryption fails', async () => {
+    const sessionLink = 'https://kagi.com/search?token=secret'
+    const store = await createStore()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const secretStoreModule = await import('../shared/secret-store')
+    secretStoreModule.setSecretStore({
+      isEncryptionAvailable: () => true,
+      encryptString: () => {
+        throw new Error('encryption failed')
+      },
+      decryptString: () => {
+        throw new Error('decryption unavailable')
+      }
+    })
+
+    try {
+      store.updateUI({ browserKagiSessionLink: sessionLink })
+      store.flush()
+
+      const persisted = existsSync(dataFile()) ? readDataFile() : null
+      expect(JSON.stringify(persisted)).not.toContain(sessionLink)
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[persistence] Failed to flush state:',
+        expect.objectContaining({
+          message: '[persistence] Refusing to persist secret unencrypted'
+        })
+      )
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 
   it('keeps plaintext Kagi session links readable for migration from older builds', async () => {
