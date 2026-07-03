@@ -234,6 +234,8 @@ export default function TabGroupSplitLayout({
 }): React.JSX.Element {
   const dragSplit = useTabDragSplit({ worktreeId, enabled: isWorktreeActive })
   const hasSplits = layout.type === 'split'
+  // Why: split chrome is derived from the full layout while maximize only swaps
+  // the mounted leaf below, so restore affordances and edge borders stay true.
   const maximizedLeaf = maximizedGroupId ? findLeafForGroup(layout, maximizedGroupId) : null
   const renderedLayout = maximizedLeaf ?? layout
 

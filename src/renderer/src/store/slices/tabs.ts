@@ -1381,15 +1381,25 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (!groupExists || current === groupId) {
         return {}
       }
+      const nextActiveGroupIdByWorktree = {
+        ...state.activeGroupIdByWorktree,
+        [worktreeId]: groupId
+      }
+      const activeSurfacePatch = buildActiveSurfacePatch(
+        {
+          ...state,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        },
+        worktreeId,
+        groupId
+      )
       return {
         maximizedGroupIdByWorktree: {
           ...state.maximizedGroupIdByWorktree,
           [worktreeId]: groupId
         },
-        activeGroupIdByWorktree: {
-          ...state.activeGroupIdByWorktree,
-          [worktreeId]: groupId
-        }
+        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        ...activeSurfacePatch
       }
     })
   },

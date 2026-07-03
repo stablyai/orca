@@ -256,11 +256,14 @@ export default function TabGroupPanel({
               {isFocused ? (
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
               ) : null}
+              {/* Why: maximizing a single-pane group is a no-op; spanning only matters
+                  when there are sibling split panes to hide. */}
               {isFocused && hasSplitGroups ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
+                      aria-pressed={model.isGroupMaximized}
                       aria-label={
                         model.isGroupMaximized
                           ? translate(
@@ -319,6 +322,26 @@ export default function TabGroupPanel({
                       </DropdownMenuTrigger>
                     </TooltipTrigger>
                     <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          commands.toggleGroupMaximize()
+                        }}
+                      >
+                        {model.isGroupMaximized ? (
+                          <Minimize2 className="size-4" />
+                        ) : (
+                          <Maximize2 className="size-4" />
+                        )}
+                        {model.isGroupMaximized
+                          ? translate(
+                              'auto.components.tab.group.TabGroupPanel.restoreSplitLayout',
+                              'Restore split layout'
+                            )
+                          : translate(
+                              'auto.components.tab.group.TabGroupPanel.maximizePane',
+                              'Maximize pane'
+                            )}
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
                         onSelect={() => {
