@@ -4096,7 +4096,7 @@
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
           "sidebarRowMissing": "El destino ya no existe",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "No se pudo desanidar el espacio de trabajo"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -7517,6 +7517,8 @@
             "e1263dd748": "jira",
             "76f6af7c57": "Conecte Jira Cloud o actualice las credenciales del token API de Jira.",
             "617603509b": "Integración de Jira",
+            "jiraServerKeyword": "server",
+            "jiraDataCenterKeyword": "data center",
             "8c568d761c": "solicitud de extracción",
             "33180e8c10": "autohospedado",
             "129fc59aa8": "gitea",
@@ -7539,7 +7541,8 @@
             "41ccade05c": "gh",
             "b79c21bd42": "github",
             "7166b9090c": "Autenticación de GitHub a través de la CLI de gh.",
-            "f16e41cc72": "Integración de GitHub"
+            "f16e41cc72": "Integración de GitHub",
+            "jiraCloudServerCredentials": "Conecta credenciales de Jira Cloud o Server/Data Center."
           }
         },
         "jira": {
@@ -8401,7 +8404,11 @@
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "Desconectar todo",
-                "account_scope_prefix": "Account scope"
+                "account_scope_prefix": "Account scope",
+                "jiraCloudServerRemoteCredentialCopy": "Conecta un sitio de Jira Cloud o Server/Data Center. Las credenciales se envían al runtime remoto seleccionado y se almacenan allí con el cifrado que admita el runtime.",
+                "jiraCloudServerLocalCredentialCopy": "Conecta un sitio de Jira Cloud o Server/Data Center. Las credenciales se almacenan localmente y se cifran cuando el almacenamiento del runtime local lo admite.",
+                "jiraCloudServerIssueDescription": "Explora, crea y empieza a trabajar desde incidencias de Jira.",
+                "connectedJiraCredentialStorage": "Cada sitio de Jira conectado tiene una credencial almacenada por el runtime activo."
               }
             }
           }
@@ -12137,7 +12144,21 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
-            "8388bdea2b": "Connect Jira site"
+            "8388bdea2b": "Connect Jira site",
+            "cloudServerDescription": "Conecta un sitio de Jira Cloud o Server/Data Center para explorar y actualizar incidencias.",
+            "deploymentType": "Tipo de Jira",
+            "cloud": "Cloud",
+            "serverDataCenter": "Server/Data Center",
+            "serverUrl": "URL del sitio Jira",
+            "serverUrlPlaceholder": "https://jira.example.com",
+            "authMode": "Modo de autenticación",
+            "basicAuth": "Usuario + contraseña/PAT",
+            "bearerAuth": "Bearer PAT",
+            "username": "Usuario",
+            "passwordOrToken": "Contraseña o token",
+            "bearerToken": "Token Bearer",
+            "remoteCredentialStorage": "Tu credencial se envía al runtime remoto seleccionado y se almacena allí con el cifrado que admita el runtime.",
+            "localCredentialStorage": "Tu credencial se almacena localmente y se cifra cuando el almacenamiento del runtime local lo admite."
           }
         }
       },

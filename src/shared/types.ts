@@ -1816,6 +1816,7 @@ export type {
   JiraCreateFieldAllowedValue,
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
+  JiraDeploymentType,
   JiraIssue,
   JiraIssueFilter,
   JiraIssueType,

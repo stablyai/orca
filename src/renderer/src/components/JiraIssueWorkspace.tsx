@@ -339,7 +339,7 @@ export default function JiraIssueWorkspace({
         id: result.id || createBrowserUuid(),
         body: bodyState.body,
         createdAt: new Date().toISOString(),
-        user: { accountId: 'local', displayName: 'You' }
+        user: { userId: 'local', accountId: 'local', displayName: 'You' }
       }
       optimisticCommentsRef.current.push(comment)
       setComments((prev) => [...prev, comment])
@@ -566,7 +566,7 @@ export default function JiraIssueWorkspace({
                     onClick={() =>
                       void mutateIssue(
                         'assignee',
-                        { assigneeAccountId: null },
+                        { assigneeUserId: null },
                         { assignee: undefined }
                       )
                     }
@@ -576,12 +576,12 @@ export default function JiraIssueWorkspace({
                   </button>
                   {users.map((user) => (
                     <button
-                      key={user.accountId}
+                      key={user.userId}
                       type="button"
                       onClick={() =>
                         void mutateIssue(
                           'assignee',
-                          { assigneeAccountId: user.accountId },
+                          { assigneeUserId: user.userId },
                           { assignee: user }
                         )
                       }

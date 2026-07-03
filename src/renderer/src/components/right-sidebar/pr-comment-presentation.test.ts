@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { installWindowLocalStorage } from '@/test/memory-storage'
 import {
   DEFAULT_PR_COMMENT_PRESENTATION_VARIANT,
   getPRCommentPresentationClasses,
@@ -8,6 +9,10 @@ import {
 } from './pr-comment-presentation'
 
 describe('pr-comment-presentation', () => {
+  beforeEach(() => {
+    installWindowLocalStorage()
+  })
+
   it('defaults to cards layout', () => {
     expect(DEFAULT_PR_COMMENT_PRESENTATION_VARIANT).toBe('cards')
   })

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -56,6 +56,12 @@ function writeJiraFiles(siteId: string, token: string | Buffer): void {
     { encoding: 'utf-8' }
   )
   writeFileSync(tokenPathForSite(siteId), token)
+}
+
+function readJiraSiteFile(): { sites?: unknown[] } {
+  return JSON.parse(
+    readFileSync(join(tempHome, '.orca', 'jira-sites.json'), { encoding: 'utf-8' })
+  ) as { sites?: unknown[] }
 }
 
 function writeMultiSiteFiles(
@@ -133,6 +139,190 @@ afterEach(() => {
 })
 
 describe('Jira client credential storage', () => {
+  it('normalizes legacy saved Cloud sites to deployment-aware metadata', async () => {
+    const siteId = 'site-alpha'
+    writeJiraFiles(siteId, 'token-alpha')
+    const jira = await loadClientModule()
+
+    expect(jira.getStatus()).toMatchObject({
+      connected: true,
+      viewer: {
+        accountId: 'account-alpha',
+        userId: 'account-alpha',
+        displayName: 'Ada',
+        email: 'ada@example.com'
+      },
+      sites: [
+        {
+          id: siteId,
+          deploymentType: 'cloud',
+          authMode: 'basic',
+          accountId: 'account-alpha',
+          viewerUserId: 'account-alpha'
+        }
+      ]
+    })
+    expect(readJiraSiteFile().sites?.[0]).toMatchObject({
+      id: siteId,
+      deploymentType: 'cloud',
+      authMode: 'basic',
+      viewerUserId: 'account-alpha'
+    })
+  })
+
+  it('strips URL credentials before storing Jira site metadata', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          name: 'ada',
+          displayName: 'Ada Server',
+          emailAddress: 'ada@example.internal'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        deploymentType: 'server',
+        authMode: 'basic',
+        siteUrl: 'https://url-user:url-secret@jira.example.internal/',
+        username: 'ada',
+        passwordOrToken: 'server-secret'
+      })
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(jira.getStatus().sites?.[0]?.siteUrl).toBe('https://jira.example.internal')
+    expect(String(netFetchMock.mock.calls[0]?.[0])).toBe(
+      'https://jira.example.internal/rest/api/2/myself'
+    )
+  })
+
+  it('connects to Jira Server with Basic credentials through REST API v2', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          name: 'ada',
+          key: 'JIRAUSER10000',
+          displayName: 'Ada Server',
+          emailAddress: 'ada@example.internal'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        deploymentType: 'server',
+        authMode: 'basic',
+        siteUrl: 'jira.example.internal',
+        username: 'ada',
+        passwordOrToken: 'server-secret'
+      })
+    ).resolves.toEqual({
+      ok: true,
+      viewer: {
+        accountId: 'ada',
+        userId: 'ada',
+        displayName: 'Ada Server',
+        email: 'ada@example.internal',
+        avatarUrl: undefined
+      }
+    })
+
+    expect(resolveProxyMock).toHaveBeenCalledWith('https://jira.example.internal/rest/api/2/myself')
+    const connectHeaders = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(connectHeaders.get('Authorization')).toBe(
+      `Basic ${Buffer.from('ada:server-secret').toString('base64')}`
+    )
+
+    const savedSite = jira.getStatus().sites?.[0]
+    expect(savedSite).toMatchObject({
+      siteUrl: 'https://jira.example.internal',
+      email: 'ada@example.internal',
+      displayName: 'Ada Server',
+      accountId: 'ada',
+      viewerUserId: 'ada',
+      deploymentType: 'server',
+      authMode: 'basic',
+      authUsername: 'ada'
+    })
+    expect(jira.getClients(savedSite?.id)[0]?.authorization).toBe(
+      `Basic ${Buffer.from('ada:server-secret').toString('base64')}`
+    )
+  })
+
+  it('connects to Jira Server with Bearer credentials through REST API v2', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          name: 'pat-user',
+          displayName: 'PAT User',
+          emailAddress: 'pat@example.internal'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        deploymentType: 'server',
+        authMode: 'bearer',
+        siteUrl: 'https://jira.example.internal/',
+        bearerToken: 'bearer-secret'
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      viewer: {
+        accountId: 'pat-user',
+        userId: 'pat-user',
+        displayName: 'PAT User'
+      }
+    })
+
+    const connectHeaders = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(resolveProxyMock).toHaveBeenCalledWith('https://jira.example.internal/rest/api/2/myself')
+    expect(connectHeaders.get('Authorization')).toBe('Bearer bearer-secret')
+
+    const savedSite = jira.getStatus().sites?.[0]
+    expect(savedSite).toMatchObject({
+      siteUrl: 'https://jira.example.internal',
+      deploymentType: 'server',
+      authMode: 'bearer',
+      accountId: 'pat-user',
+      viewerUserId: 'pat-user',
+      authUsername: 'pat-user'
+    })
+    expect(jira.getClients(savedSite?.id)[0]?.authorization).toBe('Bearer bearer-secret')
+  })
+
+  it('reports Server login redirects without leaking JSON parse errors', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      new Response('<html><body>login</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' }
+      })
+    )
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        deploymentType: 'server',
+        authMode: 'basic',
+        siteUrl: 'https://jira.example.internal',
+        username: 'ada',
+        passwordOrToken: 'server-secret'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error:
+        'Jira returned a non-JSON response. Check the selected deployment type and credentials.'
+    })
+  })
+
   it('preserves plaintext fallback and reaches Jira auth header construction', async () => {
     const siteId = 'site-alpha'
     writeJiraFiles(siteId, 'token-alpha')

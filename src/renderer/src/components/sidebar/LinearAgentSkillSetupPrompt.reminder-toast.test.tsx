@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
+import { installWindowLocalStorage } from '@/test/memory-storage'
 import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
@@ -173,6 +174,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     mocks.toastWarning.mockClear()
     mocks.toastWarning.mockReturnValue('linear-setup-toast-id')
     mocks.panelProps.length = 0
+    installWindowLocalStorage()
     window.localStorage.clear()
     _linearAgentSkillSetupPromptInternalsForTests.resetSessionReminders()
     Object.defineProperty(window, 'api', {

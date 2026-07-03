@@ -47,6 +47,64 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined
 }
 
+function hasOnlyKeys(record: Record<string, unknown>, allowedKeys: ReadonlySet<string>): boolean {
+  return Object.keys(record).every((key) => allowedKeys.has(key))
+}
+
+function normalizeRequiredString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function normalizeConnectArgs(value: unknown): JiraConnectArgs | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const input = value as Record<string, unknown>
+  // Why: older renderer/runtime callers omitted deploymentType before Server/DC support.
+  const deploymentType = input.deploymentType ?? 'cloud'
+  if (deploymentType === 'cloud') {
+    if (!hasOnlyKeys(input, new Set(['deploymentType', 'siteUrl', 'email', 'apiToken']))) {
+      return null
+    }
+    const siteUrl = normalizeRequiredString(input.siteUrl)
+    const email = normalizeRequiredString(input.email)
+    const apiToken = normalizeRequiredString(input.apiToken)
+    return siteUrl && email && apiToken
+      ? { deploymentType: 'cloud', siteUrl, email, apiToken }
+      : null
+  }
+  if (deploymentType !== 'server') {
+    return null
+  }
+  if (input.authMode === 'basic') {
+    if (
+      !hasOnlyKeys(
+        input,
+        new Set(['deploymentType', 'authMode', 'siteUrl', 'username', 'passwordOrToken'])
+      )
+    ) {
+      return null
+    }
+    const siteUrl = normalizeRequiredString(input.siteUrl)
+    const username = normalizeRequiredString(input.username)
+    const passwordOrToken = normalizeRequiredString(input.passwordOrToken)
+    return siteUrl && username && passwordOrToken
+      ? { deploymentType: 'server', authMode: 'basic', siteUrl, username, passwordOrToken }
+      : null
+  }
+  if (input.authMode === 'bearer') {
+    if (!hasOnlyKeys(input, new Set(['deploymentType', 'authMode', 'siteUrl', 'bearerToken']))) {
+      return null
+    }
+    const siteUrl = normalizeRequiredString(input.siteUrl)
+    const bearerToken = normalizeRequiredString(input.bearerToken)
+    return siteUrl && bearerToken
+      ? { deploymentType: 'server', authMode: 'bearer', siteUrl, bearerToken }
+      : null
+  }
+  return null
+}
+
 function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -56,6 +114,13 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
     return null
   }
   if (input.labels !== undefined && normalizeStringArray(input.labels) === undefined) {
+    return null
+  }
+  if (
+    input.assigneeUserId !== undefined &&
+    input.assigneeUserId !== null &&
+    typeof input.assigneeUserId !== 'string'
+  ) {
     return null
   }
   if (
@@ -80,18 +145,11 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
 
 export function registerJiraHandlers(): void {
   ipcMain.handle('jira:connect', async (_event, args: JiraConnectArgs) => {
-    if (
-      typeof args?.siteUrl !== 'string' ||
-      typeof args?.email !== 'string' ||
-      typeof args?.apiToken !== 'string'
-    ) {
-      return { ok: false, error: 'Site URL, email, and API token are required.' }
+    const normalized = normalizeConnectArgs(args)
+    if (!normalized) {
+      return { ok: false, error: 'Invalid Jira connection settings.' }
     }
-    const result = await connect({
-      siteUrl: args.siteUrl,
-      email: args.email,
-      apiToken: args.apiToken
-    })
+    const result = await connect(normalized)
     if (result.ok) {
       _resetPreflightCache()
     }

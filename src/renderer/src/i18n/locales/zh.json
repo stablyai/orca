@@ -4077,7 +4077,7 @@
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
           "sidebarRowMissing": "目标不再存在",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "无法取消嵌套工作区"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -7502,6 +7502,8 @@
             "e1263dd748": "Jira",
             "76f6af7c57": "连接 Jira Cloud 或更新 Jira API 令牌凭据。",
             "617603509b": "Jira 集成",
+            "jiraServerKeyword": "server",
+            "jiraDataCenterKeyword": "data center",
             "8c568d761c": "PR",
             "33180e8c10": "自托管",
             "129fc59aa8": "Gitea",
@@ -7524,7 +7526,8 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "通过 gh CLI 进行 GitHub 身份验证。",
-            "f16e41cc72": "GitHub 集成"
+            "f16e41cc72": "GitHub 集成",
+            "jiraCloudServerCredentials": "连接 Jira Cloud 或 Server/Data Center 凭据。"
           }
         },
         "jira": {
@@ -8401,7 +8404,11 @@
                 "fe9231215b": "在显示设置操作前正在检查 Linear 访问权限。",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "断开连接",
-                "account_scope_prefix": "账户范围"
+                "account_scope_prefix": "账户范围",
+                "jiraCloudServerRemoteCredentialCopy": "连接 Jira Cloud 或 Server/Data Center 站点。凭据会发送到所选远程运行时，并以该运行时支持的加密方式存储。",
+                "jiraCloudServerLocalCredentialCopy": "连接 Jira Cloud 或 Server/Data Center 站点。凭据会存储在本地，并在本地运行时存储支持时加密。",
+                "jiraCloudServerIssueDescription": "浏览、创建并开始处理 Jira 议题。",
+                "connectedJiraCredentialStorage": "每个已连接的 Jira 站点都有一份由当前运行时存储的凭据。"
               }
             }
           }
@@ -12137,7 +12144,21 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud 站点 URL",
             "d785c42b8b": "使用 Jira Cloud 站点 URL、Atlassian 邮箱和 API 令牌来浏览议题。",
-            "8388bdea2b": "连接 Jira 站点"
+            "8388bdea2b": "连接 Jira 站点",
+            "cloudServerDescription": "连接 Jira Cloud 或 Server/Data Center 站点以浏览和更新议题。",
+            "deploymentType": "Jira 类型",
+            "cloud": "Cloud",
+            "serverDataCenter": "Server/Data Center",
+            "serverUrl": "Jira 站点 URL",
+            "serverUrlPlaceholder": "https://jira.example.com",
+            "authMode": "认证方式",
+            "basicAuth": "用户名 + 密码/PAT",
+            "bearerAuth": "Bearer PAT",
+            "username": "用户名",
+            "passwordOrToken": "密码或令牌",
+            "bearerToken": "Bearer 令牌",
+            "remoteCredentialStorage": "凭据会发送到所选远程运行时，并以该运行时支持的加密方式存储。",
+            "localCredentialStorage": "凭据会存储在本地，并在本地运行时存储支持时加密。"
           }
         }
       },

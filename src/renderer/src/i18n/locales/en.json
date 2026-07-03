@@ -7554,6 +7554,8 @@
             "e1263dd748": "jira",
             "76f6af7c57": "Connect Jira Cloud or update Jira API token credentials.",
             "617603509b": "Jira Integration",
+            "jiraServerKeyword": "server",
+            "jiraDataCenterKeyword": "data center",
             "8c568d761c": "pull request",
             "33180e8c10": "self-hosted",
             "129fc59aa8": "gitea",
@@ -7576,7 +7578,8 @@
             "41ccade05c": "gh",
             "b79c21bd42": "github",
             "7166b9090c": "GitHub authentication via the gh CLI.",
-            "f16e41cc72": "GitHub Integration"
+            "f16e41cc72": "GitHub Integration",
+            "jiraCloudServerCredentials": "Connect Jira Cloud or Server/Data Center credentials."
           }
         },
         "jira": {
@@ -8409,7 +8412,11 @@
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "Disconnect",
-                "account_scope_prefix": "Account scope"
+                "account_scope_prefix": "Account scope",
+                "jiraCloudServerRemoteCredentialCopy": "Connect a Jira Cloud or Server/Data Center site. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "jiraCloudServerLocalCredentialCopy": "Connect a Jira Cloud or Server/Data Center site. Credentials are stored locally and encrypted when local runtime storage supports it.",
+                "jiraCloudServerIssueDescription": "Browse, create, and start work from Jira issues.",
+                "connectedJiraCredentialStorage": "Each connected Jira site has one credential stored by the active runtime."
               }
             }
           }
@@ -12137,7 +12144,21 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
-            "8388bdea2b": "Connect Jira site"
+            "8388bdea2b": "Connect Jira site",
+            "cloudServerDescription": "Connect a Jira Cloud or Server/Data Center site to browse and update issues.",
+            "deploymentType": "Jira type",
+            "cloud": "Cloud",
+            "serverDataCenter": "Server/Data Center",
+            "serverUrl": "Jira site URL",
+            "serverUrlPlaceholder": "https://jira.example.com",
+            "authMode": "Auth mode",
+            "basicAuth": "Username + password/PAT",
+            "bearerAuth": "Bearer PAT",
+            "username": "Username",
+            "passwordOrToken": "Password or token",
+            "bearerToken": "Bearer token",
+            "remoteCredentialStorage": "Your credential is sent to the selected remote runtime and stored there with runtime-supported encryption.",
+            "localCredentialStorage": "Your credential is stored locally and encrypted when local runtime storage supports it."
           }
         }
       },

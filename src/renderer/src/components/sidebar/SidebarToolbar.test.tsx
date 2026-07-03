@@ -3,6 +3,7 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installWindowLocalStorage } from '@/test/memory-storage'
 import type { AppState } from '@/store'
 import SidebarToolbar from './SidebarToolbar'
 
@@ -66,6 +67,7 @@ async function renderToolbar(onWorkspaceBoardToggle = vi.fn()): Promise<{
 describe('SidebarToolbar moved workspace board hint', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    installWindowLocalStorage()
     window.localStorage.clear()
     mocks.activeTooltipOpen = false
     mocks.state = {

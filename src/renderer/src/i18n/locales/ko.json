@@ -4077,7 +4077,7 @@
           "hostDisconnected": "연결 끊김",
           "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
           "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "워크스페이스 중첩 해제에 실패했습니다"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",
@@ -7502,6 +7502,8 @@
             "e1263dd748": "Jira",
             "76f6af7c57": "Jira Cloud를 연결하거나 Jira API 토큰 자격 증명을 업데이트하세요.",
             "617603509b": "Jira 연동",
+            "jiraServerKeyword": "server",
+            "jiraDataCenterKeyword": "data center",
             "8c568d761c": "PR",
             "33180e8c10": "자체 호스팅",
             "129fc59aa8": "Gitea",
@@ -7524,7 +7526,8 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "gh CLI를 통한 GitHub 인증.",
-            "f16e41cc72": "GitHub 연동"
+            "f16e41cc72": "GitHub 연동",
+            "jiraCloudServerCredentials": "Jira Cloud 또는 Server/Data Center 자격 증명을 연결합니다."
           }
         },
         "jira": {
@@ -8401,7 +8404,11 @@
                 "fe9231215b": "설정 작업을 표시하기 전에 Linear 액세스를 확인하는 중입니다.",
                 "e1f5e6424c": "{{value0}}개 워크스페이스{{value1}} 연결됨",
                 "disconnect_all": "연결 해제",
-                "account_scope_prefix": "계정 범위"
+                "account_scope_prefix": "계정 범위",
+                "jiraCloudServerRemoteCredentialCopy": "Jira Cloud 또는 Server/Data Center 사이트를 연결합니다. 자격 증명은 선택한 원격 런타임으로 전송되어 런타임이 지원하는 암호화로 저장됩니다.",
+                "jiraCloudServerLocalCredentialCopy": "Jira Cloud 또는 Server/Data Center 사이트를 연결합니다. 자격 증명은 로컬에 저장되며 로컬 런타임 저장소가 지원하는 경우 암호화됩니다.",
+                "jiraCloudServerIssueDescription": "Jira 이슈를 탐색하고 만들고 작업을 시작합니다.",
+                "connectedJiraCredentialStorage": "연결된 각 Jira 사이트에는 활성 런타임이 저장한 자격 증명 하나가 있습니다."
               }
             }
           }
@@ -12137,7 +12144,21 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud 사이트 URL",
             "d785c42b8b": "Jira Cloud 사이트 URL, Atlassian 이메일, API 토큰을 사용해 이슈를 탐색합니다.",
-            "8388bdea2b": "Jira 사이트 연결"
+            "8388bdea2b": "Jira 사이트 연결",
+            "cloudServerDescription": "Jira Cloud 또는 Server/Data Center 사이트를 연결해 이슈를 탐색하고 업데이트합니다.",
+            "deploymentType": "Jira 유형",
+            "cloud": "Cloud",
+            "serverDataCenter": "Server/Data Center",
+            "serverUrl": "Jira 사이트 URL",
+            "serverUrlPlaceholder": "https://jira.example.com",
+            "authMode": "인증 모드",
+            "basicAuth": "사용자 이름 + 비밀번호/PAT",
+            "bearerAuth": "Bearer PAT",
+            "username": "사용자 이름",
+            "passwordOrToken": "비밀번호 또는 토큰",
+            "bearerToken": "Bearer 토큰",
+            "remoteCredentialStorage": "자격 증명은 선택한 원격 런타임으로 전송되어 런타임이 지원하는 암호화로 저장됩니다.",
+            "localCredentialStorage": "자격 증명은 로컬에 저장되며 로컬 런타임 저장소가 지원하는 경우 암호화됩니다."
           }
         }
       },

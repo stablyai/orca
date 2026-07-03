@@ -15,11 +15,36 @@ const SiteSelection = z
   })
   .optional()
 
-const Connect = z.object({
-  siteUrl: requiredString('Site URL is required'),
-  email: requiredString('Email is required'),
-  apiToken: requiredString('API token is required')
-})
+const CloudConnect = z
+  .object({
+    deploymentType: z.literal('cloud').optional(),
+    siteUrl: requiredString('Site URL is required'),
+    email: requiredString('Email is required'),
+    apiToken: requiredString('API token is required')
+  })
+  .strict()
+  .transform((value) => ({ ...value, deploymentType: 'cloud' as const }))
+
+const ServerBasicConnect = z
+  .object({
+    deploymentType: z.literal('server'),
+    authMode: z.literal('basic'),
+    siteUrl: requiredString('Site URL is required'),
+    username: requiredString('Username is required'),
+    passwordOrToken: requiredString('Password or token is required')
+  })
+  .strict()
+
+const ServerBearerConnect = z
+  .object({
+    deploymentType: z.literal('server'),
+    authMode: z.literal('bearer'),
+    siteUrl: requiredString('Site URL is required'),
+    bearerToken: requiredString('Bearer token is required')
+  })
+  .strict()
+
+const Connect = z.union([ServerBasicConnect, ServerBearerConnect, CloudConnect])
 
 const SelectSite = z.object({
   siteId: requiredString('Site ID is required')
@@ -59,6 +84,7 @@ const IssueUpdate = z.object({
   updates: z.object({
     title: OptionalString,
     labels: z.array(z.string()).optional(),
+    assigneeUserId: z.union([z.string(), z.null()]).optional(),
     assigneeAccountId: z.union([z.string(), z.null()]).optional(),
     priorityId: z.union([z.string(), z.null()]).optional(),
     transitionId: OptionalString
@@ -92,12 +118,31 @@ export const JIRA_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'jira.connect',
     params: Connect,
-    handler: async (params, { runtime }) =>
-      runtime.jiraConnect({
+    handler: async (params, { runtime }) => {
+      if (params.deploymentType === 'server') {
+        if (params.authMode === 'bearer') {
+          return runtime.jiraConnect({
+            deploymentType: 'server',
+            authMode: 'bearer',
+            siteUrl: params.siteUrl.trim(),
+            bearerToken: params.bearerToken.trim()
+          })
+        }
+        return runtime.jiraConnect({
+          deploymentType: 'server',
+          authMode: 'basic',
+          siteUrl: params.siteUrl.trim(),
+          username: params.username.trim(),
+          passwordOrToken: params.passwordOrToken.trim()
+        })
+      }
+      return runtime.jiraConnect({
+        deploymentType: 'cloud',
         siteUrl: params.siteUrl.trim(),
         email: params.email.trim(),
         apiToken: params.apiToken.trim()
       })
+    }
   }),
   defineMethod({
     name: 'jira.disconnect',

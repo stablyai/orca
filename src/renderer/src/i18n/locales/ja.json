@@ -4077,7 +4077,7 @@
           "hostDisconnected": "切断済み",
           "failedNestWorkspace": "ワークスペースをネストできませんでした",
           "sidebarRowMissing": "対象はもう存在しません",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "ワークスペースのネスト解除に失敗しました"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -7539,6 +7539,8 @@
             "e1263dd748": "Jira",
             "76f6af7c57": "Jira Cloud に接続するか、Jira API トークンの認証情報を更新します。",
             "617603509b": "Jira 連携",
+            "jiraServerKeyword": "server",
+            "jiraDataCenterKeyword": "data center",
             "8c568d761c": "PR",
             "33180e8c10": "自己ホスト型",
             "129fc59aa8": "Gitea",
@@ -7561,7 +7563,8 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "gh CLI を介した GitHub 認証。",
-            "f16e41cc72": "GitHub 連携"
+            "f16e41cc72": "GitHub 連携",
+            "jiraCloudServerCredentials": "Jira Cloud または Server/Data Center の認証情報を接続します。"
           }
         },
         "jira": {
@@ -8401,7 +8404,11 @@
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "切断",
-                "account_scope_prefix": "Account scope"
+                "account_scope_prefix": "Account scope",
+                "jiraCloudServerRemoteCredentialCopy": "Jira Cloud または Server/Data Center サイトに接続します。認証情報は選択したリモート runtime に送信され、その runtime が対応する暗号化で保存されます。",
+                "jiraCloudServerLocalCredentialCopy": "Jira Cloud または Server/Data Center サイトに接続します。認証情報はローカルに保存され、ローカル runtime のストレージが対応している場合は暗号化されます。",
+                "jiraCloudServerIssueDescription": "Jira の課題を参照、作成し、作業を開始できます。",
+                "connectedJiraCredentialStorage": "接続済みの各 Jira サイトには、アクティブな runtime が保存する認証情報が 1 つあります。"
               }
             }
           }
@@ -12137,7 +12144,21 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
-            "8388bdea2b": "Connect Jira site"
+            "8388bdea2b": "Connect Jira site",
+            "cloudServerDescription": "Jira Cloud または Server/Data Center サイトに接続して、課題を参照、更新します。",
+            "deploymentType": "Jira の種類",
+            "cloud": "Cloud",
+            "serverDataCenter": "Server/Data Center",
+            "serverUrl": "Jira サイト URL",
+            "serverUrlPlaceholder": "https://jira.example.com",
+            "authMode": "認証モード",
+            "basicAuth": "ユーザー名 + パスワード/PAT",
+            "bearerAuth": "Bearer PAT",
+            "username": "ユーザー名",
+            "passwordOrToken": "パスワードまたはトークン",
+            "bearerToken": "Bearer トークン",
+            "remoteCredentialStorage": "認証情報は選択したリモート runtime に送信され、その runtime が対応する暗号化で保存されます。",
+            "localCredentialStorage": "認証情報はローカルに保存され、ローカル runtime のストレージが対応している場合は暗号化されます。"
           }
         }
       },

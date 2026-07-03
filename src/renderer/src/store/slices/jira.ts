@@ -4,6 +4,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  JiraConnectArgs,
   JiraConnectionStatus,
   JiraIssue,
   JiraIssueFilter,
@@ -159,11 +160,9 @@ export type JiraSlice = {
   jiraSearchCache: Record<string, CacheEntry<JiraIssue[]>>
 
   checkJiraConnection: () => Promise<void>
-  connectJira: (args: {
-    siteUrl: string
-    email: string
-    apiToken: string
-  }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
+  connectJira: (
+    args: JiraConnectArgs
+  ) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
   testJiraConnection: (
     siteId?: string | null
   ) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
