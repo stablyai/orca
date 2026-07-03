@@ -101,6 +101,7 @@ type MainWindowStub = {
   id?: number
   isDestroyed?: MockFn
   on: MockFn
+  once: MockFn
   webContents: {
     id?: number
     isDestroyed?: MockFn
@@ -126,6 +127,7 @@ function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {})
     id: 1,
     isDestroyed: vi.fn(() => false),
     on: vi.fn(),
+    once: vi.fn(),
     webContents: {
       id: 1,
       isDestroyed: vi.fn(() => false),
@@ -165,6 +167,16 @@ function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
   return mainWindowOnMock.mock.calls
     .filter(([event]) => event === 'closed')
     .map(([, handler]) => handler as () => void)
+}
+
+// Updater setup is deferred to first paint; fire the captured ready-to-show
+// handler and flush its setImmediate hop.
+async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
+  const handler = mainWindow.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1] as
+    | (() => void)
+    | undefined
+  handler?.()
+  await new Promise((resolve) => setImmediate(resolve))
 }
 
 describe('attachMainWindowServices', () => {
@@ -241,9 +253,10 @@ describe('attachMainWindowServices', () => {
   it('passes injected update quit cleanup to the auto-updater', async () => {
     const onBeforeUpdateQuit = vi.fn()
     const store = createStore()
+    const mainWindow = createMainWindow()
 
     attachMainWindowServices(
-      createMainWindow() as never,
+      mainWindow as never,
       store,
       createRuntime() as never,
       undefined,
@@ -251,6 +264,9 @@ describe('attachMainWindowServices', () => {
       { onBeforeUpdateQuit }
     )
 
+    // Deferred to first paint — must not be configured at attach time.
+    expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
+    await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
@@ -260,9 +276,11 @@ describe('attachMainWindowServices', () => {
 
   it('flushes the store before update quit when no cleanup is injected', async () => {
     const store = createStore()
+    const mainWindow = createMainWindow()
 
-    attachMainWindowServices(createMainWindow() as never, store, createRuntime() as never)
+    attachMainWindowServices(mainWindow as never, store, createRuntime() as never)
 
+    await fireReadyToShow(mainWindow)
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(store.flush).toHaveBeenCalledTimes(1)

@@ -41,6 +41,9 @@ import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
+
+const UPDATER_SETUP_FALLBACK_MS = 15_000
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
@@ -116,37 +119,53 @@ export function attachMainWindowServices(
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
-  setupAutoUpdater(mainWindow, {
-    getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-    onBeforeQuit: async () => {
-      try {
-        await options?.onBeforeUpdateQuit?.()
-      } finally {
-        store.flush()
-      }
-    },
-    setLastUpdateCheckAt: (timestamp) => {
-      store.updateUI({ lastUpdateCheckAt: timestamp })
-    },
-    getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-    getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-    setPendingUpdateNudgeId: (id) => {
-      // Why: the nudge lifecycle is owned by the main process. When applying a
-      // new campaign, persist the pending id AND clear the version dismissal
-      // together so relaunches cannot resurrect the old hidden-card state
-      // between nudge apply and renderer sync. When clearing (id is null),
-      // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
-      // would silently un-dismiss an update if the flow ever changes.
-      if (id) {
-        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-      } else {
-        store.updateUI({ pendingUpdateNudgeId: null })
-      }
-    },
-    setDismissedUpdateNudgeId: (id) => {
-      store.updateUI({ dismissedUpdateNudgeId: id })
+  // Why: setupAutoUpdater's first getAutoUpdater() call synchronously
+  // require()s electron-updater in packaged builds — seconds on a cold
+  // Windows disk under Defender scanning (part of issue #7225's pre-paint
+  // stall) — so defer it past first paint. The timer fallback keeps update
+  // checks alive for renderers that crash-loop before ever painting.
+  let updaterSetupDone = false
+  const setupAutoUpdaterDeferred = (): void => {
+    if (updaterSetupDone || mainWindow.isDestroyed()) {
+      return
     }
-  })
+    updaterSetupDone = true
+    setupAutoUpdater(mainWindow, {
+      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+      onBeforeQuit: async () => {
+        try {
+          await options?.onBeforeUpdateQuit?.()
+        } finally {
+          store.flush()
+        }
+      },
+      setLastUpdateCheckAt: (timestamp) => {
+        store.updateUI({ lastUpdateCheckAt: timestamp })
+      },
+      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+      setPendingUpdateNudgeId: (id) => {
+        // Why: the nudge lifecycle is owned by the main process. When applying a
+        // new campaign, persist the pending id AND clear the version dismissal
+        // together so relaunches cannot resurrect the old hidden-card state
+        // between nudge apply and renderer sync. When clearing (id is null),
+        // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
+        // would silently un-dismiss an update if the flow ever changes.
+        if (id) {
+          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+        } else {
+          store.updateUI({ pendingUpdateNudgeId: null })
+        }
+      },
+      setDismissedUpdateNudgeId: (id) => {
+        store.updateUI({ dismissedUpdateNudgeId: id })
+      }
+    })
+    logStartupMilestone('updater-setup-done')
+  }
+  mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
+  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
+  updaterSetupFallback.unref?.()
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])

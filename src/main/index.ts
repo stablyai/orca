@@ -91,7 +91,11 @@ import {
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
-import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import {
+  isStartupDiagnosticsEnabled,
+  logStartupDiagnostic,
+  logStartupMilestone
+} from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { RateLimitService } from './rate-limits/service'
@@ -406,14 +410,6 @@ if (startupDiagnosticsEnabled) {
     e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
   })
   startEventLoopStallProbe()
-}
-
-// Why: startup benchmarking needs in-process timestamps — harness-side stderr
-// arrival times include pipe buffering jitter. `t` is ms since process start.
-function logStartupMilestone(event: string, details: Record<string, unknown> = {}): void {
-  if (startupDiagnosticsEnabled) {
-    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
-  }
 }
 
 function focusExistingWindow(): void {
@@ -781,6 +777,35 @@ function openMainWindow(): BrowserWindow {
   logStartupMilestone('window-created')
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
+    // Why: new Tray() is a synchronous Shell_NotifyIcon call that can block
+    // for seconds while explorer.exe's notification area is busy (part of
+    // issue #7225's pre-paint stall), so create it after first paint. The
+    // window cannot be hidden to the tray before it has ever been shown.
+    setImmediate(() => {
+      if (window.isDestroyed() || isQuitting || !store) {
+        return
+      }
+      // Why: Windows-only system tray. createSystemTray is idempotent and a
+      // no-op off win32, so calling it on each window open keeps exactly one
+      // live icon.
+      createSystemTray({
+        appIcon: store.getSettings().appIcon,
+        onOpen: showMainWindowFromTray,
+        onQuit: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            // Why: a real quit can still surface renderer save/discard prompts;
+            // the window must be visible if a hidden-to-tray session vetoes
+            // shutdown.
+            showMainWindowFromTray()
+          }
+          // Why: set the quit latch before app.quit() so the window 'close'
+          // handler proceeds to teardown instead of re-hiding to the tray.
+          isQuitting = true
+          app.quit()
+        }
+      })
+      logStartupMilestone('tray-created')
+    })
   })
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
@@ -877,23 +902,6 @@ function openMainWindow(): BrowserWindow {
     stopAllSyntheticTitleSpinners()
   })
   mainWindow = window
-  // Why: Windows-only system tray. createSystemTray is idempotent and a no-op
-  // off win32, so calling it on each window open keeps exactly one live icon.
-  createSystemTray({
-    appIcon: store.getSettings().appIcon,
-    onOpen: showMainWindowFromTray,
-    onQuit: () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        // Why: a real quit can still surface renderer save/discard prompts; the
-        // window must be visible if a hidden-to-tray session vetoes shutdown.
-        showMainWindowFromTray()
-      }
-      // Why: set the quit latch before app.quit() so the window 'close' handler
-      // proceeds to teardown instead of re-hiding the window to the tray.
-      isQuitting = true
-      app.quit()
-    }
-  })
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
