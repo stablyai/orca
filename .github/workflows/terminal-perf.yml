@@ -48,6 +48,9 @@ on:
     # terminal throughput regressions are caught before users report typing lag.
     - cron: '30 8 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   terminal-perf-linux:
     name: terminal scale perf (linux)
@@ -161,6 +164,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
