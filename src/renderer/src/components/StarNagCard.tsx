@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ExternalLink, Star, X } from 'lucide-react'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
@@ -33,19 +33,35 @@ export function StarNagCard(): React.JSX.Element | null {
   const updateCardVisible = updateStatus.state !== 'idle' && updateStatus.state !== 'not-available'
 
   useEffect(() => {
-    return window.api.starNag.onShow((payload) => {
+    const unsubscribeShow = window.api.starNag.onShow((payload) => {
+      if (payload?.surface && payload.surface !== 'card') {
+        setBusy(false)
+        setVisible(false)
+        return
+      }
       setMode(payload?.mode === 'web' ? 'web' : 'gh')
       setVisible(true)
     })
+    const unsubscribeHide = window.api.starNag.onHide(() => {
+      setBusy(false)
+      setVisible(false)
+    })
+    return () => {
+      unsubscribeShow()
+      unsubscribeHide()
+    }
   }, [])
 
-  const handleClose = (): void => {
+  const handleClose = useCallback((): void => {
+    if (busy) {
+      return
+    }
     setVisible(false)
     // Why: fire-and-forget. If persisting the dismissal fails the worst case
     // is we re-fire the same threshold on next launch — not worth blocking
     // the close animation on.
     void window.api.starNag.dismiss()
-  }
+  }, [busy])
 
   const handleLater = (): void => {
     if (busy) {
@@ -66,29 +82,37 @@ export function StarNagCard(): React.JSX.Element | null {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleClose closes
-    // over stable refs; re-binding on each render is unnecessary.
-  }, [visible])
+  }, [handleClose, visible])
 
   if (!visible) {
     return null
   }
 
+  const primaryActionClass =
+    'min-w-0 flex-1 gap-1.5 border-amber-400/60 bg-amber-400/15 text-amber-800 hover:bg-amber-400/25 dark:text-amber-100'
+
   const handleStar = async (): Promise<void> => {
     if (busy) {
       return
     }
-    if (mode === 'web') {
-      setBusy(true)
+    const openGithubFallback = async (): Promise<boolean> => {
       try {
         await window.api.shell.openUrl(ORCA_REPO_URL)
         await window.api.starNag.openWeb()
         if (mountedRef.current) {
           setVisible(false)
         }
+        return true
       } catch {
         // Why: failing to open the external browser is recoverable; keep the
         // prompt available so the user can retry or choose another action.
+        return false
+      }
+    }
+    if (mode === 'web') {
+      setBusy(true)
+      try {
+        await openGithubFallback()
       } finally {
         if (mountedRef.current) {
           setBusy(false)
@@ -102,19 +126,23 @@ export function StarNagCard(): React.JSX.Element | null {
       ok = await window.api.starNag.starOrca()
     } catch {
       ok = false
+    }
+    try {
+      if (!ok) {
+        // Why: preflight chooses whether direct starring should be offered. If
+        // the later star call fails, let the user choose the browser handoff.
+        if (mountedRef.current) {
+          setMode('web')
+        }
+        return
+      }
+      if (mountedRef.current) {
+        setVisible(false)
+      }
     } finally {
       if (mountedRef.current) {
         setBusy(false)
       }
-    }
-    if (!ok) {
-      if (mountedRef.current) {
-        setMode('web')
-      }
-      return
-    }
-    if (mountedRef.current) {
-      setVisible(false)
     }
   }
 
@@ -142,6 +170,7 @@ export function StarNagCard(): React.JSX.Element | null {
               size="icon"
               className="size-7 shrink-0"
               onClick={handleClose}
+              disabled={busy}
               aria-label={translate('auto.components.StarNagCard.b5e685e4d9', 'Dismiss')}
             >
               <X className="size-3.5" />
@@ -155,31 +184,37 @@ export function StarNagCard(): React.JSX.Element | null {
             )}
           </p>
 
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => void handleStar()}
-            disabled={busy}
-            className="mt-0.5 w-full gap-1.5"
-          >
-            {mode === 'web' ? <ExternalLink className="size-3.5" /> : <Star className="size-3.5" />}
-            {busy
-              ? mode === 'web'
-                ? translate('auto.components.StarNagCard.d32015fec7', 'Opening...')
-                : translate('auto.components.StarNagCard.af3c9bbb37', 'Starring…')
-              : mode === 'web'
-                ? translate('auto.components.StarNagCard.157bb5ecbb', 'Open GitHub')
-                : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-7 w-full"
-            onClick={handleLater}
-            disabled={busy}
-          >
-            {translate('auto.components.StarNagCard.8c967b4d15', 'Later')}
-          </Button>
+          <div className="mt-0.5 flex gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void handleStar()}
+              disabled={busy}
+              className={primaryActionClass}
+            >
+              {mode === 'web' ? (
+                <ExternalLink className="size-3.5" />
+              ) : (
+                <Star className="size-3.5" />
+              )}
+              {busy
+                ? mode === 'web'
+                  ? translate('auto.components.StarNagCard.d32015fec7', 'Opening...')
+                  : translate('auto.components.StarNagCard.af3c9bbb37', 'Starring…')
+                : mode === 'web'
+                  ? translate('auto.components.StarNagCard.157bb5ecbb', 'Open GitHub')
+                  : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-[84px]"
+              onClick={handleLater}
+              disabled={busy}
+            >
+              {translate('auto.components.StarNagCard.8c967b4d15', 'Later')}
+            </Button>
+          </div>
         </div>
       </Card>
     </div>

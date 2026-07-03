@@ -60,6 +60,9 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
     terminalLineHeight: 1,
+    terminalScrollSensitivity: 1.15,
+    terminalFastScrollSensitivity: 5,
+    terminalTuiScrollSensitivity: 1,
     terminalGpuAcceleration: 'auto',
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
@@ -78,13 +81,15 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalClipboardOnSelect: false,
     terminalAllowOsc52Clipboard: false,
     setupScriptLaunchMode: 'split-vertical',
-    terminalScrollbackBytes: 10_000_000,
+    terminalScrollbackRows: 5_000,
     localAccountRuntime: 'host',
     localAccountWslDistro: null,
     openLinksInApp: false,
     openLinksInAppPreferencePrompted: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
+    sourceControlGroupOrder: 'changes-first',
+    sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,
     floatingTerminalEnabled: false,
@@ -125,6 +130,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
+    confirmClosePinnedTab: true,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     terminalJISYenToBackslash: false,
@@ -139,6 +145,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides,
+    diffWordWrap: overrides.diffWordWrap ?? false,
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
@@ -1094,7 +1101,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeProfilePath, 'utf-8')).toBe('profile\n')
   })
 
-  it('bridges system Codex sessions before launch without replacing runtime sessions', async () => {
+  it('starts the system Codex session bridge without replacing runtime sessions', async () => {
     const systemMissingRuntimeSessionPath = join(
       getSystemCodexHomePath(),
       'sessions',
@@ -1129,9 +1136,12 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(join(getSystemCodexHomePath(), 'state_5.sqlite'), 'sqlite\n', 'utf-8')
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const { startSystemCodexSessionBridgeInBackground } =
+      await import('../codex/codex-session-bridge')
     const service = new CodexRuntimeHomeService(store as never)
 
     service.prepareForCodexLaunch()
+    await startSystemCodexSessionBridgeInBackground()
 
     const runtimeMissingSessionPath = join(
       getRuntimeCodexHomePath(),

@@ -3,10 +3,11 @@ import {
   isKeybindingAllowedInTerminal,
   isKeybindingPotentialTerminalConflict,
   keybindingMatchesAction,
-  normalizeTerminalShortcutPolicy,
+  matchKeybindingDigitIndex,
   type KeybindingActionId,
   type KeybindingMatchOptions,
-  type KeybindingOverrides
+  type KeybindingOverrides,
+  type PhysicalModifierToken
 } from './keybindings'
 
 export type WindowShortcutInput = {
@@ -21,6 +22,9 @@ export type WindowShortcutInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
+  // Set only by the double-tap detector; threads the synthetic input through
+  // the main-process resolver so allowlisted actions can fire on double-tap.
+  doubleTapModifier?: PhysicalModifierToken
 }
 
 export type WindowShortcutAction =
@@ -32,6 +36,7 @@ export type WindowShortcutAction =
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
+  | { type: 'toggleQuickCommandsMenu' }
   | { type: 'openNewWorkspace' }
   | { type: 'deleteCurrentWorkspace' }
   | { type: 'openWorkspaceBoard' }
@@ -128,28 +133,6 @@ function actionMatches(
   return keybindingMatchesAction(actionId, input, platform, keybindings, options)
 }
 
-function implicitWorktreeIndexShortcutAllowed(options: WindowShortcutResolveOptions): boolean {
-  if (options.context !== 'terminal') {
-    return true
-  }
-  return normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first'
-}
-
-function implicitTabIndexShortcutAllowed(options: WindowShortcutResolveOptions): boolean {
-  return implicitWorktreeIndexShortcutAllowed(options)
-}
-
-function tabIndexModifierPressed(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
-  const meta = Boolean(input.meta ?? input.metaKey)
-  const control = Boolean(input.control ?? input.ctrlKey)
-  const alt = Boolean(input.alt ?? input.altKey)
-
-  // Why: Ctrl+1-9 is free on macOS because workspace jumps use Cmd+1-9.
-  // On Windows/Linux Ctrl+1-9 is already the workspace jump, so Alt+1-9
-  // gives tab indexing a non-conflicting hardcoded chord.
-  return platform === 'darwin' ? control && !meta && !alt : alt && !meta && !control
-}
-
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
@@ -240,27 +223,34 @@ export function resolveWindowShortcutAction(
     return { type: 'switchRecentTab' }
   }
 
-  if (
-    implicitWorktreeIndexShortcutAllowed(options) &&
-    platformPrimaryModifier(input, platform) &&
-    !input.alt &&
-    !input.shift &&
-    input.key &&
-    input.key >= '1' &&
-    input.key <= '9'
-  ) {
-    return { type: 'jumpToWorktreeIndex', index: parseInt(input.key, 10) - 1 }
+  // Why: the two ranges live in different scopes (no shared conflictGroup), so a
+  // user is free to map both onto the same modifier without it being blocked as a
+  // conflict. Checking workspace first gives that overlap deterministic
+  // precedence — workspace wins — matching the historical Cmd-before-Ctrl order.
+  const worktreeIndex = matchKeybindingDigitIndex(
+    'workspace.selectByIndex',
+    input,
+    platform,
+    keybindings,
+    options
+  )
+  if (worktreeIndex !== null) {
+    return { type: 'jumpToWorktreeIndex', index: worktreeIndex }
   }
 
-  if (
-    implicitTabIndexShortcutAllowed(options) &&
-    tabIndexModifierPressed(input, platform) &&
-    !input.shift &&
-    input.key &&
-    input.key >= '1' &&
-    input.key <= '9'
-  ) {
-    return { type: 'jumpToTabIndex', index: parseInt(input.key, 10) - 1 }
+  const tabIndex = matchKeybindingDigitIndex(
+    'tab.selectByIndex',
+    input,
+    platform,
+    keybindings,
+    options
+  )
+  if (tabIndex !== null) {
+    return { type: 'jumpToTabIndex', index: tabIndex }
+  }
+
+  if (actionMatches('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
+    return { type: 'toggleQuickCommandsMenu' }
   }
 
   // Why: this helper is the explicit allowlist for main-process interception.
@@ -292,6 +282,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'sidebar.right.toggle'
     case 'openQuickOpen':
       return 'worktree.quickOpen'
+    case 'toggleQuickCommandsMenu':
+      return 'tab.openQuickCommandsMenu'
     case 'openNewWorkspace':
       return 'workspace.create'
     case 'deleteCurrentWorkspace':
@@ -307,15 +299,13 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
     case 'dictationKeyDown':
       return 'voice.dictation'
     case 'jumpToWorktreeIndex':
+      return 'workspace.selectByIndex'
     case 'jumpToTabIndex':
-      return null
+      return 'tab.selectByIndex'
   }
 }
 
 export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {
-  if (action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex') {
-    return true
-  }
   const actionId = getWindowShortcutActionId(action)
   if (!actionId) {
     return false

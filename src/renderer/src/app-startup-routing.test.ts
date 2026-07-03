@@ -6,16 +6,15 @@ describe('renderer startup runtime routing', () => {
   it('loads settings before repo and worktree hydration', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const startupBlockStart = source.indexOf('void (async () => {')
-    const startupBlockEnd = source.indexOf('const persistedUI = await window.api.ui.get()')
+    const startupBlockEnd = source.indexOf(
+      "const persistedUI = await timeRendererStartupStep('ui-get'"
+    )
     const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
 
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeGreaterThanOrEqual(0)
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
-      startupBlock.indexOf('await actions.fetchRepos()')
-    )
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
-      startupBlock.indexOf('await actions.fetchAllWorktrees()')
-    )
+    const settingsIndex = startupBlock.indexOf('actions.fetchSettings()')
+    expect(settingsIndex).toBeGreaterThanOrEqual(0)
+    expect(settingsIndex).toBeLessThan(startupBlock.indexOf('actions.fetchReposForAllHosts()'))
+    expect(settingsIndex).toBeLessThan(startupBlock.indexOf('actions.fetchAllWorktrees()'))
   })
 
   it('waits for first-window startup services before terminal reconnect', () => {
@@ -161,7 +160,7 @@ describe('renderer startup runtime routing', () => {
     expect(appSource).toContain('boundaryId="modal.confirm-add-project-from-folder"')
     expect(appSource).toContain('boundaryId="modal.project-added"')
     expect(appSource).toContain('setTimeout(() =>')
-    expect(sidebarSource).toContain("React.lazy(() => import('./WorktreeMetaDialog'))")
+    expect(sidebarSource).toContain("lazyWithRetry(() => import('./WorktreeMetaDialog'))")
     expect(sidebarSource).not.toContain("from './AddRepoDialog'")
     expect(sidebarSource).not.toContain("React.lazy(() => import('./AddRepoDialog'))")
     expect(sidebarSource).not.toContain("React.lazy(() => import('./NonGitFolderDialog'))")

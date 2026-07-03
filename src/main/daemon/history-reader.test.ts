@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { HistoryReader } from './history-reader'
 import { getHistorySessionDirName } from './history-paths'
 import type { SessionMeta } from './history-manager'
@@ -116,6 +116,14 @@ describe('HistoryReader', () => {
 
       const info = reader.detectColdRestore('sess-1')
       expect(info!.rehydrateSequences).toBe('\x1b[?2004h')
+    })
+
+    it('restores OSC link ranges from checkpoint', () => {
+      const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
+      writeSessionWithCheckpoint(dir, 'sess-1', makeMeta(), makeCheckpoint({ oscLinks }))
+
+      const info = reader.detectColdRestore('sess-1')
+      expect(info!.oscLinks).toEqual(oscLinks)
     })
 
     it('returns null for clean shutdown (endedAt is set)', () => {

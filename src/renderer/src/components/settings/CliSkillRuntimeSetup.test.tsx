@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import {
+  buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
@@ -17,6 +19,50 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(command).toContain("wsl.exe -d 'Ubuntu' -- sh -c")
     expect(command).toContain('getent passwd')
     expect(command).toContain('npx skills add orchestration --global')
+  })
+
+  it('wraps WSL skill updates with the same selected distro login shell', () => {
+    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
+      runtime: 'wsl',
+      wslDistro: 'Fedora Remix',
+      label: 'WSL Fedora Remix'
+    })
+
+    expect(command).toContain("wsl.exe -d 'Fedora Remix' -- sh -c")
+    expect(command).toContain('getent passwd')
+    expect(command).toContain('npx skills update orchestration --global')
+  })
+
+  it('reinstalls Windows-host skill updates through the add path', () => {
+    expect(
+      buildSkillCommandForRuntime(
+        'npx skills update orchestration --global',
+        {
+          runtime: 'host',
+          label: 'Windows'
+        },
+        'win32'
+      )
+    ).toBe(buildAgentFeatureSkillInstallCommand(['orchestration']))
+  })
+
+  it('treats missing runtime as a Windows host fallback for skill updates', () => {
+    expect(
+      buildSkillCommandForRuntime('npx skills update orca-cli --global', undefined, 'win32')
+    ).toBe(buildAgentFeatureSkillInstallCommand(['orca-cli']))
+  })
+
+  it('keeps non-Windows host skill updates on the update path', () => {
+    expect(
+      buildSkillCommandForRuntime(
+        'npx skills update orchestration --global',
+        {
+          runtime: 'host',
+          label: 'This device'
+        },
+        'linux'
+      )
+    ).toBe('npx skills update orchestration --global')
   })
 
   it('preserves the selected WSL distro for skill discovery', () => {

@@ -24,6 +24,7 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
+import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
 
 export type RuntimeLinearSettings =
   | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
@@ -170,6 +171,9 @@ export async function linearSearchIssues(
   limit?: number,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return []
+  }
   const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearIssue[]>(
@@ -329,6 +333,9 @@ export async function linearListProjects(
   workspaceId?: LinearWorkspaceSelection | null,
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return { items: [] }
+  }
   const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearProjectSummary>>(

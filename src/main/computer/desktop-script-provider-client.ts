@@ -1,6 +1,6 @@
-import { mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -125,7 +125,7 @@ export class DesktopScriptProviderClient {
     method: NativeActionMethod,
     params: Record<string, unknown>
   ): Promise<ComputerActionResult> {
-    const app = validateComputerProviderActionParams(method, params)
+    const app = await validateComputerProviderActionParams(method, params)
     const explicitWindowId = optionalNumberParam(params, 'windowId')
     const explicitWindowIndex = optionalNumberParam(params, 'windowIndex')
     const current = this.snapshotStore.current(app, explicitWindowId, params)

@@ -6,6 +6,7 @@ import type { MessageType, MessagePriority, TaskStatus } from '../../orchestrati
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
+import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 
 const MESSAGE_TYPES: MessageType[] = [
@@ -100,6 +101,8 @@ const InboxParams = z.object({
 
 const TaskCreateParams = z.object({
   spec: requiredString('Missing --spec'),
+  taskTitle: OptionalString,
+  displayName: OptionalString,
   deps: OptionalString,
   parent: OptionalString,
   callerTerminalHandle: OptionalString
@@ -194,6 +197,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           threadId: params.threadId,
           payload: params.payload
         })
+        // Why: worker_done/heartbeat sent via `send` must release the dispatch
+        // lock before waking recipients — a coordinator woken by delivery may
+        // immediately dispatch to the same terminal, which fails if the lock
+        // is still held.
+        if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
+          reconcileLifecycleMessage(db, msg)
+        }
         runtime.deliverPendingMessagesForHandle(params.to)
         runtime.notifyMessageArrived(params.to, msg.type)
         return { message: msg }
@@ -263,6 +273,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           : db.getAllMessagesForHandle(handle, undefined, typeFilter)
 
         if (showUnread && messages.length > 0) {
+          // Why: manual coordinators can consume lifecycle messages before
+          // the coordinator loop sees them, but unread `check` is still an
+          // authoritative read path for worker_done/heartbeat.
+          for (const message of messages) {
+            reconcileLifecycleMessage(db, message)
+          }
           db.markAsRead(messages.map((m) => m.id))
         }
 
@@ -360,6 +376,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
       const task = db.createTask({
         spec: params.spec,
+        taskTitle: params.taskTitle,
+        displayName: params.displayName,
         deps,
         parentId: params.parent,
         createdByTerminalHandle: params.callerTerminalHandle

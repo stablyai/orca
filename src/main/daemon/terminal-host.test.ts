@@ -1,13 +1,18 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Session, type SubprocessHandle } from './session'
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
 
-function createMockSubprocess(): SubprocessHandle {
+function createMockSubprocess(
+  options: { startupCommandDeliveredInShellArgs?: boolean } = {}
+): SubprocessHandle {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 99999,
+    ...(options.startupCommandDeliveredInShellArgs
+      ? { startupCommandDeliveredInShellArgs: true }
+      : {}),
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
@@ -163,6 +168,56 @@ describe('TerminalHost', () => {
         process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
       )
     })
+
+    it('uses the short daemon settle path when marker and prompt arrive together', async () => {
+      vi.useFakeTimers()
+      try {
+        await host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          command: 'echo hello',
+          shellReadySupported: true,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+
+        lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+        vi.advanceTimersByTime(29)
+        expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        expect(lastSubprocess.write).toHaveBeenCalledWith(
+          process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not write startup commands already embedded in shell args', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({
+          startupCommandDeliveredInShellArgs: true
+        }) as ReturnType<typeof createMockSubprocess> & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'codex --no-alt-screen',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
+    })
   })
 
   describe('write', () => {
@@ -296,6 +351,25 @@ describe('TerminalHost', () => {
       expect(sessions).toHaveLength(2)
       expect(sessions.map((s) => s.sessionId).sort()).toEqual(['session-1', 'session-2'])
     })
+
+    it('uses applied size without serializing terminal snapshots', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      host.resize('session-1', 132, 43)
+
+      const getSnapshot = vi.spyOn(Session.prototype, 'getSnapshot')
+
+      expect(host.listSessions()[0]).toMatchObject({
+        sessionId: 'session-1',
+        cols: 132,
+        rows: 43
+      })
+      expect(getSnapshot).not.toHaveBeenCalled()
+    })
   })
 
   describe('detach', () => {
@@ -356,6 +430,29 @@ describe('TerminalHost', () => {
       expect(lastSubprocess.dispose).toHaveBeenCalled()
     })
 
+    it('releases held shell-ready marker prefixes before final checkpoint', async () => {
+      host.dispose()
+      const onFinalCheckpoint = vi.fn()
+      host = new TerminalHost({
+        spawnSubprocess: spawnFn as MockSpawnFn,
+        onFinalCheckpoint
+      })
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready')
+      host.dispose()
+
+      expect(onFinalCheckpoint).toHaveBeenCalledWith('session-1', expect.any(Object), [
+        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+      ])
+    })
+
     it('does not list exited sessions', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
@@ -368,12 +465,13 @@ describe('TerminalHost', () => {
       expect(host.listSessions()).toEqual([])
     })
 
-    it('skips forceKill on already-exited sessions to avoid recycled-pid SIGKILL', async () => {
+    it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {
       // Why: after a session's subprocess has exited (onExit fired), proc.pid
-      // refers to a reaped child whose pid may have been recycled. Calling
-      // forceKillAndDisposeSubprocess() on an exited session would
-      // process.kill(recycled_pid, 'SIGKILL') — killing a stranger. Dispose
-      // must detect isAlive=false and use disposeSubprocess() (fd release only).
+      // refers to a reaped child whose pid may have been recycled. Force-killing
+      // it would process.kill(recycled_pid, 'SIGKILL') — killing a stranger.
+      // The exit now reaps the session via session.dispose(), which skips
+      // forceKill once _state==='exited' (only the fd is released). host.dispose
+      // then only ever sees live sessions.
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -381,11 +479,14 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      // Simulate natural exit — session is retained in map until dispose.
-      lastSubprocess._onExitCb?.(0)
-
-      // Re-create another session so the map has BOTH a live and dead entry.
+      // Natural exit reaps session-1 synchronously: its subprocess fd is
+      // released (dispose) but it is never force-killed, and it is dropped from
+      // the map (so it is not listed and not touched by host.dispose below).
       const exitedSub = lastSubprocess
+      lastSubprocess._onExitCb?.(0)
+      expect(host.listSessions()).toEqual([])
+
+      // A second, live session remains in the map for host.dispose to reap.
       await host.createOrAttach({
         sessionId: 'session-2',
         cols: 80,

@@ -105,6 +105,16 @@ describe('resolveGroupAddress', () => {
       expect(result).toEqual(['term_b'])
     })
 
+    it('matches @mimo by terminal title', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'mimo' }),
+        makeSummary('term_b', { title: 'MiMo Code session' }),
+        makeSummary('term_c', { title: 'OpenCode' })
+      ]
+      const result = resolveGroupAddress('@mimo', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b'])
+    })
+
     it('matches @openclaude by terminal title', () => {
       const terminals = [
         makeSummary('term_a', { title: 'OpenClaude' }),

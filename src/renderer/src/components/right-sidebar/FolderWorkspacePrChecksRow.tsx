@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink } from 'lucide-react'
+import { ChevronRight, ExternalLink, GitMerge } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
@@ -26,7 +26,12 @@ export function FolderWorkspacePrChecksRow({
   onToggle,
   onLoadCheckDetails
 }: FolderWorkspacePrChecksRowProps): React.JSX.Element {
-  const Icon = CHECK_ICON[row.checkTone] ?? CHECK_ICON.neutral
+  const ReviewIcon = row.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const StatusIcon = CHECK_ICON[row.checkTone] ?? CHECK_ICON.neutral
+  // Why: match the regular PR checks header; the review identity leads,
+  // while aggregate check state stays with the summary metadata.
+  const showStatusIcon = row.checkTone !== 'neutral'
+  const animateStatusIcon = row.checkTone === 'pending'
   const reviewProviderLabel = row.provider === 'gitlab' ? 'MR' : 'PR'
   const toggleDetailsLabel = expanded
     ? translate(
@@ -72,11 +77,20 @@ export function FolderWorkspacePrChecksRow({
             expanded && 'rotate-90'
           )}
         />
-        <Icon className={cn('mt-0.5 size-3.5 shrink-0', CHECK_COLOR[row.checkTone])} />
+        <ReviewIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <PrChecksRowHeader row={row} />
           <div className="mt-1 truncate text-[12px] text-foreground/90">{row.title}</div>
           <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+            {showStatusIcon ? (
+              <StatusIcon
+                className={cn(
+                  'size-3 shrink-0',
+                  CHECK_COLOR[row.checkTone],
+                  animateStatusIcon && 'animate-spin'
+                )}
+              />
+            ) : null}
             <span className="truncate">{row.summary}</span>
             {row.repo ? <span className="shrink-0">· {row.repo.displayName}</span> : null}
             {row.branch ? <span className="truncate">· {row.branch}</span> : null}
@@ -130,8 +144,7 @@ function PrChecksRowHeader({ row }: { row: ParentPrChecksRow }): React.JSX.Eleme
         {row.worktree.displayName}
       </span>
       {row.reviewLabel ? (
-        <span className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-          <PullRequestIcon className="size-3" />
+        <span className="inline-flex shrink-0 items-center rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           {row.reviewLabel}
         </span>
       ) : null}

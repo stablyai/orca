@@ -58,8 +58,21 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/components/ui/sheet', () => ({
   Sheet: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetContent: ({ children }: { children: React.ReactNode }) => (
-    <div data-slot="sheet-content">{children}</div>
+  SheetContent: ({
+    children,
+    overlayStyle,
+    style
+  }: {
+    children: React.ReactNode
+    overlayStyle?: React.CSSProperties
+    style?: React.CSSProperties
+  }) => (
+    <>
+      <div data-slot="sheet-overlay" style={overlayStyle} />
+      <div data-slot="sheet-content" style={style}>
+        {children}
+      </div>
+    </>
   )
 }))
 
@@ -201,7 +214,7 @@ function repo(overrides: Partial<Repo> = {}): Repo {
   } as Repo
 }
 
-function renderDrawer(item: Worktree, enabled = true): void {
+function renderDrawer(item: Worktree, enabled = true, statusBarVisible = true): void {
   const updateWorktreeMeta = vi.fn()
   const updateWorktreesMeta = vi.fn()
   const recordFeatureInteraction = vi.fn()
@@ -226,6 +239,7 @@ function renderDrawer(item: Worktree, enabled = true): void {
     root.render(
       <WorkspaceKanbanDrawer
         open={true}
+        statusBarVisible={statusBarVisible}
         dragPreview={false}
         preserveOpenForMenu={false}
         onOpenChange={vi.fn()}
@@ -258,6 +272,34 @@ afterEach(() => {
 })
 
 describe('WorkspaceKanbanDrawer task status sync wiring', () => {
+  it('reserves the status bar row in the board sheet and overlay when visible', () => {
+    renderDrawer(worktree(), true, true)
+
+    const sheet = document.querySelector<HTMLElement>('[data-slot="sheet-content"]')
+    const overlay = document.querySelector<HTMLElement>('[data-slot="sheet-overlay"]')
+
+    expect(sheet?.style.top).toBe('36px')
+    expect(sheet?.style.bottom).toBe('24px')
+    expect(sheet?.style.height).toBe('auto')
+    expect(overlay?.style.top).toBe('36px')
+    expect(overlay?.style.bottom).toBe('24px')
+    expect(overlay?.style.pointerEvents).toBe('none')
+  })
+
+  it('keeps the board sheet and overlay flush to the viewport bottom when status bar is hidden', () => {
+    renderDrawer(worktree(), true, false)
+
+    const sheet = document.querySelector<HTMLElement>('[data-slot="sheet-content"]')
+    const overlay = document.querySelector<HTMLElement>('[data-slot="sheet-overlay"]')
+
+    expect(sheet?.style.top).toBe('36px')
+    expect(sheet?.style.bottom).toBe('0px')
+    expect(sheet?.style.height).toBe('auto')
+    expect(overlay?.style.top).toBe('36px')
+    expect(overlay?.style.bottom).toBe('0px')
+    expect(overlay?.style.pointerEvents).toBe('none')
+  })
+
   it('syncs Linear after a document-drop status move when the setting is enabled', () => {
     const item = worktree()
     renderDrawer(item)

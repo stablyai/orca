@@ -205,7 +205,7 @@ describe('loadUserSshConfig regressions', () => {
         ...actual,
         existsSync: (filePath: string) =>
           filePath === configPath || includePaths.includes(filePath),
-        globSync: () => [...includePaths].reverse(),
+        globSync: () => [...includePaths].toReversed(),
         readFileSync: (filePath: string) => {
           if (filePath === configPath) {
             return 'Include conf.d/*.conf\n'

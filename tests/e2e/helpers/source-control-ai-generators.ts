@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { writeFileSync } from 'fs'
+import { writeFileSync } from 'node:fs'
 
 async function setCustomGenerator(page: Page, scriptPath: string): Promise<void> {
   await page.evaluate(async (scriptPath) => {

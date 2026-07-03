@@ -1,5 +1,8 @@
 import { Import, Loader2 } from 'lucide-react'
-import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
+} from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
@@ -7,6 +10,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useMobileEmulatorAgentSetupState } from '../emulator-pane/use-mobile-emulator-agent-setup-state'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 import { StepBadge } from './BrowserUseStepBadge'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
 import { Button } from '../ui/button'
@@ -22,6 +26,8 @@ const EMULATOR_CLI_COMMANDS = [
 
 export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   const setup = useMobileEmulatorAgentSetupState(true)
+  const cliSkillInstallCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)
+  const cliSkillUpdateCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)
 
   const handleEnableCli = async (): Promise<void> => {
     await setup.handleEnableCli()
@@ -88,6 +94,23 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
             {!setup.cliEnabled && setup.cliInstallStatus?.detail ? (
               <p className="text-[11px] text-muted-foreground">{setup.cliInstallStatus.detail}</p>
             ) : null}
+            {setup.cliBusy ? (
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                {translate(
+                  'auto.components.settings.MobileEmulatorAgentControlRow.3d34423e88',
+                  'Registering the Orca CLI'
+                )}{' '}
+                {setup.cliInstallStatus?.commandPath ? (
+                  <code className="rounded bg-muted px-1 py-0.5">
+                    {setup.cliInstallStatus.commandPath}
+                  </code>
+                ) : null}{' '}
+                {translate(
+                  'auto.components.settings.MobileEmulatorAgentControlRow.3be27641c9',
+                  'so emulator commands can run from agent shells.'
+                )}
+              </p>
+            ) : null}
           </div>
           <TooltipProvider delayDuration={250}>
             <Tooltip>
@@ -102,7 +125,9 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
                     }
                     onClick={() => void handleEnableCli()}
                   >
-                    {setup.cliLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    {setup.cliLoading || setup.cliBusy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : null}
                     {setup.cliActionLabel}
                   </Button>
                 </span>
@@ -127,7 +152,8 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               'auto.components.settings.MobileEmulatorAgentControlRow.d94ca6a623',
               'Enables agents to use Orca CLI commands, including mobile emulator control.'
             )}
-            command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+            command={cliSkillInstallCommand}
+            installedCommand={cliSkillUpdateCommand}
             terminalTitle="Orca CLI skill setup"
             terminalAriaLabel="Orca CLI skill install terminal"
             terminalWorktreeId="settings-mobile-emulator-orca-cli-skill-terminal"
@@ -137,6 +163,10 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
             installDisabled={setup.step2Blocked}
             leading={<StepBadge index={2} state={setup.cliSkillInstalled ? 'done' : 'pending'} />}
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+            openingHint={translate(
+              'auto.components.settings.MobileEmulatorAgentControlRow.3941719a56',
+              'Checking Orca CLI before opening skill setup.'
+            )}
             onBeforeOpenTerminal={async () => {
               await ensureOrcaCliAvailableForAgentSkillTerminal()
             }}

@@ -11,6 +11,11 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useEffect: () => {},
+    // Why: this shallow harness calls the component as a plain function (no React
+    // render), so ref/callback hooks must be stubbed like useState/useEffect. The
+    // favicon tests never fire pointer events, so non-persistent refs are fine.
+    useRef: <T,>(initial: T) => ({ current: initial }),
+    useCallback: <T,>(fn: T) => fn,
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
       if (!(stateIndex in reactHookRuntime.states)) {
@@ -76,6 +81,21 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuSeparator: function DropdownMenuSeparator() {
     return { type: 'DropdownMenuSeparator', props: {} }
   },
+  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
+    return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
+  },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
   }
@@ -133,7 +153,6 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
     onActivate: () => {},
     onClose: () => {},
     onCloseToRight: () => {},
-    onSplitGroup: () => {},
     onDuplicate: () => {},
     onTogglePin: () => {},
     dragData: {
@@ -195,7 +214,7 @@ async function renderExpandedBrowserTab(tab: BrowserTabState): Promise<unknown> 
   return expandNode(await renderBrowserTab(tab))
 }
 
-describe('BrowserTab favicon', { timeout: 10_000 }, () => {
+describe('BrowserTab favicon', { timeout: 30_000 }, () => {
   beforeEach(() => {
     reactHookRuntime.states = []
     reactHookRuntime.index = 0

@@ -6,6 +6,7 @@ import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../share
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
   resolveSourceControlActionRecipe,
+  resolveSourceControlAiEnabled,
   resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults,
   type ResolvedSourceControlAiGenerationParams
@@ -66,6 +67,10 @@ export function useSourceControlAi({
   const sourceControlAiDiscoveryHostKey = useMemo(
     () => getSourceControlAiControllerDiscoveryHostKey(settings, activeConnectionId),
     [activeConnectionId, settings]
+  )
+  const sourceControlAiActionsVisible = useMemo(
+    () => (settings ? resolveSourceControlAiEnabled({ settings, repo: activeRepo }) : false),
+    [activeRepo, settings]
   )
   const resolvedCommitMessageAi = useMemo(
     () =>
@@ -259,6 +264,7 @@ export function useSourceControlAi({
 
   return {
     sourceControlAiDiscoveryHostKey,
+    sourceControlAiActionsVisible,
     resolvedCommitMessageAi,
     resolvedPrCreationDefaults,
     resolveConflictsComposerOpen,

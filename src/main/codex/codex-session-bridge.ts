@@ -3,7 +3,6 @@ import {
   linkSync,
   lstatSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   readlinkSync,
   renameSync,
@@ -12,6 +11,13 @@ import {
 } from 'node:fs'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import {
+  listCodexSessionJsonlFiles,
+  listCodexSessionJsonlFilesIncrementally
+} from './codex-session-file-listing'
+import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
+
+export type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
 
 type LegacyCopiedSessionMarker = {
   sourcePath: string
@@ -27,6 +33,16 @@ export type LegacyCopiedCodexSessionBridgeScanPreference = {
   sourceSkipBytes: number | null
 }
 
+export type CodexSessionBridgeSummary = {
+  scannedFiles: number
+  linkedFiles: number
+}
+
+let backgroundSessionBridgeTask: Promise<void> | null = null
+
+/**
+ * Synchronously mirrors system session files into the managed runtime home.
+ */
 export function syncSystemCodexSessionsIntoManagedHome(): void {
   const systemSessionsRoot = join(getSystemCodexHomePath(), 'sessions')
   if (!existsSync(systemSessionsRoot)) {
@@ -35,53 +51,99 @@ export function syncSystemCodexSessionsIntoManagedHome(): void {
 
   const managedSessionsRoot = join(getOrcaManagedCodexHomePath(), 'sessions')
   for (const systemSessionFilePath of listCodexSessionJsonlFiles(systemSessionsRoot)) {
-    const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
-    const managedSessionFilePath = join(managedSessionsRoot, relativePath)
-    if (existsSync(managedSessionFilePath)) {
-      if (
-        replaceSymlinkSessionBridgeWithHardlink(
-          systemSessionFilePath,
-          managedSessionFilePath,
-          relativePath
-        )
-      ) {
-        continue
-      }
-      migrateLegacyCopiedSessionBridge(systemSessionFilePath, managedSessionFilePath, relativePath)
-      continue
+    bridgeSystemCodexSessionFile(systemSessionsRoot, managedSessionsRoot, systemSessionFilePath)
+  }
+}
+
+/**
+ * Starts a single background bridge task for historical system sessions.
+ *
+ * Concurrent callers share the same in-flight task so launch code can request
+ * background bridging without starting duplicate directory walks.
+ */
+export function startSystemCodexSessionBridgeInBackground(
+  options: CodexSessionBridgeIncrementalOptions = {}
+): Promise<void> {
+  if (backgroundSessionBridgeTask) {
+    return backgroundSessionBridgeTask
+  }
+  const task = syncSystemCodexSessionsIntoManagedHomeIncrementally(options)
+    .catch((error: unknown) => {
+      console.warn('[codex-session-bridge] Background session bridge failed:', error)
+    })
+    .then(() => undefined)
+  backgroundSessionBridgeTask = task
+  void task.finally(() => {
+    if (backgroundSessionBridgeTask === task) {
+      backgroundSessionBridgeTask = null
     }
-    mkdirSync(dirname(managedSessionFilePath), { recursive: true })
-    linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)
-  }
+  })
+  return task
 }
 
-function listCodexSessionJsonlFiles(rootPath: string): string[] {
-  const files: string[] = []
-  try {
-    for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
-      const childPath = join(rootPath, entry.name)
-      if (entry.isDirectory()) {
-        appendSessionFilePaths(files, listCodexSessionJsonlFiles(childPath))
-        continue
-      }
-      if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-        files.push(childPath)
-      }
+/**
+ * Incrementally mirrors system session files into the managed runtime home.
+ *
+ * Returns scan/link counts for tests and diagnostics while keeping each file
+ * bridge operation equivalent to the synchronous path.
+ */
+export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
+  options: CodexSessionBridgeIncrementalOptions = {}
+): Promise<CodexSessionBridgeSummary> {
+  const systemSessionsRoot = join(getSystemCodexHomePath(), 'sessions')
+  if (!existsSync(systemSessionsRoot)) {
+    return { scannedFiles: 0, linkedFiles: 0 }
+  }
+
+  const managedSessionsRoot = join(getOrcaManagedCodexHomePath(), 'sessions')
+  const summary: CodexSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
+  for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
+    systemSessionsRoot,
+    options
+  )) {
+    summary.scannedFiles += 1
+    if (
+      bridgeSystemCodexSessionFile(systemSessionsRoot, managedSessionsRoot, systemSessionFilePath)
+    ) {
+      summary.linkedFiles += 1
     }
-  } catch (error) {
-    console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
   }
-  return files.sort()
+  return summary
 }
 
-function appendSessionFilePaths(target: string[], source: readonly string[]): void {
-  // Why: existing Codex homes can accumulate enough nested sessions to exceed
-  // V8's argument limit if child arrays are spread into push().
-  for (const filePath of source) {
-    target.push(filePath)
+/**
+ * Bridges one system session file into the managed sessions tree.
+ *
+ * Existing managed files are migrated when possible; missing files are linked
+ * and counted as newly available to the managed runtime home.
+ */
+function bridgeSystemCodexSessionFile(
+  systemSessionsRoot: string,
+  managedSessionsRoot: string,
+  systemSessionFilePath: string
+): boolean {
+  const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
+  const managedSessionFilePath = join(managedSessionsRoot, relativePath)
+  if (existsSync(managedSessionFilePath)) {
+    if (
+      replaceSymlinkSessionBridgeWithHardlink(
+        systemSessionFilePath,
+        managedSessionFilePath,
+        relativePath
+      )
+    ) {
+      return true
+    }
+    migrateLegacyCopiedSessionBridge(systemSessionFilePath, managedSessionFilePath, relativePath)
+    return false
   }
+  mkdirSync(dirname(managedSessionFilePath), { recursive: true })
+  return linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)
 }
 
+/**
+ * Links a source session file and clears any stale copied-session marker.
+ */
 function linkSystemCodexSessionFile(
   sourcePath: string,
   targetPath: string,
@@ -94,6 +156,9 @@ function linkSystemCodexSessionFile(
   return linked
 }
 
+/**
+ * Attempts to link a session file with hardlink first and symlink fallback.
+ */
 function tryLinkSystemCodexSessionFile(sourcePath: string, targetPath: string): boolean {
   if (tryHardlinkSystemCodexSessionFile(sourcePath, targetPath)) {
     return true
@@ -109,6 +174,9 @@ function tryLinkSystemCodexSessionFile(sourcePath: string, targetPath: string): 
   return false
 }
 
+/**
+ * Attempts a hardlink so resume sees one physical JSONL session log.
+ */
 function tryHardlinkSystemCodexSessionFile(sourcePath: string, targetPath: string): boolean {
   try {
     // Why: Codex resume ignores symlinked JSONL sessions, while a hardlink
@@ -120,6 +188,10 @@ function tryHardlinkSystemCodexSessionFile(sourcePath: string, targetPath: strin
   }
 }
 
+/**
+ * Replaces an older symlink bridge with a hardlink when the target still points
+ * at the expected source session.
+ */
 function replaceSymlinkSessionBridgeWithHardlink(
   sourcePath: string,
   targetPath: string,
@@ -160,6 +232,10 @@ function replaceSymlinkSessionBridgeWithHardlink(
   return false
 }
 
+/**
+ * Migrates a legacy copied bridge to a linked bridge when the copied file still
+ * matches its marker.
+ */
 function migrateLegacyCopiedSessionBridge(
   sourcePath: string,
   targetPath: string,
@@ -198,6 +274,12 @@ function migrateLegacyCopiedSessionBridge(
   }
 }
 
+/**
+ * Resolves how scanners should treat a legacy copied session bridge.
+ *
+ * The result keeps resume scans coherent until the copied bridge is migrated to
+ * a hardlink or symlink.
+ */
 export function getLegacyCopiedCodexSessionBridgeScanPreference(
   sessionFilePath: string
 ): LegacyCopiedCodexSessionBridgeScanPreference | null {
@@ -234,10 +316,16 @@ export function getLegacyCopiedCodexSessionBridgeScanPreference(
   }
 }
 
+/**
+ * Returns the marker path for a legacy copied session bridge.
+ */
 function getLegacySessionCopyMarkerPath(relativePath: string): string {
   return join(getOrcaManagedCodexHomePath(), '.orca-session-copies', `${relativePath}.json`)
 }
 
+/**
+ * Reads and validates the marker for a legacy copied session bridge.
+ */
 function readLegacyCopiedSessionMarker(relativePath: string): LegacyCopiedSessionMarker | null {
   try {
     const parsed: unknown = JSON.parse(
@@ -262,6 +350,9 @@ function readLegacyCopiedSessionMarker(relativePath: string): LegacyCopiedSessio
   }
 }
 
+/**
+ * Checks whether source or target file stats still match a legacy bridge marker.
+ */
 function fileStatsMatchMarker(
   stat: { size: number; mtimeMs: number },
   marker: LegacyCopiedSessionMarker,
@@ -272,6 +363,9 @@ function fileStatsMatchMarker(
   return stat.size === expectedSize && stat.mtimeMs === expectedMtimeMs
 }
 
+/**
+ * Removes the marker after a copied session bridge has been migrated or retired.
+ */
 function clearLegacyCopiedSessionMarker(relativePath: string): void {
   rmSync(getLegacySessionCopyMarkerPath(relativePath), { force: true })
 }

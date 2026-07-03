@@ -81,6 +81,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     ptyIdsByTabId: {},
     browserTabsByWorktree: {},
     hideDefaultBranchWorkspace: false,
+    hideAutomationGeneratedWorkspaces: false,
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -96,6 +97,8 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
     showSleepingWorkspaces: true,
     filterRepoIds: [],
     hideDefaultBranchWorkspace: false,
+    hideAutomationGeneratedWorkspaces: false,
+    workspaceHostScope: 'all',
     ...overrides
   }
 }
@@ -128,6 +131,36 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([])
+  })
+
+  it('hides automation-created workspaces when the automation filter is enabled', () => {
+    const manual = makeWorktree('manual')
+    const automationCreated = {
+      ...makeWorktree('automation-created'),
+      automationProvenance: {
+        kind: 'created-by-automation' as const,
+        automationId: 'automation-1',
+        automationNameSnapshot: 'Nightly review',
+        automationRunId: 'run-1',
+        automationRunTitleSnapshot: 'Nightly review run',
+        createdAt: 123,
+        executionTargetType: 'local' as const,
+        executionTargetId: 'local',
+        projectId: 'repo1',
+        repoId: 'repo1',
+        hostId: 'local' as const
+      }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [manual, automationCreated] },
+      [manual.id, automationCreated.id],
+      visibleOptions({
+        hideAutomationGeneratedWorkspaces: true
+      })
+    )
+
+    expect(result).toEqual([manual.id])
   })
 
   it('does not treat slept wake-hint tabs as live surfaces', () => {
@@ -517,6 +550,12 @@ describe('sidebarHasActiveFilters', () => {
     expect(sidebarHasActiveFilters(filterState({ hideDefaultBranchWorkspace: true }))).toBe(true)
   })
 
+  it('returns true when only automation-created workspaces are hidden', () => {
+    expect(sidebarHasActiveFilters(filterState({ hideAutomationGeneratedWorkspaces: true }))).toBe(
+      true
+    )
+  })
+
   it('returns true when sleeping workspaces are hidden', () => {
     expect(sidebarHasActiveFilters(filterState({ showSleepingWorkspaces: false }))).toBe(true)
   })
@@ -536,6 +575,7 @@ describe('computeClearFilterActions', () => {
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
       resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -548,6 +588,19 @@ describe('computeClearFilterActions', () => {
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
       resetHideDefaultBranchWorkspace: true,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetVisibleWorkspaceHostIds: false
+    })
+  })
+
+  it('flags only hideAutomationGeneratedWorkspaces for reset when it is the sole filter', () => {
+    expect(
+      computeClearFilterActions(filterState({ hideAutomationGeneratedWorkspaces: true }))
+    ).toEqual({
+      resetShowSleepingWorkspaces: false,
+      resetFilterRepoIds: false,
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: true,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -565,6 +618,16 @@ describe('computeClearFilterActions', () => {
     expect(actions.resetFilterRepoIds).toBe(true)
   })
 
+  it('flags legacy single-host scope for reset even without visible host ids', () => {
+    expect(computeClearFilterActions(filterState({ workspaceHostScope: 'ssh:host-1' }))).toEqual({
+      resetShowSleepingWorkspaces: false,
+      resetFilterRepoIds: false,
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetVisibleWorkspaceHostIds: true
+    })
+  })
+
   it('flags every active filter simultaneously', () => {
     expect(
       computeClearFilterActions(
@@ -572,6 +635,7 @@ describe('computeClearFilterActions', () => {
           showSleepingWorkspaces: false,
           filterRepoIds: ['repo1', 'repo2'],
           hideDefaultBranchWorkspace: true,
+          hideAutomationGeneratedWorkspaces: true,
           visibleWorkspaceHostIds: ['local']
         })
       )
@@ -579,6 +643,7 @@ describe('computeClearFilterActions', () => {
       resetShowSleepingWorkspaces: true,
       resetFilterRepoIds: true,
       resetHideDefaultBranchWorkspace: true,
+      resetHideAutomationGeneratedWorkspaces: true,
       resetVisibleWorkspaceHostIds: true
     })
   })

@@ -1,4 +1,5 @@
-import React, { lazy } from 'react'
+import React from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult, GitStatusEntry } from '../../../../shared/types'
 import { ConflictBanner } from './ConflictComponents'

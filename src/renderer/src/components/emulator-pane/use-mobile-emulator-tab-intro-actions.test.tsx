@@ -121,7 +121,7 @@ describe('useMobileEmulatorTabIntroActions', () => {
     expect(closeUnifiedTab).toHaveBeenCalledWith('simulator-tab')
     expect(toast.info).toHaveBeenCalledWith(
       'Mobile Emulator hidden',
-      expect.objectContaining({ id: 'mobile-emulator-hidden' })
+      expect.objectContaining({ id: 'mobile-emulator-hidden', duration: 30_000 })
     )
     expect(toast.error).not.toHaveBeenCalled()
   })

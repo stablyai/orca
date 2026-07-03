@@ -7,6 +7,7 @@ describe('runtime RPC call queue', () => {
     expect(isBackgroundRuntimeMethod('hostedReview.forBranch')).toBe(true)
     expect(isBackgroundRuntimeMethod('worktree.prefetchCreateBase')).toBe(true)
     expect(isBackgroundRuntimeMethod('terminal.send')).toBe(false)
+    expect(isBackgroundRuntimeMethod('terminal.agentStatus')).toBe(false)
     expect(isBackgroundRuntimeMethod('worktree.create')).toBe(false)
   })
 

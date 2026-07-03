@@ -1,104 +1,166 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
-import { buildAiVaultResumeCommandForWorktree } from '@/lib/ai-vault-resume-command'
-import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { agentLabel, filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
+import {
+  useActiveRepo,
+  useActiveWorktree,
+  useActiveWorktreeId,
+  useAllWorktrees,
+  useProjectHostSetupProjection,
+  useRepos
+} from '@/store/selectors'
+import { filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
+import {
+  deriveAiVaultScopeSessionPaths,
+  deriveAiVaultWorkspaceScopePaths
+} from './ai-vault-scope-paths'
+import {
+  DEFAULT_AI_VAULT_SCOPE,
+  getRestorableAiVaultScope,
+  normalizeAiVaultScopeForContext
+} from './ai-vault-scope-state'
+import { buildAiVaultProjectContext } from './ai-vault-session-projects'
+import {
+  resolveAiVaultSessionResumeActions,
+  resolveAiVaultSessionResumeState
+} from './ai-vault-session-resume'
+import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
+import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
+import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
+import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_AGENTS,
   type AiVaultAgent,
   type AiVaultGroup,
-  type AiVaultListResult,
   type AiVaultScope,
   type AiVaultSession,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
-import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
-
-const SESSION_LIMIT = 500
+import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
 
 export default function AiVaultPanel(): React.JSX.Element {
+  const activeWorktreeId = useActiveWorktreeId()
   const activeWorktree = useActiveWorktree()
-  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const agentCmdOverrides = useAppStore((s) => s.settings?.agentCmdOverrides ?? {})
+  const activeRepo = useActiveRepo()
+  const repos = useRepos()
+  const allWorktrees = useAllWorktrees()
+  const projectHostSetupProjection = useProjectHostSetupProjection()
+  const resumeTargetState = useAppStore(
+    useShallow((state) => ({
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      repos: state.repos,
+      worktreesByRepo: state.worktreesByRepo
+    }))
+  )
+  const settings = useAppStore((s) => s.settings)
+  const agentCmdOverrides = settings?.agentCmdOverrides
+  const { getOriginalPaneTarget, jumpToOriginalPane, jumpToWorktree } =
+    useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
-  const [scope, setScope] = useState<AiVaultScope>('workspace')
+  const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
   const [sort, setSort] = useState<AiVaultSort>('updated')
-  const [group, setGroup] = useState<AiVaultGroup>('folder')
+  const [group, setGroup] = useState<AiVaultGroup>('project')
   const [hideEmptySessions, setHideEmptySessions] = useState(true)
   const [agents, setAgents] = useState<AiVaultAgent[]>([...AI_VAULT_AGENTS])
-  const [sessions, setSessions] = useState<AiVaultSession[]>([])
-  const [scanResult, setScanResult] = useState<AiVaultListResult | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
-  const refreshIdRef = useRef(0)
-  const refreshInFlightRef = useRef(false)
-  const mountedRef = useRef(true)
+  const userChangedScopeRef = useRef(false)
+  const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
 
-  const isRemoteWorktree = Boolean(activeRepo?.connectionId)
+  const isRuntimeWorktree = useMemo(
+    () =>
+      getAiVaultResumeWorkspaceTargetStatus(resumeTargetState, activeWorktreeId ?? null) ===
+      'runtime',
+    [activeWorktreeId, resumeTargetState]
+  )
   const activeWorktreePath = activeWorktree?.path ?? null
+  // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
+  const activeWorktreePaths = useMemo(
+    () => deriveAiVaultWorkspaceScopePaths(activeWorktree ?? null, allWorktrees),
+    [activeWorktree, allWorktrees]
+  )
+  const projectScopeContext = useMemo(
+    () =>
+      buildAiVaultProjectContext({
+        repos,
+        worktrees: allWorktrees,
+        projectHostSetupProjection,
+        activeRepo,
+        activeWorktree,
+        sessions: []
+      }),
+    [activeRepo, activeWorktree, allWorktrees, projectHostSetupProjection, repos]
+  )
+  const activeProjectKey = projectScopeContext.activeProjectKey
+  const projectLabelByKey = projectScopeContext.projectLabelByKey
+  // Sent to the scanner so scoped views surface sessions older than the global cap.
+  const scopePaths = useMemo(
+    () =>
+      deriveAiVaultScopeSessionPaths(activeWorktree ?? null, allWorktrees, {
+        activeProjectKey,
+        projectHostSetupProjection
+      }),
+    [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection]
+  )
+  const { error, loading, refresh, scanResult, sessions } = useAiVaultSessionRefresh(scopePaths)
+  const sessionProjectById = useMemo(
+    () =>
+      buildAiVaultProjectContext({
+        repos,
+        worktrees: allWorktrees,
+        projectHostSetupProjection,
+        activeRepo,
+        activeWorktree,
+        sessions
+      }).sessionProjectById,
+    [activeRepo, activeWorktree, allWorktrees, projectHostSetupProjection, repos, sessions]
+  )
+  const sessionWorktreeById = useAiVaultSessionWorktreeMap({
+    sessions,
+    worktrees: allWorktrees,
+    activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null
+  })
+  const { buildResumeStartup, copyResumeCommand, handleResume } = useAiVaultSessionLaunchActions({
+    activeWorktree: activeWorktree ?? null,
+    activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+    targetState: resumeTargetState,
+    agentCmdOverrides
+  })
   const hasAllAgentsSelected = agents.length === AI_VAULT_AGENTS.length
   const viewAdjustmentCount =
     (hasAllAgentsSelected ? 0 : 1) +
     (sort === 'updated' ? 0 : 1) +
-    (group === 'folder' ? 0 : 1) +
+    (group === 'project' ? 0 : 1) +
     (hideEmptySessions ? 0 : 1)
 
+  // Workspace is the preferred default, but unavailable context still falls back to All.
   useEffect(() => {
-    if (!activeWorktreePath && scope === 'workspace') {
-      setScope('all')
+    const normalizedScope = normalizeAiVaultScopeForContext({
+      scope,
+      activeProjectKey,
+      activeWorktreePath
+    })
+    if (normalizedScope !== scope) {
+      setScope(normalizedScope)
     }
-  }, [activeWorktreePath, scope])
-
-  const refresh = useCallback(async (args: { force?: boolean } = {}): Promise<void> => {
-    if (refreshInFlightRef.current) {
-      return
-    }
-
-    refreshInFlightRef.current = true
-    const refreshId = refreshIdRef.current + 1
-    refreshIdRef.current = refreshId
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await window.api.aiVault.listSessions({
-        limit: SESSION_LIMIT,
-        force: args.force
-      })
-      if (!mountedRef.current || refreshIdRef.current !== refreshId) {
-        return
-      }
-      setScanResult(result)
-      setSessions(result.sessions)
-    } catch (err) {
-      if (mountedRef.current && refreshIdRef.current === refreshId) {
-        setError(err instanceof Error ? err.message : String(err))
-      }
-    } finally {
-      refreshInFlightRef.current = false
-      if (mountedRef.current && refreshIdRef.current === refreshId) {
-        setLoading(false)
-      }
-    }
-  }, [])
+  }, [activeProjectKey, activeWorktreePath, scope])
 
   useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      refreshIdRef.current += 1
-      refreshInFlightRef.current = false
+    const restorableScope = getRestorableAiVaultScope({
+      scope,
+      activeProjectKey,
+      activeWorktreePath,
+      preferredScope: preferredScopeRef.current,
+      userChangedScope: userChangedScopeRef.current
+    })
+    if (restorableScope) {
+      setScope(restorableScope)
     }
-  }, [])
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
+  }, [activeProjectKey, activeWorktreePath, scope])
 
   const filteredSessions = useMemo(
     () =>
@@ -107,39 +169,33 @@ export default function AiVaultPanel(): React.JSX.Element {
         agents,
         scope,
         sort,
-        activeWorktreePath,
+        activeWorktreePaths,
+        activeProjectKey,
+        sessionProjectById,
+        projectLabelByKey,
         hideEmptySessions
       }),
-    [activeWorktreePath, agents, hideEmptySessions, query, scope, sessions, sort]
+    [
+      activeProjectKey,
+      activeWorktreePaths,
+      agents,
+      hideEmptySessions,
+      projectLabelByKey,
+      query,
+      scope,
+      sessionProjectById,
+      sessions,
+      sort
+    ]
   )
 
   const groups = useMemo(
-    () => groupAiVaultSessions(filteredSessions, group),
-    [filteredSessions, group]
-  )
-
-  const buildResumeCommand = useCallback(
-    (session: AiVaultSession): string =>
-      buildAiVaultResumeCommandForWorktree({
-        state: useAppStore.getState(),
-        worktreeId: activeWorktree?.id ?? null,
-        session,
-        commandOverride: agentCmdOverrides[session.agent]
+    () =>
+      groupAiVaultSessions(filteredSessions, group, {
+        sessionProjectById,
+        projectLabelByKey
       }),
-    [activeWorktree?.id, agentCmdOverrides]
-  )
-
-  const copyResumeCommand = useCallback(
-    async (session: AiVaultSession): Promise<void> => {
-      await window.api.ui.writeClipboardText(buildResumeCommand(session))
-      toast.success(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.resumeCommandCopied',
-          'Resume command copied'
-        )
-      )
-    },
-    [buildResumeCommand]
+    [filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
 
   const copyText = useCallback(async (text: string, label: string): Promise<void> => {
@@ -151,40 +207,44 @@ export default function AiVaultPanel(): React.JSX.Element {
     )
   }, [])
 
-  const handleResume = useCallback(
-    (session: AiVaultSession): void => {
-      if (!activeWorktree) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
-            'Open a workspace before resuming a session.'
-          )
-        )
-        return
-      }
-      if (isRemoteWorktree) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.localWorkspacesOnly',
-            'Resume from history is only available in local workspaces.'
-          )
-        )
-        return
-      }
-      launchAiVaultSessionInNewTab({
-        agent: session.agent,
-        worktreeId: activeWorktree.id,
-        command: buildResumeCommand(session)
-      })
-      toast.success(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.agentSessionQueued',
-          '{{value0}} session queued',
-          { value0: agentLabel(session.agent) }
-        )
-      )
-    },
-    [activeWorktree, buildResumeCommand, isRemoteWorktree]
+  const getSessionResumeState = useCallback(
+    (session: AiVaultSession) =>
+      resolveAiVaultSessionResumeState({
+        sessionFilePath: session.filePath,
+        worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
+        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+        worktrees: allWorktrees,
+        repos,
+        targetState: resumeTargetState
+      }),
+    [
+      activeWorktree?.id,
+      activeWorktreeId,
+      allWorktrees,
+      repos,
+      resumeTargetState,
+      sessionWorktreeById
+    ]
+  )
+
+  const getSessionResumeActions = useCallback(
+    (session: AiVaultSession) =>
+      resolveAiVaultSessionResumeActions({
+        sessionFilePath: session.filePath,
+        worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
+        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+        worktrees: allWorktrees,
+        repos,
+        targetState: resumeTargetState
+      }),
+    [
+      activeWorktree?.id,
+      activeWorktreeId,
+      allWorktrees,
+      repos,
+      resumeTargetState,
+      sessionWorktreeById
+    ]
   )
 
   const setAgentEnabled = useCallback((agent: AiVaultAgent, enabled: boolean) => {
@@ -200,8 +260,14 @@ export default function AiVaultPanel(): React.JSX.Element {
   const resetViewOptions = useCallback(() => {
     setAgents([...AI_VAULT_AGENTS])
     setSort('updated')
-    setGroup('folder')
+    setGroup('project')
     setHideEmptySessions(true)
+  }, [])
+
+  const handleScopeChange = useCallback((nextScope: AiVaultScope) => {
+    preferredScopeRef.current = nextScope
+    userChangedScopeRef.current = nextScope !== DEFAULT_AI_VAULT_SCOPE
+    setScope(nextScope)
   }, [])
 
   const toggleGroup = useCallback((key: string) => {
@@ -225,6 +291,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         sessionCount={sessions.length}
         hasScanResult={Boolean(scanResult)}
         activeWorktreePath={activeWorktreePath}
+        activeProjectKey={activeProjectKey}
         scope={scope}
         agents={agents}
         sort={sort}
@@ -232,7 +299,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         hideEmptySessions={hideEmptySessions}
         adjustmentCount={viewAdjustmentCount}
         onQueryChange={setQuery}
-        onScopeChange={setScope}
+        onScopeChange={handleScopeChange}
         onAgentEnabledChange={setAgentEnabled}
         onSortChange={setSort}
         onGroupChange={setGroup}
@@ -241,12 +308,11 @@ export default function AiVaultPanel(): React.JSX.Element {
         onRefresh={() => void refresh({ force: true })}
       />
 
-      {isRemoteWorktree ? (
+      {isRuntimeWorktree ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-[11px] leading-4 text-muted-foreground">
           {translate(
-            'auto.components.right.sidebar.AiVaultPanel.remoteBrowseLocalHistory',
-            'SSH-host workspaces can browse local history. Resume actions run from {{value0}} workspaces.',
-            { value0: getLocalExecutionHostLabel() }
+            'auto.components.right.sidebar.AiVaultPanel.runtimeBrowseLocalHistory',
+            'Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.'
           )}
         </div>
       ) : null}
@@ -274,11 +340,16 @@ export default function AiVaultPanel(): React.JSX.Element {
         sessionsCount={sessions.length}
         filteredSessionsCount={filteredSessions.length}
         error={error}
-        resumeDisabled={!activeWorktree || isRemoteWorktree}
-        buildResumeCommand={buildResumeCommand}
+        buildResumeStartup={buildResumeStartup}
+        getSessionResumeState={getSessionResumeState}
+        getSessionResumeActions={getSessionResumeActions}
+        getOriginalPaneTarget={getOriginalPaneTarget}
+        getWorktreeInfo={(session) => sessionWorktreeById.get(session.id) ?? null}
         onToggleGroup={toggleGroup}
+        onJumpToOriginalPane={jumpToOriginalPane}
+        onJumpToWorktree={jumpToWorktree}
         onResume={handleResume}
-        onCopyResume={(session) => void copyResumeCommand(session)}
+        onCopyResume={(session, worktreeId) => void copyResumeCommand(session, worktreeId)}
         onCopyId={(session) =>
           void copyText(
             session.sessionId,

@@ -1,3 +1,5 @@
+// Why: import from 'buffer' (the npm polyfill), not 'node:buffer' — Metro
+// can't resolve Node's builtin in a React Native bundle.
 import { Buffer } from 'buffer'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'

@@ -12,7 +12,11 @@ import { useAppStore } from '../../store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
+import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
@@ -71,12 +75,10 @@ function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
 function runtimeHostConnectionState({
   hasStatus,
   online,
-  active,
   remoteControl
 }: {
   hasStatus: boolean
   online: boolean
-  active: boolean
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
 }): RuntimeHostConnectionState {
   if (!hasStatus) {
@@ -91,7 +93,12 @@ function runtimeHostConnectionState({
   if (remoteControl?.state === 'closed' && remoteControl.lastError) {
     return 'disconnected'
   }
-  return active ? 'connected' : 'available'
+  // Why: "connected" means attached/reachable, NOT "is the active default host".
+  // Both surfaces (this status bar and Settings > Remote Orca Servers) must agree
+  // on that single definition, or a reachable-but-not-active host reads
+  // "Connected" in one place and "Available" in the other. Active/default is a
+  // separate concept (surfaced elsewhere), so it must not change this state.
+  return 'connected'
 }
 
 function runtimeHostConnectionDetail(
@@ -117,23 +124,16 @@ function runtimeHostConnectionDetail(
       { value0: String(remoteControl.reconnectAttempt + 1) }
     )
   }
-  if (remoteControl.pendingRequestCount > 0 || remoteControl.subscriptionCount > 0) {
-    return translate(
-      'auto.components.status.bar.SshStatusSegment.runtime_channel_counts',
-      '{{value0}} pending · {{value1}} streams',
-      {
-        value0: String(remoteControl.pendingRequestCount),
-        value1: String(remoteControl.subscriptionCount)
-      }
-    )
-  }
+  // Why: pending-request / subscription counts are internal RPC plumbing (e.g. a
+  // live browser screencast shows as "N streams"). They're noise in a user-facing
+  // status row and make the line truncate — only surface actionable detail
+  // (errors, close reasons, reconnect attempts) above.
   return undefined
 }
 
 export function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {
   switch (state) {
     case 'connected':
-    case 'available':
       return 'connected'
     case 'checking':
     case 'reconnecting':
@@ -144,7 +144,7 @@ export function runtimeStatusForOverall(state: RuntimeHostConnectionState): Host
 }
 
 export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
-  return state === 'connected' || state === 'available'
+  return state === 'connected'
 }
 
 export function SshStatusSegment({
@@ -171,27 +171,33 @@ export function SshStatusSegment({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const targets = Array.from(sshTargetLabels.entries()).map(([id, label]) => {
-    const state = sshConnectionStates.get(id)
-    return {
-      id,
-      label,
-      status: (state?.status ?? 'disconnected') as SshConnectionStatus,
-      syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
-    }
-  })
-  const runtimeHosts = runtimeEnvironments.map((environment) => {
-    const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
-    const override = hostLabelOverrides.get(toRuntimeExecutionHostId(environment.id))
-    return {
-      id: environment.id,
-      label: override || environment.name || environment.id,
-      hasStatus: Boolean(statusEntry),
-      online: Boolean(statusEntry?.status),
-      active: settings?.activeRuntimeEnvironmentId === environment.id,
-      remoteControl: statusEntry?.status?.remoteControl ?? null
-    }
-  })
+  const targets = Array.from(sshTargetLabels.entries())
+    // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
+    // as a user-facing SSH host in the status bar.
+    .filter(([id]) => !isRuntimeOwnedSshTargetId(id))
+    .map(([id, label]) => {
+      const state = sshConnectionStates.get(id)
+      return {
+        id,
+        label,
+        status: (state?.status ?? 'disconnected') as SshConnectionStatus,
+        syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
+      }
+    })
+  const runtimeHosts = runtimeEnvironments
+    .filter(isUserManagedRuntimeEnvironment)
+    .map((environment) => {
+      const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
+      const override = hostLabelOverrides.get(toRuntimeExecutionHostId(environment.id))
+      return {
+        id: environment.id,
+        label: override || environment.name || environment.id,
+        hasStatus: Boolean(statusEntry),
+        online: Boolean(statusEntry?.status),
+        active: settings?.activeRuntimeEnvironmentId === environment.id,
+        remoteControl: statusEntry?.status?.remoteControl ?? null
+      }
+    })
   const runtimeHostRows = runtimeHosts.map((host) => ({
     ...host,
     state: runtimeHostConnectionState(host)

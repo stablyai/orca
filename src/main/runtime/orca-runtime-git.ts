@@ -7,6 +7,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus,
   GitWorktreeInfo,
@@ -23,6 +24,7 @@ import {
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
+import type { GitProviderStatusOptions } from '../providers/types'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
@@ -40,6 +42,7 @@ import {
   getDiff,
   getStagedCommitContext,
   getStatus as getGitStatus,
+  getSubmoduleStatus as getGitSubmoduleStatus,
   stageFile,
   unstageFile
 } from '../git/status'
@@ -164,7 +167,7 @@ export class RuntimeGitCommands {
 
   async getRuntimeGitStatus(
     worktreeSelector: string,
-    options?: { includeIgnored?: boolean }
+    options?: GitProviderStatusOptions
   ): Promise<GitStatusResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
@@ -180,6 +183,25 @@ export class RuntimeGitCommands {
     return options
       ? getGitStatus(target.worktree.path, { ...options, ...gitOptions })
       : getGitStatus(target.worktree.path, gitOptions)
+  }
+
+  async getRuntimeGitSubmoduleStatus(
+    worktreeSelector: string,
+    submodulePath: string,
+    area: GitStagingArea = 'unstaged'
+  ): Promise<GitStatusResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.getSubmoduleStatus(target.worktree.path, submodulePath, area)
+    }
+    return getGitSubmoduleStatus(target.worktree.path, submodulePath, {
+      ...localGitOptionsForTarget(target),
+      ...(area === 'staged' ? { staged: true } : {})
+    })
   }
 
   async checkRuntimeGitIgnoredPaths(

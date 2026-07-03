@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME
+  ORCA_CLI_SKILL_NAME,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
@@ -24,10 +24,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
-  buildSkillInstallCommandForRuntime,
+  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
+  getSkillDiscoveryTargetForRuntime,
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
@@ -85,9 +86,9 @@ export function CliSection({
       getSelectedAgentRuntime(settings, wslSupportedPlatform, wslAvailable, wslCapabilitiesLoading),
     [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
   )
-  const cliSkillDiscoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
-    () => (agentRuntime.runtime === 'wsl' ? { runtime: 'wsl' } : undefined),
-    [agentRuntime.runtime]
+  const cliSkillDiscoveryTarget = useMemo(
+    () => getSkillDiscoveryTargetForRuntime(agentRuntime),
+    [agentRuntime]
   )
   const {
     installed: cliSkillDetected,
@@ -98,8 +99,12 @@ export function CliSection({
     discoveryTarget: cliSkillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const cliSkillInstallCommand = buildSkillInstallCommandForRuntime(
+  const cliSkillInstallCommand = buildSkillCommandForRuntime(
     ORCA_CLI_SKILL_INSTALL_COMMAND,
+    agentRuntime
+  )
+  const cliSkillUpdateCommand = buildSkillCommandForRuntime(
+    ORCA_CLI_SKILL_UPDATE_COMMAND,
     agentRuntime
   )
   const cliSkillTerminalShellOverride = getAgentSkillTerminalShellOverride(
@@ -366,6 +371,7 @@ export function CliSection({
                 'Enables agents to use Orca workspace, terminal, and progress commands.'
               )}
               command={cliSkillInstallCommand}
+              installedCommand={cliSkillUpdateCommand}
               terminalTitle="CLI skill setup"
               terminalAriaLabel="CLI skill install terminal"
               terminalWorktreeId={`settings-cli-skill-terminal-${agentRuntime.runtime}`}

@@ -6,6 +6,8 @@ import type {
 } from '../../../shared/agent-status-types'
 import { tabHasLivePty } from './tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
+import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
+import type { AgentKind } from '../../../shared/telemetry-events'
 
 // Re-export from shared module so existing renderer imports continue to work.
 // Why: the main process now needs the same agent detection logic for stat
@@ -119,6 +121,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   amp: 'Amp',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
+  'mimo-code': 'MiMo Code',
   cursor: 'Cursor',
   aider: 'Aider',
   pi: 'Pi',
@@ -128,7 +131,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   grok: 'Grok',
   hermes: 'Hermes',
   devin: 'Devin',
-  ante: 'Ante'
+  ante: 'Ante',
+  kimi: 'Kimi'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
@@ -159,6 +163,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   codex: true,
   autohand: true,
   opencode: true,
+  'mimo-code': true,
   pi: true,
   omp: true,
   gemini: true,
@@ -195,6 +200,14 @@ export function agentTypeToIconAgent(agentType: AgentType | null | undefined): T
   return Object.prototype.hasOwnProperty.call(ICONABLE_AGENT_TYPES, agentType)
     ? (agentType as TuiAgent)
     : null
+}
+
+// Why: telemetry's `agent_kind` enum derives from the TuiAgent mapping. Share
+// one resolver so the notes-send dropdown and the sidebar send path stamp
+// identical agent_kind values on `agent_prompt_sent`.
+export function agentKindForAgentType(agentType: AgentType | null | undefined): AgentKind {
+  const tuiAgent = agentTypeToIconAgent(agentType)
+  return tuiAgent ? tuiAgentToAgentKind(tuiAgent) : 'other'
 }
 
 // Why: explicit agent status entries (from hook-based reports) can go stale if

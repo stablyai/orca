@@ -24,6 +24,7 @@ export function getPiPrefillExtensionSource(kind: PiAgentKind): string {
   return [
     'export default function (pi) {',
     "  pi.on('session_start', async (event, ctx) => {",
+    '    if (!process.env.ORCA_PANE_KEY) return',
     "    if (event.reason !== 'startup') return",
     `    const prefill = process.env.${envVar}`,
     '    if (!prefill) return',

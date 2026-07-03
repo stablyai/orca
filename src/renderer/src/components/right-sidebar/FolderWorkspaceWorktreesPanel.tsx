@@ -1,4 +1,8 @@
 import WorktreeCard from '@/components/sidebar/WorktreeCard'
+import {
+  getLineageChildrenInlineStyle,
+  getLineageNestedRowGeometry
+} from '@/components/sidebar/worktree-list-indentation'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { Worktree } from '../../../../shared/types'
@@ -12,6 +16,8 @@ function stopNestedWorktreeCardBubble(event: React.SyntheticEvent<HTMLElement>):
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+  const experimentalNewWorktreeCardStyle =
+    useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle) === true
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
@@ -52,6 +58,12 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
     const lineageCollapsed = collapsedLineageWorktreeIds.has(worktree.id)
     const nextAncestorIds = new Set([...ancestorIds, worktree.id])
     const safeLineageChildren = lineageChildren.filter((child) => !nextAncestorIds.has(child.id))
+    const hasSafeLineageChildren = safeLineageChildren.length > 0
+    const lineageGeometry = getLineageNestedRowGeometry({
+      experimentalNewWorktreeCardStyle,
+      inheritedCardContentIndent: 0,
+      lineageDepth: ancestorIds.size
+    })
     return (
       <WorktreeCard
         key={worktree.id}
@@ -62,25 +74,36 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
         hideRepoBadge={false}
         nativeDragEnabled={false}
         flushSurface
+        contentIndent={lineageGeometry.cardContentIndent}
         affiliateListMode
         lineageChildCount={safeLineageChildren.length}
         lineageCollapsed={lineageCollapsed}
         lineageChildren={
-          !lineageCollapsed && safeLineageChildren.length > 0
+          !lineageCollapsed && hasSafeLineageChildren
             ? safeLineageChildren.map((child) => (
                 <div
                   key={child.id}
                   onClick={stopNestedWorktreeCardBubble}
                   onDoubleClick={stopNestedWorktreeCardBubble}
                   onDragStart={stopNestedWorktreeCardBubble}
+                  style={
+                    lineageGeometry.surfaceInset > 0
+                      ? { paddingLeft: lineageGeometry.surfaceInset }
+                      : undefined
+                  }
                 >
                   {renderChildWorktree(child, nextAncestorIds)}
                 </div>
               ))
             : undefined
         }
+        lineageChildrenStyle={
+          hasSafeLineageChildren
+            ? getLineageChildrenInlineStyle(lineageGeometry.lineageChildrenInlineOffset)
+            : undefined
+        }
         onLineageToggle={
-          safeLineageChildren.length > 0
+          hasSafeLineageChildren
             ? (event) => {
                 event.preventDefault()
                 event.stopPropagation()

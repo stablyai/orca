@@ -176,7 +176,8 @@ describe('StarNagService', () => {
 
     expect(window.webContents.send).toHaveBeenCalledTimes(1)
     expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
-      mode: 'gh'
+      mode: 'gh',
+      surface: 'card'
     })
     expect(consoleInfoMock).toHaveBeenCalledTimes(1)
     expect(consoleInfoMock).toHaveBeenCalledWith({
@@ -199,7 +200,8 @@ describe('StarNagService', () => {
     await flushAsyncWork()
 
     expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
-      mode: 'web'
+      mode: 'web',
+      surface: 'card'
     })
     expect(trackMock).toHaveBeenCalledWith('star_nag_outcome', {
       outcome: 'shown',
@@ -249,7 +251,8 @@ describe('StarNagService', () => {
     await flushAsyncWork()
 
     expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
-      mode: 'gh'
+      mode: 'gh',
+      surface: 'card'
     })
     expect(consoleInfoMock).toHaveBeenCalledWith({
       event: 'star_nag_shown',
@@ -299,6 +302,198 @@ describe('StarNagService', () => {
     expect(trackMock).not.toHaveBeenCalled()
   })
 
+  it('shows agent value moment prompts once per app version after eligibility passes', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service, ui } = createHarness()
+
+    service.registerIpcHandlers()
+    await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
+      status: 'ready',
+      mode: 'gh'
+    })
+    await getIpcHandler('star-nag:showAgentValueMoment')()
+    getIpcHandler('star-nag:dismiss')()
+    await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
+      status: 'skipped'
+    })
+
+    expect(window.webContents.send).toHaveBeenCalledTimes(1)
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
+      mode: 'gh',
+      surface: 'card'
+    })
+    expect(ui.starNagAgentValueMomentAppVersion).toBe('1.2.3')
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'shown', source: 'agent_value_moment' })
+    )
+  })
+
+  it('consumes agent value moment for cooldown suppression without showing later in the same version', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service, ui } = createHarness({
+      starNagDeferredUntil: Date.now() + 3 * 24 * 60 * 60 * 1000
+    })
+
+    service.registerIpcHandlers()
+    await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
+      status: 'skipped'
+    })
+    ui.starNagDeferredUntil = null
+    await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
+      status: 'skipped'
+    })
+
+    expect(window.webContents.send).not.toHaveBeenCalled()
+    expect(ui.starNagAgentValueMomentAppVersion).toBe('1.2.3')
+  })
+
+  it('does not consume agent value moment when no window can receive the card', async () => {
+    const { service, ui } = createHarness()
+
+    service.registerIpcHandlers()
+    await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
+      status: 'ready',
+      mode: 'gh'
+    })
+    await getIpcHandler('star-nag:showAgentValueMoment')()
+
+    expect(ui.starNagAgentValueMomentAppVersion).toBeUndefined()
+
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    await getIpcHandler('star-nag:showAgentValueMoment')()
+
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
+      mode: 'gh',
+      surface: 'card'
+    })
+    expect(ui.starNagAgentValueMomentAppVersion).toBe('1.2.3')
+  })
+
+  it('shows onboarding completed prompts on the toast surface', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service } = createHarness()
+
+    service.registerIpcHandlers()
+    await getIpcHandler('star-nag:onboardingCompleted')()
+
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
+      mode: 'gh',
+      surface: 'toast'
+    })
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'shown', source: 'onboarding_completed' })
+    )
+  })
+
+  it('lets onboarding completed supersede an already visible threshold card', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service, ui } = createHarness()
+
+    service.registerIpcHandlers()
+    getIpcHandler('star-nag:forceShow')()
+    await getIpcHandler('star-nag:onboardingCompleted')()
+
+    expect(window.webContents.send).toHaveBeenNthCalledWith(1, 'star-nag:show', {
+      mode: 'gh',
+      surface: 'card'
+    })
+    expect(window.webContents.send).toHaveBeenNthCalledWith(2, 'star-nag:hide')
+    expect(window.webContents.send).toHaveBeenNthCalledWith(3, 'star-nag:show', {
+      mode: 'gh',
+      surface: 'toast'
+    })
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'shown', source: 'onboarding_completed' })
+    )
+    expect(ui.starNagCompleted).toBeUndefined()
+  })
+
+  it('hides a superseded visible card when onboarding completion detects an existing star', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    checkOrcaStarredMock.mockResolvedValueOnce(true)
+    const { service, ui } = createHarness()
+
+    service.registerIpcHandlers()
+    getIpcHandler('star-nag:forceShow')()
+    await getIpcHandler('star-nag:onboardingCompleted')()
+
+    expect(window.webContents.send).toHaveBeenNthCalledWith(1, 'star-nag:show', {
+      mode: 'gh',
+      surface: 'card'
+    })
+    expect(window.webContents.send).toHaveBeenNthCalledWith(2, 'star-nag:hide')
+    expect(window.webContents.send).toHaveBeenCalledTimes(2)
+    expect(ui.starNagCompleted).toBe(true)
+  })
+
+  it('queues onboarding completed while a threshold star check is in flight', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const deferredStarCheck = createDeferred<boolean | null>()
+    checkOrcaStarredMock.mockReturnValueOnce(deferredStarCheck.promise).mockResolvedValueOnce(null)
+    const { service, emitAgentStarted, ui } = createHarness()
+
+    service.start()
+    service.registerIpcHandlers()
+    emitAgentStarted(45)
+    await getIpcHandler('star-nag:onboardingCompleted')()
+
+    expect(window.webContents.send).not.toHaveBeenCalled()
+
+    deferredStarCheck.resolve(false)
+    await flushAsyncWork()
+
+    expect(window.webContents.send).toHaveBeenNthCalledWith(1, 'star-nag:show', {
+      mode: 'gh',
+      surface: 'card'
+    })
+    expect(window.webContents.send).toHaveBeenNthCalledWith(2, 'star-nag:hide')
+    expect(window.webContents.send).toHaveBeenNthCalledWith(3, 'star-nag:show', {
+      mode: 'web',
+      surface: 'toast'
+    })
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'shown', source: 'onboarding_completed', mode: 'web' })
+    )
+    expect(ui.starNagCompleted).toBeUndefined()
+  })
+
+  it('queues onboarding completed while an agent value moment star check is in flight', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const deferredStarCheck = createDeferred<boolean | null>()
+    checkOrcaStarredMock.mockReturnValueOnce(deferredStarCheck.promise).mockResolvedValueOnce(null)
+    const { service, ui } = createHarness()
+
+    service.registerIpcHandlers()
+    const agentValueMoment = getIpcHandler('star-nag:agentValueMoment')()
+    await getIpcHandler('star-nag:onboardingCompleted')()
+
+    deferredStarCheck.resolve(false)
+    await expect(agentValueMoment).resolves.toEqual({ status: 'ready', mode: 'gh' })
+    await flushAsyncWork()
+
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
+      mode: 'web',
+      surface: 'toast'
+    })
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'shown', source: 'onboarding_completed', mode: 'web' })
+    )
+    expect(ui.starNagCompleted).toBeUndefined()
+  })
+
   it('allows force_show to bypass the persisted cooldown', () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
@@ -310,7 +505,8 @@ describe('StarNagService', () => {
     getIpcHandler('star-nag:forceShow')()
 
     expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
-      mode: 'gh'
+      mode: 'gh',
+      surface: 'card'
     })
   })
 
@@ -355,7 +551,8 @@ describe('StarNagService', () => {
     forceShow()
 
     expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
-      mode: 'gh'
+      mode: 'gh',
+      surface: 'card'
     })
     expect(consoleInfoMock).toHaveBeenCalledWith({
       event: 'star_nag_shown',
@@ -480,7 +677,8 @@ describe('StarNagService', () => {
     expect(window.webContents.send).toHaveBeenCalledTimes(1)
     expect(consoleInfoMock).toHaveBeenCalledTimes(1)
     expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
-      mode: 'web'
+      mode: 'web',
+      surface: 'card'
     })
     expect(consoleInfoMock).toHaveBeenCalledWith({
       event: 'star_nag_shown',
@@ -616,8 +814,9 @@ describe('StarNagService', () => {
       'star_nag_outcome',
       expect.objectContaining({ outcome: 'opened_repo', mode: 'web' })
     )
-    expect(opened.ui.starNagCompleted).toBe(true)
-    expect(opened.ui.starNagDeferredUntil).toBeNull()
+    expect(opened.ui.starNagCompleted).toBeUndefined()
+    expect(opened.ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
+    expect(opened.ui.starNagNextThreshold).toBe(STAR_NAG_INITIAL_THRESHOLD * 2)
   })
 
   it('emits opened_repo at most once for one prompt session', () => {
@@ -680,6 +879,43 @@ describe('StarNagService', () => {
       source: 'star_nag',
       nth_repo_added: 3
     })
+  })
+
+  it('uses the source moment for confirmed direct-star success telemetry', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service } = createHarness()
+
+    service.registerIpcHandlers()
+    await getIpcHandler('star-nag:onboardingCompleted')()
+    await getIpcHandler('star-nag:starOrca')()
+
+    expect(trackMock).toHaveBeenCalledWith('app_starred_orca', {
+      source: 'onboarding_completed',
+      nth_repo_added: 3
+    })
+  })
+
+  it('does not emit confirmed star telemetry for web fallback handoff', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    checkOrcaStarredMock.mockResolvedValue(null)
+    const { service, ui } = createHarness()
+
+    service.registerIpcHandlers()
+    await getIpcHandler('star-nag:onboardingCompleted')()
+    getIpcHandler('star-nag:openWeb')()
+
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'opened_repo', source: 'onboarding_completed' })
+    )
+    expect(trackMock).not.toHaveBeenCalledWith(
+      'app_starred_orca',
+      expect.objectContaining({ source: 'onboarding_completed' })
+    )
+    expect(ui.starNagCompleted).toBeUndefined()
+    expect(ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
   })
 
   it('uses fresh cohort context for canonical app_starred_orca success telemetry', async () => {
@@ -808,7 +1044,7 @@ describe('StarNagService', () => {
       'star_nag_outcome',
       expect.objectContaining({ outcome: 'opened_repo', mode: 'web' })
     )
-    expect(ui.starNagCompleted).toBe(true)
-    expect(ui.starNagDeferredUntil).toBeNull()
+    expect(ui.starNagCompleted).toBeUndefined()
+    expect(ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
   })
 })

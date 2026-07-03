@@ -183,32 +183,69 @@ export async function updateIssueBySlug(
     removeAssignees
   } = args.updates
 
-  // Title / body / state go through PATCH /repos/{owner}/{repo}/issues/{n}.
+  if (duplicateOf !== undefined && (state !== 'closed' || stateReason !== 'duplicate')) {
+    return {
+      ok: false,
+      error: {
+        type: 'validation_error',
+        message: 'Duplicate target is only valid when closing as duplicate.'
+      }
+    }
+  }
+  if (state === 'closed' && stateReason === 'duplicate' && duplicateOf === undefined) {
+    return {
+      ok: false,
+      error: {
+        type: 'validation_error',
+        message: 'Duplicate target issue number is required.'
+      }
+    }
+  }
+  if (duplicateOf !== undefined) {
+    const duplicate = assertPositiveInt(duplicateOf, 'duplicateOf')
+    if (!duplicate.ok) {
+      return { ok: false, error: duplicate.error }
+    }
+  }
+
+  // Title/body go through PATCH /repos/{owner}/{repo}/issues/{n}.
+  // State uses gh issue close/reopen so duplicate closes can record a target.
   // Labels/assignees go through their dedicated endpoints.
   const base = `repos/${args.owner}/${args.repo}/issues/${args.number}`
 
+  if (state !== undefined) {
+    const stateArgs =
+      state === 'closed'
+        ? ['issue', 'close', String(args.number), '--repo', `${args.owner}/${args.repo}`]
+        : ['issue', 'reopen', String(args.number), '--repo', `${args.owner}/${args.repo}`]
+    if (state === 'closed') {
+      if (stateReason === 'completed') {
+        stateArgs.push('--reason', 'completed')
+      } else if (stateReason === 'not_planned') {
+        stateArgs.push('--reason', 'not planned')
+      } else if (stateReason === 'duplicate') {
+        stateArgs.push('--duplicate-of', String(duplicateOf))
+      }
+    }
+    await acquire()
+    try {
+      await ghExecFileAsync(stateArgs, { encoding: 'utf-8' })
+    } catch (err) {
+      const { stderr, stdout } = extractExecError(err)
+      return { ok: false, error: classifyProjectError(stderr, stdout) }
+    } finally {
+      release()
+    }
+  }
+
   // 1) PATCH body
-  if (
-    title !== undefined ||
-    body !== undefined ||
-    state !== undefined ||
-    stateReason !== undefined
-  ) {
+  if (title !== undefined || body !== undefined) {
     const patchArgs: string[] = ['-X', 'PATCH', base]
     if (title !== undefined) {
       patchArgs.push('--raw-field', `title=${title}`)
     }
     if (body !== undefined) {
       patchArgs.push('--raw-field', `body=${body}`)
-    }
-    if (state !== undefined) {
-      patchArgs.push('--raw-field', `state=${state}`)
-    }
-    if (stateReason !== undefined) {
-      patchArgs.push('--raw-field', `state_reason=${stateReason}`)
-    }
-    if (duplicateOf !== undefined) {
-      patchArgs.push('--raw-field', `duplicate_of=${duplicateOf}`)
     }
     const r = await runRest<unknown>(patchArgs)
     if (!r.ok) {

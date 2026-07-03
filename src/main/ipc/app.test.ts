@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, appExitMock, appQuitMock, appRelaunchMock, execFileMock } = vi.hoisted(() => ({
+const {
+  handlers,
+  appExitMock,
+  appQuitMock,
+  appRelaunchMock,
+  execFileMock,
+  destroySystemTrayMock,
+  showOpenDialogMock,
+  grantFloatingWorkspaceDirectoryMock
+} = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
   appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
-  execFileMock: vi.fn()
+  execFileMock: vi.fn(),
+  destroySystemTrayMock: vi.fn(),
+  showOpenDialogMock: vi.fn(),
+  grantFloatingWorkspaceDirectoryMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -24,7 +36,7 @@ vi.mock('electron', () => ({
     fromWebContents: vi.fn(() => null)
   },
   dialog: {
-    showOpenDialog: vi.fn()
+    showOpenDialog: showOpenDialogMock
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
@@ -35,6 +47,16 @@ vi.mock('electron', () => ({
 
 vi.mock('@electron-toolkit/utils', () => ({
   is: { dev: true }
+}))
+
+vi.mock('../tray/system-tray', () => ({
+  destroySystemTray: destroySystemTrayMock
+}))
+
+vi.mock('./floating-workspace-directory', () => ({
+  ensureDefaultFloatingWorkspacePath: vi.fn(),
+  grantFloatingWorkspaceDirectory: grantFloatingWorkspaceDirectoryMock,
+  resolveFloatingTerminalCwd: vi.fn()
 }))
 
 import { registerAppHandlers } from './app'
@@ -49,6 +71,9 @@ describe('registerAppHandlers', () => {
     appQuitMock.mockReset()
     appRelaunchMock.mockReset()
     execFileMock.mockReset()
+    destroySystemTrayMock.mockReset()
+    showOpenDialogMock.mockReset()
+    grantFloatingWorkspaceDirectoryMock.mockReset()
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
 
@@ -70,8 +95,12 @@ describe('registerAppHandlers', () => {
     await relaunchPromise
     await vi.advanceTimersByTimeAsync(150)
 
+    expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
+    expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
+      appExitMock.mock.invocationCallOrder[0]
+    )
   })
 
   it('waits for pre-relaunch cleanup before exiting', async () => {
@@ -146,7 +175,70 @@ describe('registerAppHandlers', () => {
     expect(appExitMock).not.toHaveBeenCalled()
   })
 
-  it('falls back when the macOS keyboard layout probe never reports completion', async () => {
+  it('returns the selected macOS input mode before the keyboard layout fallback', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        null,
+        JSON.stringify([
+          { 'Bundle ID': 'com.apple.PressAndHold', InputSourceKind: 'Non Keyboard Input Method' },
+          {
+            'Bundle ID': 'com.apple.inputmethod.SCIM',
+            'Input Mode': 'com.apple.inputmethod.SCIM.ITABC',
+            InputSourceKind: 'Input Mode'
+          }
+        ])
+      )
+      return { kill: vi.fn() }
+    })
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBe(
+      'com.apple.inputmethod.SCIM.ITABC'
+    )
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledWith(
+      '/usr/bin/plutil',
+      expect.arrayContaining(['AppleSelectedInputSources']),
+      expect.any(Object),
+      expect.any(Function)
+    )
+  })
+
+  it('falls back to the keyboard layout when no keyboard input mode is selected', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    execFileMock
+      .mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(
+          null,
+          JSON.stringify([
+            {
+              'Bundle ID': 'com.apple.PressAndHold',
+              InputSourceKind: 'Non Keyboard Input Method'
+            }
+          ])
+        )
+        return { kill: vi.fn() }
+      })
+      .mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, 'com.apple.keylayout.ABC\n')
+        return { kill: vi.fn() }
+      })
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBe(
+      'com.apple.keylayout.ABC'
+    )
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/usr/bin/defaults',
+      ['read', 'com.apple.HIToolbox', 'AppleCurrentKeyboardLayoutInputSourceID'],
+      expect.any(Object),
+      expect.any(Function)
+    )
+  })
+
+  it('falls back when macOS keyboard input source probes never report completion', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
     const killMock = vi.fn()
     execFileMock.mockImplementation(() => ({ kill: killMock }))
@@ -160,10 +252,27 @@ describe('registerAppHandlers', () => {
       return result
     })
 
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1000)
 
     expect(settled).toBe(true)
     await expect(resultPromise).resolves.toBeNull()
-    expect(killMock).toHaveBeenCalled()
+    expect(killMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('picks an existing floating workspace directory without enabling native directory creation', async () => {
+    const store = {}
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/Users/kaylee/notes']
+    })
+    registerAppHandlers(store as never)
+
+    await expect(
+      handlers.get('app:pickFloatingWorkspaceDirectory')?.({ sender: {} })
+    ).resolves.toBe('/Users/kaylee/notes')
+    expect(showOpenDialogMock).toHaveBeenCalledWith({
+      properties: ['openDirectory']
+    })
+    expect(grantFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
   })
 })

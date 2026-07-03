@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 
 type Props = {
   command: string
+  installedCommand: string
   skillDetected: boolean
   skillLoading: boolean
   skillError: string | null
@@ -18,6 +19,7 @@ type Props = {
 
 export function BrowserUseSkillStep({
   command,
+  installedCommand,
   skillDetected,
   skillLoading,
   skillError,
@@ -40,6 +42,7 @@ export function BrowserUseSkillStep({
         "Enables agents to navigate and verify pages in Orca's browser."
       )}
       command={command}
+      installedCommand={installedCommand}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="settings-browser-use-skill-terminal"

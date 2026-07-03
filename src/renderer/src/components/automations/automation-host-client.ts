@@ -22,9 +22,13 @@ type RuntimeAutomationUpdateInput = Omit<AutomationUpdateInput, 'projectId' | 'w
   workspace?: string
 }
 
-type AutomationHostTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
+export type AutomationHostTarget =
+  | { kind: 'local' }
+  | { kind: 'environment'; environmentId: string }
 
-function getRuntimeTargetFromHostId(hostId: string | null | undefined): AutomationHostTarget {
+export function getAutomationTargetFromHostId(
+  hostId: string | null | undefined
+): AutomationHostTarget {
   const parsed = parseExecutionHostId(hostId)
   return parsed?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsed.environmentId }
@@ -39,13 +43,17 @@ export function getAutomationListTarget(
 }
 
 export function getAutomationOwnerTarget(
-  automation: Pick<Automation, 'runContext'>
+  automation: Pick<Automation, 'runContext'>,
+  sourceTarget?: AutomationHostTarget | null
 ): AutomationHostTarget {
-  return getRuntimeTargetFromHostId(automation.runContext?.hostId)
+  if (sourceTarget?.kind === 'environment') {
+    return sourceTarget
+  }
+  return getAutomationTargetFromHostId(automation.runContext?.hostId)
 }
 
 export function getAutomationCreateTarget(input: AutomationCreateInput): AutomationHostTarget {
-  return getRuntimeTargetFromHostId(input.runContext?.hostId)
+  return getAutomationTargetFromHostId(input.runContext?.hostId)
 }
 
 function toRuntimeAutomationCreateInput(
@@ -117,9 +125,10 @@ export async function createAutomationForTarget(input: AutomationCreateInput): P
 
 export async function updateAutomationForTarget(
   automation: Automation,
-  updates: AutomationUpdateInput
+  updates: AutomationUpdateInput,
+  sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
-  const target = getAutomationOwnerTarget(automation)
+  const target = getAutomationOwnerTarget(automation, sourceTarget)
   if (target.kind === 'local') {
     return await window.api.automations.update({ id: automation.id, updates })
   }
@@ -132,8 +141,11 @@ export async function updateAutomationForTarget(
   return result.automation
 }
 
-export async function deleteAutomationForTarget(automation: Automation): Promise<void> {
-  const target = getAutomationOwnerTarget(automation)
+export async function deleteAutomationForTarget(
+  automation: Automation,
+  sourceTarget?: AutomationHostTarget | null
+): Promise<void> {
+  const target = getAutomationOwnerTarget(automation, sourceTarget)
   if (target.kind === 'local') {
     await window.api.automations.delete({ id: automation.id })
     return
@@ -141,8 +153,11 @@ export async function deleteAutomationForTarget(automation: Automation): Promise
   await callRuntimeRpc(target, 'automation.delete', { id: automation.id }, { timeoutMs: 15_000 })
 }
 
-export async function runAutomationNowForTarget(automation: Automation): Promise<AutomationRun> {
-  const target = getAutomationOwnerTarget(automation)
+export async function runAutomationNowForTarget(
+  automation: Automation,
+  sourceTarget?: AutomationHostTarget | null
+): Promise<AutomationRun> {
+  const target = getAutomationOwnerTarget(automation, sourceTarget)
   if (target.kind === 'local') {
     return await window.api.automations.runNow({ id: automation.id })
   }

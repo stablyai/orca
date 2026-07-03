@@ -1,0 +1,298 @@
+import { useMemo } from 'react'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import {
+  isPathInsideOrEqual,
+  isRuntimePathAbsolute,
+  normalizeRuntimePathForComparison,
+  normalizeRuntimePathSeparators
+} from '../../../../shared/cross-platform-path'
+import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { Worktree } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
+
+export type AiVaultSessionWorktreeStatus = 'current' | 'active' | 'archived' | 'unavailable'
+
+export type AiVaultSessionWorktreeInfo = {
+  status: AiVaultSessionWorktreeStatus
+  label: string
+  path: string
+  worktreeId?: string
+}
+
+type WorktreeCandidate = {
+  worktree: Worktree
+  path: string
+  status: Exclude<AiVaultSessionWorktreeStatus, 'current'>
+  source: 'current-path' | 'prior-path'
+}
+
+export function resolveAiVaultSessionWorktreeInfo({
+  session,
+  worktrees,
+  activeWorktreeId
+}: {
+  session: AiVaultSession
+  worktrees: readonly Worktree[]
+  activeWorktreeId: string | null
+}): AiVaultSessionWorktreeInfo | null {
+  if (!session.cwd) {
+    return null
+  }
+
+  const candidates = buildWorktreeCandidates(worktrees)
+    .filter((candidate) => isSessionInWorktreePath(candidate.path, session.cwd!))
+    .sort(compareWorktreeCandidates)
+
+  const best = candidates[0]
+  if (!best) {
+    return {
+      status: 'unavailable',
+      label: compactPathLabel(session.cwd),
+      path: session.cwd
+    }
+  }
+
+  const status =
+    best.worktree.id === activeWorktreeId
+      ? 'current'
+      : best.worktree.isArchived
+        ? 'archived'
+        : best.status
+
+  return {
+    status,
+    label: best.worktree.displayName || compactPathLabel(best.path),
+    path: best.path,
+    worktreeId: best.worktree.id
+  }
+}
+
+export function extractWorktreePathFromSessionTitle(title: string): string | null {
+  const trimmed = title.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const suffixMatch = trimmed.match(/\s-\s*Worktree:\s*(.+)$/i)
+  if (suffixMatch?.[1]) {
+    return suffixMatch[1].trim()
+  }
+
+  const inlineMatch = trimmed.match(/\bWorktree:\s*(.+)$/i)
+  return inlineMatch?.[1]?.trim() ?? null
+}
+
+export function resolveAiVaultSessionWorktreeDisplay(args: {
+  session: AiVaultSession
+  worktrees: readonly Worktree[]
+  activeWorktreeId: string | null
+}): AiVaultSessionWorktreeInfo | null {
+  const resolved = resolveAiVaultSessionWorktreeInfo(args)
+  if (resolved) {
+    return resolved
+  }
+
+  const cwd = args.session.cwd?.trim()
+  if (cwd) {
+    return unavailableWorktreeInfo(cwd)
+  }
+
+  const titlePath = extractWorktreePathFromSessionTitle(args.session.title)
+  if (titlePath) {
+    return unavailableWorktreeInfo(titlePath)
+  }
+
+  const branch = args.session.branch?.trim()
+  if (branch) {
+    return {
+      status: 'unavailable',
+      label: branch,
+      path: branch
+    }
+  }
+
+  return null
+}
+
+export function useAiVaultSessionWorktreeMap({
+  sessions,
+  worktrees,
+  activeWorktreeId
+}: {
+  sessions: readonly AiVaultSession[]
+  worktrees: readonly Worktree[]
+  activeWorktreeId: string | null
+}): ReadonlyMap<string, AiVaultSessionWorktreeInfo> {
+  return useMemo(
+    () =>
+      new Map(
+        sessions.flatMap((session) => {
+          const worktreeInfo = resolveAiVaultSessionWorktreeDisplay({
+            session,
+            worktrees,
+            activeWorktreeId
+          })
+          return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
+        })
+      ),
+    [activeWorktreeId, sessions, worktrees]
+  )
+}
+
+export function canJumpToAiVaultSessionWorktree(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+): boolean {
+  return Boolean(
+    worktreeInfo?.worktreeId &&
+    worktreeInfo.status !== 'archived' &&
+    worktreeInfo.status !== 'unavailable'
+  )
+}
+
+// Why: a session in the worktree you're already viewing has nowhere to jump,
+// so we hide the affordance rather than offering a self-jump (the "Current
+// worktree" badge already signals where it lives).
+export function isAiVaultSessionInCurrentWorktree(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+): boolean {
+  return worktreeInfo?.status === 'current'
+}
+
+export function aiVaultWorktreeJumpTooltip(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+): string {
+  if (canJumpToAiVaultSessionWorktree(worktreeInfo)) {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToWorktree',
+      'Jump to Worktree'
+    )
+  }
+  if (!worktreeInfo) {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.noRecordedWorktree',
+      'No worktree was recorded for this session.'
+    )
+  }
+  if (worktreeInfo.status === 'archived') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.archivedJumpUnavailable',
+      'This session is in an archived worktree.'
+    )
+  }
+  if (worktreeInfo.status === 'unavailable') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeMatch',
+      'No active worktree matches this session.'
+    )
+  }
+  return translate(
+    'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeTarget',
+    'No active worktree is available.'
+  )
+}
+
+function buildWorktreeCandidates(worktrees: readonly Worktree[]): WorktreeCandidate[] {
+  const candidates: WorktreeCandidate[] = []
+  for (const worktree of worktrees) {
+    if (hasUsablePath(worktree.path)) {
+      candidates.push({
+        worktree,
+        path: worktree.path,
+        status: worktree.isArchived ? 'archived' : 'active',
+        source: 'current-path'
+      })
+    }
+    for (const priorWorktreeId of worktree.priorWorktreeIds ?? []) {
+      const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
+      if (!parsed || parsed.repoId !== worktree.repoId || !hasUsablePath(parsed.worktreePath)) {
+        continue
+      }
+      candidates.push({
+        worktree,
+        path: parsed.worktreePath,
+        status: worktree.isArchived ? 'archived' : 'active',
+        source: 'prior-path'
+      })
+    }
+  }
+  return candidates
+}
+
+function hasUsablePath(pathValue: string): boolean {
+  const trimmed = pathValue.trim()
+  return Boolean(trimmed && isRuntimePathAbsolute(trimmed))
+}
+
+function isSessionInWorktreePath(worktreePath: string, sessionCwd: string): boolean {
+  if (isPathInsideOrEqual(worktreePath, sessionCwd)) {
+    return true
+  }
+  const wslPath = parseWslUncPath(worktreePath)
+  return wslPath ? isPathInsideOrEqual(wslPath.linuxPath, sessionCwd) : false
+}
+
+function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandidate): number {
+  const lengthDifference =
+    normalizeRuntimePathForComparison(right.path).length -
+    normalizeRuntimePathForComparison(left.path).length
+  if (lengthDifference !== 0) {
+    return lengthDifference
+  }
+  if (left.source === right.source) {
+    return 0
+  }
+  return left.source === 'current-path' ? -1 : 1
+}
+
+export function aiVaultWorktreeCompactPath(pathValue: string): string {
+  const parts = normalizeRuntimePathSeparators(pathValue).split('/').filter(Boolean)
+  if (parts.length >= 2) {
+    return parts.slice(-2).join('/')
+  }
+  return parts[0] ?? pathValue
+}
+
+export function shouldShowAiVaultWorktreeStatusBadge(
+  status: AiVaultSessionWorktreeStatus
+): boolean {
+  // Why: "active" repeats the branch label without adding scan value in dense rows.
+  return status !== 'active'
+}
+
+function unavailableWorktreeInfo(pathValue: string): AiVaultSessionWorktreeInfo {
+  return {
+    status: 'unavailable',
+    label: compactPathLabel(pathValue),
+    path: pathValue
+  }
+}
+
+function compactPathLabel(pathValue: string): string {
+  return aiVaultWorktreeCompactPath(pathValue)
+}
+
+export function aiVaultWorktreeStatusLabel(status: AiVaultSessionWorktreeStatus): string {
+  if (status === 'current') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.currentWorktree',
+      'Current worktree'
+    )
+  }
+  if (status === 'active') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.activeWorktree',
+      'Active worktree'
+    )
+  }
+  if (status === 'archived') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultSessionWorktree.archivedWorktree',
+      'Archived worktree'
+    )
+  }
+  return translate(
+    'auto.components.right.sidebar.AiVaultSessionWorktree.unavailableWorktree',
+    'Unavailable worktree'
+  )
+}

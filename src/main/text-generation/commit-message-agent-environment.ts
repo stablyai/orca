@@ -44,9 +44,9 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
     return null
   }
   // Why: each kind owns a distinct ORCA_*_SOURCE_* shadow so a headless commit
-  // run from inside an OMP overlay restores the OMP source dir, never the Pi
-  // one (and vice versa). PI_CODING_AGENT_DIR is the binary-facing var both
-  // kinds emit — see src/main/pi/titlebar-extension-service.ts.
+  // run from inside a legacy OMP overlay restores the OMP source dir, never
+  // the Pi one (and vice versa). PI_CODING_AGENT_DIR is the binary-facing var
+  // both kinds consume — see src/main/pi/titlebar-extension-service.ts.
   const sourceVar =
     agentId === 'opencode'
       ? 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'

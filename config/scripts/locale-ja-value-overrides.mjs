@@ -210,6 +210,7 @@ export const JA_VALUE_OVERRIDES = {
   Ding: 'ディン',
   'Take back': '操作を取り戻す',
   'Mobile driving': 'モバイルで操作中',
+  'Phone driving': 'スマホ操作中',
   'Mobile is driving this browser': 'モバイルがこのブラウザを操作しています',
   'Wants to run': '実行をリクエスト中',
   'No states found': 'ステータスが見つかりません',

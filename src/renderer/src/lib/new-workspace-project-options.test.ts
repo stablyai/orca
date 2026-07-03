@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES,
   buildNewWorkspaceFolderSourceOptions,
   buildNewWorkspaceProjectOptions,
-  getRepoIdFromNewWorkspaceFolderSourceOptionId
+  getRepoIdFromNewWorkspaceFolderSourceOptionId,
+  isNewWorkspaceProjectOptionQueryTooLarge,
+  searchNewWorkspaceProjectOptions,
+  type NewWorkspaceProjectOption
 } from './new-workspace-project-options'
 import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
 
@@ -102,6 +106,51 @@ describe('buildNewWorkspaceProjectOptions', () => {
     })
 
     expect(options.map((option) => option.id)).toEqual(['github:stablyai/orca'])
+  })
+
+  it('filters project options by display name and detail', () => {
+    const options: NewWorkspaceProjectOption[] = [
+      {
+        kind: 'project',
+        id: 'orca',
+        projectId: 'orca',
+        displayName: 'Orca',
+        badgeColor: '#111111',
+        detail: 'stablyai/orca'
+      },
+      {
+        kind: 'project',
+        id: 'docs',
+        projectId: 'docs',
+        displayName: 'Docs',
+        badgeColor: '#222222',
+        detail: 'stablyai/docs'
+      }
+    ]
+
+    expect(searchNewWorkspaceProjectOptions(options, 'docs')).toEqual([options[1]])
+    expect(searchNewWorkspaceProjectOptions(options, 'stablyai/orca')).toEqual([options[0]])
+  })
+
+  it('rejects oversized pasted searches before reading project options', () => {
+    const oversizedQuery = 'secret-project-option'.repeat(
+      NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES
+    )
+    const throwingOptions = [
+      {
+        id: 'secret',
+        badgeColor: '#111111',
+        get displayName(): string {
+          throw new Error('oversized project option queries must not scan names')
+        },
+        get detail(): string {
+          throw new Error('oversized project option queries must not scan details')
+        }
+      }
+    ] as NewWorkspaceProjectOption[]
+
+    expect(isNewWorkspaceProjectOptionQueryTooLarge(oversizedQuery)).toBe(true)
+    expect(searchNewWorkspaceProjectOptions(throwingOptions, oversizedQuery)).toEqual([])
   })
 })
 

@@ -1,14 +1,16 @@
-import { execFile as execFileCb } from 'child_process'
-import { existsSync, readFileSync } from 'fs'
-import { homedir } from 'os'
-import { win32 as pathWin32 } from 'path'
-import { promisify } from 'util'
+import { execFile as execFileCb } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { win32 as pathWin32 } from 'node:path'
+import { promisify } from 'node:util'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from '../shared/agent-process-recognition'
+import { getFirstCommandToken } from '../shared/command-token-scanner'
+import { getProcessTableSnapshot } from '../shared/process-table-snapshot'
 import { isShellProcess } from '../shared/shell-process-detection'
 import {
   resolveWindowsAgentForegroundProcess,
@@ -97,7 +99,7 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
   // check+read pair races a concurrent exit anyway, and the catch already
   // falls through to lsof.
   try {
-    const { readlinkSync } = await import('fs')
+    const { readlinkSync } = await import('node:fs')
     return readlinkSync(`/proc/${pid}/cwd`)
   } catch {
     // Fall through
@@ -197,7 +199,7 @@ function candidateScore(row: ProcessRow & { depth: number }): number {
 }
 
 function processCommandToken(command: string): string {
-  return command.trim().split(/\s+/, 1)[0] ?? ''
+  return getFirstCommandToken(command)
 }
 
 function candidateMatchesFallbackWrapper(candidate: ProcessRow, fallbackProcess: string): boolean {
@@ -209,10 +211,7 @@ async function getRecognizedForegroundDescendant(
   fallbackProcess?: string | null
 ): Promise<string | null> {
   try {
-    const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=,stat=,command='], {
-      encoding: 'utf-8',
-      timeout: 3000
-    })
+    const stdout = await getProcessTableSnapshot()
     const rows = parsePsRows(stdout)
     const root = rows.find((row) => row.pid === pid)
     const candidates = collectDescendants(rows, pid).sort(

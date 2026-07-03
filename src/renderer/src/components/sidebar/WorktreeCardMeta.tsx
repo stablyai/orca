@@ -1,7 +1,8 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import { CalendarClock, CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -12,7 +13,7 @@ import {
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetaIconBadge, MetadataActionIcon } from './WorktreeCardMetadataControls'
-import { IssueStateBadge, LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
+import { LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type {
@@ -24,6 +25,8 @@ import type {
 } from './worktree-card-meta-types'
 import { translate } from '@/i18n/i18n'
 import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
+import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
+import { WorktreeCardIssueDetailSection } from './WorktreeCardIssueDetailSection'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -41,19 +44,20 @@ export function hasWorktreeCardDetails({
   issue,
   linearIssue,
   review,
-  comment
+  comment,
+  automationProvenance
 }: WorktreeCardMetaBadgesProps): boolean {
-  return Boolean(issue || linearIssue || review || hasComment(comment))
+  return Boolean(issue || linearIssue || review || hasComment(comment) || automationProvenance)
 }
 
 export const WorktreeCardMetaBadges = React.forwardRef<
   HTMLDivElement,
   WorktreeCardMetaBadgesRootProps
 >(function WorktreeCardMetaBadges(
-  { issue, linearIssue, review, comment, className, ...props },
+  { issue, linearIssue, review, comment, automationProvenance, className, ...props },
   ref
 ): React.JSX.Element | null {
-  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
+  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance })) {
     return null
   }
 
@@ -77,6 +81,16 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           )}
         >
           <StickyNote className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {automationProvenance && (
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.automationCreated',
+            'Created by automation'
+          )}
+        >
+          <CalendarClock className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {issue && (
@@ -121,10 +135,12 @@ export function WorktreeCardDetailsHover({
   linearIssue,
   review,
   comment,
+  automationProvenance,
   children,
   branchName,
   workspaceTitle,
   identityOrder = 'workspace-first',
+  automationHostId,
   detailsAfter,
   openDelay = 250,
   closeDelay = 120,
@@ -134,13 +150,17 @@ export function WorktreeCardDetailsHover({
   onOpenLinearIssueInOrca,
   onOpenReviewInOrca,
   onUnlinkReview,
+  onOpenAutomation,
+  onOpenAutomationRun,
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
   const {
     hoverOpen,
+    issueMenuOpen,
     reviewMenuOpen,
     handleHoverOpenChange,
+    handleIssueMenuOpenChange,
     handleReviewMenuOpenChange,
     closeHover
   } = hoverControl ?? internalHoverControl
@@ -151,22 +171,60 @@ export function WorktreeCardDetailsHover({
     },
     [closeHover]
   )
+  const copyLinkedWorkItemLink = React.useCallback(async (url: string, label: string) => {
+    try {
+      // Why: Electron clipboard IPC remains reliable from nested hover/dropdown
+      // overlays where browser clipboard activation can be lost.
+      await window.api.ui.writeClipboardText(url)
+      toast.success(
+        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkSuccess', '{{value0}} copied', {
+          value0: label
+        })
+      )
+    } catch {
+      toast.error(
+        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkFailure', 'Failed to copy link')
+      )
+    }
+  }, [])
+  const handleCopyIssueLink = React.useCallback((): void => {
+    if (!issue?.url) {
+      return
+    }
+    closeHover()
+    void copyLinkedWorkItemLink(
+      issue.url,
+      translate('auto.components.sidebar.WorktreeCardMeta.issueLinkLabel', 'Issue link')
+    )
+  }, [closeHover, copyLinkedWorkItemLink, issue?.url])
+  const handleCopyReviewLink = React.useCallback((): void => {
+    if (!review?.url) {
+      return
+    }
+    void copyLinkedWorkItemLink(
+      review.url,
+      translate('auto.components.sidebar.WorktreeCardMeta.reviewLinkLabel', '{{value0}} link', {
+        value0: getReviewLabel(review)
+      })
+    )
+  }, [copyLinkedWorkItemLink, review])
 
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
 
   if (
     !showIdentityHeader &&
-    !hasWorktreeCardDetails({ issue, linearIssue, review, comment }) &&
+    !hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance }) &&
     !detailsAfter
   ) {
     return children
   }
 
-  const issueLabels = issue?.labels ?? []
   const branchIdentity = branchName ? (
     <div
       className={cn(
-        'truncate font-mono text-[11px] leading-none text-muted-foreground',
+        // Why: the hover panel is where users read full git identity; wrap instead
+        // of truncating so long branch names stay readable like issue titles below.
+        'break-words font-mono text-[11px] leading-snug text-muted-foreground',
         identityOrder === 'workspace-first' && 'mt-1'
       )}
     >
@@ -177,7 +235,7 @@ export function WorktreeCardDetailsHover({
     workspaceTitle && workspaceTitle !== branchName ? (
       <div
         className={cn(
-          'truncate text-[13px] font-semibold leading-snug text-foreground',
+          'break-words text-[13px] font-semibold leading-snug text-foreground',
           identityOrder === 'branch-first' && 'mt-1'
         )}
       >
@@ -212,70 +270,16 @@ export function WorktreeCardDetailsHover({
             </div>
           )}
 
-          {issue && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<CircleDot className="size-3 text-muted-foreground" />}
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.e97d8f2876',
-                  'Issue #{{value0}}',
-                  { value0: issue.number }
-                )}
-                actions={
-                  <>
-                    {onEditIssue && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
-                          'Edit issue'
-                        )}
-                        onClick={onEditIssue}
-                      >
-                        <Pencil className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {issue.url && onOpenGitHubIssueInOrca && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
-                          'Open in Orca'
-                        )}
-                        onClick={dismissAndRun(onOpenGitHubIssueInOrca)}
-                      >
-                        <MonitorUp className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {issue.url && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.b22f058067',
-                          'View on GitHub'
-                        )}
-                        href={issue.url}
-                      >
-                        <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                  </>
-                }
-              />
-              <WorktreeCardDetailSectionContent className="space-y-1.5">
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {issue.title}
-                </div>
-                {(issue.state || issueLabels.length > 0) && (
-                  <div className="flex flex-wrap gap-1">
-                    {issue.state && <IssueStateBadge state={issue.state} />}
-                    {issueLabels.map((label) => (
-                      <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
+          <WorktreeCardIssueDetailSection
+            issue={issue}
+            issueMenuOpen={issueMenuOpen}
+            onIssueMenuOpenChange={handleIssueMenuOpenChange}
+            onCopyIssueLink={issue?.url ? handleCopyIssueLink : undefined}
+            onEditIssue={onEditIssue}
+            onOpenGitHubIssueInOrca={
+              onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
+            }
+          />
 
           {linearIssue && (
             <WorktreeCardDetailSection>
@@ -339,9 +343,21 @@ export function WorktreeCardDetailsHover({
             reviewMenuOpen={reviewMenuOpen}
             onReviewMenuOpenChange={handleReviewMenuOpenChange}
             onOpenReviewInOrca={onOpenReviewInOrca}
+            onCopyReviewLink={review?.url ? handleCopyReviewLink : undefined}
             onUnlinkReview={onUnlinkReview}
             closeHover={closeHover}
           />
+
+          {automationProvenance && (
+            <WorktreeCardAutomationDetailSection
+              provenance={automationProvenance}
+              worktreeHostId={automationHostId}
+              onOpenAutomation={onOpenAutomation ? dismissAndRun(onOpenAutomation) : undefined}
+              onOpenAutomationRun={
+                onOpenAutomationRun ? dismissAndRun(onOpenAutomationRun) : undefined
+              }
+            />
+          )}
 
           {hasComment(comment) && (
             <WorktreeCardDetailSection>

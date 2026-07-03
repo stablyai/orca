@@ -9,9 +9,12 @@ import type {
   TabContentType,
   TabGroup,
   TabGroupLayoutNode,
+  TerminalTab,
+  TuiAgent,
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import {
   dedupeTabOrder,
   ensureGroup,
@@ -25,9 +28,11 @@ import {
   sanitizeRecentTabIds,
   updateGroup
 } from './tab-group-state'
+import { isPaneColumnSplitDropNoOp } from './pane-column-split-drop-no-op'
 import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -107,6 +112,11 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
+  /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
+  setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
+  /** Flip a tab between the terminal and native chat renderings. The live
+   *  TerminalPane stays mounted — this only changes which surface is shown. */
+  toggleTabViewMode: (tabId: string) => void
   setTabCustomLabel: (
     tabId: string,
     label: string | null,
@@ -163,6 +173,73 @@ export type TabsSlice = {
     activeRenderableTabId: string | null
   }
   hydrateTabsSession: (session: WorkspaceSessionState) => void
+}
+
+// Why: keep the TerminalTab (tabsByWorktree) pin in sync with the unified-tab
+// pin so reconcile's `existing.isPinned` fallback stays authoritative locally.
+// Returns an empty patch when the tab isn't a persisted TerminalTab.
+function patchTerminalTabPinned(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  worktreeId: string,
+  tabId: string,
+  isPinned: boolean
+): Partial<Pick<AppState, 'tabsByWorktree'>> {
+  const tabs = tabsByWorktree[worktreeId]
+  if (!tabs?.some((tab) => tab.id === tabId)) {
+    return {}
+  }
+  return {
+    tabsByWorktree: {
+      ...tabsByWorktree,
+      [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, isPinned } : tab))
+    }
+  }
+}
+
+// Why: pin is host-authoritative for remote-server tabs, so mirror it to the
+// host (like setTabColor) or it's lost on reconnect/restart/other clients.
+// Dynamic import keeps this store slice off the runtime layer.
+function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: boolean): void {
+  const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+  // Why: only terminal tab pins are persisted host-side today (browser/editor
+  // tracked in #5729), so skip the RPC for other types instead of a no-op round
+  // trip.
+  if (
+    !found ||
+    found.tab.contentType !== 'terminal' ||
+    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+  ) {
+    return
+  }
+  const worktreeId = found.worktreeId
+  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+    setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
+  )
+}
+
+// Why: viewMode is host-tracked like color/pin, so mirror the local toggle/set to
+// the host or it's lost on reconnect/restart and never reaches paired clients.
+// Only the user/RPC-set action path mirrors — never the reconcile that applies a
+// host value — so the echoed snapshot can't re-trigger an outbound RPC (no loop).
+function mirrorTabViewModeToHost(
+  state: AppState,
+  tabId: string,
+  viewMode: 'terminal' | 'chat'
+): void {
+  const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+  // Why: only terminal tab viewMode is persisted host-side; skip the RPC for other
+  // types instead of a no-op round trip.
+  if (
+    !found ||
+    found.tab.contentType !== 'terminal' ||
+    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+  ) {
+    return
+  }
+  const worktreeId = found.worktreeId
+  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+    setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
+  )
 }
 
 function buildSplitNode(
@@ -487,6 +564,44 @@ function buildActiveSurfacePatch(
       [worktreeId]: derived.activeTabType
     }
   }
+}
+
+function activeSurfacePatchMatchesState(
+  state: Pick<
+    AppState,
+    | 'activeBrowserTabId'
+    | 'activeBrowserTabIdByWorktree'
+    | 'activeFileId'
+    | 'activeFileIdByWorktree'
+    | 'activeTabId'
+    | 'activeTabIdByWorktree'
+    | 'activeTabType'
+    | 'activeTabTypeByWorktree'
+  >,
+  worktreeId: string,
+  patch: Pick<
+    AppState,
+    | 'activeBrowserTabId'
+    | 'activeBrowserTabIdByWorktree'
+    | 'activeFileId'
+    | 'activeFileIdByWorktree'
+    | 'activeTabId'
+    | 'activeTabIdByWorktree'
+    | 'activeTabType'
+    | 'activeTabTypeByWorktree'
+  >
+): boolean {
+  return (
+    state.activeBrowserTabId === patch.activeBrowserTabId &&
+    state.activeBrowserTabIdByWorktree[worktreeId] ===
+      patch.activeBrowserTabIdByWorktree[worktreeId] &&
+    state.activeFileId === patch.activeFileId &&
+    state.activeFileIdByWorktree[worktreeId] === patch.activeFileIdByWorktree[worktreeId] &&
+    state.activeTabId === patch.activeTabId &&
+    state.activeTabIdByWorktree[worktreeId] === patch.activeTabIdByWorktree[worktreeId] &&
+    state.activeTabType === patch.activeTabType &&
+    state.activeTabTypeByWorktree[worktreeId] === patch.activeTabTypeByWorktree[worktreeId]
+  )
 }
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
@@ -952,6 +1067,48 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
   },
 
+  setTabViewMode: (tabId, mode) => {
+    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode }) ?? {})
+    mirrorTabViewModeToHost(get(), tabId, mode)
+  },
+
+  toggleTabViewMode: (tabId) => {
+    let toggled: {
+      from: 'terminal' | 'chat'
+      to: 'terminal' | 'chat'
+      agent: TuiAgent | null
+    } | null = null
+    set((state) => {
+      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      if (!found) {
+        return {}
+      }
+      // Why: default is 'terminal' for legacy/missing, so the first toggle flips
+      // to 'chat'. patchTab mutates only this tab, leaving split siblings intact.
+      const fromMode: 'terminal' | 'chat' = found.tab.viewMode === 'chat' ? 'chat' : 'terminal'
+      const nextMode = fromMode === 'chat' ? 'terminal' : 'chat'
+      // Why: `launchAgent` lives on the legacy terminal tab keyed by the unified
+      // tab's entityId — resolve it here so the toggle telemetry can attribute
+      // adoption by agent without threading it through every caller.
+      const agent =
+        (state.tabsByWorktree[found.worktreeId] ?? []).find(
+          (terminal) => terminal.id === found.tab.entityId
+        )?.launchAgent ?? null
+      toggled = { from: fromMode, to: nextMode, agent }
+      return patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }) ?? {}
+    })
+    // Why: emit after the state write so the event reflects the committed mode.
+    const committed = toggled as {
+      from: 'terminal' | 'chat'
+      to: 'terminal' | 'chat'
+      agent: TuiAgent | null
+    } | null
+    if (committed) {
+      emitNativeChatToggled(committed)
+      mirrorTabViewModeToHost(get(), tabId, committed.to)
+    }
+  },
+
   setRenamingTabId: (tabId) => {
     set({ renamingTabId: tabId })
   },
@@ -996,12 +1153,17 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...state.unifiedTabsByWorktree,
           [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
         },
+        // Why: reconcile derives a tab's pin from the TerminalTab (tabsByWorktree),
+        // so mirror the pin there too — otherwise an unrelated host snapshot
+        // recomputes isPinned:false and visually un-pins during the echo window.
+        ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, true),
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: updateGroup(groups, { ...group, tabOrder })
         }
       }
     })
+    mirrorTabPinnedToHost(get(), tabId, true)
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }
@@ -1031,12 +1193,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...state.unifiedTabsByWorktree,
           [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
         },
+        ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, false),
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: updateGroup(groups, { ...group, tabOrder })
         }
       }
     })
+    mirrorTabPinnedToHost(get(), tabId, false)
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }
@@ -1119,10 +1283,13 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   focusGroup: (worktreeId, groupId) =>
     set((state) => {
-      const nextActiveGroupIdByWorktree = {
-        ...state.activeGroupIdByWorktree,
-        [worktreeId]: groupId
-      }
+      const groupAlreadyFocused = state.activeGroupIdByWorktree[worktreeId] === groupId
+      const nextActiveGroupIdByWorktree = groupAlreadyFocused
+        ? state.activeGroupIdByWorktree
+        : {
+            ...state.activeGroupIdByWorktree,
+            [worktreeId]: groupId
+          }
       // Why: focusing a split group surfaces whichever terminal tab is already
       // active in that group, so the tab-level bell is no longer needed.
       //
@@ -1133,6 +1300,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       // before the user ever sees the tab. All current callers only fire for
       // the active worktree, but this guard prevents future misuse.
       if (state.activeWorktreeId !== worktreeId) {
+        if (groupAlreadyFocused) {
+          return state
+        }
         return {
           activeGroupIdByWorktree: nextActiveGroupIdByWorktree
         }
@@ -1162,8 +1332,23 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               return changed ? copy : state.unreadTerminalTabs
             })()
           : state.unreadTerminalTabs
+      const activeSurfacePatch = buildActiveSurfacePatch(
+        {
+          ...state,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        },
+        worktreeId,
+        groupId
+      )
+      if (
+        groupAlreadyFocused &&
+        nextUnreadTerminalTabs === state.unreadTerminalTabs &&
+        activeSurfacePatchMatchesState(state, worktreeId, activeSurfacePatch)
+      ) {
+        return state
+      }
       return {
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        ...(groupAlreadyFocused ? {} : { activeGroupIdByWorktree: nextActiveGroupIdByWorktree }),
         // Why: only write unreadTerminalTabs back into state when it actually
         // changed. The IIFE above returns state.unreadTerminalTabs by reference
         // on no-op; preserving that reference via conditional spread keeps
@@ -1172,14 +1357,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
           : {}),
-        ...buildActiveSurfacePatch(
-          {
-            ...state,
-            activeGroupIdByWorktree: nextActiveGroupIdByWorktree
-          },
-          worktreeId,
-          groupId
-        )
+        ...activeSurfacePatch
       }
     }),
 
@@ -1327,18 +1505,49 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
         return group
       })
+      let nextLayoutByWorktree = state.layoutByWorktree
+      let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
+      let filteredGroups = nextGroups
+      if (sourceOrder.length === 0) {
+        filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
+        const collapsedState = collapseGroupLayout(
+          nextLayoutByWorktree,
+          nextActiveGroupIdByWorktreeResolved,
+          worktreeId,
+          sourceGroup.id,
+          targetGroupId
+        )
+        nextLayoutByWorktree = collapsedState.layoutByWorktree
+        nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
+      }
+      const nextGroupsByWorktree = {
+        ...state.groupsByWorktree,
+        [worktreeId]: filteredGroups
+      }
+      const nextUnifiedTabsByWorktree = {
+        ...state.unifiedTabsByWorktree,
+        [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+          candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+        )
+      }
       return {
-        unifiedTabsByWorktree: {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
-        },
-        groupsByWorktree: {
-          ...state.groupsByWorktree,
-          [worktreeId]: nextGroups
-        },
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+        groupsByWorktree: nextGroupsByWorktree,
+        layoutByWorktree: nextLayoutByWorktree,
+        activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved,
+        ...(state.activeWorktreeId === worktreeId
+          ? buildActiveSurfacePatch(
+              {
+                ...state,
+                unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+                groupsByWorktree: nextGroupsByWorktree,
+                layoutByWorktree: nextLayoutByWorktree,
+                activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved
+              },
+              worktreeId,
+              nextActiveGroupIdByWorktreeResolved[worktreeId] ?? null
+            )
+          : {})
       }
     })
     if (moved && opts?.recordInteraction !== false) {
@@ -1367,11 +1576,20 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (!isSplitDrop && tab.groupId === target.groupId) {
         return {}
       }
-      if (isSplitDrop && tab.groupId === target.groupId && sourceGroup.tabOrder.length <= 1) {
-        // Why: dragging the final tab in a group onto that same group's edge
-        // would create a transient sibling only to collapse the source
-        // immediately, leaving the layout unchanged while still churning focus
-        // and group IDs. Treat that as a no-op instead of faking a split.
+      const layout = state.layoutByWorktree[worktreeId]
+      if (
+        isSplitDrop &&
+        isPaneColumnSplitDropNoOp({
+          sourceGroupId: sourceGroup.id,
+          targetGroupId: target.groupId,
+          splitDirection: target.splitDirection!,
+          sourceTabCount: sourceGroup.tabOrder.length,
+          layout
+        })
+      ) {
+        // Why: dragging the final tab in a group onto that same group's edge,
+        // or onto the adjacent sibling's matching edge, creates a transient
+        // column only to collapse the emptied source immediately.
         return {}
       }
 

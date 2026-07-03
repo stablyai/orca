@@ -7,7 +7,8 @@ const {
   getStateMock,
   isWebRuntimeSessionActiveMock,
   isWebTerminalSurfaceTabIdMock,
-  resolveHostSessionTabIdForWebSessionTabMock
+  resolveHostSessionTabIdForWebSessionTabMock,
+  toHostSessionTabIdMock
 } = vi.hoisted(() => ({
   activateWebRuntimeSessionTabMock: vi.fn(),
   closeWebRuntimeSessionTabMock: vi.fn(),
@@ -15,7 +16,8 @@ const {
   getStateMock: vi.fn(),
   isWebRuntimeSessionActiveMock: vi.fn(),
   isWebTerminalSurfaceTabIdMock: vi.fn(() => false),
-  resolveHostSessionTabIdForWebSessionTabMock: vi.fn<() => string | null>(() => null)
+  resolveHostSessionTabIdForWebSessionTabMock: vi.fn<() => string | null>(() => null),
+  toHostSessionTabIdMock: vi.fn((tabId: string) => tabId)
 }))
 
 vi.mock('@/store', () => ({
@@ -29,7 +31,8 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock,
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock,
-  isWebTerminalSurfaceTabId: isWebTerminalSurfaceTabIdMock
+  isWebTerminalSurfaceTabId: isWebTerminalSurfaceTabIdMock,
+  toHostSessionTabId: toHostSessionTabIdMock
 }))
 
 vi.mock('@/runtime/web-session-tabs-sync', () => ({
@@ -70,7 +73,7 @@ describe('createNewTerminalTab', () => {
 
     createNewTerminalTab('wt-1', 'zsh')
 
-    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh')
+    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', undefined)
     expect(setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
@@ -116,6 +119,53 @@ describe('createNewTerminalTab', () => {
       worktreeId: 'wt-1',
       environmentId: 'owner-runtime',
       command: 'pwsh',
+      activate: true
+    })
+    expect(createTab).not.toHaveBeenCalled()
+  })
+
+  it('creates local terminal tabs with a requested startup cwd', () => {
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const setActiveTabType = vi.fn()
+    const setTabBarOrder = vi.fn()
+    getStateMock
+      .mockReturnValueOnce({
+        settings: { activeRuntimeEnvironmentId: null },
+        createTab,
+        setActiveTabType,
+        setTabBarOrder
+      })
+      .mockReturnValueOnce({
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+        openFiles: [],
+        tabBarOrderByWorktree: {},
+        setTabBarOrder
+      })
+
+    createNewTerminalTab('wt-1', undefined, { startupCwd: '/repo/packages/app' })
+
+    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      startupCwd: '/repo/packages/app'
+    })
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+  })
+
+  it('delegates requested startup cwd to host runtime terminals', () => {
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      createTab,
+      setActiveTabType: vi.fn()
+    })
+
+    createNewTerminalTab('wt-1', undefined, { startupCwd: '/repo/packages/app' })
+
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'web-runtime',
+      command: undefined,
+      cwd: '/repo/packages/app',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
@@ -247,25 +297,147 @@ describe('closeTerminalTab', () => {
     expect(closeUnifiedTab).toHaveBeenCalledWith('unified-tab-1')
   })
 
-  it('closes local-only agent tabs locally when they have no host session binding', () => {
+  it('routes closes on a remote worktree to the host even when the local→host map has no entry', () => {
+    // Why: regression for the close-reappear bug. On a remote-owned worktree the
+    // tab is host-authoritative; when the map has no entry (e.g. a plain-UUID host
+    // tab id) the close must still reach the host via the decoded id, or the
+    // host's next snapshot re-adds the tab. It also prunes locally for snappiness.
     const closeTab = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue(null)
     getStateMock.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: 'web-runtime' },
       tabsByWorktree: {
-        'wt-1': [{ id: 'local-agent-tab' }, { id: 'local-tab-2' }]
+        'wt-1': [{ id: 'plain-uuid-tab' }, { id: 'local-tab-2' }]
       },
       activeWorktreeId: 'wt-1',
-      activeTabId: 'local-agent-tab',
+      activeTabId: 'plain-uuid-tab',
       openFiles: [],
       closeTab,
       setActiveTab: vi.fn()
     })
 
-    closeTerminalTab('local-agent-tab')
+    closeTerminalTab('plain-uuid-tab')
 
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
-    expect(closeTab).toHaveBeenCalledWith('local-agent-tab')
+    expect(closeTab).toHaveBeenCalledWith('plain-uuid-tab')
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'plain-uuid-tab',
+      environmentId: 'web-runtime'
+    })
+  })
+
+  function makePinnedTabState(
+    overrides: { confirmClosePinnedTab: boolean } & Record<string, unknown>
+  ): Record<string, unknown> {
+    const { confirmClosePinnedTab, ...rest } = overrides
+    return {
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab },
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'unified-pinned-1',
+            entityId: 'pinned-entity-1',
+            contentType: 'terminal',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            label: 'Server',
+            generatedLabel: null,
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            isPreview: false,
+            isPinned: true
+          }
+        ]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'pinned-entity-1',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab: vi.fn(),
+      closeUnifiedTab: vi.fn(),
+      setActiveTab: vi.fn(),
+      setActiveWorktree: vi.fn(),
+      requestPinnedTabCloseConfirm: vi.fn(),
+      ...rest
+    }
+  }
+
+  it('routes a pinned tab through the confirmation guard instead of closing it', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1')
+
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ tabLabel: 'Server', onConfirm: expect.any(Function) })
+    )
+  })
+
+  it('closes the pinned tab when the confirmation callback runs', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1')
+    const { onConfirm } = requestPinnedTabCloseConfirm.mock.calls[0][0] as { onConfirm: () => void }
+    onConfirm()
+
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-pinned-1')
+  })
+
+  it('guards a pinned tab closed by its unified id (workspace overlay path)', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    // Why: TerminalPaneOverlayLayer closes by terminalTab.id (the unified id),
+    // not the entityId. The guard must still recognize it as pinned.
+    closeTerminalTab('unified-pinned-1')
+
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes a pinned tab immediately when the confirmation setting is off', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: false,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1')
+
+    expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-pinned-1')
   })
 })
 

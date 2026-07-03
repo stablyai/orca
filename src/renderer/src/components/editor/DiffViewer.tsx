@@ -23,6 +23,7 @@ import { getLargeDiffRenderLimit } from './large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecycle'
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
+import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 
 export default function DiffViewer({
   modelKey,
@@ -79,6 +80,7 @@ export default function DiffViewer({
     startLine?: number
     top: number
     left?: number
+    lineHeight: number
   } | null>(null)
 
   const renderLimit = useMemo(
@@ -114,7 +116,8 @@ export default function DiffViewer({
         top,
         left: modifiedEditor
           ? (getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current) ?? undefined)
-          : undefined
+          : undefined,
+        lineHeight: modifiedEditor?.getOption(monaco.editor.EditorOption.lineHeight) ?? 0
       }),
     onDeleteComment: (id) => {
       if (worktreeId) {
@@ -131,17 +134,16 @@ export default function DiffViewer({
       return
     }
     const update = (): void => {
-      const top = getDiffCommentPopoverTop(
-        modifiedEditor,
-        popover.lineNumber,
-        modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
-      )
+      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
+      const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
       if (top == null) {
         setPopover(null)
         return
       }
       const left = getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current)
-      setPopover((prev) => (prev ? { ...prev, top, left: left == null ? prev.left : left } : prev))
+      setPopover((prev) =>
+        prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
+      )
     }
     const scrollSub = modifiedEditor.onDidScrollChange(update)
     const contentSub = modifiedEditor.onDidContentSizeChange(update)
@@ -402,6 +404,7 @@ export default function DiffViewer({
             startLine={popover.startLine}
             top={popover.top}
             left={popover.left}
+            lineHeight={popover.lineHeight}
             placeholder={addLineCommentPlaceholder}
             submitLabel={addLineCommentLabel}
             submittingLabel="Posting…"
@@ -448,6 +451,7 @@ export default function DiffViewer({
               fontSize: diffEditorFontSize,
               fontFamily: settings?.terminalFontFamily || 'monospace',
               lineNumbers: 'on',
+              ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
               automaticLayout: true,
               renderOverviewRuler: true,
               scrollbar: diffEditorScrollbarOptions,

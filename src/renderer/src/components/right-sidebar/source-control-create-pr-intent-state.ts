@@ -1,78 +1,16 @@
-import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'
-import type { GitUpstreamStatus } from '../../../../shared/types'
 import type { PrimaryAction } from './source-control-primary-action-types'
+import {
+  resolveCreateReviewIntentEligibility,
+  type CreateReviewIntentEligibility,
+  type CreateReviewIntentKind
+} from '../../../../shared/source-control-create-review-intent'
 
-export type CreatePrIntentKind =
-  | 'dirty'
-  | 'message_required'
-  | 'no_upstream'
-  | 'needs_push'
-  | 'force_push'
+// Why: renderer APIs keep PR terminology for compatibility, while shared logic
+// uses provider-neutral review terminology for PR/MR hosts.
+export type CreatePrIntentKind = CreateReviewIntentKind
+export type CreatePrIntentEligibility = CreateReviewIntentEligibility
 
-export type CreatePrIntentEligibility = {
-  eligible: boolean
-  kind: CreatePrIntentKind | null
-}
-
-export function resolveCreatePrIntentEligibility({
-  stagedCount,
-  hasStageableChanges,
-  hasMessage,
-  hasUnresolvedConflicts,
-  upstreamStatus,
-  hostedReviewCreation,
-  branchCommitsAhead,
-  hasCurrentBranch = true
-}: {
-  stagedCount: number
-  hasStageableChanges: boolean
-  hasMessage: boolean
-  hasUnresolvedConflicts: boolean
-  upstreamStatus: GitUpstreamStatus | undefined
-  hostedReviewCreation?: HostedReviewCreationEligibility | null
-  branchCommitsAhead?: number
-  hasCurrentBranch?: boolean
-}): CreatePrIntentEligibility {
-  if (
-    hasUnresolvedConflicts ||
-    !hasCurrentBranch ||
-    !hostedReviewCreation ||
-    hostedReviewCreation.canCreate ||
-    !supportsHostedReviewCreation(hostedReviewCreation.provider)
-  ) {
-    return { eligible: false, kind: null }
-  }
-
-  if (hostedReviewCreation.blockedReason === 'dirty') {
-    if (stagedCount > 0 && !hasMessage) {
-      return { eligible: true, kind: 'message_required' }
-    }
-    return { eligible: stagedCount > 0 || hasStageableChanges, kind: 'dirty' }
-  }
-
-  if (hostedReviewCreation.blockedReason === 'no_upstream') {
-    const hasPublishableCommits = branchCommitsAhead === undefined ? false : branchCommitsAhead > 0
-    return {
-      eligible: hasPublishableCommits || stagedCount > 0 || hasStageableChanges,
-      kind: 'no_upstream'
-    }
-  }
-
-  if (hostedReviewCreation.blockedReason === 'needs_push') {
-    return { eligible: true, kind: 'needs_push' }
-  }
-
-  if (
-    hostedReviewCreation.blockedReason === 'needs_sync' &&
-    shouldForcePushWithLeaseForUpstream(upstreamStatus)
-  ) {
-    return { eligible: true, kind: 'force_push' }
-  }
-
-  return { eligible: false, kind: null }
-}
+export const resolveCreatePrIntentEligibility = resolveCreateReviewIntentEligibility
 
 export function resolveVisibleCreatePrHeaderAction({
   createPrHeaderAction

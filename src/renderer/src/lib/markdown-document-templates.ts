@@ -36,13 +36,51 @@ function stripMarkdownExtension(name: string): string {
 }
 
 function titleFromName(name: string): string {
-  const stem = stripMarkdownExtension(name).replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const stem = foldMarkdownTemplateTitleWhitespace(
+    stripMarkdownExtension(name).replace(/[-_]+/g, ' ')
+  )
 
   if (!stem) {
     return 'Untitled'
   }
 
   return stem.charAt(0).toUpperCase() + stem.slice(1)
+}
+
+// Why: template names can originate from pasted/remote filenames; title display
+// only needs collapsed whitespace, not a whole-string whitespace regex pass.
+function foldMarkdownTemplateTitleWhitespace(value: string): string {
+  let normalized = ''
+  let pendingWhitespace = false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (isMarkdownTemplateTitleWhitespace(code)) {
+      pendingWhitespace = normalized.length > 0
+      continue
+    }
+    if (pendingWhitespace) {
+      normalized += ' '
+      pendingWhitespace = false
+    }
+    normalized += value.charAt(index)
+  }
+  return normalized
+}
+
+function isMarkdownTemplateTitleWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }
 
 function padDatePart(value: number): string {

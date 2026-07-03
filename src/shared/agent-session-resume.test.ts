@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   extractAgentProviderSession,
   getAgentResumeArgv,
+  isResumableTuiAgent,
   normalizeAgentProviderSession
 } from './agent-session-resume'
 
 describe('agent session resume metadata', () => {
+  it('treats devin as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('devin')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -16,8 +21,10 @@ describe('agent session resume metadata', () => {
       { key: 'conversation_id', id: 'agy-conversation' }
     ],
     ['opencode', { sessionID: 'opencode-session' }, { key: 'session_id', id: 'opencode-session' }],
+    ['mimo-code', { sessionID: 'mimo-session' }, { key: 'session_id', id: 'mimo-session' }],
     ['droid', { session_id: 'droid-session' }, { key: 'session_id', id: 'droid-session' }],
-    ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }]
+    ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }],
+    ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
@@ -28,8 +35,10 @@ describe('agent session resume metadata', () => {
     ['gemini', { key: 'session_id', id: 's1' }, ['gemini', '--resume', 's1']],
     ['antigravity', { key: 'conversation_id', id: 's1' }, ['agy', '--conversation', 's1']],
     ['opencode', { key: 'session_id', id: 's1' }, ['opencode', '--session', 's1']],
+    ['mimo-code', { key: 'session_id', id: 's1' }, ['mimo', '--session', 's1']],
     ['droid', { key: 'session_id', id: 's1' }, ['droid', '--resume', 's1']],
-    ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']]
+    ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']],
+    ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })
@@ -43,5 +52,37 @@ describe('agent session resume metadata', () => {
       key: 'session_id',
       id: 'ok'
     })
+  })
+
+  it('rejects devin resume when provider session key is not session_id', () => {
+    expect(getAgentResumeArgv('devin', { key: 'conversation_id', id: 'x' })).toBeNull()
+  })
+
+  it('captures the hook transcript_path for native-chat agents (claude/codex)', () => {
+    expect(
+      extractAgentProviderSession('claude', {
+        session_id: 'cs',
+        transcript_path: '/home/u/.claude/projects/slug/real.jsonl'
+      })
+    ).toEqual({
+      key: 'session_id',
+      id: 'cs',
+      transcriptPath: '/home/u/.claude/projects/slug/real.jsonl'
+    })
+    expect(
+      extractAgentProviderSession('codex', { session_id: 'xs', transcriptPath: '/x/r.jsonl' })
+    ).toEqual({ key: 'session_id', id: 'xs', transcriptPath: '/x/r.jsonl' })
+  })
+
+  it('does not attach transcript_path for non-native-chat agents', () => {
+    expect(
+      extractAgentProviderSession('gemini', { session_id: 'gs', transcript_path: '/x/r.jsonl' })
+    ).toEqual({ key: 'session_id', id: 'gs' })
+  })
+
+  it('round-trips transcriptPath through normalizeAgentProviderSession', () => {
+    expect(
+      normalizeAgentProviderSession({ key: 'session_id', id: 'ok', transcriptPath: '/x/r.jsonl' })
+    ).toEqual({ key: 'session_id', id: 'ok', transcriptPath: '/x/r.jsonl' })
   })
 })

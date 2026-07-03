@@ -16,6 +16,7 @@ export type AttachMobileImageDeps = {
   // start — lets the UI show a sending spinner only for the transfer, not the
   // (potentially long) time the picker is open.
   readonly onUploadStart?: () => void
+  readonly beforeTerminalSend?: (terminal: string) => Promise<boolean>
 }
 
 // Uploads a picked image to the host and pastes the resulting file path into the
@@ -30,7 +31,8 @@ export async function attachMobileImageToTerminal(
     deviceToken,
     getConnectionId,
     pickImage,
-    onUploadStart
+    onUploadStart,
+    beforeTerminalSend
   }: AttachMobileImageDeps
 ): Promise<boolean> {
   const picked = await pickImage(source)
@@ -45,6 +47,9 @@ export async function attachMobileImageToTerminal(
   // Why: a generated image path is terminal image injection, so it's always
   // bracketed (matching desktop paste) regardless of terminal mode.
   const payload = buildMobileImagePastePayload(imagePath)
+  if (beforeTerminalSend && !(await beforeTerminalSend(terminal))) {
+    return false
+  }
   await client.sendRequest('terminal.send', {
     terminal,
     text: payload,

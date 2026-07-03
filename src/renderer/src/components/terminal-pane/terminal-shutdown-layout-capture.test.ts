@@ -1,7 +1,10 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
+const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as const
 
 const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn()
@@ -48,6 +51,24 @@ function mockRootForPane(paneId: number, leafId: string = LEAF_ID): HTMLDivEleme
     dataset: { paneId: String(paneId), leafId }
   })
   return new MockHTMLElement({ firstElementChild: pane }) as unknown as HTMLDivElement
+}
+
+function mockRootForSplit(firstPaneId = 1, secondPaneId = 2): HTMLDivElement {
+  const first = new MockHTMLElement({
+    classList: ['pane'],
+    dataset: { paneId: String(firstPaneId), leafId: LEAF_ID },
+    style: { flex: '1' }
+  })
+  const second = new MockHTMLElement({
+    classList: ['pane'],
+    dataset: { paneId: String(secondPaneId), leafId: LEAF_ID_2 },
+    style: { flex: '1' }
+  })
+  const split = new MockHTMLElement({
+    classList: ['pane-split'],
+    children: [first, second]
+  })
+  return new MockHTMLElement({ firstElementChild: split }) as unknown as HTMLDivElement
 }
 
 describe('captureTerminalShutdownLayout', () => {
@@ -138,6 +159,42 @@ describe('captureTerminalShutdownLayout', () => {
     expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
   })
 
+  it('caps shutdown scrollback snapshots by UTF-8 bytes', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const multibyteRow = 'é'.repeat(1024)
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 512 } },
+      serializeAddon: {
+        serialize: vi.fn((options?: { scrollback?: number }) =>
+          multibyteRow.repeat(options?.scrollback ?? 0)
+        )
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: { 1: 'ssh shell' },
+      existingLayout: undefined
+    })
+
+    const buffer = layout.buffersByLeafId?.[LEAF_ID] ?? ''
+    expect(buffer.length).toBeGreaterThan(0)
+    expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
+      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+    )
+    expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT / 2)
+  })
+
   it('does not preserve prior scrollback buffers or refs for a cleared leaf', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const pane = {
@@ -174,5 +231,182 @@ describe('captureTerminalShutdownLayout', () => {
     expect(layout.scrollbackRefsByLeafId).toBeUndefined()
     expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1' })
     expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
+  })
+
+  it('does not preserve stale prior PTY bindings as shutdown focus targets', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const deadPane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => 'dead scrollback')
+      }
+    }
+    const livePane = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      stablePaneId: LEAF_ID_2,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => 'live scrollback')
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [deadPane, livePane]),
+      getActivePane: vi.fn(() => deadPane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForSplit(1, 2),
+      expandedPaneId: null,
+      paneTransports: new Map([[2, { getPtyId: vi.fn(() => 'pty-live') }]]),
+      paneTitlesByPaneId: {},
+      existingLayout: {
+        root: null,
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_ID]: 'pty-stale', [LEAF_ID_2]: 'pty-live' }
+      }
+    })
+
+    expect(layout.activeLeafId).toBe(LEAF_ID_2)
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-live' })
+    expect(layout.buffersByLeafId).toEqual({
+      [LEAF_ID]: 'dead scrollback',
+      [LEAF_ID_2]: 'live scrollback'
+    })
+  })
+
+  it('preserves prior PTY bindings while current pane transports are still attaching', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const firstPane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => 'first scrollback')
+      }
+    }
+    const secondPane = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      stablePaneId: LEAF_ID_2,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => 'second scrollback')
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [firstPane, secondPane]),
+      getActivePane: vi.fn(() => secondPane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForSplit(1, 2),
+      expandedPaneId: null,
+      paneTransports: new Map([
+        [1, { getPtyId: vi.fn(() => null) }],
+        [2, { getPtyId: vi.fn(() => null) }]
+      ]),
+      paneTitlesByPaneId: {},
+      existingLayout: {
+        root: null,
+        activeLeafId: LEAF_ID_2,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_ID]: 'pty-first', [LEAF_ID_2]: 'pty-second' }
+      }
+    })
+
+    expect(layout.activeLeafId).toBe(LEAF_ID_2)
+    expect(layout.ptyIdsByLeafId).toEqual({
+      [LEAF_ID]: 'pty-first',
+      [LEAF_ID_2]: 'pty-second'
+    })
+  })
+
+  it('does not persist a no-PTY pane as active when another split pane is bound', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const paneWithoutPty = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const paneWithPty = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      stablePaneId: LEAF_ID_2,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [paneWithoutPty, paneWithPty]),
+      getActivePane: vi.fn(() => paneWithoutPty)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForSplit(),
+      expandedPaneId: null,
+      paneTransports: new Map([[2, { getPtyId: vi.fn(() => 'pty-2') }]]),
+      paneTitlesByPaneId: {},
+      existingLayout: undefined
+    })
+
+    expect(layout.activeLeafId).toBe(LEAF_ID_2)
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-2' })
+  })
+
+  it('does not preserve a stale prior PTY binding for active shutdown focus', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const paneWithoutPty = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const paneWithPty = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      stablePaneId: LEAF_ID_2,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [paneWithoutPty, paneWithPty]),
+      getActivePane: vi.fn(() => paneWithoutPty)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForSplit(),
+      expandedPaneId: null,
+      paneTransports: new Map([[2, { getPtyId: vi.fn(() => 'pty-2') }]]),
+      paneTitlesByPaneId: {},
+      existingLayout: {
+        root: null,
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_ID]: 'stale-pty', [LEAF_ID_2]: 'pty-2' }
+      }
+    })
+
+    expect(layout.activeLeafId).toBe(LEAF_ID_2)
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-2' })
   })
 })

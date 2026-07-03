@@ -1,11 +1,15 @@
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+
 // ─── Protocol Version ────────────────────────────────────────────────
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 14
+export const PROTOCOL_VERSION = 18
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -19,6 +23,7 @@ export type TerminalSnapshot = {
   /** Scrollback portion only (rows above the visible viewport). Write this
    *  to preserve history without interfering with TUI repaints. */
   scrollbackAnsi: string
+  oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
   cwd: string | null
   modes: TerminalModes
@@ -38,24 +43,10 @@ export type TerminalModes = {
   alternateScreen: boolean
 }
 
-/** On-disk shape of checkpoint.json. Written by history-manager, read by
- *  history-reader — one type so the generation pairing with output.log's
- *  header (see terminal-history-log.ts) cannot silently diverge between the
- *  writer and the consumer. */
-export type TerminalCheckpointFile = {
-  snapshotAnsi: string
-  scrollbackAnsi: string
-  rehydrateSequences: string
-  cwd: string | null
-  cols: number
-  rows: number
-  modes: TerminalModes
-  scrollbackLines: number
-  /** Ties this checkpoint to the output.log whose header carries the same
-   *  generation. Absent on checkpoints written before incremental logs. */
-  generation?: number
-  checkpointedAt: string
-}
+// The on-disk checkpoint.json shape lives in daemon-checkpoint-file.ts (it
+// depends only on TerminalModes here) — re-exported so existing importers of
+// `./types` keep working.
+export type { TerminalCheckpointFile } from './daemon-checkpoint-file'
 
 // ─── NDJSON Protocol Messages ───────────────────────────────────────
 
@@ -87,6 +78,7 @@ export type CreateOrAttachRequest = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    startupCommandDelivery?: StartupCommandDelivery
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
      *  the shell picked in the "+" menu or the persisted default-shell setting,
@@ -101,6 +93,7 @@ export type CreateOrAttachRequest = {
      *  PTY path resolves the same effective executable as LocalPtyProvider. */
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
+    shellReadyTimeoutMs?: number
   }
 }
 
@@ -217,6 +210,17 @@ export type GetSnapshotRequest = {
   }
 }
 
+// Why: read-only readback of the size the PTY actually applied (vs the size the
+// renderer last requested via the fire-and-forget resize notify). Lets the
+// renderer's resume drift-check re-assert a resize the daemon dropped/coerced.
+export type GetSizeRequest = {
+  id: string
+  type: 'getSize'
+  payload: {
+    sessionId: string
+  }
+}
+
 // ─── Incremental checkpoint records (v13+) ──────────────────────────
 // Why: the 5s checkpoint used to re-serialize the full emulator buffer per
 // tick, stalling the daemon's PTY pump for O(buffer). Incremental checkpoints
@@ -238,6 +242,11 @@ export type TakePendingOutputRequest = {
      *  snapshot taken in a separate request could include bytes that a later
      *  take would replay again, duplicating content on cold restore. */
     includeSnapshot?: boolean
+    /** True only for final checkpoints taken immediately before PTY teardown.
+     *  This lets the daemon release pending parser-state bytes that should be
+     *  preserved before the backing PTY is destroyed, without disturbing live
+     *  full checkpoints or warm-reconnect checkpoints. */
+    teardownSnapshot?: boolean
   }
 }
 
@@ -270,6 +279,7 @@ export type DaemonRequest =
   | SystemResolverHealthRequest
   | PtySpawnHealthRequest
   | GetSnapshotRequest
+  | GetSizeRequest
   | TakePendingOutputRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
@@ -314,6 +324,7 @@ export type SessionInfo = {
   state: SessionState
   shellState: ShellReadyState
   isAlive: boolean
+  terminalHandle?: string
   pid: number | null
   cwd: string | null
   cols: number

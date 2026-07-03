@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, truncateSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, truncateSync } from 'node:fs'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { HeadlessEmulator } from './headless-emulator'
@@ -70,6 +70,23 @@ describe('incremental terminal history restore', () => {
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('from base')
     expect(restore!.scrollbackAnsi).toContain('from tail after checkpoint')
+  })
+
+  it('preserves checkpoint OSC link ranges while replaying the log tail', async () => {
+    await manager.checkpoint(
+      SESSION_ID,
+      snapshotOf(['\x1b]8;;https://example.com/issue/1234\x07#1234\x1b]8;;\x07\r\n'])
+    )
+    await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'tail\r\n' }])
+
+    const restore = reader.detectColdRestore(SESSION_ID)
+    expect(restore).not.toBeNull()
+    expect(restore!.oscLinks).toContainEqual({
+      row: 0,
+      startCol: 0,
+      endCol: 5,
+      uri: 'https://example.com/issue/1234'
+    })
   })
 
   it('ignores a stale log whose generation predates the checkpoint', async () => {

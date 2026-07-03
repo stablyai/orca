@@ -33,6 +33,7 @@ describe('packaged CLI assets', () => {
         join('node_modules', 'tweetnacl'),
         join('node_modules', 'zod'),
         join('node_modules', 'yaml'),
+        join('node_modules', 'jsonc-parser'),
         join('node_modules', 'node-pty'),
         join('node_modules', 'sherpa-onnx-darwin-${arch}'),
         join('node_modules', 'sherpa-onnx-linux-${arch}'),

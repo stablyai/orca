@@ -14,6 +14,7 @@ import {
   Server
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -45,7 +46,13 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderPanel, barColor, getProviderUsageStatusLabel } from './tooltip'
+import {
+  ProviderIcon,
+  ProviderPanel,
+  barColor,
+  formatResetCreditExpiry,
+  getProviderUsageStatusLabel
+} from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
@@ -70,18 +77,18 @@ type StatusBarProps = {
   floatingTerminalOpen: boolean
 }
 
-const PetStatusSegment = React.lazy(() =>
+const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
-const ResourceUsageStatusSegment = React.lazy(() =>
+const ResourceUsageStatusSegment = lazyWithRetry(() =>
   import('./ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
   }))
 )
-const PortsStatusSegment = React.lazy(() =>
+const PortsStatusSegment = lazyWithRetry(() =>
   import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
 )
-const SshStatusSegment = React.lazy(() =>
+const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
 
@@ -894,59 +901,69 @@ function MiniBar({ leftPct }: { leftPct: number }): React.JSX.Element {
 // Inline usage bars (compact bars for inactive accounts in the switcher)
 // ---------------------------------------------------------------------------
 
-function InlineUsageBars({
+export function InlineUsageBars({
   limits,
   isFetching
 }: {
   limits: ProviderRateLimits
   isFetching: boolean
 }): React.JSX.Element {
-  const sessionLeft = limits.session
-    ? Math.max(0, Math.round(100 - limits.session.usedPercent))
-    : null
-  const weeklyLeft = limits.weekly ? Math.max(0, Math.round(100 - limits.weekly.usedPercent)) : null
+  const usageWindows = [
+    limits.session
+      ? {
+          key: 'session',
+          left: Math.max(0, Math.round(100 - limits.session.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.d79c3362c4', '% 5h')
+        }
+      : null,
+    limits.weekly
+      ? {
+          key: 'weekly',
+          left: Math.max(0, Math.round(100 - limits.weekly.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', '% wk')
+        }
+      : null,
+    limits.fableWeekly
+      ? {
+          key: 'fableWeekly',
+          left: Math.max(0, Math.round(100 - limits.fableWeekly.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', '% Fable')
+        }
+      : null
+  ].filter((window): window is { key: string; left: number; label: string } => window !== null)
 
   return (
-    <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
-      {sessionLeft !== null && (
-        <div className="flex flex-1 items-center gap-1">
-          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+    <div
+      className={`grid w-full items-center gap-1.5 ${isFetching ? 'animate-pulse' : ''}`}
+      style={{
+        gridTemplateColumns: `repeat(${Math.max(1, usageWindows.length)}, minmax(0, 1fr))`
+      }}
+    >
+      {usageWindows.map((window) => (
+        <div key={window.key} className="flex min-w-0 items-center gap-1">
+          <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className={`h-full rounded-full ${barColor(sessionLeft)}`}
-              style={{ width: `${sessionLeft}%` }}
+              className={`h-full rounded-full ${barColor(window.left)}`}
+              style={{ width: `${window.left}%` }}
             />
           </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {sessionLeft}
-            {translate('auto.components.status.bar.StatusBar.d79c3362c4', '% 5h')}
+          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+            {window.left}
+            {window.label}
           </span>
         </div>
-      )}
-      {weeklyLeft !== null && (
-        <div className="flex flex-1 items-center gap-1">
-          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full rounded-full ${barColor(weeklyLeft)}`}
-              style={{ width: `${weeklyLeft}%` }}
-            />
-          </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {weeklyLeft}
-            {translate('auto.components.status.bar.StatusBar.5c938d39ac', '% wk')}
-          </span>
-        </div>
-      )}
-      {limits.status === 'error' && !limits.session && !limits.weekly && (
+      ))}
+      {usageWindows.length === 0 && limits.status === 'error' ? (
         <span className="text-[10px] text-muted-foreground">
           {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
         </span>
-      )}
+      ) : null}
     </div>
   )
 }
 
 function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return limits?.status === 'error' && !limits.session && !limits.weekly
+  return limits?.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly
 }
 
 function InlineUsageSignInAction({
@@ -1046,7 +1063,7 @@ function ProviderSegment({
   }
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !p.session && !p.weekly) {
+  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1065,7 +1082,7 @@ function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !p.session && !p.weekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1102,15 +1119,40 @@ function ProviderSegment({
     )
   }
 
+  const visibleWindows = [
+    p.session
+      ? {
+          key: 'session',
+          window: p.session,
+          label: formatWindowLabel(p.session.windowMinutes)
+        }
+      : null,
+    p.weekly
+      ? {
+          key: 'weekly',
+          window: p.weekly,
+          label: formatWindowLabel(p.weekly.windowMinutes)
+        }
+      : null,
+    p.fableWeekly
+      ? {
+          key: 'fableWeekly',
+          window: p.fableWeekly,
+          label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
+        }
+      : null
+  ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
+
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
-      {p.session && (
-        <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
-      )}
-      {p.session && p.weekly && <span className="text-muted-foreground">·</span>}
-      {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
+      {visibleWindows.map((window, index) => (
+        <React.Fragment key={window.key}>
+          {index > 0 && <span className="text-muted-foreground">·</span>}
+          <WindowLabel w={window.window} label={window.label} />
+        </React.Fragment>
+      ))}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -1364,6 +1406,10 @@ function CodexSwitcherMenu({
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
   const resetCreditCount = codex.rateLimitResetCredits?.availableCount ?? null
+  const resetCreditExpiry =
+    resetCreditCount !== null
+      ? formatResetCreditExpiry(codex.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
+      : null
   const canRedeemReset = resetCreditCount !== null && resetCreditCount > 0
 
   return (
@@ -1371,6 +1417,9 @@ function CodexSwitcherMenu({
       provider={codex}
       compact={compact}
       iconOnly={iconOnly}
+      // Why: Codex reset credits render beside the reset action below; showing
+      // them in the generic provider summary duplicates the same metadata.
+      hidePanelResetCredits
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.ba55303942',
         'Open Codex details and account switcher'
@@ -1430,17 +1479,24 @@ function CodexSwitcherMenu({
       </Dialog>
       {resetCreditCount !== null ? (
         <>
-          <DropdownMenuLabel>
-            {resetCreditCount === 1
-              ? translate(
-                  'auto.components.status.bar.StatusBar.5e5f9f5160',
-                  '1 rate-limit reset available'
-                )
-              : translate(
-                  'auto.components.status.bar.StatusBar.5ecae9197c',
-                  '{{value0}} rate-limit resets available',
-                  { value0: resetCreditCount }
-                )}
+          <DropdownMenuLabel className="space-y-0.5">
+            <div>
+              {resetCreditCount === 1
+                ? translate(
+                    'auto.components.status.bar.StatusBar.5e5f9f5160',
+                    '1 rate-limit reset available'
+                  )
+                : translate(
+                    'auto.components.status.bar.StatusBar.5ecae9197c',
+                    '{{value0}} rate-limit resets available',
+                    { value0: resetCreditCount }
+                  )}
+            </div>
+            {resetCreditExpiry ? (
+              <div className="text-[11px] font-normal text-muted-foreground">
+                {resetCreditExpiry}
+              </div>
+            ) : null}
           </DropdownMenuLabel>
           {canRedeemReset ? (
             <DropdownMenuItem
@@ -1585,6 +1641,7 @@ export function ProviderDetailsMenu({
   iconOnly,
   ariaLabel,
   topContent,
+  hidePanelResetCredits = false,
   open,
   onOpenChange,
   children
@@ -1594,6 +1651,7 @@ export function ProviderDetailsMenu({
   iconOnly: boolean
   ariaLabel: string
   topContent?: React.ReactNode
+  hidePanelResetCredits?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
@@ -1620,7 +1678,7 @@ export function ProviderDetailsMenu({
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
                 {provider.provider === 'claude'
@@ -1659,7 +1717,8 @@ export function ProviderDetailsMenu({
       >
         {topContent}
         <div className="p-2">
-          <ProviderPanel p={provider} />
+          {/* Why: provider-specific action sections may render richer reset-credit UI. */}
+          <ProviderPanel p={provider} showResetCredits={!hidePanelResetCredits} />
         </div>
         {children ? (
           <>

@@ -1,7 +1,7 @@
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  buildWindowsAgentHookPostCommand,
+  buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
   writeManagedScript
@@ -38,11 +38,21 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
   settings: CLAUDE_HOOK_SETTINGS
 }
 
-function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+function getManagedScript(
+  target: 'local' | 'posix' = 'local',
+  options: { skipWhenDevinImportsClaude?: boolean } = {}
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
+      ...(options.skipWhenDevinImportsClaude
+        ? [
+            // Why: Devin imports .claude hooks by default. Skip Orca's managed
+            // Claude hook there so status posts stay attributed to Devin.
+            'if not "%DEVIN_PROJECT_DIR%"=="" exit /b 0'
+          ]
+        : []),
       // Why: the endpoint file holds the *live* port/token for this Orca
       // install. A PTY that survived an Orca restart has stale PORT/TOKEN
       // baked into its env from the old instance — loading `endpoint.cmd`
@@ -53,7 +63,12 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      buildWindowsAgentHookPostCommand('claude'),
+      // Why: post via curl.exe, not a second PowerShell. Claude's launcher is
+      // already an encoded PowerShell command (Git Bash needs it to survive
+      // spaces); a PowerShell post on top of that meant two interpreter
+      // startups per hook. The post runs inside the .cmd (cmd.exe context), so
+      // curl works the same here as for the POSIX/Codex hooks.
+      buildWindowsAgentHookCurlPostCommand('claude'),
       'exit /b 0',
       ''
     ].join('\r\n')
@@ -61,6 +76,15 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
+    ...(options.skipWhenDevinImportsClaude
+      ? [
+          // Why: Devin imports .claude hooks by default. Skip Orca's managed
+          // Claude hook there so status posts stay attributed to Devin.
+          'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
+          '  exit 0',
+          'fi'
+        ]
+      : []),
     // Why: the endpoint file holds the *live* port/token for this Orca
     // install. PTYs that survive an Orca restart have stale PORT/TOKEN
     // baked into their env from the old instance — sourcing the file here
@@ -95,6 +119,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
@@ -181,7 +206,10 @@ export class ClaudeHookService {
       command,
       getManagedScriptFileName(this.options.settings)
     )
-    writeManagedScript(scriptPath, getManagedScript())
+    writeManagedScript(
+      scriptPath,
+      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+    )
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
@@ -229,7 +257,11 @@ export class ClaudeHookService {
       // of broken settings.json.
       // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
       // running on Windows; never derive remote script syntax from local OS.
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeManagedScriptRemote(
+        sftp,
+        remoteScriptPath,
+        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      )
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {

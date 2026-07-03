@@ -20,6 +20,35 @@ function roundTripMarkdown(content: string): string {
   }
 }
 
+function markdownAfterTextReplace(content: string, search: string, replacement: string): string {
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions(),
+    content: encodeRawMarkdownHtmlForRichEditor(content),
+    contentType: 'markdown'
+  })
+
+  try {
+    let from: number | null = null
+    editor.state.doc.descendants((node, pos) => {
+      if (from !== null || !node.isText || !node.text) {
+        return
+      }
+      const index = node.text.indexOf(search)
+      if (index !== -1) {
+        from = pos + index
+      }
+    })
+    if (from === null) {
+      throw new Error(`Missing text: ${search}`)
+    }
+    editor.view.dispatch(editor.state.tr.insertText(replacement, from, from + search.length))
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
 function slashCommandMarkdown(commandId: SlashCommandId): string {
   const editor = new Editor({
     element: null,
@@ -150,6 +179,42 @@ describe('rich markdown round trip', () => {
 
   it('preserves markdown tables', () => {
     expect(roundTripMarkdown('| a | b |\n| - | - |\n| 1 | 2 |\n')).toContain('| a')
+  })
+
+  it('preserves encoded local image paths with screenshot filenames', () => {
+    expect(roundTripMarkdown('![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)\n')).toBe(
+      '![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)'
+    )
+  })
+
+  it('preserves links whose label is inline code', () => {
+    expect(roundTripMarkdown('Link to [`foo.md`](./foo.md) here\n')).toBe(
+      'Link to [`foo.md`](./foo.md) here'
+    )
+  })
+
+  it('preserves links whose label is inline code after an editor transaction', () => {
+    expect(
+      markdownAfterTextReplace('Link to [`foo.md`](./foo.md) here\n', 'here', 'here saved')
+    ).toBe('Link to [`foo.md`](./foo.md) here saved')
+  })
+
+  it('preserves links when editing inside an inline-code label', () => {
+    expect(markdownAfterTextReplace('Link to [`foo.md`](./foo.md) here\n', 'foo', 'bar')).toBe(
+      'Link to [`bar.md`](./foo.md) here'
+    )
+  })
+
+  it('preserves titled links whose label is inline code', () => {
+    expect(roundTripMarkdown('Link to [`foo.md`](./foo.md "Foo") here\n')).toBe(
+      'Link to [`foo.md`](./foo.md "Foo") here'
+    )
+  })
+
+  it('preserves bold link labels as formatted link text', () => {
+    expect(roundTripMarkdown('Link to [**bold**](./foo.md) here\n')).toBe(
+      'Link to [**bold**](./foo.md) here'
+    )
   })
 
   it('does not surface Linear issue reference definitions as description text', () => {

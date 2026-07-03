@@ -22,6 +22,7 @@ export function getPiTitlebarExtensionSource(): string {
     '}',
     '',
     'export default function (pi) {',
+    '  if (!process.env.ORCA_PANE_KEY) return',
     '  let timer = null',
     '  let frameIndex = 0',
     '',

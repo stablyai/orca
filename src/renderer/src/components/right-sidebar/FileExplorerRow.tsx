@@ -20,6 +20,7 @@ import {
   Loader2,
   Pencil,
   Search,
+  SquareTerminal,
   Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -50,6 +51,7 @@ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/loc
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
+import { downloadRuntimeFile, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -270,6 +272,7 @@ type FileExplorerRowProps = {
   isIgnored: boolean
   deleteShortcutLabel: string
   connectionId?: string | null
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null
   canCollapseFolderSubtree: boolean
   targetDir: string
   targetDepth: number
@@ -283,6 +286,7 @@ type FileExplorerRowProps = {
   onDuplicate: (node: TreeNode) => void
   onAddFolderAsProject: () => void
   canAddAsProject: boolean
+  onOpenInTerminal: () => void
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
   onFindInFolder: () => void
@@ -302,21 +306,49 @@ export function shouldShowFindInFolderAction(node: TreeNode): boolean {
   return node.isDirectory
 }
 
+export function shouldShowOpenInTerminalAction(node: TreeNode): boolean {
+  return node.isDirectory
+}
+
 export function shouldShowRemoteDownloadAction(
   node: TreeNode,
-  connectionId?: string | null
+  connectionId?: string | null,
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null
 ): boolean {
   // Why: Desktop-only because download depends on Electron's native save dialog.
   return (
     !node.isDirectory &&
-    Boolean(connectionId) &&
+    Boolean(connectionId || runtimeDownloadContext) &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
 }
 
-export async function downloadRemoteFile(node: TreeNode, connectionId: string): Promise<void> {
+export function shouldShowCopyFileAction(
+  node: TreeNode,
+  connectionId?: string | null,
+  selectionSize = 1
+): boolean {
+  // Why: remote directories would require recursive materialization semantics;
+  // keep this to a single concrete file reference until multi-file copy exists.
+  return (
+    (!connectionId || !node.isDirectory) &&
+    selectionSize === 1 &&
+    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+  )
+}
+
+export async function downloadRemoteFile(
+  node: TreeNode,
+  connectionIdOrRuntimeContext: string | RuntimeFileOperationArgs
+): Promise<void> {
   try {
-    const result = await window.api.fs.downloadFile({ filePath: node.path, connectionId })
+    const result =
+      typeof connectionIdOrRuntimeContext === 'string'
+        ? await window.api.fs.downloadFile({
+            filePath: node.path,
+            connectionId: connectionIdOrRuntimeContext
+          })
+        : await downloadRuntimeFile(connectionIdOrRuntimeContext, node.path, node.name)
     // Why: Suppress toasts when the user cancels the native save dialog per design.
     if (result.canceled) {
       return
@@ -350,6 +382,26 @@ export async function downloadRemoteFile(node: TreeNode, connectionId: string): 
   }
 }
 
+export async function copyFileToOsClipboard(
+  node: TreeNode,
+  connectionId?: string | null
+): Promise<void> {
+  const failureMessage = translate(
+    'auto.components.right.sidebar.FileExplorerRow.b234ab25b4',
+    'Could not copy the file to the clipboard'
+  )
+  try {
+    const result = await window.api.ui.writeClipboardFile(
+      connectionId ? { filePath: node.path, connectionId } : node.path
+    )
+    if (!result.ok) {
+      toast.error(failureMessage)
+    }
+  } catch (error) {
+    toast.error(extractIpcErrorMessage(error, failureMessage))
+  }
+}
+
 export function FileExplorerRow({
   node,
   isExpanded,
@@ -362,6 +414,7 @@ export function FileExplorerRow({
   isIgnored,
   deleteShortcutLabel,
   connectionId,
+  runtimeDownloadContext,
   canCollapseFolderSubtree,
   targetDir,
   targetDepth,
@@ -375,6 +428,7 @@ export function FileExplorerRow({
   onDuplicate,
   onAddFolderAsProject,
   canAddAsProject,
+  onOpenInTerminal,
   onRequestDelete,
   onCollapseFolderSubtree,
   onFindInFolder,
@@ -392,7 +446,12 @@ export function FileExplorerRow({
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
-  const showRemoteDownloadAction = shouldShowRemoteDownloadAction(node, connectionId)
+  const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
+    node,
+    connectionId,
+    runtimeDownloadContext
+  )
+  const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
       rowDropDir,
@@ -415,10 +474,14 @@ export function FileExplorerRow({
     }
   }, [activeWorktreeId, node.path])
   const handleDownload = useCallback(() => {
-    if (!connectionId) {
+    const downloadTarget = connectionId || runtimeDownloadContext
+    if (!downloadTarget) {
       return
     }
-    void downloadRemoteFile(node, connectionId)
+    void downloadRemoteFile(node, downloadTarget)
+  }, [connectionId, node, runtimeDownloadContext])
+  const handleCopyFile = useCallback(() => {
+    void copyFileToOsClipboard(node, connectionId)
   }, [connectionId, node])
 
   return (
@@ -433,9 +496,12 @@ export function FileExplorerRow({
     >
       <ContextMenuTrigger asChild>
         <button
+          data-file-explorer-row=""
+          data-selected={isSelected ? 'true' : undefined}
           className={cn(
-            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors hover:bg-accent hover:text-foreground',
-            isSelected && 'bg-accent text-accent-foreground',
+            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors',
+            !isSelected && 'hover:bg-accent hover:text-foreground',
+            isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
@@ -592,6 +658,12 @@ export function FileExplorerRow({
           {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
         </ContextMenuItem>
         <ContextMenuSeparator />
+        {showCopyFileAction && (
+          <ContextMenuItem onSelect={handleCopyFile}>
+            <Copy />
+            {translate('auto.components.right.sidebar.FileExplorerRow.98a79948b3', 'Copy')}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
           <Copy />
           {selectionSize > 1
@@ -628,6 +700,15 @@ export function FileExplorerRow({
             {translate(
               'auto.components.right.sidebar.FileExplorerRow.1bb9be455c',
               'Add as Project...'
+            )}
+          </ContextMenuItem>
+        )}
+        {shouldShowOpenInTerminalAction(node) && (
+          <ContextMenuItem onSelect={onOpenInTerminal}>
+            <SquareTerminal />
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.e887fa4b2e',
+              'Open in Terminal'
             )}
           </ContextMenuItem>
         )}

@@ -61,6 +61,8 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarOpen?: boolean
     rightSidebarTab?: EditorExternalWatchTargetState['rightSidebarTab']
     rightSidebarExplorerView?: EditorExternalWatchTargetState['rightSidebarExplorerView']
+    gitStatusHugeByWorktree?: EditorExternalWatchTargetState['gitStatusHugeByWorktree']
+    sshConnectionStates?: EditorExternalWatchTargetState['sshConnectionStates']
   }): EditorExternalWatchTargetState => ({
     openFiles: args.openFiles ?? [],
     worktreesByRepo: { [args.repo.id]: [args.worktree] },
@@ -69,6 +71,8 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarOpen: args.rightSidebarOpen ?? false,
     rightSidebarTab: args.rightSidebarTab ?? 'explorer',
     rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
+    gitStatusHugeByWorktree: args.gitStatusHugeByWorktree ?? {},
+    sshConnectionStates: args.sshConnectionStates ?? new Map(),
     settings:
       args.runtimeEnvironmentId === undefined
         ? null
@@ -98,7 +102,7 @@ describe('getEditorExternalWatchTargets', () => {
     ])
   })
 
-  it('does not watch the active worktree while the file explorer is hidden', () => {
+  it('does not watch the active worktree while the sidebar is hidden', () => {
     const repo = makeRepo('repo-active')
     const worktree = makeWorktree(repo.id, 'wt-active')
 
@@ -150,7 +154,7 @@ describe('getEditorExternalWatchTargets', () => {
     ).toEqual([])
   })
 
-  it('does not watch the active worktree when a different right sidebar tab is visible', () => {
+  it('keeps watching the active worktree when Source Control is visible', () => {
     const repo = makeRepo('repo-source-control')
     const worktree = makeWorktree(repo.id, 'wt-source-control')
 
@@ -164,7 +168,75 @@ describe('getEditorExternalWatchTargets', () => {
           rightSidebarTab: 'source-control'
         })
       ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-source-control',
+        worktreePath: '/repo-source-control/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('does not watch Source Control-only worktrees when git status is paused as huge', () => {
+    const repo = makeRepo('repo-source-control-huge')
+    const worktree = makeWorktree(repo.id, 'wt-source-control-huge')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control',
+          gitStatusHugeByWorktree: { [worktree.id]: { limit: 1000 } }
+        })
+      ).targets
     ).toEqual([])
+  })
+
+  it('does not watch Source Control-only SSH worktrees while disconnected', () => {
+    const repo = makeRepo('repo-source-control-ssh', 'ssh-1')
+    const worktree = makeWorktree(repo.id, 'wt-source-control-ssh')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control',
+          sshConnectionStates: new Map([['ssh-1', { status: 'disconnected' } as never]])
+        })
+      ).targets
+    ).toEqual([])
+  })
+
+  it('watches Source Control-only SSH worktrees when connected', () => {
+    const repo = makeRepo('repo-source-control-ssh-connected', 'ssh-1')
+    const worktree = makeWorktree(repo.id, 'wt-source-control-ssh-connected')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control',
+          sshConnectionStates: new Map([['ssh-1', { status: 'connected' } as never]])
+        })
+      ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-source-control-ssh-connected',
+        worktreePath: '/repo-source-control-ssh-connected/worktree',
+        connectionId: 'ssh-1',
+        runtimeEnvironmentId: null
+      }
+    ])
   })
 
   it('rebuilds ownerless targets when an SSH connection id hydrates', () => {

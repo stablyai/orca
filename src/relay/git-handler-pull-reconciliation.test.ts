@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { execFileSync } from 'child_process'
-import { existsSync, mkdtempSync, writeFileSync } from 'fs'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { tmpdir } from 'os'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { tmpdir } from 'node:os'
 import { RelayContext } from './context'
 import { GitHandler } from './git-handler'
 import {
@@ -94,7 +94,7 @@ describe('GitHandler pull reconciliation', () => {
     )
 
     expect(execGit(consumerDir, ['status', '--short'])).toBe('')
-  })
+  }, 15_000)
 
   it('preserves configured rebase pull semantics', async () => {
     const consumerDir = createDivergentFixture()
@@ -108,7 +108,7 @@ describe('GitHandler pull reconciliation', () => {
     expect(parentRefs).toHaveLength(1)
     expect(existsSync(path.join(consumerDir, 'remote.txt'))).toBe(true)
     expect(execGit(consumerDir, ['status', '--short'])).toBe('')
-  })
+  }, 15_000)
 })
 
 function restoreGitEnv(

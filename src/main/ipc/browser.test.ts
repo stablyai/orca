@@ -11,10 +11,7 @@ const {
   getWorktreeIdForTabMock,
   openDevToolsMock,
   setAnnotationViewportBridgeMock,
-  getDownloadPromptMock,
-  acceptDownloadMock,
   cancelDownloadMock,
-  showSaveDialogMock,
   browserWindowFromWebContentsMock,
   webContentsFromIdMock
 } = vi.hoisted(() => ({
@@ -27,10 +24,7 @@ const {
   getWorktreeIdForTabMock: vi.fn(),
   openDevToolsMock: vi.fn().mockResolvedValue(true),
   setAnnotationViewportBridgeMock: vi.fn().mockResolvedValue(true),
-  getDownloadPromptMock: vi.fn(),
-  acceptDownloadMock: vi.fn(),
   cancelDownloadMock: vi.fn(),
-  showSaveDialogMock: vi.fn(),
   browserWindowFromWebContentsMock: vi.fn(),
   webContentsFromIdMock: vi.fn()
 }))
@@ -38,9 +32,6 @@ const {
 vi.mock('electron', () => ({
   BrowserWindow: {
     fromWebContents: browserWindowFromWebContentsMock
-  },
-  dialog: {
-    showSaveDialog: showSaveDialogMock
   },
   ipcMain: {
     removeHandler: removeHandlerMock,
@@ -60,8 +51,6 @@ vi.mock('../browser/browser-manager', () => ({
     getWorktreeIdForTab: getWorktreeIdForTabMock,
     openDevTools: openDevToolsMock,
     setAnnotationViewportBridge: setAnnotationViewportBridgeMock,
-    getDownloadPrompt: getDownloadPromptMock,
-    acceptDownload: acceptDownloadMock,
     cancelDownload: cancelDownloadMock
   }
 }))
@@ -87,10 +76,7 @@ describe('registerBrowserHandlers', () => {
     getWorktreeIdForTabMock.mockReset()
     openDevToolsMock.mockReset()
     setAnnotationViewportBridgeMock.mockReset()
-    getDownloadPromptMock.mockReset()
-    acceptDownloadMock.mockReset()
     cancelDownloadMock.mockReset()
-    showSaveDialogMock.mockReset()
     browserWindowFromWebContentsMock.mockReset()
     webContentsFromIdMock.mockReset()
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
@@ -125,19 +111,13 @@ describe('registerBrowserHandlers', () => {
     expect(registerGuestMock).not.toHaveBeenCalled()
   })
 
-  it('accepts downloads through a main-owned save dialog', async () => {
-    getDownloadPromptMock.mockReturnValue({ filename: 'report.csv' })
-    acceptDownloadMock.mockReturnValue({ ok: true })
-    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/tmp/report.csv' })
-
+  it('authorizes browser download cancellation through the owning renderer', () => {
+    cancelDownloadMock.mockReturnValue(true)
     registerBrowserHandlers()
 
-    const acceptHandler = handleMock.mock.calls.find(
-      ([channel]) => channel === 'browser:acceptDownload'
-    )?.[1] as (
-      event: { sender: Electron.WebContents },
-      args: { downloadId: string }
-    ) => Promise<{ ok: true } | { ok: false; reason: string }>
+    const cancelHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:cancelDownload'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: { downloadId: string }) => boolean
 
     const sender = {
       id: 91,
@@ -146,15 +126,36 @@ describe('registerBrowserHandlers', () => {
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
 
-    const result = await acceptHandler({ sender }, { downloadId: 'download-1' })
+    const result = cancelHandler({ sender }, { downloadId: 'download-1' })
 
-    expect(showSaveDialogMock).toHaveBeenCalledTimes(1)
-    expect(acceptDownloadMock).toHaveBeenCalledWith({
+    expect(cancelDownloadMock).toHaveBeenCalledWith({
       downloadId: 'download-1',
-      senderWebContentsId: 91,
-      savePath: '/tmp/report.csv'
+      senderWebContentsId: 91
     })
-    expect(result).toEqual({ ok: true })
+    expect(result).toBe(true)
+  })
+
+  it('rejects browser download cancellation from untrusted callers', () => {
+    registerBrowserHandlers()
+
+    const cancelHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:cancelDownload'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: { downloadId: string }) => boolean
+
+    const result = cancelHandler(
+      {
+        sender: {
+          id: 92,
+          isDestroyed: () => false,
+          getType: () => 'webview',
+          getURL: () => 'https://example.com'
+        } as Electron.WebContents
+      },
+      { downloadId: 'download-1' }
+    )
+
+    expect(result).toBe(false)
+    expect(cancelDownloadMock).not.toHaveBeenCalled()
   })
 
   it('updates the bridge active tab for the owning worktree', async () => {

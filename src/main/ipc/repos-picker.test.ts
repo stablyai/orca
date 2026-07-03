@@ -64,6 +64,14 @@ describe('repos folder pickers', () => {
     return handler(null, undefined) as Promise<string[]>
   }
 
+  const callPickDirectory = (): Promise<string | null> => {
+    const handler = handlers.get('repos:pickDirectory')
+    if (!handler) {
+      throw new Error('repos:pickDirectory handler was never registered')
+    }
+    return handler(null, undefined) as Promise<string | null>
+  }
+
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
@@ -100,5 +108,19 @@ describe('repos folder pickers', () => {
     showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
 
     await expect(callPickFolders()).resolves.toEqual([])
+  })
+
+  it('picks an existing directory without enabling native directory creation', async () => {
+    const parentDir = join(sep, 'projects')
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: [parentDir]
+    })
+
+    await expect(callPickDirectory()).resolves.toBe(parentDir)
+
+    expect(showOpenDialogMock).toHaveBeenCalledWith(mockWindow, {
+      properties: ['openDirectory']
+    })
   })
 })

@@ -128,10 +128,16 @@ export function getActiveSpanContext(): SpanContext | undefined {
  * This is the function 90% of call sites should reach for: it keeps span
  * lifetime scoped to the async work it measures.
  */
+type SpanRecordDecision = (record: RedactableSpan) => boolean
+
 export async function withSpan<T>(
   name: string,
   fn: (span: ActiveSpan) => Promise<T> | T,
-  options?: { kind?: string; attributes?: Record<string, unknown> }
+  options?: {
+    kind?: string
+    attributes?: Record<string, unknown>
+    shouldRecord?: SpanRecordDecision
+  }
 ): Promise<T> {
   const span = startSpan(name, options)
   try {
@@ -157,7 +163,11 @@ export async function withSpan<T>(
  */
 export function startSpan(
   name: string,
-  options?: { kind?: string; attributes?: Record<string, unknown> }
+  options?: {
+    kind?: string
+    attributes?: Record<string, unknown>
+    shouldRecord?: SpanRecordDecision
+  }
 ): ActiveSpan {
   if (!activeSink) {
     return noopSpan
@@ -201,6 +211,10 @@ export function startSpan(
       attributes: Object.fromEntries(pending.attributes),
       events: pending.events,
       exit
+    }
+
+    if (options?.shouldRecord && !options.shouldRecord(record)) {
+      return
     }
 
     const redacted = redactSpan(record, 'client')

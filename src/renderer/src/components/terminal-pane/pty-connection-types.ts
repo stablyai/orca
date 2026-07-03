@@ -3,7 +3,9 @@ import type { ReplayingPanesRef } from './replay-guard'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
-import type { TuiAgent } from '../../../../shared/types'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -14,7 +16,12 @@ export type PtyConnectionDeps = {
     /** Renderer-delivered startup input for callers that need xterm paste
      *  semantics before the submit Enter. */
     delivery?: 'terminal-paste'
+    startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    launchToken?: string
+    launchAgent?: TuiAgent
+    draftPrompt?: string
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
@@ -22,6 +29,8 @@ export type PtyConnectionDeps = {
     initialAgentStatus?: { agent: TuiAgent; prompt: string }
     /** Show the restored-session banner when this startup command mounts. */
     showSessionRestoredBanner?: boolean
+    /** Initial startup may be paired with a setup split that changes its grid. */
+    waitForSetupSplitDirection?: SetupSplitDirection
   } | null
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
@@ -59,4 +68,5 @@ export type PtyConnectionDeps = {
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
+  clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
 }

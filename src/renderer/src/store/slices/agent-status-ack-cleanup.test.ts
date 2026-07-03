@@ -86,7 +86,8 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
     vi.setSystemTime(new Date('2026-04-29T12:00:00.000Z'))
     const store = createTestStore()
 
-    // Session 1: agent runs on tab-1:0, user acks it, tab closes.
+    // Session 1: agent runs on tab-1:0, user acks it, pane state is torn down
+    // without marking the whole tab closed.
     store
       .getState()
       .setAgentStatus('tab-1:0', { state: 'working', prompt: 'first', agentType: 'claude' })
@@ -94,7 +95,7 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
     const firstAck = store.getState().acknowledgedAgentsByPaneKey['tab-1:0']
     expect(firstAck).toBeGreaterThan(0)
 
-    store.getState().dropAgentStatusByTabPrefix('tab-1')
+    store.getState().removeAgentStatus('tab-1:0')
     expect(store.getState().acknowledgedAgentsByPaneKey['tab-1:0']).toBeUndefined()
 
     // Session 2: a brand-new tab+pane happens to collide on the same paneKey,

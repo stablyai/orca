@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
+import { Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
@@ -91,17 +92,26 @@ export function MobileDriverOverlay({
   if (isHeldAtPhoneFit) {
     return (
       <LoudOverlay
-        eyebrow="Held at phone size"
+        eyebrow={translate(
+          'auto.components.terminal.pane.MobileDriverOverlay.f2a8b9c1d3',
+          'From your phone'
+        )}
         title={translate(
           'auto.components.terminal.pane.MobileDriverOverlay.faa367dc74',
-          'This terminal is sized for your mobile app'
+          'Your phone left this at phone size'
         )}
-        body="The session is still being held at the dimensions your phone last reported. Restore to use it on your desktop."
-        actionLabel="Restore desktop size"
+        body={translate(
+          'auto.components.terminal.pane.MobileDriverOverlay.a6b1d8f3e2',
+          'Your phone session ended. Restore to desktop size for this terminal, or for all terminals your phone left at phone size.'
+        )}
+        actionLabel={translate(
+          'auto.components.terminal.pane.MobileDriverOverlay.b3d8e1f42a',
+          'Restore this terminal'
+        )}
         actionPending={actionPending}
         allActionLabel={translate(
-          'auto.components.terminal.pane.MobileDriverOverlay.54f7d6f69d',
-          'Resize all terminals'
+          'auto.components.terminal.pane.MobileDriverOverlay.e8c4f2a91b',
+          'Restore all terminals'
         )}
         allActionPending={allActionPending}
         onAction={handleAction}
@@ -127,17 +137,26 @@ export function MobileDriverOverlay({
 
   return (
     <LoudOverlay
-      eyebrow="Mobile is driving this terminal"
-      title={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.3eed73394f',
-        'Your keyboard is paused'
+      eyebrow={translate(
+        'auto.components.terminal.pane.MobileDriverOverlay.f2a8b9c1d3',
+        'From your phone'
       )}
-      body="Output below is being typed from your phone. Take back to resume typing on the desktop, or collapse to keep watching."
-      actionLabel="Take back"
+      title={translate(
+        'auto.components.terminal.pane.MobileDriverOverlay.c7e4a2b8f1',
+        'Your phone is in control'
+      )}
+      body={translate(
+        'auto.components.terminal.pane.MobileDriverOverlay.d9f3c6e2a4',
+        'Desktop keyboard is paused. Take back this terminal to type here, take back all terminals your phone controls, or collapse to keep watching.'
+      )}
+      actionLabel={translate(
+        'auto.components.terminal.pane.MobileDriverOverlay.c8f2e1a4b9',
+        'Take back this terminal'
+      )}
       actionPending={actionPending}
       allActionLabel={translate(
         'auto.components.terminal.pane.MobileDriverOverlay.54f7d6f69d',
-        'Resize all terminals'
+        'Take back all terminals'
       )}
       allActionPending={allActionPending}
       onAction={handleAction}
@@ -218,17 +237,31 @@ function LoudOverlay({
       )}
     >
       <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
-        <div
-          className={cn(
-            'flex items-center gap-1.5 text-xs font-medium',
-            tone === 'driving' ? 'text-foreground' : 'text-muted-foreground'
-          )}
-        >
-          <span aria-hidden="true">●</span>
-          <span>{eyebrow}</span>
-        </div>
-        <div id={titleId} className="text-base font-semibold leading-tight">
-          {title}
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              'flex size-10 shrink-0 items-center justify-center rounded-full border border-border',
+              tone === 'driving' ? 'bg-muted' : 'bg-muted/60'
+            )}
+          >
+            <Smartphone className="size-5 text-foreground" aria-hidden="true" />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div
+              className={cn(
+                'flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide',
+                tone === 'driving' ? 'text-foreground' : 'text-muted-foreground'
+              )}
+            >
+              {tone === 'driving' ? (
+                <span aria-hidden="true" className="size-1.5 rounded-full bg-foreground" />
+              ) : null}
+              <span>{eyebrow}</span>
+            </div>
+            <div id={titleId} className="text-base font-semibold leading-tight">
+              {title}
+            </div>
+          </div>
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
           {body}
@@ -293,7 +326,7 @@ function LockChip({
         rootClassName
       )}
     >
-      <span aria-hidden="true" className="size-2 rounded-full bg-foreground" />
+      <Smartphone className="size-3 text-foreground" aria-hidden="true" />
       <Button
         type="button"
         variant="ghost"
@@ -301,10 +334,7 @@ function LockChip({
         className="px-1 font-medium"
         onClick={onExpand}
       >
-        {translate(
-          'auto.components.terminal.pane.MobileDriverOverlay.c44659e09f',
-          'Mobile driving'
-        )}
+        {translate('auto.components.terminal.pane.MobileDriverOverlay.c44659e09f', 'Phone driving')}
       </Button>
       <Button type="button" variant="default" size="xs" onClick={onAction} disabled={actionPending}>
         {translate('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back')}

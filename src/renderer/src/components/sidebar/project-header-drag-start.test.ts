@@ -46,7 +46,7 @@ describe('createProjectHeaderDragSession', () => {
     expect(handleEl.setPointerCapture).not.toHaveBeenCalled()
   })
 
-  it('does not arm drag when the pointer starts outside the project name handle', () => {
+  it('does not arm drag when the pointer starts outside the project icon handle', () => {
     const header = document.createElement('div')
     const handleEl = document.createElement('div')
     handleEl.setAttribute('data-repo-header-drag-handle', '')

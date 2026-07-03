@@ -1,5 +1,5 @@
 import type { AppState } from '../store'
-import { detectAgentStatusFromTitle } from '../../../shared/agent-detection'
+import { isDecorativeAgentTitleFrameChange } from '../../../shared/agent-decorative-title-signature'
 import type { WorkspaceSessionPatch } from '../../../shared/types'
 import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
@@ -14,22 +14,6 @@ const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
 // Why: this handoff flag is stripped from workspace sessions, so toggling it
 // alone should not rebuild and rewrite the durable session payload.
 const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>(['pendingActivationSpawn'])
-
-function getDecorativeAgentTitleSignature(title: string): string | null {
-  const status = detectAgentStatusFromTitle(title)
-  if (!status) {
-    return null
-  }
-  return `${status}:${title
-    .trim()
-    .replace(/^[\u2800-\u28ff\s]+/u, '')
-    .replace(/\s+/g, ' ')}`
-}
-
-function isDecorativeAgentTitleFrameChange(prevTitle: string, nextTitle: string): boolean {
-  const prevSignature = getDecorativeAgentTitleSignature(prevTitle)
-  return prevSignature !== null && prevSignature === getDecorativeAgentTitleSignature(nextTitle)
-}
 
 function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {
   if (prev === next) {

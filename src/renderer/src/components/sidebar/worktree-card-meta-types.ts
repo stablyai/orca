@@ -1,4 +1,5 @@
-import type { IssueInfo } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { AutomationWorkspaceProvenance, IssueInfo } from '../../../../shared/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 
@@ -25,6 +26,7 @@ export type WorktreeCardMetaBadgesProps = {
   linearIssue: WorktreeCardLinearIssueDisplay | null
   review: WorktreeCardPrDisplay | null
   comment: string | null
+  automationProvenance?: AutomationWorkspaceProvenance | null
 }
 
 export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
@@ -35,6 +37,7 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   branchName?: string
   workspaceTitle?: string
   identityOrder?: 'workspace-first' | 'branch-first'
+  automationHostId?: ExecutionHostId
   detailsAfter?: React.ReactNode
   openDelay?: number
   closeDelay?: number
@@ -44,5 +47,7 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
   onOpenReviewInOrca?: (event: React.MouseEvent) => void
   onUnlinkReview?: () => void
+  onOpenAutomation?: (event: React.MouseEvent) => void
+  onOpenAutomationRun?: (event: React.MouseEvent) => void
   hoverControl?: WorktreeCardDetailsHoverControl
 }

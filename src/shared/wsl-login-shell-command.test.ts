@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process'
+import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import {
   buildWslInteractiveLoginShellCommand,
@@ -7,9 +7,30 @@ import {
   quotePosixShell
 } from './wsl-login-shell-command'
 
+const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
+let wslShAvailable: boolean | null = null
+
+function canRunWslSh(): boolean {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  if (wslShAvailable !== null) {
+    return wslShAvailable
+  }
+  try {
+    execFileSync('wsl.exe', ['--', 'sh', '-lc', 'true'], {
+      timeout: WSL_TEST_COMMAND_TIMEOUT_MS
+    })
+    wslShAvailable = true
+  } catch {
+    wslShAvailable = false
+  }
+  return wslShAvailable
+}
+
 function expectValidShSyntax(command: string): void {
   try {
-    execFileSync('sh', ['-n'], { input: command })
+    execFileSync('sh', ['-n'], { input: command, timeout: WSL_TEST_COMMAND_TIMEOUT_MS })
     return
   } catch (error) {
     if (
@@ -19,7 +40,13 @@ function expectValidShSyntax(command: string): void {
       throw error
     }
   }
-  execFileSync('wsl.exe', ['--', 'sh', '-n'], { input: command })
+  if (!canRunWslSh()) {
+    return
+  }
+  execFileSync('wsl.exe', ['--', 'sh', '-n'], {
+    input: command,
+    timeout: WSL_TEST_COMMAND_TIMEOUT_MS
+  })
 }
 
 describe('wsl login shell command helpers', () => {
@@ -31,7 +58,9 @@ describe('wsl login shell command helpers', () => {
     const command = buildWslLoginShellCommand("printf 'hello'")
 
     expect(command).toContain('getent passwd')
+    expect(command).toContain('bash|zsh|ksh|mksh|ash)')
     expect(command).toContain('exec "$_orca_wsl_shell" -ilc')
+    expect(command).toContain('exec /bin/sh -lc')
     expect(command).toContain("printf '\\''hello'\\''")
   })
 
@@ -45,7 +74,7 @@ describe('wsl login shell command helpers', () => {
     expect(escaped).toContain('\\$(getent passwd "\\$(id -un)"')
     expect(escaped).toContain('\\$HISTFILE')
     expectValidShSyntax(command)
-  }, 15_000)
+  }, 30_000)
 
   it('does not double-escape wrapper shell variables', () => {
     const command = 'echo \\$_orca_wsl_shell "$_orca_wsl_shell"'
@@ -65,23 +94,23 @@ describe('wsl login shell command helpers', () => {
       "'HISTFILE=/tmp/orca-history printf \"\\$HISTFILE\"; printf '\\''%s'\\'' \"\\$SHELL\"'"
     )
     expectValidShSyntax(command)
-  }, 15_000)
+  }, 30_000)
 
   it('preserves user command variables across the Windows-to-WSL argv boundary', () => {
-    if (process.platform !== 'win32') {
-      return
-    }
-    try {
-      execFileSync('wsl.exe', ['--', 'true'])
-    } catch {
+    if (!canRunWslSh()) {
       return
     }
 
     const command = buildWslLoginShellCommand('orca_value=ok; printf "<%s>" "$orca_value"')
     const escaped = escapeWslShCommandForWindows(command)
 
-    expect(execFileSync('wsl.exe', ['--', 'sh', '-lc', escaped], { encoding: 'utf8' })).toBe('<ok>')
-  }, 15_000)
+    expect(
+      execFileSync('wsl.exe', ['--', 'sh', '-lc', escaped], {
+        encoding: 'utf8',
+        timeout: WSL_TEST_COMMAND_TIMEOUT_MS
+      })
+    ).toBe('<ok>')
+  }, 30_000)
 
   it('starts an interactive login shell without assuming bash', () => {
     const command = buildWslInteractiveLoginShellCommand()

@@ -14,6 +14,7 @@ import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { collectAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
 import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
@@ -131,6 +132,7 @@ export class AutomationService {
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
     const run = this.store.updateAutomationRun(result)
+    clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalRunStatus(run.status)) {
       return run
     }
@@ -231,7 +233,11 @@ export class AutomationService {
       workspaceId: automation.workspaceId,
       error: null
     })
-    const payload: AutomationDispatchRequest = { automation, run: updated }
+    const payload: AutomationDispatchRequest = {
+      automation,
+      run: updated,
+      dispatchToken: createAutomationDispatchToken(automation.id, updated.id)
+    }
     webContents.send('automations:dispatchRequested', payload)
     return updated
   }
@@ -256,12 +262,17 @@ export class AutomationService {
     }
     try {
       const launch = await this.headlessDispatcher!({ automation, run, target })
-      const updated = this.store.updateAutomationRun({
-        runId: run.id,
-        status: 'dispatched',
+      const launchRunTarget = {
         workspaceId: launch.workspaceId,
         workspaceDisplayName: launch.workspaceDisplayName ?? null,
         terminalSessionId: launch.terminalSessionId,
+        terminalPaneKey: launch.terminalPaneKey ?? null,
+        terminalPtyId: launch.terminalPtyId ?? null
+      }
+      const updated = this.store.updateAutomationRun({
+        runId: run.id,
+        status: 'dispatched',
+        ...launchRunTarget,
         error: null
       })
       if (launch.completion) {
@@ -270,9 +281,7 @@ export class AutomationService {
             this.markDispatchResult({
               runId: run.id,
               status: completion.status,
-              workspaceId: launch.workspaceId,
-              workspaceDisplayName: launch.workspaceDisplayName ?? null,
-              terminalSessionId: launch.terminalSessionId,
+              ...launchRunTarget,
               precheckResult,
               outputSnapshot: completion.outputSnapshot ?? null,
               error: completion.error ?? null
@@ -282,9 +291,7 @@ export class AutomationService {
             this.markDispatchResult({
               runId: run.id,
               status: 'dispatch_failed',
-              workspaceId: launch.workspaceId,
-              workspaceDisplayName: launch.workspaceDisplayName ?? null,
-              terminalSessionId: launch.terminalSessionId,
+              ...launchRunTarget,
               error: error instanceof Error ? error.message : String(error)
             })
           )

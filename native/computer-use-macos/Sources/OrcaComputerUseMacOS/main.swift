@@ -1508,6 +1508,7 @@ private final class TreeRenderer {
     var focusedElementId: Int?
     var truncated = false
     var maxDepthReached = false
+    private let reader = AXSnapshotReader()
     private var nextIndex = 0
     static let maxNodes = 1200
     static let maxDepth = 64
@@ -1530,22 +1531,26 @@ private final class TreeRenderer {
         }
         guard !ancestors.contains(where: { CFEqual($0, element) }) else { return }
 
-        let role = stringAttribute(element, kAXRoleAttribute as String) ?? "AXUnknown"
-        let children = primaryChildren(element, role: role, windowBounds: windowBounds)
-        let value = valueString(element)
-        let placeholder = placeholderString(element)
-        let rawActions = actions(element)
-        let rowSummary = rowTextSummary(element, role: role)
-        let linkText = role == "AXLink" ? descendantTextSnippets(element, limit: 2, maxDepth: 3).first : nil
+        let role = reader.stringAttribute(element, kAXRoleAttribute as String) ?? "AXUnknown"
+        let children = reader.primaryChildren(element, role: role, windowBounds: windowBounds)
+        let value = reader.valueString(element, role: role)
+        let placeholder = reader.placeholderString(element)
+        let rawActions = reader.actions(element)
+        let rowSummary = reader.rowTextSummary(element, role: role)
+        let roleDescription = reader.stringAttribute(element, kAXRoleDescriptionAttribute as String)
+        let title = reader.stringAttribute(element, kAXTitleAttribute as String)
+        let label = reader.stringAttribute(element, kAXDescriptionAttribute as String)
+        let url = reader.stringAttribute(element, kAXURLAttribute as String)
+        let linkText = role == "AXLink" ? reader.descendantTextSnippets(element, limit: 2, maxDepth: 3).first : nil
         let baseNode = SnapshotRenderNode(
             role: role,
-            roleDescription: stringAttribute(element, kAXRoleDescriptionAttribute as String),
-            title: stringAttribute(element, kAXTitleAttribute as String),
-            label: stringAttribute(element, kAXDescriptionAttribute as String),
+            roleDescription: roleDescription,
+            title: title,
+            label: label,
             linkText: linkText,
             value: value,
             placeholder: placeholder,
-            url: stringAttribute(element, kAXURLAttribute as String),
+            url: url,
             traits: [],
             rawActions: rawActions,
             childCount: children.count,
@@ -1553,19 +1558,19 @@ private final class TreeRenderer {
         )
         let name = SnapshotRenderHeuristics.displayName(baseNode)
         let meaningful = SnapshotRenderHeuristics.meaningfulActions(rawActions, role: role)
-        let localFrame = frame(element, windowBounds: windowBounds)
-        let traits = traitsFor(element, role: role)
-        let webAreaDepth = webAreaDepth(role: role, ancestors: ancestors)
-        let summary = genericTextSummary(element, role: role, name: name, actions: meaningful, traits: traits)
+        let localFrame = reader.frame(element, windowBounds: windowBounds)
+        let traits = reader.traitsFor(element, role: role)
+        let webAreaDepth = reader.webAreaDepth(role: role, ancestors: ancestors)
+        let summary = reader.genericTextSummary(element, role: role, name: name, actions: meaningful, traits: traits)
         let node = SnapshotRenderNode(
             role: role,
-            roleDescription: stringAttribute(element, kAXRoleDescriptionAttribute as String),
-            title: stringAttribute(element, kAXTitleAttribute as String),
-            label: stringAttribute(element, kAXDescriptionAttribute as String),
+            roleDescription: roleDescription,
+            title: title,
+            label: label,
             linkText: linkText,
             value: value,
             placeholder: placeholder,
-            url: stringAttribute(element, kAXURLAttribute as String),
+            url: url,
             traits: traits,
             rawActions: rawActions,
             childCount: children.count,
@@ -1617,6 +1622,23 @@ private final class TreeRenderer {
         }
     }
 
+    private func tabStripCompaction(parent: SnapshotRenderNode, children: [AXUIElement]) -> SnapshotTabStripCompaction? {
+        let childNodes = children.map { child in
+            let role = reader.stringAttribute(child, kAXRoleAttribute as String) ?? "AXUnknown"
+            return SnapshotRenderNode(
+                role: role,
+                roleDescription: reader.stringAttribute(child, kAXRoleDescriptionAttribute as String),
+                title: reader.stringAttribute(child, kAXTitleAttribute as String),
+                label: reader.stringAttribute(child, kAXDescriptionAttribute as String),
+                value: reader.valueString(child, role: role),
+                traits: reader.traitsFor(child, role: role)
+            )
+        }
+        // Why: browsers expose every open tab through AX; retaining only the active
+        // tab keeps snapshots focused on the current page instead of stale tab titles.
+        return SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: childNodes)
+    }
+
     private func compactRenderedBrowserTabs(parent: SnapshotRenderNode, startLine: Int, depth: Int) {
         guard SnapshotRenderHeuristics.roleText(parent) == "scroll area" else { return }
         let indent = String(repeating: "\t", count: depth)
@@ -1647,44 +1669,301 @@ private final class TreeRenderer {
     }
 }
 
-private func valueString(_ element: AXUIElement) -> String? {
-    if isSecureTextElement(element) {
-        return "[redacted]"
+private final class AXSnapshotReader {
+    private enum CachedAttribute {
+        case missing
+        case found(CFTypeRef)
     }
-    if let string = stringAttribute(element, kAXValueAttribute as String) {
-        return string
+
+    private final class ElementCache {
+        let element: AXUIElement
+        var loadedAttributeNames = false
+        var advertisedAttributes: Set<String>?
+        var attributes: [String: CachedAttribute] = [:]
+        var actions: [String]?
+        var settable: [String: Bool] = [:]
+
+        init(element: AXUIElement) {
+            self.element = element
+        }
     }
-    if let number = numberAttribute(element, kAXValueAttribute as String) {
-        return number.stringValue
+
+    private var elementsByHash: [CFHashCode: [ElementCache]] = [:]
+
+    func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
+        guard let value = copyAttribute(element, attribute) else { return nil }
+        if CFGetTypeID(value) == CFStringGetTypeID(), let string = value as? String {
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if CFGetTypeID(value) == CFURLGetTypeID(), let url = value as? URL {
+            return url.absoluteString
+        }
+        return nil
     }
-    return nil
-}
 
-private func isSecureTextElement(_ element: AXUIElement) -> Bool {
-    let role = stringAttribute(element, kAXRoleAttribute as String)?.lowercased() ?? ""
-    let subrole = stringAttribute(element, kAXSubroleAttribute as String)?.lowercased() ?? ""
-    let title = stringAttribute(element, kAXTitleAttribute as String)?.lowercased() ?? ""
-    let description = stringAttribute(element, kAXDescriptionAttribute as String)?.lowercased() ?? ""
-    let placeholder = placeholderString(element)?.lowercased() ?? ""
-    let haystack = [role, subrole, title, description, placeholder].joined(separator: " ")
-    return haystack.contains("secure") ||
-        haystack.contains("password") ||
-        haystack.contains("passcode") ||
-        haystack.contains("verification code") ||
-        haystack.contains("one-time code")
-}
+    func boolAttribute(_ element: AXUIElement, _ attribute: String) -> Bool? {
+        copyAttribute(element, attribute) as? Bool
+    }
 
-private func placeholderString(_ element: AXUIElement) -> String? {
-    stringAttribute(element, "AXPlaceholderValue") ?? stringAttribute(element, "AXPlaceholder")
-}
+    func numberAttribute(_ element: AXUIElement, _ attribute: String) -> NSNumber? {
+        copyAttribute(element, attribute) as? NSNumber
+    }
 
-private func traitsFor(_ element: AXUIElement, role: String) -> [String] {
-    var traits: [String] = []
-    if boolAttribute(element, kAXSelectedAttribute as String) == true { traits.append("selected") }
-    if boolAttribute(element, kAXExpandedAttribute as String) == true { traits.append("expanded") }
-    if boolAttribute(element, kAXEnabledAttribute as String) == false { traits.append("disabled") }
-    if valueSettableRoles.contains(role), isSettable(element, kAXValueAttribute as String) { traits.append("settable") }
-    return traits
+    func copyArray(_ element: AXUIElement, _ attribute: String) -> [AXUIElement]? {
+        copyAttribute(element, attribute) as? [AXUIElement]
+    }
+
+    func actions(_ element: AXUIElement) -> [String] {
+        let cache = cache(for: element)
+        if let actions = cache.actions {
+            return actions
+        }
+        var value: CFArray?
+        let actions = AXUIElementCopyActionNames(element, &value) == .success ? value as? [String] ?? [] : []
+        cache.actions = actions
+        return actions
+    }
+
+    func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
+        let cache = cache(for: element)
+        if let cached = cache.settable[attribute] {
+            return cached
+        }
+        var settable = DarwinBoolean(false)
+        let value = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success && settable.boolValue
+        cache.settable[attribute] = value
+        return value
+    }
+
+    func frame(_ element: AXUIElement, windowBounds: CGRect) -> CGRect? {
+        guard let absolute = absoluteFrame(element) else { return nil }
+        return CGRect(
+            x: absolute.minX - windowBounds.minX,
+            y: absolute.minY - windowBounds.minY,
+            width: absolute.width,
+            height: absolute.height
+        )
+    }
+
+    func primaryChildren(_ element: AXUIElement, role: String, windowBounds: CGRect) -> [AXUIElement] {
+        if usesRowsAsPrimaryChildren(role: role), let rows = copyArray(element, kAXRowsAttribute as String), !rows.isEmpty {
+            return visibleRows(rows, parent: element, windowBounds: windowBounds)
+        }
+        return copyArray(element, kAXChildrenAttribute as String) ?? []
+    }
+
+    func valueString(_ element: AXUIElement, role: String) -> String? {
+        if isSecureTextElement(element, role: role) {
+            return "[redacted]"
+        }
+        if let string = stringAttribute(element, kAXValueAttribute as String) {
+            return string
+        }
+        if let number = numberAttribute(element, kAXValueAttribute as String) {
+            return number.stringValue
+        }
+        return nil
+    }
+
+    func placeholderString(_ element: AXUIElement) -> String? {
+        stringAttribute(element, "AXPlaceholderValue") ?? stringAttribute(element, "AXPlaceholder")
+    }
+
+    func traitsFor(_ element: AXUIElement, role: String) -> [String] {
+        var traits: [String] = []
+        if boolAttribute(element, kAXSelectedAttribute as String) == true { traits.append("selected") }
+        if boolAttribute(element, kAXExpandedAttribute as String) == true { traits.append("expanded") }
+        if boolAttribute(element, kAXEnabledAttribute as String) == false { traits.append("disabled") }
+        if valueSettableRoles.contains(role), isSettable(element, kAXValueAttribute as String) { traits.append("settable") }
+        return traits
+    }
+
+    func genericTextSummary(
+        _ element: AXUIElement,
+        role: String,
+        name: String?,
+        actions: [String],
+        traits: [String]
+    ) -> String? {
+        guard (role == kAXGroupRole as String || role == kAXUnknownRole as String),
+              name == nil,
+              actions.isEmpty,
+              traits.isEmpty,
+              isPlainTextSubtree(element, maxDepth: 4)
+        else {
+            return nil
+        }
+        let texts = descendantTextSnippets(element, limit: 8, maxDepth: 4)
+        guard texts.count >= 2 else { return nil }
+        let summary = texts.joined(separator: " ")
+        guard summary.count <= 220 else { return nil }
+        return summary
+    }
+
+    func rowTextSummary(_ element: AXUIElement, role: String) -> String? {
+        guard ["AXRow", "AXCell", "AXOutlineRow"].contains(role) else { return nil }
+        let texts = descendantTextSnippets(element, limit: 6, maxDepth: 3)
+        guard !texts.isEmpty else { return nil }
+        return texts.joined(separator: " ")
+    }
+
+    func descendantTextSnippets(_ element: AXUIElement, limit: Int, maxDepth: Int) -> [String] {
+        var values: [String] = []
+        var seen = Set<String>()
+
+        func collect(_ node: AXUIElement, depth: Int) {
+            guard values.count < limit, depth <= maxDepth else { return }
+            let role = stringAttribute(node, kAXRoleAttribute as String) ?? ""
+            if role == kAXStaticTextRole as String || role == "AXLink" {
+                for candidate in [
+                    stringAttribute(node, kAXValueAttribute as String),
+                    stringAttribute(node, kAXTitleAttribute as String),
+                    stringAttribute(node, kAXDescriptionAttribute as String),
+                ] {
+                    guard let candidate else { continue }
+                    let text = preview(candidate, maxLength: 80)
+                    guard !text.isEmpty, seen.insert(text).inserted else { continue }
+                    values.append(text)
+                    if values.count >= limit { return }
+                }
+            }
+            for child in copyArray(node, kAXChildrenAttribute as String) ?? [] {
+                collect(child, depth: depth + 1)
+                if values.count >= limit { return }
+            }
+        }
+
+        collect(element, depth: 0)
+        return values
+    }
+
+    func webAreaDepth(role: String, ancestors: [AXUIElement]) -> Int? {
+        if role == "AXWebArea" { return 0 }
+        guard let index = ancestors.firstIndex(where: { stringAttribute($0, kAXRoleAttribute as String) == "AXWebArea" }) else {
+            return nil
+        }
+        return ancestors.count - index
+    }
+
+    private func copyAttribute(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+        let cache = cache(for: element)
+        if let cached = cache.attributes[attribute] {
+            switch cached {
+            case .missing:
+                return nil
+            case let .found(value):
+                return value
+            }
+        }
+        if let advertisedAttributes = advertisedAttributes(cache),
+           !SnapshotRenderHeuristics.supportsAttribute(attribute, advertisedAttributes: advertisedAttributes) {
+            cache.attributes[attribute] = .missing
+            return nil
+        }
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value else {
+            cache.attributes[attribute] = .missing
+            return nil
+        }
+        cache.attributes[attribute] = .found(value)
+        return value
+    }
+
+    private func advertisedAttributes(_ cache: ElementCache) -> Set<String>? {
+        if cache.loadedAttributeNames {
+            return cache.advertisedAttributes
+        }
+        cache.loadedAttributeNames = true
+        var value: CFArray?
+        guard AXUIElementCopyAttributeNames(cache.element, &value) == .success, let attributes = value as? [String] else {
+            return nil
+        }
+        cache.advertisedAttributes = Set(attributes)
+        return cache.advertisedAttributes
+    }
+
+    private func absoluteFrame(_ element: AXUIElement) -> CGRect? {
+        guard let positionValue = copyAttribute(element, kAXPositionAttribute as String),
+              let sizeValue = copyAttribute(element, kAXSizeAttribute as String)
+        else {
+            return nil
+        }
+        var point = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(positionValue as! AXValue, .cgPoint, &point),
+              AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+        else {
+            return nil
+        }
+        return CGRect(origin: point, size: size)
+    }
+
+    private func visibleRows(_ rows: [AXUIElement], parent: AXUIElement, windowBounds: CGRect) -> [AXUIElement] {
+        guard let parentFrame = frame(parent, windowBounds: windowBounds) else {
+            return Array(rows.prefix(20))
+        }
+        let visible = rows.filter { row in
+            guard let rowFrame = frame(row, windowBounds: windowBounds) else { return false }
+            return rowFrame.intersects(parentFrame)
+        }
+        return Array((visible.isEmpty ? rows : visible).prefix(20))
+    }
+
+    private func isSecureTextElement(_ element: AXUIElement, role: String) -> Bool {
+        guard SnapshotRenderHeuristics.shouldProbeSecureTextMetadata(role: role) else {
+            return false
+        }
+        let haystack = [
+            role,
+            stringAttribute(element, kAXSubroleAttribute as String) ?? "",
+            stringAttribute(element, kAXTitleAttribute as String) ?? "",
+            stringAttribute(element, kAXDescriptionAttribute as String) ?? "",
+            placeholderString(element) ?? "",
+        ].joined(separator: " ").lowercased()
+        return haystack.contains("secure") ||
+            haystack.contains("password") ||
+            haystack.contains("passcode") ||
+            haystack.contains("verification code") ||
+            haystack.contains("one-time code")
+    }
+
+    private func isPlainTextSubtree(_ element: AXUIElement, maxDepth: Int) -> Bool {
+        var sawText = false
+        let allowedContainerRoles: Set<String> = [
+            kAXGroupRole as String,
+            kAXUnknownRole as String,
+            kAXStaticTextRole as String,
+            "AXLink",
+            "AXImage",
+        ]
+
+        func visit(_ node: AXUIElement, depth: Int) -> Bool {
+            guard depth <= maxDepth else { return false }
+            let role = stringAttribute(node, kAXRoleAttribute as String) ?? "AXUnknown"
+            guard allowedContainerRoles.contains(role) else { return false }
+            if role == kAXStaticTextRole as String || role == "AXLink" {
+                sawText = true
+            }
+            guard SnapshotRenderHeuristics.meaningfulActions(actions(node), role: role).isEmpty else { return false }
+            for child in copyArray(node, kAXChildrenAttribute as String) ?? [] {
+                guard visit(child, depth: depth + 1) else { return false }
+            }
+            return true
+        }
+
+        return visit(element, depth: 0) && sawText
+    }
+
+    private func cache(for element: AXUIElement) -> ElementCache {
+        let hash = CFHash(element)
+        if let cache = elementsByHash[hash]?.first(where: { CFEqual($0.element, element) }) {
+            return cache
+        }
+        let cache = ElementCache(element: element)
+        elementsByHash[hash, default: []].append(cache)
+        return cache
+    }
 }
 
 private let valueSettableRoles: Set<String> = [
@@ -1697,24 +1976,6 @@ private let valueSettableRoles: Set<String> = [
     kAXTextFieldRole as String,
 ]
 
-private func primaryChildren(_ element: AXUIElement, role: String, windowBounds: CGRect) -> [AXUIElement] {
-    if usesRowsAsPrimaryChildren(role: role), let rows = copyArray(element, kAXRowsAttribute as String), !rows.isEmpty {
-        return visibleRows(rows, parent: element, windowBounds: windowBounds)
-    }
-    return copyArray(element, kAXChildrenAttribute as String) ?? []
-}
-
-private func visibleRows(_ rows: [AXUIElement], parent: AXUIElement, windowBounds: CGRect) -> [AXUIElement] {
-    guard let parentFrame = frame(parent, windowBounds: windowBounds) else {
-        return Array(rows.prefix(20))
-    }
-    let visible = rows.filter { row in
-        guard let rowFrame = frame(row, windowBounds: windowBounds) else { return false }
-        return rowFrame.intersects(parentFrame)
-    }
-    return Array((visible.isEmpty ? rows : visible).prefix(20))
-}
-
 private func usesRowsAsPrimaryChildren(role: String) -> Bool {
     [
         kAXBrowserRole as String,
@@ -1722,23 +1983,6 @@ private func usesRowsAsPrimaryChildren(role: String) -> Bool {
         kAXOutlineRole as String,
         kAXTableRole as String,
     ].contains(role)
-}
-
-private func tabStripCompaction(parent: SnapshotRenderNode, children: [AXUIElement]) -> SnapshotTabStripCompaction? {
-    let childNodes = children.map { child in
-        let role = stringAttribute(child, kAXRoleAttribute as String) ?? "AXUnknown"
-        return SnapshotRenderNode(
-            role: role,
-            roleDescription: stringAttribute(child, kAXRoleDescriptionAttribute as String),
-            title: stringAttribute(child, kAXTitleAttribute as String),
-            label: stringAttribute(child, kAXDescriptionAttribute as String),
-            value: valueString(child),
-            traits: traitsFor(child, role: role)
-        )
-    }
-    // Why: browsers expose every open tab through AX; retaining only the active
-    // tab keeps snapshots focused on the current page instead of stale tab titles.
-    return SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: childNodes)
 }
 
 private func isDirectRenderedBrowserTabLine(_ line: String, indent: String) -> Bool {
@@ -1759,100 +2003,6 @@ private func renderedElementIndex(_ line: String, indent: String) -> Int? {
         character >= "0" && character <= "9"
     }
     return Int(digits)
-}
-
-private func genericTextSummary(
-    _ element: AXUIElement,
-    role: String,
-    name: String?,
-    actions: [String],
-    traits: [String]
-) -> String? {
-    guard (role == kAXGroupRole as String || role == kAXUnknownRole as String),
-          name == nil,
-          actions.isEmpty,
-          traits.isEmpty,
-          isPlainTextSubtree(element, maxDepth: 4)
-    else {
-        return nil
-    }
-    let texts = descendantTextSnippets(element, limit: 8, maxDepth: 4)
-    guard texts.count >= 2 else { return nil }
-    let summary = texts.joined(separator: " ")
-    guard summary.count <= 220 else { return nil }
-    return summary
-}
-
-private func rowTextSummary(_ element: AXUIElement, role: String) -> String? {
-    guard ["AXRow", "AXCell", "AXOutlineRow"].contains(role) else { return nil }
-    let texts = descendantTextSnippets(element, limit: 6, maxDepth: 3)
-    guard !texts.isEmpty else { return nil }
-    return texts.joined(separator: " ")
-}
-
-private func isPlainTextSubtree(_ element: AXUIElement, maxDepth: Int) -> Bool {
-    var sawText = false
-    let allowedContainerRoles: Set<String> = [
-        kAXGroupRole as String,
-        kAXUnknownRole as String,
-        kAXStaticTextRole as String,
-        "AXLink",
-        "AXImage",
-    ]
-
-    func visit(_ node: AXUIElement, depth: Int) -> Bool {
-        guard depth <= maxDepth else { return false }
-        let role = stringAttribute(node, kAXRoleAttribute as String) ?? "AXUnknown"
-        guard allowedContainerRoles.contains(role) else { return false }
-        if role == kAXStaticTextRole as String || role == "AXLink" {
-            sawText = true
-        }
-        guard SnapshotRenderHeuristics.meaningfulActions(actions(node), role: role).isEmpty else { return false }
-        for child in copyArray(node, kAXChildrenAttribute as String) ?? [] {
-            guard visit(child, depth: depth + 1) else { return false }
-        }
-        return true
-    }
-
-    return visit(element, depth: 0) && sawText
-}
-
-private func descendantTextSnippets(_ element: AXUIElement, limit: Int, maxDepth: Int) -> [String] {
-    var values: [String] = []
-    var seen = Set<String>()
-
-    func collect(_ node: AXUIElement, depth: Int) {
-        guard values.count < limit, depth <= maxDepth else { return }
-        let role = stringAttribute(node, kAXRoleAttribute as String) ?? ""
-        if role == kAXStaticTextRole as String || role == "AXLink" {
-            for candidate in [
-                stringAttribute(node, kAXValueAttribute as String),
-                stringAttribute(node, kAXTitleAttribute as String),
-                stringAttribute(node, kAXDescriptionAttribute as String),
-            ] {
-                guard let candidate else { continue }
-                let text = preview(candidate, maxLength: 80)
-                guard !text.isEmpty, seen.insert(text).inserted else { continue }
-                values.append(text)
-                if values.count >= limit { return }
-            }
-        }
-        for child in copyArray(node, kAXChildrenAttribute as String) ?? [] {
-            collect(child, depth: depth + 1)
-            if values.count >= limit { return }
-        }
-    }
-
-    collect(element, depth: 0)
-    return values
-}
-
-private func webAreaDepth(role: String, ancestors: [AXUIElement]) -> Int? {
-    if role == "AXWebArea" { return 0 }
-    guard let index = ancestors.firstIndex(where: { stringAttribute($0, kAXRoleAttribute as String) == "AXWebArea" }) else {
-        return nil
-    }
-    return ancestors.count - index
 }
 
 private func sanitize(_ value: String) -> String {

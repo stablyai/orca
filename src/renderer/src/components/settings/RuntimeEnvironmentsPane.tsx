@@ -16,7 +16,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GlobalSettings } from '../../../../shared/types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import {
+  isUserManagedRuntimeEnvironment,
+  type PublicKnownRuntimeEnvironment
+} from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import {
   describeRuntimeCompatBlock,
@@ -44,6 +47,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { RuntimePairingUrlGenerator } from './RuntimePairingUrlGenerator'
+import { EphemeralVmRuntimesSection } from './EphemeralVmRuntimesSection'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -192,9 +196,8 @@ export function getActiveServerModeDescription(allowLocalRuntime: boolean): stri
 
 type RuntimeServerConnectionState = 'connected' | 'checking' | 'disconnected'
 
-function getRuntimeServerConnectionState(
-  details: RuntimeHostDetails | undefined,
-  _active: boolean
+export function getRuntimeServerConnectionState(
+  details: RuntimeHostDetails | undefined
 ): RuntimeServerConnectionState {
   if (!details || details.status === 'loading') {
     return 'checking'
@@ -202,6 +205,10 @@ function getRuntimeServerConnectionState(
   if (details.status !== 'ready' || details.compatibility?.kind === 'blocked') {
     return 'disconnected'
   }
+  // Why: an attached, reachable, compatible host is "Connected" (and exposes
+  // Disconnect). Whether it is the default *active* server is a separate concept,
+  // surfaced by the Advanced > Active Server selector and the row's help text —
+  // it must not change this connection label, or the dot/label/button disagree.
   return 'connected'
 }
 
@@ -282,14 +289,15 @@ export function RuntimeEnvironmentsPane({
     }
     try {
       const nextEnvironments = await window.api.runtimeEnvironments.list()
+      const visibleEnvironments = nextEnvironments.filter(isUserManagedRuntimeEnvironment)
       // Why: drop store status for servers no longer saved so stale hosts don't
       // linger in the sidebar registry.
       useAppStore.getState().setRuntimeEnvironments(nextEnvironments)
       if (mountedRef.current) {
-        setEnvironments(nextEnvironments)
+        setEnvironments(visibleEnvironments)
         setDetailsByEnvironmentId((current) => {
           const next: Record<string, RuntimeHostDetails> = {}
-          for (const environment of nextEnvironments) {
+          for (const environment of visibleEnvironments) {
             next[environment.id] = current[environment.id] ?? {
               status: 'loading',
               runtimeStatus: null,
@@ -301,7 +309,7 @@ export function RuntimeEnvironmentsPane({
         })
       }
       await Promise.allSettled(
-        nextEnvironments.map(async (environment) => {
+        visibleEnvironments.map(async (environment) => {
           try {
             const response = await window.api.runtimeEnvironments.getStatus({
               selector: environment.id,
@@ -864,7 +872,8 @@ export function RuntimeEnvironmentsPane({
                     const details = detailsByEnvironmentId[environment.id]
                     const detailsDescription = getHostDetailsDescription(details)
                     const isActive = settings.activeRuntimeEnvironmentId === environment.id
-                    const connectionState = getRuntimeServerConnectionState(details, isActive)
+                    const connectionState = getRuntimeServerConnectionState(details)
+                    // A connected host exposes Disconnect; otherwise Connect.
                     const isReachable = connectionState === 'connected'
                     const actionBusy =
                       connectingId === environment.id ||
@@ -985,6 +994,8 @@ export function RuntimeEnvironmentsPane({
           )}
         </div>
       </div>
+
+      <EphemeralVmRuntimesSection />
 
       <div data-settings-section="default-runtime">
         <Button

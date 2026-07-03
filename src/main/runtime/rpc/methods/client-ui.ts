@@ -31,6 +31,7 @@ const LegacyWorktreeCardProperty = z.enum([
   'issue',
   'linear-issue',
   'pr',
+  'automation',
   'comment',
   'ports',
   'inline-agents'
@@ -140,6 +141,7 @@ const SettingsUpdate = z
     agentStatusHooksEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
+    compactWorktreeCards: z.boolean().optional(),
     githubProjects: GitHubProjectSettings.optional()
   })
   .strict()
@@ -169,6 +171,7 @@ const UiUpdate = z
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     workspaceHostOrder: z.array(z.string()).optional(),
     hideDefaultBranchWorkspace: z.boolean().optional(),
+    hideAutomationGeneratedWorkspaces: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
@@ -181,6 +184,7 @@ const UiUpdate = z
     workspaceBoardColumnWidth: z.number().finite().optional(),
     syncTaskStatusFromWorkspaceBoard: z.boolean().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
+    _workspaceStatusesReorderedDefaultRepaired: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultVisualsMigrated: z.boolean().optional(),
     statusBarItems: z.array(StatusBarItem).optional(),

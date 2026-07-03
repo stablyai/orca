@@ -14,9 +14,9 @@ import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../..
 import {
   AGENT_ACTIVITY_DISPLAY_OPTIONS,
   CARD_LAYOUT_OPTIONS,
-  PROPERTY_OPTIONS,
   getWorktreeCardPropertyOptions
 } from './sidebar-workspace-option-items'
+import { PROPERTY_OPTIONS } from './worktree-card-display-property-options'
 import { translate } from '@/i18n/i18n'
 
 type WorktreeCardDisplayMenuSectionProps = {
@@ -29,9 +29,10 @@ export function WorktreeCardDisplayMenuSection({
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const setWorktreeCardProperties = useAppStore((s) => s.setWorktreeCardProperties)
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+  const setWorktreeCardMode = useAppStore((s) => s.setWorktreeCardMode)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
+  const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
   const cardLayoutLabel =
@@ -39,9 +40,10 @@ export function WorktreeCardDisplayMenuSection({
   const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
     worktreeCardProperties.includes(opt.id)
   ).length
+  const hasProjectGroups = projectGroups.length > 0
   const worktreeCardPropertyOptions = useMemo(
-    () => getWorktreeCardPropertyOptions({ newCardStyle }),
-    [newCardStyle]
+    () => getWorktreeCardPropertyOptions({ newCardStyle, hasProjectGroups }),
+    [newCardStyle, hasProjectGroups]
   )
   const handleWorktreeCardPropertyChange = useCallback(
     (properties: readonly WorktreeCardProperty[], checked: boolean): void => {
@@ -108,9 +110,9 @@ export function WorktreeCardDisplayMenuSection({
           <DropdownMenuRadioGroup
             value={cardLayout}
             onValueChange={(value) => {
-              void updateSettings({
-                compactWorktreeCards: value === 'compact'
-              })
+              // Why: layout changes are presets, not just density toggles; keep
+              // the visible menu path aligned with card property defaults.
+              setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
             }}
           >
             {CARD_LAYOUT_OPTIONS.map((opt) => (

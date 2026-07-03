@@ -22,9 +22,6 @@ export function resolveCommitDisabledReason(
   if (inputs.stagedCount === 0) {
     return 'Stage at least one file to commit'
   }
-  if (inputs.hasPartiallyStagedChanges) {
-    return 'Stage all changes before committing partially staged files'
-  }
   if (!inputs.hasMessage) {
     return COMMIT_MESSAGE_REQUIRED_REASON
   }

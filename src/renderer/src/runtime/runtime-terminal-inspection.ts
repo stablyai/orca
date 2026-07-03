@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../shared/types'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
 import { useAppStore } from '../store'
 import { RuntimeRpcCallError, callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import {
@@ -15,6 +16,10 @@ export type RuntimeTerminalProcessInspection = {
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
+
+function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {
+  return isTerminalInputTooLargeWithDeferredMeasurement(data)
+}
 
 export function isRemoteRuntimePtyId(ptyId: string): boolean {
   return ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
@@ -97,6 +102,30 @@ export function sendRuntimePtyInput(
   ptyId: string,
   data: string
 ): boolean {
+  const tooLarge = isRuntimePtyInputTooLarge(data)
+  if (tooLarge === true) {
+    return false
+  }
+  if (tooLarge !== false) {
+    // Why: this is a fire-and-forget path, so accepted paste-sized input must
+    // yield before validation and then dispatch without blocking the renderer.
+    void tooLarge
+      .then((resolvedTooLarge) => {
+        if (!resolvedTooLarge) {
+          sendRuntimePtyInputWithinLimit(settings, ptyId, data)
+        }
+      })
+      .catch(() => {})
+    return true
+  }
+  return sendRuntimePtyInputWithinLimit(settings, ptyId, data)
+}
+
+function sendRuntimePtyInputWithinLimit(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string,
+  data: string
+): boolean {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
@@ -131,6 +160,10 @@ export async function sendRuntimePtyInputVerified(
   ptyId: string,
   data: string
 ): Promise<boolean> {
+  const tooLarge = isRuntimePtyInputTooLarge(data)
+  if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
+    return false
+  }
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)

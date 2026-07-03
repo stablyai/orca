@@ -171,7 +171,7 @@ export function RepositoryPane({
     ].includes(entry.title)
   )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
-  const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
+  const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
   const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
   const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')

@@ -9,6 +9,7 @@ const {
 } = require('./packaged-runtime-node-modules.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
+const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -83,10 +84,13 @@ module.exports = {
   // app.asar.unpacked/node_modules/.
   // Why: remote runtime connections use WebSocket + E2EE from the packaged CLI
   // before the GUI process starts, so those deps need the same treatment.
+  // Why: out/package.json pins compiled output to CommonJS so parent
+  // package.json files with type=module cannot change the packaged CLI loader.
   // Why: sherpa-onnx native bindings (platform-specific subpackages) must be
   // unpacked because they ship .node addons + .dylib/.so files that cannot be
   // dlopen()'d from inside the asar archive.
   asarUnpack: [
+    'out/package.json',
     'out/cli/**',
     'out/shared/**',
     'out/main/agent-hooks/**',
@@ -123,7 +127,7 @@ module.exports = {
     if (!existsSync(resourcesDir)) {
       return
     }
-    prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName)
+    prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
@@ -142,6 +146,11 @@ module.exports = {
   },
   win: {
     executableName: 'Orca',
+    // Why: Windows installers are signed after electron-builder packaging by
+    // SignPath, so the packager cannot infer the updater publisherName.
+    signtoolOptions: {
+      publisherName: 'SignPath Foundation'
+    },
     extraResources: [
       ...commonExtraResources,
       winSpeechNativeResource,
@@ -268,22 +277,51 @@ module.exports = {
       },
       featureWallResources
     ],
-    target: ['AppImage', 'deb', 'rpm'],
+    target: ['AppImage', 'deb'],
     maintainer: 'stablyai',
     category: 'Utility'
   },
   appImage: {
-    artifactName: 'orca-linux.${ext}'
+    artifactName: isLinuxArm64Release ? 'orca-linux-arm64.${ext}' : 'orca-linux.${ext}'
   },
   deb: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide_${version}_${arch}.${ext}',
-    depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip']
+    // Why: xvfb lets the bundled `orca serve` CLI run browser panes on a headless
+    // Linux host — Chromium needs a display server even for offscreen rendering,
+    // and serve starts Xvfb itself when present (see ensure-virtual-display.ts).
+    depends: [
+      'python3',
+      'python3-gi',
+      'gir1.2-atspi-2.0',
+      'at-spi2-core',
+      'xdotool',
+      'xclip',
+      'xvfb'
+    ],
+    // Why: symlink the bundled CLI onto PATH at install time so `orca-ide serve`
+    // works on a headless host. The in-app CLI registration (CliInstaller) is
+    // GUI-triggered and can never run on a server, so without this the CLI is
+    // unreachable from the shell on exactly the hosts that need it.
+    afterInstall: 'resources/linux/packaging/after-install.sh',
+    afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   rpm: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide-${version}.${arch}.${ext}',
-    depends: ['python3', 'python3-gobject', 'at-spi2-core', 'xdotool', 'xclip']
+    // Why: see deb depends. RPM distros ship Xvfb as xorg-x11-server-Xvfb (there
+    // is no `xvfb` package), so the name differs from the deb here.
+    depends: [
+      'python3',
+      'python3-gobject',
+      'at-spi2-core',
+      'xdotool',
+      'xclip',
+      'xorg-x11-server-Xvfb'
+    ],
+    // Why: same headless CLI-on-PATH registration as deb; rpm runs these via fpm.
+    afterInstall: 'resources/linux/packaging/after-install.sh',
+    afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   beforeBuild: electronBuilderNativeRebuild,
   // Why: must be true so that electron-builder rebuilds native modules

@@ -63,8 +63,18 @@ vi.mock('@/store', () => ({
     selector({
       openAgentSendPopoverTargetMode: storeMocks.openAgentSendPopoverTargetMode,
       closeAgentSendPopoverTargetMode: storeMocks.closeAgentSendPopoverTargetMode,
-      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode
+      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode,
+      agentStatusByPaneKey: {},
+      agentStatusEpoch: 0,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      ptyIdsByTabId: {},
+      runtimePaneTitlesByTabId: {}
     })
+}))
+
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: (selector: unknown) => selector
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -115,8 +125,15 @@ vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
   }
 }))
 
+vi.mock('./ReviewNotesSendMenuContent', () => ({
+  ReviewNotesSendMenuContent: function ReviewNotesSendMenuContent(props: Record<string, unknown>) {
+    return { type: 'ReviewNotesSendMenuContent', props }
+  }
+}))
+
 vi.mock('@/lib/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (status: string) => status,
+  getActiveTerminalNoteTarget: () => null,
   sendNotesToActiveAgentSession: vi.fn(),
   useCanSendNotesToActiveTerminal: () => false
 }))
@@ -309,11 +326,10 @@ describe('NotesSendMenu', () => {
     )
   })
 
-  it('offers the active session action alongside new agent launchers', () => {
+  it('passes the default scope to review note send content', () => {
     const tree = renderMenu()
 
-    expect(findByType(tree, 'DropdownMenuItem').props.disabled).toBe(true)
-    expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
+    expect(findByType(tree, 'ReviewNotesSendMenuContent').props).toMatchObject({
       worktreeId: 'wt-1',
       groupId: 'group-1',
       prompt: 'prompt-all',

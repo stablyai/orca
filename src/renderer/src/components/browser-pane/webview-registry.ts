@@ -1,4 +1,5 @@
 import { clearLiveBrowserUrl } from './browser-runtime'
+import { removeBrowserPageViewport } from './browser-page-viewport'
 
 // Why: the webview registry is shared coordination state between BrowserPane
 // (React component) and store-layer cleanup helpers (shutdownWorktreeBrowsers,
@@ -190,6 +191,9 @@ export function moveFocusToRendererBeforeWebviewDetach(webview: Electron.Webview
 export function destroyPersistentWebview(browserTabId: string): void {
   const webview = webviewRegistry.get(browserTabId)
   if (!webview) {
+    // Why: the viewport can outlive a missing webview entry; tear it down on
+    // explicit close paths so overlay slots do not leak parked shells.
+    removeBrowserPageViewport(browserTabId)
     registeredWebContentsIds.delete(browserTabId)
     clearLiveBrowserUrl(browserTabId)
     return
@@ -198,6 +202,7 @@ export function destroyPersistentWebview(browserTabId: string): void {
   moveFocusToRendererBeforeWebviewDetach(webview)
   webview.remove()
   unregisterPersistentWebview(browserTabId)
+  removeBrowserPageViewport(browserTabId)
   registeredWebContentsIds.delete(browserTabId)
   clearLiveBrowserUrl(browserTabId)
 }

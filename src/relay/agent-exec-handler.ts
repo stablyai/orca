@@ -1,6 +1,6 @@
-import { exec, spawn, type ChildProcess } from 'child_process'
-import { existsSync } from 'fs'
-import { delimiter, join } from 'path'
+import { exec, spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { delimiter, join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 
 const DEFAULT_TIMEOUT_MS = 60_000

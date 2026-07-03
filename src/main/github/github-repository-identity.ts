@@ -1,10 +1,18 @@
 import { gitExecFileAsync } from '../git/runner'
 import type { GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { readLocalGitConfigSignature } from './local-git-config-signature'
+import {
+  parseGitHubOwnerRepo,
+  parseGitHubRemoteIdentity,
+  type GitHubRemoteIdentity
+} from './github-remote-identity-parsing'
+import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
 
 export type OwnerRepo = GitHubOwnerRepo
 
-export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
+export type { GitHubRemoteIdentity }
+export { parseGitHubOwnerRepo, parseGitHubRemoteIdentity }
 
 export type GitHubRepoContext = {
   repoPath: string
@@ -41,12 +49,14 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
       }
 }
 
-const OWNER_REPO_CACHE_TTL_MS = 30_000
+const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000
+const OWNER_REPO_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
 const OWNER_REPO_CACHE_MAX_ENTRIES = 512
 
 type OwnerRepoCacheEntry = {
   value: OwnerRepo | null
   expiresAt: number
+  configSignature?: string
 }
 
 const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
@@ -78,52 +88,6 @@ function pruneOwnerRepoCache(now: number): void {
   }
 }
 
-export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
-  const identity = parseGitHubRemoteIdentity(remoteUrl)
-  if (!identity || identity.host.toLowerCase() !== 'github.com') {
-    return null
-  }
-  return { owner: identity.owner, repo: identity.repo }
-}
-
-function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  // Why: GitHub documents ssh.github.com:443 as SSH-over-HTTPS for github.com repos.
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
-}
-
-function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner' | 'repo'> | null {
-  const parts = path.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
-  if (parts.length !== 2) {
-    return null
-  }
-  const [owner, repoWithSuffix] = parts
-  const repo = repoWithSuffix.replace(/\.git$/i, '')
-  if (!owner || !repo) {
-    return null
-  }
-  return { owner, repo }
-}
-
-export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdentity | null {
-  const trimmed = remoteUrl.trim()
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
-  if (sshMatch) {
-    return { host: normalizeGitHubRemoteHost(sshMatch[1]), owner: sshMatch[2], repo: sshMatch[3] }
-  }
-
-  try {
-    const url = new URL(trimmed)
-    if (!['git:', 'git+ssh:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
-      return null
-    }
-    const path = parseGitHubRemotePath(url.pathname)
-    return path ? { host: normalizeGitHubRemoteHost(url.hostname), ...path } : null
-  } catch {
-    return null
-  }
-}
-
 export async function getRemoteUrlForRepo(
   context: GitHubRepoContext,
   remoteName: string
@@ -143,6 +107,13 @@ export async function getRemoteUrlForRepo(
   return stdout
 }
 
+function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
+  if (value) {
+    return OWNER_REPO_POSITIVE_CACHE_TTL_MS
+  }
+  return configSignature ? OWNER_REPO_NEGATIVE_CACHE_TTL_MS : OWNER_REPO_POSITIVE_CACHE_TTL_MS
+}
+
 export async function getOwnerRepoForRemote(
   repoPath: string,
   remoteName: string,
@@ -156,7 +127,26 @@ export async function getOwnerRepoForRemote(
   pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
-    return cached.value
+    if (cached.value === null && cached.configSignature !== undefined) {
+      const currentSignature = await readLocalGitConfigSignature(context)
+      if (currentSignature !== cached.configSignature) {
+        ownerRepoCache.delete(cacheKey)
+      } else {
+        return cached.value
+      }
+    } else {
+      return cached.value
+    }
+  }
+  if (cached && cached.expiresAt <= now) {
+    ownerRepoCache.delete(cacheKey)
+  }
+
+  const nextConfigSignature = await readLocalGitConfigSignature(context)
+  const refreshedNow = Date.now()
+  const refreshedCached = ownerRepoCache.get(cacheKey)
+  if (refreshedCached && refreshedCached.expiresAt > refreshedNow) {
+    return refreshedCached.value
   }
 
   const inFlight = ownerRepoInFlight.get(cacheKey)
@@ -166,7 +156,7 @@ export async function getOwnerRepoForRemote(
 
   // Why: startup can resolve issue sources, PR candidates, and repo metadata
   // for the same repo concurrently. Coalesce missing-remote probes.
-  const probe = resolveOwnerRepoForRemote(context, remoteName, cacheKey)
+  const probe = resolveOwnerRepoForRemote(context, remoteName, cacheKey, nextConfigSignature)
   ownerRepoInFlight.set(cacheKey, probe)
   try {
     return await probe
@@ -180,7 +170,8 @@ export async function getOwnerRepoForRemote(
 async function resolveOwnerRepoForRemote(
   context: GitHubRepoContext,
   remoteName: string,
-  cacheKey: string
+  cacheKey: string,
+  configSignature?: string
 ): Promise<OwnerRepo | null> {
   const now = Date.now()
   try {
@@ -189,15 +180,25 @@ async function resolveOwnerRepoForRemote(
     if (result) {
       ownerRepoCache.set(cacheKey, {
         value: result,
-        expiresAt: now + OWNER_REPO_CACHE_TTL_MS
+        expiresAt: now + getOwnerRepoCacheTtl(result, configSignature)
       })
       pruneOwnerRepoCache(now)
       return result
     }
-  } catch {
-    // ignore - non-GitHub remote or no remote
+  } catch (error) {
+    // Why: only stable "no such remote" misses are safe to hold for minutes.
+    // Transient git lock/IO failures must retry on the next lookup.
+    if (!isStableMissingGitRemoteError(error)) {
+      return null
+    }
   }
-  ownerRepoCache.set(cacheKey, { value: null, expiresAt: now + OWNER_REPO_CACHE_TTL_MS })
+  // Why: a missing/non-GitHub remote is stable until `.git/config` changes.
+  // Holding that negative longer avoids Git process churn across PR polling.
+  ownerRepoCache.set(cacheKey, {
+    value: null,
+    expiresAt: now + getOwnerRepoCacheTtl(null, configSignature),
+    ...(configSignature ? { configSignature } : {})
+  })
   pruneOwnerRepoCache(now)
   return null
 }

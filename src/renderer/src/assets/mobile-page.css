@@ -6,10 +6,28 @@
   position: absolute;
   top: 12px;
   left: 12px;
+  right: 12px;
   z-index: 3;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-page-root .mp-page-toolbar-primary {
+  max-width: min(100%, 22rem);
+}
+
+.mobile-page-root .mp-sidebar-toggle-btn {
+  max-width: 100%;
+  justify-content: flex-start;
+  font-weight: 600;
+  text-align: left;
+  white-space: normal;
+}
+
+.mobile-page-root .mp-page-toolbar-close {
+  margin-top: 1px;
 }
 
 .mobile-page-root {
@@ -557,6 +575,15 @@
   height: 116px;
 }
 
+.mobile-page-root .mp-qr-large {
+  padding: 10px;
+}
+
+.mobile-page-root .mp-qr-large img {
+  width: 164px;
+  height: 164px;
+}
+
 .mobile-page-root .mp-qr-stack {
   display: flex;
   flex-direction: column;
@@ -653,6 +680,42 @@
   border-bottom-color: var(--foreground);
 }
 
+/* iOS release-channel switch (Preview vs Stable), shown above the install CTA */
+.mobile-page-root .mp-channel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: -8px 0 18px;
+  flex-wrap: wrap;
+}
+
+.mobile-page-root .mp-channel-toggle button {
+  border: 1px solid var(--border);
+  background: transparent;
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.mobile-page-root .mp-channel-toggle button.is-active {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-channel-tagline {
+  margin-left: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 .mobile-page-root .mp-inline-actions {
   display: flex;
   align-items: center;
@@ -704,8 +767,9 @@
 }
 
 .mobile-page-root .mp-network-select {
-  min-width: 220px;
-  max-width: 280px;
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 240px;
 }
 
 .mobile-page-root .mp-network-refresh {

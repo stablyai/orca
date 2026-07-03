@@ -9,6 +9,7 @@ import {
   Bell,
   Blocks,
   Bot,
+  Bug,
   Cable,
   FlaskConical,
   GitBranch,
@@ -70,17 +71,39 @@ import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-s
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import {
-  getCachedWindowsTerminalCapabilities,
-  getWindowsTerminalCapabilityOwnerKey
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 
-export function isWebClientLocation(): boolean {
-  return (
-    Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) ||
-    window.location.pathname.endsWith('/web-index.html')
-  )
+export { isWebClientLocation } from '@/lib/web-client-location'
+
+function getDevToolsPaneSearchEntries(): SettingsNavSection['searchEntries'] {
+  return [
+    {
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlayground',
+        'Notification playground'
+      ),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlaygroundDescription',
+        'Trigger representative toast and notification UI states.'
+      ),
+      keywords: [
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordDev', 'dev'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordToast', 'toast'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordSonner', 'sonner'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordError', 'error'),
+        translate(
+          'auto.hooks.useSettingsNavigationMetadata.devSearchKeywordNotification',
+          'notification'
+        )
+      ]
+    }
+  ]
 }
 
 export function buildSettingsNavigationMetadata({
@@ -88,12 +111,14 @@ export function buildSettingsNavigationMetadata({
   isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
+  isDev = import.meta.env.DEV,
   repos
 }: {
   isMac: boolean
   isWindows: boolean
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
+  isDev?: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -118,7 +143,7 @@ export function buildSettingsNavigationMetadata({
         'Manage AI agents, set a default, and customize commands.'
       ),
       icon: Bot,
-      searchEntries: getAgentsPaneSearchEntries(),
+      searchEntries: getAgentsPaneSearchEntries({ includeAgentRuntime: isWindowsTerminalHost }),
       group: 'capabilities'
     },
     {
@@ -228,6 +253,21 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getIntegrationsPaneSearchEntries(),
       group: 'setup'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'mobile',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
+              'Control terminals and agents from your phone.'
+            ),
+            icon: Smartphone,
+            searchEntries: getMobileSettingsPaneSearchEntries(),
+            group: 'setup'
+          }
+        ]
+      : []),
     {
       id: 'git',
       title: translate(
@@ -296,7 +336,7 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
-    ...(showDesktopOnlySettings && isMac
+    ...(showDesktopOnlySettings
       ? [
           {
             id: 'mobile-emulator',
@@ -333,7 +373,10 @@ export function buildSettingsNavigationMetadata({
         'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
       ),
       icon: Palette,
-      searchEntries: getAppearancePaneSearchEntries(),
+      searchEntries: getAppearancePaneSearchEntries({
+        showWarpImport: showDesktopOnlySettings,
+        showSystemTray: showDesktopOnlySettings && isWindows
+      }),
       group: 'interface'
     },
     {
@@ -387,6 +430,21 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getStatsPaneSearchEntries(),
       group: 'interface'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'ssh',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
+              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
+            ),
+            icon: Cable,
+            searchEntries: getSshPaneSearchEntries(),
+            group: 'remote'
+          }
+        ]
+      : []),
     {
       id: 'servers',
       title: translate(
@@ -401,32 +459,6 @@ export function buildSettingsNavigationMetadata({
       group: 'remote',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'ssh',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
-              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
-            ),
-            icon: Cable,
-            searchEntries: getSshPaneSearchEntries(),
-            group: 'remote'
-          },
-          {
-            id: 'mobile',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
-              'Control terminals and agents from your phone.'
-            ),
-            icon: Smartphone,
-            searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'mobile'
-          }
-        ]
-      : []),
     ...(showDesktopOnlySettings && isMac
       ? [
           {
@@ -474,6 +506,26 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
+    // Why: dev tooling must not be reachable from packaged/web builds even if
+    // this pure metadata builder is called manually with isDev=true.
+    ...(showDesktopOnlySettings && import.meta.env.DEV && isDev
+      ? [
+          {
+            id: 'dev',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.devDescription',
+              'Dev-only tools for exercising UI states.'
+            ),
+            // Why: distinct from the sibling Advanced section's Wrench so the two
+            // entries in the same 'advanced' group stay visually distinguishable.
+            icon: Bug,
+            searchEntries: getDevToolsPaneSearchEntries(),
+            group: 'advanced',
+            badge: translate('auto.hooks.useSettingsNavigationMetadata.devBadge', 'Dev')
+          }
+        ]
+      : []),
     {
       id: 'experimental',
       title: translate('auto.hooks.useSettingsNavigationMetadata.225071c560', 'Experimental'),
@@ -503,18 +555,21 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   // contents refresh on rerender without depending on i18n.language directly.
   useTranslation()
   const repos = useAppStore((state) => state.repos)
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId
-  )
+  const settings = useAppStore((state) => state.settings)
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId
+    settings?.activeRuntimeEnvironmentId
   )
-  const isWindowsTerminalHost =
-    isWindows ||
-    getCachedWindowsTerminalCapabilities(windowsTerminalCapabilityOwnerKey).hostPlatform === 'win32'
+  const runtimeTarget = getActiveRuntimeTarget(settings)
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    isWindows || isWebClient || runtimeTarget.kind === 'environment',
+    false,
+    windowsTerminalCapabilityOwnerKey,
+    runtimeTarget
+  )
+  const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
 
   // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
   // and search entries cannot drift. Keep this hook free of Settings pane UI
@@ -526,6 +581,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWindows,
         isWindowsTerminalHost,
         isWebClient,
+        isDev: import.meta.env.DEV,
         repos
       }),
     [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]

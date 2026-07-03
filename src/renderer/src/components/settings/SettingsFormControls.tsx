@@ -9,6 +9,11 @@ import { Label } from '../ui/label'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
+import {
+  filterFontSuggestions,
+  filterTerminalThemeOptions,
+  isSettingsFormOptionQueryTooLarge
+} from './settings-form-option-filter'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
@@ -71,11 +76,19 @@ export function SettingsRow({
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
-      className={cn('flex gap-4 py-2', alignTop ? 'items-start' : 'items-center justify-between')}
+      className={cn(
+        'flex gap-4',
+        description ? 'py-3' : 'py-2',
+        alignTop ? 'items-start' : 'items-center justify-between'
+      )}
     >
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <Label id={labelId}>{label}</Label>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      <div className={cn('min-w-0 flex-1', description ? 'space-y-1' : 'space-y-0.5')}>
+        <Label id={labelId} className="select-text">
+          {label}
+        </Label>
+        {description ? (
+          <p className="select-text text-xs text-muted-foreground">{description}</p>
+        ) : null}
       </div>
       <div className="shrink-0">{control}</div>
     </div>
@@ -213,16 +226,18 @@ type SettingsSubsectionHeaderProps = {
   title: React.ReactNode
   description?: React.ReactNode
   action?: React.ReactNode
+  className?: string
 }
 
 /** Consistent subsection header: h3 text-sm font-semibold + optional muted description. */
 export function SettingsSubsectionHeader({
   title,
   description,
-  action
+  action,
+  className
 }: SettingsSubsectionHeaderProps): React.JSX.Element {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className={cn('flex items-start justify-between gap-3', className)}>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{title}</h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
@@ -303,10 +318,10 @@ export function ThemePicker({
     return () => clearTimeout(timer)
   }, [importedHighlightSignal])
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const matchingThemes = themeOptions.filter((theme) =>
-    `${theme.label} ${theme.sourceLabel ?? ''}`.toLowerCase().includes(normalizedQuery)
-  )
+  const themeQuery = query.trim()
+  const shouldShowThemeQueryLabel =
+    themeQuery.length > 0 && !isSettingsFormOptionQueryTooLarge(themeQuery)
+  const matchingThemes = filterTerminalThemeOptions(themeOptions, query)
   const selectedThemeLabel =
     themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
   const groupedThemes = [
@@ -348,11 +363,11 @@ export function ThemePicker({
           <span>
             {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
             {visibleThemeCount}
-            {normalizedQuery
+            {shouldShowThemeQueryLabel
               ? translate(
                   'auto.components.settings.SettingsFormControls.c822571b2e',
                   ' matching "{{value0}}"',
-                  { value0: query.trim() }
+                  { value0: themeQuery }
                 )
               : translate(
                   'auto.components.settings.SettingsFormControls.cb330ef7f8',
@@ -578,6 +593,7 @@ export function FontAutocomplete({
   const [prevValue, setPrevValue] = useState(value)
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const [isFilteringQuery, setIsFilteringQuery] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const previewFontFamilyRef = useRef(onPreviewFontFamily)
@@ -597,6 +613,9 @@ export function FontAutocomplete({
   if (value !== prevValue) {
     setPrevValue(value)
     setQuery(value)
+    if (value !== query) {
+      setIsFilteringQuery(false)
+    }
   }
 
   useEffect(() => {
@@ -607,6 +626,7 @@ export function FontAutocomplete({
     const handlePointerDown = (event: MouseEvent): void => {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false)
+        setIsFilteringQuery(false)
       }
     }
 
@@ -615,34 +635,34 @@ export function FontAutocomplete({
   }, [open])
 
   const normalizedQuery = query.trim().toLowerCase()
-  const filteredSuggestions = useMemo(() => {
-    const startsWith = suggestions.filter((font) => font.toLowerCase().startsWith(normalizedQuery))
-    const includes = suggestions.filter(
-      (font) =>
-        !font.toLowerCase().startsWith(normalizedQuery) &&
-        font.toLowerCase().includes(normalizedQuery)
-    )
-    return normalizedQuery ? [...startsWith, ...includes] : suggestions
-  }, [suggestions, normalizedQuery])
+  const normalizedValue = value.trim().toLowerCase()
+  const filteredSuggestions = useMemo(
+    () => filterFontSuggestions(suggestions, query),
+    [suggestions, query]
+  )
+  // Why: the committed font fills the input, but opening the chooser should
+  // still reveal every installed font instead of only fonts sharing that name.
+  const visibleSuggestions =
+    !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
 
   // Why: sync the highlighted index during render rather than via useEffect so
   // the correct item is highlighted on the very first paint after open/filter
   // changes — useEffect would leave one render with the stale index visible.
-  const [prevFilteredSuggestions, setPrevFilteredSuggestions] = useState(filteredSuggestions)
+  const [prevVisibleSuggestions, setPrevVisibleSuggestions] = useState(visibleSuggestions)
   const [prevOpen, setPrevOpen] = useState(open)
   const [prevHighlightedValue, setPrevHighlightedValue] = useState(value)
   if (
-    filteredSuggestions !== prevFilteredSuggestions ||
+    visibleSuggestions !== prevVisibleSuggestions ||
     open !== prevOpen ||
     value !== prevHighlightedValue
   ) {
-    setPrevFilteredSuggestions(filteredSuggestions)
+    setPrevVisibleSuggestions(visibleSuggestions)
     setPrevOpen(open)
     setPrevHighlightedValue(value)
-    if (!open || filteredSuggestions.length === 0) {
+    if (!open || visibleSuggestions.length === 0) {
       setHighlightedIndex(-1)
     } else {
-      const selectedIndex = filteredSuggestions.findIndex((font) => font === value)
+      const selectedIndex = visibleSuggestions.findIndex((font) => font === value)
       setHighlightedIndex(Math.max(selectedIndex, 0))
     }
   }
@@ -658,11 +678,12 @@ export function FontAutocomplete({
       onPreviewFontFamily(null)
       return
     }
-    onPreviewFontFamily(filteredSuggestions[highlightedIndex] ?? null)
-  }, [filteredSuggestions, highlightedIndex, onPreviewFontFamily, open])
+    onPreviewFontFamily(visibleSuggestions[highlightedIndex] ?? null)
+  }, [visibleSuggestions, highlightedIndex, onPreviewFontFamily, open])
 
   const commitValue = (nextValue: string): void => {
     setQuery(nextValue)
+    setIsFilteringQuery(false)
     onChange(nextValue)
     setOpen(false)
   }
@@ -680,15 +701,20 @@ export function FontAutocomplete({
           onChange={(e) => {
             const next = e.target.value
             setQuery(next)
+            setIsFilteringQuery(true)
             onChange(next)
             setOpen(true)
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setIsFilteringQuery(false)
+            setOpen(true)
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               if (open) {
                 e.preventDefault()
                 setOpen(false)
+                setIsFilteringQuery(false)
               }
               return
             }
@@ -696,9 +722,9 @@ export function FontAutocomplete({
             if (e.key === 'ArrowDown') {
               e.preventDefault()
               setOpen(true)
-              if (filteredSuggestions.length > 0) {
+              if (visibleSuggestions.length > 0) {
                 setHighlightedIndex((current) =>
-                  current < 0 ? 0 : Math.min(current + 1, filteredSuggestions.length - 1)
+                  current < 0 ? 0 : Math.min(current + 1, visibleSuggestions.length - 1)
                 )
               }
               return
@@ -707,16 +733,16 @@ export function FontAutocomplete({
             if (e.key === 'ArrowUp') {
               e.preventDefault()
               setOpen(true)
-              if (filteredSuggestions.length > 0) {
+              if (visibleSuggestions.length > 0) {
                 setHighlightedIndex((current) =>
-                  current < 0 ? filteredSuggestions.length - 1 : Math.max(current - 1, 0)
+                  current < 0 ? visibleSuggestions.length - 1 : Math.max(current - 1, 0)
                 )
               }
               return
             }
 
             if (e.key === 'Enter' && open && highlightedIndex >= 0) {
-              const highlightedFont = filteredSuggestions[highlightedIndex]
+              const highlightedFont = visibleSuggestions[highlightedIndex]
               if (highlightedFont) {
                 e.preventDefault()
                 commitValue(highlightedFont)
@@ -740,6 +766,7 @@ export function FontAutocomplete({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 setQuery('')
+                setIsFilteringQuery(false)
                 onChange('')
                 setOpen(true)
                 focusInput()
@@ -760,6 +787,9 @@ export function FontAutocomplete({
             onClick={() => {
               const nextOpen = !open
               setOpen(nextOpen)
+              if (!nextOpen) {
+                setIsFilteringQuery(false)
+              }
               if (nextOpen) {
                 focusInput()
               }
@@ -778,10 +808,10 @@ export function FontAutocomplete({
 
       {open ? (
         <div className="absolute top-full z-20 mt-2 w-full overflow-hidden rounded-md border border-border/50 bg-popover shadow-md">
-          <ScrollArea className={filteredSuggestions.length > 8 ? 'h-64' : undefined}>
+          <ScrollArea className={visibleSuggestions.length > 8 ? 'h-64' : undefined}>
             <div id={listboxId} role="listbox" className="p-1">
-              {filteredSuggestions.length > 0 ? (
-                filteredSuggestions.map((font, index) => (
+              {visibleSuggestions.length > 0 ? (
+                visibleSuggestions.map((font, index) => (
                   <button
                     key={font}
                     type="button"

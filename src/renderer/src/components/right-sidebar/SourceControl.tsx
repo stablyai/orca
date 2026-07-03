@@ -32,7 +32,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { resolveRemoteOperationErrorMessage } from '@/store/slices/editor'
+import { resolveRemoteOperationErrorMessage } from '@/lib/source-control-remote-error'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
@@ -73,15 +73,51 @@ import {
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
+import {
+  canDiscardStatusEntry,
+  canStageStatusEntry,
+  canUnstageStatusEntry
+} from './source-control-entry-actions'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import {
   buildGitStatusSourceControlTree,
   buildSourceControlTree,
+  applyGitStatusEntryAreasToSourceControlTree,
   collectSourceControlTreeFileEntries,
   compactSourceControlTree,
   flattenSourceControlTree,
+  namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
 } from './source-control-tree'
+import {
+  collectListSelectionEntries,
+  getSubmoduleExpansionKey,
+  injectExpandedSubmoduleEntries,
+  injectExpandedSubmoduleRows,
+  isExpandableSubmoduleEntry,
+  type RenderableSourceControlNode,
+  type RenderableSubmoduleListItem
+} from './source-control-submodule-expansion'
+import { useSourceControlSubmoduleStatus } from './useSourceControlSubmoduleStatus'
+import {
+  buildSourceControlDisplaySections,
+  getSourceControlSectionViewAction,
+  resolveSourceControlGroupOrder,
+  SOURCE_CONTROL_AREAS,
+  type SourceControlDisplaySectionId,
+  type SourceControlEntryGroups,
+  type SourceControlSectionArea
+} from './source-control-section-order'
+import {
+  buildActiveOpenFileSignature,
+  buildActiveOpenRowKeys
+} from './source-control-active-open-file-keys'
+import {
+  filterSourceControlGroupedPathEntries,
+  filterSourceControlPathEntries,
+  getSourceControlFileFilterState
+} from './source-control-file-filter'
+import { getCommitMessageTextareaRows } from './source-control-commit-message-rows'
 import {
   SourceControlDiscardDialog,
   type PendingDiscardConfirmation
@@ -92,12 +128,7 @@ import {
 } from './git-status-refresh'
 import { describeForkPushTarget } from './fork-push-target-label'
 import { toast } from 'sonner'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+import { SourceControlEntryContextMenu } from './source-control-entry-context-menu'
 import {
   Dialog,
   DialogClose,
@@ -152,6 +183,7 @@ import {
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
+import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
@@ -173,17 +205,20 @@ import type {
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
-import { humanizeBranchSlug } from '../../../../shared/branch-name-from-work'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
-import {
-  type SourceControlActionRecipe,
-  type SourceControlLaunchActionId
+import type {
+  SourceControlActionRecipe,
+  SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import {
+  loadSessionCommitDrafts,
+  saveSessionCommitDrafts
+} from '@/lib/source-control-commit-draft-session'
 import {
   getCommitFailureDialogWorktreeKey,
   shouldShowCommitFailureDialog,
@@ -220,10 +255,12 @@ import {
   createPrIntentGitStatusMatchesToken,
   createPrIntentRunTokenMatches,
   getCreatePrIntentStagePaths,
+  resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
 } from './source-control-create-pr-intent-flow'
 import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-intent-state'
+import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import {
   buildLoadingHostedReviewCreationEligibility,
   resolveCreatePrHeaderAction,
@@ -234,10 +271,28 @@ import {
   shouldShowSourceControlCompareUnavailableCard,
   SourceControlHeaderToolbar
 } from './source-control-header-toolbar'
+import {
+  hasPositiveHostedReviewNumberLink,
+  hasResolvableHostedReviewPushTargetLink,
+  hasUsableHostedReviewPushTarget,
+  resolveHostedReviewActionUpstreamStatus,
+  resolveHostedReviewStateForActions
+} from './source-control-hosted-review-push-target'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
+import {
+  createRunningCommitMessageGenerationRecord,
+  getCommitMessageGenerationRecordKey,
+  markCommitMessageGenerationHydrated,
+  resolveCommitMessageGenerationCancel,
+  resolveCommitMessageGenerationFailure,
+  resolveCommitMessageGenerationSuccess,
+  type CommitMessageGenerationRecord
+} from '@/store/slices/commit-message-generation'
 import {
   createRunningPullRequestGenerationRecord,
   getPullRequestGenerationRecordKey,
+  getPullRequestGenerationSeedRestoreKey,
+  markPullRequestGenerationTerminalSeedRestored,
   resolvePullRequestGenerationCancel,
   resolvePullRequestGenerationFailure,
   resolvePullRequestGenerationSuccess,
@@ -299,6 +354,45 @@ export function resolveSourceControlBaseRef(input: {
     return reviewBaseRef
   }
   return worktreeBaseRef || input.repoBaseRef?.trim() || input.defaultBaseRef?.trim() || null
+}
+
+// Why: the compare/diff view's base is conceptually distinct from the PR/rebase
+// merge target (effectiveBaseRef). When the setting is on, default the compare
+// base to the current branch's upstream so the panel surfaces local changes
+// instead of the full delta vs the repo default branch. Branches without an
+// upstream fall back to effectiveBaseRef so the automatic policy never makes
+// the committed-changes comparison disappear unexpectedly. When the setting is
+// off, fall back to effectiveBaseRef so behavior is unchanged.
+export function resolveSourceControlCompareBaseRef(input: {
+  enabled: boolean
+  worktreeBaseRef?: string | null
+  repoBaseRef?: string | null
+  upstreamName?: string | null
+  fallbackBaseRef?: string | null
+}): string | null {
+  if (!input.enabled) {
+    return input.fallbackBaseRef?.trim() || null
+  }
+  const pinned = input.worktreeBaseRef?.trim() || input.repoBaseRef?.trim()
+  if (pinned) {
+    return pinned
+  }
+  return input.upstreamName?.trim() || input.fallbackBaseRef?.trim() || null
+}
+
+// Why: only drop a stale branch-compare summary once we know there is truly no
+// compare base. While upstream status is still loading (remoteStatus undefined)
+// compareBaseRef can momentarily resolve to null, so clearing then would make
+// the committed-changes summary flicker until upstream loads.
+export function shouldClearBranchCompareForMissingBase(input: {
+  isFolder: boolean
+  compareBaseRef: string | null
+  remoteStatus: GitUpstreamStatus | undefined
+}): boolean {
+  if (input.isFolder || input.compareBaseRef) {
+    return false
+  }
+  return input.remoteStatus !== undefined
 }
 
 export function resolveSourceControlPickerBaseRef(input: {
@@ -411,12 +505,7 @@ const PRIMARY_ICONS: Partial<
   create_pr: GitPullRequestArrow
 }
 
-// Why: unstaged ("Changes") is listed first so that conflict files — which
-// are assigned area:'unstaged' by the parser — appear above "Staged Changes".
-// This keeps unresolved conflicts visible at the top of the list where the
-// user won't miss them.
-const SECTION_ORDER = ['unstaged', 'staged', 'untracked'] as const
-const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], { key: string; fallback: string }> = {
+const SECTION_LABELS: Record<SourceControlSectionArea, { key: string; fallback: string }> = {
   staged: {
     key: 'auto.components.right.sidebar.SourceControl.48a003c1b1',
     fallback: 'Staged Changes'
@@ -430,8 +519,14 @@ const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], { key: string; fall
     fallback: 'Untracked Files'
   }
 }
+const CONFLICTS_SECTION_LABEL = {
+  key: 'auto.components.right.sidebar.SourceControl.conflictsSection',
+  fallback: 'Conflicts'
+}
 
-const BRANCH_REFRESH_INTERVAL_MS = 5000
+// Why: 5s branch compare polling churned git subprocesses in large repos.
+// Explicit commit, remote, manual, and base-ref refresh paths still run immediately.
+export const BRANCH_REFRESH_INTERVAL_MS = 30_000
 // Why: row action buttons host Radix Tooltip triggers. Keeping the overlay
 // measurable prevents transient top-left tooltip placement during hover.
 const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
@@ -443,6 +538,9 @@ const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
 const SUBMODULE_WORKTREE_ONLY_LABEL = 'Submodule changes - stage inside submodule'
 const SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP = 'Stage these changes inside the submodule'
+const SUBMODULE_LOADING_LABEL = 'Loading submodule changes…'
+const SUBMODULE_EMPTY_LABEL = 'No changes in submodule'
+const SUBMODULE_ERROR_LABEL = 'Failed to load submodule changes'
 
 function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
@@ -528,7 +626,7 @@ export function normalizeSourceControlViewMode(value: unknown): SourceControlVie
 
 type GitStatusSourceControlTreeNode = SourceControlTreeNode<
   GitStatusEntry,
-  (typeof SECTION_ORDER)[number]
+  SourceControlSectionArea
 >
 type SourceControlTreeDirectoryNode = Extract<GitStatusSourceControlTreeNode, { type: 'directory' }>
 type BranchSourceControlTreeNode = SourceControlTreeNode<GitBranchChangeEntry, 'branch'>
@@ -548,11 +646,8 @@ function getSourceControlDirectoryActionPaths(
 ): SourceControlDirectoryActionPaths {
   const entries = collectSourceControlTreeFileEntries(node)
   return {
-    stagePaths:
-      node.area === 'unstaged' || node.area === 'untracked'
-        ? getStageAllPaths(entries, node.area)
-        : [],
-    unstagePaths: node.area === 'staged' ? getUnstageAllPaths(entries) : [],
+    stagePaths: entries.filter(isStageableStatusEntry).map((entry) => entry.path),
+    unstagePaths: getUnstageAllPaths(entries),
     discardPaths:
       node.area === 'unstaged' || node.area === 'untracked'
         ? getDiscardAllPaths(entries, node.area)
@@ -572,6 +667,13 @@ type HostedReviewCreationRequestState = {
   worktreeId: string
   branch: string
   status: 'loading' | 'failed'
+}
+
+type HostedReviewCreationProviderHint = {
+  repoId: string | null
+  worktreeId: string | null
+  branch: string
+  provider: HostedReviewProvider
 }
 
 type CreatedHostedReview = {
@@ -710,6 +812,9 @@ function SourceControlInner(): React.JSX.Element {
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
       : EMPTY_GIT_STATUS_ENTRIES
   )
+  const activeGitStatusHead = useAppStore((s) =>
+    activeWorktreeId ? (s.gitStatusHeadByWorktree?.[activeWorktreeId] ?? null) : null
+  )
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
@@ -757,7 +862,9 @@ function SourceControlInner(): React.JSX.Element {
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
+  const clearGitBranchCompare = useAppStore((s) => s.clearGitBranchCompare)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+  const ensureHostedReviewPushTarget = useAppStore((s) => s.ensureHostedReviewPushTarget)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const pushBranch = useAppStore((s) => s.pushBranch)
   const pullBranch = useAppStore((s) => s.pullBranch)
@@ -904,6 +1011,7 @@ function SourceControlInner(): React.JSX.Element {
     settings?.sourceControlViewMode
   )
   const sourceControlViewMode = persistedSourceControlViewMode
+  const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -912,9 +1020,11 @@ function SourceControlInner(): React.JSX.Element {
   // falsy until we have a real answer from the main process.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState('')
-  // Why: commit drafts/errors are worktree-scoped during the mounted session,
-  // so switching worktrees restores each draft instead of wiping it.
-  const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>({})
+  // Why: Source Control unmounts when the user switches tabs, so keep commit
+  // drafts in a module-scoped session cache and restore them on remount.
+  const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>(() =>
+    loadSessionCommitDrafts()
+  )
   const commitDraftsRef = useRef<CommitDraftsByWorktree>(commitDrafts)
   const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
   const [remoteActionErrors, setRemoteActionErrors] = useState<
@@ -941,12 +1051,16 @@ function SourceControlInner(): React.JSX.Element {
     Record<string, boolean>
   >({})
   const [generateErrors, setGenerateErrors] = useState<Record<string, string | null>>({})
-  const isGenerating = generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false
-  const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
   const [hostedReviewCreationState, setHostedReviewCreationState] =
     useState<HostedReviewCreationState | null>(null)
   const [hostedReviewCreationRequestState, setHostedReviewCreationRequestState] =
     useState<HostedReviewCreationRequestState | null>(null)
+  const hostedReviewCreationProviderHintRef = useRef<HostedReviewCreationProviderHint>({
+    repoId: null,
+    worktreeId: null,
+    branch: '',
+    provider: 'github'
+  })
   const createPrInFlightRef = useRef<Record<string, boolean>>({})
   const [createPrInFlightByWorktree, setCreatePrInFlightByWorktree] = useState<
     Record<string, boolean>
@@ -958,7 +1072,8 @@ function SourceControlInner(): React.JSX.Element {
     repoId: null as string | null,
     worktreeId: null as string | null,
     worktreePath: null as string | null,
-    branch: null as string | null
+    branch: null as string | null,
+    baseRef: null as string | null
   })
   const [createPrIntentInFlightByWorktree, setCreatePrIntentInFlightByWorktree] = useState<
     Record<string, boolean>
@@ -1003,6 +1118,15 @@ function SourceControlInner(): React.JSX.Element {
   const setPullRequestGenerationRecord = useAppStore((s) => s.setPullRequestGenerationRecord)
   const updatePullRequestGenerationRecord = useAppStore((s) => s.updatePullRequestGenerationRecord)
 
+  const commitMessageGenerationRecords = useAppStore((s) => s.commitMessageGenerationRecords)
+  const allocateCommitMessageGenerationRequestId = useAppStore(
+    (s) => s.allocateCommitMessageGenerationRequestId
+  )
+  const setCommitMessageGenerationRecord = useAppStore((s) => s.setCommitMessageGenerationRecord)
+  const updateCommitMessageGenerationRecord = useAppStore(
+    (s) => s.updateCommitMessageGenerationRecord
+  )
+
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
   const remoteActionError = remoteActionErrors[activeWorktreeId ?? ''] ?? null
@@ -1033,6 +1157,26 @@ function SourceControlInner(): React.JSX.Element {
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
+  const { expandedSubmoduleKeys, submoduleStatusByKey, toggleSubmodule } =
+    useSourceControlSubmoduleStatus({
+      activeWorktreeId,
+      worktreePath,
+      activeRepoSettings,
+      entries
+    })
+  const activeCommitMessageGenerationKey = getCommitMessageGenerationRecordKey(
+    activeWorktreeId,
+    worktreePath
+  )
+  const activeCommitMessageGenerationRecord: CommitMessageGenerationRecord | null =
+    activeCommitMessageGenerationKey
+      ? (commitMessageGenerationRecords[activeCommitMessageGenerationKey] ?? null)
+      : null
+  const isGenerating =
+    activeCommitMessageGenerationRecord?.status === 'running' ||
+    (generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false)
+  const generateError =
+    activeCommitMessageGenerationRecord?.error ?? generateErrors[activeWorktreeId ?? ''] ?? null
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? activeRepo?.connectionId ?? null)
     : null
@@ -1046,14 +1190,6 @@ function SourceControlInner(): React.JSX.Element {
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  useEffect(() => {
-    createPrIntentCurrentTargetRef.current = {
-      repoId: activeRepo?.id ?? null,
-      worktreeId: activeWorktreeId ?? null,
-      worktreePath,
-      branch: branchName
-    }
-  }, [activeRepo?.id, activeWorktreeId, branchName, worktreePath])
   const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
     worktreeId: activeWorktreeId,
     worktreePath,
@@ -1069,6 +1205,10 @@ function SourceControlInner(): React.JSX.Element {
     activePullRequestGenerationRecordCandidate.context.branch === branchName
       ? activePullRequestGenerationRecordCandidate
       : null
+  const activePullRequestGenerationSeedRestoreKey = getPullRequestGenerationSeedRestoreKey({
+    recordKey: activePullRequestGenerationKey,
+    record: activePullRequestGenerationRecord
+  })
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: gate polling on both the active tab AND the sidebar being open.
   // The sidebar now stays mounted when closed (for performance), so without
@@ -1262,7 +1402,8 @@ function SourceControlInner(): React.JSX.Element {
           settings,
           activeRepo.id,
           activeRepo.connectionId,
-          activeRepo.executionHostId
+          activeRepo.executionHostId,
+          true
         )
       : null
   const hostedReviewEntry = hostedReviewCacheKey
@@ -1276,25 +1417,49 @@ function SourceControlInner(): React.JSX.Element {
           branchName,
           settings,
           activeRepo.connectionId,
-          activeRepo.executionHostId
+          activeRepo.executionHostId,
+          true
         )
       : null
   const activePrFromQueue = activePrCacheKey ? (prCache[activePrCacheKey]?.data ?? null) : null
-  const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
-    ? activePrFromQueue
-      ? { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
-      : (hostedReviewEntry?.data ?? null)
-    : null
+  const hostedReviewEntryData = hostedReviewEntry?.data ?? null
+  const hostedReview: HostedReviewInfo | null = useMemo(() => {
+    if (!hostedReviewCacheKey) {
+      return null
+    }
+    if (activePrFromQueue) {
+      return { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
+    }
+    return hostedReviewEntryData
+  }, [activePrFromQueue, hostedReviewCacheKey, hostedReviewEntryData])
   const effectiveBaseRef = resolveSourceControlBaseRef({
     worktreeBaseRef: normalizedWorktreeBaseRef,
     reviewBaseRefName: hostedReview?.baseRefName,
     repoBaseRef: normalizedRepoBaseRef,
     defaultBaseRef
   })
+  // Why: the compare/diff view uses this base; the PR/rebase merge target keeps
+  // using effectiveBaseRef. When the setting is off, this equals effectiveBaseRef.
+  const compareBaseRef = resolveSourceControlCompareBaseRef({
+    enabled: settings?.sourceControlCompareAgainstUpstream ?? false,
+    worktreeBaseRef: normalizedWorktreeBaseRef,
+    repoBaseRef: normalizedRepoBaseRef,
+    upstreamName: remoteStatus?.upstreamName ?? null,
+    fallbackBaseRef: effectiveBaseRef
+  })
   const pickerBaseRef = resolveSourceControlPickerBaseRef({
     pinnedBaseRef,
     effectiveBaseRef
   })
+  useEffect(() => {
+    createPrIntentCurrentTargetRef.current = {
+      repoId: activeRepo?.id ?? null,
+      worktreeId: activeWorktreeId ?? null,
+      worktreePath,
+      branch: branchName,
+      baseRef: effectiveBaseRef ?? null
+    }
+  }, [activeRepo?.id, activeWorktreeId, branchName, effectiveBaseRef, worktreePath])
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const fallbackGitHubPRNumber = linkedGitHubPR == null ? (activePrFromQueue?.number ?? null) : null
@@ -1318,46 +1483,101 @@ function SourceControlInner(): React.JSX.Element {
     shouldResolveHostedReviewCreation &&
     hostedReviewCreationRequestMatchesCurrent &&
     hostedReviewCreationRequestState.status === 'loading' &&
-    hostedReviewCreation === null &&
     hostedReview === null
-  const hostedReviewCreationForHeader = useMemo(() => {
-    if (hostedReviewCreation) {
-      return hostedReviewCreation
-    }
-    if (!isHostedReviewCreationLoading) {
-      return null
-    }
-    const provider = resolveProvisionalHostedReviewProvider({
+  const provisionalHostedReviewProvider = useMemo(
+    () =>
+      resolveProvisionalHostedReviewProvider({
+        hostedReview,
+        hostedReviewCreationState: hostedReviewCreation
+          ? {
+              repoId: activeRepo?.id ?? '',
+              data: hostedReviewCreation
+            }
+          : null,
+        activeRepoId: activeRepo?.id ?? null,
+        linkedGitHubPR,
+        fallbackGitHubPR: fallbackGitHubPRNumber,
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR
+      }),
+    [
+      activeRepo?.id,
+      fallbackGitHubPRNumber,
       hostedReview,
-      hostedReviewCreationState,
-      activeRepoId: activeRepo?.id ?? null,
-      linkedGitHubPR,
-      fallbackGitHubPR: fallbackGitHubPRNumber,
-      linkedGitLabMR,
-      linkedBitbucketPR,
+      hostedReviewCreation,
       linkedAzureDevOpsPR,
+      linkedBitbucketPR,
+      linkedGitHubPR,
+      linkedGitLabMR,
       linkedGiteaPR
-    })
-    return buildLoadingHostedReviewCreationEligibility(provider)
+    ]
+  )
+  useEffect(() => {
+    const hasConcreteProviderHint =
+      hostedReview !== null ||
+      hostedReviewCreation !== null ||
+      linkedGitHubPR !== null ||
+      fallbackGitHubPRNumber !== null ||
+      linkedGitLabMR !== null ||
+      linkedAzureDevOpsPR !== null ||
+      linkedGiteaPR !== null
+
+    if (!hasConcreteProviderHint) {
+      return
+    }
+
+    hostedReviewCreationProviderHintRef.current = {
+      repoId: activeRepo?.id ?? null,
+      worktreeId: activeWorktreeId ?? null,
+      branch: branchName,
+      provider: provisionalHostedReviewProvider
+    }
   }, [
     activeRepo?.id,
+    activeWorktreeId,
+    branchName,
     fallbackGitHubPRNumber,
     hostedReview,
     hostedReviewCreation,
-    hostedReviewCreationState,
-    isHostedReviewCreationLoading,
     linkedAzureDevOpsPR,
-    linkedBitbucketPR,
+    linkedGiteaPR,
     linkedGitHubPR,
     linkedGitLabMR,
-    linkedGiteaPR
+    provisionalHostedReviewProvider
   ])
-  const hasLinkedHostedReview =
-    (linkedGitHubPR ?? fallbackGitHubPRNumber) !== null ||
-    linkedGitLabMR !== null ||
-    linkedBitbucketPR !== null ||
-    linkedAzureDevOpsPR !== null ||
-    linkedGiteaPR !== null
+  const hostedReviewCreationForHeader = useMemo(() => {
+    // Why: a fresh preflight must disable stale Create PR eligibility while
+    // upstream/dirty/base state is reconciling after commit or push, while
+    // preserving provider copy from the previous safe snapshot.
+    if (isHostedReviewCreationLoading) {
+      const providerHint = hostedReviewCreationProviderHintRef.current
+      const provider =
+        providerHint.repoId === (activeRepo?.id ?? null) &&
+        providerHint.worktreeId === (activeWorktreeId ?? null) &&
+        providerHint.branch === branchName
+          ? providerHint.provider
+          : provisionalHostedReviewProvider
+      return buildLoadingHostedReviewCreationEligibility(provider)
+    }
+    return hostedReviewCreation
+  }, [
+    activeRepo?.id,
+    activeWorktreeId,
+    branchName,
+    hostedReviewCreation,
+    isHostedReviewCreationLoading,
+    provisionalHostedReviewProvider
+  ])
+  const hasHostedReviewLink = hasPositiveHostedReviewNumberLink({
+    linkedGitHubPR,
+    fallbackGitHubPR: fallbackGitHubPRNumber,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR
+  })
   // Why: when activeRepo.connectionId is truthy, neither the SourceControl
   // effect below nor WorktreeCard.tsx fetches hostedReview for this branch,
   // so hostedReviewEntry would stay undefined forever and would permanently
@@ -1365,7 +1585,59 @@ function SourceControlInner(): React.JSX.Element {
   // and no upstream. Skip the loading state for those repos so the publish
   // gate doesn't latch.
   const isHostedReviewStateLoading =
-    !activeRepo?.connectionId && hasLinkedHostedReview && hostedReviewEntry === undefined
+    !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
+  const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({
+    linkedGitHubPR,
+    linkedGitLabMR
+  })
+  useEffect(() => {
+    // Why: resolving review heads can hit provider/SSH APIs, so keep it tied
+    // to the visible Source Control branch view like the adjacent PR polling.
+    if (!isBranchVisible || isFolder || !activeWorktreeId || activeWorktree?.pushTarget) {
+      return
+    }
+    if (!hasResolvableReviewPushTargetLink) {
+      return
+    }
+    void ensureHostedReviewPushTarget(activeWorktreeId)
+  }, [
+    activeWorktree?.pushTarget,
+    activeWorktreeId,
+    ensureHostedReviewPushTarget,
+    hasResolvableReviewPushTargetLink,
+    isBranchVisible,
+    isFolder,
+    linkedGitHubPR,
+    linkedGitLabMR
+  ])
+  const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+    pushTarget: activeWorktree?.pushTarget,
+    upstreamStatus: remoteStatus,
+    hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink
+  })
+  const hostedReviewStateForActions = resolveHostedReviewStateForActions({
+    hostedReviewState: hostedReview?.state ?? null,
+    hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink
+  })
+  const remoteStatusForActions: typeof remoteStatus = useMemo(
+    () =>
+      resolveHostedReviewActionUpstreamStatus({
+        hasHostedReviewLink,
+        hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink,
+        hostedReviewState: hostedReviewStateForActions,
+        isHostedReviewStateLoading,
+        canUseHostedReviewPushTarget,
+        upstreamStatus: remoteStatus
+      }),
+    [
+      canUseHostedReviewPushTarget,
+      hasHostedReviewLink,
+      hasResolvableReviewPushTargetLink,
+      hostedReviewStateForActions,
+      isHostedReviewStateLoading,
+      remoteStatus
+    ]
+  )
   useEffect(() => {
     if (
       !isBranchVisible ||
@@ -1418,77 +1690,100 @@ function SourceControlInner(): React.JSX.Element {
   // create_pr, unmount the composer, and cancel the in-flight generation.
 
   const grouped = useMemo(() => {
-    const groups = {
-      staged: [] as GitStatusEntry[],
-      unstaged: [] as GitStatusEntry[],
-      untracked: [] as GitStatusEntry[]
-    }
+    const groups: SourceControlEntryGroups = { staged: [], unstaged: [], untracked: [] }
     for (const entry of entries) {
       groups[entry.area].push(entry)
     }
-    for (const area of SECTION_ORDER) {
+    for (const area of SOURCE_CONTROL_AREAS) {
       groups[area].sort(compareGitStatusEntries)
     }
     return groups
   }, [entries])
 
-  const normalizedFilter = filterQuery.toLowerCase()
+  const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
+  const normalizedFilter = fileFilterState.normalizedFilter
   const isGitHistoryVisible =
-    !normalizedFilter && Boolean(activeWorktreeId && worktreePath && !isFolder)
+    !normalizedFilter &&
+    !fileFilterState.tooLarge &&
+    Boolean(activeWorktreeId && worktreePath && !isFolder)
 
-  const filteredGrouped = useMemo(() => {
-    if (!normalizedFilter) {
-      return grouped
-    }
-    return {
-      staged: grouped.staged.filter((e) => e.path.toLowerCase().includes(normalizedFilter)),
-      unstaged: grouped.unstaged.filter((e) => e.path.toLowerCase().includes(normalizedFilter)),
-      untracked: grouped.untracked.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
-    }
-  }, [grouped, normalizedFilter])
+  const filteredGrouped = useMemo(
+    () => filterSourceControlGroupedPathEntries(grouped, fileFilterState),
+    [fileFilterState, grouped]
+  )
 
-  const filteredBranchEntries = useMemo(() => {
-    if (!normalizedFilter) {
-      return branchEntries
-    }
-    return branchEntries.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
-  }, [branchEntries, normalizedFilter])
+  const displaySections = useMemo(
+    () => buildSourceControlDisplaySections(filteredGrouped, sourceControlGroupOrder),
+    [filteredGrouped, sourceControlGroupOrder]
+  )
+  const unfilteredDisplaySections = useMemo(
+    () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
+    [grouped, sourceControlGroupOrder]
+  )
+  const unfilteredDisplaySectionsById = useMemo(
+    () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
+    [unfilteredDisplaySections]
+  )
 
-  const flatEntries = useMemo(() => {
-    const arr: FlatEntry[] = []
-    for (const area of SECTION_ORDER) {
-      if (!collapsedSections.has(area)) {
-        for (const entry of filteredGrouped[area]) {
-          arr.push({ key: `${area}::${entry.path}`, entry, area })
-        }
-      }
-    }
-    return arr
-  }, [filteredGrouped, collapsedSections])
+  const filteredBranchEntries = useMemo(
+    () => filterSourceControlPathEntries(branchEntries, fileFilterState),
+    [branchEntries, fileFilterState]
+  )
 
-  const treeRootsByArea = useMemo(
-    () => ({
-      staged: compactSourceControlTree(
-        buildGitStatusSourceControlTree('staged', filteredGrouped.staged)
-      ),
-      unstaged: compactSourceControlTree(
-        buildGitStatusSourceControlTree('unstaged', filteredGrouped.unstaged)
-      ),
-      untracked: compactSourceControlTree(
-        buildGitStatusSourceControlTree('untracked', filteredGrouped.untracked)
+  const treeRootsBySection = useMemo(() => {
+    const roots: Partial<Record<SourceControlDisplaySectionId, GitStatusSourceControlTreeNode[]>> =
+      {}
+    for (const section of displaySections) {
+      const sectionRoots = compactSourceControlTree(
+        buildGitStatusSourceControlTree(section.area, section.items)
       )
-    }),
-    [filteredGrouped]
-  )
+      roots[section.id] =
+        section.id === 'conflicts'
+          ? applyGitStatusEntryAreasToSourceControlTree(
+              // Why: conflict rows can mirror normal paths, so their folder
+              // collapse keys must not share state with normal area sections.
+              namespaceSourceControlTreeDirectoryKeys(sectionRoots, 'conflicts')
+            )
+          : sectionRoots
+    }
+    return roots
+  }, [displaySections])
 
-  const visibleTreeRowsByArea = useMemo(
-    () => ({
-      staged: flattenSourceControlTree(treeRootsByArea.staged, collapsedTreeDirs),
-      unstaged: flattenSourceControlTree(treeRootsByArea.unstaged, collapsedTreeDirs),
-      untracked: flattenSourceControlTree(treeRootsByArea.untracked, collapsedTreeDirs)
-    }),
-    [collapsedTreeDirs, treeRootsByArea]
-  )
+  const visibleTreeRowsBySection = useMemo(() => {
+    const rows: Partial<Record<SourceControlDisplaySectionId, RenderableSourceControlNode[]>> = {}
+    for (const section of displaySections) {
+      rows[section.id] = injectExpandedSubmoduleRows(
+        flattenSourceControlTree(treeRootsBySection[section.id] ?? [], collapsedTreeDirs),
+        expandedSubmoduleKeys,
+        submoduleStatusByKey,
+        SUBMODULE_LOADING_LABEL,
+        SUBMODULE_EMPTY_LABEL
+      )
+    }
+    return rows
+  }, [
+    collapsedTreeDirs,
+    displaySections,
+    treeRootsBySection,
+    expandedSubmoduleKeys,
+    submoduleStatusByKey
+  ])
+
+  // List view needs the same lazy submodule expansion as the tree view, just
+  // spliced into the flat entry list instead of the tree-row list.
+  const visibleListRowsBySection = useMemo(() => {
+    const rows: Partial<Record<SourceControlDisplaySectionId, RenderableSubmoduleListItem[]>> = {}
+    for (const section of displaySections) {
+      rows[section.id] = injectExpandedSubmoduleEntries(
+        section.items,
+        expandedSubmoduleKeys,
+        submoduleStatusByKey,
+        SUBMODULE_LOADING_LABEL,
+        SUBMODULE_EMPTY_LABEL
+      )
+    }
+    return rows
+  }, [displaySections, expandedSubmoduleKeys, submoduleStatusByKey])
 
   const branchTreeRoots = useMemo(
     () => compactSourceControlTree(buildSourceControlTree('branch', filteredBranchEntries)),
@@ -1500,23 +1795,38 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const visibleSelectionEntries = useMemo(() => {
+    const arr: FlatEntry[] = []
+    // Why: list view splices lazily-loaded submodule child rows into the
+    // rendered list, so selection/range/open-key bookkeeping must read the same
+    // injected rows instead of the pre-injection flat entries.
     if (sourceControlViewMode === 'list') {
-      return flatEntries
+      for (const section of displaySections) {
+        if (collapsedSections.has(section.id)) {
+          continue
+        }
+        arr.push(...collectListSelectionEntries(visibleListRowsBySection[section.id] ?? []))
+      }
+      return arr
     }
 
-    const arr: FlatEntry[] = []
-    for (const area of SECTION_ORDER) {
-      if (collapsedSections.has(area)) {
+    for (const section of displaySections) {
+      if (collapsedSections.has(section.id)) {
         continue
       }
-      for (const node of visibleTreeRowsByArea[area]) {
+      for (const node of visibleTreeRowsBySection[section.id] ?? []) {
         if (node.type === 'file') {
           arr.push({ key: node.key, entry: node.entry, area: node.area })
         }
       }
     }
     return arr
-  }, [collapsedSections, flatEntries, sourceControlViewMode, visibleTreeRowsByArea])
+  }, [
+    collapsedSections,
+    displaySections,
+    sourceControlViewMode,
+    visibleListRowsBySection,
+    visibleTreeRowsBySection
+  ])
 
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
   const unresolvedConflicts = useMemo(
@@ -1533,6 +1843,7 @@ function SourceControlInner(): React.JSX.Element {
   )
   const {
     sourceControlAiDiscoveryHostKey,
+    sourceControlAiActionsVisible,
     resolvedCommitMessageAi,
     resolvedPrCreationDefaults,
     resolveConflictsComposerOpen,
@@ -1571,6 +1882,20 @@ function SourceControlInner(): React.JSX.Element {
     openSettingsTarget,
     openSettingsPage
   })
+
+  useEffect(() => {
+    if (sourceControlAiActionsVisible) {
+      return
+    }
+    setResolveConflictsComposerOpen(false)
+    setCommitGenerationDialogOpen(false)
+    setPullRequestGenerationDialogOpen(false)
+  }, [
+    setCommitGenerationDialogOpen,
+    setPullRequestGenerationDialogOpen,
+    setResolveConflictsComposerOpen,
+    sourceControlAiActionsVisible
+  ])
 
   // Why: orphaned draft/error/in-flight entries accumulate when worktrees are
   // removed from the store (long sessions with many create/destroy cycles).
@@ -1623,6 +1948,10 @@ function SourceControlInner(): React.JSX.Element {
       }
     }
   }, [updateCommitDrafts, worktreeMap])
+
+  useEffect(() => {
+    saveSessionCommitDrafts(commitDrafts)
+  }, [commitDrafts])
 
   useEffect(() => {
     // Why: users often finish merge/rebase conflicts in a terminal. Once git
@@ -1756,15 +2085,15 @@ function SourceControlInner(): React.JSX.Element {
         //
         // Then fire-and-forget refreshBranchCompare so the "Committed on
         // Branch" section repopulates as soon as the IPC returns instead of
-        // waiting up to 5 seconds for the next poll. Unawaited on purpose:
+        // waiting for the next poll. Unawaited on purpose:
         // compound flows (runCompoundCommitAction) need handleCommit to
         // resolve immediately so the push step starts without delay. Errors
         // here are best-effort — the polling tick will retry.
-        if (!options?.target && effectiveBaseRef) {
+        if (!options?.target && compareBaseRef) {
           beginGitBranchCompareRequest(
             target.worktreeId,
-            `${target.worktreeId}:${effectiveBaseRef}:${Date.now()}:post-commit`,
-            effectiveBaseRef
+            `${target.worktreeId}:${compareBaseRef}:${Date.now()}:post-commit`,
+            compareBaseRef
           )
         }
         if (!options?.target) {
@@ -1789,7 +2118,7 @@ function SourceControlInner(): React.JSX.Element {
       activeWorktreeId,
       beginGitBranchCompareRequest,
       commitMessage,
-      effectiveBaseRef,
+      compareBaseRef,
       grouped.staged.length,
       refreshActiveGitStatusAfterMutation,
       updateCommitDrafts,
@@ -1800,7 +2129,7 @@ function SourceControlInner(): React.JSX.Element {
 
   const handleGenerate = useCallback(
     async (overrides?: RuntimeGenerateCommitMessageOverrides): Promise<void> => {
-      if (!activeWorktreeId || !worktreePath) {
+      if (!activeWorktreeId || !worktreePath || !activeCommitMessageGenerationKey) {
         return
       }
       if (generateInFlightRef.current[activeWorktreeId]) {
@@ -1827,7 +2156,18 @@ function SourceControlInner(): React.JSX.Element {
       }
 
       generateInFlightRef.current[activeWorktreeId] = true
+      const requestId = allocateCommitMessageGenerationRequestId()
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      setCommitMessageGenerationRecord(
+        activeCommitMessageGenerationKey,
+        createRunningCommitMessageGenerationRecord({
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId,
+          requestId,
+          runtimeTargetSettings: activeRepoSettings
+        })
+      )
       setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
       setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       try {
@@ -1847,15 +2187,37 @@ function SourceControlInner(): React.JSX.Element {
           // surface. Clear any prior error and stay quiet.
           if (result.canceled) {
             setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+            updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
+              resolveCommitMessageGenerationFailure({
+                record,
+                requestId,
+                canceled: true,
+                error: null
+              })
+            )
             return
           }
           setGenerateErrors((prev) => ({
             ...prev,
             [activeWorktreeId]: result.error
           }))
+          updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
+            resolveCommitMessageGenerationFailure({
+              record,
+              requestId,
+              error: result.error
+            })
+          )
           return
         }
 
+        updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
+          resolveCommitMessageGenerationSuccess({
+            record,
+            requestId,
+            message: result.message
+          })
+        )
         // Why: race protection — the user may have started typing into the
         // textarea while the agent was running. In that case we silently drop
         // the generated message rather than overwrite their in-progress edits.
@@ -1869,26 +2231,40 @@ function SourceControlInner(): React.JSX.Element {
         useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
         setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to generate commit message'
         setGenerateErrors((prev) => ({
           ...prev,
-          [activeWorktreeId]:
-            error instanceof Error ? error.message : 'Failed to generate commit message'
+          [activeWorktreeId]: message
         }))
+        updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
+          resolveCommitMessageGenerationFailure({
+            record,
+            requestId,
+            error: message
+          })
+        )
       } finally {
         setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
         generateInFlightRef.current[activeWorktreeId] = false
       }
     },
     [
+      activeCommitMessageGenerationKey,
       activeRepoSettings,
       activeWorktreeId,
+      allocateCommitMessageGenerationRequestId,
       resolvedCommitMessageAi,
+      setCommitMessageGenerationRecord,
       updateCommitDrafts,
+      updateCommitMessageGenerationRecord,
       worktreePath
     ]
   )
 
   const handleGenerateCommitMessageClick = useCallback((): void => {
+    if (!sourceControlAiActionsVisible) {
+      return
+    }
     if (
       hasConfiguredCommitMessageGenerationDefaults({ settings, repo: activeRepo ?? null }) &&
       resolvedCommitMessageAi?.ok
@@ -1897,7 +2273,14 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
     openCommitGenerationDialog()
-  }, [activeRepo, handleGenerate, openCommitGenerationDialog, resolvedCommitMessageAi, settings])
+  }, [
+    activeRepo,
+    handleGenerate,
+    openCommitGenerationDialog,
+    resolvedCommitMessageAi,
+    settings,
+    sourceControlAiActionsVisible
+  ])
 
   const generateCommitMessageForCreatePrIntent = useCallback(
     async (
@@ -1956,12 +2339,15 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const handleCancelGenerate = useCallback((): void => {
-    if (!activeWorktreeId || !worktreePath) {
+    if (!activeWorktreeId || !worktreePath || !activeCommitMessageGenerationKey) {
       return
     }
     if (!generateInFlightRef.current[activeWorktreeId]) {
       return
     }
+    updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
+      resolveCommitMessageGenerationCancel(record)
+    )
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
     // Why: fire-and-forget — the in-flight generateCommitMessage promise
     // resolves with `{canceled: true}` once the kill propagates, which is
@@ -1973,7 +2359,13 @@ function SourceControlInner(): React.JSX.Element {
       worktreePath,
       connectionId
     })
-  }, [activeRepoSettings, activeWorktreeId, worktreePath])
+  }, [
+    activeCommitMessageGenerationKey,
+    activeRepoSettings,
+    activeWorktreeId,
+    updateCommitMessageGenerationRecord,
+    worktreePath
+  ])
 
   // Why: a single dispatcher for every remote-only action the split button or
   // chevron dropdown can trigger. Keeps the error-swallow pattern in one
@@ -2524,6 +2916,22 @@ function SourceControlInner(): React.JSX.Element {
       })
     })
   }, [activePullRequestGenerationKey, prGenerationRecords, updatePullRequestGenerationRecord])
+  const handlePullRequestGenerationSeedRestored = useCallback((): void => {
+    if (!activePullRequestGenerationKey || !activePullRequestGenerationRecord) {
+      return
+    }
+    const requestId = activePullRequestGenerationRecord.context.requestId
+    updatePullRequestGenerationRecord(activePullRequestGenerationKey, (record) =>
+      markPullRequestGenerationTerminalSeedRestored({
+        record,
+        requestId
+      })
+    )
+  }, [
+    activePullRequestGenerationKey,
+    activePullRequestGenerationRecord,
+    updatePullRequestGenerationRecord
+  ])
 
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
@@ -2546,7 +2954,8 @@ function SourceControlInner(): React.JSX.Element {
     generateDisabledReason: prGenerateDisabledReason,
     handleGenerate: handleGeneratePullRequestFields,
     handleCancelGenerate: handleCancelGeneratePullRequestFields,
-    applyGeneratedFields: applyGeneratedPullRequestFields
+    applyGeneratedFields: applyGeneratedPullRequestFields,
+    initializedFromEligibility: pullRequestFieldsInitialized
   } = useCreatePullRequestDialogFields({
     open: hostedReviewCreation?.canCreate === true,
     repoId: activeRepo?.id ?? '',
@@ -2554,14 +2963,20 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath: worktreePath ?? '',
     branch: branchName,
     eligibility: hostedReviewCreation,
+    currentBaseRef: effectiveBaseRef,
     repo: activeRepo ?? null,
     settings: activeRepoSettings,
     submitting: isCreatingPr,
     prCreationDefaults: resolvedPrCreationDefaults,
+    sourceControlAiActionsVisible,
     onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration,
     generation: {
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
+      seedRestoreKey: activePullRequestGenerationSeedRestoreKey,
+      seed: activePullRequestGenerationRecord?.seed ?? null,
+      seedFieldRevisions: activePullRequestGenerationRecord?.seedFieldRevisions ?? null,
+      onSeedRestored: handlePullRequestGenerationSeedRestored,
       onGenerate: (fields, fieldRevisions, overrides) => {
         void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions, overrides)
       },
@@ -2570,6 +2985,9 @@ function SourceControlInner(): React.JSX.Element {
   })
 
   const handleGeneratePullRequestFieldsClick = useCallback((): void => {
+    if (!sourceControlAiActionsVisible) {
+      return
+    }
     if (
       hasConfiguredSourceControlTextGenerationDefaults({
         actionId: 'pullRequest',
@@ -2581,15 +2999,24 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
     openPullRequestGenerationDialog()
-  }, [activeRepo, handleGeneratePullRequestFields, openPullRequestGenerationDialog, settings])
+  }, [
+    activeRepo,
+    handleGeneratePullRequestFields,
+    openPullRequestGenerationDialog,
+    settings,
+    sourceControlAiActionsVisible
+  ])
 
   useEffect(() => {
+    // Why: on Source Control remount, the PR fields hook seeds eligibility
+    // defaults in an effect; hydrating before that effect runs gets overwritten.
     if (
       !activePullRequestGenerationKey ||
       !activePullRequestGenerationRecord ||
       activePullRequestGenerationRecord.status !== 'succeeded' ||
       !activePullRequestGenerationRecord.result ||
-      activePullRequestGenerationRecord.hydrated
+      activePullRequestGenerationRecord.hydrated ||
+      !pullRequestFieldsInitialized
     ) {
       return
     }
@@ -2618,7 +3045,42 @@ function SourceControlInner(): React.JSX.Element {
     activePullRequestGenerationKey,
     activePullRequestGenerationRecord,
     applyGeneratedPullRequestFields,
+    pullRequestFieldsInitialized,
     updatePullRequestGenerationRecord
+  ])
+
+  useEffect(() => {
+    // Why: direct commit-message generation can finish after Source Control
+    // unmounts; the store record lets the remounted textarea consume it once.
+    if (
+      !activeCommitMessageGenerationKey ||
+      !activeWorktreeId ||
+      !activeCommitMessageGenerationRecord ||
+      activeCommitMessageGenerationRecord.status !== 'succeeded' ||
+      !activeCommitMessageGenerationRecord.message ||
+      activeCommitMessageGenerationRecord.hydrated
+    ) {
+      return
+    }
+    updateCommitDrafts((prev) => {
+      const current = prev[activeWorktreeId]
+      return current && current.length > 0
+        ? prev
+        : writeCommitDraftForWorktree(
+            prev,
+            activeWorktreeId,
+            activeCommitMessageGenerationRecord.message ?? ''
+          )
+    })
+    updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
+      markCommitMessageGenerationHydrated(record)
+    )
+  }, [
+    activeCommitMessageGenerationKey,
+    activeCommitMessageGenerationRecord,
+    activeWorktreeId,
+    updateCommitDrafts,
+    updateCommitMessageGenerationRecord
   ])
 
   useEffect(() => {
@@ -2642,6 +3104,9 @@ function SourceControlInner(): React.JSX.Element {
       branch: branchName,
       status: 'loading'
     })
+    // Why: upstream/status changes can make the previous eligibility unsafe
+    // to click while the new preflight is still resolving.
+    setHostedReviewCreationState(null)
     void getHostedReviewCreationEligibility({
       repoPath: activeRepo.path,
       repoId: activeRepo.id,
@@ -2715,10 +3180,23 @@ function SourceControlInner(): React.JSX.Element {
       !activeRepo ||
       !activeWorktreeId ||
       !worktreePath ||
-      !hostedReviewCreation?.canCreate ||
+      !hostedReviewCreation ||
       prGenerating ||
       createPrInFlightRef.current[activeWorktreeId]
     ) {
+      return
+    }
+
+    if (!hostedReviewCreation.canCreate) {
+      // Why: blocked Create Review clicks are intentional for actionable states;
+      // the inline notice tells users which prerequisite to clear next.
+      const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
+      if (message) {
+        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          tone: 'destructive',
+          message
+        })
+      }
       return
     }
 
@@ -2865,9 +3343,11 @@ function SourceControlInner(): React.JSX.Element {
         return false
       }
 
-      const base = stripBaseRef(
-        eligibility.defaultBaseRef ?? effectiveBaseRef ?? prBase ?? ''
-      ).trim()
+      const base = resolveCreatePrIntentReviewBase({
+        currentBaseRef: token.baseRef,
+        eligibilityDefaultBaseRef: eligibility.defaultBaseRef,
+        composerBaseRef: prBase
+      }).trim()
       if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(token.branch).toLowerCase()) {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
@@ -2880,13 +3360,12 @@ function SourceControlInner(): React.JSX.Element {
         return false
       }
 
-      const fallbackTitle =
-        eligibility.title?.trim() ||
-        humanizeBranchSlug(stripBaseRef(token.branch).split('/').pop()?.replace(/_/g, '-') ?? '') ||
-        stripBaseRef(token.branch)
       let fields = {
         base,
-        title: fallbackTitle,
+        title: resolveCreateReviewDraftTitle({
+          branch: token.branch,
+          eligibilityTitle: eligibility.title
+        }),
         body: eligibility.body ?? prBody,
         draft: resolvedPrCreationDefaults.draft
       }
@@ -3051,7 +3530,6 @@ function SourceControlInner(): React.JSX.Element {
     [
       activeRepo,
       createHostedReview,
-      effectiveBaseRef,
       createPrIntentActiveTargetConflicts,
       createPrIntentRunStillOwnsWorktree,
       getCreatePrIntentOperationTarget,
@@ -3069,11 +3547,12 @@ function SourceControlInner(): React.JSX.Element {
 
   const refreshBranchCompareForCreatePrIntent = useCallback(
     async (token: CreatePrIntentRunToken): Promise<number | undefined> => {
-      if (!effectiveBaseRef) {
+      const baseRef = token.baseRef?.trim()
+      if (!baseRef) {
         return undefined
       }
-      const requestKey = `${token.worktreeId}:${effectiveBaseRef}:${Date.now()}:create-pr-intent`
-      beginGitBranchCompareRequest(token.worktreeId, requestKey, effectiveBaseRef)
+      const requestKey = `${token.worktreeId}:${baseRef}:${Date.now()}:create-pr-intent`
+      beginGitBranchCompareRequest(token.worktreeId, requestKey, baseRef)
       const result = await getRuntimeGitBranchCompare(
         {
           // Why: the intent flow may continue after a worktree switch; use the
@@ -3083,12 +3562,12 @@ function SourceControlInner(): React.JSX.Element {
           worktreePath: token.worktreePath,
           connectionId: getConnectionId(token.worktreeId) ?? undefined
         },
-        effectiveBaseRef
+        baseRef
       )
       setGitBranchCompareResult(token.worktreeId, requestKey, result)
       return result.summary.status === 'ready' ? (result.summary.commitsAhead ?? 0) : undefined
     },
-    [activeRepoSettings, beginGitBranchCompareRequest, effectiveBaseRef, setGitBranchCompareResult]
+    [activeRepoSettings, beginGitBranchCompareRequest, setGitBranchCompareResult]
   )
 
   const readHostedReviewCreationEligibilityForIntent = useCallback(
@@ -3109,7 +3588,7 @@ function SourceControlInner(): React.JSX.Element {
         repoId: activeRepo.id,
         worktreePath: token.worktreePath,
         branch: token.branch,
-        base: effectiveBaseRef ?? null,
+        base: token.baseRef ?? null,
         hasUncommittedChanges,
         hasUpstream: upstreamStatus?.hasUpstream,
         ahead: upstreamStatus?.ahead,
@@ -3131,7 +3610,6 @@ function SourceControlInner(): React.JSX.Element {
     },
     [
       activeRepo,
-      effectiveBaseRef,
       fallbackGitHubPRNumber,
       getHostedReviewCreationEligibility,
       linkedAzureDevOpsPR,
@@ -3193,7 +3671,10 @@ function SourceControlInner(): React.JSX.Element {
       repoId: activeRepo.id,
       worktreeId: activeWorktreeId,
       worktreePath,
-      branch: branchName
+      branch: branchName,
+      // Why: Create PR intent crosses async commit/push steps; the review
+      // target must stay tied to the base selected when the run started.
+      baseRef: effectiveBaseRef ?? null
     })
     const operationTarget = getCreatePrIntentOperationTarget(token)
     const runIsCurrent = (): boolean =>
@@ -3417,7 +3898,7 @@ function SourceControlInner(): React.JSX.Element {
       const remoteOk = await runRemoteAction(remoteStep, {
         target: operationTarget,
         remoteStatus: latestUpstreamStatus,
-        baseRef: effectiveBaseRef
+        baseRef: token.baseRef
       })
       if (abortIfStale()) {
         return
@@ -3533,16 +4014,15 @@ function SourceControlInner(): React.JSX.Element {
       hasUnresolvedConflicts: unresolvedConflicts.length > 0,
       isCommitting,
       isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
-      upstreamStatus: remoteStatus,
-      prState: hostedReview?.state ?? null,
+      upstreamStatus: remoteStatusForActions,
+      prState: hostedReviewStateForActions,
       isPRStateLoading: isHostedReviewStateLoading,
       inFlightRemoteOpKind,
       hostedReviewCreation,
       branchCommitsAhead:
         branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
       hasCurrentBranch: Boolean(branchName),
-      canPushLinkedReviewWithoutUpstream:
-        Boolean(activeWorktree?.pushTarget) || remoteStatus?.hasConfiguredPushTarget === true,
+      canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
       isPrIntentInFlight: isCreatePrIntentInFlight
     })
   }, [
@@ -3557,13 +4037,13 @@ function SourceControlInner(): React.JSX.Element {
     inFlightRemoteOpKind,
     hostedReviewCreation,
     isHostedReviewStateLoading,
-    hostedReview?.state,
-    activeWorktree?.pushTarget,
+    hostedReviewStateForActions,
+    canUseHostedReviewPushTarget,
     isCreatePrIntentInFlight,
     branchSummary?.commitsAhead,
     branchSummary?.status,
     branchName,
-    remoteStatus,
+    remoteStatusForActions,
     unresolvedConflicts.length
   ])
 
@@ -3589,17 +4069,23 @@ function SourceControlInner(): React.JSX.Element {
       hasCurrentBranch: Boolean(branchName),
       isPrIntentInFlight: isCreatePrIntentInFlight
     })
-    return isCreatingPr && action?.kind === 'create_pr'
-      ? {
-          ...action,
-          title: translate(
-            'auto.components.right.sidebar.SourceControl.fe5bd1a610',
-            'Creating {{value0}}...',
-            { value0: hostedReviewCreateCopy.reviewLabel }
-          ),
-          disabled: true
-        }
-      : action
+    if ((prGenerating || isCreatingPr) && action?.kind === 'create_pr') {
+      return {
+        ...action,
+        title: prGenerating
+          ? translate(
+              'auto.components.right.sidebar.SourceControl.createPrIntentGeneratingDetails',
+              'Generating review details…'
+            )
+          : translate(
+              'auto.components.right.sidebar.SourceControl.fe5bd1a610',
+              'Creating {{value0}}...',
+              { value0: hostedReviewCreateCopy.reviewLabel }
+            ),
+        disabled: true
+      }
+    }
+    return action
   }, [
     branchName,
     branchSummary?.commitsAhead,
@@ -3620,13 +4106,14 @@ function SourceControlInner(): React.JSX.Element {
     isHostedReviewCreationLoading,
     isHostedReviewStateLoading,
     isRemoteOperationActive,
+    prGenerating,
     remoteStatus,
     unresolvedConflicts.length
   ])
   const directCreatePrAction =
     createPrHeaderAction?.kind === 'create_pr' &&
     hostedReviewCreation?.canCreate === true &&
-    (!createPrHeaderAction.disabled || isCreatingPr)
+    (!createPrHeaderAction.disabled || isCreatingPr || prGenerating)
       ? createPrHeaderAction
       : null
   const visibleCreatePrHeaderAction = resolveVisibleCreatePrHeaderAction({
@@ -3645,8 +4132,8 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
         conflictOperation,
-        upstreamStatus: remoteStatus,
-        prState: hostedReview?.state ?? null,
+        upstreamStatus: remoteStatusForActions,
+        prState: hostedReviewStateForActions,
         isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
         hostedReviewCreation,
@@ -3654,8 +4141,7 @@ function SourceControlInner(): React.JSX.Element {
         branchCommitsAhead:
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
-        canPushLinkedReviewWithoutUpstream:
-          Boolean(activeWorktree?.pushTarget) || remoteStatus?.hasConfiguredPushTarget === true,
+        canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
         rebaseBaseRef: effectiveBaseRef
       }),
     [
@@ -3673,14 +4159,14 @@ function SourceControlInner(): React.JSX.Element {
       isCreatingPr,
       isCreatePrIntentInFlight,
       isHostedReviewStateLoading,
-      hostedReview?.state,
+      hostedReviewStateForActions,
       prGenerating,
-      activeWorktree?.pushTarget,
+      canUseHostedReviewPushTarget,
       branchSummary?.commitsAhead,
       branchSummary?.status,
       branchName,
       effectiveBaseRef,
-      remoteStatus,
+      remoteStatusForActions,
       unresolvedConflicts.length
     ]
   )
@@ -3756,6 +4242,43 @@ function SourceControlInner(): React.JSX.Element {
       return createEmptySplitGroup(activeWorktreeId, sourceGroupId, 'right') ?? undefined
     },
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
+  )
+
+  // Why: a stable string signature keeps this selector referentially stable so
+  // the panel only re-renders when the active editor file (or its diff source)
+  // actually changes. Gated on the visible tab being an editor so the highlight
+  // clears when the user switches to a terminal or browser surface.
+  const activeOpenFileSignature = useAppStore((s) => {
+    if (!activeWorktreeId) {
+      return null
+    }
+    if (s.activeTabTypeByWorktree?.[activeWorktreeId] !== 'editor') {
+      return null
+    }
+    const activeFileId = s.activeFileIdByWorktree?.[activeWorktreeId]
+    if (!activeFileId) {
+      return null
+    }
+    const activeFile = s.openFiles?.find(
+      (file) => file.id === activeFileId && file.worktreeId === activeWorktreeId
+    )
+    if (!activeFile) {
+      return null
+    }
+    return buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
+  })
+
+  const activeOpenAvailableRowKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const entry of visibleSelectionEntries) {
+      keys.add(entry.key)
+    }
+    return keys
+  }, [visibleSelectionEntries])
+
+  const activeOpenRowKeys = useMemo(
+    () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
+    [activeOpenAvailableRowKeys, activeOpenFileSignature]
   )
 
   const handleOpenDiff = useCallback(
@@ -3866,7 +4389,10 @@ function SourceControlInner(): React.JSX.Element {
 
   const bulkUnstagePaths = useMemo(
     () =>
-      selectedEntries.filter((entry) => entry.area === 'staged').map((entry) => entry.entry.path),
+      selectedEntries
+        // Why: submodule-internal rows are read-only from the parent worktree.
+        .filter((entry) => entry.area === 'staged' && !entry.entry.submoduleRoot)
+        .map((entry) => entry.entry.path),
     [selectedEntries]
   )
 
@@ -4002,49 +4528,6 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
-  // Why: "Stage all" on the Changes section intentionally skips unresolved
-  // conflict rows. `git add` on a conflicted file silently clears the `u`
-  // record — the only live signal we have — before the user has reviewed it,
-  // which mirrors the per-row Stage suppression above.
-  const handleStageAllInArea = useCallback(
-    async (area: 'unstaged' | 'untracked') => {
-      if (!worktreePath || isExecutingBulk) {
-        return
-      }
-      const paths = getStageAllPaths(grouped[area], area)
-      if (paths.length === 0) {
-        return
-      }
-      setIsExecutingBulk(true)
-      try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await bulkStageRuntimeGitPaths(
-          {
-            // Why: route staging by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          paths
-        )
-        await refreshActiveGitStatusAfterMutation()
-        clearSelection()
-      } finally {
-        setIsExecutingBulk(false)
-      }
-    },
-    [
-      activeRepoSettings,
-      worktreePath,
-      grouped,
-      activeWorktreeId,
-      isExecutingBulk,
-      clearSelection,
-      refreshActiveGitStatusAfterMutation
-    ]
-  )
-
   // Why: 'stage' primary stages every unstaged + untracked path in one
   // bulkStage call. It bypasses handleActionInvoke because that handler is
   // typed to DropdownActionKind and 'stage' is intentionally not in the
@@ -4126,53 +4609,19 @@ function SourceControlInner(): React.JSX.Element {
     }
   }, [createPrHeaderAction, handleCreatePullRequest, runCreatePrIntent])
 
-  const handleUnstageAll = useCallback(async () => {
-    if (!worktreePath || isExecutingBulk) {
-      return
-    }
-    const paths = getUnstageAllPaths(grouped.staged)
-    if (paths.length === 0) {
-      return
-    }
-    setIsExecutingBulk(true)
-    try {
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await bulkUnstageRuntimeGitPaths(
-        {
-          // Why: route unstaging by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        },
-        paths
-      )
-      await refreshActiveGitStatusAfterMutation()
-      clearSelection()
-    } finally {
-      setIsExecutingBulk(false)
-    }
-  }, [
-    activeRepoSettings,
-    worktreePath,
-    grouped.staged,
-    activeWorktreeId,
-    isExecutingBulk,
-    clearSelection,
-    refreshActiveGitStatusAfterMutation
-  ])
-
   const branchCompareInFlightRef = useRef(false)
   const branchCompareRerunRef = useRef(false)
   const branchCompareRunPromiseRef = useRef<Promise<void> | null>(null)
   const refreshBranchCompareRef = useRef<() => Promise<void>>(async () => {})
+  const branchCompareStatusHeadRef = useRef<BranchCompareStatusHeadSnapshot | null>(null)
+  const branchCompareRemoteStatusRef = useRef<BranchCompareRemoteStatusSnapshot | null>(null)
 
   const runBranchCompare = useCallback(async () => {
-    if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
+    if (!activeWorktreeId || !worktreePath || !compareBaseRef || isFolder) {
       return
     }
 
-    const requestKey = `${activeWorktreeId}:${effectiveBaseRef}:${Date.now()}`
+    const requestKey = `${activeWorktreeId}:${compareBaseRef}:${Date.now()}`
     const existingSummary =
       useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId]
 
@@ -4181,19 +4630,16 @@ function SourceControlInner(): React.JSX.Element {
     // getBaseRefDefault corrected a stale cross-repo value).  Polling retries
     // — whether the previous result was 'ready' *or* an error — keep the
     // current UI visible until the new IPC result arrives.  Resetting to
-    // 'loading' on every 5-second poll when the compare is in an error state
-    // caused a visible loading→error→loading→error flicker.
-    const baseRefChanged = existingSummary && existingSummary.baseRef !== effectiveBaseRef
+    // 'loading' on every poll when the compare is in an error state caused a
+    // visible loading→error→loading→error flicker.
+    const baseRefChanged = existingSummary && existingSummary.baseRef !== compareBaseRef
     const shouldResetToLoading = !existingSummary || baseRefChanged
     if (shouldResetToLoading) {
-      beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef)
+      beginGitBranchCompareRequest(activeWorktreeId, requestKey, compareBaseRef)
     } else {
-      useAppStore.setState((s) => ({
-        gitBranchCompareRequestKeyByWorktree: {
-          ...s.gitBranchCompareRequestKeyByWorktree,
-          [activeWorktreeId]: requestKey
-        }
-      }))
+      beginGitBranchCompareRequest(activeWorktreeId, requestKey, compareBaseRef, {
+        preserveExistingSummary: true
+      })
     }
 
     try {
@@ -4206,13 +4652,13 @@ function SourceControlInner(): React.JSX.Element {
           worktreePath,
           connectionId
         },
-        effectiveBaseRef
+        compareBaseRef
       )
       setGitBranchCompareResult(activeWorktreeId, requestKey, result)
     } catch (error) {
       setGitBranchCompareResult(activeWorktreeId, requestKey, {
         summary: {
-          baseRef: effectiveBaseRef,
+          baseRef: compareBaseRef,
           baseOid: null,
           compareRef: branchName,
           headOid: null,
@@ -4229,7 +4675,7 @@ function SourceControlInner(): React.JSX.Element {
     activeWorktreeId,
     beginGitBranchCompareRequest,
     branchName,
-    effectiveBaseRef,
+    compareBaseRef,
     isFolder,
     setGitBranchCompareResult,
     worktreePath
@@ -4243,8 +4689,8 @@ function SourceControlInner(): React.JSX.Element {
 
     branchCompareInFlightRef.current = true
     const runPromise = (async (): Promise<void> => {
-      // Why: branch compare shells out to git on a timer and can exceed the
-      // 5s poll interval on large repos. Keep one compare chain in flight and
+      // Why: branch compare shells out to git from both event-driven refreshes
+      // and the fallback timer. Keep one compare chain in flight and
       // collapse skipped ticks into one trailing refresh instead of stacking
       // subprocesses while preserving the await contract for direct callers.
       try {
@@ -4305,7 +4751,7 @@ function SourceControlInner(): React.JSX.Element {
           worktreePath,
           connectionId
         },
-        { limit: 50, baseRef: effectiveBaseRef }
+        { limit: 50, baseRef: compareBaseRef }
       )
       if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
         return
@@ -4329,7 +4775,7 @@ function SourceControlInner(): React.JSX.Element {
   }, [
     activeRepoSettings,
     activeWorktreeId,
-    effectiveBaseRef,
+    compareBaseRef,
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
@@ -4341,18 +4787,89 @@ function SourceControlInner(): React.JSX.Element {
   refreshGitHistoryRef.current = refreshGitHistory
 
   useEffect(() => {
-    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !effectiveBaseRef || isFolder) {
+    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
+      branchCompareStatusHeadRef.current = null
       return
     }
 
-    // Why: branch compare shells out to git every tick. The panel only needs
-    // background freshness while Orca is visible; hidden-window time should not
-    // burn subprocess work or timer wakeups.
+    const current = {
+      baseRef: compareBaseRef,
+      statusHead: activeGitStatusHead,
+      worktreeId: activeWorktreeId
+    }
+    const previous = branchCompareStatusHeadRef.current
+    branchCompareStatusHeadRef.current = current
+    if (shouldRefreshBranchCompareForStatusHead(previous, current)) {
+      void refreshBranchCompareRef.current()
+    }
+  }, [
+    activeGitStatusHead,
+    activeWorktreeId,
+    compareBaseRef,
+    isBranchVisible,
+    isFolder,
+    worktreePath
+  ])
+
+  useEffect(() => {
+    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
+      branchCompareRemoteStatusRef.current = null
+      return
+    }
+
+    // Why: pushing a branch can move its remote-tracking base and ahead count
+    // without changing local HEAD, so the HEAD-change effect alone misses it.
+    const current = {
+      ahead: remoteStatus?.ahead ?? null,
+      baseRef: compareBaseRef,
+      behind: remoteStatus?.behind ?? null,
+      hasUpstream: remoteStatus?.hasUpstream ?? null,
+      upstreamName: remoteStatus?.upstreamName ?? null,
+      worktreeId: activeWorktreeId
+    }
+    const previous = branchCompareRemoteStatusRef.current
+    branchCompareRemoteStatusRef.current = current
+    if (shouldRefreshBranchCompareForRemoteStatus(previous, current)) {
+      void refreshBranchCompareRef.current()
+    }
+  }, [
+    activeWorktreeId,
+    compareBaseRef,
+    isBranchVisible,
+    isFolder,
+    remoteStatus?.ahead,
+    remoteStatus?.behind,
+    remoteStatus?.hasUpstream,
+    remoteStatus?.upstreamName,
+    worktreePath
+  ])
+
+  useEffect(() => {
+    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
+      return
+    }
+
+    // Why: git-status HEAD changes refresh branch compare immediately. Keep a
+    // visible-window fallback for base refs or remote updates that do not move HEAD.
     return installWindowVisibilityInterval({
       run: () => void refreshBranchCompareRef.current(),
       intervalMs: BRANCH_REFRESH_INTERVAL_MS
     })
-  }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
+  }, [activeWorktreeId, compareBaseRef, isBranchVisible, isFolder, worktreePath])
+
+  useEffect(() => {
+    // Why: when the compare-base policy resolves to no base, runBranchCompare
+    // bails out; drop any stale summary so the
+    // committed-changes section and "vs" row disappear and only the working tree
+    // shows. Wait until upstream status has loaded so the summary doesn't flicker.
+    if (
+      !activeWorktreeId ||
+      !shouldClearBranchCompareForMissingBase({ isFolder, compareBaseRef, remoteStatus })
+    ) {
+      return
+    }
+    clearGitBranchCompare(activeWorktreeId)
+  }, [activeWorktreeId, clearGitBranchCompare, compareBaseRef, isFolder, remoteStatus])
 
   useEffect(() => {
     // Why: history shells out to git. Defer the first load until the user
@@ -4362,8 +4879,10 @@ function SourceControlInner(): React.JSX.Element {
     }
     void refreshGitHistoryRef.current()
   }, [
+    // Why: history is fetched with compareBaseRef, so re-run when the upstream
+    // compare base changes — effectiveBaseRef can stay put while it moves.
     activeWorktreeId,
-    effectiveBaseRef,
+    compareBaseRef,
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
@@ -4805,11 +5324,11 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const requestDiscardAllInArea = useCallback(
-    (area: DiscardAllArea): void => {
+    (area: DiscardAllArea, confirmedPaths?: readonly string[]): void => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = getDiscardAllPaths(grouped[area], area)
+      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
       if (paths.length === 0) {
         return
       }
@@ -4882,7 +5401,7 @@ function SourceControlInner(): React.JSX.Element {
           visibleCreatePrHeaderAction={visibleCreatePrHeaderAction}
           hostedReview={hostedReview}
           isCreatePrIntentInFlight={isCreatePrIntentInFlight}
-          isCreatingPr={isCreatingPr}
+          isCreatingPr={isCreatingPr || prGenerating}
           onCreatePrHeaderClick={handleCreatePrHeaderClick}
           onOpenHostedReviewInChecks={openHostedReviewInChecks}
           sourceControlViewMode={sourceControlViewMode}
@@ -4894,7 +5413,7 @@ function SourceControlInner(): React.JSX.Element {
           diffCommentCount={diffCommentCount}
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
-          compareBaseRef={effectiveBaseRef}
+          compareBaseRef={compareBaseRef}
           upstreamStatus={remoteStatus}
         />
 
@@ -5056,6 +5575,7 @@ function SourceControlInner(): React.JSX.Element {
               <ConflictSummaryCard
                 conflictOperation={conflictOperation}
                 unresolvedCount={unresolvedConflictReviewEntries.length}
+                sourceControlAiActionsVisible={sourceControlAiActionsVisible}
                 isResolvingWithAI={false}
                 isAbortingOperation={isAbortingOperation}
                 onAbortOperation={handleAbortOperationForConflict}
@@ -5102,6 +5622,13 @@ function SourceControlInner(): React.JSX.Element {
               supportingText={`This workspace is clean and this branch has no changes ahead of ${branchSummary?.baseRef ?? 'base'}`}
             />
           ) : null}
+
+          {fileFilterState.tooLarge && (
+            <EmptyState
+              heading="Search text is too large"
+              supportingText="Use a shorter file filter."
+            />
+          )}
 
           {normalizedFilter && !hasFilteredUncommittedEntries && !hasFilteredBranchEntries && (
             <EmptyState
@@ -5158,7 +5685,7 @@ function SourceControlInner(): React.JSX.Element {
                 baseResults={prBaseResults}
                 setBaseResults={setPrBaseResults}
                 baseSearchError={prBaseSearchError}
-                aiGenerationEnabled={prAiGenerationEnabled}
+                aiGenerationEnabled={sourceControlAiActionsVisible && prAiGenerationEnabled}
                 generating={prGenerating}
                 generateDisabled={prGenerateDisabled}
                 generateDisabledReason={prGenerateDisabledReason}
@@ -5193,7 +5720,8 @@ function SourceControlInner(): React.JSX.Element {
                 isCreatePrIntentInFlight={isCreatePrIntentInFlight}
                 groupId={activeGroupId ?? activeWorktreeId}
                 showComposer={!showGenericEmptyState}
-                aiEnabled={resolvedCommitMessageAi?.ok === true}
+                sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+                aiEnabled={sourceControlAiActionsVisible && resolvedCommitMessageAi?.ok === true}
                 aiAgentConfigured={resolvedCommitMessageAi?.ok === true}
                 isGenerating={isGenerating}
                 generateError={generateError}
@@ -5225,35 +5753,32 @@ function SourceControlInner(): React.JSX.Element {
 
           {hasFilteredUncommittedEntries && (
             <>
-              {SECTION_ORDER.map((area) => {
-                const items = filteredGrouped[area]
-                if (items.length === 0) {
-                  return null
-                }
-                const isCollapsed = collapsedSections.has(area)
+              {displaySections.map((section) => {
+                const { area, id, items } = section
+                const isCollapsed = collapsedSections.has(id)
                 // Why: "Stage all"/"Unstage all" operate on the *unfiltered*
                 // group for the area — acting on just the filter-visible subset
                 // would surprise users who don't realize a filter is active.
                 // The +/- is hidden when the filter is active to avoid that
                 // mismatch between what's shown and what would be staged.
                 // Why: visibility and execution both resolve paths through the
-                // same helpers (`getStageAllPaths`/`getUnstageAllPaths`/
-                // `getDiscardAllPaths`) so the button can never show for a set
-                // the handler would then filter to empty.
-                const stageAllPaths =
-                  area === 'unstaged' || area === 'untracked'
-                    ? getStageAllPaths(grouped[area], area)
-                    : []
+                // same eligibility rules as the handlers so the button can
+                // never show for a set the handler would then filter to empty.
+                const actionSection = unfilteredDisplaySectionsById.get(id) ?? section
+                const actionItems = actionSection.items
+                const stageAllPaths = actionItems
+                  .filter(isStageableStatusEntry)
+                  .map((entry) => entry.path)
+                const unstageAllPaths = getUnstageAllPaths(actionItems)
+                const discardAllPaths = getDiscardAllPaths(actionItems, area)
                 const canStageAll = !normalizedFilter && stageAllPaths.length > 0
-                const canUnstageAll =
-                  !normalizedFilter &&
-                  area === 'staged' &&
-                  getUnstageAllPaths(grouped.staged).length > 0
-                const canRevertAll =
-                  !normalizedFilter && getDiscardAllPaths(grouped[area], area).length > 0
-                const sectionLabel = SECTION_LABELS[area]
+                const canUnstageAll = !normalizedFilter && unstageAllPaths.length > 0
+                const canRevertAll = !normalizedFilter && discardAllPaths.length > 0
+                const sectionLabel =
+                  id === 'conflicts' ? CONFLICTS_SECTION_LABEL : SECTION_LABELS[area]
+                const sectionViewAction = getSourceControlSectionViewAction(actionSection)
                 return (
-                  <div key={area}>
+                  <div key={id}>
                     <SectionHeader
                       label={translate(sectionLabel.key, sectionLabel.fallback)}
                       count={items.length}
@@ -5261,7 +5786,7 @@ function SourceControlInner(): React.JSX.Element {
                         items.filter((entry) => entry.conflictStatus === 'unresolved').length
                       }
                       isCollapsed={isCollapsed}
-                      onToggle={() => toggleSection(area)}
+                      onToggle={() => toggleSection(id)}
                       actions={
                         <>
                           {/* Why: bulk action buttons are hover-only on
@@ -5295,7 +5820,7 @@ function SourceControlInner(): React.JSX.Element {
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  requestDiscardAllInArea(area)
+                                  requestDiscardAllInArea(area, discardAllPaths)
                                 }}
                                 disabled={isExecutingBulk}
                               />
@@ -5309,9 +5834,7 @@ function SourceControlInner(): React.JSX.Element {
                                 )}
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  if (area === 'unstaged' || area === 'untracked') {
-                                    void handleStageAllInArea(area)
-                                  }
+                                  void handleStageAllPaths(stageAllPaths)
                                 }}
                                 disabled={isExecutingBulk}
                               />
@@ -5325,22 +5848,42 @@ function SourceControlInner(): React.JSX.Element {
                                 )}
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  void handleUnstageAll()
+                                  void handleUnstagePaths(unstageAllPaths)
                                 }}
                                 disabled={isExecutingBulk}
                               />
                             )}
                           </div>
-                          {items.some((entry) => entry.conflictStatus === 'unresolved') ? (
+                          {sectionViewAction ? (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                              className={
+                                items.some((entry) => entry.conflictStatus === 'unresolved')
+                                  ? 'h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground'
+                                  : 'h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground'
+                              }
                               onClick={(e) => {
                                 e.stopPropagation()
-                                if (activeWorktreeId && worktreePath) {
-                                  openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
+                                if (!activeWorktreeId || !worktreePath) {
+                                  return
+                                }
+                                if (sectionViewAction.kind === 'conflict-review') {
+                                  openConflictReview(
+                                    activeWorktreeId,
+                                    worktreePath,
+                                    sectionViewAction.entries,
+                                    'live-summary'
+                                  )
+                                } else {
+                                  openAllDiffs(
+                                    activeWorktreeId,
+                                    worktreePath,
+                                    undefined,
+                                    sectionViewAction.area,
+                                    sectionViewAction.entries
+                                  )
                                 }
                               }}
                             >
@@ -5349,31 +5892,23 @@ function SourceControlInner(): React.JSX.Element {
                                 'View all'
                               )}
                             </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (activeWorktreeId && worktreePath) {
-                                  openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
-                                }
-                              }}
-                            >
-                              {translate(
-                                'auto.components.right.sidebar.SourceControl.48db37cca9',
-                                'View all'
-                              )}
-                            </Button>
-                          )}
+                          ) : null}
                         </>
                       }
                     />
                     {!isCollapsed &&
                       (sourceControlViewMode === 'tree'
-                        ? visibleTreeRowsByArea[area].map((node) => {
+                        ? (visibleTreeRowsBySection[id] ?? []).map((node) => {
+                            if (node.type === 'submodule-placeholder') {
+                              return (
+                                <SubmodulePlaceholderRow
+                                  key={node.key}
+                                  depth={node.depth}
+                                  state={node.state}
+                                  message={node.message}
+                                />
+                              )
+                            }
                             if (node.type === 'directory') {
                               return (
                                 <SourceControlTreeDirectoryRow
@@ -5396,6 +5931,14 @@ function SourceControlInner(): React.JSX.Element {
                                 />
                               )
                             }
+                            const submoduleExpansion = isExpandableSubmoduleEntry(node.entry)
+                              ? {
+                                  isExpanded: expandedSubmoduleKeys.has(
+                                    getSubmoduleExpansionKey(node.entry)
+                                  ),
+                                  onToggle: () => toggleSubmodule(node.entry)
+                                }
+                              : undefined
                             return (
                               <UncommittedEntryRow
                                 key={node.key}
@@ -5405,20 +5948,42 @@ function SourceControlInner(): React.JSX.Element {
                                 worktreePath={worktreePath}
                                 depth={node.depth}
                                 selected={selectedKeySet.has(node.key)}
+                                isOpenFile={activeOpenRowKeys.has(node.key)}
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
+                                connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
                                 onDiscard={requestDiscardEntry}
                                 commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
                                 showPathHint={false}
+                                submoduleExpansion={submoduleExpansion}
                               />
                             )
                           })
-                        : items.map((entry) => {
+                        : (visibleListRowsBySection[id] ?? []).map((row) => {
+                            if (row.type === 'submodule-placeholder') {
+                              return (
+                                <SubmodulePlaceholderRow
+                                  key={row.key}
+                                  depth={row.depth}
+                                  state={row.state}
+                                  message={row.message}
+                                />
+                              )
+                            }
+                            const entry = row.entry
                             const key = `${entry.area}::${entry.path}`
+                            const submoduleExpansion = isExpandableSubmoduleEntry(entry)
+                              ? {
+                                  isExpanded: expandedSubmoduleKeys.has(
+                                    getSubmoduleExpansionKey(entry)
+                                  ),
+                                  onToggle: () => toggleSubmodule(entry)
+                                }
+                              : undefined
                             return (
                               <UncommittedEntryRow
                                 key={key}
@@ -5426,15 +5991,19 @@ function SourceControlInner(): React.JSX.Element {
                                 entry={entry}
                                 currentWorktreeId={currentWorktreeId}
                                 worktreePath={worktreePath}
+                                depth={entry.submoduleRoot ? 1 : 0}
                                 selected={selectedKeySet.has(key)}
+                                isOpenFile={activeOpenRowKeys.has(key)}
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
+                                connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
                                 onDiscard={requestDiscardEntry}
                                 commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
+                                submoduleExpansion={submoduleExpansion}
                               />
                             )
                           }))}
@@ -5508,6 +6077,7 @@ function SourceControlInner(): React.JSX.Element {
                           worktreePath={worktreePath}
                           depth={node.depth}
                           onRevealInExplorer={revealInExplorer}
+                          connectionId={activeConnectionId}
                           onOpen={(event) => openCommittedDiff(node.entry, event)}
                           commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
                           showPathHint={false}
@@ -5521,6 +6091,7 @@ function SourceControlInner(): React.JSX.Element {
                         currentWorktreeId={currentWorktreeId}
                         worktreePath={worktreePath}
                         onRevealInExplorer={revealInExplorer}
+                        connectionId={activeConnectionId}
                         onOpen={(event) => openCommittedDiff(entry, event)}
                         commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                       />
@@ -5648,7 +6219,7 @@ function SourceControlInner(): React.JSX.Element {
         </DialogContent>
       </Dialog>
       <SourceControlAgentActionDialog
-        open={resolveConflictsComposerOpen}
+        open={sourceControlAiActionsVisible && resolveConflictsComposerOpen}
         onOpenChange={setResolveConflictsComposerOpen}
         actionId="resolveConflicts"
         title={translate(
@@ -5686,7 +6257,7 @@ function SourceControlInner(): React.JSX.Element {
         }
       />
       <SourceControlTextGenerationDialog
-        open={commitGenerationDialogOpen}
+        open={sourceControlAiActionsVisible && commitGenerationDialogOpen}
         onOpenChange={setCommitGenerationDialogOpen}
         actionId="commitMessage"
         title={translate(
@@ -5707,7 +6278,7 @@ function SourceControlInner(): React.JSX.Element {
         onSaveDefaults={handleSaveCommitMessageGenerationDefaults}
       />
       <SourceControlTextGenerationDialog
-        open={pullRequestGenerationDialogOpen}
+        open={sourceControlAiActionsVisible && pullRequestGenerationDialogOpen}
         onOpenChange={setPullRequestGenerationDialogOpen}
         actionId="pullRequest"
         title={translate(
@@ -5917,6 +6488,7 @@ type CommitAreaProps = {
   isCreatingPr?: boolean
   isCreatePrIntentInFlight?: boolean
   showComposer?: boolean
+  sourceControlAiActionsVisible: boolean
   aiEnabled: boolean
   aiAgentConfigured: boolean
   isGenerating: boolean
@@ -5959,6 +6531,7 @@ export function CommitArea({
   isCreatingPr = false,
   isCreatePrIntentInFlight = false,
   showComposer = true,
+  sourceControlAiActionsVisible,
   aiEnabled,
   aiAgentConfigured,
   isGenerating,
@@ -5983,7 +6556,7 @@ export function CommitArea({
   // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
   // the existing style) — the browser scrolls internally past 12 rows.
-  const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
+  const rows = getCommitMessageTextareaRows(commitMessage)
   // Why: only spin the primary when its label matches what's actually
   // running. The commit-area resolver overrides the primary kind to mirror
   // the in-flight op (e.g. user picks Sync from the dropdown → primary
@@ -6187,7 +6760,9 @@ export function CommitArea({
             aria-describedby={describedBy || undefined}
             // Why: reserve right padding so typed text does not slide under the
             // absolute-positioned Generate icon in the top-right corner.
-            className={`mt-0.5 min-h-14 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+            // Why: match Input surface tokens and pin disabled:border-input so
+            // Chromium's UA disabled styles don't wash out the field outline.
+            className={`mt-0.5 min-h-14 w-full resize-none appearance-none rounded-md border border-input bg-background shadow-xs px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:border-input disabled:bg-background disabled:text-foreground disabled:shadow-xs dark:bg-input/30 dark:disabled:bg-input/30 ${
               showGenerate ? 'pr-8' : ''
             }`}
           />
@@ -6376,31 +6951,33 @@ export function CommitArea({
               </p>
             </div>
             <div className="ml-[1.375rem] flex min-w-0 items-center gap-1.5">
-              <CommitFailureFixSplitButton
-                label={translate(
-                  'auto.components.right.sidebar.SourceControl.60bd988f0b',
-                  'AI Fix'
-                )}
-                worktreeId={worktreeId}
-                groupId={groupId}
-                connectionId={connectionId}
-                repoId={repoId}
-                launchPlatform={launchPlatform}
-                prompt={commitFailureRecoveryPrompt}
-                isLaunching={isFixingCommitFailureWithAI}
-                variant="secondary"
-                size="xs"
-                iconClassName="size-3"
-                primaryClassName="h-6 px-2 text-[11px]"
-                chevronClassName="h-6 px-1.5"
-                savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
-                savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
-                savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
-                onSaveAgentDefault={onSaveLaunchActionDefault}
-                onOpenSettings={onOpenSourceControlAiSettings}
-                onFixWithDefaultAgent={handleFixCommitFailureWithAI}
-                onPromptDelivered={handleCommitFailureAgentPromptDelivered}
-              />
+              {sourceControlAiActionsVisible ? (
+                <CommitFailureFixSplitButton
+                  label={translate(
+                    'auto.components.right.sidebar.SourceControl.60bd988f0b',
+                    'AI Fix'
+                  )}
+                  worktreeId={worktreeId}
+                  groupId={groupId}
+                  connectionId={connectionId}
+                  repoId={repoId}
+                  launchPlatform={launchPlatform}
+                  prompt={commitFailureRecoveryPrompt}
+                  isLaunching={isFixingCommitFailureWithAI}
+                  variant="secondary"
+                  size="xs"
+                  iconClassName="size-3"
+                  primaryClassName="h-6 px-2 text-[11px]"
+                  chevronClassName="h-6 px-1.5"
+                  savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
+                  savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
+                  savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
+                  onSaveAgentDefault={onSaveLaunchActionDefault}
+                  onOpenSettings={onOpenSourceControlAiSettings}
+                  onFixWithDefaultAgent={handleFixCommitFailureWithAI}
+                  onPromptDelivered={handleCommitFailureAgentPromptDelivered}
+                />
+              ) : null}
               {hasCommitFailureDetails && (
                 <Button
                   type="button"
@@ -6436,31 +7013,33 @@ export function CommitArea({
               {commitError}
             </pre>
             <DialogFooter>
-              <CommitFailureFixSplitButton
-                label={translate(
-                  'auto.components.right.sidebar.SourceControl.834cb3f23d',
-                  'Fix with AI'
-                )}
-                worktreeId={worktreeId}
-                groupId={groupId}
-                connectionId={connectionId}
-                repoId={repoId}
-                launchPlatform={launchPlatform}
-                prompt={commitFailureRecoveryPrompt}
-                isLaunching={isFixingCommitFailureWithAI}
-                variant="default"
-                size="sm"
-                iconClassName="size-4"
-                primaryClassName="rounded-r-none"
-                chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
-                savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
-                savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
-                savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
-                onSaveAgentDefault={onSaveLaunchActionDefault}
-                onOpenSettings={onOpenSourceControlAiSettings}
-                onFixWithDefaultAgent={handleFixCommitFailureWithAI}
-                onPromptDelivered={handleCommitFailureAgentPromptDelivered}
-              />
+              {sourceControlAiActionsVisible ? (
+                <CommitFailureFixSplitButton
+                  label={translate(
+                    'auto.components.right.sidebar.SourceControl.834cb3f23d',
+                    'Fix with AI'
+                  )}
+                  worktreeId={worktreeId}
+                  groupId={groupId}
+                  connectionId={connectionId}
+                  repoId={repoId}
+                  launchPlatform={launchPlatform}
+                  prompt={commitFailureRecoveryPrompt}
+                  isLaunching={isFixingCommitFailureWithAI}
+                  variant="default"
+                  size="sm"
+                  iconClassName="size-4"
+                  primaryClassName="rounded-r-none"
+                  chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
+                  savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
+                  savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
+                  savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
+                  onSaveAgentDefault={onSaveLaunchActionDefault}
+                  onOpenSettings={onOpenSourceControlAiSettings}
+                  onFixWithDefaultAgent={handleFixCommitFailureWithAI}
+                  onPromptDelivered={handleCommitFailureAgentPromptDelivered}
+                />
+              ) : null}
               <DialogClose asChild>
                 <Button type="button" variant="outline" size="sm">
                   {translate('auto.components.right.sidebar.SourceControl.783a808870', 'Close')}
@@ -6494,7 +7073,11 @@ export function CommitArea({
               : 'text-muted-foreground'
           )}
         >
-          <span className="min-w-0 flex-1 truncate">{createPrIntentNotice.message}</span>
+          {/* Why: Create Review blockers carry recovery steps; truncating them hides
+          the action the user needs in the default narrow sidebar. */}
+          <span className="min-w-0 flex-1 break-words leading-4 [overflow-wrap:anywhere]">
+            {createPrIntentNotice.message}
+          </span>
           {createPrIntentNotice.action === 'settings' && onOpenSourceControlAiSettings ? (
             <button
               type="button"
@@ -6520,6 +7103,49 @@ export function CommitArea({
         </p>
       )}
     </div>
+  )
+}
+
+type BranchCompareStatusHeadSnapshot = {
+  baseRef: string
+  statusHead: string | null
+  worktreeId: string
+}
+
+type BranchCompareRemoteStatusSnapshot = {
+  ahead: number | null
+  baseRef: string
+  behind: number | null
+  hasUpstream: boolean | null
+  upstreamName: string | null
+  worktreeId: string
+}
+
+export function shouldRefreshBranchCompareForStatusHead(
+  previous: BranchCompareStatusHeadSnapshot | null,
+  current: BranchCompareStatusHeadSnapshot
+): boolean {
+  return (
+    current.statusHead !== null &&
+    previous !== null &&
+    previous.worktreeId === current.worktreeId &&
+    previous.baseRef === current.baseRef &&
+    previous.statusHead !== current.statusHead
+  )
+}
+
+export function shouldRefreshBranchCompareForRemoteStatus(
+  previous: BranchCompareRemoteStatusSnapshot | null,
+  current: BranchCompareRemoteStatusSnapshot
+): boolean {
+  return (
+    previous !== null &&
+    previous.worktreeId === current.worktreeId &&
+    previous.baseRef === current.baseRef &&
+    (previous.hasUpstream !== current.hasUpstream ||
+      previous.upstreamName !== current.upstreamName ||
+      previous.ahead !== current.ahead ||
+      previous.behind !== current.behind)
   )
 }
 
@@ -6975,6 +7601,7 @@ function DiffCommentsInlineList({
 export function ConflictSummaryCard({
   conflictOperation,
   unresolvedCount,
+  sourceControlAiActionsVisible,
   isResolvingWithAI,
   isAbortingOperation = false,
   onAbortOperation,
@@ -6983,6 +7610,7 @@ export function ConflictSummaryCard({
 }: {
   conflictOperation: GitConflictOperation
   unresolvedCount: number
+  sourceControlAiActionsVisible: boolean
   isResolvingWithAI: boolean
   isAbortingOperation?: boolean
   onAbortOperation?: (operation: GitConflictOperation) => void
@@ -7019,26 +7647,28 @@ export function ConflictSummaryCard({
         </div>
       </div>
       <div className="mt-2">
-        <Button
-          type="button"
-          variant="default"
-          size="sm"
-          className="h-7 w-full text-xs"
-          disabled={isResolvingWithAI}
-          onClick={onResolveWithAI}
-        >
-          {isResolvingWithAI ? (
-            <RefreshCw className="size-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="size-3.5" />
-          )}
-          {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
-        </Button>
+        {sourceControlAiActionsVisible ? (
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className="h-7 w-full text-xs"
+            disabled={isResolvingWithAI}
+            onClick={onResolveWithAI}
+          >
+            {isResolvingWithAI ? (
+              <RefreshCw className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="mt-1.5 h-7 w-full text-xs"
+          className={cn(sourceControlAiActionsVisible && 'mt-1.5', 'h-7 w-full text-xs')}
           onClick={onReview}
         >
           <GitMerge className="size-3.5" />
@@ -7308,6 +7938,37 @@ function DiffLineCounts({
   )
 }
 
+function SubmodulePlaceholderRow({
+  depth,
+  state,
+  message
+}: {
+  depth: number
+  state: 'loading' | 'empty' | 'error'
+  message?: string
+}): React.JSX.Element {
+  const fallback =
+    state === 'error'
+      ? SUBMODULE_ERROR_LABEL
+      : state === 'empty'
+        ? SUBMODULE_EMPTY_LABEL
+        : SUBMODULE_LOADING_LABEL
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-1 pr-3 py-1 text-[11px]',
+        state === 'error' ? 'text-destructive' : 'text-muted-foreground'
+      )}
+      style={{
+        paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
+      }}
+    >
+      {state === 'loading' && <Loader2 className="size-3 shrink-0 animate-spin" />}
+      <span className="min-w-0 truncate">{message ?? fallback}</span>
+    </div>
+  )
+}
+
 const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,
   entry,
@@ -7315,15 +7976,18 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   worktreePath,
   depth = 0,
   selected,
+  isOpenFile = false,
   onSelect,
   onContextMenu,
   onRevealInExplorer,
+  connectionId,
   onOpen,
   onStage,
   onUnstage,
   onDiscard,
   commentCount,
-  showPathHint = true
+  showPathHint = true,
+  submoduleExpansion
 }: {
   entryKey: string
   entry: GitStatusEntry
@@ -7331,22 +7995,26 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   worktreePath: string
   depth?: number
   selected?: boolean
+  isOpenFile?: boolean
   onSelect?: (e: React.MouseEvent, key: string, entry: GitStatusEntry) => void
   onContextMenu?: (key: string) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
+  connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
   onDiscard: (entry: GitStatusEntry) => void
   commentCount: number
   showPathHint?: boolean
+  // When set, the row is a dirty submodule: clicking toggles lazy expansion of
+  // its inner changes instead of opening a (uninformative) gitlink diff.
+  submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
   const FileIcon = getFileTypeIcon(entry.path)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
-  const isResolvedLocally = entry.conflictStatus === 'resolved_locally'
   const isSubmoduleWorktreeOnly = isSubmoduleWorktreeOnlyChange(entry)
   const conflictLabel = entry.conflictKind
     ? getLocalizedConflictKindLabel(entry.conflictKind)
@@ -7363,17 +8031,18 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   // For unresolved: discarding is too easy to misfire on a high-risk file.
   // For resolved_locally: discarding can silently re-create the conflict or
   // lose the resolution, and v1 does not have UX to explain this clearly.
-  const canDiscard =
-    !isUnresolvedConflict &&
-    !isResolvedLocally &&
-    (entry.area === 'unstaged' || entry.area === 'untracked')
-  const canStage = isStageableStatusEntry(entry)
-  const canUnstage = entry.area === 'staged'
+  const canDiscard = canDiscardStatusEntry(entry)
+  const canStage = canStageStatusEntry(entry)
+  // Why: a submodule-internal staged row is read-only from the parent worktree,
+  // so the parent repo's Unstage must not be offered (mirrors bulk unstage).
+  const canUnstage = canUnstageStatusEntry(entry)
 
   return (
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      connectionId={connectionId}
+      onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
       onOpenChange={(open) => {
         if (open && onContextMenu) {
@@ -7385,9 +8054,14 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         data-testid="source-control-entry"
         data-source-control-path={entry.path}
         data-source-control-area={entry.area}
+        // Why: the currently open file gets the strongest "current row" accent
+        // (full `bg-accent` + `data-current`) per the styleguide, outranking the
+        // lighter bulk-selection tint so the open file always reads as active.
+        data-current={isOpenFile ? 'true' : undefined}
         className={cn(
-          'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors hover:bg-accent/40',
-          selected && 'bg-accent/60'
+          'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
+          isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40',
+          !isOpenFile && selected && 'bg-accent/60'
         )}
         style={{
           paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
@@ -7403,6 +8077,15 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           e.dataTransfer.effectAllowed = 'copy'
         }}
         onClick={(e) => {
+          if (submoduleExpansion) {
+            // Why: a double-click emits two click events; without this guard it
+            // expands and immediately collapses the submodule row.
+            if (e.detail > 1) {
+              return
+            }
+            submoduleExpansion.onToggle()
+            return
+          }
           if (onSelect) {
             onSelect(e, entryKey, entry)
           } else {
@@ -7410,9 +8093,20 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           }
         }}
         onDoubleClick={(e) => {
+          if (submoduleExpansion) {
+            return
+          }
           onOpen(entry, toPermanentSourceControlRowOpenEvent(e))
         }}
       >
+        {submoduleExpansion && (
+          <ChevronDown
+            className={cn(
+              'size-3 shrink-0 text-muted-foreground transition-transform',
+              !submoduleExpansion.isExpanded && '-rotate-90'
+            )}
+          />
+        )}
         <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <div className="min-w-0 flex-1 text-xs">
           <span className="min-w-0 block truncate">
@@ -7575,6 +8269,7 @@ function BranchEntryRow({
   worktreePath,
   depth = 0,
   onRevealInExplorer,
+  connectionId,
   onOpen,
   commentCount,
   showPathHint = true
@@ -7584,7 +8279,8 @@ function BranchEntryRow({
   worktreePath: string
   depth?: number
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpen: (event: SourceControlRowOpenEvent) => void
+  connectionId?: string | null
+  onOpen: (event?: SourceControlRowOpenEvent) => void
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
@@ -7597,6 +8293,8 @@ function BranchEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      connectionId={connectionId}
+      onView={() => onOpen()}
       onRevealInExplorer={onRevealInExplorer}
     >
       <div
@@ -7642,42 +8340,6 @@ function BranchEntryRow({
         </span>
       </div>
     </SourceControlEntryContextMenu>
-  )
-}
-
-function SourceControlEntryContextMenu({
-  currentWorktreeId,
-  absolutePath,
-  onRevealInExplorer,
-  onOpenChange,
-  children
-}: {
-  currentWorktreeId: string
-  absolutePath?: string
-  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpenChange?: (open: boolean) => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  const handleOpenInFileExplorer = useCallback(() => {
-    if (!absolutePath) {
-      return
-    }
-    onRevealInExplorer(currentWorktreeId, absolutePath)
-  }, [absolutePath, currentWorktreeId, onRevealInExplorer])
-
-  return (
-    <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onSelect={handleOpenInFileExplorer} disabled={!absolutePath}>
-          <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControl.cc05b2d088',
-            'Open in File Explorer'
-          )}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
   )
 }
 

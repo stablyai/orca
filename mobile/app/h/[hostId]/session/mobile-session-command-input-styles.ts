@@ -136,12 +136,14 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     gap: spacing.sm
   },
 
-  liveInputHint: {
+  liveInputFocusTarget: {
     flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
   },
+
   liveInputCapture: {
     position: 'absolute',
     opacity: 0,

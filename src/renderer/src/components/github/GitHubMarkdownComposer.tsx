@@ -21,9 +21,15 @@ import {
   GitHubMarkdownComposerTabbar,
   type ComposerTab
 } from '@/components/github/github-markdown-composer-tabbar'
+import { hasBoundedGitHubMarkdownImageUrlText } from '@/components/github/github-markdown-image-url'
 import { useImageInput } from '@/components/github/use-image-input'
 import type { GitHubOwnerRepo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import {
+  getRichMarkdownSpellcheckAttribute,
+  useRichMarkdownSpellcheckAttribute
+} from '@/components/editor/rich-markdown-spellcheck'
 
 type GitHubMarkdownComposerProps = {
   value: string
@@ -58,6 +64,9 @@ export function GitHubMarkdownComposer({
   const onSubmitShortcutRef = useRef(onSubmitShortcut)
   const disabledRef = useRef(disabled)
   const isEditingLinkRef = useRef(false)
+  const richMarkdownSpellcheckEnabled = useAppStore(
+    (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
+  )
   const [activeTab, setActiveTab] = useState<ComposerTab>('write')
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
@@ -113,7 +122,7 @@ export function GitHubMarkdownComposer({
     editorProps: {
       attributes: {
         class: cn('rich-markdown-editor github-markdown-composer-editor', minHeightClassName),
-        spellcheck: 'true'
+        spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)
       },
       handleKeyDown: (_view, event) => {
         if (isScreenSubmitShortcut(event)) {
@@ -178,6 +187,7 @@ export function GitHubMarkdownComposer({
       setLinkBubble(null)
     }
   })
+  useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   useEffect(() => {
     if (!editor) {
@@ -309,7 +319,11 @@ export function GitHubMarkdownComposer({
         disabled={disabled}
         className="h-8 min-w-0 text-xs"
       />
-      <Button type="submit" size="xs" disabled={disabled || !imageUrl.trim()}>
+      <Button
+        type="submit"
+        size="xs"
+        disabled={disabled || !hasBoundedGitHubMarkdownImageUrlText(imageUrl)}
+      >
         {translate('auto.components.github.GitHubMarkdownComposer.e3bd59143c', 'Insert')}
       </Button>
       <Button type="button" variant="ghost" size="xs" onClick={() => setImageInputOpen(false)}>
