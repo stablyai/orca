@@ -173,16 +173,7 @@ export function RepositoryIconPicker({
     return () => {
       cancelled = true
     }
-  }, [
-    repo,
-    repo.id,
-    repo.upstream,
-    repo.repoIcon,
-    resolveGitHubAvatar,
-    resolveUpstreamLive,
-    updateRepo,
-    mountedRef
-  ])
+  }, [repo, resolveGitHubAvatar, resolveUpstreamLive, updateRepo, mountedRef])
 
   return (
     <div className="space-y-3">
