@@ -104,7 +104,13 @@ function isNotGitRepositoryError(error: unknown): boolean {
 }
 
 function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+  // Why: this fixed command's only compatibility-sensitive flag is `-z`;
+  // localized Git usage errors still exit 129 when older versions reject it.
+  if (getErrorCode(error) === '129') {
+    return true
+  }
+
+  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(
     getErrorText(error)
   )
 }
