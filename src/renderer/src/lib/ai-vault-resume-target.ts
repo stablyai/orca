@@ -37,7 +37,9 @@ export function isSupportedAiVaultResumeTargetStatus(status: AiVaultResumeTarget
   return status === 'local' || status === 'ssh'
 }
 
-export function isWslStoredAiVaultSessionFile(sessionFilePath: string | null | undefined): boolean {
+export function isWslStoredAiVaultSessionFile(
+  sessionFilePath: string | null | undefined
+): boolean {
   return Boolean(sessionFilePath && isWslUncPath(sessionFilePath))
 }
 
