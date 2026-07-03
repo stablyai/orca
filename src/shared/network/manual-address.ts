@@ -40,13 +40,14 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   if (IPV4_REGEX.test(host)) {
     return { ok: true, address: trimmed }
   }
-  // Why: an all-digit dotted string (e.g. `256.0.0.1`, `1.2.3.4.5`) is a
-  // mistyped IPv4 address, not a hostname, even though bare numeric labels
-  // are technically legal per RFC 1123. Falling through to HOSTNAME_REGEX
-  // for these would silently "accept" IP typos as unresolvable hostnames.
-  // The trailing `+` requires at least one dot, so a bare numeric label
-  // (`123`) still falls through and validates as a legal hostname.
-  if (/^[0-9]+(?:\.[0-9]+)+$/.test(host)) {
+  // Why: reject any all-numeric host (bare `123` or dotted `256.0.0.1`) as a
+  // mistyped IP rather than a hostname. Although bare numeric labels are
+  // technically legal per RFC 1123, they are ambiguous with an IPv4 address:
+  // the WHATWG URL host parser that `resolvePairingEndpoint` feeds this into
+  // reinterprets a numeric host as IPv4 (`123` becomes `0.0.0.123`), so
+  // accepting one here would let the UI "validate" an address that the main
+  // process then silently dials as a different host.
+  if (/^[0-9]+(?:\.[0-9]+)*$/.test(host)) {
     return { ok: false, error: ERROR_MESSAGE }
   }
   if (HOSTNAME_REGEX.test(host)) {
@@ -70,7 +71,10 @@ function splitHostPort(value: string): { host: string; port: string | null } {
 }
 
 function isValidPort(port: string): boolean {
-  if (!/^[0-9]+$/.test(port)) {
+  // Reject leading zeros: a canonical port has none, and allowing them lets an
+  // arbitrarily long zero-padded string (`00…08080`) slip past the range check
+  // and inflate the returned address past the hostname length cap.
+  if (!/^[1-9][0-9]*$/.test(port)) {
     return false
   }
   const value = Number(port)

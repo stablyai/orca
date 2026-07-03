@@ -110,20 +110,14 @@ describe('parseManualNetworkAddress', () => {
       }
     })
 
-    it('does not treat a malformed IPv4-shaped input as a valid all-digit hostname', () => {
-      // Bare-digit labels are legal RFC 1123 hostname labels, but a dotted
-      // all-numeric string is almost certainly a mistyped IP, not a hostname.
-      for (const bad of ['1.2.3', '1.2.3.4.5', '256.0.0.1', '999.999.999.999']) {
+    it('rejects an all-numeric host as an ambiguous IPv4', () => {
+      // Bare (`123`) and dotted (`256.0.0.1`) all-numeric strings are treated
+      // as mistyped IPs, not hostnames: the WHATWG URL parser downstream would
+      // reinterpret a numeric host as IPv4 (`123` -> `0.0.0.123`), so accepting
+      // one here would validate an address the main process dials differently.
+      for (const bad of ['123', '123:8080', '1.2.3', '1.2.3.4.5', '256.0.0.1', '999.999.999.999']) {
         expect(parseManualNetworkAddress(bad).ok).toBe(false)
       }
-    })
-
-    it('accepts a bare single-label numeric hostname', () => {
-      // The IPv4-typo guard only rejects *dotted* all-numeric strings, so a
-      // bare numeric label stays a legal RFC 1123 hostname (the main process
-      // resolves it the same way).
-      expect(parseManualNetworkAddress('123')).toEqual({ ok: true, address: '123' })
-      expect(parseManualNetworkAddress('123:8080').ok).toBe(true)
     })
   })
 
@@ -142,6 +136,11 @@ describe('parseManualNetworkAddress', () => {
     it('rejects a non-numeric or empty port', () => {
       expect(parseManualNetworkAddress('example.com:abc').ok).toBe(false)
       expect(parseManualNetworkAddress('example.com:').ok).toBe(false)
+    })
+
+    it('rejects a leading-zero (non-canonical, unbounded-length) port', () => {
+      expect(parseManualNetworkAddress('example.com:0080').ok).toBe(false)
+      expect(parseManualNetworkAddress(`example.com:${'0'.repeat(1000)}8080`).ok).toBe(false)
     })
 
     it('rejects addresses with more than one colon (e.g. IPv6-shaped input)', () => {
