@@ -373,6 +373,17 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
+import type {
+  KimiUsageBreakdownKind,
+  KimiUsageBreakdownRow,
+  KimiUsageDailyPoint,
+  KimiUsageRange,
+  KimiUsageScanState,
+  KimiUsageScope,
+  KimiUsageSessionRow,
+  KimiUsageSnapshot,
+  KimiUsageSummary
+} from '../shared/kimi-usage-types'
 import type { AiVaultListArgs, AiVaultListResult } from '../shared/ai-vault-types'
 import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
@@ -747,6 +758,32 @@ export type OpenCodeUsageApi = {
     range: OpenCodeUsageRange
     limit?: number
   }) => Promise<OpenCodeUsageSessionRow[]>
+}
+
+export type KimiUsageApi = {
+  getScanState: () => Promise<KimiUsageScanState>
+  setEnabled: (args: { enabled: boolean }) => Promise<KimiUsageScanState>
+  refresh: (args?: { force?: boolean }) => Promise<KimiUsageScanState>
+  getSnapshot: (args: {
+    scope: KimiUsageScope
+    range: KimiUsageRange
+    limit?: number
+  }) => Promise<KimiUsageSnapshot>
+  getSummary: (args: { scope: KimiUsageScope; range: KimiUsageRange }) => Promise<KimiUsageSummary>
+  getDaily: (args: {
+    scope: KimiUsageScope
+    range: KimiUsageRange
+  }) => Promise<KimiUsageDailyPoint[]>
+  getBreakdown: (args: {
+    scope: KimiUsageScope
+    range: KimiUsageRange
+    kind: KimiUsageBreakdownKind
+  }) => Promise<KimiUsageBreakdownRow[]>
+  getRecentSessions: (args: {
+    scope: KimiUsageScope
+    range: KimiUsageRange
+    limit?: number
+  }) => Promise<KimiUsageSessionRow[]>
 }
 
 export type AiVaultApi = {
@@ -2178,6 +2215,7 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  kimiUsage: KimiUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: {

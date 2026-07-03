@@ -19,6 +19,7 @@ import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
+import { KimiUsageStore, initKimiUsagePath } from './kimi-usage/store'
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
@@ -180,6 +181,7 @@ let stats: StatsCollector | null = null
 let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let openCodeUsage: OpenCodeUsageStore | null = null
+let kimiUsage: KimiUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let claudeAccounts: ClaudeAccountService | null = null
@@ -527,6 +529,7 @@ if (hasSingleInstanceLock) {
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+  initKimiUsagePath()
   crashReports = CrashReportStore.fromUserData()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
@@ -686,6 +689,9 @@ function openMainWindow(): BrowserWindow {
   if (!openCodeUsage) {
     throw new Error('OpenCode usage store must be initialized before opening the main window')
   }
+  if (!kimiUsage) {
+    throw new Error('Kimi usage store must be initialized before opening the main window')
+  }
   if (!rateLimits) {
     throw new Error('Rate limit service must be initialized before opening the main window')
   }
@@ -810,6 +816,7 @@ function openMainWindow(): BrowserWindow {
     claudeUsage,
     codexUsage,
     openCodeUsage,
+    kimiUsage,
     codexAccounts,
     claudeAccounts,
     rateLimits,
@@ -1589,6 +1596,7 @@ app.whenReady().then(async () => {
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
   openCodeUsage = new OpenCodeUsageStore(store)
+  kimiUsage = new KimiUsageStore(store)
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)

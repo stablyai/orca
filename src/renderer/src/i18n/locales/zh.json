@@ -3282,7 +3282,8 @@
           "b2cf4310ce": "概览",
           "908c470587": "codex",
           "eb6a066185": "claude",
-          "eee19cfade": "概览"
+          "eee19cfade": "概览",
+          "3cf75f0eb0": "Kimi"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "会话",
@@ -3302,7 +3303,8 @@
           "ca6bc5fded": "刷新",
           "e06d1baf5c": "刷新使用概览",
           "c760c481c5": "使用概述",
-          "55c910f4f1": "- 部分型号价格不详"
+          "55c910f4f1": "- 部分型号价格不详",
+          "9b53df065e": "Enable Kimi"
         },
         "share": {
           "card": {
@@ -3342,7 +3344,8 @@
             "model": {
               "bc474051e5": "OpenCode",
               "eb220d193b": "Codex",
-              "544d6d4c16": "Claude"
+              "544d6d4c16": "Claude",
+              "6f712fcb4f": "Kimi"
             },
             "sections": {
               "9564a3b21b": "会话 -",
@@ -3384,6 +3387,46 @@
           "faf3444859": "输入",
           "a8b7487ff7": "输出",
           "cfe2282ffa": "未知"
+        },
+        "KimiUsagePane": {
+          "040c044d39": "By model",
+          "a15206a63a": "Top model:",
+          "0f0a1684bb": "By project",
+          "048ffe4d65": "Top project:",
+          "e04c58327c": "Orca worktrees only",
+          "144a6050e9": "All local Kimi usage",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time",
+          "bea80ceae0": "Kimi Usage Tracking",
+          "b8b3522436": "Reads local Kimi usage logs to show token, model, and session stats.",
+          "f04131b3be": "Enable Kimi usage analytics",
+          "6cc7782458": " • Last scan error: {{value0}}",
+          "230d6de108": "Kimi usage options",
+          "01583b30aa": "Filters",
+          "40d283c837": "Scope",
+          "b5ed5c9fd0": "Range",
+          "bed558df0b": "Refresh Kimi usage",
+          "603cd138dc": "Refresh",
+          "bb6363e08c": "No local Kimi usage found yet for this scope.",
+          "d637a892ed": "Input tokens",
+          "7aa4d8ce35": "Output tokens",
+          "603504ee3b": "Cached input",
+          "5a65d68b77": "Reasoning output",
+          "7e9433469a": "Sessions / Events",
+          "15c34d4b08": "Recorded cost",
+          "e5bb23d85e": "Kimi wire transcripts do not record cost, so recorded cost stays unavailable.",
+          "4799177b1c": "Recent sessions",
+          "81817a641a": "Most recent local Kimi sessions in this scope.",
+          "d97bdf6e27": "Last active",
+          "a4738de041": "Project",
+          "08c78441b7": "Model",
+          "d416f5cf92": "Events",
+          "0f2f266c9d": "Input",
+          "dfc4513657": "Output",
+          "349f7c3f5c": "Total",
+          "362231082f": "Unknown"
         }
       },
       "sparse": {

@@ -127,6 +127,7 @@ import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createOpenCodeUsageSlice } from './opencode-usage'
+import { createKimiUsageSlice } from './kimi-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
@@ -163,6 +164,7 @@ function createTestStore() {
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createOpenCodeUsageSlice(...a),
+    ...createKimiUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),

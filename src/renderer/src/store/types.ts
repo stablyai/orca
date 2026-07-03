@@ -18,6 +18,7 @@ import type { WorkspaceSpaceSlice } from './slices/workspace-space'
 import type { ClaudeUsageSlice } from './slices/claude-usage'
 import type { CodexUsageSlice } from './slices/codex-usage'
 import type { OpenCodeUsageSlice } from './slices/opencode-usage'
+import type { KimiUsageSlice } from './slices/kimi-usage'
 import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
 import type { SshSlice } from './slices/ssh'
@@ -52,6 +53,7 @@ export type AppState = RepoSlice &
   ClaudeUsageSlice &
   CodexUsageSlice &
   OpenCodeUsageSlice &
+  KimiUsageSlice &
   BrowserSlice &
   RateLimitSlice &
   SshSlice &

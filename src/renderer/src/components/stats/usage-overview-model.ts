@@ -15,9 +15,14 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
+import type {
+  KimiUsageDailyPoint,
+  KimiUsageScanState,
+  KimiUsageSummary
+} from '../../../../shared/kimi-usage-types'
 import { translate } from '@/i18n/i18n'
 
-export type UsageProviderId = 'claude' | 'codex' | 'opencode'
+export type UsageProviderId = 'claude' | 'codex' | 'opencode' | 'kimi'
 
 export type UsageProviderOverview = {
   id: UsageProviderId
@@ -47,6 +52,7 @@ export type UsageOverviewDailyPoint = {
   claudeTokens: number
   codexTokens: number
   openCodeTokens: number
+  kimiTokens: number
   intensity: 0 | 1 | 2 | 3 | 4
 }
 
@@ -88,6 +94,11 @@ export type UsageOverviewInput = {
     summary: OpenCodeUsageSummary | null
     daily: OpenCodeUsageDailyPoint[]
   }
+  kimi: {
+    scanState: KimiUsageScanState | null
+    summary: KimiUsageSummary | null
+    daily: KimiUsageDailyPoint[]
+  }
 }
 
 function getClaudeDailyTotal(entry: ClaudeUsageDailyPoint): number {
@@ -106,6 +117,13 @@ function getOpenCodeNewInputTokens(summary: OpenCodeUsageSummary | null): number
     return 0
   }
   return Math.max(summary.inputTokens - summary.cachedInputTokens, 0)
+}
+
+function getKimiNewInputTokens(summary: KimiUsageSummary | null): number {
+  // Why: Kimi (like Claude) reports inputTokens as the non-cached bucket already
+  // — cachedInputTokens is separate and totalTokens sums all buckets. Subtracting
+  // cache (as Codex/OpenCode do for their cache-inclusive input) would undercount.
+  return summary?.inputTokens ?? 0
 }
 
 function getIntensity(totalTokens: number, maxTokens: number): 0 | 1 | 2 | 3 | 4 {
@@ -218,6 +236,34 @@ function createOpenCodeProvider(input: UsageOverviewInput['opencode']): UsagePro
   }
 }
 
+function createKimiProvider(input: UsageOverviewInput['kimi']): UsageProviderOverview {
+  const summary = input.summary
+  const dailyActiveDays = input.daily
+    .filter((entry) => entry.totalTokens > 0)
+    .map((entry) => entry.day)
+  return {
+    id: 'kimi',
+    label: translate('auto.components.stats.usage.overview.model.6f712fcb4f', 'Kimi'),
+    enabled: input.scanState?.enabled ?? false,
+    isScanning: input.scanState?.isScanning ?? false,
+    hasData: summary?.hasAnyKimiData ?? input.scanState?.hasAnyKimiData ?? false,
+    lastScanCompletedAt: input.scanState?.lastScanCompletedAt ?? null,
+    lastScanError: input.scanState?.lastScanError ?? null,
+    sessions: summary?.sessions ?? 0,
+    activityLabel: 'events',
+    activityCount: summary?.events ?? 0,
+    totalTokens: summary?.totalTokens ?? 0,
+    newInputTokens: getKimiNewInputTokens(summary),
+    outputTokens: summary?.outputTokens ?? 0,
+    cacheTokens: summary?.cachedInputTokens ?? 0,
+    reasoningTokens: summary?.reasoningOutputTokens ?? 0,
+    estimatedCostUsd: summary?.estimatedCostUsd ?? null,
+    topModel: summary?.topModel ?? null,
+    topProject: summary?.topProject ?? null,
+    activeDays: countActiveDays(dailyActiveDays)
+  }
+}
+
 function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDailyPoint[] {
   const byDay = new Map<string, Omit<UsageOverviewDailyPoint, 'intensity'>>()
 
@@ -227,7 +273,8 @@ function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDailyPoint[
       totalTokens: 0,
       claudeTokens: 0,
       codexTokens: 0,
-      openCodeTokens: 0
+      openCodeTokens: 0,
+      kimiTokens: 0
     }
     const total = getClaudeDailyTotal(entry)
     current.totalTokens += total
@@ -241,7 +288,8 @@ function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDailyPoint[
       totalTokens: 0,
       claudeTokens: 0,
       codexTokens: 0,
-      openCodeTokens: 0
+      openCodeTokens: 0,
+      kimiTokens: 0
     }
     current.totalTokens += entry.totalTokens
     current.codexTokens += entry.totalTokens
@@ -254,10 +302,25 @@ function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDailyPoint[
       totalTokens: 0,
       claudeTokens: 0,
       codexTokens: 0,
-      openCodeTokens: 0
+      openCodeTokens: 0,
+      kimiTokens: 0
     }
     current.totalTokens += entry.totalTokens
     current.openCodeTokens += entry.totalTokens
+    byDay.set(entry.day, current)
+  }
+
+  for (const entry of input.kimi.daily) {
+    const current = byDay.get(entry.day) ?? {
+      day: entry.day,
+      totalTokens: 0,
+      claudeTokens: 0,
+      codexTokens: 0,
+      openCodeTokens: 0,
+      kimiTokens: 0
+    }
+    current.totalTokens += entry.totalTokens
+    current.kimiTokens += entry.totalTokens
     byDay.set(entry.day, current)
   }
 
@@ -304,6 +367,7 @@ export function getRecentUsageDays(
         claudeTokens: 0,
         codexTokens: 0,
         openCodeTokens: 0,
+        kimiTokens: 0,
         intensity: 0
       }
     )
@@ -315,7 +379,8 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
   const providers = [
     createClaudeProvider(input.claude),
     createCodexProvider(input.codex),
-    createOpenCodeProvider(input.opencode)
+    createOpenCodeProvider(input.opencode),
+    createKimiProvider(input.kimi)
   ]
   const daily = buildDailyOverview(input)
   const bestDay =

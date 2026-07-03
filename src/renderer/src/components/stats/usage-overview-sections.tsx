@@ -18,6 +18,13 @@ const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   4: 'border-border/60 bg-foreground/75'
 }
 
+const PROVIDER_BAR_CLASS: Record<UsageProviderOverview['id'], string> = {
+  claude: 'bg-foreground/75',
+  codex: 'bg-muted-foreground',
+  opencode: 'bg-border',
+  kimi: 'bg-primary'
+}
+
 function translateActivityLabel(label: UsageProviderOverview['activityLabel']): string {
   if (label === 'turns') {
     return translate('auto.components.stats.usage.overview.sections.c8f3a2d1e0b4', 'turns')
@@ -141,7 +148,7 @@ export function DailyIntensityGrid({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.stats.usage.overview.sections.f28ff1f852',
-              'Recent combined Claude, Codex, and OpenCode token activity.'
+              'Recent combined Claude, Codex, OpenCode, and Kimi token activity.'
             )}
           </p>
         </div>
@@ -245,7 +252,7 @@ export function ProviderUsageRow({
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-foreground/75"
+          className={`h-full rounded-full ${PROVIDER_BAR_CLASS[provider.id]}`}
           style={{ width: `${Math.max(share * 100, provider.totalTokens > 0 ? 2 : 0)}%` }}
         />
       </div>

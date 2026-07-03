@@ -5,6 +5,7 @@ import { StatCard } from './StatCard'
 import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
+import { KimiUsagePane } from './KimiUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import { Button } from '../ui/button'
 import {
@@ -45,7 +46,7 @@ function formatTrackingSince(timestamp: number | null): string {
   return `Tracking since ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'kimi'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -71,6 +72,12 @@ const USAGE_ANALYTICS_OPTIONS = [
     get label() {
       return translate('auto.components.stats.StatsPane.1e696db2f6', 'OpenCode')
     }
+  },
+  {
+    id: 'kimi',
+    get label() {
+      return translate('auto.components.stats.StatsPane.3cf75f0eb0', 'Kimi')
+    }
   }
 ] as const satisfies readonly { id: UsageTab; label: string }[]
 
@@ -79,6 +86,21 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
     return <BarChart3 className="size-3.5 text-muted-foreground" />
   }
   return <AgentIcon agent={tab} size={14} />
+}
+
+function UsageAnalyticsPanel({ tab }: { tab: UsageTab }): React.JSX.Element {
+  switch (tab) {
+    case 'overview':
+      return <UsageOverviewPane />
+    case 'claude':
+      return <ClaudeUsagePane />
+    case 'codex':
+      return <CodexUsagePane />
+    case 'opencode':
+      return <OpenCodeUsagePane />
+    case 'kimi':
+      return <KimiUsagePane />
+  }
 }
 
 export function StatsPane(): React.JSX.Element {
@@ -187,15 +209,7 @@ export function StatsPane(): React.JSX.Element {
             active panel mounted avoids hidden tab-content layout/focus churn that produced a visible
             vertical jitter below the usage card when switching disabled providers. */}
         <div>
-          {activeUsageTab === 'overview' ? (
-            <UsageOverviewPane />
-          ) : activeUsageTab === 'claude' ? (
-            <ClaudeUsagePane />
-          ) : activeUsageTab === 'codex' ? (
-            <CodexUsagePane />
-          ) : (
-            <OpenCodeUsagePane />
-          )}
+          <UsageAnalyticsPanel tab={activeUsageTab} />
         </div>
       </div>
     </div>
