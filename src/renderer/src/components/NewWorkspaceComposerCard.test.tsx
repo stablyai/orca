@@ -371,6 +371,34 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(findInputByLabel(current.container, 'Branch name')).toBeNull()
   })
 
+  it('omits the branch name field when a tracked work item is the source', () => {
+    // Why: a PR/issue/MR/Linear source derives the branch itself (and a linked
+    // GitHub PR re-resolves it at submit), so a manual override would be a
+    // silently ignored control — the field is only for typed-name/base-branch.
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      branchNameOverride: 'feature/manual',
+      smartNameSelection: { kind: 'github-pr', label: '#42 Fix', url: 'https://example.com/pr/42' },
+      onBranchNameOverrideChange: vi.fn()
+    })
+
+    expect(findInputByLabel(current.container, 'Branch name')).toBeNull()
+  })
+
+  it('keeps the branch name field when creating from a base branch', () => {
+    // Why: choosing a base branch still lets the user name their new branch.
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      branchNameOverride: 'feature/manual',
+      smartNameSelection: { kind: 'branch', label: 'main' },
+      onBranchNameOverrideChange: vi.fn()
+    })
+
+    expect(findInputByLabel(current.container, 'Branch name')).toBeTruthy()
+  })
+
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {
     current = renderCard({
       eligibleRepos: [

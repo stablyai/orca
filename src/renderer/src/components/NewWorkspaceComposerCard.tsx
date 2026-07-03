@@ -1141,7 +1141,14 @@ export default function NewWorkspaceComposerCard({
                 </div>
               ) : null}
 
-              {selectedRepoIsGit && branchesEnabled ? (
+              {/* Why: only offer a manual branch name when creating from a
+                  typed name or a base branch. When a tracked work item (PR/
+                  issue/MR/Linear) is the source, the branch is derived from
+                  that item — a linked GitHub PR even re-resolves it at submit —
+                  so an override typed here would be silently ignored. */}
+              {selectedRepoIsGit &&
+              branchesEnabled &&
+              (!smartNameSelection || smartNameSelection.kind === 'branch') ? (
                 <div className="space-y-1">
                   <label
                     htmlFor={branchNameInputId}
