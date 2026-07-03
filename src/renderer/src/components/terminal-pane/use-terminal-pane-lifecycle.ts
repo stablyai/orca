@@ -1178,6 +1178,7 @@ export function useTerminalPaneLifecycle({
           useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
           clearTerminalPaneUnread(paneKey)
           useAppStore.getState().dropAgentStatus(paneKey)
+          useAppStore.getState().clearPaneForegroundAgent(paneKey)
         }
         if (transport) {
           const ptyId = suppressIntentionalPaneCloseExit(

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { isShellProcess } from '../../../shared/agent-detection'
 import { worktreeUsesRemoteConnection } from '@/store/slices/terminals'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import {
   resolveFocusedCompletedTabAgent,
   resolveFocusedTabAgent,
@@ -37,12 +37,18 @@ export function resolveLaunchedAgentExitEvidence(args: {
   hookAgent: TuiAgent | null
   siblingHookAgent?: TuiAgent | null
   hasCompletedHook: boolean
+  processAgent?: TuiAgent | null
+  processShellForeground?: boolean
 }): boolean {
-  if (
-    !titleShowsNoAgent(args.title, args.defaultTitle) ||
-    args.hookAgent ||
-    args.siblingHookAgent
-  ) {
+  if (args.hookAgent || args.siblingHookAgent || args.processAgent) {
+    return false
+  }
+  // Why: OSC 133;D proved the foreground returned to the shell — process-grade
+  // exit evidence that doesn't depend on the agent leaving a clean title.
+  if (args.processShellForeground && args.hasObservedAgentSignal) {
+    return true
+  }
+  if (!titleShowsNoAgent(args.title, args.defaultTitle)) {
     return false
   }
   return args.hasCompletedHook || (!args.isRemote && args.hasObservedAgentSignal)
@@ -57,6 +63,8 @@ export function resolveTabAgentFromSignals(args: {
   siblingHookAgent?: TuiAgent | null
   focusedCompletedHookAgent?: TuiAgent | null
   siblingCompletedHookAgent?: TuiAgent | null
+  processAgent?: TuiAgent | null
+  processShellForeground?: boolean
   launchAgent?: TuiAgent
 }): TuiAgent | null {
   const launchAgent = args.launchAgent ?? null
@@ -92,15 +100,20 @@ export function resolveTabAgentFromSignals(args: {
     hasObservedAgentSignal: args.hasObservedAgentSignal,
     hookAgent: focusedHookAgent,
     siblingHookAgent: args.siblingHookAgent,
-    hasCompletedHook
+    hasCompletedHook,
+    processAgent: args.processAgent,
+    processShellForeground: args.processShellForeground
   })
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
+  const processAgent = args.processAgent ?? null
   // Why: titleAgent ranks ahead of launch/fallback hooks because, once the
   // pane has shown activity, a live explicit title is the freshest identity
   // signal — it beats a launchAgent gone stale through pane reuse. Before any
   // activity, titleAgent is null while launchAgent exists, so launch bootstrap
-  // still wins the startup window.
-  return focusedHookAgent ?? titleAgent ?? activeLaunchAgent ?? fallbackHookAgent
+  // still wins the startup window. Process identity (the recognized foreground
+  // process) is ground truth below hooks — it covers agents that emit neither
+  // hooks nor titles.
+  return focusedHookAgent ?? processAgent ?? titleAgent ?? activeLaunchAgent ?? fallbackHookAgent
 }
 
 /**
@@ -112,9 +125,14 @@ export function resolveTabAgentFromSignals(args: {
  * 1. Hook status — provider identity from native integrations; the live entry
  *    for the pane, dropped by the same OSC 133 command-finished machinery that
  *    clears the sidebar row when the process exits.
- * 2. launchAgent — what Orca launched here; instant bootstrap before hooks
- *    arrive, cleared once hook/title evidence shows the launched agent exited.
- * 3. Title — legacy/unknown-session fallback, and the live override when a pane
+ * 2. Process identity — the recognized foreground process, read at OSC 133
+ *    command boundaries (local panes only); covers agents that emit neither
+ *    hooks nor titles, and its shell-foreground mark is title-independent
+ *    exit evidence.
+ * 3. launchAgent — what Orca launched here; instant bootstrap before hooks
+ *    arrive, cleared once hook/process/title evidence shows the launched
+ *    agent exited.
+ * 4. Title — legacy/unknown-session fallback, and the live override when a pane
  *    is reused: once the pane has shown activity, a title that explicitly names
  *    a different agent than launchAgent wins over that stale launch identity.
  *    Otherwise it is ignored while launchAgent exists, and generic spinner-only
@@ -143,6 +161,18 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   )
   const hasCompletedHook = focusedCompletedHookAgent !== null
   const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)
+  const focusedPaneKey = useAppStore((s) => {
+    const activeLeafId = s.terminalLayoutsByTabId[tab.id]?.activeLeafId
+    return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
+  })
+  const processAgent = useAppStore((s) =>
+    focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null) : null
+  )
+  const processShellForeground = useAppStore((s) =>
+    focusedPaneKey
+      ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)
+      : false
+  )
 
   // The focused pane's PTY (single-pane tabs have exactly one leaf). Only used
   // to reset per-process-generation signals when the pane is respawned.
@@ -199,7 +229,9 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     const fallbackAgentSignal = tab.launchAgent
       ? explicitTitleAgent === tab.launchAgent
       : Boolean(explicitTitleAgent || siblingHookAgent)
-    if (focusedHookAgent || completedHookEvidence || fallbackAgentSignal) {
+    // Why: a recognized foreground process is focused-pane ground truth, so it
+    // arms exit clearing even for agents with no hook or title integration.
+    if (focusedHookAgent || completedHookEvidence || processAgent || fallbackAgentSignal) {
       hasObservedAgentSignalRef.current = true
       setHasObservedAgentSignal(true)
     }
@@ -208,6 +240,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     isRemoteLike,
     focusedHookAgent,
     completedHookEvidence,
+    processAgent,
     siblingHookAgent,
     tab.launchAgent,
     tab.title
@@ -227,7 +260,9 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
       hasObservedAgentSignal: hasObservedAgentSignal && hasObservedAgentSignalRef.current,
       hookAgent: focusedHookAgent,
       siblingHookAgent,
-      hasCompletedHook: completedHookEvidence
+      hasCompletedHook: completedHookEvidence,
+      processAgent,
+      processShellForeground
     })
     if (launchedAgentExited) {
       clearTabLaunchAgent(tab.id)
@@ -239,6 +274,8 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     siblingHookAgent,
     hasObservedAgentSignal,
     isRemoteLike,
+    processAgent,
+    processShellForeground,
     tab.defaultTitle,
     tab.id,
     tab.launchAgent,
@@ -254,6 +291,8 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     siblingHookAgent,
     focusedCompletedHookAgent,
     siblingCompletedHookAgent,
+    processAgent,
+    processShellForeground,
     launchAgent: tab.launchAgent
   })
 }
