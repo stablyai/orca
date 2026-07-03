@@ -18,6 +18,7 @@ import {
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
 import {
+  hasCompatibleAgentTitleIdentity,
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner
 } from '../../shared/agent-title-owner'
@@ -1916,7 +1917,7 @@ export class OrcaRuntimeService {
   private resolvedWorktreeGeneration = 0
   private cloneInFlightByPath = new Map<string, Promise<void>>()
   private agentDetector: AgentDetector | null = null
-  private ptyForegroundAgentRefreshes = new Map<string, Promise<void>>()
+  private ptyForegroundAgentRefreshes = new Map<string, Promise<boolean>>()
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
@@ -5132,7 +5133,18 @@ export class OrcaRuntimeService {
         // mutate the title every tick, so probing per-title-change would stream
         // a foreground query per frame during active work.
         if (prevStatus !== pty.lastAgentStatus) {
-          this.refreshPtyForegroundAgent(ptyId)
+          const foregroundRefresh = this.refreshPtyForegroundAgentFromController(ptyId)
+          if (
+            shouldTouchPtyBackedSessionTabs &&
+            this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, oscTitle)
+          ) {
+            shouldTouchPtyBackedSessionTabs = false
+            void foregroundRefresh.then((foregroundAgentChanged) => {
+              if (!foregroundAgentChanged) {
+                this.touchMobileSessionSnapshotsForPty(ptyId)
+              }
+            })
+          }
         }
       }
     }
@@ -8501,6 +8513,15 @@ export class OrcaRuntimeService {
     }
   }
 
+  private shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
+    pty: RuntimePtyWorktreeRecord,
+    title: string
+  ): boolean {
+    return (
+      !pty.launchAgent && pty.foregroundAgent === null && hasCompatibleAgentTitleIdentity(title)
+    )
+  }
+
   /**
    * Schedules an asynchronous query to check which agent process is currently
    * running in the foreground of a PTY.
@@ -8513,7 +8534,7 @@ export class OrcaRuntimeService {
    * Deduplicates and manages in-flight foreground agent refresh queries
    * for a specific PTY.
    */
-  private refreshPtyForegroundAgentFromController(ptyId: string): Promise<void> {
+  private refreshPtyForegroundAgentFromController(ptyId: string): Promise<boolean> {
     const pendingRefresh = this.ptyForegroundAgentRefreshes.get(ptyId)
     if (pendingRefresh) {
       return pendingRefresh
@@ -8529,34 +8550,35 @@ export class OrcaRuntimeService {
    * Queries the PTY controller for the active foreground process, identifies if it
    * is a recognized agent, and updates the PTY's foreground agent state if changed.
    */
-  private async loadPtyForegroundAgentFromController(ptyId: string): Promise<void> {
+  private async loadPtyForegroundAgentFromController(ptyId: string): Promise<boolean> {
     if (!this.ptyController) {
-      return
+      return false
     }
     const pty = this.ptysById.get(ptyId)
     if (!pty?.connected) {
-      return
+      return false
     }
     // Why: foregroundAgent is only consulted as the owner fallback when
     // launchAgent is unknown, so a known launchAgent makes the relay
     // getForegroundProcess round-trip pure waste (covers all launched agents).
     if (pty.launchAgent) {
-      return
+      return false
     }
     let foregroundProcess: string | null
     try {
       foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
     } catch {
-      return
+      return false
     }
     const foregroundAgent = foregroundProcess
       ? (recognizeAgentProcess(foregroundProcess)?.agent ?? null)
       : null
     if (pty.foregroundAgent === foregroundAgent) {
-      return
+      return false
     }
     pty.foregroundAgent = foregroundAgent
     this.touchMobileSessionSnapshotsForPty(ptyId)
+    return true
   }
 
   private getFreshExplicitAgentStatusForHandle(handle: string): {

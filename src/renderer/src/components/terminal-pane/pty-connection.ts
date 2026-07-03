@@ -78,7 +78,11 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentType
+} from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -1018,8 +1022,35 @@ export function connectPanePty(
       MANUAL_AGENT_COMMAND_MAX_CHARS
     )
   }
+  const deletePendingShellCommandWord = (): void => {
+    pendingShellCommandLine = pendingShellCommandLine.replace(/[^\S\r\n]*\S+[^\S\r\n]*$/, '')
+  }
+  const hasFreshPaneAgentSurface = (): boolean => {
+    const state = useAppStore.getState()
+    const entry = state.agentStatusByPaneKey[cacheKey]
+    const now = Date.now()
+    const entryIsFresh =
+      entry &&
+      typeof entry.updatedAt === 'number' &&
+      now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+    if (entryIsFresh && entry.state !== 'done') {
+      return true
+    }
+    const currentTitle =
+      state.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id] ?? entry?.terminalTitle ?? null
+    if (entryIsFresh && entry?.agentType && currentTitle === entry.terminalTitle) {
+      return true
+    }
+    return Boolean(entryIsFresh && detectAgentStatusFromTitle(currentTitle ?? '') !== null)
+  }
   const observeAcceptedShellCommandInput = (data: string): void => {
     if (commandInferredPaneAgent) {
+      return
+    }
+    // Why: bytes typed inside a live agent TUI are prompt text, not shell
+    // commands, even if they spell another agent binary name.
+    if (hasFreshPaneAgentSurface()) {
+      pendingShellCommandLine = ''
       return
     }
     if (data.includes('\x1b')) {
@@ -1038,7 +1069,15 @@ export function connectPanePty(
         pendingShellCommandLine = pendingShellCommandLine.slice(0, -1)
         continue
       }
+      if (char === '\x17') {
+        deletePendingShellCommandWord()
+        continue
+      }
       if (char === '\x03' || char === '\x15') {
+        pendingShellCommandLine = ''
+        continue
+      }
+      if (char < ' ') {
         pendingShellCommandLine = ''
         continue
       }
