@@ -1,5 +1,5 @@
-import { join } from 'path'
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { join } from 'node:path'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import type { SessionMeta } from './history-manager'
 import type { TerminalCheckpointFile, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -50,8 +50,9 @@ export class HistoryReader {
     }
 
     // Why log replay is preferred over the checkpoint alone: the log carries
-    // byte-exact output up to ~5s before the crash, while the checkpoint can
-    // be a full log-cap (~5MB of output) stale.
+    // byte-exact output up to ~5s before the crash (up to the full-snapshot
+    // cooldown, ~45s, for a streaming session mid-deferral), while the
+    // checkpoint can be a full log-cap (~5MB of output) stale.
     const logRestore = this.restoreFromIncrementalLog(sessionDir, meta, checkpoint)
     if (logRestore) {
       return logRestore

@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import { posix } from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import { posix } from 'node:path'
 
 // Why: only files the user's actual shell would source. Mixing zsh and bash
 // files breaks the "last assignment wins matches the live shell" guarantee —

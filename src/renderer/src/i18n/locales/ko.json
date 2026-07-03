@@ -133,7 +133,8 @@
         "7a566540de": "페어링 URL 또는 코드",
         "cb4d287238": "서버 이름",
         "3affe7de3a": "이 브라우저가 연결할 수 있는 Orca 서버의 페어링 URL을 붙여넣습니다.",
-        "e3bcd082ac": "Orca에 연결"
+        "e3bcd082ac": "Orca에 연결",
+        "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
       },
       "web": {
         "preload": {
@@ -228,10 +229,12 @@
           "2e17f825d4": "워크트리가 삭제되었고 브랜치는 유지되었습니다",
           "78e08cd877": "Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
           "3b57982bf6": "\"{{value1}}\" 워크스페이스를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
-          "81f13f48d2": "\"{{value1}}\" 워크트리를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다."
+          "81f13f48d2": "\"{{value1}}\" 워크트리를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
+          "runtimeScopeForbiddenTitle": "이 연결은 제한된(모바일) 액세스입니다",
+          "runtimeScopeForbiddenDescription": "모바일 범위 페어링에서는 워크스페이스를 사용할 수 없습니다. 설정 → 원격 Orca 서버 → 이 Orca 서버 공유에서 브라우저 액세스 링크로 다시 연결하세요."
         },
         "repos": {
-          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
+          "2975400634": "이 런타임에서 Git이 아닌 폴더를 열려면 Orca 서버를 업데이트하세요.",
           "b7e14472ae": "폴더를 추가하지 못했습니다.",
           "e649269645": "선택한 호스트에 경로를 입력하려면 프로젝트 추가를 사용하세요.",
           "c6e022ddfc": "프로젝트를 추가하지 못했습니다.",
@@ -239,8 +242,8 @@
           "8bb3ad7935": "프로젝트가 추가됨",
           "a8e4b3af5b": "프로젝트가 이미 추가되었습니다.",
           "6d3318e813": "repos를 가져오지 못했습니다.",
-          "3be0f7df04": "Cannot open folder on selected runtime",
-          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
+          "3be0f7df04": "선택한 런타임에서 폴더를 열 수 없습니다.",
+          "15cf5319ec": "{{path}}이(가) {{hostName}}에서 확인되었지만 해당 호스트가 사용 가능한 폴더를 보고하지 않았습니다."
         },
         "settings": {
           "e12dab333b": "서버를 전환하지 못했습니다.",
@@ -360,7 +363,7 @@
         "worktree": {
           "background": {
             "terminals": {
-              "setupTitle": "Setup"
+              "setupTitle": "설정"
             }
           }
         },
@@ -400,7 +403,7 @@
         "mobile": {
           "emulator": {
             "tab": {
-              "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
+              "bf4f2a8a72": "에뮬레이터를 시작할 수 없습니다. iOS 또는 Android 에뮬레이터 설정을 확인하고 다른 기기를 사용해 보세요."
             }
           }
         }
@@ -532,6 +535,12 @@
         "distroRequired": "이 스킬을 설치하기 전에 프로젝트의 WSL 배포판을 선택하세요.",
         "distroMissing": "선택한 WSL 배포판을 사용할 수 없습니다. 사용 가능한 배포판을 선택하거나 이 프로젝트를 Windows로 전환하세요.",
         "wslDefault": "WSL 기본값"
+      },
+      "sidebarWorktreeActivation": {
+        "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
+      },
+      "ephemeralVmWorkspaceTarget": {
+        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
       }
     },
     "hooks": {
@@ -638,7 +647,17 @@
         "b1c2f8b0ac": "Claude, Codex, Gemini 및 OpenCode Go에 대한 선택적 계정 전환.",
         "f70ac54d38": "AI 제공업체 계정",
         "4121f7a0a2": "AI agents를 관리하고, 기본값을 설정하고, 명령을 사용자 정의하세요.",
-        "b49abbd2f7": "에이전트"
+        "b49abbd2f7": "에이전트",
+        "dev": "Dev Tools",
+        "devDescription": "Dev-only tools for exercising UI states.",
+        "devBadge": "Dev",
+        "devSearchNotificationPlayground": "Notification playground",
+        "devSearchNotificationPlaygroundDescription": "Trigger representative toast and notification UI states.",
+        "devSearchKeywordDev": "dev",
+        "devSearchKeywordToast": "toast",
+        "devSearchKeywordSonner": "sonner",
+        "devSearchKeywordError": "error",
+        "devSearchKeywordNotification": "notification"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -1143,8 +1162,15 @@
         "reuseExistingBranch": "브랜치 재사용",
         "reuseExistingBranchHint": "기존 브랜치에서 새 브랜치를 만들지 않고 해당 브랜치를 체크아웃합니다.",
         "createMultiple": "더 만들기",
-        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+        "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
+        "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오.",
+        "destroyDisabled": "비활성화된 파괴",
+        "destroyConfigured": "구성된 파괴",
+        "noDestroyConfigured": "파괴하지 마세요",
+        "ephemeralVm": "워크스페이스별 환경",
+        "chooseRunTarget": "대상 선택",
+        "noRunTargets": "이 프로젝트에는 실행 대상이 준비되어 있지 않습니다.",
+        "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -1321,7 +1347,9 @@
         "8ff5ae8866": "담당자",
         "82c87eceb9": "담당자 편집",
         "1ff5d979df": "할당된 사람이 없음",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "이 검사는 병합 차단을 해제하기 전에 GitHub에서 수동 작업(예: 워크플로 실행 승인)이 필요합니다.",
+        "dd5d9a4f17": "{{value0}}에 업데이트됨",
+        "71a3c0f9d2": "워크스페이스 시작"
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -2193,7 +2221,10 @@
             "ed2a664f8b": "작업 트리를 만들 수 없습니다.",
             "a3346fc6ed": "작업 트리 생성 취소",
             "532aea14ce": "취소",
-            "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다."
+            "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다.",
+            "vmProvisioningTitle": "VM 프로비저닝",
+            "cancelProvisioning": "취소",
+            "vmProvisioningLogEmpty": "레시피 출력을 기다리는 중…"
           }
         }
       },
@@ -2258,24 +2289,24 @@
             "ee81adfcef": "보기",
             "4d0b72481c": "무시",
             "9cc26c019d": "제거",
-            "0e2d235c63": "Inactive workspace scan ready",
-            "4a35c08764": "Review",
-            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
-            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
-            "3d957ff117": "No workspaces match these filters.",
-            "e94b1f8bb4": "Clear filters",
-            "efb3843e75": "Filter and sort workspaces",
-            "93b7381d50": "Filters",
-            "a615e24679": "Sort",
-            "4cc5b73efe": "Finding inactive workspaces...",
-            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
-            "searchPlaceholder": "Search workspaces",
-            "ageFilter": "Age",
-            "reviewFilter": "Review",
+            "0e2d235c63": "비활성 워크스페이스 스캔 준비됨",
+            "4a35c08764": "리뷰",
+            "47123d0108": "비활성 워크스페이스를 검색 중입니다. 이것을 닫고 다시 오시면 됩니다.",
+            "9a3be9f2df": "비활성 워크스페이스를 검색 중입니다. 완료되면 여기에 새 행이 나타납니다. 이것을 닫고 다시 오시면 됩니다.",
+            "3d957ff117": "이 필터와 일치하는 워크스페이스가 없습니다.",
+            "e94b1f8bb4": "필터 지우기",
+            "efb3843e75": "워크스페이스 필터링 및 정렬",
+            "93b7381d50": "필터",
+            "a615e24679": "종류",
+            "4cc5b73efe": "비활성 워크스페이스를 찾는 중...",
+            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} 스캔됨",
+            "searchPlaceholder": "워크스페이스 검색",
+            "ageFilter": "나이",
+            "reviewFilter": "리뷰",
             "gitFilter": "Git",
-            "contextFilter": "Context",
-            "sortBy": "Sort by",
-            "sortDirection": "Direction"
+            "contextFilter": "문맥",
+            "sortBy": "정렬 기준",
+            "sortDirection": "방향"
           }
         }
       },
@@ -2518,6 +2549,17 @@
             "dont_ask_again": "고정된 탭에 대해 다시 묻지 않기",
             "0b38ee2f86": "취소",
             "c337c9d75c": "닫기"
+          },
+          "TerminalSshReconnectOverlay": {
+            "authFailed": "{{value0}} 인증에 실패했습니다. 이 터미널 세션을 계속하려면 다시 연결하세요.",
+            "reconnectFailed": "{{value0}}에 대한 SSH 연결에 실패했습니다. 이 터미널 세션을 계속하려면 다시 연결하세요.",
+            "connecting": "{{value0}}에 연결 중입니다. 호스트를 사용할 수 있게 되면 이 터미널이 재개됩니다.",
+            "connected": "SSH가 연결되었습니다.",
+            "disconnected": "이 터미널은 {{value0}} 연결을 기다리고 있습니다. 이 SSH 세션을 계속하려면 연결하세요.",
+            "connectFailed": "SSH 연결 실패",
+            "title": "SSH 연결 필요",
+            "connectingButton": "연결 중...",
+            "connectButton": "연결"
           }
         }
       },
@@ -2861,7 +2903,9 @@
             "c35af53b73": "로그인",
             "f19a63e7cd": "사용량을 보려면 로그인하세요.",
             "5c938d39ac": "%주간",
+            "54e8d6bb2d": "% Fable",
             "d79c3362c4": "% 5h",
+            "a79c64f87e": "Fable",
             "8295903d17": "전환 후 이전 대화를 계속하기 전에 라이브 Claude terminals을 다시 시작하십시오.",
             "c98ea88392": "다른 계정 없음",
             "9332ba8684": "다음으로 전환",
@@ -3025,6 +3069,7 @@
             "6d6df77f41": "데이터가 없습니다",
             "7f7f208060": "월간",
             "252c096536": "주간",
+            "a79c64f87e": "Fable",
             "94038ad2fa": "세션",
             "2c35eca8d4": "사용량을 가져올 수 없습니다.",
             "1292d4f2ee": "사용할 수 없음",
@@ -3573,9 +3618,9 @@
           "05b33a17a9": "취소",
           "8fba4b8cbb": "이 폴더는 Git repos가 아닙니다. 편집기, terminal, 검색 기능은 제공되지만 Git 기반 기능은 사용할 수 없습니다.",
           "c49fb13492": "이 호스트에 폴더를 추가하지 못했습니다.",
-          "9a766f33ac": "This path was checked on the SSH host.",
-          "79fd02cf5f": "This path was checked on {{hostName}}.",
-          "8851b77327": "This path was checked locally."
+          "9a766f33ac": "이 경로는 SSH 호스트에서 확인되었습니다.",
+          "79fd02cf5f": "이 경로는 {{hostName}}에서 확인되었습니다.",
+          "8851b77327": "이 경로는 로컬에서 확인되었습니다."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "후크 실행",
@@ -4031,7 +4076,8 @@
           "hostAuthNeeded": "인증 필요",
           "hostDisconnected": "연결 끊김",
           "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
-          "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다"
+          "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",
@@ -4318,7 +4364,16 @@
           "host": "호스트",
           "local": "로컬",
           "runtime": "서버",
-          "ssh": "SSH"
+          "ssh": "SSH",
+          "connecting": "연결 중",
+          "connect": "연결",
+          "addSshHost": "SSH 호스트 추가",
+          "addRemoteServer": "원격 서버 추가",
+          "addRemoteHost": "원격 호스트 추가",
+          "addRemoteHostTooltip": "로그인할 수 있는 시스템의 경우 SSH를 선택하고 Orca 서버의 경우 원격 서버를 선택합니다.",
+          "addSshHostDetail": "SSH를 통해 기존 머신을 사용합니다.",
+          "addRemoteServerDetail": "다른 컴퓨터에서 실행 중인 Orca와 페어링합니다.",
+          "addRemoteHostDetail": "SSH 호스트 또는 Orca 서버"
         },
         "sidebarHostOptions": {
           "3e102f111c": "모든 호스트",
@@ -4407,6 +4462,48 @@
           "8c0b2e7a41": "Non-Orca 워크트리 설정 열기",
           "5d1c9f0a82": "취소",
           "3b7e4a1c96": "외부 워크트리 숨기기"
+        },
+        "useAddRepoHostSelection": {
+          "connectionFailed": "SSH 연결에 실패했습니다."
+        },
+        "AddRemoteHostDialog": {
+          "sshHostRequired": "호스트 또는 SSH 구성 별칭이 필요합니다.",
+          "sshPortInvalid": "포트는 1에서 65535 사이여야 합니다.",
+          "sshRelayGraceInvalid": "Terminal 시간 초과는 60~{{value0}}초 사이여야 합니다.",
+          "sshSaved": "SSH 호스트가 추가되었습니다.",
+          "sshSaveFailed": "SSH 호스트를 추가하지 못했습니다.",
+          "serverFieldsRequired": "서버 이름과 페어링 코드가 필요합니다.",
+          "serverSaved": "원격 서버가 추가되었습니다.",
+          "serverSaveFailed": "원격 서버를 추가하지 못했습니다.",
+          "serverTitle": "원격 서버 추가",
+          "sshTitle": "SSH 호스트 추가",
+          "serverDescription": "다른 컴퓨터에서 실행 중인 Orca와 페어링합니다.",
+          "sshDescription": "SSH를 통해 로그인할 수 있는 영구 머신을 추가합니다.",
+          "cancel": "취소",
+          "saving": "저장 중...",
+          "save": "저장",
+          "label": "레이블",
+          "sshLabelPlaceholder": "Dev box",
+          "sshHost": "호스트 또는 별칭",
+          "sshHostPlaceholder": "deploy@server:22",
+          "username": "사용자 이름",
+          "usernamePlaceholder": "deploy",
+          "port": "포트",
+          "identityFile": "신원 파일",
+          "identityFilePlaceholder": "~/.ssh/id_ed25519 (선택 사항)",
+          "serverName": "서버 이름",
+          "serverNamePlaceholder": "Dev box",
+          "pairingCode": "페어링 코드",
+          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingHelpPrefix": "서버에서 실행",
+          "pairingCommand": "orca serve --pairing-address <host>",
+          "pairingHelpSuffix": "한 다음 출력된 페어링 URL을 붙여넣으세요.",
+          "sshImportAlreadySynced": "~/.ssh/config가 이미 동기화되어 있습니다.",
+          "sshImportSynced": "{{value0}} 호스트{{value1}}을(를) 동기화했습니다.",
+          "sshImportFailed": "SSH 구성을 가져오지 못했습니다.",
+          "importing": "가져오는 중...",
+          "importSshConfig": "~/.ssh/config 가져오기",
+          "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다."
         }
       },
       "shared": {
@@ -4989,15 +5086,15 @@
             "toggleLabel": "새 카드 스타일 전환"
           },
           "nativeChat": {
-            "title": "Native chat",
-            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
-            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
-            "toggleLabel": "Toggle native chat",
-            "defaultTitle": "Default view",
-            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
-            "defaultViewLabel": "Default native chat view",
-            "defaultViewTerminal": "Terminal chat",
-            "defaultViewNative": "Native chat"
+            "title": "네이티브 채팅",
+            "description": "Claude 및 Codex terminal 세션에 대한 데스크톱 채팅 화면을 미리 봅니다.",
+            "copy": "지원되는 Claude 및 Codex terminal 창에서 전환할 수 있는 기본 채팅 보기를 추가합니다. 성적표 충실도, 스트리밍 및 terminal 패리티를 조정하는 동안 실험적입니다.",
+            "toggleLabel": "기본 채팅 전환",
+            "defaultTitle": "기본 보기",
+            "defaultCopy": "새로운 Claude 및 Codex terminal 탭이 열리는 방식을 선택하세요.",
+            "defaultViewLabel": "기본 기본 채팅 보기",
+            "defaultViewTerminal": "Terminal 채팅",
+            "defaultViewNative": "네이티브 채팅"
           }
         },
         "FloatingWorkspacePane": {
@@ -5048,10 +5145,10 @@
           "0df2e4fd12": "자동 저장 파일",
           "d21136d9ef": "Orca가 파일 편집을 유지하는 방법을 구성합니다.",
           "45c6e85c4d": "편집기",
-          "8f1afdfbd8": "Diff Word Wrap",
-          "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
-          "bf16ef0af2": "Off",
-          "3f6892f307": "On"
+          "8f1afdfbd8": "차이점 단어 줄 바꿈",
+          "4aa4d9fb73": "가로 스크롤을 요구하는 대신 diff 편집기에서 긴 줄을 줄 바꿈합니다.",
+          "bf16ef0af2": "끄다",
+          "3f6892f307": "~에"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
@@ -5393,11 +5490,11 @@
           "b5e2d93e01": "확인 중...",
           "c6f3ea4f12": "준비됨",
           "d704fb5023": "설정 필요",
-          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
-          "6d1483d4a0": "1 emulator device detected.",
-          "0a452d4d3b": "{{value0}} emulator devices detected.",
-          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
-          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
+          "06b06429c6": "Android SDK 및 iOS 시뮬레이터 지원을 확인 중입니다.",
+          "6d1483d4a0": "1개의 에뮬레이터 장치가 감지되었습니다.",
+          "0a452d4d3b": "{{value0}} 에뮬레이터 장치가 감지되었습니다.",
+          "f62a1bb759": "Orca는 장치가 감지된 후 에뮬레이터 장치를 자동으로 선택합니다.",
+          "b2fd62ea75": "새 에뮬레이터 탭 및 agent 연결 명령을 위한 기본 장치입니다. 자동 선택은 이미 실행 중인 장치를 선호합니다."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "QR 코드를 재생성하고 Orca 모바일 앱에서 스캔하세요.",
@@ -5445,9 +5542,9 @@
           "c8491c17ef": "QR 코드를 스캔하여 휴대폰에서 Orca를 제어하세요. 베타/초기 미리보기 - 버그 및 주요 변경 사항이 예상됩니다. 다음에서 iOS 앱을 받으세요.",
           "e7a3ae8c4e": "모바일",
           "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요.",
-          "1de96ec8a6": "Show Orca Mobile Button",
-          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
-          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
+          "1de96ec8a6": "Orca Mobile 버튼 표시",
+          "682293cadf": "왼쪽 사이드바 상단에 Orca Mobile 버튼을 표시합니다.",
+          "d4f2b65f30": "사이드바에 Orca Mobile 바로가기를 표시합니다."
         },
         "NotificationsPane": {
           "906b4afebf": "테스트 알림 보내기",
@@ -5698,8 +5795,8 @@
           "81057d5f71": "저장 중...",
           "da37d6f10e": "복사",
           "3149964b66": "복사됨",
-          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+          "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
+          "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
@@ -6032,7 +6129,9 @@
           "9abb9be3bc": "설정 시작",
           "23c6874fdf": "AI 기능",
           "2309068a6f": "파괴적",
-          "65358016ea": "버리기"
+          "65358016ea": "버리기",
+          "dev": "Dev Tools",
+          "devDescription": "Dev-only tools for exercising UI states."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -6178,7 +6277,7 @@
           "2227ce47b6": "대상을 저장하지 못했습니다.",
           "f602009125": "대상이 추가됨",
           "b4ba0ce33d": "타겟이 업데이트되었습니다.",
-          "3879cbaa52": "릴레이 유예 기간은 60초에서 {{value0}}초 사이여야 하며, 재설정될 때까지 유지를 선택해야 합니다.",
+          "3879cbaa52": "terminals 시간 제한은 60~{{value0}}초 사이여야 하며, 그렇지 않으면 재설정될 때까지 terminals을 활성 상태로 유지해야 합니다.",
           "4db9afce1c": "포트는 1에서 65535 사이여야 합니다.",
           "0e5aa04161": "호스트 또는 SSH 구성 별칭이 필요합니다.",
           "f1fc50dad2": "SSH 대상을 로드하지 못했습니다.",
@@ -6213,7 +6312,9 @@
           "c77f1abfe3": "원격 terminals 종료 중",
           "18968ede9e": "오류",
           "f0871e6bfb": "연결",
-          "47e94bd6ba": "연결됨"
+          "47e94bd6ba": "연결됨",
+          "a883f5a00f": "terminal 시간 초과: {{value0}}",
+          "8ce71262f4": "재설정될 때까지 terminals"
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "그러면 이 SSH 대상에서 활성 terminal 세션이 중지됩니다. 다시 연결해도 복원되지 않습니다.",
@@ -6225,11 +6326,11 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "취소",
-          "1b19b00e93": "(7일).",
-          "137e88ce8d": "연결 해제 후 릴레이가 terminals을 활성 상태로 유지하는 기간입니다. 기본값: 10800(3시간). 최대:",
-          "b574994adc": "원격 terminals은 종료하거나 릴레이를 재설정할 때까지 계속 사용할 수 있습니다.",
-          "71fc546097": "재설정될 때까지 살아 있음",
-          "92f80edbfd": "릴레이 유예 기간(초)",
+          "1b19b00e93": "제한된 시간 초과는 60초에서 7일 사이여야 합니다.",
+          "137e88ce8d": "Orca가 이 호스트에서 연결 해제된 뒤에도 원격 터미널은 계속 실행됩니다.",
+          "b574994adc": "중지하려면 원격 터미널 종료 또는 릴레이 재설정을 사용하세요.",
+          "71fc546097": "재설정할 때까지 터미널 유지",
+          "92f80edbfd": "원격 터미널 지속성",
           "feae1d1e69": "선택 사항. ProxyJump / ssh -J와 동일합니다.",
           "11bcb4507a": "bastion.example.com",
           "b2ab248ded": "점프 호스트",
@@ -6249,7 +6350,13 @@
           "9518545cb6": "대상 추가",
           "a62b4cb39a": "변경 사항 저장",
           "29af933cd5": "새로운 SSH 대상",
-          "f2331ce599": "SSH 대상 편집"
+          "f2331ce599": "SSH 대상 편집",
+          "7c13f58c91": "재설정할 때까지",
+          "55c56cf2c7": "연결 해제 후 시간 제한(초)",
+          "4a342f44c1": "고급 연결",
+          "e9609ddca6": "프록시, 점프 호스트, 연결 재사용",
+          "8c922dffba": "더 빠른 설정을 위해 SSH 연결 재사용",
+          "53e9aabfc0": "사용 가능한 경우 OpenSSH 멀티플렉싱을 사용합니다. 사용자 지정 SSH 제한이 있는 호스트에서는 끄세요."
         },
         "TasksPane": {
           "3a72b9745e": "작업 페이지와 사이드바 바로가기에 표시할 작업 제공자를 선택합니다.",
@@ -6714,8 +6821,8 @@
             "afbf35be68": "안정적인 세션",
             "agentPermissions": "Agent 권한",
             "agentPermissionsDescription": "agent 권한 기본값을 Yolo와 수동 사이에서 전환합니다.",
-            "agentRuntime": "Agent Runtime",
-            "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default."
+            "agentRuntime": "Agent 런타임",
+            "agentRuntimeDescription": "기본적으로 Windows 또는 WSL에서 agents를 감지하고 시작할지 선택합니다."
           }
         },
         "appearance": {
@@ -6924,8 +7031,8 @@
             "291f480a5e": "홈",
             "a942905148": "새 브라우저 탭을 만들 때 열리는 URL입니다. 빈 탭을 열려면 비워 두세요.",
             "c3903322d2": "기본 홈 페이지",
-            "19ea5607cf": "Localhost Worktree Labels",
-            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+            "19ea5607cf": "로컬호스트 작업 트리 레이블",
+            "4e0fdf0a3f": "브라우저 탭을 더 쉽게 구분할 수 있도록 작업 트리별 Orca 로컬 호스트 URL로 워크스페이스 포트를 엽니다."
           },
           "use": {
             "search": {
@@ -7129,8 +7236,8 @@
               "worktrees": "worktrees"
             },
             "nativeChat": {
-              "title": "Native chat",
-              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
+              "title": "네이티브 채팅",
+              "description": "Claude 및 Codex terminal 세션에 대한 데스크톱 채팅 화면을 미리 봅니다."
             }
           }
         },
@@ -7544,8 +7651,8 @@
               "f213400800": "모바일",
               "671eb4173c": "휴대폰에서 terminals과 agents를 제어하세요.",
               "ffd52a96e4": "모바일",
-              "1de96ec8a6": "Show Orca Mobile Button",
-              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
+              "1de96ec8a6": "Orca Mobile 버튼 표시",
+              "682293cadf": "왼쪽 사이드바 상단에 Orca Mobile 버튼을 표시합니다."
             }
           }
         },
@@ -8478,40 +8585,123 @@
           "f5ed5dcbf6": "Press keys…"
         },
         "ShortcutRemoveButton": {
-          "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
+          "9e29aff18b": "{{value0}} 바로가기 {{value1}} 제거",
           "2a9588b1c2": "Remove this binding"
         },
         "BrowserLocalhostWorktreeLabelsSetting": {
-          "8ac8c3ad19": "Localhost Worktree Labels",
-          "1db3c8b983": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+          "8ac8c3ad19": "로컬호스트 작업 트리 레이블",
+          "1db3c8b983": "브라우저 탭을 더 쉽게 구분할 수 있도록 작업 트리별 Orca 로컬 호스트 URL로 워크스페이스 포트를 엽니다."
         },
         "AgentRuntimeSetting": {
-          "label": "Agent runtime",
+          "label": "Agent 런타임",
           "wsl": "WSL",
-          "loadingWsl": "Loading WSL",
-          "selectDistro": "Select distro",
-          "windowsDescription": "Detect and launch agents on Windows for projects that do not override their runtime.",
-          "wslUnavailable": "WSL is not available on this machine.",
-          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
-          "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
+          "loadingWsl": "WSL 로드 중",
+          "selectDistro": "배포판 선택",
+          "windowsDescription": "런타임을 재정의하지 않는 프로젝트에 대해 Windows에서 agents를 감지하고 시작합니다.",
+          "wslUnavailable": "이 컴퓨터에서는 WSL을 사용할 수 없습니다.",
+          "distroRequired": "프로젝트가 WSL을 상속하려면 먼저 WSL 배포판을 선택하세요.",
+          "wslDescription": "런타임을 재정의하지 않는 프로젝트에 대해 WSL을 통해 {{value0}}에서 agents를 감지하고 시작합니다."
         },
         "MobileEmulatorSdkStatus": {
-          "536026130e": "Emulator SDKs",
-          "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
+          "536026130e": "에뮬레이터 SDK",
+          "dde0ec1cd8": "Orca가 에뮬레이터를 실행하는 데 사용하는 도구 체인입니다. Android는 Android SDK를 통해 모든 OS에서 작동합니다. iOS 시뮬레이터에는 macOS에서 Xcode가 필요합니다.",
           "027cbf668a": "Android SDK",
-          "f6d080d128": "Using configured path",
-          "7fe4bd5907": "Detected at",
-          "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
-          "b94ff260e6": "Download Android Studio",
-          "18925b082d": "Locate SDK folder",
-          "8c52684db8": "Clear",
+          "f6d080d128": "구성된 경로 사용",
+          "7fe4bd5907": "다음에서 감지됨",
+          "2784f0b22d": "찾을 수 없습니다. Android Studio를 설치한 다음 가상 장치를 만듭니다.",
+          "b94ff260e6": "안드로이드 스튜디오 다운로드",
+          "18925b082d": "SDK 폴더 찾기",
+          "8c52684db8": "지우기",
           "76eb88b88e": "iOS Simulator (Xcode)",
-          "c6f3ea4f12": "Ready",
-          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
-          "63fe73a1ea": "Could not update Android SDK folder."
+          "c6f3ea4f12": "준비됨",
+          "e4f14b50d7": "Xcode를 설치하고 iOS 시뮬레이터 런타임을 추가하세요.",
+          "63fe73a1ea": "Android SDK 폴더를 업데이트할 수 없습니다."
         },
         "AppearanceAdvancedDisclosure": {
           "advanced": "고급"
+        },
+        "DevToolsPane": {
+          "nativeActionLayoutCheck": "Native action layout check",
+          "secondary": "Secondary",
+          "secondaryActionClicked": "Secondary action clicked",
+          "primaryAction": "Primary action",
+          "primaryActionClicked": "Primary action clicked",
+          "branchHasChanges": "branch has changes",
+          "viewChangesClicked": "View Changes clicked",
+          "forceDeleteClicked": "Force Delete clicked",
+          "devOnlyCallback": "Dev-only callback.",
+          "infoToast": "Info toast",
+          "infoToastDescription": "Long informational copy with no explicit action.",
+          "localCanaryBehind": "Local canary is behind origin/canary",
+          "successToast": "Success toast",
+          "successToastDescription": "Short confirmation state.",
+          "settingsSaved": "Settings saved",
+          "shortSuccessCopy": "Short success copy.",
+          "errorToast": "Error toast",
+          "errorToastDescription": "Long error copy without recovery actions.",
+          "failedToSyncWorkspaceMetadata": "Failed to sync workspace metadata",
+          "nativeActionToast": "Native action toast",
+          "nativeActionToastDescription": "Uses Sonner action and cancel slots.",
+          "deleteFailureToast": "Delete failure toast",
+          "deleteFailureToastDescription": "Custom footer with View and Force Delete.",
+          "behindBaseRefToast": "Behind base ref toast",
+          "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
+          "notificationPlayground": "Notification playground",
+          "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
+          "devOnly": "Dev only"
+        },
+        "EphemeralVmRecipeRow": {
+          "useInWorkspace": "워크스페이스에서 사용"
+        },
+        "EphemeralVmRuntimesSection": {
+          "cleanupFailed": "정리 실패",
+          "cleanupRunning": "정리 실행 중",
+          "cleanupDisabled": "정리가 비활성화되었습니다.",
+          "running": "달리기",
+          "failed": "실패한",
+          "loadFailed": "임시 VM 런타임을 로드할 수 없습니다.",
+          "cleanupFailedToast": "임시 VM 런타임을 정리할 수 없습니다.",
+          "markedCleaned": "임시 VM 런타임을 정리된 것으로 표시했습니다.",
+          "cleaned": "임시 VM 런타임을 정리했습니다.",
+          "copiedCleanupCommand": "정리 명령을 복사했습니다.",
+          "copiedCleanupPayload": "정리 페이로드를 복사했습니다.",
+          "copyCleanupFailed": "정리 명령을 복사할 수 없습니다.",
+          "title": "임시 VM 런타임",
+          "description": "레시피로 생성된 런타임은 워크스페이스를 소유합니다. 충돌, 생성 실패 또는 수동 복구 후 오래된 항목을 정리합니다.",
+          "refresh": "임시 VM 런타임 새로 고침",
+          "loading": "임시 VM 런타임 확인 중…",
+          "empty": "임시 VM 런타임은 정리가 필요하지 않습니다.",
+          "copyCleanup": "복사 명령",
+          "retry": "정리 다시 시도",
+          "cleanup": "대청소"
+        },
+        "ephemeralVms": {
+          "search": {
+            "title": "워크스페이스별 환경",
+            "description": "repo 소유 레시피가 각 워크스페이스에 고유한 주문형 일회용 환경을 제공하는 방법을 알아보세요."
+          }
+        },
+        "EphemeralVmsPane": {
+          "loadError": "레시피를 로드할 수 없습니다.",
+          "copyError": "프롬프트를 복사할 수 없습니다.",
+          "skillTitle": "워크스페이스별 환경 기술",
+          "skillDescription": "repo 소유 환경 레시피를 설정, 빌드, 인증 및 검증합니다.",
+          "whatTitle": "당신과 함께 기술이 하는 일",
+          "whatScaffold": "Orca 서버 또는 SSH를 통해 연결된 공급자를 위한 레시피 및 스크립트를 작성합니다.",
+          "whatBuild": "재사용 가능한 기본 이미지를 구축하고 agent에 로그인합니다.",
+          "whatValidate": "워크스페이스를 생성할 수 있도록 유효성을 검사합니다.",
+          "promptHint": "어떤 워크스페이스에서든 agent에게 다음과 같이 질문하세요.",
+          "copy": "복사",
+          "copied": "복사됨",
+          "recipes": "조리법",
+          "recipesHelp": "agent가 orca.yaml에 추가하는 레시피가 여기에 표시되어 워크스페이스를 시작할 준비가 됩니다.",
+          "refresh": "임시 VM 레시피 새로 고침",
+          "checking": "레시피 확인 중...",
+          "none": "아직 레시피를 찾을 수 없습니다."
+        },
+        "ephemeralVmsExperimentalSetting": {
+          "description": "repo 소유 온디맨드 환경에 대한 설정 제어 및 워크스페이스 실행 대상을 표시합니다.",
+          "toggleLabel": "워크스페이스별 환경 전환"
         }
       },
       "right": {
@@ -8630,7 +8820,8 @@
             "98a79948b3": "복사",
             "b234ab25b4": "파일을 클립보드에 복사하지 못했습니다",
             "f9d7ca753d": "경로 복사",
-            "3161c4e425": "폴더"
+            "3161c4e425": "폴더",
+            "e887fa4b2e": "터미널에서 열기"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git이 무시한 파일 표시",
@@ -10741,8 +10932,8 @@
           "8f68ad9ca9": "{{value0}} AI {{value1}} 표시",
           "724a13568d": "{{value0}}에서",
           "6094135eec": "대 {{value0}}",
-          "a4420ca1f7": "Wrap On",
-          "dde325ddfe": "Wrap Off"
+          "a4420ca1f7": "랩 온",
+          "dde325ddfe": "마무리"
         },
         "ConflictComponents": {
           "f338288514": "충돌 콘텐츠 로드 중...",
@@ -10831,7 +11022,7 @@
           "561251019a": "추가 작업",
           "8c8b7f5ff5": "머리말 표시",
           "10c39d58c1": "머리말 숨기기",
-          "1eef809708": "Word Wrap"
+          "1eef809708": "단어 줄 바꿈"
         },
         "EditorPanelShell": {
           "e2c4dec350": "편집기 로드 중..."
@@ -11073,11 +11264,11 @@
           "d34a2021c8": "제목 2",
           "abb5100a3d": "제목 1",
           "b462641ed2": "본문 텍스트",
-          "91a843fb43": "More blocks",
-          "2cd9e0bbb3": "Headings",
-          "b05e14620d": "Heading 4",
-          "6bbf827ef5": "Heading 5",
-          "d1bbf9a835": "Collapsible section"
+          "91a843fb43": "더 많은 블록",
+          "2cd9e0bbb3": "제목",
+          "b05e14620d": "제목 4",
+          "6bbf827ef5": "제목 5",
+          "d1bbf9a835": "접을 수 있는 섹션"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "저장",
@@ -11156,10 +11347,10 @@
                 "41482b15ce": "토글 제목 1",
                 "570611864e": "큰 섹션 제목.",
                 "e66e7f04c6": "제목 1",
-                "5f9a0ed7c4": "Heading 4",
-                "01a71dbbdd": "Nested section heading.",
-                "8440fa4acf": "Heading 5",
-                "b287b93c66": "Deep section heading."
+                "5f9a0ed7c4": "제목 4",
+                "01a71dbbdd": "중첩된 섹션 제목.",
+                "8440fa4acf": "제목 5",
+                "b287b93c66": "깊은 섹션 제목."
               }
             }
           }
@@ -11220,8 +11411,8 @@
           "d5a8c2f1b9": "이 체크를 수정할 기본 AI agent 시작",
           "e2b4d7c8a1": "이 체크를 처리할 agent 선택",
           "f1c9e3a6d4": "체크를 수정할 agent 선택",
-          "5e2a9c3f88": "Open file at this line",
-          "actionRequired": "Action required"
+          "5e2a9c3f88": "이 줄에서 파일 열기",
+          "actionRequired": "조치 필요"
         },
         "check": {
           "run": {
@@ -11244,10 +11435,10 @@
           "tooLarge": "붙여넣기 내용이 너무 큽니다."
         },
         "CheckRunJobs": {
-          "1c0a4d7e02": "succeeded",
-          "2d3b8f1a55": "skipped",
-          "3e6c9a2b71": "pending",
-          "4f7d0c3e88": "steps failed",
+          "1c0a4d7e02": "성공했다",
+          "2d3b8f1a55": "건너뛰었습니다",
+          "3e6c9a2b71": "보류 중",
+          "4f7d0c3e88": "단계 실패",
           "5a8e1d4f23": " · "
         }
       },
@@ -12096,7 +12287,7 @@
       },
       "nativeChat": {
         "contextMenu": {
-          "copy": "Copy"
+          "copy": "복사"
         }
       }
     },
@@ -12118,83 +12309,84 @@
   "components": {
     "native-chat": {
       "composer": {
-        "imageUnsupported": "Image paste is not supported for this agent.",
-        "send": "Send",
-        "noPty": "No live terminal — toggle back to reconnect.",
-        "locked": "Input is held by another device.",
-        "placeholder": "Send a message…",
-        "mentionHint": "Referencing file:",
-        "attach": "Attach file",
-        "startDictation": "Start dictation",
-        "stopDictation": "Stop dictation",
-        "noSkills": "No matching skills",
-        "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
-        "removeAttachment": "Remove attachment"
+        "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
+        "send": "보내기",
+        "noPty": "라이브 terminal이 없습니다. 다시 연결하려면 다시 전환하세요.",
+        "locked": "입력이 다른 장치에 의해 보류됩니다.",
+        "placeholder": "메시지 보내기…",
+        "mentionHint": "참조 파일:",
+        "attach": "파일첨부",
+        "startDictation": "받아쓰기 시작",
+        "stopDictation": "받아쓰기 중지",
+        "noSkills": "어울리는 스킬 없음",
+        "localAttachmentUnsupported": "원격 세션에는 로컬 첨부 파일을 사용할 수 없습니다.",
+        "removeAttachment": "첨부파일 삭제",
+        "pastedImageLabel": "붙여넣은 이미지"
       },
       "tool": {
-        "running": "Running…",
-        "result": "Result"
+        "running": "실행 중…",
+        "result": "결과"
       },
       "status": {
-        "responding": "Agent is responding"
+        "responding": "Agent이 응답 중입니다."
       },
-      "jumpToLatest": "Jump to latest",
+      "jumpToLatest": "최신으로 이동",
       "toggle": {
-        "showTerminal": "Show terminal",
-        "showChat": "Show chat view"
+        "showTerminal": "terminal 표시",
+        "showChat": "채팅 보기 표시"
       },
       "state": {
         "loading": {
-          "title": "Loading conversation…",
-          "subtitle": "Reading the agent transcript."
+          "title": "대화 로드 중…",
+          "subtitle": "agent 기록을 읽는 중입니다."
         },
         "error": {
-          "title": "Could not load conversation",
-          "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
+          "title": "대화를 로드할 수 없습니다.",
+          "subtitle": "스크립트를 읽을 수 없습니다. 계속 작업하려면 terminal로 다시 전환하세요."
         },
         "notAgent": {
-          "title": "No conversation here",
-          "subtitle": "This terminal is not running a recognized coding agent."
+          "title": "여기에는 대화가 없습니다.",
+          "subtitle": "이 terminal은 인식된 코딩 agent를 실행하고 있지 않습니다."
         },
         "empty": {
-          "title": "Start a chat with {{value0}}",
-          "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change."
+          "title": "{{value0}}님과 채팅을 시작하세요",
+          "subtitle": "{{value0}}에게 코드 검사, 출력 설명 또는 변경을 요청하세요."
         }
       },
-      "stop": "Stop the agent",
+      "stop": "에이전트 중지",
       "copyMessage": {
-        "copied": "Copied",
-        "copy": "Copy message"
+        "copied": "복사됨",
+        "copy": "메시지 복사"
       },
-      "scrollMessageToTop": "Scroll this message to top",
-      "loadingEarlier": "Loading…",
-      "loadEarlier": "Load earlier messages",
+      "scrollMessageToTop": "이 메시지를 맨 위로 스크롤",
+      "loadingEarlier": "로드 중…",
+      "loadEarlier": "이전 메시지 로드",
       "question": {
-        "step": "Step {{value0}}",
-        "other": "Other…",
-        "otherPlaceholder": "Type your answer",
-        "cancel": "Cancel",
-        "send": "Send answer",
-        "next": "Next"
+        "step": "{{value0}} 단계",
+        "other": "다른…",
+        "otherPlaceholder": "답변을 입력하세요",
+        "cancel": "취소",
+        "send": "답변 보내기",
+        "next": "다음"
       },
       "approval": {
-        "title": "Allow {{value0}}?",
-        "allow": "Allow",
-        "deny": "Deny"
+        "title": "{{value0}}을(를) 허용하시겠습니까?",
+        "allow": "허용하다",
+        "deny": "부인하다"
       }
     },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Switch to terminal view",
-          "switchToChatView": "Switch to chat view"
+          "switchToTerminalView": "terminal 보기로 전환",
+          "switchToChatView": "채팅 보기로 전환"
         }
       }
     },
     "workspace": {
       "cleanup": {
         "presentationFixtures": {
-          "reviewAlphaCleanup": "Review alpha cleanup"
+          "reviewAlphaCleanup": "알파 정리 검토"
         },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",

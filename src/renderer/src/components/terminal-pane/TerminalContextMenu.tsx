@@ -32,7 +32,7 @@ import {
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
-import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { AgentIcon } from '@/lib/agent-catalog'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
@@ -107,17 +107,19 @@ export default function TerminalContextMenu({
   onCopyTerminalId,
   onCopyPaneId
 }: TerminalContextMenuProps): React.JSX.Element {
+  // Why: Windows/Linux shortcut labels are long; context menu rows should show
+  // the primary binding only so alternative bindings do not force row wraps.
   const shortcuts = useMemo(
     () => ({
-      copy: formatShortcutLabel('terminal.copySelection', keybindings),
-      paste: formatShortcutLabel('terminal.paste', keybindings),
-      splitRight: formatShortcutLabel('terminal.splitRight', keybindings),
-      splitDown: formatShortcutLabel('terminal.splitDown', keybindings),
-      equalize: formatShortcutLabel('terminal.equalizePaneSizes', keybindings),
-      expand: formatShortcutLabel('terminal.expandPane', keybindings),
-      setTitle: formatShortcutLabel('terminal.setTitle', keybindings),
-      clearPaneTitle: formatShortcutLabel('terminal.clearPaneTitle', keybindings),
-      close: formatShortcutLabel('terminal.closePane', keybindings),
+      copy: formatPrimaryShortcutLabel('terminal.copySelection', keybindings),
+      paste: formatPrimaryShortcutLabel('terminal.paste', keybindings),
+      splitRight: formatPrimaryShortcutLabel('terminal.splitRight', keybindings),
+      splitDown: formatPrimaryShortcutLabel('terminal.splitDown', keybindings),
+      equalize: formatPrimaryShortcutLabel('terminal.equalizePaneSizes', keybindings),
+      expand: formatPrimaryShortcutLabel('terminal.expandPane', keybindings),
+      setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
+      clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
+      close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
       nativeChat: nativeChatToggleShortcutLabel(isMacPlatform())
     }),
     [keybindings]
@@ -168,7 +170,7 @@ export default function TerminalContextMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-52"
+        className="w-60"
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(e) => {
@@ -291,7 +293,7 @@ export default function TerminalContextMenu({
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onSplitRight}>
+        <DropdownMenuItem className="whitespace-nowrap" onSelect={onSplitRight}>
           <PanelRightClose />
           {translate(
             'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
@@ -299,7 +301,7 @@ export default function TerminalContextMenu({
           )}
           <DropdownMenuShortcut>{shortcuts.splitRight}</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onSplitDown}>
+        <DropdownMenuItem className="whitespace-nowrap" onSelect={onSplitDown}>
           <PanelBottomClose />
           {translate(
             'auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2',

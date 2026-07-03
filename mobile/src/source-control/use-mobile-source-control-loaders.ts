@@ -8,7 +8,7 @@ import {
   isMobileGitTransientRefreshError,
   type MobileGitStatusResult
 } from './mobile-git-status'
-import { type MobileGitBranchCompareResult } from './mobile-branch-compare'
+import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
 import {
   SELECTOR_RETRY_COUNT,
   SELECTOR_RETRY_DELAY_MS,

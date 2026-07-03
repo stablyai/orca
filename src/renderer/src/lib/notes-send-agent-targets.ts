@@ -1,17 +1,16 @@
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { detectAgentStatusFromTitle, getAgentLabel } from './agent-status'
-import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
+import type { TerminalTab } from '../../../shared/types'
+import { detectAgentSendTitleStatus } from './agent-send-title-status'
+import {
+  resolveRuntimePaneTitleLeafResolution,
+  type RuntimePaneTitleLeafResolution
+} from './runtime-pane-title-leaf-id'
 import {
   deriveRunningAgentSendTargets,
   type RunningAgentTargetState
 } from './running-agent-targets'
-
-const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
-const CLAUDE_IDLE_PREFIX = '\u2733'
-const GEMINI_IDLE_PREFIX = '\u25c7'
-const PI_IDLE_PREFIX = '\u03c0 - '
 
 export type NotesSendAgentTargetState = RunningAgentTargetState &
   Pick<AppState, 'runtimePaneTitlesByTabId'>
@@ -26,41 +25,19 @@ export type NotesSendAgentTarget = {
   disabledReason?: string
 }
 
-function isRecognizedAgentTitle(title: string | null): boolean {
-  return (
-    title !== null && detectAgentStatusFromTitle(title) !== null && getAgentLabel(title) !== null
-  )
-}
-
-function detectLaunchAgentPaneStatus(paneTitle: string | null, tabTitle: string) {
-  if (paneTitle !== null && isRecognizedAgentTitle(paneTitle)) {
-    return detectLaunchAgentStatusFromTitle(paneTitle)
+function detectLaunchAgentPaneStatus(
+  paneTitleResolution: RuntimePaneTitleLeafResolution,
+  tabTitle: string
+) {
+  if (paneTitleResolution.title !== null) {
+    return detectAgentSendTitleStatus(paneTitleResolution.title)
   }
   // Why: mirror isTerminalRunningAgent — the OSC-enriched tab title only counts
   // when the leaf has no runtime pane title of its own yet.
-  return paneTitle === null && isRecognizedAgentTitle(tabTitle)
-    ? detectLaunchAgentStatusFromTitle(tabTitle)
-    : null
-}
-
-function detectLaunchAgentStatusFromTitle(title: string) {
-  const status = detectAgentStatusFromTitle(title)
-  if (status !== 'idle') {
-    return status
+  if (paneTitleResolution.hasAnyPaneTitle) {
+    return null
   }
-  // Why: selected-target sends are immediate. A bare launch title like
-  // "Codex" proves agent identity, but not that the CLI is ready for input.
-  return isExplicitIdleLaunchTitle(title) ? status : null
-}
-
-function isExplicitIdleLaunchTitle(title: string): boolean {
-  return (
-    EXPLICIT_IDLE_TITLE_RE.test(title) ||
-    title.startsWith(CLAUDE_IDLE_PREFIX) ||
-    title.startsWith('* ') ||
-    title.includes(GEMINI_IDLE_PREFIX) ||
-    title.startsWith(PI_IDLE_PREFIX)
-  )
+  return detectAgentSendTitleStatus(tabTitle)
 }
 
 /**
@@ -88,59 +65,113 @@ export function deriveNotesSendAgentTargets(
       paneKey: target.paneKey,
       tabId: target.tabId,
       leafId: target.leafId,
-      agentType: target.entry.agentType,
+      agentType: resolveNotesTargetAgentType(target.entry.agentType, target.tab.launchAgent),
       tabTitle: target.tab.title,
       status: target.status,
       ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
     })
   )
 
-  // Why: dedupe by tab, not pane. A launch-agent tab already surfaced through a
-  // live status entry must not also emit a hint row — its active leaf may be a
-  // split shell pane, which would list a second bogus row for the same tab.
-  const statusBackedTabIds = new Set(targets.map((target) => target.tabId))
-
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    if (!tab.launchAgent || statusBackedTabIds.has(tab.id)) {
+    const launchTarget = deriveLaunchAgentTarget(state, tab)
+    if (!launchTarget) {
       continue
     }
 
-    const layout = state.terminalLayoutsByTabId[tab.id]
-    const leafId = layout?.activeLeafId
-    if (!leafId || !isTerminalLeafId(leafId)) {
-      continue
-    }
-
-    const ptyId = layout.ptyIdsByLeafId?.[leafId] ?? null
-    if (!ptyId || !state.ptyIdsByTabId[tab.id]?.includes(ptyId)) {
-      continue
-    }
-
-    const paneTitle = resolveRuntimePaneTitleForLeaf(
-      layout,
-      state.runtimePaneTitlesByTabId[tab.id],
-      leafId
-    )
-    const launchStatus = detectLaunchAgentPaneStatus(paneTitle, tab.title)
-    if (!launchStatus) {
-      // Why: launchAgent is set the instant Orca spawns the tab, but the runtime
-      // only accepts a send once the pane reads as an agent. Skipping until the
-      // title is recognized keeps "listed ⇒ sendable" and avoids the boot-window
-      // "not a recognized agent session" error.
-      continue
-    }
-    const disabledReason = launchStatus === 'permission' ? 'Agent needs permission' : undefined
-
-    targets.push({
-      paneKey: makePaneKey(tab.id, leafId),
-      tabId: tab.id,
-      leafId,
-      agentType: tab.launchAgent,
-      tabTitle: tab.title,
-      status: disabledReason ? 'disabled' : 'eligible',
-      ...(disabledReason ? { disabledReason } : {})
-    })
+    mergeLaunchAgentTarget(targets, launchTarget)
   }
 
   return targets
+}
+
+function resolveNotesTargetAgentType(
+  entryAgentType: AgentType | null | undefined,
+  launchAgent: AgentType | null | undefined
+): AgentType | null | undefined {
+  if (entryAgentType && entryAgentType !== 'unknown') {
+    return entryAgentType
+  }
+  return launchAgent ?? entryAgentType
+}
+
+function deriveLaunchAgentTarget(
+  state: NotesSendAgentTargetState,
+  tab: TerminalTab
+): NotesSendAgentTarget | null {
+  if (!tab.launchAgent) {
+    return null
+  }
+
+  const layout = state.terminalLayoutsByTabId[tab.id]
+  const leafId = layout?.activeLeafId
+  if (!leafId || !isTerminalLeafId(leafId)) {
+    return null
+  }
+
+  const ptyId = layout.ptyIdsByLeafId?.[leafId] ?? null
+  if (!ptyId || !state.ptyIdsByTabId[tab.id]?.includes(ptyId)) {
+    return null
+  }
+
+  const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
+  const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
+  const launchStatus = detectLaunchAgentPaneStatus(paneTitleResolution, tab.title)
+  if (!launchStatus) {
+    // Why: launchAgent is set the instant Orca spawns the tab, but the runtime
+    // only accepts a send once the pane reads as an agent. Skipping until the
+    // title is recognized keeps "listed ⇒ sendable" and avoids the boot-window
+    // "not a recognized agent session" error.
+    return null
+  }
+  const disabledReason = launchStatus === 'permission' ? 'Agent needs permission' : undefined
+
+  return {
+    paneKey: makePaneKey(tab.id, leafId),
+    tabId: tab.id,
+    leafId,
+    agentType: tab.launchAgent,
+    tabTitle: tab.title,
+    status: disabledReason ? 'disabled' : 'eligible',
+    ...(disabledReason ? { disabledReason } : {})
+  }
+}
+
+function mergeLaunchAgentTarget(
+  targets: NotesSendAgentTarget[],
+  launchTarget: NotesSendAgentTarget
+): void {
+  const samePaneIndex = targets.findIndex((target) => target.paneKey === launchTarget.paneKey)
+  if (samePaneIndex !== -1) {
+    const existing = targets[samePaneIndex]
+    if (existing.status === 'eligible' || existing.disabledReason === 'Agent needs permission') {
+      return
+    }
+
+    // Why: hook-backed status can outlive the CLI after sleep/resume. When the
+    // same live launch-agent pane has a fresh title proof, prefer the sendable
+    // runtime evidence over the stale retained status row.
+    targets[samePaneIndex] = {
+      ...launchTarget,
+      agentType:
+        existing.agentType && existing.agentType !== 'unknown'
+          ? existing.agentType
+          : launchTarget.agentType,
+      tabTitle: existing.tabTitle || launchTarget.tabTitle
+    }
+    return
+  }
+
+  // Why: dedupe by tab for fresh/permission status rows. Their active leaf may
+  // be a split shell pane, which would list a second bogus row for the same tab.
+  if (
+    targets.some(
+      (target) =>
+        target.tabId === launchTarget.tabId &&
+        (target.status === 'eligible' || target.disabledReason === 'Agent needs permission')
+    )
+  ) {
+    return
+  }
+
+  targets.push(launchTarget)
 }

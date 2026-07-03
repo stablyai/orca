@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: relay filesystem request handling shares
    path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
-import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
-import { execFile } from 'child_process'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 // Why: RelayContext is accepted in the constructor for protocol back-compat
@@ -190,7 +190,7 @@ export class FsHandler {
 
   private async createFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    const { dirname } = await import('path')
+    const { dirname } = await import('node:path')
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
   }

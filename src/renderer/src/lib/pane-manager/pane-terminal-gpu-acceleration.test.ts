@@ -77,6 +77,30 @@ describe('applyTerminalGpuAcceleration', () => {
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
   })
 
+  it('clears context-loss latches when the acceleration mode changes', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'MacIntel',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)'
+    })
+    const pane = createPane()
+    pane.webglDisabledAfterContextLoss = true
+    const options: PaneManagerOptions = { terminalGpuAcceleration: 'auto' }
+
+    applyTerminalGpuAcceleration([pane], options, 'on')
+
+    expect(pane.webglDisabledAfterContextLoss).toBe(false)
+  })
+
+  it('keeps context-loss latches when the acceleration mode is unchanged', () => {
+    const pane = createPane()
+    pane.webglDisabledAfterContextLoss = true
+    const options: PaneManagerOptions = { terminalGpuAcceleration: 'on' }
+
+    applyTerminalGpuAcceleration([pane], options, 'on')
+
+    expect(pane.webglDisabledAfterContextLoss).toBe(true)
+  })
+
   it('returns Linux panes to DOM when switching from forced WebGL back to auto without a safe renderer', () => {
     vi.stubGlobal('navigator', {
       platform: 'Linux x86_64',

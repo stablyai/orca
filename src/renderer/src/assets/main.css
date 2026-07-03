@@ -295,6 +295,52 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+[data-sonner-toaster] {
+  font-family: var(--font-sans);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
+  margin-top: 2px;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-content] {
+  min-width: 0;
+  flex: 1 1 calc(100% - 30px);
+  gap: 6px;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  /* Why: Sonner's native action slots otherwise share the copy row and squeeze
+     long notices; indent the wrapped footer to align with text after the icon. */
+  margin-top: 2px;
+  margin-left: 26px;
+  margin-right: 0;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] ~ [data-button] {
+  margin-left: 0;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
+  line-height: 1.35;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-description] {
+  /* Why: match the 80% body-copy opacity used by the custom-React toast bodies
+     (delete-worktree-failure, local-base-ref-suggestion) so string and JSX
+     descriptions read at the same weight. */
+  color: color-mix(in srgb, var(--popover-foreground) 80%, transparent);
+  line-height: 1.45;
+}
+
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
   /* Why: Sonner's dark-theme defaults can resolve the close icon and button
      background to the same color; keep the X readable on both Orca themes. */

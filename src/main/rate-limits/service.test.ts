@@ -3,7 +3,7 @@ stale-data handling, account-switch generation, and OpenCode config-change
 semantics covered in service.ts, which already carries the same pragma.
 Keeping them in one file makes the ordering contract reviewable as a unit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
@@ -353,7 +353,8 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
       authPreparation: undefined,
-      allowPtyFallback: false
+      allowPtyFallback: false,
+      allowUsagePanelSupplement: true
     })
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
@@ -459,7 +460,8 @@ describe('RateLimitService', () => {
         wslLinuxConfigDir: '/home/jin/.claude',
         stripAuthEnv: true
       }),
-      allowPtyFallback: true
+      allowPtyFallback: true,
+      allowUsagePanelSupplement: true
     })
     expect(service.getState().claudeTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
   })
@@ -483,7 +485,8 @@ describe('RateLimitService', () => {
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
       authPreparation: expect.objectContaining({ provenance: 'system' }),
-      allowPtyFallback: false
+      allowPtyFallback: false,
+      allowUsagePanelSupplement: true
     })
   })
 
@@ -497,7 +500,8 @@ describe('RateLimitService', () => {
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
       authPreparation: undefined,
-      allowPtyFallback: false
+      allowPtyFallback: false,
+      allowUsagePanelSupplement: true
     })
   })
 
@@ -521,7 +525,8 @@ describe('RateLimitService', () => {
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
       authPreparation: expect.objectContaining({ provenance: 'wsl:Ubuntu:system' }),
-      allowPtyFallback: false
+      allowPtyFallback: false,
+      allowUsagePanelSupplement: true
     })
   })
 
@@ -580,7 +585,7 @@ describe('RateLimitService', () => {
     })
 
     expect(fetchClaudeRateLimits).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowPtyFallback: true })
+      expect.objectContaining({ allowPtyFallback: true, allowUsagePanelSupplement: true })
     )
 
     expect(service.getState().inactiveClaudeAccounts).not.toEqual(

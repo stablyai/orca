@@ -1,5 +1,5 @@
-import { existsSync, statSync } from 'fs'
-import { win32 as pathWin32 } from 'path'
+import { existsSync, statSync } from 'node:fs'
+import { win32 as pathWin32 } from 'node:path'
 
 /** Dependency seams so the resolver can be unit-tested without a real Windows
  *  filesystem. Production callers omit these and get process.env / fs. */
@@ -45,6 +45,26 @@ function readEnv(env: NodeJS.ProcessEnv, names: string[]): string | undefined {
     }
   }
   return undefined
+}
+
+function getPathExecutableCandidates(env: NodeJS.ProcessEnv, executable: string): string[] {
+  const pathValue = readEnv(env, ['PATH', 'Path', 'path'])
+  if (!pathValue) {
+    return []
+  }
+
+  const candidates: string[] = []
+  const seen = new Set<string>()
+  for (const rawPart of pathValue.split(pathWin32.delimiter)) {
+    const dir = rawPart.trim().replace(/^"|"$/g, '')
+    // Why: Windows' implicit current-directory search can pick up repo-local
+    // shims. Only absolute PATH entries become ConPTY launch candidates.
+    if (!pathWin32.isAbsolute(dir)) {
+      continue
+    }
+    pushUniqueCandidate(candidates, seen, pathWin32.join(dir, executable))
+  }
+  return candidates
 }
 
 function pushUniqueCandidate(
@@ -94,6 +114,9 @@ function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
       )
     }
   }
+  for (const candidate of getPathExecutableCandidates(env, 'pwsh.exe')) {
+    pushUniqueCandidate(candidates, seen, candidate)
+  }
   return candidates
 }
 
@@ -138,7 +161,7 @@ export function resolveWindowsPowerShellExecutablePath(
   }
 
   for (const candidate of getPwshCandidatePaths(env)) {
-    if (isRealExecutable(candidate)) {
+    if (!isWindowsAppExecutionAliasPath(candidate) && isRealExecutable(candidate)) {
       return candidate
     }
   }

@@ -63,7 +63,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
-import { buildWorktreeComparator } from './smart-sort'
+import { buildWorktreeComparator, compareWorktreeSortLabel } from './smart-sort'
 import {
   buildAttentionByWorktree,
   type SmartClass,
@@ -180,6 +180,10 @@ import {
   type WorktreeSidebarTrackedStatusDropTarget,
   type WorktreeSidebarDropPreview
 } from './worktree-sidebar-drop-preview'
+import {
+  getReorderedWorktreeIdsToUnnest,
+  getWorktreeLineageDropTargetId
+} from './worktree-lineage-drag-drop'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
@@ -984,11 +988,11 @@ function getPointerDropStatusTarget(args: {
   if (pinTarget && args.container.contains(pinTarget)) {
     return { status: null, isPinDrop: true, lineageParentId: null }
   }
-  const rowTarget = target.closest<HTMLElement>('[data-worktree-drag-id]')
-  let lineageParentId: string | null = null
-  if (rowTarget && args.container.contains(rowTarget)) {
-    lineageParentId = rowTarget.dataset.worktreeDragId ?? null
-  }
+  const lineageParentId = getWorktreeLineageDropTargetId({
+    container: args.container,
+    target,
+    pointerY: args.y
+  })
   const statusTarget = target.closest<HTMLElement>('[data-workspace-status-drop-target]')
   return {
     status:
@@ -1314,6 +1318,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const [highlightedRevealRowKey, setHighlightedRevealRowKey] = useState<string | null>(null)
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
+  const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
@@ -1494,6 +1499,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       groupKey: string
       rects: readonly WorktreeSidebarDragRect[]
       draggedIds: readonly string[]
+      draggingWorktreeId?: string | null
     }): WorktreeSidebarDropPreview | null => {
       const container = scrollRef.current
       if (!container) {
@@ -1510,7 +1516,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         scrollTop: container.scrollTop,
         rects: args.rects,
         groupIds: group.worktreeIds,
-        draggedIds: args.draggedIds
+        draggedIds: args.draggedIds,
+        draggingWorktreeId: args.draggingWorktreeId
       })
     },
     [worktreeDragUnitGroups]
@@ -1525,7 +1532,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         pointerY,
         groupKey: session.sourceGroupKey,
         rects: session.rects,
-        draggedIds: session.reorderUnitDraggedIds
+        draggedIds: session.reorderUnitDraggedIds,
+        draggingWorktreeId: session.draggingWorktreeId
       })
     },
     [computeWorktreeDropForGroup]
@@ -1545,7 +1553,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         pointerY: args.pointerY,
         groupKey,
         rects: getWorktreeSidebarDragRectsForGroup(container, groupKey),
-        draggedIds: args.draggedIds
+        draggedIds: args.draggedIds,
+        draggingWorktreeId: worktreeDragSessionRef.current?.draggingWorktreeId ?? null
       })
     },
     [computeWorktreeDropForGroup]
@@ -2587,6 +2596,37 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [assignWorktreeParent, getEligibleLineageDropTarget]
   )
 
+  const clearReorderedWorktreeParents = useCallback(
+    (args: { draggedIds: readonly string[]; sourceGroupKey: string }) => {
+      const sourceGroup = worktreeDragGroups.find((group) => group.key === args.sourceGroupKey)
+      if (!sourceGroup) {
+        return
+      }
+      const ids = getReorderedWorktreeIdsToUnnest({
+        draggedIds: args.draggedIds,
+        sourceGroupIds: sourceGroup.worktreeIds,
+        lineageById: worktreeLineageById
+      })
+      if (ids.length === 0) {
+        return
+      }
+      // Why: dropping a nested card onto a reorder line is the escape hatch
+      // from accidental nesting, so clear only the directly dragged children.
+      void Promise.all(ids.map((id) => updateWorktreeLineage(id, { noParent: true }))).catch(
+        (err) => {
+          console.error('Failed to unnest workspace:', err)
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeList.failedUnnestWorkspace',
+              'Failed to unnest workspace'
+            )
+          )
+        }
+      )
+    },
+    [updateWorktreeLineage, worktreeDragGroups, worktreeLineageById]
+  )
+
   const flushWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
     if (!drag) {
@@ -3101,6 +3141,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               dropIndex: drop.dropIndex
             })
           })
+          clearReorderedWorktreeParents({
+            draggedIds: drag.draggedIds,
+            sourceGroupKey: drag.sourceGroupKey
+          })
         } else if (scrollRef.current) {
           const currentTarget = preferredStatusTarget
           const currentPreview = currentTarget.status
@@ -3157,6 +3201,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   }, [
     beginWorktreePointerDrag,
     clearWorktreeDrag,
+    clearReorderedWorktreeParents,
     commitWorktreeLineageParentDrop,
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
@@ -3504,10 +3549,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           dropIndex: drop.dropIndex
         })
       })
+      clearReorderedWorktreeParents({
+        draggedIds: session.draggedIds,
+        sourceGroupKey: session.sourceGroupKey
+      })
       clearWorktreeDrag()
     },
     [
       clearWorktreeDrag,
+      clearReorderedWorktreeParents,
       commitWorktreeLineageParentDrop,
       computeWorktreeDrop,
       computeWorktreeStatusDrop,
@@ -3757,6 +3807,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           dropIndex: drop.dropIndex
         })
       })
+      clearReorderedWorktreeParents({
+        draggedIds: session.draggedIds,
+        sourceGroupKey: session.sourceGroupKey
+      })
       clearWorktreeDrag()
     }
 
@@ -3764,6 +3818,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     return () => document.removeEventListener('drop', handleDocumentDrop, true)
   }, [
     clearWorktreeDrag,
+    clearReorderedWorktreeParents,
     commitWorktreeLineageParentDrop,
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
@@ -3997,10 +4052,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
               const isHeaderCollapsed = collapsedGroups.has(row.key)
-              // Why: repo/project headers already reveal actions on hover; tuck
-              // the collapse chevron into that cluster instead of a new surface.
+              // Why: repo/project and status headers use the same compact
+              // section chrome; flat "All" stays a simple label.
               const showHeaderCollapseAffordance =
-                row.count > 0 && (isRepoHeader || isProjectGroupHeader)
+                row.count > 0 &&
+                (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null)
               // Why: non-project section headers like "All" are labels for the
               // flat list, so they should not reserve project hierarchy indent.
               const headerPaddingLeft =
@@ -4614,11 +4670,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   onClickCapture={handleWorktreeRowClickCapture}
                   onDoubleClick={nested ? stopNestedWorktreeCardBubble : undefined}
                   onDragStart={nested ? stopNestedWorktreeCardBubble : undefined}
-                  onPointerDown={(event) =>
-                    nested
-                      ? undefined
-                      : handleWorktreeRowPointerDown(event, itemRow.worktree.id, itemRow.rowKey)
-                  }
+                  onPointerDown={(event) => {
+                    if (nested) {
+                      event.stopPropagation()
+                    }
+                    handleWorktreeRowPointerDown(event, itemRow.worktree.id, itemRow.rowKey)
+                  }}
                   style={{
                     paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined
                   }}
@@ -5192,7 +5249,7 @@ const WorktreeList = React.memo(function WorktreeList({
         sessionHasHadPty.current = true
       } else {
         nonArchivedWorktrees.sort(
-          (a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
+          (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b)
         )
         lastAttentionByWorktreeRef.current = null
         return nonArchivedWorktrees.map((w) => w.id)

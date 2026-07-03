@@ -464,6 +464,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
+      startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
@@ -631,7 +632,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           sessions: [],
           issues: [],
           scannedAt: new Date().toISOString()
-        })
+        }),
+      onWindowFocused: () => () => {}
     },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
@@ -2169,6 +2171,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleFloatingTerminal: () => noopUnsubscribe,
     onTerminalShortcutCaptured: () => noopUnsubscribe,
     onOpenQuickOpen: () => noopUnsubscribe,
+    onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
@@ -2539,11 +2542,13 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     ackColdRestore: () => {},
     ackData: () => {},
     setActiveRendererPty: () => {},
+    setRendererPtyVisible: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
+    hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({
@@ -2572,7 +2577,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     settlePaneSerializer: () => Promise.resolve(),
     clearPendingPaneSerializer: () => Promise.resolve(),
     management: {
-      listSessions: () => Promise.resolve({ sessions: [] }),
+      listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0 }),
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false })

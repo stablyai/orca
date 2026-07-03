@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: filesystem, editor-file, and search commands share the same local/SSH path authorization rules. Keeping that IO adapter together prevents separate command paths from drifting on safety checks. */
-import type { ChildProcess } from 'child_process'
-import { watch as watchFs } from 'fs'
+import type { ChildProcess } from 'node:child_process'
+import { watch as watchFs } from 'node:fs'
 import {
   constants,
   copyFile,
@@ -13,9 +13,9 @@ import {
   rm,
   stat,
   writeFile
-} from 'fs/promises'
-import { homedir } from 'os'
-import { basename, dirname, extname, join } from 'path'
+} from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { basename, dirname, extname, join } from 'node:path'
 import type {
   DirEntry,
   FsChangeEvent,

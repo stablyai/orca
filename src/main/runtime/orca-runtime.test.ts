@@ -1,10 +1,11 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EventEmitter } from 'events'
-import { randomUUID } from 'crypto'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { homedir, tmpdir } from 'os'
-import { join } from 'path'
+import { EventEmitter } from 'node:events'
+import { randomUUID } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ipcMain } from 'electron'
 import type {
   FolderWorkspace,
@@ -2288,6 +2289,8 @@ describe('OrcaRuntimeService', () => {
 
   it('does not create runtime local worktrees when remote-tracking base refresh fails', async () => {
     const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-refresh-fails')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/cli-refresh-fails')
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
@@ -2605,11 +2608,21 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('rejects an existing PR when a matching push target lacks selected PR metadata', async () => {
+  it('suffixes an existing PR when a matching push target lacks selected PR metadata', async () => {
     const runtime = new OrcaRuntimeService(store)
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/fix-title')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/fix-title')
+    const createdWorktree = {
+      path: '/tmp/workspaces/fix-title-2',
+      head: 'abc123',
+      branch: 'refs/heads/feature/fix-2',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockImplementation(
+      (sanitizedName: string) => `/tmp/workspaces/${sanitizedName}`
+    )
+    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce(null)
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
     getPRForBranchMock.mockResolvedValueOnce({
       number: 42,
       title: 'Existing PR',
@@ -2623,63 +2636,96 @@ describe('OrcaRuntimeService', () => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
-      return { stdout: '', stderr: '' }
-    })
-
-    try {
-      await expect(
-        runtime.createManagedWorktree({
-          repoSelector: 'id:repo-1',
-          name: 'fix-title',
-          baseBranch: 'abc123',
-          branchNameOverride: 'feature/fix',
-          pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-        })
-      ).rejects.toThrow('Branch "feature/fix" already has PR #42.')
-
-      expect(getPRForBranchMock).toHaveBeenCalledWith(TEST_REPO_PATH, 'feature/fix')
-      expect(addWorktree).not.toHaveBeenCalled()
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('rejects a matching push target branch when selected PR metadata has no PR number', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/fix-title')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/fix-title')
-    vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix-2^{commit}')) {
         throw new Error('missing local branch')
       }
       return { stdout: '', stderr: '' }
     })
 
     try {
-      await expect(
-        runtime.createManagedWorktree({
-          repoSelector: 'id:repo-1',
-          name: 'fix-title',
-          baseBranch: 'abc123',
-          branchNameOverride: 'feature/fix',
-          linkedPR: null,
-          pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-        })
-      ).rejects.toThrow('Branch "feature/fix" already exists on a remote.')
+      await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'fix-title',
+        baseBranch: 'abc123',
+        branchNameOverride: 'feature/fix',
+        pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+      })
 
-      expect(getPRForBranchMock).not.toHaveBeenCalled()
-      expect(addWorktree).not.toHaveBeenCalled()
+      expect(getPRForBranchMock).toHaveBeenCalledWith(TEST_REPO_PATH, 'feature/fix')
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'feature/fix-2',
+        'abc123',
+        false
+      )
     } finally {
       gitSpy.mockRestore()
     }
   })
 
-  it('rejects a matching push target branch when the existing PR is different', async () => {
+  it('suffixes a matching push target branch when selected PR metadata has no PR number', async () => {
     const runtime = new OrcaRuntimeService(store)
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/fix-title')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/fix-title')
+    const createdWorktree = {
+      path: '/tmp/workspaces/fix-title-2',
+      head: 'abc123',
+      branch: 'refs/heads/feature/fix-2',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockImplementation(
+      (sanitizedName: string) => `/tmp/workspaces/${sanitizedName}`
+    )
+    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
+        throw new Error('missing local branch')
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix-2^{commit}')) {
+        throw new Error('missing local branch')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'fix-title',
+        baseBranch: 'abc123',
+        branchNameOverride: 'feature/fix',
+        linkedPR: null,
+        pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+      })
+
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'feature/fix-2',
+        'abc123',
+        false
+      )
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('suffixes a matching push target branch when the existing PR is different', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const createdWorktree = {
+      path: '/tmp/workspaces/fix-title-2',
+      head: 'abc123',
+      branch: 'refs/heads/feature/fix-2',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockImplementation(
+      (sanitizedName: string) => `/tmp/workspaces/${sanitizedName}`
+    )
+    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
+    vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
     getPRForBranchMock.mockResolvedValueOnce({
       number: 43,
       title: 'Different PR',
@@ -2693,55 +2739,79 @@ describe('OrcaRuntimeService', () => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
-      return { stdout: '', stderr: '' }
-    })
-
-    try {
-      await expect(
-        runtime.createManagedWorktree({
-          repoSelector: 'id:repo-1',
-          name: 'fix-title',
-          baseBranch: 'abc123',
-          branchNameOverride: 'feature/fix',
-          linkedPR: 42,
-          pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-        })
-      ).rejects.toThrow('Branch "feature/fix" already has PR #43.')
-
-      expect(getPRForBranchMock).toHaveBeenCalledWith(TEST_REPO_PATH, 'feature/fix')
-      expect(addWorktree).not.toHaveBeenCalled()
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('rejects a selected PR remote conflict when the PR lookup fails', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/fix-title')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/fix-title')
-    vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
-    getPRForBranchMock.mockRejectedValueOnce(new Error('gh unavailable'))
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix-2^{commit}')) {
         throw new Error('missing local branch')
       }
       return { stdout: '', stderr: '' }
     })
 
     try {
-      await expect(
-        runtime.createManagedWorktree({
-          repoSelector: 'id:repo-1',
-          name: 'fix-title',
-          baseBranch: 'abc123',
-          branchNameOverride: 'feature/fix',
-          linkedPR: 42,
-          pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-        })
-      ).rejects.toThrow('Could not verify selected PR branch "feature/fix". Try again.')
+      await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'fix-title',
+        baseBranch: 'abc123',
+        branchNameOverride: 'feature/fix',
+        linkedPR: 42,
+        pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+      })
 
       expect(getPRForBranchMock).toHaveBeenCalledWith(TEST_REPO_PATH, 'feature/fix')
-      expect(addWorktree).not.toHaveBeenCalled()
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'feature/fix-2',
+        'abc123',
+        false
+      )
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('suffixes a selected PR remote conflict when the PR lookup fails', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const createdWorktree = {
+      path: '/tmp/workspaces/fix-title-2',
+      head: 'abc123',
+      branch: 'refs/heads/feature/fix-2',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockImplementation(
+      (sanitizedName: string) => `/tmp/workspaces/${sanitizedName}`
+    )
+    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
+    vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    getPRForBranchMock.mockRejectedValueOnce(new Error('gh unavailable'))
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
+        throw new Error('missing local branch')
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix-2^{commit}')) {
+        throw new Error('missing local branch')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'fix-title',
+        baseBranch: 'abc123',
+        branchNameOverride: 'feature/fix',
+        linkedPR: 42,
+        pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+      })
+
+      expect(getPRForBranchMock).toHaveBeenCalledWith(TEST_REPO_PATH, 'feature/fix')
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'feature/fix-2',
+        'abc123',
+        false
+      )
     } finally {
       gitSpy.mockRestore()
     }
@@ -2818,6 +2888,15 @@ describe('OrcaRuntimeService', () => {
     ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
     vi.mocked(getBranchConflictKind).mockClear()
     vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        {
+          path: TEST_REPO_PATH,
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
       .mockResolvedValueOnce([
         {
           path: TEST_REPO_PATH,
@@ -3404,11 +3483,14 @@ describe('OrcaRuntimeService', () => {
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'rev-parse') {
+        if (args[0] === 'rev-parse' && args[1] === '--git-path') {
           return {
             stdout: '/remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh\n',
             stderr: ''
           }
+        }
+        if (args[0] === 'rev-parse') {
+          throw new Error('missing local branch')
         }
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
@@ -3557,11 +3639,14 @@ describe('OrcaRuntimeService', () => {
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'rev-parse') {
+        if (args[0] === 'rev-parse' && args[1] === '--git-path') {
           return {
             stdout: '/remote/repo/.git/worktrees/mobile-setup-split/orca/setup-runner.sh\n',
             stderr: ''
           }
+        }
+        if (args[0] === 'rev-parse') {
+          throw new Error('missing local branch')
         }
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
@@ -4763,6 +4848,85 @@ describe('OrcaRuntimeService', () => {
     const repo = await runtime.addRepo('/tmp/runtime-add-root-prep', 'folder')
 
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(runtimeStore, repo)
+  })
+
+  it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-'))
+    const repos: Record<string, unknown>[] = []
+    getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+      updateRepo: (id: string, updates: Record<string, unknown>) => {
+        const index = repos.findIndex((repo) => repo.id === id)
+        if (index === -1) {
+          return null
+        }
+        repos[index] = { ...repos[index], ...updates }
+        return repos[index] as never
+      },
+      getProjects: () =>
+        repos
+          .map((repo) => {
+            const upstream = repo.upstream as { owner: string; repo: string } | undefined
+            if (!upstream) {
+              return null
+            }
+            return {
+              id: `github:${upstream.owner}/${upstream.repo}`,
+              displayName: repo.displayName,
+              badgeColor: repo.badgeColor,
+              providerIdentity: { provider: 'github', owner: upstream.owner, repo: upstream.repo },
+              sourceRepoIds: [repo.id],
+              createdAt: repo.addedAt,
+              updatedAt: repo.addedAt
+            }
+          })
+          .filter(Boolean) as never,
+      getProjectHostSetups: () =>
+        repos.map((repo) => {
+          const upstream = repo.upstream as { owner: string; repo: string } | undefined
+          return {
+            id: repo.id,
+            projectId: upstream ? `github:${upstream.owner}/${upstream.repo}` : repo.id,
+            hostId: 'local',
+            repoId: repo.id,
+            path: repo.path,
+            displayName: repo.displayName,
+            kind: repo.kind,
+            setupState: 'ready',
+            setupMethod: repo.projectHostSetupMethod ?? 'legacy-repo',
+            createdAt: repo.addedAt,
+            updatedAt: repo.addedAt
+          }
+        }) as never
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+      const result = await runtime.setupProjectExistingFolder({
+        projectId: 'github:stablyai/orca',
+        hostId: 'runtime:env-1',
+        path: tempRoot,
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+
+      expect(result.project.id).toBe('github:stablyai/orca')
+      expect(result.repo.path).toBe(tempRoot)
+      expect(result.setup).toMatchObject({
+        projectId: 'github:stablyai/orca',
+        path: tempRoot,
+        setupMethod: 'imported-existing-folder'
+      })
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
   })
 
   it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
@@ -6560,6 +6724,47 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('injects runtime hook receiver env into terminal sessions', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-hooked' })
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      buildAgentHookPtyEnv: () => ({
+        ORCA_AGENT_HOOK_PORT: '5678',
+        ORCA_AGENT_HOOK_TOKEN: 'agent-token',
+        ORCA_AGENT_HOOK_ENV: 'remote',
+        ORCA_AGENT_HOOK_VERSION: '1'
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      env: {
+        ORCA_AGENT_HOOK_PORT: '1111',
+        ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+        ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+      }
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
+    expect(spawnCall?.env).toEqual(
+      expect.objectContaining({
+        ORCA_AGENT_HOOK_PORT: '5678',
+        ORCA_AGENT_HOOK_TOKEN: 'agent-token',
+        ORCA_AGENT_HOOK_ENV: 'remote',
+        ORCA_AGENT_HOOK_VERSION: '1',
+        ORCA_PANE_KEY: expect.any(String),
+        ORCA_TAB_ID: expect.any(String),
+        ORCA_WORKTREE_ID: TEST_WORKTREE_ID
+      })
+    )
+    expect(spawnCall?.env?.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+  })
+
   it.each([
     { label: 'canonical folder workspace selector', selector: TEST_FOLDER_WORKSPACE_KEY },
     { label: 'id-prefixed folder workspace selector', selector: `id:${TEST_FOLDER_WORKSPACE_KEY}` }
@@ -7097,6 +7302,78 @@ describe('OrcaRuntimeService', () => {
         cwd: TEST_WORKTREE_PATH,
         worktreeId: TEST_WORKTREE_ID
       })
+    )
+  })
+
+  it('accepts renderer-backed terminal create replies only from the target renderer', async () => {
+    const webContents = { send: vi.fn() }
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: { send: vi.fn() } },
+        { requestId: payload.requestId, error: 'spoofed renderer reply' }
+      )
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Renderer Terminal',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer',
+            paneTitle: null
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: webContents },
+        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Renderer Terminal' }
+      )
+    })
+    webContents.send = send
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: 'codex',
+        rendererBacked: true,
+        title: 'Renderer Terminal'
+      })
+    ).resolves.toMatchObject({
+      handle: expect.stringMatching(/^term_/),
+      tabId: 'tab-renderer',
+      title: 'Renderer Terminal',
+      worktreeId: TEST_WORKTREE_ID,
+      surface: 'visible'
+    })
+    expect(send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.objectContaining({
+        requestId: expect.any(String),
+        worktreeId: TEST_WORKTREE_ID,
+        command: 'codex',
+        title: 'Renderer Terminal'
+      })
+    )
+    expect(electronMocks.ipcMain.removeListener).toHaveBeenCalledWith(
+      'terminal:tabCreateReply',
+      expect.any(Function)
     )
   })
 
@@ -15683,7 +15960,13 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
+    const webContents = { send: vi.fn() }
     const send = vi.fn((_channel: string, payload: { requestId: string; activate?: boolean }) => {
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: { send: vi.fn() } },
+        { requestId: payload.requestId, error: 'spoofed renderer reply' }
+      )
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [
@@ -15719,7 +16002,7 @@ describe('OrcaRuntimeService', () => {
       })
       ipcMain.emit(
         'terminal:tabCreateReply',
-        {},
+        { sender: webContents },
         {
           requestId: payload.requestId,
           tabId: 'tab-renderer',
@@ -15727,11 +16010,12 @@ describe('OrcaRuntimeService', () => {
         }
       )
     })
+    webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { send }
+      webContents
     })
 
     const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
@@ -15742,7 +16026,8 @@ describe('OrcaRuntimeService', () => {
       'terminal:requestTabCreate',
       expect.objectContaining({
         worktreeId: TEST_WORKTREE_ID,
-        activate: false
+        activate: false,
+        source: 'runtime-session'
       })
     )
     expect(focusTerminal).not.toHaveBeenCalled()
@@ -15766,6 +16051,7 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
+    const webContents = { send: vi.fn() }
     const send = vi.fn((_channel: string, payload: { requestId: string }) => {
       runtime.syncWindowGraph(1, {
         tabs: [],
@@ -15802,15 +16088,16 @@ describe('OrcaRuntimeService', () => {
       })
       ipcMain.emit(
         'terminal:tabCreateReply',
-        {},
+        { sender: webContents },
         { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Terminal' }
       )
     })
+    webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { send }
+      webContents
     })
 
     const [first, second] = await Promise.all([
@@ -15867,20 +16154,22 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
+    const webContents = { send: vi.fn() }
     const send = vi.fn((_channel: string, payload: { requestId: string; worktreeId: string }) => {
       const parentTabId =
         payload.worktreeId === TEST_WORKTREE_ID ? 'tab-renderer-a' : 'tab-renderer-b'
       ipcMain.emit(
         'terminal:tabCreateReply',
-        {},
+        { sender: webContents },
         { requestId: payload.requestId, tabId: parentTabId, title: 'Terminal' }
       )
     })
+    webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { send }
+      webContents
     })
 
     const firstCreate = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
@@ -15995,18 +16284,20 @@ describe('OrcaRuntimeService', () => {
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
+      const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
-          {},
+          { sender: webContents },
           { requestId: payload.requestId, tabId: 'tab-pending', title: 'Terminal' }
         )
       })
+      webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
-        webContents: { send }
+        webContents
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
@@ -16104,18 +16395,20 @@ describe('OrcaRuntimeService', () => {
       })
       // Why: reply with a tabId but never sync a matching surface graph, so
       // waitForMobileTerminalSurface times out and the rollback path runs.
+      const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
-          {},
+          { sender: webContents },
           { requestId: payload.requestId, tabId: 'tab-ghost', title: 'Terminal' }
         )
       })
+      webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
-        webContents: { send }
+        webContents
       })
 
       const pending = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {

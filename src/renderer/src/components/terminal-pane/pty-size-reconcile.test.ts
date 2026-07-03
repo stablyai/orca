@@ -434,5 +434,43 @@ describe('reconcilePtySizeAcrossFrames', () => {
       expect(getAppliedSize).not.toHaveBeenCalled()
       expect(resize).not.toHaveBeenCalled()
     })
+
+    it('does NOT re-forward when a mobile-fit override parks the PTY mid-verification', async () => {
+      const scheduler = createFrameScheduler()
+      // The race: the applied-size read is issued while NOT parked (desktop owns
+      // the PTY), but a mobile client takes it over and parks it at phone dims
+      // before the async read resolves. The resolution must re-check parked and
+      // skip the re-forward — otherwise it clobbers the phone dims with a
+      // desktop SIGWINCH. Regression for the visibility-resume mobile-fit leak.
+      let parked = false
+      const resize = vi.fn()
+      const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))
+      reconcilePtySizeAcrossFrames({
+        spawnCols: 203,
+        spawnRows: 50,
+        isAlive: () => true,
+        isParked: () => parked,
+        isAuthoritative: () => true,
+        measure: pane.measure,
+        resize,
+        // The PTY reports the stale wide size, so a parked-blind loop would
+        // re-forward the narrow desktop grid on resolution.
+        getAppliedSize: async () => {
+          // Park the PTY while this read is in flight.
+          parked = true
+          return { cols: 203, rows: 50 }
+        },
+        requestFrame: scheduler.requestFrame,
+        cancelFrame: scheduler.cancelFrame
+      })
+      await runAsync(scheduler, 400)
+
+      // The only forwards allowed are the pre-park settle ones (79x50 while
+      // desktop owned the PTY); no forward may fire AFTER the override parked it.
+      // With the fix, the verify-driven re-forward at 79x50 is suppressed, so the
+      // narrow size is forwarded at most once (the initial settle), never again.
+      const narrowForwards = resize.mock.calls.filter((c) => c[0] === 79 && c[1] === 50)
+      expect(narrowForwards.length).toBeLessThanOrEqual(1)
+    })
   })
 })

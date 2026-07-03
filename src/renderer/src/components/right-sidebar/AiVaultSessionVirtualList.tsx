@@ -16,6 +16,7 @@ import {
 } from './ai-vault-session-resume'
 import {
   canJumpToAiVaultSessionWorktree,
+  isAiVaultSessionInCurrentWorktree,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
 import {
@@ -263,9 +264,14 @@ function AiVaultVirtualRow({
   const isActiveStickyHeader = row.type === 'group' && activeStickyHeaderIndex === index
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
-  const worktreeJumpId = canJumpToAiVaultSessionWorktree(worktreeInfo)
-    ? worktreeInfo?.worktreeId
-    : null
+  // Why: omit the jump affordance when the session already lives in the
+  // worktree on screen — jumping there is a no-op the "Current worktree" badge
+  // already conveys.
+  const showJumpToWorktree = !isAiVaultSessionInCurrentWorktree(worktreeInfo)
+  const worktreeJumpId =
+    showJumpToWorktree && canJumpToAiVaultSessionWorktree(worktreeInfo)
+      ? worktreeInfo?.worktreeId
+      : null
   const resumeState = row.type === 'session' ? getSessionResumeState(row.session) : null
   const resumeActions = row.type === 'session' ? getSessionResumeActions(row.session) : null
   const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState) : ''
@@ -304,6 +310,7 @@ function AiVaultVirtualRow({
           onJumpToOriginalPane={
             originalPaneTarget ? () => onJumpToOriginalPane(row.session) : undefined
           }
+          showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
           onResume={() => {
             if (resumeState?.worktreeId) {

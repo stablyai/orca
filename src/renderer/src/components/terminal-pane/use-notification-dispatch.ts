@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
-import { resolveExplicitTerminalTitleAgentType } from '@/lib/terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'

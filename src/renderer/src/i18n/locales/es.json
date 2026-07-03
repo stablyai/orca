@@ -133,7 +133,8 @@
         "7a566540de": "URL o código de emparejamiento",
         "cb4d287238": "Nombre del servidor",
         "3affe7de3a": "Pegue una URL de emparejamiento de un servidor Orca al que este navegador pueda acceder.",
-        "e3bcd082ac": "Conéctate a Orca"
+        "e3bcd082ac": "Conéctate a Orca",
+        "mobileScopeRejected": "Este código QR concede acceso limitado (móvil). Para usar la app web completa, abre el enlace del navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca → Nuevo enlace."
       },
       "web": {
         "preload": {
@@ -228,10 +229,12 @@
           "2e17f825d4": "Árbol de trabajo eliminado, rama conservada",
           "78e08cd877": "Git no pudo eliminar de forma segura la rama \"{{value0}}\", por lo que Orca la conservó para evitar perder commits locales.",
           "3b57982bf6": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el espacio de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales.",
-          "81f13f48d2": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el árbol de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales."
+          "81f13f48d2": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el árbol de trabajo \"{{value1}}\", por lo que Orca la conservó para evitar perder commits locales.",
+          "runtimeScopeForbiddenTitle": "Esta conexión tiene acceso limitado (móvil)",
+          "runtimeScopeForbiddenDescription": "Los espacios de trabajo no están disponibles con un emparejamiento de acceso móvil. Vuelve a conectarte con el enlace del navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca."
         },
         "repos": {
-          "2975400634": "Update Orca server to open non-Git folders on this runtime.",
+          "2975400634": "Actualice el servidor Orca para abrir carpetas que no sean Git en este tiempo de ejecución.",
           "b7e14472ae": "No se pudo agregar la carpeta",
           "e649269645": "Utilice una ruta de servidor para agregar proyectos desde un tiempo de ejecución remoto.",
           "c6e022ddfc": "No se pudo agregar el proyecto",
@@ -239,8 +242,8 @@
           "8bb3ad7935": "Proyecto agregado",
           "a8e4b3af5b": "Proyecto ya agregado",
           "6d3318e813": "No se pudieron importar repositorios",
-          "3be0f7df04": "Cannot open folder on selected runtime",
-          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
+          "3be0f7df04": "No se puede abrir la carpeta en el tiempo de ejecución seleccionado",
+          "15cf5319ec": "{{path}} fue verificado en {{hostName}}, pero ese host no informó una carpeta utilizable."
         },
         "settings": {
           "e12dab333b": "No se pudo cambiar de servidor",
@@ -360,7 +363,7 @@
         "worktree": {
           "background": {
             "terminals": {
-              "setupTitle": "Setup"
+              "setupTitle": "Configuración"
             }
           }
         },
@@ -400,7 +403,7 @@
         "mobile": {
           "emulator": {
             "tab": {
-              "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
+              "bf4f2a8a72": "No se pudo iniciar el emulador. Verifique la configuración del emulador de iOS o Android y pruebe con otro dispositivo."
             }
           }
         }
@@ -532,6 +535,12 @@
         "distroRequired": "Selecciona una distribución WSL para este proyecto antes de instalar esta habilidad.",
         "distroMissing": "La distribución WSL seleccionada no está disponible. Elige una disponible o cambia este proyecto a Windows.",
         "wslDefault": "Predeterminado de WSL"
+      },
+      "sidebarWorktreeActivation": {
+        "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
+      },
+      "ephemeralVmWorkspaceTarget": {
+        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
       }
     },
     "hooks": {
@@ -638,7 +647,17 @@
         "b1c2f8b0ac": "Cambio de cuenta opcional para Claude, Codex, Gemini y OpenCode Go.",
         "f70ac54d38": "Cuentas de proveedores de IA",
         "4121f7a0a2": "Administre agents de IA, establezca un valor predeterminado y personalice comandos.",
-        "b49abbd2f7": "Agentes"
+        "b49abbd2f7": "Agentes",
+        "dev": "Dev Tools",
+        "devDescription": "Dev-only tools for exercising UI states.",
+        "devBadge": "Dev",
+        "devSearchNotificationPlayground": "Notification playground",
+        "devSearchNotificationPlaygroundDescription": "Trigger representative toast and notification UI states.",
+        "devSearchKeywordDev": "dev",
+        "devSearchKeywordToast": "toast",
+        "devSearchKeywordSonner": "sonner",
+        "devSearchKeywordError": "error",
+        "devSearchKeywordNotification": "notification"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -1143,8 +1162,15 @@
         "reuseExistingBranch": "Reutilizar rama",
         "reuseExistingBranchHint": "Hacer checkout de la rama existente en lugar de crear una nueva a partir de ella.",
         "createMultiple": "Crear más",
-        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+        "waitForSetupBeforeAgent": "Espere a que se complete la configuración antes de iniciar el agent",
+        "waitForSetupBeforeAgentHelp": "Active esto cuando el programa de instalación instale dependencias, servidores MCP o archivos de configuración que el agent necesite durante el inicio.",
+        "destroyDisabled": "destruir discapacitados",
+        "destroyConfigured": "destruir configurado",
+        "noDestroyConfigured": "no destruir",
+        "ephemeralVm": "Entorno por espacio de trabajo",
+        "chooseRunTarget": "Elige objetivo",
+        "noRunTargets": "No hay objetivos de ejecución listos para este proyecto.",
+        "perWorkspaceEnvHint": "Proporcione un entorno bajo demanda a partir de una receta"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Crear árbol de trabajo",
@@ -1321,7 +1347,9 @@
         "8ff5ae8866": "Responsables",
         "82c87eceb9": "Editar responsables",
         "1ff5d979df": "Nadie asignado",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "Esta comprobación requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del flujo de trabajo) antes de poder desbloquear la fusión.",
+        "dd5d9a4f17": "actualizado {{value0}}",
+        "71a3c0f9d2": "Iniciar espacio de trabajo"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
@@ -2193,7 +2221,10 @@
             "ed2a664f8b": "No se pudo crear el árbol de trabajo",
             "a3346fc6ed": "Cancelar la creación del árbol de trabajo",
             "532aea14ce": "Cancelar",
-            "767951265d": "Algo salió mal al crear el árbol de trabajo."
+            "767951265d": "Algo salió mal al crear el árbol de trabajo.",
+            "vmProvisioningTitle": "Aprovisionamiento de máquina virtual",
+            "cancelProvisioning": "Cancelar",
+            "vmProvisioningLogEmpty": "Esperando la salida de la receta..."
           }
         }
       },
@@ -2258,24 +2289,24 @@
             "ee81adfcef": "Vista",
             "4d0b72481c": "Ignorar",
             "9cc26c019d": "Eliminar",
-            "0e2d235c63": "Inactive workspace scan ready",
-            "4a35c08764": "Review",
-            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
-            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
-            "3d957ff117": "No workspaces match these filters.",
-            "e94b1f8bb4": "Clear filters",
-            "efb3843e75": "Filter and sort workspaces",
-            "93b7381d50": "Filters",
-            "a615e24679": "Sort",
-            "4cc5b73efe": "Finding inactive workspaces...",
-            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
-            "searchPlaceholder": "Search workspaces",
-            "ageFilter": "Age",
-            "reviewFilter": "Review",
+            "0e2d235c63": "Escaneo del espacio de trabajo inactivo listo",
+            "4a35c08764": "Revisar",
+            "47123d0108": "Escaneando espacios de trabajo inactivos. Puedes cerrar esto y volver.",
+            "9a3be9f2df": "Escaneando espacios de trabajo inactivos. Aquí aparecen nuevas filas a medida que terminan. Puedes cerrar esto y volver.",
+            "3d957ff117": "Ningún espacio de trabajo coincide con estos filtros.",
+            "e94b1f8bb4": "Limpiar filtros",
+            "efb3843e75": "Filtrar y ordenar espacios de trabajo",
+            "93b7381d50": "Filtros",
+            "a615e24679": "Clasificar",
+            "4cc5b73efe": "Encontrar espacios de trabajo inactivos...",
+            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} escaneado",
+            "searchPlaceholder": "Buscar espacios de trabajo",
+            "ageFilter": "Edad",
+            "reviewFilter": "Revisar",
             "gitFilter": "Git",
-            "contextFilter": "Context",
-            "sortBy": "Sort by",
-            "sortDirection": "Direction"
+            "contextFilter": "Contexto",
+            "sortBy": "Ordenar por",
+            "sortDirection": "Dirección"
           }
         }
       },
@@ -2518,6 +2549,17 @@
             "dont_ask_again": "No volver a preguntar por pestañas fijadas",
             "0b38ee2f86": "Cancelar",
             "c337c9d75c": "Cerrar"
+          },
+          "TerminalSshReconnectOverlay": {
+            "authFailed": "Error de autenticación en {{value0}}. Vuelve a conectar para continuar esta sesión de terminal.",
+            "reconnectFailed": "La conexión SSH a {{value0}} falló. Vuelve a conectar para continuar esta sesión de terminal.",
+            "connecting": "Conectando a {{value0}}. Esta terminal se reanudará cuando el host esté disponible.",
+            "connected": "SSH está conectado.",
+            "disconnected": "Esta terminal está esperando {{value0}}. Conéctate para continuar esta sesión SSH.",
+            "connectFailed": "Error de conexión SSH",
+            "title": "Se requiere conexión SSH",
+            "connectingButton": "Conectando...",
+            "connectButton": "Conectar"
           }
         }
       },
@@ -2861,7 +2903,9 @@
             "c35af53b73": "Iniciar sesión",
             "f19a63e7cd": "Inicia sesión para ver el uso",
             "5c938d39ac": "% semana",
+            "54e8d6bb2d": "% Fable",
             "d79c3362c4": "% 5h",
+            "a79c64f87e": "Fable",
             "8295903d17": "Reinicie los terminales Claude en vivo antes de continuar conversaciones antiguas después de cambiar.",
             "c98ea88392": "Ninguna otra cuenta",
             "9332ba8684": "Cambiar a",
@@ -3025,6 +3069,7 @@
             "6d6df77f41": "No hay datos disponibles",
             "7f7f208060": "Mensual",
             "252c096536": "Semanalmente",
+            "a79c64f87e": "Fable",
             "94038ad2fa": "Sesión",
             "2c35eca8d4": "No se puede recuperar el uso",
             "1292d4f2ee": "Indisponible",
@@ -3592,9 +3637,9 @@
           "05b33a17a9": "Cancelar",
           "8fba4b8cbb": "Esta carpeta no es un repositorio de Git. Tendrás el editor, la terminal y la búsqueda, pero las funciones basadas en Git no estarán disponibles.",
           "c49fb13492": "No se pudo agregar la carpeta remota",
-          "9a766f33ac": "This path was checked on the SSH host.",
-          "79fd02cf5f": "This path was checked on {{hostName}}.",
-          "8851b77327": "This path was checked locally."
+          "9a766f33ac": "Esta ruta se verificó en el host SSH.",
+          "79fd02cf5f": "Esta ruta fue verificada el {{hostName}}.",
+          "8851b77327": "Esta ruta fue verificada localmente."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Ejecutar ganchos",
@@ -4050,7 +4095,8 @@
           "hostAuthNeeded": "Autenticación requerida",
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
-          "sidebarRowMissing": "El destino ya no existe"
+          "sidebarRowMissing": "El destino ya no existe",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -4318,7 +4364,16 @@
           "host": "Host",
           "local": "Local",
           "runtime": "Server",
-          "ssh": "SSH"
+          "ssh": "SSH",
+          "connecting": "Conectando",
+          "connect": "Conectar",
+          "addSshHost": "Agregar host SSH",
+          "addRemoteServer": "Agregar servidor remoto",
+          "addRemoteHost": "Agregar host remoto",
+          "addRemoteHostTooltip": "Elija SSH para una máquina en la que pueda iniciar sesión o servidor remoto para un servidor Orca.",
+          "addSshHostDetail": "Utilice una máquina existente a través de SSH.",
+          "addRemoteServerDetail": "Emparéjelo con Orca ejecutándose en otra computadora.",
+          "addRemoteHostDetail": "Host SSH o servidor Orca"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -4407,6 +4462,48 @@
           "8c0b2e7a41": "Abrir ajustes de árboles de trabajo no pertenecientes a Orca",
           "5d1c9f0a82": "Cancelar",
           "3b7e4a1c96": "Ocultar árboles de trabajo externos"
+        },
+        "useAddRepoHostSelection": {
+          "connectionFailed": "La conexión SSH falló."
+        },
+        "AddRemoteHostDialog": {
+          "sshHostRequired": "Se requiere un alias de configuración de host o SSH.",
+          "sshPortInvalid": "El puerto debe estar entre 1 y 65535.",
+          "sshRelayGraceInvalid": "El tiempo de espera del terminal debe estar entre 60 y {{value0}} segundos.",
+          "sshSaved": "Se agregó el host SSH.",
+          "sshSaveFailed": "No se pudo agregar el host SSH.",
+          "serverFieldsRequired": "Se requieren el nombre del servidor y el código de emparejamiento.",
+          "serverSaved": "Se agregó servidor remoto.",
+          "serverSaveFailed": "No se pudo agregar el servidor remoto.",
+          "serverTitle": "Agregar servidor remoto",
+          "sshTitle": "Agregar host SSH",
+          "serverDescription": "Emparéjelo con Orca ejecutándose en otra computadora.",
+          "sshDescription": "Agregue una máquina persistente en la que pueda iniciar sesión a través de SSH.",
+          "cancel": "Cancelar",
+          "saving": "Ahorro...",
+          "save": "Ahorrar",
+          "label": "Etiqueta",
+          "sshLabelPlaceholder": "Dev box",
+          "sshHost": "Anfitrión o alias",
+          "sshHostPlaceholder": "deploy@server:22",
+          "username": "Nombre de usuario",
+          "usernamePlaceholder": "deploy",
+          "port": "Puerto",
+          "identityFile": "Archivo de identidad",
+          "identityFilePlaceholder": "~/.ssh/id_ed25519 (opcional)",
+          "serverName": "Nombre del servidor",
+          "serverNamePlaceholder": "Dev box",
+          "pairingCode": "código de emparejamiento",
+          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingHelpPrefix": "Ejecuta",
+          "pairingCommand": "orca serve --pairing-address <host>",
+          "pairingHelpSuffix": "en el servidor y pega la URL de emparejamiento impresa.",
+          "sshImportAlreadySynced": "~/.ssh/config ya está sincronizado.",
+          "sshImportSynced": "Sincronizado {{value0}} host{{value1}}.",
+          "sshImportFailed": "No se pudo importar la configuración SSH.",
+          "importing": "Importador...",
+          "importSshConfig": "Importar ~/.ssh/config",
+          "sshPersistenceDefault": "Los terminales remotos de este host seguirán activos hasta que los cierres o restablezcas el relé."
         }
       },
       "shared": {
@@ -5004,15 +5101,15 @@
             "toggleLabel": "Alternar nuevo estilo de tarjeta"
           },
           "nativeChat": {
-            "title": "Native chat",
-            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
-            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
-            "toggleLabel": "Toggle native chat",
-            "defaultTitle": "Default view",
-            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
-            "defaultViewLabel": "Default native chat view",
-            "defaultViewTerminal": "Terminal chat",
-            "defaultViewNative": "Native chat"
+            "title": "chat nativo",
+            "description": "Obtenga una vista previa de la superficie de chat del escritorio para las sesiones de terminal de Claude y Codex.",
+            "copy": "Agrega una vista de chat nativa a la que puede cambiar desde los paneles de terminal compatibles de Claude y Codex. Experimental mientras ajustamos la fidelidad de la transcripción, la transmisión y la paridad terminal.",
+            "toggleLabel": "Alternar chat nativo",
+            "defaultTitle": "Vista predeterminada",
+            "defaultCopy": "Elija cómo se abren las nuevas pestañas de terminal de Claude y Codex.",
+            "defaultViewLabel": "Vista de chat nativa predeterminada",
+            "defaultViewTerminal": "charla terminal",
+            "defaultViewNative": "chat nativo"
           }
         },
         "FloatingWorkspacePane": {
@@ -5063,10 +5160,10 @@
           "0df2e4fd12": "Guardar archivos automáticamente",
           "d21136d9ef": "Configure cómo Orca persiste en las ediciones de archivos.",
           "45c6e85c4d": "Editor",
-          "8f1afdfbd8": "Diff Word Wrap",
-          "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
-          "bf16ef0af2": "Off",
-          "3f6892f307": "On"
+          "8f1afdfbd8": "Ajuste de palabras diferencial",
+          "4aa4d9fb73": "Ajuste líneas largas en editores de diferencias en lugar de requerir desplazamiento horizontal.",
+          "bf16ef0af2": "Apagado",
+          "3f6892f307": "En"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "host local, 127.0.0.1, *.interno",
@@ -5408,11 +5505,11 @@
           "b5e2d93e01": "De cheques...",
           "c6f3ea4f12": "Listo",
           "d704fb5023": "Necesita configuración",
-          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
-          "6d1483d4a0": "1 emulator device detected.",
-          "0a452d4d3b": "{{value0}} emulator devices detected.",
-          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
-          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
+          "06b06429c6": "Comprobando la compatibilidad con el SDK de Android y el simulador de iOS.",
+          "6d1483d4a0": "1 dispositivo emulador detectado.",
+          "0a452d4d3b": "{{value0}} dispositivos emuladores detectados.",
+          "f62a1bb759": "Orca seleccionará automáticamente un dispositivo emulador después de que se detecten los dispositivos.",
+          "b2fd62ea75": "Dispositivo predeterminado para nuevas pestañas del emulador y comandos de conexión de agents. La selección automática prefiere un dispositivo que ya esté en ejecución."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "Regenera el código QR y escanéalo desde la aplicación móvil de Orca.",
@@ -5460,9 +5557,9 @@
           "c8491c17ef": "Controla Orca desde tu teléfono escaneando un código QR. Beta/vista previa anticipada: espere errores y cambios importantes. Obtenga la aplicación para iOS desde",
           "e7a3ae8c4e": "Móvil",
           "174f4a3c6d": "Controla terminales y agents desde tu teléfono.",
-          "1de96ec8a6": "Show Orca Mobile Button",
-          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
-          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
+          "1de96ec8a6": "Mostrar botón de Orca Mobile",
+          "682293cadf": "Mostrar el botón de Orca Mobile en la parte superior de la barra lateral izquierda.",
+          "d4f2b65f30": "Mostrar el acceso directo de Orca Mobile en la barra lateral."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar notificación de prueba",
@@ -5713,8 +5810,8 @@
           "81057d5f71": "Ahorro...",
           "da37d6f10e": "Copiar",
           "3149964b66": "copiado",
-          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+          "waitForSetupBeforeAgent": "Espere a que se complete la configuración antes de iniciar el agent",
+          "waitForSetupBeforeAgentHelp": "Active esto cuando el programa de instalación instale dependencias, servidores MCP o archivos de configuración que el agent necesite durante el inicio."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Utilice el color del repo {{value0}}",
@@ -6047,7 +6144,9 @@
           "9abb9be3bc": "Configuración",
           "23c6874fdf": "Capacidades de IA",
           "2309068a6f": "destructivo",
-          "65358016ea": "Desechar"
+          "65358016ea": "Desechar",
+          "dev": "Dev Tools",
+          "devDescription": "Dev-only tools for exercising UI states."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -6193,7 +6292,7 @@
           "2227ce47b6": "No se pudo guardar el objetivo",
           "f602009125": "Objetivo agregado",
           "b4ba0ce33d": "Objetivo actualizado",
-          "3879cbaa52": "El período de gracia de retransmisión debe estar entre 60 y {{value0}} segundos, o elegir mantener activo hasta que se reinicie",
+          "3879cbaa52": "El tiempo de espera del terminal debe estar entre 60 y {{value0}} segundos, o mantener los terminales activos hasta que se reinicien.",
           "4db9afce1c": "El puerto debe estar entre 1 y 65535",
           "0e5aa04161": "Se requiere un alias de configuración de host o SSH",
           "f1fc50dad2": "No se pudieron cargar destinos SSH",
@@ -6228,7 +6327,9 @@
           "c77f1abfe3": "Terminar con terminales remotos",
           "18968ede9e": "Error",
           "f0871e6bfb": "conectar",
-          "47e94bd6ba": "conectado"
+          "47e94bd6ba": "conectado",
+          "a883f5a00f": "tiempo de espera del terminal: {{value0}}",
+          "8ce71262f4": "terminales hasta el reinicio"
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "Esto detendrá las sesiones de terminal activas en este destino SSH. Volver a conectarlos no los restaurará.",
@@ -6240,11 +6341,11 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "Cancelar",
-          "1b19b00e93": "(7 días).",
-          "137e88ce8d": "Cuánto tiempo el relé mantiene vivos los terminales después de la desconexión. Predeterminado: 10800 (3 horas). Máximo:",
-          "b574994adc": "Los terminales remotos permanecen disponibles hasta que los finalice o reinicie el relé.",
-          "71fc546097": "Mantener vivo hasta reiniciar",
-          "92f80edbfd": "Período de gracia del relevo (segundos)",
+          "1b19b00e93": "Los tiempos de espera acotados deben estar entre 60 segundos y 7 días.",
+          "137e88ce8d": "Los terminales remotos siguen ejecutándose después de que Orca se desconecta de este host.",
+          "b574994adc": "Usa Finalizar terminales remotos o Restablecer relé cuando quieras detenerlos.",
+          "71fc546097": "Mantener los terminales activos hasta restablecer",
+          "92f80edbfd": "Persistencia de terminales remotos",
           "feae1d1e69": "Opcional. Equivalente a ProxyJump/ssh -J.",
           "11bcb4507a": "bastion.ejemplo.com",
           "b2ab248ded": "Anfitrión de salto",
@@ -6264,7 +6365,13 @@
           "9518545cb6": "Agregar destino",
           "a62b4cb39a": "Guardar cambios",
           "29af933cd5": "Nuevo destino SSH",
-          "f2331ce599": "Editar destino SSH"
+          "f2331ce599": "Editar destino SSH",
+          "7c13f58c91": "Hasta restablecer",
+          "55c56cf2c7": "Tiempo de espera tras desconectar (segundos)",
+          "4a342f44c1": "Conexión avanzada",
+          "e9609ddca6": "Proxy, host de salto y reutilización de conexión",
+          "8c922dffba": "Reutilizar la conexión SSH para configurar más rápido",
+          "53e9aabfc0": "Usa multiplexación de OpenSSH cuando está disponible. Desactívalo para hosts con restricciones SSH personalizadas."
         },
         "TasksPane": {
           "3a72b9745e": "Elija qué proveedores de tareas aparecen en la página Tareas y en los accesos directos de la barra lateral.",
@@ -6729,8 +6836,8 @@
             "afbf35be68": "sesión estable",
             "agentPermissions": "Agent Permissions",
             "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual.",
-            "agentRuntime": "Agent Runtime",
-            "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default."
+            "agentRuntime": "Tiempo de ejecución del Agent",
+            "agentRuntimeDescription": "Elija si los agents se detectan y ejecutan en Windows o en WSL de forma predeterminada."
           }
         },
         "appearance": {
@@ -6939,8 +7046,8 @@
             "291f480a5e": "hogar",
             "a942905148": "URL abierta al crear una nueva pestaña del navegador. Déjelo vacío para abrir una pestaña en blanco.",
             "c3903322d2": "Página de inicio predeterminada",
-            "19ea5607cf": "Localhost Worktree Labels",
-            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+            "19ea5607cf": "Etiquetas del árbol de trabajo de localhost",
+            "4e0fdf0a3f": "Abra los puertos del espacio de trabajo como URL de host local de Orca específicas del árbol de trabajo para que las pestañas del navegador sean más fáciles de distinguir."
           },
           "use": {
             "search": {
@@ -7144,8 +7251,8 @@
               "worktrees": "worktrees"
             },
             "nativeChat": {
-              "title": "Native chat",
-              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
+              "title": "chat nativo",
+              "description": "Obtenga una vista previa de la superficie de chat del escritorio para las sesiones de terminal de Claude y Codex."
             }
           }
         },
@@ -7559,8 +7666,8 @@
               "f213400800": "móvil",
               "671eb4173c": "Controla terminales y agents desde tu teléfono.",
               "ffd52a96e4": "Móvil",
-              "1de96ec8a6": "Show Orca Mobile Button",
-              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
+              "1de96ec8a6": "Mostrar botón de Orca Mobile",
+              "682293cadf": "Mostrar el botón de Orca Mobile en la parte superior de la barra lateral izquierda."
             }
           }
         },
@@ -8478,40 +8585,123 @@
           "f5ed5dcbf6": "Press keys…"
         },
         "ShortcutRemoveButton": {
-          "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
+          "9e29aff18b": "Eliminar {{value0}} acceso directo {{value1}}",
           "2a9588b1c2": "Remove this binding"
         },
         "BrowserLocalhostWorktreeLabelsSetting": {
-          "8ac8c3ad19": "Localhost Worktree Labels",
-          "1db3c8b983": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+          "8ac8c3ad19": "Etiquetas del árbol de trabajo de localhost",
+          "1db3c8b983": "Abra los puertos del espacio de trabajo como URL de host local de Orca específicas del árbol de trabajo para que las pestañas del navegador sean más fáciles de distinguir."
         },
         "AgentRuntimeSetting": {
-          "label": "Agent runtime",
+          "label": "Tiempo de ejecución del Agent",
           "wsl": "WSL",
-          "loadingWsl": "Loading WSL",
-          "selectDistro": "Select distro",
-          "windowsDescription": "Detect and launch agents on Windows for projects that do not override their runtime.",
-          "wslUnavailable": "WSL is not available on this machine.",
-          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
-          "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
+          "loadingWsl": "Cargando WSL",
+          "selectDistro": "Seleccionar distribución",
+          "windowsDescription": "Detecte e inicie agents en Windows para proyectos que no anulan su tiempo de ejecución.",
+          "wslUnavailable": "WSL no está disponible en esta máquina.",
+          "distroRequired": "Elija una distribución WSL antes de que los proyectos puedan heredar WSL.",
+          "wslDescription": "Detecta y lanza agents en {{value0}} a través de WSL para proyectos que no anulan su tiempo de ejecución."
         },
         "MobileEmulatorSdkStatus": {
-          "536026130e": "Emulator SDKs",
-          "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
+          "536026130e": "SDK de emulador",
+          "dde0ec1cd8": "Cadenas de herramientas que Orca utiliza para ejecutar emuladores. Android funciona en cualquier sistema operativo a través del SDK de Android; Los simuladores de iOS necesitan Xcode en macOS.",
           "027cbf668a": "Android SDK",
-          "f6d080d128": "Using configured path",
-          "7fe4bd5907": "Detected at",
-          "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
-          "b94ff260e6": "Download Android Studio",
-          "18925b082d": "Locate SDK folder",
-          "8c52684db8": "Clear",
+          "f6d080d128": "Usando la ruta configurada",
+          "7fe4bd5907": "Detectado en",
+          "2784f0b22d": "Extraviado. Instale Android Studio, luego cree un dispositivo virtual.",
+          "b94ff260e6": "Descargar Android Studio",
+          "18925b082d": "Localizar la carpeta SDK",
+          "8c52684db8": "Claro",
           "76eb88b88e": "iOS Simulator (Xcode)",
-          "c6f3ea4f12": "Ready",
-          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
-          "63fe73a1ea": "Could not update Android SDK folder."
+          "c6f3ea4f12": "Listo",
+          "e4f14b50d7": "Instale Xcode y agregue un tiempo de ejecución del simulador de iOS.",
+          "63fe73a1ea": "No se pudo actualizar la carpeta SDK de Android."
         },
         "AppearanceAdvancedDisclosure": {
           "advanced": "Avanzado"
+        },
+        "DevToolsPane": {
+          "nativeActionLayoutCheck": "Native action layout check",
+          "secondary": "Secondary",
+          "secondaryActionClicked": "Secondary action clicked",
+          "primaryAction": "Primary action",
+          "primaryActionClicked": "Primary action clicked",
+          "branchHasChanges": "branch has changes",
+          "viewChangesClicked": "View Changes clicked",
+          "forceDeleteClicked": "Force Delete clicked",
+          "devOnlyCallback": "Dev-only callback.",
+          "infoToast": "Info toast",
+          "infoToastDescription": "Long informational copy with no explicit action.",
+          "localCanaryBehind": "Local canary is behind origin/canary",
+          "successToast": "Success toast",
+          "successToastDescription": "Short confirmation state.",
+          "settingsSaved": "Settings saved",
+          "shortSuccessCopy": "Short success copy.",
+          "errorToast": "Error toast",
+          "errorToastDescription": "Long error copy without recovery actions.",
+          "failedToSyncWorkspaceMetadata": "Failed to sync workspace metadata",
+          "nativeActionToast": "Native action toast",
+          "nativeActionToastDescription": "Uses Sonner action and cancel slots.",
+          "deleteFailureToast": "Delete failure toast",
+          "deleteFailureToastDescription": "Custom footer with View and Force Delete.",
+          "behindBaseRefToast": "Behind base ref toast",
+          "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
+          "notificationPlayground": "Notification playground",
+          "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
+          "devOnly": "Dev only"
+        },
+        "EphemeralVmRecipeRow": {
+          "useInWorkspace": "Uso en el espacio de trabajo"
+        },
+        "EphemeralVmRuntimesSection": {
+          "cleanupFailed": "Error de limpieza",
+          "cleanupRunning": "limpieza en ejecución",
+          "cleanupDisabled": "Limpieza deshabilitada",
+          "running": "Correr",
+          "failed": "Fallido",
+          "loadFailed": "No se pudieron cargar tiempos de ejecución de VM temporales.",
+          "cleanupFailedToast": "No se pudo limpiar el tiempo de ejecución temporal de la VM.",
+          "markedCleaned": "Tiempo de ejecución de VM temporal marcado como limpio.",
+          "cleaned": "Se limpió el tiempo de ejecución temporal de la VM.",
+          "copiedCleanupCommand": "Comando de limpieza copiado.",
+          "copiedCleanupPayload": "Carga útil de limpieza copiada.",
+          "copyCleanupFailed": "No se pudo copiar el comando de limpieza.",
+          "title": "Tiempos de ejecución temporales de VM",
+          "description": "Los tiempos de ejecución creados por recetas son propiedad del espacio de trabajo. Limpie las entradas obsoletas después de fallas, creaciones fallidas o recuperación manual.",
+          "refresh": "Actualizar tiempos de ejecución de VM temporales",
+          "loading": "Comprobando tiempos de ejecución de VM temporales...",
+          "empty": "No es necesario limpiar tiempos de ejecución de VM temporales.",
+          "copyCleanup": "comando copiar",
+          "retry": "Reintentar la limpieza",
+          "cleanup": "Limpieza"
+        },
+        "ephemeralVms": {
+          "search": {
+            "title": "Entornos por espacio de trabajo",
+            "description": "Descubra cómo las recetas propiedad del repo brindan a cada espacio de trabajo su propio entorno desechable bajo demanda."
+          }
+        },
+        "EphemeralVmsPane": {
+          "loadError": "No se pudieron cargar recetas.",
+          "copyError": "No se pudo copiar el mensaje.",
+          "skillTitle": "Habilidad Entornos por espacio de trabajo",
+          "skillDescription": "Configura, crea, autentica y valida recetas de entornos propiedad del repo.",
+          "whatTitle": "Qué hace la habilidad contigo",
+          "whatScaffold": "Escribe la receta y los scripts para su proveedor, conectados a través de un servidor Orca o SSH.",
+          "whatBuild": "Crea una imagen base reutilizable e inicia la sesión de su agent.",
+          "whatValidate": "Lo valida para que puedas crear un espacio de trabajo en él.",
+          "promptHint": "En cualquier espacio de trabajo, pregúntale a tu agent:",
+          "copy": "Copiar",
+          "copied": "copiado",
+          "recipes": "Recetas",
+          "recipesHelp": "Las recetas que su agent agrega a orca.yaml aparecen aquí, listas para iniciar un espacio de trabajo.",
+          "refresh": "Actualizar recetas de VM efímeras",
+          "checking": "Comprobando recetas...",
+          "none": "Aún no se han encontrado recetas."
+        },
+        "ephemeralVmsExperimentalSetting": {
+          "description": "Muestra controles de configuración y objetivos de ejecución del espacio de trabajo para entornos bajo demanda de propiedad de repos.",
+          "toggleLabel": "Alternar entornos por espacio de trabajo"
         }
       },
       "right": {
@@ -8630,7 +8820,8 @@
             "98a79948b3": "Copiar",
             "b234ab25b4": "No se pudo copiar el archivo al portapapeles",
             "f9d7ca753d": "Copiar rutas",
-            "3161c4e425": "carpeta"
+            "3161c4e425": "carpeta",
+            "e887fa4b2e": "Abrir en terminal"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados de Git",
@@ -10741,8 +10932,8 @@
           "8f68ad9ca9": "Mostrar {{value0}} AI {{value1}}",
           "724a13568d": "en {{value0}}",
           "6094135eec": "frente a {{value0}}",
-          "a4420ca1f7": "Wrap On",
-          "dde325ddfe": "Wrap Off"
+          "a4420ca1f7": "Envolver",
+          "dde325ddfe": "Envolver"
         },
         "ConflictComponents": {
           "f338288514": "Cargando contenidos conflictivos...",
@@ -10831,7 +11022,7 @@
           "561251019a": "Más acciones",
           "8c8b7f5ff5": "Mostrar portada",
           "10c39d58c1": "Ocultar materia preliminar",
-          "1eef809708": "Word Wrap"
+          "1eef809708": "Ajuste de palabras"
         },
         "EditorPanelShell": {
           "e2c4dec350": "Cargando editor..."
@@ -11073,11 +11264,11 @@
           "d34a2021c8": "Título 2",
           "abb5100a3d": "Título 1",
           "b462641ed2": "Texto del cuerpo",
-          "91a843fb43": "More blocks",
-          "2cd9e0bbb3": "Headings",
-          "b05e14620d": "Heading 4",
-          "6bbf827ef5": "Heading 5",
-          "d1bbf9a835": "Collapsible section"
+          "91a843fb43": "Más bloques",
+          "2cd9e0bbb3": "Encabezamientos",
+          "b05e14620d": "Título 4",
+          "6bbf827ef5": "Título 5",
+          "d1bbf9a835": "Sección plegable"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Ahorrar",
@@ -11156,10 +11347,10 @@
                 "41482b15ce": "Alternar título 1",
                 "570611864e": "Encabezado de sección grande.",
                 "e66e7f04c6": "Título 1",
-                "5f9a0ed7c4": "Heading 4",
-                "01a71dbbdd": "Nested section heading.",
-                "8440fa4acf": "Heading 5",
-                "b287b93c66": "Deep section heading."
+                "5f9a0ed7c4": "Título 4",
+                "01a71dbbdd": "Encabezado de sección anidada.",
+                "8440fa4acf": "Título 5",
+                "b287b93c66": "Encabezado de sección profunda."
               }
             }
           }
@@ -11220,8 +11411,8 @@
           "d5a8c2f1b9": "Iniciar el agente de IA predeterminado para corregir esta comprobación",
           "e2b4d7c8a1": "Elige un agente para esta comprobación",
           "f1c9e3a6d4": "Elige un agente para corregir la comprobación",
-          "5e2a9c3f88": "Open file at this line",
-          "actionRequired": "Action required"
+          "5e2a9c3f88": "Abrir archivo en esta línea",
+          "actionRequired": "Acción requerida"
         },
         "check": {
           "run": {
@@ -11244,10 +11435,10 @@
           "tooLarge": "El contenido pegado es demasiado grande."
         },
         "CheckRunJobs": {
-          "1c0a4d7e02": "succeeded",
-          "2d3b8f1a55": "skipped",
-          "3e6c9a2b71": "pending",
-          "4f7d0c3e88": "steps failed",
+          "1c0a4d7e02": "tuvo éxito",
+          "2d3b8f1a55": "saltado",
+          "3e6c9a2b71": "pendiente",
+          "4f7d0c3e88": "pasos fallidos",
           "5a8e1d4f23": " · "
         }
       },
@@ -12096,7 +12287,7 @@
       },
       "nativeChat": {
         "contextMenu": {
-          "copy": "Copy"
+          "copy": "Copiar"
         }
       }
     },
@@ -12118,83 +12309,84 @@
   "components": {
     "native-chat": {
       "composer": {
-        "imageUnsupported": "Image paste is not supported for this agent.",
-        "send": "Send",
-        "noPty": "No live terminal — toggle back to reconnect.",
-        "locked": "Input is held by another device.",
-        "placeholder": "Send a message…",
-        "mentionHint": "Referencing file:",
-        "attach": "Attach file",
-        "startDictation": "Start dictation",
-        "stopDictation": "Stop dictation",
-        "noSkills": "No matching skills",
-        "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
-        "removeAttachment": "Remove attachment"
+        "imageUnsupported": "Este agente no admite pegar imágenes.",
+        "send": "Enviar",
+        "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
+        "locked": "La entrada está retenida por otro dispositivo.",
+        "placeholder": "Enviar un mensaje…",
+        "mentionHint": "Archivo de referencia:",
+        "attach": "Adjuntar archivo",
+        "startDictation": "Iniciar dictado",
+        "stopDictation": "Detener dictado",
+        "noSkills": "Sin habilidades coincidentes",
+        "localAttachmentUnsupported": "Los archivos adjuntos locales no están disponibles para sesiones remotas.",
+        "removeAttachment": "Quitar archivo adjunto",
+        "pastedImageLabel": "Imagen pegada"
       },
       "tool": {
-        "running": "Running…",
-        "result": "Result"
+        "running": "Ejecutando…",
+        "result": "Resultado"
       },
       "status": {
-        "responding": "Agent is responding"
+        "responding": "El agente está respondiendo"
       },
-      "jumpToLatest": "Jump to latest",
+      "jumpToLatest": "Saltar a lo último",
       "toggle": {
-        "showTerminal": "Show terminal",
-        "showChat": "Show chat view"
+        "showTerminal": "Mostrar terminal",
+        "showChat": "Mostrar vista de chat"
       },
       "state": {
         "loading": {
-          "title": "Loading conversation…",
-          "subtitle": "Reading the agent transcript."
+          "title": "Cargando conversación…",
+          "subtitle": "Leyendo la transcripción del agente."
         },
         "error": {
-          "title": "Could not load conversation",
-          "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
+          "title": "No se pudo cargar la conversación",
+          "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando."
         },
         "notAgent": {
-          "title": "No conversation here",
-          "subtitle": "This terminal is not running a recognized coding agent."
+          "title": "No hay conversación aquí",
+          "subtitle": "Este terminal no está ejecutando un agente de código reconocido."
         },
         "empty": {
-          "title": "Start a chat with {{value0}}",
-          "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change."
+          "title": "Iniciar un chat con {{value0}}",
+          "subtitle": "Pídale a {{value0}} que inspeccione el código, explique el resultado o realice un cambio."
         }
       },
-      "stop": "Stop the agent",
+      "stop": "Detener el agente",
       "copyMessage": {
-        "copied": "Copied",
-        "copy": "Copy message"
+        "copied": "Copiado",
+        "copy": "Copiar mensaje"
       },
-      "scrollMessageToTop": "Scroll this message to top",
-      "loadingEarlier": "Loading…",
-      "loadEarlier": "Load earlier messages",
+      "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
+      "loadingEarlier": "Cargando…",
+      "loadEarlier": "Cargar mensajes anteriores",
       "question": {
-        "step": "Step {{value0}}",
-        "other": "Other…",
-        "otherPlaceholder": "Type your answer",
-        "cancel": "Cancel",
-        "send": "Send answer",
-        "next": "Next"
+        "step": "Paso {{value0}}",
+        "other": "Otro…",
+        "otherPlaceholder": "Escribe tu respuesta",
+        "cancel": "Cancelar",
+        "send": "Enviar respuesta",
+        "next": "Siguiente"
       },
       "approval": {
-        "title": "Allow {{value0}}?",
-        "allow": "Allow",
-        "deny": "Deny"
+        "title": "¿Permitir {{value0}}?",
+        "allow": "Permitir",
+        "deny": "Denegar"
       }
     },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Switch to terminal view",
-          "switchToChatView": "Switch to chat view"
+          "switchToTerminalView": "Cambiar a la vista de terminal",
+          "switchToChatView": "Cambiar a vista de chat"
         }
       }
     },
     "workspace": {
       "cleanup": {
         "presentationFixtures": {
-          "reviewAlphaCleanup": "Review alpha cleanup"
+          "reviewAlphaCleanup": "Revisar la limpieza alfa"
         },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",

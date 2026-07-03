@@ -1,9 +1,21 @@
 /* eslint-disable max-lines -- Why: Codex hook trust parsing, hashing, and byte-preserving TOML edits share one fragile file-format contract; splitting would make the compatibility shim harder to audit. */
-import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
-import { createHash, randomUUID } from 'crypto'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
+import { dirname, join } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
 import { escapeRegex } from '../../shared/string-utils'
 import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import {
+  createTomlLineScanState,
+  isTomlStructuralLine,
+  updateTomlLineScanState
+} from './config-toml-line-scan'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
 // ~/.codex/config.toml under [hooks.state."<key>"]. Without it the hook is in
@@ -469,16 +481,14 @@ export function normalizeHookTrustKeyForLookup(key: string): string {
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
   const ranges: TrustBlockRange[] = []
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < content.length) {
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
-    const headerKey = isInsideTomlMultilineString(multilineState)
-      ? null
-      : parseHookStateHeaderKey(line)
+    const headerKey = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
     if (
       headerKey !== null &&
       normalizeHookTrustKeyForLookup(headerKey) === normalizeHookTrustKeyForLookup(key)
@@ -491,7 +501,7 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
       cursor = Math.max(blockEnd, nextCursor)
       continue
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     cursor = nextCursor
   }
   return ranges
@@ -589,13 +599,13 @@ function skipTomlInlineWhitespace(line: string, startIndex: number): number {
 // a flat regex misclassifies both cases.
 function findNextTableHeader(text: string): number {
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < text.length) {
     const newlineIdx = text.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? text.length : newlineIdx
     const rawLine = text.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
-    if (!isInsideTomlMultilineString(multilineState)) {
+    if (isTomlStructuralLine(scanState)) {
       const trimmed = line.trimStart()
       // Why: stop at both `[table]` and `[[array.of.tables]]` — both end our
       // block. Skipping `[[ ]]` here would let our slice consume past array
@@ -604,7 +614,7 @@ function findNextTableHeader(text: string): number {
         return cursor
       }
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     if (newlineIdx === -1) {
       return -1
     }
@@ -669,92 +679,6 @@ function isCompleteTableHeader(line: string): boolean {
     i++
   }
   return false
-}
-
-type TomlMultilineState = {
-  basic: boolean
-  literal: boolean
-}
-
-type TomlMultilineMode = 'basic' | 'literal' | null
-
-function isInsideTomlMultilineString(state: TomlMultilineState): boolean {
-  return state.basic || state.literal
-}
-
-function updateTomlMultilineState(state: TomlMultilineState, line: string): TomlMultilineState {
-  let mode: TomlMultilineMode = state.basic ? 'basic' : state.literal ? 'literal' : null
-  let index = 0
-  while (index < line.length) {
-    if (mode === 'basic') {
-      if (line[index] === '\\') {
-        index += 2
-        continue
-      }
-      if (line.startsWith('"""', index)) {
-        mode = null
-        index += 3
-        continue
-      }
-      index++
-      continue
-    }
-    if (mode === 'literal') {
-      if (line.startsWith("'''", index)) {
-        mode = null
-        index += 3
-        continue
-      }
-      index++
-      continue
-    }
-
-    const char = line[index]
-    if (char === '#') {
-      break
-    }
-    if (line.startsWith('"""', index)) {
-      mode = 'basic'
-      index += 3
-      continue
-    }
-    if (line.startsWith("'''", index)) {
-      mode = 'literal'
-      index += 3
-      continue
-    }
-    if (char === '"') {
-      index = skipTomlBasicString(line, index + 1)
-      continue
-    }
-    if (char === "'") {
-      index = skipTomlLiteralString(line, index + 1)
-      continue
-    }
-    index++
-  }
-  return { basic: mode === 'basic', literal: mode === 'literal' }
-}
-
-function skipTomlBasicString(line: string, startIndex: number): number {
-  let index = startIndex
-  while (index < line.length) {
-    const char = line[index]
-    if (char === '\\') {
-      index += 2
-      continue
-    }
-    if (char === '"') {
-      return index + 1
-    }
-    index++
-  }
-  return index
-}
-
-function skipTomlLiteralString(line: string, startIndex: number): number {
-  const endIndex = line.indexOf("'", startIndex)
-  return endIndex === -1 ? line.length : endIndex + 1
 }
 
 // Why: same atomic-rename + .bak rotation pattern as writeHooksJson — a
@@ -823,14 +747,14 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
   // Why: walk line-by-line so `[hooks.state."..."]` inside a `"""..."""` or
   // `'''...'''` multi-line string isn't mistaken for a real header.
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < content.length) {
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
-    const key = isInsideTomlMultilineString(multilineState) ? null : parseHookStateHeaderKey(line)
+    const key = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
     if (key !== null) {
       // Why: block ends at the next *real* header (multi-line aware).
       const after = content.slice(nextCursor)
@@ -856,7 +780,7 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
       cursor = nextCursor
       continue
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     cursor = nextCursor
   }
   return result

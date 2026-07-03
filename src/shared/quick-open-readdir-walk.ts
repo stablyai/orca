@@ -1,5 +1,5 @@
-import { lstat, readdir } from 'fs/promises'
-import { join, relative } from 'path'
+import { lstat, readdir } from 'node:fs/promises'
+import { join, relative } from 'node:path'
 import {
   HIDDEN_DIR_BLOCKLIST,
   shouldExcludeQuickOpenRelPath,

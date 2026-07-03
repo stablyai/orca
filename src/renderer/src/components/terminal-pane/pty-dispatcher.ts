@@ -24,6 +24,7 @@ import {
 export type PtyDataMeta = {
   seq?: number
   rawLength?: number
+  background?: boolean
 }
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
@@ -114,6 +115,10 @@ export function ensurePtyDispatcher(): void {
       if (typeof payload.rawLength === 'number') {
         meta ??= {}
         meta.rawLength = payload.rawLength
+      }
+      if (payload.background === true) {
+        meta ??= {}
+        meta.background = true
       }
       const handler = ptyDataHandlers.get(payload.id)
       if (handler) {

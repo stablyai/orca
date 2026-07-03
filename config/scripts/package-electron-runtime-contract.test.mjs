@@ -1,10 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
-const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const projectDir = resolve(import.meta.dirname, '../..')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
@@ -61,22 +60,28 @@ describe('Electron runtime package contract', () => {
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
     const releaseCommands = new Map(
       parsedWorkflow.jobs.build.strategy.matrix.include.map(({ platform, release_command }) => [
         platform,
         release_command
       ])
     )
+    const macReleaseCommand = macWorkflow.jobs['build-mac'].steps.find(
+      (step) => step.name === 'Publish release artifacts (macOS)'
+    ).with.command
 
-    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'mac', 'win'])
-    for (const command of releaseCommands.values()) {
+    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'win'])
+    for (const command of [...releaseCommands.values(), macReleaseCommand]) {
       expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
       expect(command).toContain('electron-builder')
       expect(command.indexOf('ensure-native-runtime')).toBeLessThan(
         command.indexOf('electron-builder')
       )
     }
-    expect(releaseCommands.get('mac')).toContain(' && ORCA_MAC_RELEASE=1 ')
+    expect(macReleaseCommand).toContain(' && ORCA_MAC_RELEASE=1 ')
     expect(releaseCommands.get('linux-x64')).toContain(' && pnpm exec electron-builder ')
     expect(releaseCommands.get('linux-x64')).toContain('--linux AppImage deb rpm --x64')
     expect(releaseCommands.get('linux-arm64')).toContain('ORCA_LINUX_ARM64_RELEASE=1')
@@ -84,6 +89,69 @@ describe('Electron runtime package contract', () => {
     expect(releaseCommands.get('win')).toContain(
       '; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder '
     )
+  })
+
+  it('pins the Windows release builder to the VS 2022 runner image', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const windowsReleaseEntry = releaseWorkflow.jobs.build.strategy.matrix.include.find(
+      ({ platform }) => platform === 'win'
+    )
+
+    expect(windowsReleaseEntry.os).toBe('windows-2022')
+  })
+
+  it('keeps release-cut signing provenance on GitHub-hosted runners', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const buildMatrixRunners = releaseWorkflow.jobs.build.strategy.matrix.include.map(
+      ({ os }) => os
+    )
+    const releaseWorkflowText = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const macDispatchStep = releaseWorkflow.jobs['build-mac'].steps.find(
+      (step) => step.name === 'Run isolated macOS release build'
+    )
+
+    expect(releaseWorkflowText).not.toContain('blacksmith-')
+    expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('ubuntu-latest')
+    expect(releaseWorkflow.jobs['build-mac'].permissions.actions).toBe('write')
+    expect(macDispatchStep.run).toBe('node config/scripts/run-release-mac-build-workflow.mjs')
+    expect(macDispatchStep.env.RELEASE_MAC_BUILD_WORKFLOW).toBe('release-mac-build.yml')
+    expect(macDispatchStep.env.RELEASE_MAC_BUILD_TAG).toBe('${{ needs.cut.outputs.tag }}')
+    expect(buildMatrixRunners).not.toContain('blacksmith-6vcpu-macos-15')
+    expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build')
+    expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build-mac')
+  })
+
+  it('runs the macOS release build in an isolated Blacksmith workflow', () => {
+    const releaseMacWorkflowText = readFileSync(
+      join(projectDir, '.github/workflows/release-mac-build.yml'),
+      'utf8'
+    )
+    const releaseMacWorkflow = parse(releaseMacWorkflowText)
+    const buildMacJob = releaseMacWorkflow.jobs['build-mac']
+    const checkoutStep = buildMacJob.steps.find((step) => step.name === 'Checkout')
+    const publishStep = buildMacJob.steps.find(
+      (step) => step.name === 'Publish release artifacts (macOS)'
+    )
+
+    expect(releaseMacWorkflow['run-name']).toBe(
+      'Mac release build ${{ inputs.tag }} (${{ inputs.release_run_id }})'
+    )
+    expect(releaseMacWorkflow.on.workflow_dispatch.inputs.tag.required).toBe(true)
+    expect(releaseMacWorkflow.on.workflow_dispatch.inputs.release_run_id.required).toBe(true)
+    expect(buildMacJob['runs-on']).toBe('blacksmith-6vcpu-macos-15')
+    expect(checkoutStep.with.ref).toBe('refs/tags/${{ inputs.tag }}')
+    expect(publishStep.with.command).toContain('ORCA_MAC_RELEASE=1')
+    expect(publishStep.with.command).toContain('electron-builder')
+    expect(publishStep.with.command).toContain('--mac --publish always')
+    expect(releaseMacWorkflowText).not.toContain('signpath/')
+    expect(releaseMacWorkflowText).not.toContain('SIGNPATH_')
   })
 
   it('preflights SignPath module install before Windows signing side effects', () => {
@@ -98,11 +166,18 @@ describe('Electron runtime package contract', () => {
       name === 'Install SignPath PowerShell module' ? [index] : []
     )
     const buildIndex = stepNames.indexOf('Build Windows release artifacts')
+    const verifyNodePtyIndex = stepNames.indexOf('Verify Windows node-pty ConPTY runtime')
     const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
     const downloadIndex = stepNames.indexOf('Download signed Windows installer from SignPath')
 
-    expect(installStepIndexes).toEqual([buildIndex + 1])
+    expect(verifyNodePtyIndex).toBe(buildIndex + 1)
+    expect(installStepIndexes).toEqual([verifyNodePtyIndex + 1])
     expect(installStepIndexes[0]).toBeLessThan(uploadIndex)
+
+    expect(steps[verifyNodePtyIndex].run).toContain(
+      'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
+    )
+    expect(steps[verifyNodePtyIndex].run).toContain('conpty/conpty.dll')
 
     const uploadThroughDownloadScript = steps
       .slice(uploadIndex, downloadIndex + 1)
@@ -119,6 +194,10 @@ describe('Electron runtime package contract', () => {
 
     expect(installStep.if).toBe("matrix.platform == 'win'")
     expect(installStep.shell).toBe('pwsh')
+    expect(installRun).toContain(
+      'if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue))'
+    )
+    expect(installRun).toContain('Register-PSRepository -Default -InstallationPolicy Trusted')
     expect(installRun).toContain('Set-PSRepository -Name PSGallery -InstallationPolicy Trusted')
     expect(installRun).toMatch(/\$env:PSModulePath -split \[System\.IO\.Path\]::PathSeparator/)
     expect(installRun).toContain(
@@ -140,6 +219,23 @@ describe('Electron runtime package contract', () => {
     )
     expect(installRun).toMatch(/if \(\$attempt -eq 3\) {\s+throw\s+}/)
     expect(installRun).not.toMatch(/throw\s+\$_/)
+  })
+
+  it('temporarily allows publishing Windows after verifying the signed installer only', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const steps = parsedWorkflow.jobs.build.steps
+    const stepNames = steps.map((step) => step.name)
+    const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
+    const innerVerifyIndex = stepNames.indexOf('Verify signed Windows inner executable')
+    const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
+
+    expect(outerVerifyIndex).toBeGreaterThan(-1)
+    expect(innerVerifyIndex).toBe(-1)
+    expect(publishIndex).toBe(outerVerifyIndex + 1)
   })
 
   it('publishes both Linux release matrix entries', () => {

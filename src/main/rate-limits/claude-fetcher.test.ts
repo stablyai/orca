@@ -169,6 +169,183 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
+  it('accepts Claude Code statusline-style rate limit window fields', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'oauth-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          five_hour: { used_percentage: 23.5, resets_at: 1770000000 },
+          seven_day: { used_percentage: 41.2, resets_at: 1770604800 },
+          fable_weekly: { used_percentage: 12.3, resets_at: 1770691200 }
+        }),
+        { status: 200 }
+      )
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 23.5, resetsAt: 1770000000000 },
+      weekly: { usedPercent: 41.2, resetsAt: 1770604800000 },
+      fableWeekly: { usedPercent: 12.3, resetsAt: 1770691200000 }
+    })
+  })
+
+  it('supplements managed-account OAuth usage with Fable from the CLI usage panel', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'managed:account-1'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'oauth-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          five_hour: { used_percentage: 23.5, resets_at: 1770000000 },
+          seven_day: { used_percentage: 41.2, resets_at: 1770604800 }
+        }),
+        { status: 200 }
+      )
+    )
+    vi.mocked(fetchViaPty).mockResolvedValueOnce({
+      provider: 'claude',
+      session: { usedPercent: 91, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: null,
+      fableWeekly: {
+        usedPercent: 12.3,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: '3d 2h'
+      },
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    })
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 23.5, resetsAt: 1770000000000 },
+      weekly: { usedPercent: 41.2, resetsAt: 1770604800000 },
+      fableWeekly: { usedPercent: 12.3, resetDescription: '3d 2h' },
+      usageMetadata: {
+        source: 'oauth',
+        attemptedSources: ['oauth', 'cli']
+      }
+    })
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+  })
+
+  it('supplements system OAuth usage when the service explicitly allows usage-panel reads', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'oauth-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+    vi.mocked(fetchViaPty).mockResolvedValueOnce({
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      fableWeekly: {
+        usedPercent: 58,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: '4d'
+      },
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    })
+
+    await expect(
+      fetchClaudeRateLimits({
+        authPreparation,
+        allowPtyFallback: false,
+        allowUsagePanelSupplement: true
+      })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 },
+      fableWeekly: { usedPercent: 58, resetDescription: '4d' },
+      usageMetadata: {
+        source: 'oauth',
+        attemptedSources: ['oauth', 'cli']
+      }
+    })
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+  })
+
+  it('ignores bare Fable OAuth usage because the window length is ambiguous', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'oauth-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          five_hour: { utilization: 11 },
+          seven_day: { utilization: 22 },
+          fable: { utilization: 33 }
+        }),
+        { status: 200 }
+      )
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 11 },
+      weekly: { usedPercent: 22 },
+      fableWeekly: null
+    })
+  })
+
   it('falls back to legacy Keychain credentials for host system default without an explicit config dir', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {

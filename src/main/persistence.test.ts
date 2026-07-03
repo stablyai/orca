@@ -10,10 +10,11 @@ import {
   mkdirSync,
   existsSync,
   realpathSync,
+  statSync,
   symlinkSync
-} from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+} from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type {
   PersistedState,
   Project,
@@ -39,6 +40,7 @@ import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-sc
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
 import { SshConnectionStore } from './ssh/ssh-connection-store'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
+import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -70,13 +72,7 @@ const REORDERED_DEFAULT_WORKSPACE_STATUSES = [
   },
   { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
 ]
-const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
-  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
-  { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
-  { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
-  { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
-]
-const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
+const REORDERED_DONE_DEFAULT_WORKSPACE_STATUSES = [
   { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
   { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
   {
@@ -86,6 +82,23 @@ const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
     icon: 'conductor-progress'
   },
   { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+]
+const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+  { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
+  { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
+  { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
+]
+const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' }
 ]
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
@@ -480,7 +493,8 @@ describe('Store', () => {
     expect(settings.terminalFontWeight).toBe(500)
     expect(settings.terminalScrollSensitivity).toBe(1.15)
     expect(settings.terminalFastScrollSensitivity).toBe(5)
-    expect(settings.terminalTuiScrollSensitivity).toBe(3)
+    expect(settings.terminalTuiScrollSensitivity).toBe(1)
+    expect(settings.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
     expect(settings.terminalUseSeparateLightTheme).toBe(true)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
@@ -1052,9 +1066,17 @@ describe('Store', () => {
           host: 'unlimited.example.com',
           port: 22,
           username: 'dev',
-          relayGracePeriodSeconds: 10800,
+          relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
           remoteWorkspaceSyncEnabled: true,
           remoteWorkspaceSyncGracePeriodSeconds: 0
+        },
+        {
+          id: 'ssh-form-default-relay',
+          label: 'Form-default relay',
+          host: 'form-default.example.com',
+          port: 22,
+          username: 'dev',
+          relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
         }
       ]
     })
@@ -1066,6 +1088,7 @@ describe('Store', () => {
     expect(targets[1].relayGracePeriodSeconds).toBe(0)
     expect(targets[2].relayGracePeriodSeconds).toBe(0)
     expect(targets[3].relayGracePeriodSeconds).toBe(0)
+    expect(targets[4]).not.toHaveProperty('relayGracePeriodSeconds')
     for (const target of targets) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
@@ -1077,10 +1100,36 @@ describe('Store', () => {
     expect(persisted.sshTargets?.[1]?.relayGracePeriodSeconds).toBe(0)
     expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(0)
     expect(persisted.sshTargets?.[3]?.relayGracePeriodSeconds).toBe(0)
+    expect(persisted.sshTargets?.[4]).not.toHaveProperty('relayGracePeriodSeconds')
     for (const target of persisted.sshTargets ?? []) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
     }
+  })
+
+  it('drops the legacy SSH relay default when updating targets', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-update-legacy-default',
+      label: 'Update legacy default',
+      host: 'update-default.example.com',
+      port: 22,
+      username: 'dev'
+    })
+
+    const updated = store.updateSshTarget('ssh-update-legacy-default', {
+      relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+    })
+
+    expect(updated).not.toHaveProperty('relayGracePeriodSeconds')
+    expect(store.getSshTarget('ssh-update-legacy-default')).not.toHaveProperty(
+      'relayGracePeriodSeconds'
+    )
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const onDisk = persisted.sshTargets?.find((t) => t.id === 'ssh-update-legacy-default')
+    expect(onDisk).not.toHaveProperty('relayGracePeriodSeconds')
   })
 
   it('persists the SSH target source field through add, update, and disk round-trip', async () => {
@@ -1109,6 +1158,45 @@ describe('Store', () => {
     const onDisk = persisted.sshTargets?.find((t) => t.id === 'ssh-src-1')
     expect(onDisk?.source).toBe('ssh-config')
     expect(onDisk?.port).toBe(2222)
+  })
+
+  it('persists only explicit SSH connection reuse opt-outs', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-reuse-default',
+      label: 'Default reuse',
+      host: 'default.example.com',
+      port: 22,
+      username: 'dev',
+      systemSshConnectionReuse: true
+    })
+    store.addSshTarget({
+      id: 'ssh-reuse-off',
+      label: 'Reuse disabled',
+      host: 'legacy.example.com',
+      port: 22,
+      username: 'dev',
+      systemSshConnectionReuse: false
+    })
+
+    expect(store.getSshTarget('ssh-reuse-default')).not.toHaveProperty('systemSshConnectionReuse')
+    expect(store.getSshTarget('ssh-reuse-off')?.systemSshConnectionReuse).toBe(false)
+
+    store.flush()
+    const persistedBeforeUpdate = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const defaultTarget = persistedBeforeUpdate.sshTargets?.find(
+      (t) => t.id === 'ssh-reuse-default'
+    )
+    const disabledTarget = persistedBeforeUpdate.sshTargets?.find((t) => t.id === 'ssh-reuse-off')
+    expect(defaultTarget).not.toHaveProperty('systemSshConnectionReuse')
+    expect(disabledTarget?.systemSshConnectionReuse).toBe(false)
+
+    const updated = store.updateSshTarget('ssh-reuse-off', { systemSshConnectionReuse: undefined })
+    expect(updated).not.toHaveProperty('systemSshConnectionReuse')
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const updatedTarget = persisted.sshTargets?.find((t) => t.id === 'ssh-reuse-off')
+    expect(updatedTarget).not.toHaveProperty('systemSshConnectionReuse')
   })
 
   it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
@@ -1914,6 +2002,57 @@ describe('Store', () => {
     const updated = store.updateSettings({ autoRenameBranchFromWorkDefaultedOn: false })
 
     expect(updated.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+  })
+
+  it('migrates inherited TUI scroll sensitivity defaults to one report on first load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalTuiScrollSensitivity: 3 },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalTuiScrollSensitivity).toBe(1)
+    expect(store.getSettings().terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.terminalTuiScrollSensitivity).toBe(1)
+  })
+
+  it('preserves TUI scroll sensitivity choices after the one-report migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        terminalTuiScrollSensitivity: 3,
+        terminalTuiScrollSensitivityDefaultedToOne: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalTuiScrollSensitivity).toBe(3)
+    expect(store.getSettings().terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
+  })
+
+  it('stamps the TUI scroll sensitivity migration guard on future updates', async () => {
+    const store = await createStore()
+
+    const updated = store.updateSettings({
+      terminalTuiScrollSensitivity: 3,
+      terminalTuiScrollSensitivityDefaultedToOne: false
+    })
+
+    expect(updated.terminalTuiScrollSensitivity).toBe(3)
+    expect(updated.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
   })
 
   it('merges rollback commit-message AI writes into existing source-control AI on load', async () => {
@@ -4304,7 +4443,7 @@ describe('Store', () => {
       const store = await createStore()
       store.addRepo(makeRepo())
       store.flush()
-      vi.advanceTimersByTime(300)
+      vi.advanceTimersByTime(1000)
 
       const persisted = readDataFile() as { repos: Repo[] }
       expect(persisted.repos).toHaveLength(1)
@@ -4324,9 +4463,9 @@ describe('Store', () => {
 
       // Before the debounce fires, file should not exist yet (or be stale)
       vi.advanceTimersByTime(100)
-      // The 300ms debounce hasn't elapsed yet
+      // The 1s debounce hasn't elapsed yet
 
-      vi.advanceTimersByTime(300)
+      vi.advanceTimersByTime(1000)
       // The timer fired; wait for the async disk write to complete
       await store.waitForPendingWrite()
 
@@ -4336,6 +4475,242 @@ describe('Store', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // ── Content-hash write skipping ────────────────────────────────────
+  // Why inode comparison: every real write is a tmp+rename, which allocates a
+  // new inode. An unchanged inode proves no write happened.
+
+  it('skips the disk write when a mutation burst nets out to already-persisted state', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      store.updateUI({ sidebarWidth: 400 })
+      vi.advanceTimersByTime(1000)
+      await store.waitForPendingWrite()
+      const inoBefore = statSync(dataFile()).ino
+
+      store.updateUI({ sidebarWidth: 500 })
+      store.updateUI({ sidebarWidth: 400 })
+      vi.advanceTimersByTime(2000)
+      await store.waitForPendingWrite()
+
+      expect(statSync(dataFile()).ino).toBe(inoBefore)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips the sync flush when state already matches the last write', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      store.updateUI({ sidebarWidth: 420 })
+      vi.advanceTimersByTime(1000)
+      await store.waitForPendingWrite()
+      const inoBefore = statSync(dataFile()).ino
+
+      store.flush()
+
+      expect(statSync(dataFile()).ino).toBe(inoBefore)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds save postponement under sustained mutation bursts (max-wait)', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      // Mutations every 500ms keep resetting the 1s trailing debounce; the
+      // 5s max-wait must force a write anyway.
+      let width = 400
+      for (let i = 0; i < 11; i++) {
+        store.updateUI({ sidebarWidth: width++ })
+        vi.advanceTimersByTime(500)
+      }
+      await store.waitForPendingWrite()
+
+      expect(existsSync(dataFile())).toBe(true)
+      const persisted = readDataFile() as { ui: { sidebarWidth: number } }
+      expect(persisted.ui.sidebarWidth).toBeGreaterThanOrEqual(400)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-binding an already-persisted pty does not rewrite the state file', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    const binding = {
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      ptyId: 'daemon-pty'
+    }
+    store.persistPtyBinding(binding)
+    const inoBefore = statSync(dataFile()).ino
+
+    // The warm-restart re-bind storm: every restored terminal re-asserts an
+    // identical binding with a sync flush. Identical state must not rewrite.
+    store.persistPtyBinding(binding)
+
+    expect(statSync(dataFile()).ino).toBe(inoBefore)
+  })
+
+  // ── worktreeMeta startup GC ────────────────────────────────────────
+
+  it('garbage-collects stale local worktreeMeta at load with a 30-day grace', async () => {
+    const OLD = Date.now() - 40 * 24 * 60 * 60 * 1000
+    const RECENT = Date.now() - 1 * 24 * 60 * 60 * 1000
+    const missing = (name: string): string => join(testState.dir, 'gone', name)
+    const meta = (lastActivityAt: number, extra: Record<string, unknown> = {}) => ({
+      displayName: '',
+      comment: '',
+      lastActivityAt,
+      ...extra
+    })
+    const liveKey = `r1::${testState.dir}`
+    const deadKey = `r1::${missing('dead')}`
+    const recentKey = `r1::${missing('recent')}`
+    const sshKey = `ssh-repo::/home/alice/gone`
+    const remoteHostKey = `r1::${missing('remote-host')}`
+    const orphanKey = `removed-repo::${missing('orphan')}`
+    const wslKey = `r1::\\\\wsl$\\Ubuntu\\home\\gone`
+
+    writeDataFile({
+      repos: [
+        makeRepo(),
+        makeRepo({ id: 'ssh-repo', path: '/home/alice/repo', connectionId: 'conn-1' })
+      ],
+      worktreeMeta: {
+        [liveKey]: meta(OLD),
+        [deadKey]: meta(OLD),
+        [recentKey]: meta(RECENT),
+        [sshKey]: meta(OLD),
+        [remoteHostKey]: meta(OLD, { hostId: 'ssh:conn-1' }),
+        [orphanKey]: meta(OLD),
+        [wslKey]: meta(OLD)
+      },
+      worktreeLineageById: { [deadKey]: { parentWorktreeId: liveKey } }
+    })
+
+    const store = await createStore()
+    const kept = Object.keys(store.getAllWorktreeMeta())
+
+    expect(kept).toContain(liveKey) // path exists
+    expect(kept).toContain(recentKey) // inside the grace window
+    expect(kept).toContain(sshKey) // SSH repo: remote paths never checked locally
+    expect(kept).toContain(remoteHostKey) // remote hostId on the meta itself
+    expect(kept).toContain(wslKey) // WSL UNC path
+    expect(kept).not.toContain(deadKey)
+    expect(kept).not.toContain(orphanKey)
+    expect(store.getWorktreeLineage(deadKey)).toBeUndefined()
+  })
+
+  it('never GCs folder-workspace instance metas — the meta IS the workspace', async () => {
+    const OLD = Date.now() - 40 * 24 * 60 * 60 * 1000
+    const folderInstanceKey = `r1::${join(testState.dir, 'gone-folder')}::workspace:11111111-1111-4111-8111-111111111111`
+    writeDataFile({
+      repos: [makeRepo({ kind: 'folder' })],
+      worktreeMeta: {
+        [folderInstanceKey]: { displayName: 'Session A', comment: '', lastActivityAt: OLD }
+      }
+    })
+
+    const store = await createStore()
+    expect(Object.keys(store.getAllWorktreeMeta())).toContain(folderInstanceKey)
+  })
+
+  it('never GCs Linux-style WSL worktree paths on Windows', async () => {
+    const OLD = Date.now() - 40 * 24 * 60 * 60 * 1000
+    const wslLinkedKey = 'r1::/home/user/gone-worktree'
+    writeDataFile({
+      repos: [makeRepo()],
+      worktreeMeta: {
+        [wslLinkedKey]: { displayName: '', comment: '', lastActivityAt: OLD }
+      }
+    })
+
+    await withPlatform('win32', async () => {
+      const store = await createStore()
+      expect(Object.keys(store.getAllWorktreeMeta())).toContain(wslLinkedKey)
+    })
+  })
+
+  it('tolerates a null worktreeMeta map in the durable file', async () => {
+    writeDataFile({ worktreeMeta: null })
+    const store = await createStore()
+    expect(store.getAllWorktreeMeta()).toEqual({})
+  })
+
+  // ── GitHub cache sidecar ───────────────────────────────────────────
+
+  it('cache refreshes never rewrite the durable state file', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      store.updateUI({ sidebarWidth: 411 })
+      vi.advanceTimersByTime(1000)
+      await store.waitForPendingWrite()
+      const inoBefore = statSync(dataFile()).ino
+      expect((readDataFile() as { githubCache?: unknown }).githubCache).toBeUndefined()
+
+      store.setGitHubCache({ pr: { 'o/r#1': { fetchedAt: 123 } as never }, issue: {} })
+      vi.advanceTimersByTime(6000)
+      await store.waitForPendingWrite()
+
+      expect(statSync(dataFile()).ino).toBe(inoBefore)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('snapshots the cache at flush and seeds the next Store from the sidecar', async () => {
+    const store = await createStore()
+    store.setGitHubCache({ pr: { 'o/r#7': { fetchedAt: 7 } as never }, issue: {} })
+    store.flush()
+    expect(existsSync(join(testState.dir, 'orca-github-cache.json'))).toBe(true)
+
+    const restarted = await createStore()
+    expect(restarted.getGitHubCache().pr['o/r#7']).toEqual({ fetchedAt: 7 })
+  })
+
+  it('keeps a legacy in-file cache as the seed and strips it from disk', async () => {
+    writeDataFile({ githubCache: { pr: { legacy: { fetchedAt: 1 } }, issue: {} } })
+
+    const store = await createStore()
+    expect(store.getGitHubCache().pr.legacy).toEqual({ fetchedAt: 1 })
+
+    // The legacy key marks the state dirty at load; the next write drops it.
+    store.flush()
+    expect((readDataFile() as { githubCache?: unknown }).githubCache).toBeUndefined()
   })
 
   // ── UI state ───────────────────────────────────────────────────────
@@ -4380,7 +4755,7 @@ describe('Store', () => {
           tasks: { firstInteractedAt: 100, interactionCount: 1 }
         }
       })
-      vi.advanceTimersByTime(300)
+      vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
       const persistedBefore = readFileSync(dataFile(), 'utf-8')
       store.onUIChanged((ui) => notifications.push(ui))
@@ -4394,7 +4769,7 @@ describe('Store', () => {
           tasks: { firstInteractedAt: 100, interactionCount: 1 }
         }
       })
-      vi.advanceTimersByTime(300)
+      vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
 
       expect(notifications).toEqual([])
@@ -4982,34 +5357,55 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'completed',
-      'in-review',
+      'todo',
       'in-progress',
-      'todo'
+      'in-review',
+      'completed'
     ])
-    expect(ui.workspaceStatuses?.[0]?.label).toBe('Done')
+    expect(ui.workspaceStatuses?.at(-1)?.label).toBe('Done')
     expect(ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
     expect(ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
 
     store.flush()
-    const persisted = readDataFile() as {
-      ui?: {
-        workspaceStatuses?: typeof REORDERED_DEFAULT_WORKSPACE_STATUSES
-        _workspaceStatusesDefaultOrderMigrated?: boolean
-        _workspaceStatusesDefaultWorkflowMigrated?: boolean
-        _workspaceStatusesDefaultVisualsMigrated?: boolean
-      }
-    }
-    expect(persisted.ui?._workspaceStatusesDefaultOrderMigrated).toBe(true)
-    expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
-    expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
-    expect(persisted.ui?.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'completed',
-      'in-review',
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
+    expect(persisted.ui._workspaceStatusesReorderedDefaultRepaired).toBe(true)
+    expect(persisted.ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
+    expect(persisted.ui._workspaceStatusesDefaultVisualsMigrated).toBe(true)
+    expect(persisted.ui.workspaceStatuses?.map((status) => status.id)).toEqual([
+      'todo',
       'in-progress',
-      'todo'
+      'in-review',
+      'completed'
     ])
-    expect(persisted.ui?.workspaceStatuses?.[0]?.label).toBe('Done')
+    expect(persisted.ui.workspaceStatuses?.at(-1)?.label).toBe('Done')
+  })
+
+  it('repairs the known-bad reordered default statuses after old migration flags are set', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        workspaceStatuses: REORDERED_DONE_DEFAULT_WORKSPACE_STATUSES,
+        _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesDefaultWorkflowMigrated: true,
+        _workspaceStatusesDefaultVisualsMigrated: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual([
+      'todo',
+      'in-progress',
+      'in-review',
+      'completed'
+    ])
+    expect(store.getUI().workspaceStatuses?.at(-1)?.label).toBe('Done')
+    expect(store.getUI()._workspaceStatusesReorderedDefaultRepaired).toBe(true)
   })
 
   it('migrates legacy default workspace status visuals and workflow once on load', async () => {
@@ -5074,6 +5470,7 @@ describe('Store', () => {
       ui: {
         workspaceStatuses: REORDERED_DEFAULT_WORKSPACE_STATUSES,
         _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesReorderedDefaultRepaired: true,
         _workspaceStatusesDefaultWorkflowMigrated: true
       },
       githubCache: { pr: {}, issue: {} },
@@ -8147,7 +8544,7 @@ describe('Store', () => {
 
         const store = await createStore()
         store.addRepo(makeRepo({ id: 'first-async' }))
-        vi.advanceTimersByTime(300)
+        vi.advanceTimersByTime(1000)
         await store.waitForPendingWrite()
 
         const bak0AfterFirst = readBackup(0)
@@ -8155,7 +8552,7 @@ describe('Store', () => {
 
         vi.setSystemTime(new Date(Date.now() + 5 * 60 * 1000))
         store.addRepo(makeRepo({ id: 'within-hour-async', path: '/within-async' }))
-        vi.advanceTimersByTime(300)
+        vi.advanceTimersByTime(1000)
         await store.waitForPendingWrite()
 
         const bak0AfterSecond = readBackup(0)
@@ -8180,7 +8577,7 @@ describe('Store', () => {
 
         const store = await createStore()
         store.addRepo(makeRepo({ id: 'first-async' }))
-        vi.advanceTimersByTime(300)
+        vi.advanceTimersByTime(1000)
         await store.waitForPendingWrite()
 
         expect(
@@ -8191,7 +8588,7 @@ describe('Store', () => {
 
         vi.setSystemTime(new Date(Date.now() + 61 * 60 * 1000))
         store.addRepo(makeRepo({ id: 'after-hour-async', path: '/after-async' }))
-        vi.advanceTimersByTime(300)
+        vi.advanceTimersByTime(1000)
         await store.waitForPendingWrite()
 
         expect(
@@ -8304,9 +8701,9 @@ describe('Store', () => {
       try {
         const store = await createStore()
         store.addRepo(makeRepo({ id: 'first' }))
-        vi.advanceTimersByTime(300)
+        vi.advanceTimersByTime(1000)
         store.addRepo(makeRepo({ id: 'second', path: '/second' }))
-        vi.advanceTimersByTime(300)
+        vi.advanceTimersByTime(1000)
         await store.waitForPendingWrite()
 
         const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as { repos: Repo[] }

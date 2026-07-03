@@ -6,7 +6,7 @@
  * so multiple test files can reuse them without duplication.
  */
 import { vi } from 'vitest'
-import { execFileSync } from 'child_process'
+import { execFileSync } from 'node:child_process'
 import type { RelayDispatcher } from './dispatcher'
 
 const TEST_GIT_USER_EMAIL = 'test@test.com'

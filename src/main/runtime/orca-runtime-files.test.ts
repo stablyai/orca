@@ -3,8 +3,8 @@
    setup that makes cross-command filesystem behavior comparable. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import type * as Fs from 'fs'
-import type * as FsPromises from 'fs/promises'
+import type * as Fs from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 import type * as GitRunner from '../git/runner'
 

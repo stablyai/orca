@@ -36,6 +36,7 @@ export type WindowShortcutAction =
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
+  | { type: 'toggleQuickCommandsMenu' }
   | { type: 'openNewWorkspace' }
   | { type: 'deleteCurrentWorkspace' }
   | { type: 'openWorkspaceBoard' }
@@ -248,6 +249,10 @@ export function resolveWindowShortcutAction(
     return { type: 'jumpToTabIndex', index: tabIndex }
   }
 
+  if (actionMatches('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
+    return { type: 'toggleQuickCommandsMenu' }
+  }
+
   // Why: this helper is the explicit allowlist for main-process interception.
   // Anything not listed here must keep flowing to the renderer/PTTY so readline
   // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen while
@@ -277,6 +282,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'sidebar.right.toggle'
     case 'openQuickOpen':
       return 'worktree.quickOpen'
+    case 'toggleQuickCommandsMenu':
+      return 'tab.openQuickCommandsMenu'
     case 'openNewWorkspace':
       return 'workspace.create'
     case 'deleteCurrentWorkspace':

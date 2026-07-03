@@ -1,5 +1,5 @@
-import { lstat, readdir, realpath } from 'fs/promises'
-import { basename, join, posix, resolve } from 'path'
+import { lstat, readdir, realpath } from 'node:fs/promises'
+import { basename, join, posix, resolve } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import { authorizeExternalPath, isENOENT } from './filesystem-auth'
 import { getSshConnectionManager } from './ssh'

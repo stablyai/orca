@@ -69,6 +69,49 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('foreground', expect.any(Function))
   })
 
+  it('runs parsed callbacks after immediate foreground output parses', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    let parseCallback: (() => void) | undefined
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      parseCallback = callback
+    })
+    const onParsed = vi.fn()
+
+    writeTerminalOutput(terminal, 'foreground', {
+      foreground: true,
+      onParsed
+    })
+
+    expect(onParsed).not.toHaveBeenCalled()
+    parseCallback?.()
+    expect(onParsed).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs parsed callbacks after queued foreground output parses', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    let parseCallback: (() => void) | undefined
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      parseCallback = callback
+    })
+    const onParsed = vi.fn()
+
+    writeTerminalOutput(terminal, 'queued', {
+      foreground: true,
+      latencySensitive: false,
+      onParsed
+    })
+
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.write).toHaveBeenCalledWith('queued', expect.any(Function))
+    expect(onParsed).not.toHaveBeenCalled()
+    parseCallback?.()
+    expect(onParsed).toHaveBeenCalledTimes(1)
+  })
+
   it('synchronously refreshes visible rows after foreground output parses', async () => {
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createForegroundTerminal()
@@ -199,6 +242,71 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal.write).toHaveBeenCalledTimes(1)
     expect(terminal.write).toHaveBeenCalledWith('ab')
+  })
+
+  it('runs parsed callbacks after background output parses without foreground refresh', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+    const writes: string[] = []
+    const parseCallbacks: (() => void)[] = []
+    terminal.write = function write(data: string, callback?: () => void): void {
+      writes.push(data)
+      if (callback) {
+        parseCallbacks.push(callback)
+      }
+    } as typeof terminal.write
+    const onParsed = vi.fn()
+
+    writeTerminalOutput(terminal, 'hidden redraw', {
+      foreground: false,
+      forceForegroundRefresh: true,
+      followupForegroundRefresh: true,
+      onParsed
+    })
+
+    vi.advanceTimersByTime(50)
+
+    expect(writes).toEqual(['hidden redraw'])
+    expect(onParsed).not.toHaveBeenCalled()
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+
+    parseCallbacks[0]?.()
+
+    expect(onParsed).toHaveBeenCalledTimes(1)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps parsed callbacks on large background chunks split by the scheduler', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const writes: string[] = []
+    const parseCallbacks: (() => void)[] = []
+    terminal.write = function write(data: string, callback?: () => void): void {
+      writes.push(data)
+      if (callback) {
+        parseCallbacks.push(callback)
+      }
+    } as typeof terminal.write
+    const onParsed = vi.fn()
+
+    writeTerminalOutput(terminal, 'x'.repeat(20 * 1024), {
+      foreground: false,
+      onParsed
+    })
+
+    vi.advanceTimersByTime(50)
+
+    expect(writes.map((data) => data.length)).toEqual([16 * 1024, 4 * 1024])
+    expect(parseCallbacks).toHaveLength(2)
+    expect(onParsed).not.toHaveBeenCalled()
+
+    parseCallbacks[0]?.()
+
+    expect(onParsed).toHaveBeenCalledTimes(1)
+    parseCallbacks[1]?.()
+    expect(onParsed).toHaveBeenCalledTimes(2)
   })
 
   it('defers throughput foreground output to the shared high-priority drain', async () => {

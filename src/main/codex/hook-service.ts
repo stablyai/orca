@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
-import { existsSync, readFileSync, unlinkSync } from 'fs'
-import { join } from 'path'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -13,7 +13,7 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
+  wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookCommandConfig,
@@ -120,17 +120,10 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-// Why: a Windows script path is cmd-safe when it holds only characters cmd.exe
-// passes through untouched (drive letter, backslash, dot, dash, underscore).
-// Spaces or cmd metacharacters force the encoded launcher; `cmd.exe /C` splits
-// bare `.cmd` paths at spaces before the script can run.
-const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
-
 function getManagedCommand(scriptPath: string): string {
-  if (process.platform !== 'win32') {
-    return wrapPosixHookCommand(scriptPath)
-  }
-  return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsCmdHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 function getSystemConfigPath(): string {

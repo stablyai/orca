@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: daemon PTY spawning centralizes platform launch setup,
    preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
-import { statSync } from 'fs'
-import { delimiter, win32 as pathWin32 } from 'path'
+import { statSync } from 'node:fs'
+import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
 import {
@@ -17,7 +17,11 @@ import {
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
-import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
+import {
+  resolveEffectiveWindowsPowerShell,
+  shouldProbeWindowsPowerShellAvailability,
+  type WindowsPowerShellShellFamily
+} from '../providers/windows-powershell'
 import {
   buildWindowsPowerShellSpawnAttempts,
   type WindowsShellSpawnAttempt
@@ -25,6 +29,7 @@ import {
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
@@ -58,7 +63,12 @@ const PANE_IDENTITY_ENV_KEYS = [
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
-const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
+const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+// Why: a busy machine right after an upgrade can make one short-lived shell
+// spawn slow. Retry once before declaring the daemon unable to spawn PTYs, so
+// a transient stall does not silently route every fresh terminal to the local
+// fallback (losing daemon persistence) until a manual restart.
+const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
 export type PtySubprocessOptions = {
@@ -244,8 +254,6 @@ function preflightMacNodePtySpawnEnvironment(): void {
     return
   }
 
-  preflightDaemonCwd()
-
   let candidates: string[]
   try {
     candidates = getNodePtySpawnHelperCandidates()
@@ -264,6 +272,20 @@ function preflightMacNodePtySpawnEnvironment(): void {
   }
 
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
+}
+
+/**
+ * Ensures POSIX daemon-owned native PTY spawn prerequisites are still valid.
+ */
+function preflightUnixPtySpawnEnvironment(): void {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  // Why: detached daemons can outlive their launch cwd; repair before every
+  // PTY spawn so Linux/macOS do not wait for startup health recovery.
+  preflightDaemonCwd()
+  preflightMacNodePtySpawnEnvironment()
 }
 
 /**
@@ -306,16 +328,9 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
 }
 
 /**
- * Runs a short native PTY spawn probe for daemon health checks.
+ * Runs one short native PTY spawn probe (spawn `/bin/sh -c 'exit 0'`).
  */
-export async function checkPtySpawnHealth(): Promise<void> {
-  if (process.platform !== 'darwin') {
-    return
-  }
-
-  ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
-
+function runSinglePtySpawnHealthProbe(): Promise<void> {
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : getDefaultCwd()
@@ -336,7 +351,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
     throw formatPtySpawnError(err, '/bin/sh', cwd)
   }
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     let settled = false
     let exitDisposable: { dispose(): void } | undefined
     const finish = (error?: Error, opts?: { kill?: boolean }): void => {
@@ -375,6 +390,42 @@ export async function checkPtySpawnHealth(): Promise<void> {
       finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
     })
   })
+}
+
+/**
+ * Runs a short native PTY spawn probe for daemon health checks, retrying once
+ * so a transient stall (e.g. a busy machine right after an upgrade) does not
+ * mis-classify a healthy daemon as unable to spawn PTYs.
+ */
+export async function checkPtySpawnHealth(): Promise<void> {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  // Why: Linux/macOS daemons can outlive an app update with a deleted cwd or
+  // stale native PTY path. A real short-lived spawn catches that before the
+  // main process routes fresh panes to a daemon that cannot create terminals.
+  if (process.platform === 'darwin') {
+    ensureNodePtySpawnHelperExecutable()
+  }
+  preflightUnixPtySpawnEnvironment()
+
+  let lastError: unknown
+  for (let attempt = 1; attempt <= PTY_SPAWN_HEALTH_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await runSinglePtySpawnHealthProbe()
+      return
+    } catch (err) {
+      lastError = err
+      if (attempt < PTY_SPAWN_HEALTH_RETRY_ATTEMPTS) {
+        console.warn(
+          `[daemon] PTY spawn health probe attempt ${attempt} failed; retrying`,
+          err instanceof Error ? err.message : err
+        )
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
 /**
@@ -433,7 +484,10 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       cols: args.cols,
       rows: args.rows,
       cwd,
-      env: args.env
+      env: args.env,
+      // Why: bundled ConPTY has the modern wrap-marker behavior xterm expects;
+      // legacy system ConPTY can corrupt full-width TUI rows in scrollback.
+      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
 
   try {
@@ -506,6 +560,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   removeInheritedElectronRunAsNode(env)
+  removeAppImageRuntimeEnv(env)
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
@@ -543,6 +598,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // one-off override. Normalize both forms back to the PowerShell family so
     // the shared resolver can still fall back to inbox powershell.exe when
     // pwsh.exe was requested but is unavailable.
+    const resolvedShellFamily: WindowsPowerShellShellFamily =
+      normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+        ? normalizedShellFamily
+        : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+          ? normalizedShellFamily
+          : undefined
+    const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
+      shellFamily: resolvedShellFamily,
+      implementation: opts.terminalWindowsPowerShellImplementation
+    })
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
       pathWin32.basename(shellPath) === shellPath
@@ -553,14 +618,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     } else {
       shellPath = shouldResolvePowerShellFamily
         ? (resolveEffectiveWindowsPowerShell({
-            shellFamily:
-              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                ? 'powershell.exe'
-                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                  ? normalizedShellFamily
-                  : undefined,
+            shellFamily: resolvedShellFamily,
             implementation: opts.terminalWindowsPowerShellImplementation,
-            pwshAvailable: isPwshAvailable()
+            pwshAvailable: shouldProbePwsh ? isPwshAvailable() : false
           }) ?? shellPath)
         : shellPath
     }
@@ -708,7 +768,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
   // runs in a separate forked process with its own code path.
   ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
+  preflightUnixPtySpawnEnvironment()
   preflightWindowsPtySpawnEnvironment({
     validationCwd,
     cwdWasExplicit: opts.cwd !== undefined

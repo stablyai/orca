@@ -4,7 +4,8 @@ import {
   CONPTY_DA1_RESPONSE,
   DEFAULT_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
-  installTerminalCapabilityReplyHandlers
+  installTerminalCapabilityReplyHandlers,
+  sendTerminalOscColorQueryReplies
 } from './terminal-capability-replies'
 
 function writeTerminal(term: Terminal, data: string): Promise<void> {
@@ -110,6 +111,93 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       disposable.dispose()
       term.dispose()
     }
+  })
+
+  it('answers combined OSC foreground and background color queries from the active theme', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    term.options.theme = {
+      foreground: '#2e3434',
+      background: '#ffffff'
+    }
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false
+    })
+
+    try {
+      await writeTerminal(term, '\x1b]10;?;?\x1b\\')
+
+      expect(sendInput).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+      expect(sendInput).toHaveBeenCalledWith('\x1b]11;rgb:ffff/ffff/ffff\x1b\\')
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('answers extracted OSC color queries without waiting for xterm parsing', () => {
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
+    const sent = sendTerminalOscColorQueryReplies(
+      '\x1b]10;?\x1b\\ordinary text\x1b]11;?\x07',
+      {
+        options: {
+          theme: {
+            foreground: '#2e3434',
+            background: '#ffffff'
+          }
+        }
+      } as never,
+      sendInput
+    )
+
+    expect(sent).toBe(true)
+    expect(sendInput).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+    expect(sendInput).toHaveBeenCalledWith('\x1b]11;rgb:ffff/ffff/ffff\x1b\\')
+  })
+
+  it('answers extracted combined OSC foreground and background color queries', () => {
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
+    const sent = sendTerminalOscColorQueryReplies(
+      '\x1b]10;?;?\x1b\\',
+      {
+        options: {
+          theme: {
+            foreground: '#2e3434',
+            background: '#ffffff'
+          }
+        }
+      } as never,
+      sendInput
+    )
+
+    expect(sent).toBe(true)
+    expect(sendInput).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+    expect(sendInput).toHaveBeenCalledWith('\x1b]11;rgb:ffff/ffff/ffff\x1b\\')
+  })
+
+  it('does not answer extracted OSC color commands that only start like queries', () => {
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
+    const sent = sendTerminalOscColorQueryReplies(
+      '\x1b]10;?not-a-query\x1b\\ordinary text\x1b]11;?still-not-a-query\x07\x1b]10;?;?;?\x1b\\',
+      {
+        options: {
+          theme: {
+            foreground: '#2e3434',
+            background: '#ffffff'
+          }
+        }
+      } as never,
+      sendInput
+    )
+
+    expect(sent).toBe(false)
+    expect(sendInput).not.toHaveBeenCalled()
   })
 
   it('leaves non-query OSC color commands to other handlers', async () => {

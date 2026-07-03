@@ -293,27 +293,50 @@ function warnClaudeUsageFetchFailure(
 
 type OAuthUsageWindow = {
   utilization?: number
-  resets_at?: string
+  used_percentage?: number
+  resets_at?: string | number
 }
 
 type OAuthUsageResponse = {
   five_hour?: OAuthUsageWindow
   seven_day?: OAuthUsageWindow
+  fable_weekly?: OAuthUsageWindow
+  fable_seven_day?: OAuthUsageWindow
+  seven_day_fable?: OAuthUsageWindow
 }
 
 type ClaudeUsageAttemptState = {
   attemptedSources: UsageRateLimitSource[]
 }
 
-function parseResetDescription(isoString: string | undefined): string | null {
-  if (!isoString) {
+function parseResetTimestamp(value: string | number | undefined): number | null {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return null
+    }
+    return value > 10_000_000_000 ? value : value * 1000
+  }
+
+  if (!value) {
+    return null
+  }
+
+  const numericValue = Number(value)
+  if (Number.isFinite(numericValue) && value.trim() !== '') {
+    return numericValue > 10_000_000_000 ? numericValue : numericValue * 1000
+  }
+
+  const parsed = new Date(value).getTime()
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+function parseResetDescription(resetValue: string | number | undefined): string | null {
+  const resetTimestamp = parseResetTimestamp(resetValue)
+  if (resetTimestamp === null) {
     return null
   }
   try {
-    const date = new Date(isoString)
-    if (isNaN(date.getTime())) {
-      return null
-    }
+    const date = new Date(resetTimestamp)
     const now = new Date()
     const isToday = date.toDateString() === now.toDateString()
     if (isToday) {
@@ -333,15 +356,34 @@ function mapWindow(
   raw: OAuthUsageWindow | undefined,
   windowMinutes: number
 ): RateLimitWindow | null {
-  if (!raw || typeof raw.utilization !== 'number') {
+  if (!raw) {
+    return null
+  }
+  const usedPercent =
+    typeof raw.utilization === 'number'
+      ? raw.utilization
+      : typeof raw.used_percentage === 'number'
+        ? raw.used_percentage
+        : null
+  if (usedPercent === null) {
     return null
   }
   return {
-    usedPercent: Math.min(100, Math.max(0, raw.utilization)),
+    usedPercent: Math.min(100, Math.max(0, usedPercent)),
     windowMinutes,
-    resetsAt: raw.resets_at ? new Date(raw.resets_at).getTime() || null : null,
+    resetsAt: parseResetTimestamp(raw.resets_at),
     resetDescription: parseResetDescription(raw.resets_at)
   }
+}
+
+function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null {
+  // Why: a bare "fable" field does not prove the window length. Only accept
+  // explicit weekly/seven-day names for the distinct Fable meter.
+  return (
+    mapWindow(data.fable_weekly, 10080) ??
+    mapWindow(data.fable_seven_day, 10080) ??
+    mapWindow(data.seven_day_fable, 10080)
+  )
 }
 
 async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
@@ -374,6 +416,7 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
       provider: 'claude',
       session: mapWindow(data.five_hour, 300),
       weekly: mapWindow(data.seven_day, 10080),
+      fableWeekly: mapFableWeeklyWindow(data),
       updatedAt: Date.now(),
       error: null,
       status: 'ok'
@@ -475,6 +518,64 @@ async function fetchClaudeUsageViaCli(input: {
   )
 }
 
+function isManagedClaudeAuth(authPreparation: ClaudeRuntimeAuthPreparation | undefined): boolean {
+  return authPreparation?.provenance.startsWith('managed:') === true
+}
+
+function canSupplementOAuthUsageFromCli(input: {
+  oauthLimits: ProviderRateLimits
+  authPreparation?: ClaudeRuntimeAuthPreparation
+  allowUsagePanelSupplement: boolean
+}): boolean {
+  // Why: Fable is visible in Claude's interactive /usage panel even when the
+  // OAuth usage endpoint only reports documented 5h/7d windows. This runs only
+  // after OAuth succeeds, so it must not become a broad auth-recovery fallback.
+  return Boolean(
+    input.allowUsagePanelSupplement &&
+    !input.authPreparation?.managedRefreshDeferredByLivePty &&
+    !input.oauthLimits.fableWeekly &&
+    (input.oauthLimits.session || input.oauthLimits.weekly)
+  )
+}
+
+function mergeClaudeUsageWindows(
+  primary: ProviderRateLimits,
+  supplement: ProviderRateLimits | null
+): ProviderRateLimits {
+  if (!supplement) {
+    return primary
+  }
+  return {
+    ...primary,
+    session: primary.session ?? supplement.session,
+    weekly: primary.weekly ?? supplement.weekly,
+    fableWeekly: primary.fableWeekly ?? supplement.fableWeekly ?? null
+  }
+}
+
+async function supplementOAuthUsageFromCli(input: {
+  oauthLimits: ProviderRateLimits
+  authPreparation?: ClaudeRuntimeAuthPreparation
+  oauthCredentials: OAuthCredentialReadResult
+  attempts: ClaudeUsageAttemptState
+  allowUsagePanelSupplement: boolean
+}): Promise<ProviderRateLimits> {
+  if (!canSupplementOAuthUsageFromCli(input)) {
+    return input.oauthLimits
+  }
+  try {
+    const cliLimits = await fetchClaudeUsageViaCli({
+      authPreparation: input.authPreparation,
+      oauthCredentials: input.oauthCredentials,
+      attempts: input.attempts
+    })
+    return mergeClaudeUsageWindows(input.oauthLimits, cliLimits)
+  } catch (err) {
+    warnClaudeUsageFetchFailure(input.authPreparation, input.oauthCredentials, err)
+    return input.oauthLimits
+  }
+}
+
 function shouldDeferForLiveClaude(
   authPreparation: ClaudeRuntimeAuthPreparation | undefined,
   classification: ClaudeUsageErrorClassification
@@ -545,8 +646,9 @@ async function attemptCliRepairThenRetryOAuth(input: {
     recordAttempt(input.attempts, 'oauth')
     try {
       const oauthRetry = await fetchViaOAuth(refreshedCredentials.token)
+      const supplemented = mergeClaudeUsageWindows(oauthRetry, cliResult)
       return withClaudeUsageMetadata(
-        oauthRetry,
+        supplemented,
         metadataForAttempt({
           attemptedSources: input.attempts.attemptedSources,
           oauthCredentials: refreshedCredentials,
@@ -569,6 +671,7 @@ async function attemptCliRepairThenRetryOAuth(input: {
 export type FetchClaudeRateLimitsOptions = {
   authPreparation?: ClaudeRuntimeAuthPreparation
   allowPtyFallback?: boolean
+  allowUsagePanelSupplement?: boolean
 }
 
 export async function fetchClaudeRateLimits(
@@ -600,7 +703,15 @@ export async function fetchClaudeRateLimits(
   if (plan.steps.some((step) => step.source === 'oauth') && oauthCredentials.token) {
     recordAttempt(attempts, 'oauth')
     try {
-      const limits = await fetchViaOAuth(oauthCredentials.token)
+      const oauthLimits = await fetchViaOAuth(oauthCredentials.token)
+      const limits = await supplementOAuthUsageFromCli({
+        oauthLimits,
+        authPreparation: options?.authPreparation,
+        oauthCredentials,
+        attempts,
+        allowUsagePanelSupplement:
+          options?.allowUsagePanelSupplement ?? isManagedClaudeAuth(options?.authPreparation)
+      })
       return withClaudeUsageMetadata(
         limits,
         metadataForAttempt({

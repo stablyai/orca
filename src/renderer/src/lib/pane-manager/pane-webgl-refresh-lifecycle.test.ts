@@ -65,6 +65,30 @@ describe('pane WebGL refresh lifecycle', () => {
     expect(pane.pendingWebglRefreshRafId).toBe(29)
   })
 
+  it('actively releases the xterm WebGL context before disposing the addon', () => {
+    const loseContext = vi.fn()
+    const canvas = { width: 120, height: 40 }
+    const dispose = vi.fn()
+    const pane = createPane({
+      webglAddon: {
+        dispose,
+        _renderer: {
+          _gl: {
+            getExtension: vi.fn(() => ({ loseContext }))
+          },
+          _canvas: canvas
+        }
+      } as never
+    })
+
+    disposeWebgl(pane)
+
+    expect(loseContext).toHaveBeenCalledTimes(1)
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(canvas).toEqual({ width: 0, height: 0 })
+    expect(pane.webglAddon).toBeNull()
+  })
+
   it('cancels a pending WebGL refresh when the pane is disposed', () => {
     const cancelAnimationFrame = vi.fn()
     vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)

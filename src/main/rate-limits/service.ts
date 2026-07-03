@@ -818,6 +818,12 @@ export class RateLimitService {
     return !isSystemDefaultClaudeAuth(authPreparation)
   }
 
+  private shouldAllowClaudeUsagePanelSupplement(): boolean {
+    // Why: this supplement runs only after OAuth has already returned usage
+    // data. Keep it off on Windows where hidden PTYs are still less reliable.
+    return process.platform !== 'win32'
+  }
+
   private withFetchingStatus(
     current: ProviderRateLimits | null,
     provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
@@ -881,7 +887,8 @@ export class RateLimitService {
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation)
+          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -1056,7 +1063,8 @@ export class RateLimitService {
 
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
-      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation)
+      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+      allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
@@ -1110,6 +1118,7 @@ export class RateLimitService {
     const previousHasData = Boolean(
       previous?.session ||
       previous?.weekly ||
+      previous?.fableWeekly ||
       previous?.monthly ||
       (previous?.buckets && previous.buckets.length > 0)
     )

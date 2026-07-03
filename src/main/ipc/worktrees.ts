@@ -1,8 +1,8 @@
 /* oxlint-disable max-lines */
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import { readFile, stat } from 'fs/promises'
-import { randomUUID } from 'crypto'
+import { readFile, stat } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
@@ -44,6 +44,7 @@ import { gitExecFileAsync } from '../git/runner'
 import { withWorktreeSpan } from '../observability/instrumentation'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { fetchPrHeadTrackingRef } from '../github/pr-head-tracking-ref'
+import { pruneWorktreePRRefreshAliases } from '../github/pr-refresh-coordinator'
 import { getDefaultRemote } from '../git/repo'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -161,6 +162,9 @@ function removeWorktreeMetadataAndTransientState(store: Store, worktreeId: strin
   store.removeWorktreeMeta(worktreeId)
   advertisedUrlWatcher.forgetWorktree(worktreeId)
   deleteWorktreeHistoryDir(worktreeId)
+  // Why: release the removed worktree's PR-refresh aliases so coalesced queue
+  // entries do not retain it for the rest of the session (memory creep).
+  pruneWorktreePRRefreshAliases(worktreeId)
 }
 
 async function closeLocalWatcherForRemoval(worktreePath: string): Promise<void> {
@@ -1398,13 +1402,9 @@ export function registerWorktreeHandlers(
         if (!registeredWorktree) {
           const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
           let canCleanOrphanedDirectory = false
-          const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(store.getSettings(), repo)
           if (
             canCleanupUnregisteredOrcaWorktreeDirectory({
-              meta: removedMeta,
-              worktreePath,
-              repo,
-              knownOrcaLayouts
+              meta: removedMeta
             })
           ) {
             if (repo.connectionId) {
@@ -1477,7 +1477,6 @@ export function registerWorktreeHandlers(
                 runtimeWorktreePath,
                 repo,
                 runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-                knownOrcaLayouts,
                 registeredWorktrees,
                 statPath: access.statPath,
                 isGitRepository: (path) => isLocalGitRepository(path, localWorktreeGitOptions)

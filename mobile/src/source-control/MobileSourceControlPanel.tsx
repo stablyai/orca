@@ -16,6 +16,8 @@ export type MobileSourceControlPanelProps = {
   origin?: string
   embedded?: boolean
   onRequestClose?: () => void
+  onFileOpenStart?: () => void
+  onOpenedFileDiff?: (relativePath: string) => void
 }
 
 export function MobileSourceControlPanel({
@@ -24,7 +26,9 @@ export function MobileSourceControlPanel({
   name = '',
   origin = '',
   embedded = false,
-  onRequestClose
+  onRequestClose,
+  onFileOpenStart,
+  onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
   const state = useMobileSourceControlState({
     hostId,
@@ -32,7 +36,9 @@ export function MobileSourceControlPanel({
     name,
     origin,
     embedded,
-    onRequestClose
+    onRequestClose,
+    onFileOpenStart,
+    onOpenedFileDiff
   })
   const actionSheetActions = useMobileSourceControlActionSheet(state)
   const {
@@ -104,12 +110,7 @@ export function MobileSourceControlPanel({
           ) : null}
         </View>
       ) : (
-        <MobileSourceControlContent
-          state={state}
-          hostId={hostId}
-          worktreeId={worktreeId}
-          name={name}
-        />
+        <MobileSourceControlContent state={state} />
       )}
 
       <MobileSourceControlModals state={state} actionSheetActions={actionSheetActions} />

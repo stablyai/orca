@@ -19,4 +19,30 @@ describe('addOrcaWslInteropEnv', () => {
 
     expect(env.WSLENV).toBe('FOO/u:ORCA_TERMINAL_HANDLE/u:BAR/p')
   })
+
+  it('marks OMP status and hook env for Windows to WSL import', () => {
+    const env: Record<string, string> = {
+      ORCA_TERMINAL_HANDLE: 'term_wsl',
+      ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
+      ORCA_PANE_KEY: 'tab-1:leaf-1',
+      ORCA_TAB_ID: 'tab-1',
+      ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+      ORCA_AGENT_HOOK_PORT: '4567',
+      ORCA_AGENT_HOOK_TOKEN: 'token',
+      ORCA_AGENT_HOOK_ENV: 'dev',
+      ORCA_AGENT_HOOK_VERSION: '1'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
+    expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
+    expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
+    expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
+    expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_PORT/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TOKEN/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_ENV/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_VERSION/u')
+  })
 })

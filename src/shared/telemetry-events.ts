@@ -297,6 +297,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalActivity',
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
+  'experimentalEphemeralVms',
   'experimentalWorktreeSymlinks',
   'geminiCliOAuthEnabled',
   'openAgentTabsInChatByDefault'

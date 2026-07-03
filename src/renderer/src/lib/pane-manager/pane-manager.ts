@@ -38,6 +38,7 @@ import {
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
+import { schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import { closeManagedPane, splitManagedPane } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
@@ -167,6 +168,11 @@ export class PaneManager {
 
   refreshAllPanes(): void {
     for (const pane of this.panes.values()) {
+      // Why: suspended panes are invisible and repaint on rendering resume;
+      // recovery repaints must not scale with hidden-workspace pane count.
+      if (pane.webglAttachmentDeferred) {
+        continue
+      }
       try {
         if (pane.terminal.rows > 0) {
           pane.terminal.refresh(0, pane.terminal.rows - 1)
@@ -290,6 +296,13 @@ export class PaneManager {
     resetPaneWebglTextureAtlases(this.panes.values())
   }
 
+  scheduleRevealRepaint(): void {
+    // Why: the settled-frame callback can fire after destroy(); repainting
+    // disposed panes could throw in attach and latch the global WebGL
+    // attach backoff, downgrading unrelated new panes to the DOM renderer.
+    schedulePaneRevealRepaint(() => (this.destroyed ? [] : this.panes.values()))
+  }
+
   suspendRendering(): void {
     this.renderingSuspended = true
     suspendPaneRendering(this.panes.values())
@@ -376,7 +389,8 @@ export class PaneManager {
   private createDividerWrapped(isVertical: boolean): HTMLElement {
     return createDivider(isVertical, this.styleOptions, {
       refitPanesUnder: (el) => refitPanesUnder(el, this.panes),
-      onLayoutChanged: this.options.onLayoutChanged
+      onLayoutChanged: this.options.onLayoutChanged,
+      onDragActiveChange: this.options.onPaneDragActiveChange
     })
   }
 

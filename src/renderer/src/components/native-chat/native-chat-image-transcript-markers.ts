@@ -75,6 +75,16 @@ export function normalizeImageTranscriptMessages(
       index += 1
       continue
     }
+    // A lone `[Image: source: /path]` turn (no following `[Image #1]` prompt —
+    // e.g. an image sent with no caption) still renders as an image chip rather
+    // than the raw marker text.
+    if (imagePath) {
+      normalized.push({
+        ...message,
+        blocks: [{ type: 'image-ref', path: imagePath }]
+      })
+      continue
+    }
     normalized.push({
       ...message,
       blocks: stripFirstImagePromptMarker(message.blocks)

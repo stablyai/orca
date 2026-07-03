@@ -11,10 +11,10 @@ import {
   resolveSiblingCompletedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
-export { resolveExplicitTerminalTitleAgentType as resolveTabAgentFromTitle } from './terminal-title-agent-type'
+export { resolveExplicitTerminalTitleAgentType as resolveTabAgentFromTitle } from '../../../shared/terminal-title-agent-type'
 
 const HELPER_FOREGROUND_RETRY_DELAYS_MS = [250, 1250, 3500, 750] as const
 

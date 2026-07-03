@@ -1,6 +1,6 @@
-import { lstat } from 'fs/promises'
-import type { Stats } from 'fs'
-import { basename, dirname } from 'path'
+import { lstat } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
+import { basename, dirname } from 'node:path'
 
 function isENOENT(error: unknown): boolean {
   return (

@@ -340,4 +340,108 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
         ?.getAttribute('data-repo-backed-sources-disabled')
     ).toBe('false')
   })
+
+  it('shows VM recipes inside the run target picker', () => {
+    const hostChanges: string[] = []
+    const recipeChanges: (string | null)[] = []
+    current = renderCard({
+      projectHostSetupOptions: [
+        {
+          kind: 'ready',
+          id: 'setup-local',
+          label: 'Local Mac',
+          path: '/Users/alice/orca'
+        },
+        {
+          kind: 'ready',
+          id: 'setup-builder',
+          label: 'Builder',
+          path: '/workspace/orca'
+        }
+      ] as never,
+      selectedProjectHostSetupId: 'setup-local',
+      onProjectHostSetupChange: (setupId) => hostChanges.push(setupId),
+      ephemeralVmRecipes: [
+        {
+          id: 'vercel',
+          name: 'Vercel Sandbox',
+          create: './scripts/orca-vm/vercel.start.sh',
+          destroy: './scripts/orca-vm/vercel.cleanup.sh',
+          destroyDisabled: false
+        }
+      ] as never,
+      onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
+    })
+
+    expect(current.container.textContent).toContain('Run on')
+    expect(current.container.textContent).not.toContain('VM recipe')
+
+    const runTargetButton =
+      current.container.querySelector<HTMLButtonElement>('button[role="combobox"]')
+    expect(runTargetButton).toBeTruthy()
+    act(() => runTargetButton?.click())
+
+    expect(document.body.textContent).toContain('Per-Workspace Environment')
+    const ephemeralVmItem = [
+      ...document.body.querySelectorAll<HTMLElement>('[role="option"]')
+    ].find((item) => item.textContent?.includes('Per-Workspace Environment'))
+    expect(ephemeralVmItem).toBeTruthy()
+    act(() => ephemeralVmItem?.click())
+
+    const recipeItem = [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+      (item) => item.textContent?.includes('Vercel Sandbox')
+    )
+    expect(recipeItem).toBeTruthy()
+    act(() => recipeItem?.click())
+
+    expect(recipeChanges).toEqual(['vercel'])
+    expect(hostChanges).toEqual([])
+  })
+
+  it('clears the selected VM recipe when an existing host is selected', () => {
+    const hostChanges: string[] = []
+    const recipeChanges: (string | null)[] = []
+    current = renderCard({
+      projectHostSetupOptions: [
+        {
+          kind: 'ready',
+          id: 'setup-local',
+          label: 'Local Mac',
+          path: '/Users/alice/orca'
+        },
+        {
+          kind: 'ready',
+          id: 'setup-builder',
+          label: 'Builder',
+          path: '/workspace/orca'
+        }
+      ] as never,
+      selectedProjectHostSetupId: 'setup-local',
+      onProjectHostSetupChange: (setupId) => hostChanges.push(setupId),
+      ephemeralVmRecipes: [
+        {
+          id: 'vercel',
+          name: 'Vercel Sandbox',
+          create: './scripts/orca-vm/vercel.start.sh',
+          destroyDisabled: true
+        }
+      ] as never,
+      selectedEphemeralVmRecipeId: 'vercel',
+      onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
+    })
+
+    const runTargetButton =
+      current.container.querySelector<HTMLButtonElement>('button[role="combobox"]')
+    expect(runTargetButton?.textContent).toContain('Per-Workspace Environment')
+    act(() => runTargetButton?.click())
+
+    const builderItem = [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+      (item) => item.textContent?.includes('Builder')
+    )
+    expect(builderItem).toBeTruthy()
+    act(() => builderItem?.click())
+
+    expect(hostChanges).toEqual(['setup-builder'])
+    expect(recipeChanges).toEqual([null])
+  })
 })

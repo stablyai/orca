@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.108-rc.0",
+  "version": "1.4.120-rc.2",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -173,7 +173,7 @@
     "mermaid": "^11.15.0",
     "monaco-editor": "^0.55.1",
     "oxfmt": "^0.52.0",
-    "oxlint": "^1.67.0",
+    "oxlint": "^1.71.0",
     "oxlint-plugin-react-doctor": "0.2.10",
     "oxlint-tsgolint": "0.23.0",
     "pdfjs-dist": "^5.7.284",
@@ -250,7 +250,8 @@
     ],
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
-      "@xterm/addon-ligatures@0.11.0-beta.287": "config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch"
+      "@xterm/addon-ligatures@0.11.0-beta.287": "config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch",
+      "@xterm/addon-webgl@0.20.0-beta.286": "config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch"
     }
   },
   "reactDoctor": {

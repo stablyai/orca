@@ -1,11 +1,13 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TerminalContextMenu from './TerminalContextMenu'
+import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
 type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
+const shortcuts = vi.hoisted(() => ({ list: [] as string[] }))
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
@@ -16,7 +18,14 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     DropdownMenuContent: passthrough,
     DropdownMenuLabel: passthrough,
     DropdownMenuSeparator: () => null,
-    DropdownMenuShortcut: passthrough,
+    DropdownMenuShortcut: ({ children }: { children?: React.ReactNode }) => {
+      shortcuts.list.push(
+        React_.Children.toArray(children)
+          .filter((child): child is string => typeof child === 'string')
+          .join('')
+      )
+      return React_.createElement(React_.Fragment, null, children)
+    },
     DropdownMenuSub: passthrough,
     DropdownMenuSubContent: passthrough,
     DropdownMenuSubTrigger: passthrough,
@@ -29,7 +38,6 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
 })
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
-vi.mock('@/hooks/useShortcutLabel', () => ({ formatShortcutLabel: () => 'X' }))
 vi.mock('./terminal-context-menu-dismiss', () => ({
   shouldIgnoreTerminalMenuPointerDownOutside: () => false
 }))
@@ -82,6 +90,12 @@ function renderMenu(overrides: Record<string, unknown> = {}): void {
 describe('TerminalContextMenu', () => {
   beforeEach(() => {
     items.list = []
+    shortcuts.list = []
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('renders a "Copy Context" item that triggers onCopyAgentSessionContext (issue #5020)', () => {
@@ -98,5 +112,24 @@ describe('TerminalContextMenu', () => {
     expect(onCopyAgentSessionContext).toHaveBeenCalledTimes(1)
     // Why: copying context must not go through the fork dialog path.
     expect(onForkAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('shows one shortcut per terminal menu action on Windows', () => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    })
+    const keybindings = {
+      'terminal.copySelection': ['Ctrl+Shift+C', 'Ctrl+Insert', 'Ctrl+C'],
+      'terminal.splitRight': ['Mod+Shift+D', 'Alt+Shift+Right'],
+      'terminal.splitDown': ['Alt+Shift+D', 'Mod+Shift+Minus']
+    } satisfies KeybindingOverrides
+
+    renderMenu({ keybindings })
+
+    expect(shortcuts.list).toContain('Ctrl+Shift+C')
+    expect(shortcuts.list).toContain('Ctrl+V')
+    expect(shortcuts.list).toContain('Ctrl+Shift+D')
+    expect(shortcuts.list).toContain('Alt+Shift+D')
+    expect(shortcuts.list.some((shortcut) => shortcut.includes(','))).toBe(false)
   })
 })

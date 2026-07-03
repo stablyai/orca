@@ -1,6 +1,8 @@
 import './xterm-env-polyfill'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
+import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
 import { extractLastOscTitle } from '../../shared/agent-detection'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { extractOscScanTail, scanOsc7Uris } from './osc7-uri-extraction'
@@ -51,6 +53,14 @@ export class HeadlessEmulator {
 
     this.serializer = new SerializeAddon()
     this.terminal.loadAddon(this.serializer)
+
+    // Why: this mirror must measure character widths exactly like the
+    // renderer's xterm (Unicode 11 + ZWJ emoji joining). With the default v6
+    // tables, emoji-dense rows (agent status lines) advance the cursor
+    // differently here than on screen, so the mirrored buffer accumulates
+    // cell-shifted tears that snapshot restores then paint back as garbage.
+    this.terminal.loadAddon(new Unicode11Addon())
+    activateOrcaTerminalUnicodeProvider(this.terminal)
 
     // Why no onData wiring: this emulator exists purely for state tracking
     // (snapshots, cwd, mode flags). It MUST NOT respond to terminal query

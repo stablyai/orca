@@ -237,7 +237,6 @@ export type Repo = {
    *  default avatar (upstream owner, not the personal fork) and the fork
    *  indicator. Absent = not a fork, or fork status not yet resolved. */
   upstream?: GitHubRepositoryIdentity | null
-  gitRemoteIdentity?: GitRemoteIdentity | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string
@@ -258,6 +257,8 @@ export type Repo = {
   issueSourcePreference?: IssueSourcePreference
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
+  /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
+  gitRemoteIdentity?: GitRemoteIdentity | null
   /** Controls whether worktrees Orca did not create appear in the sidebar. */
   externalWorktreeVisibility?: ExternalWorktreeVisibility
   /** True when the repo predates hidden-by-default external worktrees. */
@@ -835,6 +836,9 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: explorer-created terminals can start below the workspace root while
+   *  still belonging to that workspace for tab/session ownership. */
+  startupCwd?: string
   /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
    *  show the provider icon immediately, before the agent emits its first hook
    *  event (a freshly-launched, idle agent reports no live status yet). Live
@@ -1935,12 +1939,31 @@ export type OrcaHooks = {
   }
   issueCommand?: string // Shared default command for linked GitHub issues
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
+  environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
+  environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
 }
 
 export type OrcaDefaultTabTemplate = {
   title?: string
   color?: string
   command?: string
+}
+
+export type OrcaVmRecipe = {
+  id: string
+  name: string
+  create: string
+  description?: string
+  suspend?: string
+  resume?: string
+  destroy?: string
+  destroyDisabled?: boolean
+}
+
+export type OrcaVmRecipeDiagnostic = {
+  index: number
+  field?: string
+  message: string
 }
 
 export type RepoHookSettings = {
@@ -2468,6 +2491,8 @@ export type GlobalSettings = {
   terminalScrollSensitivity: number
   terminalFastScrollSensitivity: number
   terminalTuiScrollSensitivity: number
+  /** One-shot migration guard for moving inherited TUI wheel reports from 3 to 1. */
+  terminalTuiScrollSensitivityDefaultedToOne?: boolean
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
@@ -2812,6 +2837,8 @@ export type GlobalSettings = {
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
   experimentalNewWorktreeCardStyle?: boolean
+  /** Experimental: per-workspace on-demand environment recipes and setup surface. */
+  experimentalEphemeralVms?: boolean
   /** Compact worktree cards by hiding a redundant metadata row when the title
    *  and branch already say the same thing. */
   compactWorktreeCards: boolean
@@ -3169,9 +3196,11 @@ export type PersistedUIState = {
    *  default workspace statuses in reverse workflow order. Once stamped,
    *  user-authored status ordering is never inferred from IDs/labels again. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
-  /** One-shot migration flag for the default status workflow order/label:
-   *  Done -> In review -> In progress -> Todo. Exact legacy default payloads
-   *  migrate; customized statuses are preserved. */
+  /** One-shot repair flag for the exact default payload that a short-lived
+   *  build persisted in reverse workflow order. */
+  _workspaceStatusesReorderedDefaultRepaired?: boolean
+  /** One-shot migration flag for default status workflow labels/visuals.
+   *  Exact legacy default payloads migrate; customized statuses are preserved. */
   _workspaceStatusesDefaultWorkflowMigrated?: boolean
   /** One-shot migration flag for the old default blue/violet/emerald status
    *  visuals. Once stamped, valid user-authored colors/icons are preserved. */
@@ -3396,6 +3425,7 @@ export type PersistedTrustedOrcaHookRepo = {
   setup?: PersistedTrustedOrcaHookEntry
   archive?: PersistedTrustedOrcaHookEntry
   issueCommand?: PersistedTrustedOrcaHookEntry
+  vmRecipe?: PersistedTrustedOrcaHookEntry
 }
 
 export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookRepo>
