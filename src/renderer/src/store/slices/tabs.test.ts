@@ -950,6 +950,43 @@ describe('TabsSlice', () => {
     })
   })
 
+  describe('toggleMaximizedTabGroup', () => {
+    it('toggles a split group into a full-width presentation without changing the layout', () => {
+      store.getState().createUnifiedTab(WT, 'terminal')
+      const groupAId = store.getState().groupsByWorktree[WT][0].id
+      const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+      if (!groupBId) {
+        throw new Error('createEmptySplitGroup returned null')
+      }
+      const layoutBefore = store.getState().layoutByWorktree[WT]
+
+      store.getState().toggleMaximizedTabGroup(WT, groupAId)
+
+      expect(store.getState().maximizedGroupIdByWorktree[WT]).toBe(groupAId)
+      expect(store.getState().activeGroupIdByWorktree[WT]).toBe(groupAId)
+      expect(store.getState().layoutByWorktree[WT]).toBe(layoutBefore)
+
+      store.getState().toggleMaximizedTabGroup(WT, groupAId)
+
+      expect(store.getState().maximizedGroupIdByWorktree[WT]).toBeUndefined()
+      expect(store.getState().layoutByWorktree[WT]).toBe(layoutBefore)
+    })
+
+    it('clears a maximized group when the split pane is closed', () => {
+      store.getState().createUnifiedTab(WT, 'terminal')
+      const groupAId = store.getState().groupsByWorktree[WT][0].id
+      const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+      if (!groupBId) {
+        throw new Error('createEmptySplitGroup returned null')
+      }
+
+      store.getState().toggleMaximizedTabGroup(WT, groupBId)
+      store.getState().closeEmptyGroup(WT, groupBId)
+
+      expect(store.getState().maximizedGroupIdByWorktree[WT]).toBeUndefined()
+    })
+  })
+
   // ─── reorderUnifiedTabs ───────────────────────────────────────────
 
   describe('reorderUnifiedTabs', () => {

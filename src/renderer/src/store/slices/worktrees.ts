@@ -2007,6 +2007,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     groupsByWorktree: omitByWorktree(s.groupsByWorktree),
     layoutByWorktree: omitByWorktree(s.layoutByWorktree),
     activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
+    maximizedGroupIdByWorktree: omitByWorktree(s.maximizedGroupIdByWorktree),
     // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
     // Why: keyed by worktreeId; re-keyed on rename but missed by both removal

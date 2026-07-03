@@ -2577,7 +2577,9 @@
             "1ff1c77616": "navegador",
             "586d2ac445": "terminal",
             "addSplitPane": "Agregar panel dividido",
-            "closePaneColumn": "Cerrar panel dividido"
+            "closePaneColumn": "Cerrar panel dividido",
+            "restoreSplitLayout": "Restore split layout",
+            "maximizePane": "Maximize pane"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Suelta sobre un panel de terminal para reanudar esta sesión.",

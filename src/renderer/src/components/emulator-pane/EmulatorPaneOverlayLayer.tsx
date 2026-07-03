@@ -57,10 +57,12 @@ const SimulatorOverlaySlot = memo(function SimulatorOverlaySlot({
 
 const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
   worktreeId,
-  isWorktreeActive
+  isWorktreeActive,
+  maximizedGroupId = null
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  maximizedGroupId?: string | null
 }): React.JSX.Element {
   const { unifiedTabs, groups } = useAppStore(
     useShallow((state) => ({
@@ -91,7 +93,11 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
     <>
       {simulatorTabs.map((tab) => {
         const isActiveInGroup = groupActiveTabById[tab.groupId] === tab.id
-        const isActive = Boolean(isWorktreeActive && isActiveInGroup)
+        const isActive = Boolean(
+          isWorktreeActive &&
+            isActiveInGroup &&
+            (maximizedGroupId === null || tab.groupId === maximizedGroupId)
+        )
         return (
           <SimulatorOverlaySlot
             key={tab.id}

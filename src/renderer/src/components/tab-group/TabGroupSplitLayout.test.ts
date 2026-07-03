@@ -206,4 +206,33 @@ describe('TabGroupSplitLayout', () => {
 
     expect(recordFeatureInteractionMock).toHaveBeenCalledWith('terminal-panes')
   })
+
+  it('renders only the maximized group while preserving split affordance context', () => {
+    const element = TabGroupSplitLayout({
+      layout: {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.5,
+        first: { type: 'leaf', groupId: 'left-group' },
+        second: { type: 'leaf', groupId: 'right-group' }
+      },
+      worktreeId: 'wt-1',
+      focusedGroupId: 'right-group',
+      isWorktreeActive: true,
+      maximizedGroupId: 'right-group'
+    })
+
+    const tabGroupPanelElement = asElement(getSplitNodeElement(element))
+
+    expect(tabGroupPanelElement.props).toEqual(
+      expect.objectContaining({
+        groupId: 'right-group',
+        worktreeId: 'wt-1',
+        isFocused: true,
+        hasSplitGroups: true,
+        reserveClosedExplorerToggleSpace: true,
+        reserveCollapsedSidebarHeaderSpace: true
+      })
+    )
+  })
 })
