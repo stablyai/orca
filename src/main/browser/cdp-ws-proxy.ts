@@ -1,88 +1,13 @@
 /* eslint-disable max-lines -- Why: this proxy owns HTTP discovery, websocket client lifecycle, and CDP debugger forwarding together. */
 import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
-import { randomUUID } from 'node:crypto'
-import type { PrintToPDFOptions, WebContents } from 'electron'
+import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
+import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
-const PDF_DEFAULT_MARGIN_INCHES = 1 / 2.54
-const PDF_STREAM_CHUNK_BYTES = 1024 * 1024
-const PDF_STREAM_HANDLE_PREFIX = 'orca-pdf-'
-const PDF_STREAM_TTL_MS = 5 * 60 * 1000
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
-
-type PdfStream = {
-  data: Buffer
-  offset: number
-  cleanupTimer: ReturnType<typeof setTimeout>
-}
-
-function finiteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function buildPrintToPdfOptions(params: Record<string, unknown>): PrintToPDFOptions {
-  const options: PrintToPDFOptions = {}
-
-  if (typeof params.landscape === 'boolean') {
-    options.landscape = params.landscape
-  }
-  if (typeof params.displayHeaderFooter === 'boolean') {
-    options.displayHeaderFooter = params.displayHeaderFooter
-  }
-  if (typeof params.printBackground === 'boolean') {
-    options.printBackground = params.printBackground
-  }
-  if (typeof params.preferCSSPageSize === 'boolean') {
-    options.preferCSSPageSize = params.preferCSSPageSize
-  }
-  if (typeof params.generateTaggedPDF === 'boolean') {
-    options.generateTaggedPDF = params.generateTaggedPDF
-  }
-  if (typeof params.generateDocumentOutline === 'boolean') {
-    options.generateDocumentOutline = params.generateDocumentOutline
-  }
-
-  const scale = finiteNumber(params.scale)
-  if (scale !== null && scale > 0) {
-    options.scale = scale
-  }
-
-  const paperWidth = finiteNumber(params.paperWidth)
-  const paperHeight = finiteNumber(params.paperHeight)
-  if (paperWidth !== null && paperHeight !== null && paperWidth > 0 && paperHeight > 0) {
-    options.pageSize = { width: paperWidth, height: paperHeight }
-  }
-
-  const marginTop = finiteNumber(params.marginTop)
-  const marginBottom = finiteNumber(params.marginBottom)
-  const marginLeft = finiteNumber(params.marginLeft)
-  const marginRight = finiteNumber(params.marginRight)
-  if ([marginTop, marginBottom, marginLeft, marginRight].some((margin) => margin !== null)) {
-    // CDP and Electron printToPDF both use inches; omitted CDP sides default to 1cm.
-    options.margins = {
-      marginType: 'custom',
-      top: marginTop ?? PDF_DEFAULT_MARGIN_INCHES,
-      bottom: marginBottom ?? PDF_DEFAULT_MARGIN_INCHES,
-      left: marginLeft ?? PDF_DEFAULT_MARGIN_INCHES,
-      right: marginRight ?? PDF_DEFAULT_MARGIN_INCHES
-    }
-  }
-
-  if (typeof params.pageRanges === 'string') {
-    options.pageRanges = params.pageRanges
-  }
-  if (typeof params.headerTemplate === 'string') {
-    options.headerTemplate = params.headerTemplate
-  }
-  if (typeof params.footerTemplate === 'string') {
-    options.footerTemplate = params.footerTemplate
-  }
-
-  return options
-}
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -96,9 +21,7 @@ export class CdpWsProxy {
   private attached = false
   // Why: agent-browser filters events by sessionId from Target.attachToTarget.
   private clientSessionId: string | undefined = undefined
-  private readonly pdfStreams = new Map<string, PdfStream>()
-  private readonly pdfStreamHandlePrefix = `${PDF_STREAM_HANDLE_PREFIX}${randomUUID()}-`
-  private nextPdfStreamId = 0
+  private readonly pdfStreams = new CdpPdfStreamStore()
 
   constructor(private readonly webContents: WebContents) {}
 
@@ -130,7 +53,7 @@ export class CdpWsProxy {
         const onClose = (): void => {
           detach()
           if (this.client === ws) {
-            this.clearPdfStreams()
+            this.pdfStreams.clear()
             this.client = null
           }
         }
@@ -181,7 +104,7 @@ export class CdpWsProxy {
     this.detachClientListeners?.()
     this.detachClientListeners = null
     this.client = null
-    this.clearPdfStreams()
+    this.pdfStreams.clear()
     client?.close()
   }
 
@@ -379,7 +302,7 @@ export class CdpWsProxy {
     }
     if (msg.method === 'IO.read') {
       const params = msg.params ?? {}
-      if (this.isPdfStreamRequest(params)) {
+      if (this.pdfStreams.ownsHandle(params)) {
         this.handleStreamRead(client, clientId, params)
         return
       }
@@ -388,7 +311,7 @@ export class CdpWsProxy {
     }
     if (msg.method === 'IO.close') {
       const params = msg.params ?? {}
-      if (this.isPdfStreamRequest(params)) {
+      if (this.pdfStreams.ownsHandle(params)) {
         this.handleStreamClose(client, clientId, params)
         return
       }
@@ -557,12 +480,7 @@ export class CdpWsProxy {
       const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
       const buffer = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf)
       if (params.transferMode === 'ReturnAsStream') {
-        const handle = `${this.pdfStreamHandlePrefix}${++this.nextPdfStreamId}`
-        this.pdfStreams.set(handle, {
-          data: buffer,
-          offset: 0,
-          cleanupTimer: this.schedulePdfStreamCleanup(handle)
-        })
+        const handle = this.pdfStreams.create(buffer)
         this.sendResult(clientId, { data: '', stream: handle }, client)
         return
       }
@@ -572,76 +490,17 @@ export class CdpWsProxy {
     }
   }
 
-  private isPdfStreamRequest(params: Record<string, unknown>): boolean {
-    return typeof params.handle === 'string' && params.handle.startsWith(this.pdfStreamHandlePrefix)
-  }
-
-  private schedulePdfStreamCleanup(handle: string): ReturnType<typeof setTimeout> {
-    const cleanupTimer = setTimeout(() => {
-      this.deletePdfStream(handle)
-    }, PDF_STREAM_TTL_MS)
-    const maybeNodeTimer = cleanupTimer as { unref?: () => void }
-    maybeNodeTimer.unref?.()
-    return cleanupTimer
-  }
-
-  private refreshPdfStreamCleanup(handle: string, stream: PdfStream): void {
-    clearTimeout(stream.cleanupTimer)
-    stream.cleanupTimer = this.schedulePdfStreamCleanup(handle)
-  }
-
-  private deletePdfStream(handle: string): void {
-    const stream = this.pdfStreams.get(handle)
-    if (!stream) {
-      return
-    }
-    clearTimeout(stream.cleanupTimer)
-    this.pdfStreams.delete(handle)
-  }
-
-  private clearPdfStreams(): void {
-    for (const stream of this.pdfStreams.values()) {
-      clearTimeout(stream.cleanupTimer)
-    }
-    this.pdfStreams.clear()
-  }
-
   private handleStreamRead(
     client: WebSocket,
     clientId: number,
     params: Record<string, unknown>
   ): void {
-    const handle = typeof params.handle === 'string' ? params.handle : ''
-    const stream = this.pdfStreams.get(handle)
-    if (!stream) {
+    const chunk = this.pdfStreams.read(params)
+    if (!chunk) {
       this.sendError(clientId, 'Invalid stream handle', client)
       return
     }
-    this.refreshPdfStreamCleanup(handle, stream)
-
-    const offset = finiteNumber(params.offset)
-    if (offset !== null) {
-      stream.offset = Math.max(0, Math.floor(offset))
-    }
-    const requestedSize = finiteNumber(params.size)
-    const size =
-      requestedSize !== null && requestedSize > 0
-        ? Math.floor(requestedSize)
-        : PDF_STREAM_CHUNK_BYTES
-    const start = Math.min(stream.offset, stream.data.length)
-    const end = Math.min(start + size, stream.data.length)
-    const chunk = stream.data.subarray(start, end)
-    stream.offset = end
-
-    this.sendResult(
-      clientId,
-      {
-        base64Encoded: true,
-        data: chunk.toString('base64'),
-        eof: end >= stream.data.length
-      },
-      client
-    )
+    this.sendResult(clientId, { base64Encoded: true, data: chunk.data, eof: chunk.eof }, client)
   }
 
   private handleStreamClose(
@@ -649,8 +508,7 @@ export class CdpWsProxy {
     clientId: number,
     params: Record<string, unknown>
   ): void {
-    const handle = typeof params.handle === 'string' ? params.handle : ''
-    this.deletePdfStream(handle)
+    this.pdfStreams.close(params)
     this.sendResult(clientId, {}, client)
   }
 
