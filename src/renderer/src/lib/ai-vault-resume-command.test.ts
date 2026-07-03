@@ -123,6 +123,27 @@ describe('ai vault resume command runtime', () => {
     ).toBe("cd 'C:\\Users\\alice\\repo' && claude '--resume' 'session one'")
   })
 
+  it('follows the live Windows shell for non-resumable agents in the fallback path', () => {
+    // Why: agents without a TUI startup plan (e.g. cursor) queue through the
+    // shared-builder fallback, which must quote for the live shell too (#6152).
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'cursor',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe(
+      'Set-Location -LiteralPath \'C:\\Users\\alice\\repo\'; cursor-agent --resume "session one"'
+    )
+  })
+
   it('keeps the cmd wrapper for the copy-to-clipboard command on Windows', () => {
     // Regression guard: the copy path is self-contained for pasting into cmd.exe
     // and must stay cmd-wrapped even though the queued path now follows the shell.
