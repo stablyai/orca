@@ -120,7 +120,7 @@ export function resolveLeftSidebarStyleVariables(
   if (!settings) {
     return undefined
   }
-  switch (settings.leftSidebarAppearanceMode) {
+  switch (settings.leftSidebarAppearanceMode ?? 'match-terminal') {
     case 'default':
       return undefined
     case 'match-terminal':
@@ -128,4 +128,14 @@ export function resolveLeftSidebarStyleVariables(
     case 'tinted':
       return resolveTintedSurfaceVariables(settings)
   }
+}
+
+export function resolveWorkspaceShellStyleVariables(
+  settings: LeftSidebarAppearanceSettings | null | undefined,
+  systemPrefersDark: boolean
+): LeftSidebarStyleVariables | undefined {
+  if (!settings || (settings.leftSidebarAppearanceMode ?? 'match-terminal') !== 'match-terminal') {
+    return undefined
+  }
+  return resolveTerminalSurfaceVariables(settings, systemPrefersDark)
 }

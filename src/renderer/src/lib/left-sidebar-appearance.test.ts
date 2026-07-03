@@ -1,7 +1,10 @@
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import { resolveLeftSidebarStyleVariables } from './left-sidebar-appearance'
+import {
+  resolveLeftSidebarStyleVariables,
+  resolveWorkspaceShellStyleVariables
+} from './left-sidebar-appearance'
 
 function settings(overrides = {}) {
   return {
@@ -11,8 +14,29 @@ function settings(overrides = {}) {
 }
 
 describe('resolveLeftSidebarStyleVariables', () => {
-  it('leaves the default sidebar token surface untouched', () => {
-    expect(resolveLeftSidebarStyleVariables(settings(), true)).toBeUndefined()
+  it('matches terminal surfaces by default', () => {
+    const vars = resolveLeftSidebarStyleVariables(
+      settings({
+        terminalColorOverrides: {
+          background: '#101820',
+          foreground: '#f0f4f8'
+        }
+      }),
+      true
+    )
+
+    expect(vars).toMatchObject({
+      '--worktree-sidebar': '#101820',
+      '--worktree-sidebar-foreground': '#f0f4f8',
+      '--background': '#101820',
+      '--foreground': '#f0f4f8'
+    })
+  })
+
+  it('leaves explicit default sidebar token surfaces untouched', () => {
+    expect(
+      resolveLeftSidebarStyleVariables(settings({ leftSidebarAppearanceMode: 'default' }), true)
+    ).toBeUndefined()
   })
 
   it('matches terminal background, foreground, and scoped text tokens', () => {
@@ -80,5 +104,35 @@ describe('resolveLeftSidebarStyleVariables', () => {
     )
 
     expect(vars?.['--worktree-sidebar']).toBe('color-mix(in srgb, #000000 35%, var(--background))')
+  })
+})
+
+describe('resolveWorkspaceShellStyleVariables', () => {
+  it('matches the terminal palette for workspace shell surfaces by default', () => {
+    const vars = resolveWorkspaceShellStyleVariables(
+      settings({
+        terminalColorOverrides: {
+          background: '#101820',
+          foreground: '#f0f4f8'
+        }
+      }),
+      true
+    )
+
+    expect(vars).toMatchObject({
+      '--background': '#101820',
+      '--foreground': '#f0f4f8',
+      '--card': 'color-mix(in srgb, #f0f4f8 4%, #101820)',
+      '--border': 'color-mix(in srgb, #f0f4f8 7%, #101820)'
+    })
+  })
+
+  it('does not theme the whole shell for explicit app-default or tinted sidebar modes', () => {
+    expect(
+      resolveWorkspaceShellStyleVariables(settings({ leftSidebarAppearanceMode: 'default' }), true)
+    ).toBeUndefined()
+    expect(
+      resolveWorkspaceShellStyleVariables(settings({ leftSidebarAppearanceMode: 'tinted' }), true)
+    ).toBeUndefined()
   })
 })

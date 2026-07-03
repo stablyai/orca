@@ -28,27 +28,27 @@ export function LeftSidebarAppearanceSetting({
         alignTop
         label={translate(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
-          'Left Sidebar Appearance'
+          'Workspace Appearance'
         )}
         description={translate(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.rowDescription',
-          'Make the left sidebar match your terminal, stay default, or use a tint.'
+          'Match the terminal palette across workspace chrome, use app defaults, or tint the sidebar.'
         )}
         control={
           <SettingsSegmentedControl<LeftSidebarAppearanceMode>
             size="sm"
-            value={settings.leftSidebarAppearanceMode ?? 'default'}
+            value={settings.leftSidebarAppearanceMode ?? 'match-terminal'}
             onChange={(leftSidebarAppearanceMode) => updateSettings({ leftSidebarAppearanceMode })}
             ariaLabel={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
-              'Left Sidebar Appearance'
+              'Workspace Appearance'
             )}
             options={[
               {
                 value: 'default',
                 label: translate(
                   'auto.components.settings.AppearancePane.leftSidebarAppearance.default',
-                  'Default'
+                  'App Default'
                 )
               },
               {
@@ -62,14 +62,14 @@ export function LeftSidebarAppearanceSetting({
                 value: 'tinted',
                 label: translate(
                   'auto.components.settings.AppearancePane.leftSidebarAppearance.tinted',
-                  'Tinted'
+                  'Tinted Sidebar'
                 )
               }
             ]}
           />
         }
       />
-      {(settings.leftSidebarAppearanceMode ?? 'default') === 'tinted' ? (
+      {(settings.leftSidebarAppearanceMode ?? 'match-terminal') === 'tinted' ? (
         <div className="space-y-2">
           <ColorField
             label={translate(

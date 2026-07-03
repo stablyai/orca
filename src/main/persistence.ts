@@ -143,6 +143,7 @@ import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
+import { normalizeLeftSidebarAppearanceMode } from '../shared/left-sidebar-appearance'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
   legacyTerminalScrollbackBytesToRows,
@@ -2933,6 +2934,11 @@ export class Store {
           parsed.settings
         )
         const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
+        const leftSidebarAppearanceDefaultedToMatchTerminal =
+          parsed.settings?.leftSidebarAppearanceDefaultedToMatchTerminal === true
+        const migratedLeftSidebarAppearanceMode = leftSidebarAppearanceDefaultedToMatchTerminal
+          ? normalizeLeftSidebarAppearanceMode(parsed.settings?.leftSidebarAppearanceMode)
+          : 'match-terminal'
         const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
@@ -3000,6 +3006,9 @@ export class Store {
           this.loadNeedsSave = true
         }
         if (!autoRenameBranchFromWorkDefaultedOn) {
+          this.loadNeedsSave = true
+        }
+        if (!leftSidebarAppearanceDefaultedToMatchTerminal) {
           this.loadNeedsSave = true
         }
         const normalizedOnboarding = normalizeLoadedOnboardingState(
@@ -3095,6 +3104,8 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            leftSidebarAppearanceMode: migratedLeftSidebarAppearanceMode,
+            leftSidebarAppearanceDefaultedToMatchTerminal: true,
             // Why: persisted settings can be user-edited or written by older
             // builds; keep tray-minimize false unless the stored value is true.
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
@@ -5064,6 +5075,17 @@ export class Store {
     }
     if ('autoRenameBranchFromWork' in updates || 'autoRenameBranchFromWorkDefaultedOn' in updates) {
       sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
+    }
+    if ('leftSidebarAppearanceMode' in updates) {
+      sanitizedUpdates.leftSidebarAppearanceMode = normalizeLeftSidebarAppearanceMode(
+        updates.leftSidebarAppearanceMode
+      )
+    }
+    if (
+      'leftSidebarAppearanceMode' in updates ||
+      'leftSidebarAppearanceDefaultedToMatchTerminal' in updates
+    ) {
+      sanitizedUpdates.leftSidebarAppearanceDefaultedToMatchTerminal = true
     }
     if ('openInApplications' in updates) {
       sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)

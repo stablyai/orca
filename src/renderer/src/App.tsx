@@ -22,7 +22,10 @@ import {
 import logo from '../../../resources/logo.svg'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import {
+  resolveLeftSidebarStyleVariables,
+  resolveWorkspaceShellStyleVariables
+} from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import {
   isPairedWebClientWindow,
@@ -622,6 +625,10 @@ function App(): React.JSX.Element {
   const systemPrefersDark = useSystemPrefersDark()
   const leftSidebarStyle = useMemo(
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
+    [settings, systemPrefersDark]
+  ) as React.CSSProperties | undefined
+  const workspaceShellStyle = useMemo(
+    () => resolveWorkspaceShellStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
   const dictationState = useAppStore((s) => s.dictationState)
@@ -2095,7 +2102,11 @@ function App(): React.JSX.Element {
           '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
           // Why: consumed by the side-position activity bar to push icons below
           // the fixed-position window-controls overlay on Windows/Linux.
-          '--window-controls-height': hasCustomTitleBar ? '36px' : '0px'
+          '--window-controls-height': hasCustomTitleBar ? '36px' : '0px',
+          // Why: terminal-matched appearance is meant to unify the whole
+          // workspace shell with the active terminal palette, not only the left
+          // sidebar. Default/Tinted remain opt-outs from global shell theming.
+          ...workspaceShellStyle
         } as React.CSSProperties
       }
     >

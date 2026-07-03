@@ -6940,7 +6940,8 @@
             },
             "leftSidebarAppearance": {
               "title": "左侧边栏外观",
-              "description": "让左侧边栏匹配终端、保持默认，或使用色调。"
+              "description": "让左侧边栏匹配终端、保持默认，或使用色调。",
+              "chrome": "chrome"
             },
             "workspaceCardLayout": {
               "title": "工作区卡片布局",

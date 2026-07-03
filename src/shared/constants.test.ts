@@ -39,6 +39,11 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
   })
 
+  it('matches the sidebar to the terminal theme by default', () => {
+    expect(getDefaultSettings('/tmp').leftSidebarAppearanceMode).toBe('match-terminal')
+    expect(getDefaultSettings('/tmp').leftSidebarAppearanceDefaultedToMatchTerminal).toBe(true)
+  })
+
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })

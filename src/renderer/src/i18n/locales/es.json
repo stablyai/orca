@@ -6955,7 +6955,8 @@
             },
             "leftSidebarAppearance": {
               "title": "Apariencia de la barra lateral izquierda",
-              "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte."
+              "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte.",
+              "chrome": "chrome"
             },
             "workspaceCardLayout": {
               "title": "Diseño de tarjetas de espacios de trabajo",
