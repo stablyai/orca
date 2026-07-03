@@ -46,7 +46,7 @@ export type TabsSlice = {
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
-  maximizedGroupIdByWorktree: Record<string, string>
+  maximizedGroupIdByWorktree: Record<string, string | undefined>
   createUnifiedTab: (
     worktreeId: string,
     contentType: TabContentType,

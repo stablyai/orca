@@ -1655,6 +1655,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'groupsByWorktree',
   'layoutByWorktree',
   'activeGroupIdByWorktree',
+  'maximizedGroupIdByWorktree',
   'gitStatusByWorktree',
   'gitStatusHeadByWorktree',
   'gitIgnoredPathsByWorktree',
@@ -3110,6 +3111,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextLayoutByWorktree[worktreeId]
         const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
         delete nextActiveGroupIdByWorktree[worktreeId]
+        const nextMaximizedGroupIdByWorktree = { ...s.maximizedGroupIdByWorktree }
+        delete nextMaximizedGroupIdByWorktree[worktreeId]
         // Why: git status / compare caches are keyed by worktree and stop being
         // refreshed once the worktree is deleted. Remove them here so deleted
         // worktrees cannot retain stale conflict badges, branch diffs, or compare
@@ -3259,6 +3262,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           groupsByWorktree: nextGroupsByWorktree,
           layoutByWorktree: nextLayoutByWorktree,
           activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+          maximizedGroupIdByWorktree: nextMaximizedGroupIdByWorktree,
           editorDrafts: nextEditorDrafts,
           markdownViewMode: nextMarkdownViewMode,
           editorViewMode: nextEditorViewMode,

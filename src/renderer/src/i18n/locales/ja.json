@@ -2578,8 +2578,8 @@
             "586d2ac445": "ターミナル",
             "addSplitPane": "分割ペインを追加",
             "closePaneColumn": "分割ペインを閉じる",
-            "restoreSplitLayout": "Restore split layout",
-            "maximizePane": "Maximize pane"
+            "restoreSplitLayout": "分割レイアウトを復元",
+            "maximizePane": "ペインを最大化"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "このセッションを再開するにはターミナルペインにドロップしてください。",
