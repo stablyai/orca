@@ -803,6 +803,7 @@ describe('listWorktrees', () => {
     ])
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
       cwd: 'C:\\Users\\me\\repo',
+      timeout: 30_000,
       wslDistro: 'Ubuntu'
     })
     expect(translateWslOutputPathsMock).toHaveBeenCalledWith(
@@ -824,7 +825,8 @@ describe('listWorktrees', () => {
     await expect(listWorktrees('/workspace/deleted-repo')).resolves.toEqual([])
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/workspace/deleted-repo'
+      cwd: '/workspace/deleted-repo',
+      timeout: 30_000
     })
     expect(statMock).toHaveBeenCalledWith('/workspace/deleted-repo')
     expect(warnSpy).toHaveBeenCalledWith(
@@ -846,7 +848,8 @@ describe('listWorktrees', () => {
     await expect(listWorktrees('/private/tmp/orca-issue-1582-test/my-repo')).resolves.toEqual([])
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/private/tmp/orca-issue-1582-test/my-repo'
+      cwd: '/private/tmp/orca-issue-1582-test/my-repo',
+      timeout: 30_000
     })
     expect(warnSpy).not.toHaveBeenCalled()
     warnSpy.mockRestore()
@@ -997,6 +1000,10 @@ describe('listWorktrees', () => {
     expect(getGitCalls()).toEqual([
       'git worktree list --porcelain -z',
       'git worktree list --porcelain'
+    ])
+    expect(gitExecFileAsyncMock.mock.calls.map(([args, options]) => [args, options])).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo', timeout: 30_000 }],
+      [['worktree', 'list', '--porcelain'], { cwd: '/repo', timeout: 30_000 }]
     ])
   })
 })
