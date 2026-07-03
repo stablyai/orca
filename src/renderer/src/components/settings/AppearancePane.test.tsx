@@ -223,7 +223,10 @@ describe('AppearancePane', () => {
   it('updates the left sidebar appearance from sidebar settings', async () => {
     mocks.state.settingsSearchQuery = 'left sidebar'
     const updateSettings = vi.fn()
-    const settings = getDefaultSettings('/tmp')
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      leftSidebarAppearanceMode: 'default' as const
+    }
 
     const container = await renderAppearancePane(settings, updateSettings)
     const matchTerminalButton = Array.from(

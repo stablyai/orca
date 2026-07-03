@@ -2004,6 +2004,55 @@ describe('Store', () => {
     expect(updated.autoRenameBranchFromWorkDefaultedOn).toBe(true)
   })
 
+  it('migrates inherited left sidebar appearances to match the terminal once', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { leftSidebarAppearanceMode: 'default' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().leftSidebarAppearanceMode).toBe('match-terminal')
+    expect(store.getSettings().leftSidebarAppearanceDefaultedToMatchTerminal).toBe(true)
+  })
+
+  it('preserves explicit sidebar appearance choices after the terminal-match migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        leftSidebarAppearanceMode: 'default',
+        leftSidebarAppearanceDefaultedToMatchTerminal: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().leftSidebarAppearanceMode).toBe('default')
+    expect(store.getSettings().leftSidebarAppearanceDefaultedToMatchTerminal).toBe(true)
+  })
+
+  it('stamps the sidebar appearance migration guard on future updates', async () => {
+    const store = await createStore()
+
+    const updated = store.updateSettings({
+      leftSidebarAppearanceMode: 'default',
+      leftSidebarAppearanceDefaultedToMatchTerminal: false
+    })
+
+    expect(updated.leftSidebarAppearanceMode).toBe('default')
+    expect(updated.leftSidebarAppearanceDefaultedToMatchTerminal).toBe(true)
+  })
+
   it('migrates inherited TUI scroll sensitivity defaults to one report on first load', async () => {
     writeDataFile({
       schemaVersion: 1,

@@ -120,7 +120,7 @@ export function resolveLeftSidebarStyleVariables(
   if (!settings) {
     return undefined
   }
-  switch (settings.leftSidebarAppearanceMode) {
+  switch (settings.leftSidebarAppearanceMode ?? 'match-terminal') {
     case 'default':
       return undefined
     case 'match-terminal':

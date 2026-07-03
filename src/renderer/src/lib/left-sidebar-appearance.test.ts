@@ -11,8 +11,29 @@ function settings(overrides = {}) {
 }
 
 describe('resolveLeftSidebarStyleVariables', () => {
-  it('leaves the default sidebar token surface untouched', () => {
-    expect(resolveLeftSidebarStyleVariables(settings(), true)).toBeUndefined()
+  it('matches terminal surfaces by default', () => {
+    const vars = resolveLeftSidebarStyleVariables(
+      settings({
+        terminalColorOverrides: {
+          background: '#101820',
+          foreground: '#f0f4f8'
+        }
+      }),
+      true
+    )
+
+    expect(vars).toMatchObject({
+      '--worktree-sidebar': '#101820',
+      '--worktree-sidebar-foreground': '#f0f4f8',
+      '--background': '#101820',
+      '--foreground': '#f0f4f8'
+    })
+  })
+
+  it('leaves explicit default sidebar token surfaces untouched', () => {
+    expect(
+      resolveLeftSidebarStyleVariables(settings({ leftSidebarAppearanceMode: 'default' }), true)
+    ).toBeUndefined()
   })
 
   it('matches terminal background, foreground, and scoped text tokens', () => {

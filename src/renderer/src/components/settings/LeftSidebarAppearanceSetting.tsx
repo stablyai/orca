@@ -32,12 +32,12 @@ export function LeftSidebarAppearanceSetting({
         )}
         description={translate(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.rowDescription',
-          'Make the left sidebar match your terminal, stay default, or use a tint.'
+          'Keep the sidebar aligned with your terminal theme, use app defaults, or add a tint.'
         )}
         control={
           <SettingsSegmentedControl<LeftSidebarAppearanceMode>
             size="sm"
-            value={settings.leftSidebarAppearanceMode ?? 'default'}
+            value={settings.leftSidebarAppearanceMode ?? 'match-terminal'}
             onChange={(leftSidebarAppearanceMode) => updateSettings({ leftSidebarAppearanceMode })}
             ariaLabel={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
@@ -69,7 +69,7 @@ export function LeftSidebarAppearanceSetting({
           />
         }
       />
-      {(settings.leftSidebarAppearanceMode ?? 'default') === 'tinted' ? (
+      {(settings.leftSidebarAppearanceMode ?? 'match-terminal') === 'tinted' ? (
         <div className="space-y-2">
           <ColorField
             label={translate(
