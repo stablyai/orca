@@ -8,6 +8,7 @@ import {
   MAX_OSC_TITLE_CHARS
 } from './agent-detection'
 import {
+  hasCompatibleAgentTitleIdentity,
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
@@ -112,6 +113,14 @@ describe('Pi-compatible title detection', () => {
   it('preserves Pi-compatible custom titles and unrelated owners', () => {
     expect(normalizeCompatibleAgentTitleForOwner('Fix pi bugs', 'omp')).toBe('Fix pi bugs')
     expect(normalizeCompatibleAgentTitleForOwner('\u280b Pi', 'codex')).toBe('\u280b Pi')
+  })
+
+  it('identifies titles whose compatible identity can be re-owned', () => {
+    expect(hasCompatibleAgentTitleIdentity('Pi ready')).toBe(true)
+    expect(hasCompatibleAgentTitleIdentity('π - tmp')).toBe(true)
+    expect(hasCompatibleAgentTitleIdentity('\u280b OMP')).toBe(true)
+    expect(hasCompatibleAgentTitleIdentity('Fix pi bugs')).toBe(false)
+    expect(hasCompatibleAgentTitleIdentity('\u280b Codex')).toBe(false)
   })
 
   it('normalizes Pi-compatible status identity and terminal title to the owner', () => {

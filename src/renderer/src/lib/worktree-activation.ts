@@ -49,6 +49,7 @@ import {
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getRuntimeEnvironmentIdForWorktree,
@@ -505,6 +506,24 @@ export function ensureWorktreeHasInitialTerminal(
         opts
       )
       return existingTerminalTabId
+    }
+    if (setup || issueCommand) {
+      // Why: runtime-owned worktrees mirror their session tabs asynchronously,
+      // so right after create there is usually no tab yet. Hold the commands
+      // for the first mirrored tab instead of silently dropping them.
+      queueHookCommandsForFirstWorktreeTab({
+        worktreeId,
+        deliver: (state, firstTerminalTabId) =>
+          queueSetupAndIssueCommands(
+            state,
+            worktreeId,
+            firstTerminalTabId,
+            setup,
+            issueCommand,
+            wrappedSetupCommandStr,
+            opts
+          )
+      })
     }
     return null
   }

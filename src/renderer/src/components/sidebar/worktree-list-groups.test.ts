@@ -2275,6 +2275,67 @@ describe('project groups', () => {
     ])
   })
 
+  it('orders Project Group siblings by tabOrder within each parent bucket', () => {
+    const rootA: ProjectGroup = {
+      id: 'group-root-a',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 20,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const rootB: ProjectGroup = {
+      ...rootA,
+      id: 'group-root-b',
+      name: 'Infrastructure',
+      tabOrder: 10
+    }
+    const childLate: ProjectGroup = {
+      ...rootA,
+      id: 'group-child-late',
+      name: 'late',
+      parentGroupId: rootB.id,
+      tabOrder: 30
+    }
+    const childEarly: ProjectGroup = {
+      ...rootA,
+      id: 'group-child-early',
+      name: 'early',
+      parentGroupId: rootB.id,
+      tabOrder: 5
+    }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      'recent',
+      {},
+      undefined,
+      false,
+      undefined,
+      [rootA, rootB, childLate, childEarly]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-root-b',
+      'project-group:group-child-early',
+      'project-group:group-child-late',
+      'project-group:group-root-a'
+    ])
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.projectGroupDepth)).toEqual(
+      [0, 1, 1, 0]
+    )
+  })
+
   it('renders nested Project Groups before repos assigned to their leaf group', () => {
     const rootGroup: ProjectGroup = {
       id: 'group-root',

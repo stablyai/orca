@@ -889,6 +889,11 @@ jobs:
         if: matrix.platform == 'win'
         shell: pwsh
         run: |
+          # Why: Some hosted Windows images start without PSGallery registered.
+          if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default -InstallationPolicy Trusted
+          }
+
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
 
           $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)

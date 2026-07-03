@@ -11,6 +11,7 @@ const PDF_DEFAULT_MARGIN_INCHES = 1 / 2.54
 const PDF_STREAM_CHUNK_BYTES = 1024 * 1024
 const PDF_STREAM_HANDLE_PREFIX = 'orca-pdf-'
 const PDF_STREAM_TTL_MS = 5 * 60 * 1000
+const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
 
 type PdfStream = {
   data: Buffer
@@ -404,11 +405,37 @@ export class CdpWsProxy {
     }
     // Why: agent-browser waits for network idle to detect navigation completion.
     // Electron webview CDP subscriptions silently lapse after cross-process swaps.
+    // Page.reload needs the same priming: forwarding it unprimed closed the tab (#7031).
     if (msg.method === 'Page.navigate' && !this.webContents.isDestroyed()) {
-      void this.navigateWithLifecycleEnsured(client, clientId, msg.params ?? {})
+      void this.navigateWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
+      return
+    }
+    // Why: CDP Page.reload can destroy Electron webview targets during process swaps.
+    // Use the same direct webContents reload path as Orca's own browser.reload.
+    if (msg.method === 'Page.reload' && !this.webContents.isDestroyed()) {
+      void this.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return
     }
     this.forwardCommand(client, clientId, msg.method, msg.params ?? {}, msg.sessionId)
+  }
+
+  private resolveDebuggerSessionId(msgSessionId?: string): string | undefined {
+    return msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
+  }
+
+  private isActiveClient(client: WebSocket): boolean {
+    return this.client === client && client.readyState === WebSocket.OPEN
+  }
+
+  private sendDebuggerCommand(
+    method: string,
+    params: Record<string, unknown>,
+    sessionId?: string
+  ): Promise<unknown> {
+    const command = sessionId
+      ? this.webContents.debugger.sendCommand(method, params, sessionId)
+      : this.webContents.debugger.sendCommand(method, params)
+    return Promise.resolve(command)
   }
 
   private forwardCommand(
@@ -422,10 +449,9 @@ export class CdpWsProxy {
       this.sendError(clientId, 'Browser tab is no longer available', client)
       return
     }
-    const sessionId =
-      msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
+    const sessionId = this.resolveDebuggerSessionId(msgSessionId)
     try {
-      Promise.resolve(this.webContents.debugger.sendCommand(method, params, sessionId))
+      this.sendDebuggerCommand(method, params, sessionId)
         .then((result) => {
           this.sendResult(clientId, result, client)
         })
@@ -437,21 +463,85 @@ export class CdpWsProxy {
     }
   }
 
-  private async navigateWithLifecycleEnsured(
+  private async navigateWithLifecycle(
     client: WebSocket,
     clientId: number,
-    params: Record<string, unknown>
+    params: Record<string, unknown>,
+    msgSessionId?: string
   ): Promise<void> {
-    try {
-      const dbg = this.webContents.debugger
-      // Why: without Network.enable, agent-browser never sees network idle → goto times out.
-      await dbg.sendCommand('Network.enable', {})
-      await dbg.sendCommand('Page.enable', {})
-      await dbg.sendCommand('Page.setLifecycleEventsEnabled', { enabled: true })
-    } catch {
-      /* best-effort */
+    await this.primePageLifecycle(this.resolveDebuggerSessionId(msgSessionId))
+    if (!this.isActiveClient(client)) {
+      return
     }
-    this.forwardCommand(client, clientId, 'Page.navigate', params)
+    this.forwardCommand(client, clientId, 'Page.navigate', params, msgSessionId)
+  }
+
+  private async reloadWithLifecycle(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>,
+    msgSessionId?: string
+  ): Promise<void> {
+    const sessionId = this.resolveDebuggerSessionId(msgSessionId)
+    const unsupportedParam = sessionId ? null : this.getUnsupportedRootReloadParam(params)
+    if (unsupportedParam) {
+      this.sendError(
+        clientId,
+        `Page.reload parameter "${unsupportedParam}" is not supported for Orca tab reloads`,
+        client
+      )
+      return
+    }
+    await this.primePageLifecycle(sessionId)
+    if (!this.isActiveClient(client)) {
+      return
+    }
+    if (sessionId) {
+      this.forwardCommand(client, clientId, 'Page.reload', params, msgSessionId)
+      return
+    }
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
+    try {
+      if (params.ignoreCache === true) {
+        this.webContents.reloadIgnoringCache()
+      } else {
+        this.webContents.reload()
+      }
+      this.sendResult(clientId, {}, client)
+    } catch (err) {
+      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
+  }
+
+  private getUnsupportedRootReloadParam(params: Record<string, unknown>): string | null {
+    return Object.keys(params).find((key) => key !== 'ignoreCache') ?? null
+  }
+
+  private async primePageLifecycle(sessionId?: string): Promise<void> {
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const priming = (async (): Promise<void> => {
+      // Why: without Network.enable, agent-browser never sees network idle → goto times out.
+      await this.sendDebuggerCommand('Network.enable', {}, sessionId)
+      await this.sendDebuggerCommand('Page.enable', {}, sessionId)
+      await this.sendDebuggerCommand('Page.setLifecycleEventsEnabled', { enabled: true }, sessionId)
+    })().catch(() => {})
+
+    try {
+      await Promise.race([
+        priming,
+        new Promise<void>((resolve) => {
+          timeout = setTimeout(resolve, LIFECYCLE_PRIMING_TIMEOUT_MS)
+          timeout.unref?.()
+        })
+      ])
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+    }
   }
 
   private async handlePrintToPdf(

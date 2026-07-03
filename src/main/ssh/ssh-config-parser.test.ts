@@ -508,4 +508,25 @@ describe('parseSshGOutput', () => {
     const result = parseSshGOutput(output)
     expect(result.identitiesOnly).toBe(true)
   })
+
+  it('parses controlmaster options and filters controlpath none', () => {
+    const output = [
+      'hostname example.com',
+      'controlmaster auto',
+      'controlpath ~/.ssh/cm/%r@%h:%p',
+      'controlpersist 10m',
+      'port 22'
+    ].join('\n')
+    const result = parseSshGOutput(output)
+    expect(result.controlMaster).toBe('auto')
+    expect(result.controlPath).toBe(testHomePath('.ssh', 'cm', '%r@%h:%p'))
+    expect(result.controlPersist).toBe('10m')
+
+    const noneResult = parseSshGOutput(
+      'hostname example.com\ncontrolmaster no\ncontrolpath none\ncontrolpersist no\nport 22'
+    )
+    expect(noneResult.controlMaster).toBe('no')
+    expect(noneResult.controlPath).toBeUndefined()
+    expect(noneResult.controlPersist).toBe('no')
+  })
 })

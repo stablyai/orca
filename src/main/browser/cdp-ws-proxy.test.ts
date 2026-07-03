@@ -21,7 +21,9 @@ function createMockWebContents() {
     detach: vi.fn(() => {
       debuggerAttached = false
     }),
-    sendCommand: vi.fn(async () => ({})),
+    sendCommand: vi.fn(
+      async (_method?: string, _params?: Record<string, unknown>, _sessionId?: string) => ({})
+    ),
     on: vi.fn((event: string, handler: DebuggerListener) => {
       const arr = listeners.get(event) ?? []
       arr.push(handler)
@@ -42,6 +44,8 @@ function createMockWebContents() {
       isDestroyed: () => destroyed,
       focus: vi.fn(),
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
+      reload: vi.fn(),
+      reloadIgnoringCache: vi.fn(),
       getTitle: vi.fn(() => 'Example'),
       getURL: vi.fn(() => 'https://example.com')
     },
@@ -88,6 +92,22 @@ describe('CdpWsProxy', () => {
       ws.once('message', (data) => resolve(JSON.parse(data.toString())))
       ws.send(JSON.stringify(msg))
     })
+  }
+
+  type SendCommandCall = [string, Record<string, unknown>?, string?]
+
+  function getSendCommandCalls(): SendCommandCall[] {
+    const calls = mock.webContents.debugger.sendCommand.mock.calls as unknown as [
+      string,
+      Record<string, unknown>?,
+      string?
+    ][]
+    return calls
+  }
+
+  function getSendCommandMethods(): string[] {
+    const calls = getSendCommandCalls()
+    return calls.map((call) => call[0])
   }
 
   function expectPdfStreamHandle(response: Record<string, unknown>): string {
@@ -321,11 +341,173 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
-  it('prints PDF data through native webContents printToPDF', async () => {
+  it('primes lifecycle events for Page.navigate', async () => {
     const client = await connect()
 
     const response = await sendAndReceive(client, {
       id: 11,
+      method: 'Page.navigate',
+      params: { url: 'https://example.com/next' }
+    })
+
+    expect(response.id).toBe(11)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Network.enable',
+      'Page.enable',
+      'Page.setLifecycleEventsEnabled',
+      'Page.navigate'
+    ])
+    client.close()
+  })
+
+  it('primes lifecycle events for Page.reload and preserves response id', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 12,
+      method: 'Page.reload'
+    })
+
+    expect(response.id).toBe(12)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Network.enable',
+      'Page.enable',
+      'Page.setLifecycleEventsEnabled'
+    ])
+    expect(mock.webContents.reload).toHaveBeenCalledTimes(1)
+    expect(getSendCommandMethods()).not.toContain('Page.reload')
+    client.close()
+  })
+
+  it('preserves explicit Page.navigate session during lifecycle priming', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 14,
+      method: 'Page.navigate',
+      params: { url: 'https://example.com/frame' },
+      sessionId: 'iframe-session-123'
+    })
+
+    expect(getSendCommandCalls().slice(2)).toEqual([
+      ['Network.enable', {}, 'iframe-session-123'],
+      ['Page.enable', {}, 'iframe-session-123'],
+      ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
+      ['Page.navigate', { url: 'https://example.com/frame' }, 'iframe-session-123']
+    ])
+    client.close()
+  })
+
+  it('forwards explicit Page.reload session after lifecycle priming', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 15,
+      method: 'Page.reload',
+      params: { ignoreCache: true },
+      sessionId: 'iframe-session-123'
+    })
+
+    expect(getSendCommandCalls().slice(2)).toEqual([
+      ['Network.enable', {}, 'iframe-session-123'],
+      ['Page.enable', {}, 'iframe-session-123'],
+      ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
+      ['Page.reload', { ignoreCache: true }, 'iframe-session-123']
+    ])
+    expect(mock.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+    expect(mock.webContents.reload).not.toHaveBeenCalled()
+    client.close()
+  })
+
+  it('rejects root Page.reload params that direct webContents reload cannot honor', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 16,
+      method: 'Page.reload',
+      params: { loaderId: 'stale-loader' }
+    })
+
+    expect(response).toEqual({
+      id: 16,
+      error: {
+        code: -32000,
+        message: 'Page.reload parameter "loaderId" is not supported for Orca tab reloads'
+      }
+    })
+    expect(mock.webContents.reload).not.toHaveBeenCalled()
+    expect(mock.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+    expect(getSendCommandMethods()).not.toContain('Network.enable')
+    client.close()
+  })
+
+  it('still reloads when lifecycle priming stalls', async () => {
+    const client = await connect()
+    mock.webContents.debugger.sendCommand.mockImplementation((method?: string) => {
+      if (method === 'Network.enable') {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({})
+    })
+
+    const responsePromise = sendAndReceive(client, {
+      id: 17,
+      method: 'Page.reload'
+    })
+
+    await expect(responsePromise).resolves.toEqual({ id: 17, result: {} })
+    expect(mock.webContents.reload).toHaveBeenCalledTimes(1)
+    client.close()
+  })
+
+  it('does not reload after the requesting client disconnects during priming', async () => {
+    const client = await connect()
+    mock.webContents.debugger.sendCommand.mockImplementation((method?: string) => {
+      if (method === 'Network.enable') {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({})
+    })
+
+    client.send(JSON.stringify({ id: 18, method: 'Page.reload' }))
+    client.close()
+
+    await new Promise((resolve) => setTimeout(resolve, 1_100))
+
+    expect(mock.webContents.reload).not.toHaveBeenCalled()
+    expect(mock.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+  })
+
+  it('forwards Runtime.evaluate without lifecycle priming', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 13,
+      method: 'Runtime.evaluate',
+      params: { expression: 'document.readyState' }
+    })
+
+    expect(response.id).toBe(13)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Runtime.evaluate'
+    ])
+    client.close()
+  })
+
+  it('prints PDF data through native webContents printToPDF', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 19,
       method: 'Page.printToPDF',
       params: {
         landscape: true,
@@ -342,7 +524,7 @@ describe('CdpWsProxy', () => {
     })
 
     expect(response).toEqual({
-      id: 11,
+      id: 19,
       result: { data: Buffer.from('%PDF-test').toString('base64') }
     })
     expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
@@ -359,10 +541,7 @@ describe('CdpWsProxy', () => {
       pageRanges: '1-2',
       preferCSSPageSize: true
     })
-    const forwardedMethods = mock.webContents.debugger.sendCommand.mock.calls.map(
-      (call) => (call as unknown[])[0]
-    )
-    expect(forwardedMethods).not.toContain('Page.printToPDF')
+    expect(getSendCommandMethods()).not.toContain('Page.printToPDF')
     client.close()
   })
 
@@ -370,7 +549,7 @@ describe('CdpWsProxy', () => {
     const client = await connect()
 
     await sendAndReceive(client, {
-      id: 12,
+      id: 20,
       method: 'Page.printToPDF',
       params: {
         marginTop: 0.25
@@ -394,45 +573,45 @@ describe('CdpWsProxy', () => {
     const client = await connect()
 
     const printResponse = await sendAndReceive(client, {
-      id: 12,
+      id: 21,
       method: 'Page.printToPDF',
       params: { transferMode: 'ReturnAsStream' }
     })
     const handle = expectPdfStreamHandle(printResponse)
 
     const firstRead = await sendAndReceive(client, {
-      id: 13,
+      id: 22,
       method: 'IO.read',
       params: { handle, size: 2 }
     })
     const secondRead = await sendAndReceive(client, {
-      id: 14,
+      id: 23,
       method: 'IO.read',
       params: { handle }
     })
     const closeResponse = await sendAndReceive(client, {
-      id: 15,
+      id: 24,
       method: 'IO.close',
       params: { handle }
     })
     const readAfterClose = await sendAndReceive(client, {
-      id: 16,
+      id: 25,
       method: 'IO.read',
       params: { handle }
     })
 
-    expect(printResponse.id).toBe(12)
+    expect(printResponse.id).toBe(21)
     expect(firstRead).toEqual({
-      id: 13,
+      id: 22,
       result: { base64Encoded: true, data: Buffer.from('ab').toString('base64'), eof: false }
     })
     expect(secondRead).toEqual({
-      id: 14,
+      id: 23,
       result: { base64Encoded: true, data: Buffer.from('cdef').toString('base64'), eof: true }
     })
-    expect(closeResponse).toEqual({ id: 15, result: {} })
+    expect(closeResponse).toEqual({ id: 24, result: {} })
     expect(readAfterClose).toEqual({
-      id: 16,
+      id: 25,
       error: { code: -32000, message: 'Invalid stream handle' }
     })
     client.close()
@@ -443,25 +622,25 @@ describe('CdpWsProxy', () => {
     const client = await connect()
 
     const printResponse = await sendAndReceive(client, {
-      id: 16,
+      id: 26,
       method: 'Page.printToPDF',
       params: { transferMode: 'ReturnAsStream' }
     })
     const handle = expectPdfStreamHandle(printResponse)
 
-    expect(printResponse.id).toBe(16)
+    expect(printResponse.id).toBe(26)
     client.close()
     await new Promise((resolve) => setTimeout(resolve, 10))
 
     const nextClient = await connect()
     const staleRead = await sendAndReceive(nextClient, {
-      id: 17,
+      id: 27,
       method: 'IO.read',
       params: { handle }
     })
 
     expect(staleRead).toEqual({
-      id: 17,
+      id: 27,
       error: { code: -32000, message: 'Invalid stream handle' }
     })
     nextClient.close()
@@ -474,28 +653,25 @@ describe('CdpWsProxy', () => {
     const client = await connect()
 
     const readResponse = await sendAndReceive(client, {
-      id: 18,
+      id: 28,
       method: 'IO.read',
       params: { handle: 'trace-stream', size: 64 }
     })
     const closeResponse = await sendAndReceive(client, {
-      id: 19,
+      id: 29,
       method: 'IO.close',
       params: { handle: 'trace-stream' }
     })
 
-    expect(readResponse).toEqual({ id: 18, result: { data: 'trace-data', eof: false } })
-    expect(closeResponse).toEqual({ id: 19, result: {} })
-    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
-      'IO.read',
-      { handle: 'trace-stream', size: 64 },
-      undefined
-    )
-    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
-      'IO.close',
-      { handle: 'trace-stream' },
-      undefined
-    )
+    expect(readResponse).toEqual({ id: 28, result: { data: 'trace-data', eof: false } })
+    expect(closeResponse).toEqual({ id: 29, result: {} })
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith('IO.read', {
+      handle: 'trace-stream',
+      size: 64
+    })
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith('IO.close', {
+      handle: 'trace-stream'
+    })
     client.close()
   })
 

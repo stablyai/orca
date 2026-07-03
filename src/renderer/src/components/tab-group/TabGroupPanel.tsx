@@ -225,7 +225,9 @@ export default function TabGroupPanel({
           user can only drag from the tiny left-sidebar header strip. */}
       <div
         className="h-[32px] shrink-0 border-b border-border bg-card"
+        data-tab-group-strip-id={groupId}
         data-terminal-focus-release-surface="true"
+        data-worktree-id={worktreeId}
       >
         <div className="flex h-full items-stretch pr-1.5">
           {/* Why: Electron's native drag hit-test only respects no-drag on DOM

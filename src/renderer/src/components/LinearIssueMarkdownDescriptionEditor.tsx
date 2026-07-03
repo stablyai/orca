@@ -11,6 +11,11 @@ import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownTool
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import {
+  getRichMarkdownSpellcheckAttribute,
+  useRichMarkdownSpellcheckAttribute
+} from '@/components/editor/rich-markdown-spellcheck'
 
 type LinearIssueMarkdownDescriptionEditorProps = {
   value: string
@@ -46,6 +51,9 @@ export function LinearIssueMarkdownDescriptionEditor({
   const language = i18n.resolvedLanguage ?? i18n.language
   const lastEditorMarkdownRef = useRef(value)
   const editorRef = useRef<Editor | null>(null)
+  const richMarkdownSpellcheckEnabled = useAppStore(
+    (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
+  )
   const linearIssueMarkdownExtensions = useMemo(() => {
     // Why: Tiptap freezes extension options when the editor is created; the
     // language value is the recreation key for translated extension options.
@@ -63,7 +71,7 @@ export function LinearIssueMarkdownDescriptionEditor({
       editorProps: {
         attributes: {
           class: 'rich-markdown-editor',
-          spellcheck: 'true',
+          spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled),
           'aria-label': 'Issue description'
         },
         handleKeyDown: (_view, event) => {
@@ -93,6 +101,7 @@ export function LinearIssueMarkdownDescriptionEditor({
     },
     [language]
   )
+  useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   useEffect(() => {
     editorRef.current = editor

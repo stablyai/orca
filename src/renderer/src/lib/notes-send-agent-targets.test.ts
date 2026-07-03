@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentStatusState
+} from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -13,6 +17,7 @@ const LAUNCH_TAB_ID = 'tab-launch'
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 const NOW = 10_000
+const OLD_STATUS_UPDATED_AT = NOW - AGENT_STATUS_STALE_AFTER_MS - 1
 
 function tab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -28,15 +33,21 @@ function tab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
-function entry(paneKey: string, state: AgentStatusState = 'done'): AgentStatusEntry {
+function entry(
+  paneKey: string,
+  state: AgentStatusState = 'done',
+  updatedAt = NOW,
+  overrides: Partial<AgentStatusEntry> = {}
+): AgentStatusEntry {
   return {
     paneKey,
     state,
     prompt: '',
-    updatedAt: NOW,
-    stateStartedAt: NOW,
+    updatedAt,
+    stateStartedAt: updatedAt,
     agentType: 'codex',
-    stateHistory: []
+    stateHistory: [],
+    ...overrides
   }
 }
 
@@ -338,6 +349,177 @@ describe('notes send agent targets', () => {
       leafId: LEAF_A,
       status: 'eligible'
     })
+  })
+
+  it('promotes a stale status-backed launch-agent pane when live title and PTY prove it is sendable', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(LAUNCH_TAB_ID, { title: 'Previous Codex session', launchAgent: 'codex' })
+          ]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey,
+        tabId: LAUNCH_TAB_ID,
+        leafId: LEAF_B,
+        agentType: 'codex',
+        tabTitle: 'Previous Codex session',
+        status: 'eligible'
+      }
+    ])
+  })
+
+  it('uses launch ownership when promoting a stale unknown status-backed pane', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT, {
+            agentType: 'unknown'
+          })
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey,
+        agentType: 'codex',
+        status: 'eligible'
+      })
+    ])
+  })
+
+  it('keeps a stale status-backed launch-agent pane disabled with only a bare agent title', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey,
+        status: 'disabled',
+        disabledReason: 'Agent status is stale'
+      })
+    ])
+  })
+
+  it('keeps a stale status-backed launch-agent pane disabled when the live title needs permission', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex - action required' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey,
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      })
+    ])
+  })
+
+  it('does not let a stale status-backed split pane hide a different live active launch-agent pane', () => {
+    const stalePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+    const livePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: {
+          [LAUNCH_TAB_ID]: splitLayout(LEAF_B, { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' })
+        },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 2: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: stalePaneKey,
+        status: 'disabled',
+        disabledReason: 'Agent status is stale'
+      }),
+      expect.objectContaining({
+        paneKey: livePaneKey,
+        status: 'eligible'
+      })
+    ])
+  })
+
+  it('does not borrow a stale tab title for an active split pane after another pane has title evidence', () => {
+    const stalePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [stalePaneKey]: entry(stalePaneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: {
+          [LAUNCH_TAB_ID]: splitLayout(LEAF_B, { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' })
+        },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'zsh' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: stalePaneKey,
+        status: 'disabled',
+        disabledReason: 'Agent status is stale'
+      })
+    ])
   })
 
   it('skips a launch-agent tab whose active leaf is not a terminal leaf', () => {

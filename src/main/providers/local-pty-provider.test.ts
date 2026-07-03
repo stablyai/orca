@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { delimiter } from 'node:path'
 
 const {
   existsSyncMock,
@@ -363,6 +364,50 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    })
+
+    it('does not inherit AppImage runtime env into Linux PTY shells', async () => {
+      const saved = {
+        APPIMAGE: process.env.APPIMAGE,
+        APPDIR: process.env.APPDIR,
+        ARGV0: process.env.ARGV0,
+        OWD: process.env.OWD,
+        APPIMAGE_LIBRARY_PATH: process.env.APPIMAGE_LIBRARY_PATH,
+        PATH: process.env.PATH,
+        LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
+      }
+      process.env.APPIMAGE = '/data/apps/orca.appimage'
+      process.env.APPDIR = '/tmp/.mount_orca123'
+      process.env.ARGV0 = '/data/apps/orca.appimage'
+      process.env.OWD = '/home/user/project'
+      process.env.APPIMAGE_LIBRARY_PATH = '/tmp/.mount_orca123/usr/lib'
+      process.env.PATH = ['/tmp/.mount_orca123', '/tmp/.mount_orca123/usr/sbin', '/usr/bin'].join(
+        delimiter
+      )
+      process.env.LD_LIBRARY_PATH = ['/tmp/.mount_orca123/usr/lib', '/opt/audio/lib'].join(
+        delimiter
+      )
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.APPIMAGE).toBeUndefined()
+      expect(env.APPDIR).toBeUndefined()
+      expect(env.ARGV0).toBeUndefined()
+      expect(env.OWD).toBeUndefined()
+      expect(env.APPIMAGE_LIBRARY_PATH).toBeUndefined()
+      expect(env.PATH).toBe('/usr/bin')
+      expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
     })
 
     it('uses shell wrapper when MiMo home must survive shell startup', async () => {
