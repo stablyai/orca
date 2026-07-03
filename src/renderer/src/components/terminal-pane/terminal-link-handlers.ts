@@ -33,14 +33,15 @@ import {
   getTerminalOrcaFileOpenHint,
   getTerminalWorktreePathOpenHint,
   getTerminalFileOpenHint,
-  getTerminalUrlOpenHint,
-  isMacPlatform
+  getTerminalUrlOpenHint
 } from './terminal-link-open-hints'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import { isTerminalLinkActivation } from './terminal-link-activation'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
 export { getTerminalFileOpenHint, getTerminalHtmlFileOpenHint, getTerminalUrlOpenHint }
+export { isTerminalLinkActivation } from './terminal-link-activation'
 
 export type LinkHandlerDeps = {
   worktreeId: string
@@ -314,11 +315,4 @@ export function installFilePathLinkClickFallback(
       terminalElement?.removeEventListener('mouseup', handleMouseUp, mouseUpListenerOptions)
     }
   }
-}
-
-export function isTerminalLinkActivation(
-  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
-): boolean {
-  const isMac = isMacPlatform()
-  return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
 }

@@ -2586,7 +2586,8 @@
             "openLocalWorkspace": "恢复会话前请先打开一个本地工作区。",
             "sessionQueued": "会话已排队",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为将其拖放到本地工作区。"
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "新建拆分"
@@ -2903,7 +2904,9 @@
             "c35af53b73": "登录",
             "f19a63e7cd": "登录查看使用情况",
             "5c938d39ac": "% 周",
+            "54e8d6bb2d": "% Fable",
             "d79c3362c4": "% 5小时",
+            "a79c64f87e": "Fable",
             "8295903d17": "切换后继续旧对话之前，请重新启动实时 Claude 终端。",
             "c98ea88392": "没有其他账户",
             "9332ba8684": "切换到",
@@ -3067,6 +3070,7 @@
             "6d6df77f41": "无可用数据",
             "7f7f208060": "每月",
             "252c096536": "每周",
+            "a79c64f87e": "Fable",
             "94038ad2fa": "会话",
             "2c35eca8d4": "无法获取使用情况",
             "1292d4f2ee": "不可用",
@@ -4073,7 +4077,8 @@
           "hostAuthNeeded": "需要身份验证",
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
-          "sidebarRowMissing": "目标不再存在"
+          "sidebarRowMissing": "目标不再存在",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -5144,7 +5149,9 @@
           "8f1afdfbd8": "差异自动换行",
           "4aa4d9fb73": "在差异编辑器中换行显示长行，而不是要求水平滚动。",
           "bf16ef0af2": "关闭",
-          "3f6892f307": "开启"
+          "3f6892f307": "开启",
+          "b82f86d7d2": "Rich Markdown Spellcheck",
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
@@ -6348,7 +6355,11 @@
           "29af933cd5": "新的 SSH 目标",
           "f2331ce599": "编辑 SSH 目标",
           "7c13f58c91": "直到重置",
-          "55c56cf2c7": "断开连接后的超时时间（秒）"
+          "55c56cf2c7": "断开连接后的超时时间（秒）",
+          "4a342f44c1": "高级连接",
+          "e9609ddca6": "代理、跳板主机和连接复用",
+          "8c922dffba": "复用 SSH 连接以加快设置",
+          "53e9aabfc0": "可用时使用 OpenSSH 多路复用。对于有自定义 SSH 限制的主机，请关闭此项。"
         },
         "TasksPane": {
           "3a72b9745e": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。",
@@ -7393,7 +7404,9 @@
             "161a86a9da": "关闭固定标签页前确认",
             "8e593f04fc": "关闭固定标签页前显示确认对话框。",
             "defaultProjectRuntime": "默认项目运行时",
-            "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。"
+            "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。",
+            "d2d2d929c0": "Rich Markdown Spellcheck",
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
         },
         "git": {
@@ -8812,7 +8825,8 @@
             "98a79948b3": "复制",
             "b234ab25b4": "无法将文件复制到剪贴板",
             "f9d7ca753d": "复制路径",
-            "3161c4e425": "文件夹"
+            "3161c4e425": "文件夹",
+            "e887fa4b2e": "在终端中打开"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",
@@ -9559,7 +9573,8 @@
             "worktreeUnavailable": "Worktree is no longer available.",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -10201,8 +10216,8 @@
           "title": "自定义网络地址",
           "description": "指定当手机不在同一 Wi-Fi 时可以访问的地址，例如 Tailscale 主机名或静态 IP。",
           "label": "地址",
-          "placeholder": "my-mac.ts.net 或 192.168.1.50",
-          "hint": "请输入 IP 地址或 Tailscale 主机名（以 .ts.net 结尾）。",
+          "placeholder": "my-mac.ts.net、home.example.com 或 192.168.1.50",
+          "hint": "请输入 IP 地址或主机名（Tailscale MagicDNS 名称、DDNS 域名或 LAN 主机名），可选择附加 :端口。",
           "cancel": "取消",
           "use": "使用地址"
         },

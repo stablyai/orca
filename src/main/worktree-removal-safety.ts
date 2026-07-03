@@ -2,8 +2,7 @@ import { lstat, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import type { GitWorktreeInfo, OrcaWorkspaceLayout, Repo, WorktreeMeta } from '../shared/types'
-import { matchesStrongOrcaCreatePath } from '../shared/worktree-ownership'
+import type { GitWorktreeInfo, Repo, WorktreeMeta } from '../shared/types'
 import { areWorktreePathsEqual } from './ipc/worktree-logic'
 import {
   gitFileProvesOrphanedWorktreeDirectory,
@@ -172,9 +171,6 @@ export async function canSafelyRemoveOrphanedWorktreeDirectory(
 
 export function canCleanupUnregisteredOrcaWorktreeDirectory(args: {
   meta: UnregisteredOrcaCleanupMeta | null | undefined
-  worktreePath: string
-  repo: Pick<Repo, 'path'>
-  knownOrcaLayouts: readonly OrcaWorkspaceLayout[]
 }): boolean {
   if (hasCurrentOrcaCreationProvenance(args.meta)) {
     return true
@@ -184,9 +180,9 @@ export function canCleanupUnregisteredOrcaWorktreeDirectory(args: {
     return true
   }
 
-  // Why: profiles created before explicit provenance can still contain Orca
-  // workspaces at the repo-specific workspaceDir/<repo>/<name> path shape.
-  return matchesStrongOrcaCreatePath(args.worktreePath, args.knownOrcaLayouts, args.repo)
+  // Why: path shape alone is not authority; users can create plain Git
+  // worktrees inside Orca's workspace directory too.
+  return false
 }
 
 export async function canCleanupUnregisteredOrcaLeftoverDirectory(args: {
@@ -195,7 +191,6 @@ export async function canCleanupUnregisteredOrcaLeftoverDirectory(args: {
   runtimeWorktreePath: string
   repo: Pick<Repo, 'path'>
   runtimeRepoPath: string
-  knownOrcaLayouts: readonly OrcaWorkspaceLayout[]
   registeredWorktrees: readonly GitWorktreeInfo[]
   statPath: StatPath
   isGitRepository: (runtimeWorktreePath: string) => Promise<boolean>

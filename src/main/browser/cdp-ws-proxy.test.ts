@@ -21,7 +21,9 @@ function createMockWebContents() {
     detach: vi.fn(() => {
       debuggerAttached = false
     }),
-    sendCommand: vi.fn(async () => ({})),
+    sendCommand: vi.fn(
+      async (_method?: string, _params?: Record<string, unknown>, _sessionId?: string) => ({})
+    ),
     on: vi.fn((event: string, handler: DebuggerListener) => {
       const arr = listeners.get(event) ?? []
       arr.push(handler)
@@ -41,6 +43,8 @@ function createMockWebContents() {
       debugger: debuggerObj,
       isDestroyed: () => destroyed,
       focus: vi.fn(),
+      reload: vi.fn(),
+      reloadIgnoringCache: vi.fn(),
       getTitle: vi.fn(() => 'Example'),
       getURL: vi.fn(() => 'https://example.com')
     },
@@ -87,6 +91,22 @@ describe('CdpWsProxy', () => {
       ws.once('message', (data) => resolve(JSON.parse(data.toString())))
       ws.send(JSON.stringify(msg))
     })
+  }
+
+  type SendCommandCall = [string, Record<string, unknown>?, string?]
+
+  function getSendCommandCalls(): SendCommandCall[] {
+    const calls = mock.webContents.debugger.sendCommand.mock.calls as unknown as [
+      string,
+      Record<string, unknown>?,
+      string?
+    ][]
+    return calls
+  }
+
+  function getSendCommandMethods(): string[] {
+    const calls = getSendCommandCalls()
+    return calls.map((call) => call[0])
   }
 
   it('starts on a random port and returns ws:// URL', () => {
@@ -308,6 +328,168 @@ describe('CdpWsProxy', () => {
     })
 
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    client.close()
+  })
+
+  it('primes lifecycle events for Page.navigate', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 11,
+      method: 'Page.navigate',
+      params: { url: 'https://example.com/next' }
+    })
+
+    expect(response.id).toBe(11)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Network.enable',
+      'Page.enable',
+      'Page.setLifecycleEventsEnabled',
+      'Page.navigate'
+    ])
+    client.close()
+  })
+
+  it('primes lifecycle events for Page.reload and preserves response id', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 12,
+      method: 'Page.reload'
+    })
+
+    expect(response.id).toBe(12)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Network.enable',
+      'Page.enable',
+      'Page.setLifecycleEventsEnabled'
+    ])
+    expect(mock.webContents.reload).toHaveBeenCalledTimes(1)
+    expect(getSendCommandMethods()).not.toContain('Page.reload')
+    client.close()
+  })
+
+  it('preserves explicit Page.navigate session during lifecycle priming', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 14,
+      method: 'Page.navigate',
+      params: { url: 'https://example.com/frame' },
+      sessionId: 'iframe-session-123'
+    })
+
+    expect(getSendCommandCalls().slice(2)).toEqual([
+      ['Network.enable', {}, 'iframe-session-123'],
+      ['Page.enable', {}, 'iframe-session-123'],
+      ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
+      ['Page.navigate', { url: 'https://example.com/frame' }, 'iframe-session-123']
+    ])
+    client.close()
+  })
+
+  it('forwards explicit Page.reload session after lifecycle priming', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 15,
+      method: 'Page.reload',
+      params: { ignoreCache: true },
+      sessionId: 'iframe-session-123'
+    })
+
+    expect(getSendCommandCalls().slice(2)).toEqual([
+      ['Network.enable', {}, 'iframe-session-123'],
+      ['Page.enable', {}, 'iframe-session-123'],
+      ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
+      ['Page.reload', { ignoreCache: true }, 'iframe-session-123']
+    ])
+    expect(mock.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+    expect(mock.webContents.reload).not.toHaveBeenCalled()
+    client.close()
+  })
+
+  it('rejects root Page.reload params that direct webContents reload cannot honor', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 16,
+      method: 'Page.reload',
+      params: { loaderId: 'stale-loader' }
+    })
+
+    expect(response).toEqual({
+      id: 16,
+      error: {
+        code: -32000,
+        message: 'Page.reload parameter "loaderId" is not supported for Orca tab reloads'
+      }
+    })
+    expect(mock.webContents.reload).not.toHaveBeenCalled()
+    expect(mock.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+    expect(getSendCommandMethods()).not.toContain('Network.enable')
+    client.close()
+  })
+
+  it('still reloads when lifecycle priming stalls', async () => {
+    const client = await connect()
+    mock.webContents.debugger.sendCommand.mockImplementation((method?: string) => {
+      if (method === 'Network.enable') {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({})
+    })
+
+    const responsePromise = sendAndReceive(client, {
+      id: 17,
+      method: 'Page.reload'
+    })
+
+    await expect(responsePromise).resolves.toEqual({ id: 17, result: {} })
+    expect(mock.webContents.reload).toHaveBeenCalledTimes(1)
+    client.close()
+  })
+
+  it('does not reload after the requesting client disconnects during priming', async () => {
+    const client = await connect()
+    mock.webContents.debugger.sendCommand.mockImplementation((method?: string) => {
+      if (method === 'Network.enable') {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({})
+    })
+
+    client.send(JSON.stringify({ id: 18, method: 'Page.reload' }))
+    client.close()
+
+    await new Promise((resolve) => setTimeout(resolve, 1_100))
+
+    expect(mock.webContents.reload).not.toHaveBeenCalled()
+    expect(mock.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+  })
+
+  it('forwards Runtime.evaluate without lifecycle priming', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 13,
+      method: 'Runtime.evaluate',
+      params: { expression: 'document.readyState' }
+    })
+
+    expect(response.id).toBe(13)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Runtime.evaluate'
+    ])
     client.close()
   })
 

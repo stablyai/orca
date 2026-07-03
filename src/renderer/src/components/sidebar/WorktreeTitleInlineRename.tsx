@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
@@ -211,6 +212,11 @@ export function WorktreeTitleInlineRename({
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       event.stopPropagation()
+      // Why: an Enter that only confirms a CJK IME candidate must not commit the
+      // rename; wait for a non-composition Enter.
+      if (isImeCompositionKeyDown(event)) {
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         void commitRename()

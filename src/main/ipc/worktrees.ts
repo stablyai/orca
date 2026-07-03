@@ -1402,13 +1402,9 @@ export function registerWorktreeHandlers(
         if (!registeredWorktree) {
           const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
           let canCleanOrphanedDirectory = false
-          const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(store.getSettings(), repo)
           if (
             canCleanupUnregisteredOrcaWorktreeDirectory({
-              meta: removedMeta,
-              worktreePath,
-              repo,
-              knownOrcaLayouts
+              meta: removedMeta
             })
           ) {
             if (repo.connectionId) {
@@ -1481,7 +1477,6 @@ export function registerWorktreeHandlers(
                 runtimeWorktreePath,
                 repo,
                 runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-                knownOrcaLayouts,
                 registeredWorktrees,
                 statPath: access.statPath,
                 isGitRepository: (path) => isLocalGitRepository(path, localWorktreeGitOptions)

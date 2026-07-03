@@ -9,6 +9,9 @@ on:
       - ready_for_review
     paths:
       - 'mobile/**'
+      # Why: the mobile terminal link parsers are conformance-tested against
+      # these shared fixtures; desktop-side fixture edits must re-run this suite.
+      - 'src/shared/terminal-file-link-conformance.ts'
 
 jobs:
   verify:

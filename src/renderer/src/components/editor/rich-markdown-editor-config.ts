@@ -26,6 +26,7 @@ import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
 } from './rich-markdown-image-context'
+import { getRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { DiffComment } from '../../../../shared/types'
 
@@ -36,6 +37,7 @@ export type EditorConfigParams = {
   worktreeRoot: string | null
   runtimeEnvironmentId?: string | null
   isMac: boolean
+  richMarkdownSpellcheckEnabled: boolean
   settings: RichMarkdownRuntimeSettings
   activateMarkdownLink: ActivateMarkdownLink
   rootRef: MutableRefObject<HTMLDivElement | null>
@@ -82,6 +84,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     worktreeRoot,
     runtimeEnvironmentId,
     isMac,
+    richMarkdownSpellcheckEnabled,
     settings,
     activateMarkdownLink,
     rootRef,
@@ -127,7 +130,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     editorProps: {
       attributes: {
         class: 'rich-markdown-editor',
-        spellcheck: 'true'
+        spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)
       },
       handleDOMEvents: {
         cut: handleRichMarkdownCut

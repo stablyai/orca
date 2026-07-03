@@ -13,7 +13,10 @@ const REMOTE_PTY_ID_PREFIX = 'remote:'
  */
 export type ReconcilableBinding = {
   reconcileIfSessionDead?: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
+  reconcileIfSessionMissing?: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
+
+export type HasPty = (ptyId: string) => Promise<boolean | null>
 
 /**
  * PURE decision: should the pane bound to `ptyId` be reconciled (torn down)
@@ -58,6 +61,37 @@ export function shouldReconcileDeadSession(args: {
     return false
   }
   return !liveSessionIds.has(ptyId)
+}
+
+export function shouldReconcileMissingSession(args: {
+  ptyId: string | null | undefined
+  connectionId: string | null | undefined
+  isLive: boolean | null | undefined
+  ptyBoundAt?: number | null
+  livenessRequestedAt?: number | null
+}): boolean {
+  if (args.isLive !== false) {
+    return false
+  }
+  return shouldReconcileDeadSession({
+    ptyId: args.ptyId,
+    connectionId: args.connectionId,
+    liveSessionIds: new Set(),
+    ptyBoundAt: args.ptyBoundAt,
+    snapshotRequestedAt: args.livenessRequestedAt
+  })
+}
+
+export function reconcileMissingSessions(args: {
+  bindings: Iterable<ReconcilableBinding>
+  hasPty: HasPty
+}): void {
+  // Why: the liveness request time must predate every async response so a
+  // stale response cannot close a PTY that bound after the request started.
+  const requestedAt = performance.now()
+  for (const binding of args.bindings) {
+    binding.reconcileIfSessionMissing?.(args.hasPty, requestedAt)
+  }
 }
 
 /**

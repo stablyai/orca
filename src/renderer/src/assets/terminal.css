@@ -219,6 +219,12 @@
   pointer-events: none;
 }
 
+.pane-drop-overlay[data-pane-drop-overlay-kind='insertion'] {
+  background: var(--chart-2);
+  border: 0;
+  border-radius: 0;
+}
+
 .tab-drop-overlay__label {
   font-size: 11px;
   color: var(--primary-foreground);

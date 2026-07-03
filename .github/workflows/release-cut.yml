@@ -1,6 +1,6 @@
 name: Cut Release
 
-# Why: single entry point for manually and scheduled cutting releases.
+# Why: single entry point for manually cutting releases.
 # Replaces the old local `pnpm release:*` scripts and the standalone scheduled
 # RC workflow so releases are always reproducible from CI and can never be
 # accidentally tagged against an uncommitted or non-main working tree.
@@ -37,16 +37,10 @@ on:
         type: string
         default: main
       dry_run:
-        description: Validate a scheduled-RC run without creating a tag
+        description: Validate an RC release cut without creating a tag
         required: false
         default: false
         type: boolean
-  schedule:
-    # Why: GitHub scheduled workflows are not guaranteed to start exactly on
-    # time and can be delayed or dropped around high-load periods. We retry
-    # across the full target hour and dedupe per PT slot. Cron is UTC, so run
-    # during both PST and PDT equivalents and let the PT-hour gate decide.
-    - cron: '*/5 10,11,22,23 * * *'
 
 permissions:
   contents: write
@@ -182,8 +176,8 @@ jobs:
 
       - name: Publish complete release-cut RC drafts from prior runs
         id: publish_drafts
-        # Why: this must run even when the current slot already cut a tag; a
-        # later cron retry may be the first chance to unstick a complete RC draft.
+        # Why: a manual RC dispatch should unstick any complete RC draft before
+        # deciding whether to cut another tag.
         if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -889,6 +883,11 @@ jobs:
         if: matrix.platform == 'win'
         shell: pwsh
         run: |
+          # Why: Some hosted Windows images start without PSGallery registered.
+          if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default -InstallationPolicy Trusted
+          }
+
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
 
           $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)

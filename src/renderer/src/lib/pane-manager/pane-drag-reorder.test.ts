@@ -229,6 +229,7 @@ describe('attachPaneDrag', () => {
     expect(appendedElements[0].removed).toBe(true)
     expect(state.dragSourcePaneId).toBeNull()
     expect(state.currentDropTarget).toBeNull()
+    expect(state.currentExternalDropTarget).toBeNull()
     expect(state.cleanupActiveDrag).toBeNull()
     expect(onDragActiveChange).toHaveBeenLastCalledWith(false)
     expect(detachPaneFromTree).not.toHaveBeenCalled()
@@ -288,8 +289,81 @@ describe('attachPaneDrag', () => {
     expect(appendedElements[0]?.removed).toBe(true)
     expect(state.dragSourcePaneId).toBeNull()
     expect(state.currentDropTarget).toBeNull()
+    expect(state.currentExternalDropTarget).toBeNull()
     expect(state.cleanupActiveDrag).toBeNull()
     expect(onDragActiveChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('drops onto an external target when no pane target is under the pointer', () => {
+    const handle = new FakeElement()
+    const root = new FakeElement(['pane-manager-root'])
+    const sourcePane = createPane(
+      1,
+      new FakeElement(['pane'], {
+        left: 0,
+        top: 80,
+        right: 100,
+        bottom: 180,
+        width: 100,
+        height: 100
+      })
+    )
+    const siblingPane = createPane(
+      2,
+      new FakeElement(['pane'], {
+        left: 120,
+        top: 80,
+        right: 220,
+        bottom: 180,
+        width: 100,
+        height: 100
+      })
+    )
+    const panes = new Map<number, ManagedPaneInternal>([
+      [sourcePane.id, sourcePane],
+      [siblingPane.id, siblingPane]
+    ])
+    const externalTarget = {
+      id: 'group-1',
+      overlayKind: 'insertion' as const,
+      rect: { left: 0, top: 0, right: 300, bottom: 32, width: 300, height: 32 } as DOMRect
+    }
+    const onExternalPaneDrop = vi.fn(() => true)
+    const state = createDragReorderState()
+
+    attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
+      getPanes: () => panes,
+      getRoot: () => root as unknown as HTMLElement,
+      getStyleOptions: () => ({}),
+      isDestroyed: () => false,
+      safeFit: vi.fn(),
+      applyPaneOpacity: vi.fn(),
+      applyDividerStyles: vi.fn(),
+      refitPanesUnder: vi.fn(),
+      resolveExternalDropTarget: ({ clientX, clientY }) =>
+        clientX === 10 && clientY === 10 ? externalTarget : null,
+      onExternalPaneDrop
+    })
+
+    handle.dispatchPointer('pointerdown', pointerEvent({ clientX: 10, clientY: 90 }))
+    handle.dispatchPointer('pointermove', pointerEvent({ clientX: 10, clientY: 10 }))
+
+    expect(state.currentDropTarget).toBeNull()
+    expect(state.currentExternalDropTarget).toBe(externalTarget)
+    expect(appendedElements[0].style).toMatchObject({
+      left: '0px',
+      top: '0px',
+      width: '300px',
+      height: '32px'
+    })
+    expect(appendedElements[0].dataset.paneDropOverlayKind).toBe('insertion')
+
+    handle.dispatchPointer('pointerup', pointerEvent({ pointerId: 1 }))
+
+    expect(onExternalPaneDrop).toHaveBeenCalledWith(sourcePane.id, externalTarget)
+    expect(detachPaneFromTree).not.toHaveBeenCalled()
+    expect(insertPaneNextTo).not.toHaveBeenCalled()
+    expect(state.currentExternalDropTarget).toBeNull()
   })
 
   it('returns cleanup that removes handle listeners and cancels active drag capture', () => {

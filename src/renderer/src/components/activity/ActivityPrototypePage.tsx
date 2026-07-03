@@ -873,6 +873,61 @@ function EventTime({ timestamp }: { timestamp: number }): React.JSX.Element {
   )
 }
 
+export function ActivityThreadOptionsMenu({
+  compactMode,
+  hasUnreadThreads,
+  onCompactModeChange,
+  onMarkAllThreadsRead
+}: {
+  compactMode: boolean
+  hasUnreadThreads: boolean
+  onCompactModeChange: (compactMode: boolean) => void
+  onMarkAllThreadsRead: () => void
+}): React.JSX.Element {
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Why: keep Tooltip and Dropdown from composing refs onto the same
+              button; the crash report's stack loops through Radix setRef. */}
+          <span className="inline-flex shrink-0">
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
+                aria-label={translate(
+                  'auto.components.activity.ActivityPrototypePage.db8a1878b5',
+                  'Thread list options'
+                )}
+              >
+                <MoreVertical className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {translate('auto.components.activity.ActivityPrototypePage.a472a14700', 'More options')}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" sideOffset={6}>
+        <DropdownMenuCheckboxItem
+          checked={compactMode}
+          onCheckedChange={(checked) => onCompactModeChange(checked === true)}
+          onSelect={(event) => event.preventDefault()}
+        >
+          {translate('auto.components.activity.ActivityPrototypePage.f70e4bec47', 'Compact mode')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onMarkAllThreadsRead} disabled={!hasUnreadThreads}>
+          {translate('auto.components.activity.ActivityPrototypePage.023ff75afe', 'Mark all read')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Element | null {
   if (!repo) {
     return null
@@ -1823,54 +1878,12 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                   the toolbar focused on the high-frequency Filter + unread
                   toggle while still giving the action a stable home next to
                   the list it acts on (rather than the titlebar). */}
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
-                        aria-label={translate(
-                          'auto.components.activity.ActivityPrototypePage.db8a1878b5',
-                          'Thread list options'
-                        )}
-                      >
-                        <MoreVertical className="size-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.a472a14700',
-                      'More options'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="end" sideOffset={6}>
-                  <DropdownMenuCheckboxItem
-                    checked={compactMode}
-                    onCheckedChange={(checked) => setCompactMode(checked === true)}
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.f70e4bec47',
-                      'Compact mode'
-                    )}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => markAllThreadsRead()}
-                    disabled={!hasUnreadThreads}
-                  >
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.023ff75afe',
-                      'Mark all read'
-                    )}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ActivityThreadOptionsMenu
+                compactMode={compactMode}
+                hasUnreadThreads={hasUnreadThreads}
+                onCompactModeChange={setCompactMode}
+                onMarkAllThreadsRead={markAllThreadsRead}
+              />
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">

@@ -54,6 +54,7 @@ import { translate } from '@/i18n/i18n'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { createNewTerminalTab } from '@/components/terminal/terminal-tab-actions'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -577,6 +578,15 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [activeRepo, openModal]
   )
+  const handleOpenInTerminal = useCallback(
+    (node: TreeNode) => {
+      if (!activeWorktreeId || !node.isDirectory) {
+        return
+      }
+      createNewTerminalTab(activeWorktreeId, undefined, { startupCwd: node.path })
+    },
+    [activeWorktreeId]
+  )
 
   if (!worktreePath) {
     return (
@@ -743,6 +753,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 onDuplicate={handleDuplicate}
                 onAddFolderAsProject={handleAddFolderAsProject}
                 canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
+                onOpenInTerminal={handleOpenInTerminal}
                 onRequestDelete={handleContextMenuDelete}
                 onCollapseFolderSubtree={handleCollapseFolderSubtree}
                 onFindInFolder={handleFindInFolder}

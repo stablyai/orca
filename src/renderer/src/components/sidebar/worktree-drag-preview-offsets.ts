@@ -38,18 +38,55 @@ function getFallbackGap(rects: readonly WorktreeDragPreviewRect[]): number {
   return gaps[Math.floor(gaps.length / 2)]!
 }
 
+function getPreviewLayoutDraggedIds(
+  groupIds: readonly string[],
+  draggedIds: readonly string[],
+  draggingWorktreeId?: string | null
+): readonly string[] {
+  if (draggedIds.length <= 1) {
+    return draggedIds
+  }
+  const draggedSet = new Set(draggedIds)
+  if (
+    draggingWorktreeId &&
+    draggedSet.has(draggingWorktreeId) &&
+    groupIds.includes(draggingWorktreeId)
+  ) {
+    return [draggingWorktreeId]
+  }
+  const firstVisibleDraggedId = groupIds.find((id) => draggedSet.has(id))
+  return firstVisibleDraggedId ? [firstVisibleDraggedId] : draggedIds.slice(0, 1)
+}
+
 export function buildWorktreeDragPreviewOffsets(args: {
   groupIds: readonly string[]
   draggedIds: readonly string[]
+  draggingWorktreeId?: string | null
   dropIndex: number
   rects: readonly WorktreeDragPreviewRect[]
 }): Map<string, number> {
-  const nextIds = moveWorktreeIdsWithinGroup(args.groupIds, args.draggedIds, args.dropIndex)
+  const committedNextIds = moveWorktreeIdsWithinGroup(
+    args.groupIds,
+    args.draggedIds,
+    args.dropIndex
+  )
+  if (arraysEqual(committedNextIds, args.groupIds)) {
+    return new Map()
+  }
+
+  // Why: dragging a large multi-select batch should advertise the insertion
+  // point without opening a giant hole that makes the sidebar jump around.
+  const layoutDraggedIds = getPreviewLayoutDraggedIds(
+    args.groupIds,
+    args.draggedIds,
+    args.draggingWorktreeId
+  )
+  const nextIds = moveWorktreeIdsWithinGroup(args.groupIds, layoutDraggedIds, args.dropIndex)
   if (arraysEqual(nextIds, args.groupIds)) {
     return new Map()
   }
 
-  const draggedSet = new Set(args.draggedIds)
+  const draggedSet = new Set(layoutDraggedIds)
   const newIndexById = new Map<string, number>()
   nextIds.forEach((id, index) => newIndexById.set(id, index))
 
