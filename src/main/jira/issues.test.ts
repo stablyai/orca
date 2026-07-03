@@ -15,7 +15,9 @@ vi.mock('./client', () => ({
   clearToken: (...args: unknown[]) => clearTokenMock(...args),
   getClients: (...args: unknown[]) => getClientsMock(...args),
   isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
-  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
+  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args),
+  jiraApiBase: (site: { deployment?: string }) =>
+    site.deployment === 'datacenter' ? '/rest/api/2' : '/rest/api/3'
 }))
 
 function makeEntry(id = 'site-1'): JiraClientForSite {
@@ -25,7 +27,9 @@ function makeEntry(id = 'site-1'): JiraClientForSite {
       siteUrl: 'https://example.atlassian.net',
       email: 'ada@example.com',
       displayName: 'Example Jira',
-      accountId: 'account-1'
+      accountId: 'account-1',
+      deployment: 'cloud',
+      authScheme: 'basic'
     },
     authorization: 'Basic token'
   }

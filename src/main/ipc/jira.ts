@@ -66,6 +66,13 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
     return null
   }
   if (
+    input.assigneeName !== undefined &&
+    input.assigneeName !== null &&
+    typeof input.assigneeName !== 'string'
+  ) {
+    return null
+  }
+  if (
     input.priorityId !== undefined &&
     input.priorityId !== null &&
     typeof input.priorityId !== 'string'
@@ -90,7 +97,10 @@ export function registerJiraHandlers(): void {
     const result = await connect({
       siteUrl: args.siteUrl,
       email: args.email,
-      apiToken: args.apiToken
+      apiToken: args.apiToken,
+      deployment: args.deployment === 'datacenter' ? 'datacenter' : undefined,
+      username:
+        typeof args.username === 'string' && args.username.trim() ? args.username : undefined
     })
     if (result.ok) {
       _resetPreflightCache()

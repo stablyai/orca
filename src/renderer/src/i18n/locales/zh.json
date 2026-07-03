@@ -12137,7 +12137,21 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud 站点 URL",
             "d785c42b8b": "使用 Jira Cloud 站点 URL、Atlassian 邮箱和 API 令牌来浏览议题。",
-            "8388bdea2b": "连接 Jira 站点"
+            "8388bdea2b": "连接 Jira 站点",
+            "dc": {
+              "description": "Use your Jira Data Center / Server URL and a personal access token to browse issues.",
+              "siteUrl": "Jira Data Center URL",
+              "siteUrlPlaceholder": "https://jira.example.com",
+              "username": "Username (optional)",
+              "usernamePlaceholder": "Only for username/password servers",
+              "token": "Personal access token",
+              "tokenPlaceholder": "Jira personal access token",
+              "tokenHelp": "Create a personal access token from your Jira profile under Personal Access Tokens."
+            },
+            "deployment": {
+              "cloud": "Cloud",
+              "datacenter": "Data Center"
+            }
           }
         }
       },

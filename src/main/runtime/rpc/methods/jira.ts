@@ -17,8 +17,12 @@ const SiteSelection = z
 
 const Connect = z.object({
   siteUrl: requiredString('Site URL is required'),
-  email: requiredString('Email is required'),
-  apiToken: requiredString('API token is required')
+  // Cloud requires an account email; Data Center PAT auth has none, so email is
+  // optional here and the client validates per deployment.
+  email: OptionalPlainString,
+  apiToken: requiredString('API token is required'),
+  deployment: z.enum(['cloud', 'datacenter']).optional(),
+  username: OptionalPlainString
 })
 
 const SelectSite = z.object({
@@ -60,6 +64,7 @@ const IssueUpdate = z.object({
     title: OptionalString,
     labels: z.array(z.string()).optional(),
     assigneeAccountId: z.union([z.string(), z.null()]).optional(),
+    assigneeName: z.union([z.string(), z.null()]).optional(),
     priorityId: z.union([z.string(), z.null()]).optional(),
     transitionId: OptionalString
   })
@@ -95,8 +100,10 @@ export const JIRA_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.jiraConnect({
         siteUrl: params.siteUrl.trim(),
-        email: params.email.trim(),
-        apiToken: params.apiToken.trim()
+        email: params.email?.trim() ?? '',
+        apiToken: params.apiToken.trim(),
+        deployment: params.deployment,
+        username: params.username?.trim() || undefined
       })
   }),
   defineMethod({

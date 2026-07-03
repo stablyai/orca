@@ -14,8 +14,10 @@ import {
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { withSpan } from '../observability/tracer'
 import type {
+  JiraAuthScheme,
   JiraConnectArgs,
   JiraConnectionStatus,
+  JiraDeployment,
   JiraSite,
   JiraSiteSelection,
   JiraViewer
@@ -124,6 +126,19 @@ function hasStoredToken(siteId: string): boolean {
   return cachedTokens.has(siteId) || credentialFileHasContent(getTokenPath(siteId))
 }
 
+function normalizeDeployment(value: unknown): JiraDeployment {
+  return value === 'datacenter' ? 'datacenter' : 'cloud'
+}
+
+function normalizeAuthScheme(value: unknown, deployment: JiraDeployment): JiraAuthScheme {
+  if (value === 'bearer' || value === 'basic') {
+    return value
+  }
+  // Legacy site files predate auth schemes: Cloud always used Basic, and a
+  // self-hosted site with no recorded scheme is assumed to use a PAT (Bearer).
+  return deployment === 'datacenter' ? 'bearer' : 'basic'
+}
+
 function normalizeSite(input: unknown): JiraSite | null {
   if (!input || typeof input !== 'object') {
     return null
@@ -138,12 +153,16 @@ function normalizeSite(input: unknown): JiraSite | null {
   ) {
     return null
   }
+  const deployment = normalizeDeployment(record.deployment)
   return {
     id: record.id,
     siteUrl: record.siteUrl,
     email: record.email,
     displayName: record.displayName,
-    accountId: record.accountId
+    accountId: record.accountId,
+    deployment,
+    authScheme: normalizeAuthScheme(record.authScheme, deployment),
+    ...(typeof record.username === 'string' && record.username ? { username: record.username } : {})
   }
 }
 
@@ -284,8 +303,18 @@ function getSiteId(siteUrl: string, email: string): string {
 
 function toViewer(data: Record<string, unknown>, fallbackEmail: string): JiraViewer {
   const avatarUrls = data.avatarUrls as Record<string, unknown> | undefined
+  // Data Center's /myself has no accountId; fall back to the user key/name so the
+  // stored site still carries a stable, non-empty identity for assignee writes.
+  const accountId =
+    typeof data.accountId === 'string' && data.accountId
+      ? data.accountId
+      : typeof data.key === 'string' && data.key
+        ? data.key
+        : typeof data.name === 'string'
+          ? data.name
+          : ''
   return {
-    accountId: typeof data.accountId === 'string' ? data.accountId : '',
+    accountId,
     displayName: typeof data.displayName === 'string' ? data.displayName : fallbackEmail,
     email: typeof data.emailAddress === 'string' ? data.emailAddress : fallbackEmail,
     avatarUrl:
@@ -295,6 +324,12 @@ function toViewer(data: Record<string, unknown>, fallbackEmail: string): JiraVie
           ? avatarUrls['32x32']
           : undefined
   }
+}
+
+// Data Center addresses users by username; surface it so connect can persist it
+// on the site for later assignee writes.
+function viewerUsername(data: Record<string, unknown>): string | undefined {
+  return typeof data.name === 'string' && data.name ? data.name : undefined
 }
 
 function siteToViewer(site: JiraSite | null): JiraViewer | null {
@@ -308,8 +343,54 @@ function siteToViewer(site: JiraSite | null): JiraViewer | null {
   }
 }
 
-function authHeader(email: string, apiToken: string): string {
-  return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
+function basicAuthHeader(user: string, secret: string): string {
+  return `Basic ${Buffer.from(`${user}:${secret}`).toString('base64')}`
+}
+
+// Cloud + DC username/password use Basic; a DC Personal Access Token uses Bearer.
+function buildAuthorization(params: {
+  authScheme: JiraAuthScheme
+  deployment: JiraDeployment
+  email: string
+  username?: string
+  token: string
+}): string {
+  if (params.authScheme === 'bearer') {
+    return `Bearer ${params.token}`
+  }
+  const user = params.deployment === 'datacenter' ? (params.username ?? params.email) : params.email
+  return basicAuthHeader(user, params.token)
+}
+
+function authorizationForSite(site: JiraSite, token: string): string {
+  return buildAuthorization({
+    authScheme: site.authScheme,
+    deployment: site.deployment,
+    email: site.email,
+    username: site.username,
+    token
+  })
+}
+
+// REST v3 is Cloud-only; Data Center / Server expose the equivalent surface
+// under v2. Callers build paths from this base so one code path serves both.
+export function apiBaseForDeployment(deployment: JiraDeployment): string {
+  return deployment === 'datacenter' ? '/rest/api/2' : '/rest/api/3'
+}
+
+export function jiraApiBase(site: JiraSite): string {
+  return apiBaseForDeployment(site.deployment)
+}
+
+// Cloud sites live on atlassian.net; anything else is treated as self-hosted DC
+// unless the caller passes an explicit deployment.
+function detectDeployment(siteUrl: string): JiraDeployment {
+  try {
+    const host = new URL(siteUrl).hostname.toLowerCase()
+    return host.endsWith('.atlassian.net') || host === 'atlassian.net' ? 'cloud' : 'datacenter'
+  } catch {
+    return 'cloud'
+  }
 }
 
 function describeErrorCause(error: unknown): string | undefined {
@@ -363,8 +444,7 @@ async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
 
 async function requestWithCredentials(
   siteUrl: string,
-  email: string,
-  apiToken: string,
+  authorization: string,
   path: string,
   init?: RequestInit
 ): Promise<unknown> {
@@ -372,7 +452,7 @@ async function requestWithCredentials(
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
-  headers.set('Authorization', authHeader(email, apiToken))
+  headers.set('Authorization', authorization)
   const response = await jiraFetch(`${siteUrl}${path}`, {
     ...init,
     headers
@@ -453,7 +533,7 @@ export function getClients(selection?: JiraSiteSelection | null): JiraClientForS
       }
       throw error
     }
-    return token ? [{ site, authorization: authHeader(site.email, token) }] : []
+    return token ? [{ site, authorization: authorizationForSite(site, token) }] : []
   })
 }
 
@@ -486,26 +566,58 @@ export async function connect(
 
   const email = args.email.trim()
   const apiToken = args.apiToken.trim()
-  if (!email || !apiToken) {
-    return { ok: false, error: 'Email and API token are required.' }
+  const username = args.username?.trim() || undefined
+  const deployment = args.deployment ?? detectDeployment(siteUrl)
+  // DC with a username uses username/password Basic; DC without one treats the
+  // token as a PAT (Bearer). Cloud always uses email + API token Basic.
+  const authScheme: JiraAuthScheme = deployment === 'datacenter' && !username ? 'bearer' : 'basic'
+
+  // Cloud needs email + token (Basic). DC with username needs username + token
+  // (Basic); DC without username treats the token as a PAT (Bearer), token only.
+  const missingCredential =
+    !apiToken ||
+    (deployment === 'cloud' && !email) ||
+    (deployment === 'datacenter' && authScheme === 'basic' && !username && !email)
+  if (missingCredential) {
+    return {
+      ok: false,
+      error:
+        deployment === 'datacenter'
+          ? 'A personal access token (or username and password) is required.'
+          : 'Email and API token are required.'
+    }
   }
+
+  const authorization = buildAuthorization({
+    authScheme,
+    deployment,
+    email,
+    username,
+    token: apiToken
+  })
+  // DC sites have no email when authenticating with a PAT; identify the site by
+  // username (or a constant) so multiple PAT sites on one host stay distinct.
+  const identitySeed = email || username || 'pat'
 
   await acquire()
   try {
-    const viewer = toViewer(
-      (await requestWithCredentials(siteUrl, email, apiToken, '/rest/api/3/myself')) as Record<
-        string,
-        unknown
-      >,
-      email
-    )
-    const id = getSiteId(siteUrl, email)
+    const myself = (await requestWithCredentials(
+      siteUrl,
+      authorization,
+      `${apiBaseForDeployment(deployment)}/myself`
+    )) as Record<string, unknown>
+    const viewer = toViewer(myself, email || username || siteUrl)
+    const resolvedUsername = username ?? viewerUsername(myself)
+    const id = getSiteId(siteUrl, identitySeed)
     const site: JiraSite = {
       id,
       siteUrl,
       email,
       displayName: viewer.displayName,
-      accountId: viewer.accountId
+      accountId: viewer.accountId,
+      deployment,
+      authScheme,
+      ...(resolvedUsername ? { username: resolvedUsername } : {})
     }
     saveToken(id, apiToken)
     const file = getSiteFile()
@@ -565,8 +677,8 @@ export async function testConnection(
   await acquire()
   try {
     const viewer = toViewer(
-      (await jiraRequest(client, '/rest/api/3/myself')) as Record<string, unknown>,
-      client.site.email
+      (await jiraRequest(client, `${jiraApiBase(client.site)}/myself`)) as Record<string, unknown>,
+      client.site.email || client.site.username || client.site.siteUrl
     )
     return { ok: true, viewer }
   } catch (error) {

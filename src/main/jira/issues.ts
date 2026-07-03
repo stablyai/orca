@@ -25,6 +25,7 @@ import {
   clearToken,
   getClients,
   isAuthError,
+  jiraApiBase,
   jiraRequest,
   release,
   type JiraClientForSite
@@ -44,6 +45,26 @@ const ISSUE_FIELDS = [
   'created',
   'updated'
 ]
+
+// Cloud's REST v3 expects ADF documents for description/comment bodies; Data
+// Center's v2 expects raw wiki-markup strings. Encode per deployment so a single
+// write path serves both without sending ADF JSON to a server that rejects it.
+function encodeIssueBody(site: JiraSite, text: string): unknown {
+  return site.deployment === 'datacenter' ? text : textToAdf(text)
+}
+
+// Cloud assignees are addressed by accountId; Data Center uses username via the
+// `name` field. Returns the field shape the deployment's assignee API accepts.
+function assigneeFieldValue(
+  site: JiraSite,
+  update: JiraIssueUpdate
+): { accountId: string | null } | { name: string | null } {
+  if (site.deployment === 'datacenter') {
+    const name = update.assigneeName ?? update.assigneeAccountId ?? null
+    return { name }
+  }
+  return { accountId: update.assigneeAccountId ?? null }
+}
 
 type JiraRecord = Record<string, unknown>
 
@@ -184,14 +205,20 @@ function avatarUrl(value: unknown): string | undefined {
 function mapUser(value: unknown): JiraUser | undefined {
   const user = asRecord(value)
   const accountId = asString(user.accountId)
-  if (!accountId) {
+  const name = asString(user.name)
+  const key = asString(user.key)
+  // Data Center users carry name/key but no accountId; accept any identity so
+  // self-hosted assignees and reporters still resolve to a user object.
+  if (!accountId && !name && !key) {
     return undefined
   }
   return {
     accountId,
-    displayName: asString(user.displayName, 'Unknown'),
+    displayName: asString(user.displayName, name || 'Unknown'),
     email: typeof user.emailAddress === 'string' ? user.emailAddress : undefined,
-    avatarUrl: avatarUrl(user.avatarUrls)
+    avatarUrl: avatarUrl(user.avatarUrls),
+    ...(name ? { name } : {}),
+    ...(key ? { key } : {})
   }
 }
 
@@ -266,6 +293,29 @@ function getCreateFieldRecords(response: JiraPagedResponse<JiraRecord>): JiraRec
       key,
       ...asRecord(value)
     }))
+  }
+  return []
+}
+
+// Data Center's legacy createmeta returns one nested document
+// ({ projects: [{ issuetypes: [{ fields: {...} }] }] }) instead of Cloud's
+// paged per-issuetype field list. Dig out the matching issuetype's keyed fields.
+function getDatacenterCreateFields(response: JiraRecord, issueTypeId: string): JiraRecord[] {
+  const projects = Array.isArray(response.projects) ? response.projects : []
+  for (const project of projects) {
+    const issueTypes = Array.isArray(asRecord(project).issuetypes)
+      ? (asRecord(project).issuetypes as unknown[])
+      : []
+    for (const issueType of issueTypes) {
+      const record = asRecord(issueType)
+      if (asString(record.id) !== issueTypeId) {
+        continue
+      }
+      const fields = record.fields
+      if (fields && typeof fields === 'object') {
+        return Object.entries(fields).map(([key, value]) => ({ key, ...asRecord(value) }))
+      }
+    }
   }
   return []
 }
@@ -346,7 +396,13 @@ async function searchIssuesForClient(
   jql: string,
   limit: number
 ): Promise<JiraIssue[]> {
-  const result = await jiraRequest<JiraSearchResponse>(entry, '/rest/api/3/search/jql', {
+  // Cloud's v3 search lives at /search/jql; Data Center's v2 keeps the original
+  // /search endpoint. Both accept the same JQL + fields POST body.
+  const searchPath =
+    entry.site.deployment === 'datacenter'
+      ? `${jiraApiBase(entry.site)}/search`
+      : `${jiraApiBase(entry.site)}/search/jql`
+  const result = await jiraRequest<JiraSearchResponse>(entry, searchPath, {
     method: 'POST',
     body: JSON.stringify({
       jql,
@@ -421,7 +477,7 @@ export async function getIssue(
     try {
       const issue = await jiraRequest<JiraRecord>(
         entry,
-        `/rest/api/3/issue/${encodeURIComponent(key)}?fields=${encodeURIComponent(
+        `${jiraApiBase(entry.site)}/issue/${encodeURIComponent(key)}?fields=${encodeURIComponent(
           ISSUE_FIELDS.join(',')
         )}`
       )
@@ -460,7 +516,7 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
       summary: title
     }
     if (args.description?.trim()) {
-      fields.description = textToAdf(args.description.trim())
+      fields.description = encodeIssueBody(entry.site, args.description.trim())
     }
     for (const [fieldKey, value] of Object.entries(args.customFields ?? {})) {
       if (!fieldKey || value === undefined || value === null || value === '') {
@@ -470,7 +526,7 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
     }
     const created = await jiraRequest<{ id: string; key: string; self: string }>(
       entry,
-      '/rest/api/3/issue',
+      `${jiraApiBase(entry.site)}/issue`,
       {
         method: 'POST',
         body: JSON.stringify({ fields })
@@ -510,22 +566,30 @@ export async function updateIssue(
       fields.priority = updates.priorityId ? { id: updates.priorityId } : null
     }
     if (Object.keys(fields).length > 0) {
-      await jiraRequest(entry, `/rest/api/3/issue/${encodeURIComponent(key)}`, {
+      await jiraRequest(entry, `${jiraApiBase(entry.site)}/issue/${encodeURIComponent(key)}`, {
         method: 'PUT',
         body: JSON.stringify({ fields })
       })
     }
-    if (updates.assigneeAccountId !== undefined) {
-      await jiraRequest(entry, `/rest/api/3/issue/${encodeURIComponent(key)}/assignee`, {
-        method: 'PUT',
-        body: JSON.stringify({ accountId: updates.assigneeAccountId })
-      })
+    if (updates.assigneeAccountId !== undefined || updates.assigneeName !== undefined) {
+      await jiraRequest(
+        entry,
+        `${jiraApiBase(entry.site)}/issue/${encodeURIComponent(key)}/assignee`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(assigneeFieldValue(entry.site, updates))
+        }
+      )
     }
     if (updates.transitionId) {
-      await jiraRequest(entry, `/rest/api/3/issue/${encodeURIComponent(key)}/transitions`, {
-        method: 'POST',
-        body: JSON.stringify({ transition: { id: updates.transitionId } })
-      })
+      await jiraRequest(
+        entry,
+        `${jiraApiBase(entry.site)}/issue/${encodeURIComponent(key)}/transitions`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ transition: { id: updates.transitionId } })
+        }
+      )
     }
     return { ok: true }
   } catch (error) {
@@ -552,10 +616,10 @@ export async function addIssueComment(
   try {
     const comment = await jiraRequest<{ id: string }>(
       entry,
-      `/rest/api/3/issue/${encodeURIComponent(key)}/comment`,
+      `${jiraApiBase(entry.site)}/issue/${encodeURIComponent(key)}/comment`,
       {
         method: 'POST',
-        body: JSON.stringify({ body: textToAdf(body) })
+        body: JSON.stringify({ body: encodeIssueBody(entry.site, body) })
       }
     )
     return { ok: true, id: comment.id }
@@ -596,7 +660,7 @@ export async function getIssueComments(
         orderBy: 'created',
         startAt: String(startAt)
       })
-      return `/rest/api/3/issue/${encodeURIComponent(key)}/comment?${params.toString()}`
+      return `${jiraApiBase(entry.site)}/issue/${encodeURIComponent(key)}/comment?${params.toString()}`
     })
     return comments.map(mapComment)
   } catch (error) {
@@ -620,12 +684,21 @@ export async function listProjects(siteId?: JiraSiteSelection | null): Promise<J
     entries.map(async (entry) => {
       await acquire()
       try {
+        // DC's /project/search (paged) only exists on Jira 8+; the flat /project
+        // endpoint is universally available, so use it for self-hosted sites.
+        if (entry.site.deployment === 'datacenter') {
+          const projects = await jiraRequest<JiraRecord[]>(
+            entry,
+            `${jiraApiBase(entry.site)}/project`
+          )
+          return projects.map((project) => mapProject(project, entry.site))
+        }
         const projects = await fetchPagedRecords(entry, 'values', (startAt, maxResults) => {
           const params = new URLSearchParams({
             maxResults: String(maxResults),
             startAt: String(startAt)
           })
-          return `/rest/api/3/project/search?${params.toString()}`
+          return `${jiraApiBase(entry.site)}/project/search?${params.toString()}`
         })
         return projects.map((project) => mapProject(project, entry.site))
       } catch (error) {
@@ -654,14 +727,32 @@ export async function listIssueTypes(
   if (!entry) {
     return []
   }
+  const base = jiraApiBase(entry.site)
   await acquire()
   try {
+    // Data Center has no paged createmeta/issuetypes endpoint; it returns the
+    // issue types nested under the classic createmeta projects payload.
+    if (entry.site.deployment === 'datacenter') {
+      const params = new URLSearchParams({
+        projectKeys: projectIdOrKey,
+        expand: 'projects.issuetypes'
+      })
+      const response = await jiraRequest<{ projects?: JiraRecord[] }>(
+        entry,
+        `${base}/issue/createmeta?${params.toString()}`
+      )
+      const project = (response.projects ?? [])[0]
+      const issueTypes = Array.isArray(asRecord(project).issuetypes)
+        ? (asRecord(project).issuetypes as JiraRecord[])
+        : []
+      return issueTypes.map(mapIssueType)
+    }
     const issueTypes = await fetchPagedRecords(entry, 'issueTypes', (startAt, maxResults) => {
       const params = new URLSearchParams({
         maxResults: String(maxResults),
         startAt: String(startAt)
       })
-      return `/rest/api/3/issue/createmeta/${encodeURIComponent(
+      return `${base}/issue/createmeta/${encodeURIComponent(
         projectIdOrKey
       )}/issuetypes?${params.toString()}`
     })
@@ -689,6 +780,21 @@ export async function listCreateFields(
   }
   await acquire()
   try {
+    if (entry.site.deployment === 'datacenter') {
+      // DC has no per-issuetype createmeta route; request the project's nested
+      // metadata once and pull the matching issuetype's field map out of it.
+      const params = new URLSearchParams({
+        projectKeys: projectIdOrKey,
+        expand: 'projects.issuetypes.fields'
+      })
+      const response = await jiraRequest<JiraRecord>(
+        entry,
+        `${jiraApiBase(entry.site)}/issue/createmeta?${params.toString()}`
+      )
+      return getDatacenterCreateFields(response, issueTypeId)
+        .map((record) => mapCreateField(record))
+        .filter((field): field is JiraCreateField => field !== null)
+    }
     const fields: JiraCreateField[] = []
     let startAt = 0
     const maxResults = 100
@@ -699,7 +805,7 @@ export async function listCreateFields(
       })
       const response = await jiraRequest<JiraPagedResponse<JiraRecord>>(
         entry,
-        `/rest/api/3/issue/createmeta/${encodeURIComponent(
+        `${jiraApiBase(entry.site)}/issue/createmeta/${encodeURIComponent(
           projectIdOrKey
         )}/issuetypes/${encodeURIComponent(issueTypeId)}?${params.toString()}`
       )
@@ -734,7 +840,7 @@ export async function listPriorities(siteId?: string | null): Promise<JiraPriori
   }
   await acquire()
   try {
-    const response = await jiraRequest<JiraRecord[]>(entry, '/rest/api/3/priority')
+    const response = await jiraRequest<JiraRecord[]>(entry, `${jiraApiBase(entry.site)}/priority`)
     return response.map(mapPriority).filter((priority): priority is JiraPriority => !!priority)
   } catch (error) {
     if (isAuthError(error)) {
@@ -759,13 +865,15 @@ export async function listAssignableUsers(
   }
   const params = new URLSearchParams({ issueKey: key, maxResults: '50' })
   if (query?.trim()) {
-    params.set('query', query.trim())
+    // Cloud's assignable search filters with `query`; Data Center expects
+    // `username` and ignores the Cloud parameter.
+    params.set(entry.site.deployment === 'datacenter' ? 'username' : 'query', query.trim())
   }
   await acquire()
   try {
     const response = await jiraRequest<JiraRecord[]>(
       entry,
-      `/rest/api/3/user/assignable/search?${params.toString()}`
+      `${jiraApiBase(entry.site)}/user/assignable/search?${params.toString()}`
     )
     return response.map(mapUser).filter((user): user is JiraUser => !!user)
   } catch (error) {
@@ -792,7 +900,7 @@ export async function listTransitions(
   try {
     const response = await jiraRequest<{ transitions?: JiraRecord[] }>(
       entry,
-      `/rest/api/3/issue/${encodeURIComponent(key)}/transitions`
+      `${jiraApiBase(entry.site)}/issue/${encodeURIComponent(key)}/transitions`
     )
     return (response.transitions ?? []).map((transition) => ({
       id: asString(transition.id),

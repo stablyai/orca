@@ -37,7 +37,9 @@ describe('jira RPC methods', () => {
     expect(runtime.jiraConnect).toHaveBeenCalledWith({
       siteUrl: 'https://example.atlassian.net',
       email: 'ada@example.com',
-      apiToken: 'token'
+      apiToken: 'token',
+      deployment: undefined,
+      username: undefined
     })
     expect(runtime.jiraSelectSite).toHaveBeenCalledWith('site-1')
     expect(runtime.jiraDisconnect).toHaveBeenCalled()

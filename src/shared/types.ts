@@ -1809,9 +1809,11 @@ export type {
 } from './gitlab-types'
 
 export type {
+  JiraAuthScheme,
   JiraComment,
   JiraConnectArgs,
   JiraConnectionStatus,
+  JiraDeployment,
   JiraCreateField,
   JiraCreateFieldAllowedValue,
   JiraCreateIssueArgs,

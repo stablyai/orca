@@ -12137,7 +12137,21 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud 사이트 URL",
             "d785c42b8b": "Jira Cloud 사이트 URL, Atlassian 이메일, API 토큰을 사용해 이슈를 탐색합니다.",
-            "8388bdea2b": "Jira 사이트 연결"
+            "8388bdea2b": "Jira 사이트 연결",
+            "dc": {
+              "description": "Use your Jira Data Center / Server URL and a personal access token to browse issues.",
+              "siteUrl": "Jira Data Center URL",
+              "siteUrlPlaceholder": "https://jira.example.com",
+              "username": "Username (optional)",
+              "usernamePlaceholder": "Only for username/password servers",
+              "token": "Personal access token",
+              "tokenPlaceholder": "Jira personal access token",
+              "tokenHelp": "Create a personal access token from your Jira profile under Personal Access Tokens."
+            },
+            "deployment": {
+              "cloud": "Cloud",
+              "datacenter": "Data Center"
+            }
           }
         }
       },

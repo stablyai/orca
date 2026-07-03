@@ -12137,7 +12137,21 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
-            "8388bdea2b": "Connect Jira site"
+            "8388bdea2b": "Connect Jira site",
+            "dc": {
+              "description": "Use your Jira Data Center / Server URL and a personal access token to browse issues.",
+              "siteUrl": "Jira Data Center URL",
+              "siteUrlPlaceholder": "https://jira.example.com",
+              "username": "Username (optional)",
+              "usernamePlaceholder": "Only for username/password servers",
+              "token": "Personal access token",
+              "tokenPlaceholder": "Jira personal access token",
+              "tokenHelp": "Create a personal access token from your Jira profile under Personal Access Tokens."
+            },
+            "deployment": {
+              "cloud": "Cloud",
+              "datacenter": "Data Center"
+            }
           }
         }
       },
