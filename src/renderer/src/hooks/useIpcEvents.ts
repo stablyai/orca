@@ -2161,6 +2161,7 @@ export function useIpcEvents(): void {
             title: data.url,
             targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
+            sessionPartition: data.sessionPartition,
             activate: data.activate === true
           })
           // Why: registerGuest fires with the page ID (not workspace ID) as
@@ -2223,7 +2224,7 @@ export function useIpcEvents(): void {
           } else {
             destroyPersistentWebview(data.browserPageId)
           }
-          store.switchBrowserTabProfile(owningWorkspace.id, data.profileId)
+          store.switchBrowserTabProfile(owningWorkspace.id, data.profileId, data.sessionPartition)
           window.api.ui.replyTabSetProfile({ requestId: data.requestId })
         } catch (err) {
           window.api.ui.replyTabSetProfile({

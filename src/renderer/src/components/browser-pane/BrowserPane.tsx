@@ -77,14 +77,12 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { rememberLiveBrowserUrl } from './browser-runtime'
+import { ensureBrowserPageWebview } from './browser-page-webview'
 import {
   destroyPersistentWebview,
   moveFocusToRendererBeforeWebviewDetach,
-  registerPersistentWebview,
-  registeredWebContentsIds,
-  webviewRegistry
+  registeredWebContentsIds
 } from './webview-registry'
 import {
   applyBrowserPageViewportLayout,
@@ -869,6 +867,7 @@ export default function BrowserPane({
               workspaceId={browserTab.id}
               worktreeId={browserTab.worktreeId}
               sessionProfileId={browserTab.sessionProfileId ?? null}
+              sessionPartition={browserTab.sessionPartition ?? null}
               isActive={isActive && page.id === activeBrowserPage?.id}
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
               isMobileDriven={mobileDrivenPageIds.has(page.id)}
@@ -2648,6 +2647,7 @@ function BrowserPagePane({
   workspaceId,
   worktreeId,
   sessionProfileId,
+  sessionPartition,
   isActive,
   isAutomationVisible,
   isMobileDriven,
@@ -2659,6 +2659,7 @@ function BrowserPagePane({
   workspaceId: string
   worktreeId: string
   sessionProfileId: string | null
+  sessionPartition: string | null
   isActive: boolean
   isAutomationVisible: boolean
   isMobileDriven: boolean
@@ -2814,7 +2815,7 @@ function BrowserPagePane({
   const sessionProfile = sessionProfileId
     ? (browserSessionProfiles.find((p) => p.id === sessionProfileId) ?? null)
     : null
-  const webviewPartition = sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
+  const webviewPartition = sessionPartition ?? sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
   const showBrowserZoomFeedback = useCallback((level: number): void => {
@@ -3576,31 +3577,23 @@ function BrowserPagePane({
       return
     }
 
-    let webview = webviewRegistry.get(browserTab.id)
-    let needsInitialNavigation = false
-    let needsInitialDefaultZoom = false
-    if (webview && webview.parentElement !== container) {
-      // Why: moving an Electron webview between DOM parents can recreate the
-      // guest document. Treat unexpected parent drift as stale state instead.
-      destroyPersistentWebview(browserTab.id)
-      webview = undefined
-      container = ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
-      if (!container) {
-        return
-      }
+    const ensuredWebview = ensureBrowserPageWebview({
+      browserTabId: browserTab.id,
+      container,
+      inputLocked: inputLockedRef.current,
+      webviewPartition,
+      resolveContainer: () =>
+        ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
+    })
+    if (!ensuredWebview) {
+      return
     }
-    if (webview && webview.getAttribute('partition') !== webviewPartition) {
-      // Why: Electron partitions are immutable after creation. If restored state
-      // or another store path changes the profile, the persisted guest must be
-      // replaced rather than parked/reused with the stale session.
-      destroyPersistentWebview(browserTab.id)
-      webview = undefined
-      container = ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
-      if (!container) {
-        return
-      }
-    }
-    if (webview) {
+    container = ensuredWebview.container
+    const webview = ensuredWebview.webview
+    const needsInitialNavigation = ensuredWebview.created
+    let needsInitialDefaultZoom = ensuredWebview.created
+
+    if (!ensuredWebview.created) {
       webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
       syncNavigationState(webview)
       // Why: seed the ref with the store URL so the URL sync effect does not
@@ -3609,35 +3602,6 @@ function BrowserPagePane({
       // last navigation event.
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserTabUrlRef.current) ?? null
-    } else {
-      webview = document.createElement('webview') as Electron.WebviewTag
-      webview.setAttribute('partition', webviewPartition)
-      webview.setAttribute('allowpopups', '')
-      // Why: keep HTML fullscreen contained to the <webview> element instead of
-      // letting guest content resize the host BrowserWindow into native macOS
-      // fullscreen. Without this, requestFullscreen() resizes the OS window but
-      // exitFullscreen() has nothing to restore, leaving the pane stuck
-      // fullscreen (issue #6442). Containing fullscreen to the element makes
-      // exit reliable and fires fullscreenchange as guests expect.
-      // Why: the key must be camelCase — Electron's <webview> webpreferences
-      // parser spreads keys verbatim into WebPreferences, so a lowercase key is
-      // silently ignored.
-      webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
-      webview.style.display = 'flex'
-      webview.style.flex = '1'
-      webview.style.width = '100%'
-      webview.style.height = '100%'
-      webview.style.border = 'none'
-      webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
-      // Why: default to white so sites that don't set an html/body background
-      // (e.g. httpbin.org/html) don't show through to Orca's dark chrome. Real
-      // browsers paint the viewport white by default; sites that specify their
-      // own background (including dark ones) still override this.
-      webview.style.background = '#ffffff'
-      registerPersistentWebview(browserTab.id, webview)
-      container.appendChild(webview)
-      needsInitialNavigation = true
-      needsInitialDefaultZoom = true
     }
 
     webviewRef.current = webview

@@ -1335,6 +1335,13 @@ export class RuntimeBrowserCommands {
     const worktreeId = params.worktree
       ? (await this.host.resolveWorktreeSelector(params.worktree)).id
       : undefined
+    const sessionPartition = browserSessionRegistry.resolveKnownPartition(params.profileId)
+    if (!sessionPartition) {
+      throw new BrowserError(
+        'invalid_argument',
+        `Browser profile ${params.profileId} was not found`
+      )
+    }
     // Why: a desktop renderer mounts a <webview>; a headless serve has none and
     // backs the page with a main-process offscreen WebContents instead. Both
     // register into BrowserManager so all downstream commands resolve uniformly.
@@ -1356,6 +1363,7 @@ export class RuntimeBrowserCommands {
       url,
       worktreeId,
       params.profileId,
+      params.profileId ? sessionPartition : undefined,
       params.activate
     )
 
@@ -1460,7 +1468,8 @@ export class RuntimeBrowserCommands {
       win.webContents.send('browser:requestTabSetProfile', {
         requestId,
         browserPageId,
-        profileId: profile.id
+        profileId: profile.id,
+        sessionPartition: profile.partition
       })
     })
 
@@ -1520,7 +1529,8 @@ export class RuntimeBrowserCommands {
     const created = await this.createBrowserTabInRenderer(
       sourceTab.url,
       sourceTab.worktreeId ?? target.worktreeId,
-      profile.id
+      profile.id,
+      profile.partition
     )
     // Why: parity with browserTabCreate. Wait for the cloned tab's webview to
     // register so the returned browserPageId is operable by the next CLI call.
@@ -1781,8 +1791,9 @@ export class RuntimeBrowserCommands {
 
   private async createBrowserTabInRenderer(
     url: string,
-    worktreeId?: string,
-    profileId?: string,
+    worktreeId: string | undefined,
+    profileId: string | undefined,
+    sessionPartition: string | undefined,
     activate?: boolean
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
@@ -1814,7 +1825,13 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
+        // Why: leave sessionProfileId/sessionPartition undefined when no explicit
+        // profile was chosen so the renderer still applies the user's configured
+        // default-profile inheritance. Only thread the resolved partition when a
+        // profile is named — sending null here would suppress inheritance and
+        // force the shared default partition.
         sessionProfileId: profileId,
+        sessionPartition,
         activate
       })
     })

@@ -27,6 +27,7 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 
@@ -640,8 +641,7 @@ export function useTabGroupWorkspaceModel({
             return
           }
           createBrowserTab(worktreeId, source.url, {
-            title: source.title,
-            sessionProfileId: source.sessionProfileId,
+            ...buildDuplicatedBrowserTabOptions(source),
             targetGroupId: groupId
           })
         })()
