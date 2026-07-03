@@ -943,6 +943,12 @@ type RuntimePtyWorktreeRecord = {
   waitBlockedAt: number | null
 }
 
+type PtyForegroundAgentRefresh = {
+  promise: Promise<boolean>
+  startedAfterTitleObservation: number
+  requestedAfterTitleObservation: number
+}
+
 function copySleepingAgentLaunchConfig(
   config: SleepingAgentLaunchConfig
 ): SleepingAgentLaunchConfig {
@@ -1926,7 +1932,8 @@ export class OrcaRuntimeService {
   private resolvedWorktreeGeneration = 0
   private cloneInFlightByPath = new Map<string, Promise<void>>()
   private agentDetector: AgentDetector | null = null
-  private ptyForegroundAgentRefreshes = new Map<string, Promise<boolean>>()
+  private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
+  private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
@@ -5156,22 +5163,25 @@ export class OrcaRuntimeService {
         if (agentStatus === 'idle' && prevStatus !== 'idle') {
           this.resolvePtyTuiIdleWaiters(pty, ptyId)
         }
+        const shouldDelayMobileSnapshot =
+          shouldTouchPtyBackedSessionTabs &&
+          this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, oscTitle)
+        let foregroundRefresh: Promise<boolean> | undefined
         // Why: gate on an actual status transition — braille spinner frames
         // mutate the title every tick, so probing per-title-change would stream
         // a foreground query per frame during active work.
         if (prevStatus !== pty.lastAgentStatus) {
-          const foregroundRefresh = this.refreshPtyForegroundAgentFromController(ptyId)
-          if (
-            shouldTouchPtyBackedSessionTabs &&
-            this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, oscTitle)
-          ) {
-            shouldTouchPtyBackedSessionTabs = false
-            void foregroundRefresh.then((foregroundAgentChanged) => {
-              if (!foregroundAgentChanged) {
-                this.touchMobileSessionSnapshotsForPty(ptyId)
-              }
-            })
-          }
+          foregroundRefresh = this.refreshPtyForegroundAgentFromController(ptyId, {
+            afterTitleObservation: observedAt
+          })
+        } else if (shouldDelayMobileSnapshot) {
+          // Why: same-status compatible title changes can arrive before the
+          // foreground owner probe settles; publishing them would flicker.
+          foregroundRefresh = this.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt)
+        }
+        if (foregroundRefresh && shouldDelayMobileSnapshot) {
+          shouldTouchPtyBackedSessionTabs = false
+          this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)
         }
       }
     }
@@ -8708,19 +8718,75 @@ export class OrcaRuntimeService {
     void this.refreshPtyForegroundAgentFromController(ptyId)
   }
 
+  private getPendingForegroundAgentRefreshForTitle(
+    ptyId: string,
+    titleObservedAt: number
+  ): Promise<boolean> | undefined {
+    if (!this.ptyForegroundAgentRefreshes.has(ptyId)) {
+      return undefined
+    }
+    return this.refreshPtyForegroundAgentFromController(ptyId, {
+      afterTitleObservation: titleObservedAt
+    })
+  }
+
+  private delayPtyBackedMobileSnapshotForForegroundAgent(
+    ptyId: string,
+    titleObservedAt: number,
+    foregroundRefresh: Promise<boolean>
+  ): void {
+    this.ptyDelayedForegroundSnapshotTitleObservations.set(ptyId, titleObservedAt)
+    void foregroundRefresh.then((foregroundAgentChanged) => {
+      if (this.ptyDelayedForegroundSnapshotTitleObservations.get(ptyId) !== titleObservedAt) {
+        return
+      }
+      this.ptyDelayedForegroundSnapshotTitleObservations.delete(ptyId)
+      if (!foregroundAgentChanged) {
+        this.touchMobileSessionSnapshotsForPty(ptyId)
+      }
+    })
+  }
+
   /**
    * Deduplicates and manages in-flight foreground agent refresh queries
    * for a specific PTY.
    */
-  private refreshPtyForegroundAgentFromController(ptyId: string): Promise<boolean> {
+  private refreshPtyForegroundAgentFromController(
+    ptyId: string,
+    options: { afterTitleObservation?: number } = {}
+  ): Promise<boolean> {
+    const startedAfterTitleObservation = options.afterTitleObservation ?? 0
     const pendingRefresh = this.ptyForegroundAgentRefreshes.get(ptyId)
     if (pendingRefresh) {
-      return pendingRefresh
+      pendingRefresh.requestedAfterTitleObservation = Math.max(
+        pendingRefresh.requestedAfterTitleObservation,
+        startedAfterTitleObservation
+      )
+      return pendingRefresh.promise
     }
-    const refresh = this.loadPtyForegroundAgentFromController(ptyId).finally(() => {
-      this.ptyForegroundAgentRefreshes.delete(ptyId)
+    const entry: PtyForegroundAgentRefresh = {
+      promise: Promise.resolve(false),
+      startedAfterTitleObservation,
+      requestedAfterTitleObservation: startedAfterTitleObservation
+    }
+    const refresh = (async (): Promise<boolean> => {
+      while (true) {
+        entry.startedAfterTitleObservation = entry.requestedAfterTitleObservation
+        const foregroundAgentChanged = await this.loadPtyForegroundAgentFromController(ptyId)
+        if (
+          foregroundAgentChanged ||
+          entry.requestedAfterTitleObservation <= entry.startedAfterTitleObservation
+        ) {
+          return foregroundAgentChanged
+        }
+      }
+    })().finally(() => {
+      if (this.ptyForegroundAgentRefreshes.get(ptyId) === entry) {
+        this.ptyForegroundAgentRefreshes.delete(ptyId)
+      }
     })
-    this.ptyForegroundAgentRefreshes.set(ptyId, refresh)
+    entry.promise = refresh
+    this.ptyForegroundAgentRefreshes.set(ptyId, entry)
     return refresh
   }
 
