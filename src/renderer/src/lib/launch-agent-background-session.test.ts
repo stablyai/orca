@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: local/runtime launch tests share a mock harness. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
@@ -175,7 +174,6 @@ describe('launchAgentBackgroundSession', () => {
       prompt: 'run the automation',
       title: 'Nightly audit'
     })
-
 
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({

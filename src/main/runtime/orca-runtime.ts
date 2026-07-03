@@ -948,6 +948,7 @@ type RuntimePtyWorktreeRecord = {
 
 type TerminalCreateOptions = {
   command?: string
+  cwd?: string
   claudeAgentTeamsSourceCommand?: string
   env?: Record<string, string>
   launchConfig?: WorktreeStartupLaunch['launchConfig']
@@ -15530,6 +15531,7 @@ export class OrcaRuntimeService {
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
       const launchOpts = this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const cwd = resolveTerminalStartupCwd(workspace.path, launchOpts.cwd) ?? workspace.path
       const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
       // Why: mint tabId in main before spawn so paneKey is known at PTY env
       // build time. Hook-based agent status (Claude/Codex/Cursor/Gemini) keys
@@ -15619,7 +15621,7 @@ export class OrcaRuntimeService {
       const result = await this.ptyController.spawn({
         cols: 120,
         rows: 40,
-        cwd: workspace.path,
+        cwd,
         command: sequencedStartupCommand
           ? launchOpts.command
           : (agentTeamsPlan?.command ?? launchOpts.command),
@@ -15717,6 +15719,9 @@ export class OrcaRuntimeService {
       ? await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
       : null
     const launchOpts = workspace ? this.resolveAgentTerminalCreateOptions(workspace, opts) : opts
+    const cwd = workspace
+      ? resolveTerminalStartupCwd(workspace.path, launchOpts.cwd)
+      : launchOpts.cwd
     const worktreeId = workspace?.id
     const requestId = randomUUID()
 
@@ -15749,6 +15754,7 @@ export class OrcaRuntimeService {
         requestId,
         worktreeId,
         command: launchOpts.command,
+        ...(cwd ? { cwd } : {}),
         ...(launchOpts.env ? { env: launchOpts.env } : {}),
         ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
         ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),

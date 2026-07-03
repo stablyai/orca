@@ -10,7 +10,6 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
