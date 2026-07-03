@@ -16,19 +16,16 @@ import { SPOTLIGHT_LOG_RELATIVE_PATH } from '../../shared/spotlight'
 import { stripTerminalSequences } from '../../shared/terminal-escape-stripping'
 import { gitExecFileAsync } from '../git/runner'
 import { getLocalPtyProvider, onLocalPtyProviderChanged } from '../ipc/pty'
-import {
-  SPOTLIGHT_RESTART_TRIGGER_FILENAME,
-  sendServerRestart,
-  watchRestartTrigger
-} from './spotlight-restart-trigger'
-
-export { stripTerminalSequences }
-export { SPOTLIGHT_RESTART_TRIGGER_FILENAME }
+import { sendServerRestart, watchRestartTrigger } from './spotlight-restart-trigger'
 
 // Keep the log useful for `tail`/`grep` without growing unbounded: once it
 // passes MAX, rewrite it down to the most recent TRIM bytes.
 const MAX_LOG_BYTES = 4 * 1024 * 1024
 const TRIM_LOG_BYTES = 1 * 1024 * 1024
+
+function spotlightLogPathFor(rootPath: string): string {
+  return path.join(rootPath, ...SPOTLIGHT_LOG_RELATIVE_PATH.split('/'))
+}
 // Coalesce bursty PTY output into one flush so a chatty server doesn't cause
 // an fs write + regex pass per chunk.
 const FLUSH_DEBOUNCE_MS = 60
@@ -84,17 +81,28 @@ async function flushCapture(capture: LogCapture): Promise<void> {
   }
   capture.flushing = true
   try {
-    if (!capture.handle) {
-      capture.handle = await open(capture.logPath, 'a')
+    let handle = capture.handle
+    if (!handle) {
+      handle = await open(capture.logPath, 'a')
+      // Teardown could have run while `open` was pending — it saw a null
+      // handle and couldn't close this one. Close it here so the fd doesn't
+      // leak, and don't write to a torn-down capture.
+      if (capture.stopped) {
+        await handle.close().catch(() => {})
+        return
+      }
+      capture.handle = handle
     }
-    await capture.handle.write(chunk)
+    await handle.write(chunk)
     capture.bytesOnDisk += Buffer.byteLength(chunk)
     if (capture.bytesOnDisk > MAX_LOG_BYTES) {
       await trimLog(capture)
     }
   } catch {
-    // Non-fatal: the log dir may have been removed mid-session. Drop the
-    // stale handle so the next flush reopens (recreating the file).
+    // Non-fatal: the log dir may have been removed mid-session. Re-queue the
+    // chunk (re-stripping plain text is a no-op) so a transient write error
+    // doesn't drop server output, and drop the stale handle to force a reopen.
+    capture.pending = chunk + capture.pending
     await capture.handle?.close().catch(() => {})
     capture.handle = null
   } finally {
@@ -165,25 +173,25 @@ export async function startSpotlightLogCapture(args: {
     teardownCapture(existing)
   }
 
-  const logPath = path.join(args.rootPath, ...SPOTLIGHT_LOG_RELATIVE_PATH.split('/'))
+  const logPath = spotlightLogPathFor(args.rootPath)
   await mkdir(path.dirname(logPath), { recursive: true })
   await ensureOrcaDirExcluded(args.rootPath).catch(() => {
     // Best-effort: without the exclude the log shows up as untracked in the
     // root, which is cosmetic — never block capture on it.
   })
-  // Seed byte count from the actual on-disk size so the trim threshold is
-  // measured across sessions, not reset to 0 each start (else it never fires).
+  await appendFile(
+    logPath,
+    `\n──── Orca Spotlight terminal capture started ${new Date().toISOString()} ────\n`,
+    'utf-8'
+  ).catch(() => {})
+  // Seed byte count from the actual on-disk size (after the marker) so the trim
+  // threshold is measured across sessions, not reset to 0 each start.
   let bytesOnDisk = 0
   try {
     bytesOnDisk = (await stat(logPath)).size
   } catch {
     // No file yet.
   }
-  await appendFile(
-    logPath,
-    `\n──── Orca Spotlight terminal capture started ${new Date().toISOString()} ────\n`,
-    'utf-8'
-  ).catch(() => {})
 
   const capture: LogCapture = {
     repoId: args.repoId,
@@ -219,9 +227,8 @@ export async function startSpotlightLogCapture(args: {
 }
 
 /** Restart the repo's Spotlight server (interrupt + history recall) and log the
- *  attempt. Public so an in-process caller can drive it; the file trigger below
- *  is the agent-facing path. */
-export function restartSpotlightServer(repoId: string): boolean {
+ *  attempt. Driven by the .orca/spotlight-restart file watcher below. */
+function restartSpotlightServer(repoId: string): boolean {
   const capture = capturesByRepoId.get(repoId)
   if (!capture) {
     return false
@@ -240,7 +247,7 @@ export function restartSpotlightServer(repoId: string): boolean {
  *  reading it know WHOSE workspace the surrounding output belongs to. */
 export async function appendSpotlightLogNote(rootPath: string, note: string): Promise<void> {
   try {
-    const logPath = path.join(rootPath, ...SPOTLIGHT_LOG_RELATIVE_PATH.split('/'))
+    const logPath = spotlightLogPathFor(rootPath)
     await mkdir(path.dirname(logPath), { recursive: true })
     await appendFile(logPath, `\n──── ${note} (${new Date().toISOString()}) ────\n`, 'utf-8')
   } catch {

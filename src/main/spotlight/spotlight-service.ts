@@ -32,10 +32,20 @@ export class SpotlightService {
   private readonly locks = new Map<string, Promise<unknown>>()
   /** In-memory status overlay: persisted state never stores 'syncing'. */
   private readonly syncingRepoIds = new Set<string>()
-  /** Worktree HEAD each repo's last checkpoint was built on, so the next
-   *  checkpoint can reuse the temp index (skip a full-worktree rescan) when
-   *  HEAD hasn't moved. In-memory only — a miss just costs one extra rescan. */
-  private readonly lastCheckpointHeadByRepo = new Map<string, string>()
+  /** Which worktree + HEAD each repo's temp index was last seeded from, so the
+   *  next checkpoint can reuse it (skip a full-worktree rescan). Keyed per repo
+   *  but records the WORKTREE too: the temp index lives per worktree, so a
+   *  takeover to a different worktree must NOT reuse — the new worktree's index
+   *  doesn't exist yet, and `add -A` against an absent index drops
+   *  tracked-but-gitignored files. In-memory; a miss just costs one rescan. */
+  private readonly lastCheckpointByRepo = new Map<string, { worktreeId: string; headSha: string }>()
+
+  /** The HEAD to pass as reuseIndexForHead, only when the last checkpoint was
+   *  for THIS worktree (so its temp index exists and is HEAD-seeded). */
+  private reuseIndexHeadFor(repoId: string, worktreeId: string): string | null {
+    const last = this.lastCheckpointByRepo.get(repoId)
+    return last && last.worktreeId === worktreeId ? last.headSha : null
+  }
 
   constructor(store: Store, getMainWindow: () => BrowserWindow | null) {
     this.store = store
@@ -86,10 +96,13 @@ export class SpotlightService {
           resolved.repo.path,
           worktreePath,
           {
-            reuseIndexForHead: this.lastCheckpointHeadByRepo.get(repoId) ?? null
+            reuseIndexForHead: this.reuseIndexHeadFor(repoId, worktreeId)
           }
         )
-        this.lastCheckpointHeadByRepo.set(repoId, outcome.checkpointHeadSha)
+        this.lastCheckpointByRepo.set(repoId, {
+          worktreeId,
+          headSha: outcome.checkpointHeadSha
+        })
         const state: SpotlightRepoState = {
           repoId,
           holderWorktreeId: worktreeId,
@@ -146,9 +159,12 @@ export class SpotlightService {
       try {
         const outcome = await syncSpotlightCore(resolved.ctx, resolved.repo.path, worktreePath, {
           force: opts.force,
-          reuseIndexForHead: this.lastCheckpointHeadByRepo.get(repoId) ?? null
+          reuseIndexForHead: this.reuseIndexHeadFor(repoId, state.holderWorktreeId)
         })
-        this.lastCheckpointHeadByRepo.set(repoId, outcome.checkpointHeadSha)
+        this.lastCheckpointByRepo.set(repoId, {
+          worktreeId: state.holderWorktreeId,
+          headSha: outcome.checkpointHeadSha
+        })
         const next: SpotlightRepoState = {
           ...state,
           status: 'active',
@@ -190,7 +206,7 @@ export class SpotlightService {
         // PTY death alone left a turned-off Spotlight still mirroring the
         // terminal and honoring restart triggers.
         stopSpotlightLogCapture({ repoId })
-        this.lastCheckpointHeadByRepo.delete(repoId)
+        this.lastCheckpointByRepo.delete(repoId)
         this.store.clearSpotlightState(repoId)
         this.emitChanged(repoId, null)
         void writeSpotlightStateFile(resolved.repo.path, null)
@@ -204,7 +220,7 @@ export class SpotlightService {
         if (spotlightError.code === 'not-active') {
           // The refs are already gone (manual cleanup); drop the stale record.
           stopSpotlightLogCapture({ repoId })
-          this.lastCheckpointHeadByRepo.delete(repoId)
+          this.lastCheckpointByRepo.delete(repoId)
           this.store.clearSpotlightState(repoId)
           this.emitChanged(repoId, null)
           void writeSpotlightStateFile(resolved.repo.path, null)
@@ -238,6 +254,7 @@ export class SpotlightService {
         if (!refs.originalHeadSha || !refs.snapshotSha) {
           // Refs were removed outside Orca — the repo is no longer in
           // Spotlight mode, so the persisted record is stale.
+          this.lastCheckpointByRepo.delete(repoId)
           this.store.clearSpotlightState(repoId)
           this.emitChanged(repoId, null)
           // Why: keep the agent-facing state file from claiming active:true

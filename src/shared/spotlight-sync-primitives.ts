@@ -45,7 +45,10 @@ export async function readRootStatus(
   ctx: SpotlightGitContext,
   rootPath: string
 ): Promise<RootStatus> {
-  const raw = await git(ctx, rootPath, ['status', '--porcelain', '-z'])
+  // -uall: expand untracked directories to individual files. Without it git
+  // collapses `sub/` to one entry, and a snapshot adding tracked `sub/file.txt`
+  // would slip past the collision guard and get overwritten by reset --hard.
+  const raw = await git(ctx, rootPath, ['status', '--porcelain', '-z', '-uall'])
   const tokens = raw.split('\0').filter((token) => token.length > 0)
   let trackedDirty = false
   const untrackedPaths = new Set<string>()
@@ -121,10 +124,14 @@ export async function createCheckpointCommit(
   const env = { GIT_INDEX_FILE: indexPath }
   // Why the reuse path: `read-tree` wipes the temp index's stat cache, forcing
   // the following `add -A` to lstat + re-hash the entire worktree on every
-  // watcher-debounced sync. When HEAD hasn't moved since the last checkpoint,
-  // the existing index is already based on it — `add -A` then only touches
-  // changed files. (A missing/empty index degrades gracefully: `add -A` stages
-  // the full working tree, which is the same content.)
+  // watcher-debounced sync. When THIS worktree's index was already seeded from
+  // this same HEAD, reuse it so `add -A` only re-stats changed files.
+  //
+  // Reuse requires a HEAD-seeded index: `add -A` against an empty/absent index
+  // treats tracked-but-gitignored files (e.g. a force-added dist/config) as
+  // ignored and drops them from the tree, which the root reset would then
+  // DELETE. The caller must only pass reuseIndexForHead for a worktree whose
+  // temp index it previously seeded (keyed per worktree, not per repo).
   if (opts.reuseIndexForHead !== head) {
     await git(ctx, worktreePath, ['read-tree', 'HEAD'], { env })
   }
@@ -239,16 +246,38 @@ export async function applySnapshotToRoot(
   rootPath: string,
   snapshotSha: string
 ): Promise<void> {
+  // Snapshot the ref's current value so we can roll it back if the reset fails.
+  // Advancing the ref first protects the fresh checkpoint commit from gc during
+  // the reset; but if the reset never lands, an advanced ref would sit ahead of
+  // the (unmoved) root HEAD, and every later sync would then throw a spurious,
+  // permanent 'root-diverged'. So on failure we restore the previous ref value.
+  const previous = await gitTry(ctx, rootPath, [
+    'rev-parse',
+    '--verify',
+    '-q',
+    SPOTLIGHT_REFS.snapshot
+  ])
   await git(ctx, rootPath, ['update-ref', SPOTLIGHT_REFS.snapshot, snapshotSha])
   // `reset --hard` mirrors adds/modifies/deletes/renames exactly and, aside
   // from the collision case guarded above, never touches untracked or ignored
   // files — root caches and installs survive.
   try {
-    await git(ctx, rootPath, ['reset', '--hard', snapshotSha])
-  } catch {
-    // Why: dev servers/watchers holding file locks (Windows EBUSY) can fail a
-    // reset transiently; the command is idempotent, so retry once.
-    await git(ctx, rootPath, ['reset', '--hard', snapshotSha])
+    try {
+      await git(ctx, rootPath, ['reset', '--hard', snapshotSha])
+    } catch {
+      // Dev servers/watchers holding file locks (Windows EBUSY) can fail a
+      // reset transiently; the command is idempotent, so retry once.
+      await git(ctx, rootPath, ['reset', '--hard', snapshotSha])
+    }
+  } catch (error) {
+    await gitTry(
+      ctx,
+      rootPath,
+      previous
+        ? ['update-ref', SPOTLIGHT_REFS.snapshot, previous]
+        : ['update-ref', '-d', SPOTLIGHT_REFS.snapshot]
+    )
+    throw error
   }
 }
 

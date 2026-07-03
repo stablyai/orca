@@ -95,12 +95,14 @@ export function openSpotlightTerminalTab({
     translate('auto.lib.open.spotlight.terminal.tab.title', 'Spotlight'),
     { recordInteraction: false }
   )
-  store.setActiveTabType('terminal')
   appendTerminalToPersistedTabOrder(useAppStore.getState(), worktreeId, tab.id)
 
   if (reveal) {
     activateAndRevealWorktree(worktreeId)
     useAppStore.getState().setActiveTabForWorktree(worktreeId, tab.id)
+    // setActiveTabType targets the ACTIVE worktree's pane, so only flip it when
+    // revealing — otherwise a reveal:false activation from a feature workspace
+    // would yank the user's current pane to the terminal.
     useAppStore.getState().setActiveTabType('terminal')
   }
 

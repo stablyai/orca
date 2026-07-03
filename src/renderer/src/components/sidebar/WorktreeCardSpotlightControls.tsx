@@ -118,7 +118,7 @@ export function SpotlightQuickAction({
           data-workspace-board-preserve-open=""
           onPointerDown={stopCardActivation}
           onClick={handleClick}
-          disabled={syncing && !heldHere}
+          disabled={syncing}
           aria-label={tooltip}
           aria-pressed={heldHere}
           className={cn(

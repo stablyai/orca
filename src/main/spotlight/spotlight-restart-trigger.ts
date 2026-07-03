@@ -70,8 +70,10 @@ export function watchRestartTrigger(orcaDir: string, onRestart: () => void): FSW
         consumeTrigger()
       }
     })
-    // A trigger written while no capture was live should still be honored.
-    consumeTrigger()
+    // Clear a leftover trigger from a prior session WITHOUT restarting: a stale
+    // file (agent touched it, then Orca closed/crashed) must not interrupt the
+    // freshly-booted server. Only triggers written after the watch is armed act.
+    void rm(triggerPath, { force: true })
     return watcher
   } catch {
     return null
