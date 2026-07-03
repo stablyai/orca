@@ -22,6 +22,8 @@ const SESSION_RE = /current\s*session/i
 const WEEKLY_RE = /(?:current\s*week|weekly\s*(?:limits?|usage|rate\s*limits?)|7\s*[- ]?\s*day)/i
 const FABLE_WORD_RE = /\bfable\b/i
 const FABLE_LABEL_RE = /^\s*fable\s*$/i
+const FABLE_WEEKLY_LABEL_RE =
+  /(?:current\s*week|weekly\s*(?:limits?|usage|rate\s*limits?)|7\s*[- ]?\s*day)\s*(?:\([^)]*\bfable\b[^)]*\)|[-:]?\s*\bfable\b)/i
 const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|consumed|left|remaining|available)/i
 const RESET_LINE_RE = /resets?\s+(?:at\s+|in\s+)?(.+)/i
 const ESC = String.fromCharCode(27)
@@ -43,6 +45,12 @@ function matchesWeeklyLabel(line: string): boolean {
 
 function matchesFableBoundary(line: string): boolean {
   return FABLE_LABEL_RE.test(line) || (FABLE_WORD_RE.test(line) && WEEKLY_RE.test(line))
+}
+
+function matchesFableUsageLabel(line: string): boolean {
+  // Why: broad Fable-weekly copy should stop nearby scans, but only a real
+  // Fable usage heading should produce the distinct Fable meter.
+  return FABLE_LABEL_RE.test(line) || FABLE_WEEKLY_LABEL_RE.test(line)
 }
 
 function isSectionLabel(line: string): boolean {
@@ -104,7 +112,7 @@ function parsePtyUsage(output: string): {
 
   const sessionPct = extractPercentAfterLabel(lines, (line) => SESSION_RE.test(line))
   const weeklyPct = extractPercentAfterLabel(lines, matchesWeeklyLabel)
-  const fableWeeklyPct = extractPercentAfterLabel(lines, (line) => FABLE_LABEL_RE.test(line))
+  const fableWeeklyPct = extractPercentAfterLabel(lines, matchesFableUsageLabel)
 
   const session: RateLimitWindow | null =
     sessionPct !== null
@@ -132,7 +140,7 @@ function parsePtyUsage(output: string): {
           usedPercent: Math.min(100, Math.max(0, fableWeeklyPct)),
           windowMinutes: 10080,
           resetsAt: null,
-          resetDescription: extractResetAfterLabel(lines, (line) => FABLE_LABEL_RE.test(line))
+          resetDescription: extractResetAfterLabel(lines, matchesFableUsageLabel)
         }
       : null
 
