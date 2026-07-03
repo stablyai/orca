@@ -257,11 +257,10 @@ window.onerror = function(msg) {
     if (/iP(ad|hone|od)/.test(navigator.userAgent)) return true;
     return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
   }
-  // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name.
-  // Start with WebKit's monospace generic there to avoid script/italic fallback.
-  var terminalFontFamily = isIOSWebView()
-    ? 'ui-monospace, "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace'
-    : '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
+  // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
+  // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
+  var TERMINAL_FONT_FALLBACKS = '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
+  var terminalFontFamily = (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS;
   // Why: change the real font size, then resize the grid to fit the viewport at
   // the new cell metrics so the text shows at its true size immediately. RN's
   // refit (measure → updateViewport) then makes the server reflow the PTY to the

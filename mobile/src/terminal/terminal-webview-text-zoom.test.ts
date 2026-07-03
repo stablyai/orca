@@ -149,22 +149,30 @@ describe('TerminalWebView text zoom', () => {
     expect(terminalHtmlSource).not.toContain('cdn.jsdelivr.net')
     expect(terminalHtmlSource).toContain('window.WebglAddon.WebglAddon')
     expect(terminalHtmlSource).toContain('function isIOSWebView()')
-    expect(terminalHtmlSource).toContain('\'ui-monospace, "Menlo", "Monaco", "Cascadia Mono"')
-    expect(terminalHtmlSource).toContain('\'"SF Mono", "Menlo", "Monaco", "Cascadia Mono"')
     expect(terminalHtmlSource).toContain('fontFamily: terminalFontFamily')
     expect(terminalHtmlSource).toContain("fontWeight: '300'")
     expect(terminalHtmlSource).toContain("fontWeightBold: '500'")
     expect(terminalHtmlSource).toContain('new window.WebglAddon.WebglAddon()')
   })
 
-  it('starts iOS WebViews on a WebKit-safe monospace family instead of SF Mono', () => {
-    const fontFamily = resolveTerminalFontFamily({
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15',
-      platform: 'iPhone',
-      maxTouchPoints: 5
-    })
+  const IOS_IPHONE_NAVIGATOR = {
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15',
+    platform: 'iPhone',
+    maxTouchPoints: 5
+  }
+  const ANDROID_NAVIGATOR = {
+    userAgent: 'Mozilla/5.0 (Linux; Android 16)',
+    platform: 'Linux armv8l',
+    maxTouchPoints: 5
+  }
+
+  it('starts iOS WebViews on ui-monospace, never SF Mono, still ending in a generic monospace guarantee', () => {
+    const fontFamily = resolveTerminalFontFamily(IOS_IPHONE_NAVIGATOR)
     expect(fontFamily.startsWith('ui-monospace, "Menlo"')).toBe(true)
     expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
+    // The chain must always terminate in the generic so it can never fall back to
+    // a script/proportional system face — the actual iOS bug being fixed.
+    expect(fontFamily.endsWith(', monospace')).toBe(true)
   })
 
   it('treats touch iPadOS WebViews that report MacIntel as iOS for font fallback', () => {
@@ -175,14 +183,17 @@ describe('TerminalWebView text zoom', () => {
     })
     expect(fontFamily.startsWith('ui-monospace, "Menlo"')).toBe(true)
     expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
+    expect(fontFamily.endsWith(', monospace')).toBe(true)
   })
 
-  it('keeps the SF Mono desktop fallback chain outside iOS WebViews', () => {
-    const fontFamily = resolveTerminalFontFamily({
-      userAgent: 'Mozilla/5.0 (Linux; Android 16)',
-      platform: 'Linux armv8l',
-      maxTouchPoints: 5
-    })
-    expect(fontFamily.startsWith('"SF Mono", "Menlo"')).toBe(true)
+  it('keeps the SF Mono lead outside iOS WebViews and shares the identical fallback tail', () => {
+    const androidFontFamily = resolveTerminalFontFamily(ANDROID_NAVIGATOR)
+    expect(androidFontFamily.startsWith('"SF Mono", "Menlo"')).toBe(true)
+    expect(androidFontFamily.endsWith(', monospace')).toBe(true)
+    // Only the lead family may differ across platforms; the rest of the chain is
+    // shared so the two platforms cannot silently drift apart.
+    const iosFontFamily = resolveTerminalFontFamily(IOS_IPHONE_NAVIGATOR)
+    const tailFrom = (family: string) => family.slice(family.indexOf('"Menlo"'))
+    expect(tailFrom(androidFontFamily)).toBe(tailFrom(iosFontFamily))
   })
 })
