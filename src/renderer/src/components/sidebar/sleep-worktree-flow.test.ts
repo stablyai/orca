@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => {
   const toastError = vi.fn()
   const markWorktreeSleepIntent = vi.fn()
   const clearWorktreeSleepIntent = vi.fn()
+  const cancelPendingSidebarWorktreeActivation = vi.fn()
   return {
+    cancelPendingSidebarWorktreeActivation,
     clearWorktreeSleepIntent,
     markWorktreeSleepIntent,
     state,
@@ -34,6 +36,9 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/lib/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: mocks.clearWorktreeSleepIntent,
   markWorktreeSleepIntent: mocks.markWorktreeSleepIntent
+}))
+vi.mock('@/lib/sidebar-worktree-activation', () => ({
+  cancelPendingSidebarWorktreeActivation: mocks.cancelPendingSidebarWorktreeActivation
 }))
 
 import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
@@ -55,6 +60,7 @@ describe('runSleepWorktree', () => {
     mocks.state.suppressPtyExit.mockClear()
     mocks.state.consumeSuppressedPtyExit.mockClear()
     mocks.suspendWorkspace.mockClear().mockResolvedValue(null)
+    mocks.cancelPendingSidebarWorktreeActivation.mockClear()
     mocks.markWorktreeSleepIntent.mockClear()
     mocks.clearWorktreeSleepIntent.mockClear()
     mocks.toastError.mockClear()

@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
+  const scheduledActivations: {
+    callback: () => void | Promise<void>
+    cancelled: boolean
+    options: { delayMs: number; quietMs: number; idleTimeoutMs: number }
+  }[] = []
   const state = {
     activeWorktreeId: null as string | null,
     setActiveWorktree: vi.fn((worktreeId: string | null) => {
@@ -22,6 +27,7 @@ const mocks = vi.hoisted(() => {
     activateAndRevealFolderWorkspace,
     activateAndRevealWorktree,
     resumeWorkspace,
+    scheduledActivations,
     state,
     toastError: vi.fn()
   }
@@ -38,16 +44,69 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
+vi.mock('@/lib/input-quiet-scheduler', () => ({
+  scheduleAfterInputQuiet: vi.fn(
+    (
+      callback: () => void | Promise<void>,
+      options: { delayMs: number; quietMs: number; idleTimeoutMs: number }
+    ) => {
+      const schedule = { callback, cancelled: false, options }
+      mocks.scheduledActivations.push(schedule)
+      return () => {
+        schedule.cancelled = true
+      }
+    }
+  )
+}))
+
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
-import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
+import {
+  SIDEBAR_WORKTREE_ACTIVATION_DELAY_MS,
+  SIDEBAR_WORKTREE_ACTIVATION_IDLE_TIMEOUT_MS,
+  SIDEBAR_WORKTREE_ACTIVATION_INPUT_QUIET_MS,
+  activateWorktreeFromSidebar
+} from '@/lib/sidebar-worktree-activation'
 import { runSleepWorktrees } from './sleep-worktree-flow'
+
+function fireScheduledActivation(index = 0): void {
+  const schedule = mocks.scheduledActivations[index]
+  if (!schedule || schedule.cancelled) {
+    return
+  }
+  schedule.callback()
+}
+
+async function settleScheduledActivation(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+async function runScheduledActivation(index = 0): Promise<void> {
+  fireScheduledActivation(index)
+  await settleScheduledActivation()
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
 
 describe('sleep flow vs slept-workspace activation', () => {
   beforeEach(() => {
     mocks.activateAndRevealWorktree.mockClear()
     mocks.activateAndRevealFolderWorkspace.mockClear()
     mocks.resumeWorkspace.mockClear().mockResolvedValue(null)
+    mocks.scheduledActivations = []
     mocks.toastError.mockClear()
     vi.stubGlobal('window', {
       api: {
@@ -85,6 +144,17 @@ describe('sleep flow vs slept-workspace activation', () => {
     expect(mocks.state.ptyIdsByTabId['tab-parent']).toEqual([])
 
     await activateWorktreeFromSidebar('wt-parent')
+    expect(mocks.resumeWorkspace).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.scheduledActivations).toHaveLength(1)
+    expect(mocks.scheduledActivations[0]?.options).toEqual({
+      delayMs: SIDEBAR_WORKTREE_ACTIVATION_DELAY_MS,
+      quietMs: SIDEBAR_WORKTREE_ACTIVATION_INPUT_QUIET_MS,
+      idleTimeoutMs: SIDEBAR_WORKTREE_ACTIVATION_IDLE_TIMEOUT_MS
+    })
+
+    await runScheduledActivation()
+
     expect(mocks.resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-parent' })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-parent', {
@@ -96,11 +166,60 @@ describe('sleep flow vs slept-workspace activation', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
   })
 
+  it('cancels an intermediate sidebar activation when another row is clicked', async () => {
+    await activateWorktreeFromSidebar('wt-parent')
+    const parentSchedule = mocks.scheduledActivations[0]
+
+    await activateWorktreeFromSidebar('wt-child-1')
+
+    expect(parentSchedule?.cancelled).toBe(true)
+    await runScheduledActivation(0)
+    expect(mocks.resumeWorkspace).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+
+    await runScheduledActivation(1)
+
+    expect(mocks.resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-child-1' })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-child-1', {
+      revealInSidebar: false
+    })
+  })
+
+  it('cancels pending activation when the target worktree goes to sleep', async () => {
+    await activateWorktreeFromSidebar('wt-parent')
+    const parentSchedule = mocks.scheduledActivations[0]
+
+    await runSleepWorktrees(['wt-parent'])
+    await runScheduledActivation()
+
+    expect(parentSchedule?.cancelled).toBe(true)
+    expect(mocks.resumeWorkspace).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('ignores a resume that finishes after the target worktree goes to sleep', async () => {
+    const resume = createDeferred<null>()
+    mocks.resumeWorkspace.mockReturnValueOnce(resume.promise)
+
+    await activateWorktreeFromSidebar('wt-parent')
+    fireScheduledActivation()
+    await Promise.resolve()
+    expect(mocks.resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-parent' })
+
+    await runSleepWorktrees(['wt-parent'])
+    resume.resolve(null)
+    await settleScheduledActivation()
+
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
   it('does not activate a slept worktree when VM resume fails', async () => {
     mocks.resumeWorkspace.mockRejectedValueOnce(new Error('provider unavailable'))
 
     await activateWorktreeFromSidebar('wt-parent')
+    await runScheduledActivation()
 
+    expect(mocks.resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-parent' })
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to wake ephemeral VM workspace',
