@@ -39,6 +39,7 @@ import { createPtySizeReassertion } from './pty-size-reassertion'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
   nativeWindowsRewriteNeedsFollowupRenderRefresh,
+  rendererRiskOutputPrefersAtlasRecovery,
   terminalOutputPrefersRenderRefresh,
   terminalRewriteOutputRenderRefreshDecision,
   terminalRewriteOutputPrefersRenderRefresh,
@@ -4119,7 +4120,13 @@ export function connectPanePty(
         return {
           refresh: true,
           inPlaceRewrite: rewriteOutputPrefersRenderRefresh,
-          recoverWebglAtlasAfterParse: true
+          // Why: see rendererRiskOutputPrefersAtlasRecovery — a shared-atlas
+          // rebuild per keystroke echo janks CJK/IME typing; the forced
+          // viewport refresh above still repaints stale cells.
+          recoverWebglAtlasAfterParse: rendererRiskOutputPrefersAtlasRecovery(data, {
+            hadRecentInput: recentInput,
+            maxInteractiveRedrawChars: FOREGROUND_INTERACTIVE_REDRAW_CHARS
+          })
         }
       }
       if (rewriteOutputPrefersRenderRefresh) {

@@ -10200,6 +10200,39 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('skips WebGL atlas recovery for CJK keystroke echoes right after terminal input', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const refresh = vi.fn()
+    const terminal = pane.terminal as typeof pane.terminal & {
+      _core?: { refresh: typeof refresh }
+    }
+    terminal._core = { refresh }
+    terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks(6)
+    sendTerminalInputThroughPane(pane, '日本語の入力')
+
+    capturedDataCallback.current?.('\x1b[2K\x1b[G> 日本語の入力')
+
+    // Why: the echo still repaints stale cells, but rebuilding the shared
+    // glyph atlas per keystroke would jank IME typing (the prompt line keeps
+    // containing CJK on every subsequent keypress).
+    expect(refresh).toHaveBeenCalledWith(0, 39, true)
+    expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+  })
+
   it('does not schedule WebGL atlas recovery for plain synchronized foreground frames', async () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
     try {

@@ -4,7 +4,9 @@ import {
   unregisterLivePaneManager
 } from '@/lib/pane-manager/pane-manager-registry'
 import {
+  _resetTerminalWebglAtlasRecoveryForTests,
   scheduleImagePasteWebglAtlasRecovery,
+  scheduleTerminalRevealWebglAtlasRecovery,
   scheduleTerminalWebglAtlasRecovery
 } from './terminal-webgl-atlas-recovery'
 
@@ -28,6 +30,9 @@ describe('terminal WebGL atlas recovery', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
+    // Why: the cooldown latch survives discarded fake timers; reset it so one
+    // test's in-flight recovery cannot swallow the next test's first burst.
+    _resetTerminalWebglAtlasRecoveryForTests()
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -165,17 +170,78 @@ describe('terminal WebGL atlas recovery', () => {
     vi.advanceTimersByTime(120)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(2)
-    scheduleTerminalWebglAtlasRecovery()
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
     vi.advanceTimersByTime(380)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
+  })
+
+  it('defers repeat terminal-output recovery to one trailing burst after the cooldown', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const manager = registerManager()
+
+    scheduleTerminalWebglAtlasRecovery()
+    vi.advanceTimersByTime(500)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+
+    // Requests landing during the cooldown must not start an immediate burst…
+    scheduleTerminalWebglAtlasRecovery()
+    scheduleTerminalWebglAtlasRecovery()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+
+    // …but the last risky chunk still gets recovered once the cooldown ends.
+    vi.advanceTimersByTime(3000)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
+    vi.advanceTimersByTime(500)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(6)
+  })
+
+  it('runs terminal-output recovery immediately again after an idle cooldown', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const manager = registerManager()
+
+    scheduleTerminalWebglAtlasRecovery()
+    vi.advanceTimersByTime(500)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+
+    // No request arrived while active, so the cooldown expires back to idle.
+    vi.advanceTimersByTime(3000)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
 
     scheduleTerminalWebglAtlasRecovery()
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(4)
+  })
+
+  it('lets tab-reveal recovery bypass the terminal-output cooldown', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const manager = registerManager()
+
+    scheduleTerminalWebglAtlasRecovery()
     vi.advanceTimersByTime(500)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(6)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(6)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+
+    // Why: a revealed pane must repaint now, not after the output cooldown.
+    scheduleTerminalRevealWebglAtlasRecovery()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
   })
 })

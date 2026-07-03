@@ -266,6 +266,28 @@ export function terminalOutputPrefersRenderRefresh(data: string): boolean {
   return false
 }
 
+export type RendererRiskAtlasRecoveryState = {
+  hadRecentInput: boolean
+  maxInteractiveRedrawChars: number
+}
+
+/**
+ * Whether renderer-risk foreground output should ALSO rebuild the shared WebGL
+ * glyph atlas after parsing, on top of the forced viewport refresh.
+ *
+ * Why: once CJK text sits on a TUI prompt line, every keystroke echoes a redraw
+ * containing it, and a shared-atlas rebuild re-rasterizes every visible glyph
+ * across all panes — felt as continuous IME typing jank. Keystroke echoes keep
+ * the viewport refresh (stale cells still repaint) and leave atlas recovery to
+ * the non-interactive chunks that follow (spinner frames, agent output).
+ */
+export function rendererRiskOutputPrefersAtlasRecovery(
+  data: string,
+  state: RendererRiskAtlasRecoveryState
+): boolean {
+  return !(state.hadRecentInput && data.length <= state.maxInteractiveRedrawChars)
+}
+
 export function terminalOutputContainsEastAsianRendererRisk(data: string): boolean {
   for (let i = 0; i < data.length; i += 1) {
     const codePoint = data.codePointAt(i)

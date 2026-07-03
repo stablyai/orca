@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   nativeWindowsRewriteNeedsFollowupRenderRefresh,
+  rendererRiskOutputPrefersAtlasRecovery,
   terminalOutputContainsEastAsianRendererRisk,
   terminalOutputPrefersRenderRefresh,
   terminalRewriteOutputRenderRefreshDecision,
@@ -402,5 +403,36 @@ describe('nativeWindowsRewriteNeedsFollowupRenderRefresh', () => {
         isInPlaceRewrite: true
       })
     ).toBe(false)
+  })
+})
+
+describe('rendererRiskOutputPrefersAtlasRecovery', () => {
+  const maxInteractiveRedrawChars = 128 * 1024
+
+  it('skips atlas recovery for keystroke-echo redraws right after terminal input', () => {
+    expect(
+      rendererRiskOutputPrefersAtlasRecovery('\x1b[2K\x1b[G> 日本語のプロンプト', {
+        hadRecentInput: true,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+  })
+
+  it('keeps atlas recovery for CJK output without recent terminal input', () => {
+    expect(
+      rendererRiskOutputPrefersAtlasRecovery('エージェントからの日本語ストリーム出力\r\n', {
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(true)
+  })
+
+  it('keeps atlas recovery for oversized chunks even during the interactive window', () => {
+    expect(
+      rendererRiskOutputPrefersAtlasRecovery('あ'.repeat(maxInteractiveRedrawChars + 1), {
+        hadRecentInput: true,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(true)
   })
 })
