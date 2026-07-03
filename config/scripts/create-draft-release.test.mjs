@@ -67,6 +67,15 @@ describe('latestPreviousDesktopReleaseTag', () => {
       'v1.4.36-rc.0'
     )
   })
+
+  it('returns empty string for the first desktop release when no earlier tag exists', () => {
+    expect(latestPreviousDesktopReleaseTag(['v1.4.36', 'mobile-v0.0.12'], 'v1.4.36')).toBe('')
+    expect(latestPreviousDesktopReleaseTag([], 'v1.4.36')).toBe('')
+  })
+
+  it('returns empty string when the current tag is not a desktop release tag', () => {
+    expect(latestPreviousDesktopReleaseTag(['v1.4.35', 'v1.4.36'], 'mobile-v0.0.12')).toBe('')
+  })
 })
 
 describe('createDraftRelease', () => {
@@ -139,5 +148,56 @@ describe('createDraftRelease', () => {
 
     const createBody = JSON.parse(fetchImpl.mock.calls[2][1].body)
     expect(createBody.prerelease).toBe(true)
+  })
+
+  it('omits previous_tag_name for the first desktop release so notes fall back to the GitHub default', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([{ name: 'v1.4.36' }, { name: 'mobile-v0.0.12' }]))
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      fetchImpl,
+      log: vi.fn()
+    })
+
+    const generateNotesBody = JSON.parse(fetchImpl.mock.calls[1][1].body)
+    expect(generateNotesBody).toEqual({ tag_name: 'v1.4.36', target_commitish: 'v1.4.36' })
+    expect(generateNotesBody).not.toHaveProperty('previous_tag_name')
+  })
+
+  it('paginates through every tag page before choosing the previous tag', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({ name: `mobile-v0.0.${index}` }))
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(firstPage))
+      .mockResolvedValueOnce(jsonResponse([{ name: 'v1.4.35' }]))
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      fetchImpl,
+      log: vi.fn()
+    })
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      'https://api.github.com/repos/stablyai/orca/tags?per_page=100&page=1',
+      expect.any(Object)
+    )
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      'https://api.github.com/repos/stablyai/orca/tags?per_page=100&page=2',
+      expect.any(Object)
+    )
+    const generateNotesBody = JSON.parse(fetchImpl.mock.calls[2][1].body)
+    expect(generateNotesBody.previous_tag_name).toBe('v1.4.35')
   })
 })
