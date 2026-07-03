@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from './ssh-connection'
+import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const execCommandMock = vi.hoisted(() => vi.fn())
 
@@ -268,6 +269,66 @@ describe('resolveRemoteNodePath', () => {
       .mockResolvedValueOnce('\n') // command -v node: empty
 
     await expect(resolveRemoteNodePath(conn)).rejects.toThrow(/Node\.js not found/)
+  })
+
+  it('keeps the default path-probe fallback for SSH session-limit-shaped errors', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    execCommandMock
+      .mockRejectedValueOnce(sessionLimitError)
+      .mockResolvedValueOnce('/bin/bash')
+      .mockResolvedValueOnce('\n')
+
+    await expect(resolveRemoteNodePath(conn)).rejects.toThrow(/Node\.js not found/)
+  })
+
+  it('rethrows SSH session-limit errors from the path probe in strict mode', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    execCommandMock.mockRejectedValueOnce(sessionLimitError)
+
+    await expect(
+      resolveRemoteNodePath(conn, undefined, { rethrowSessionLimitErrors: true })
+    ).rejects.toBe(sessionLimitError)
+  })
+
+  it('rethrows SSH session-limit errors from candidate version checks in strict mode', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    execCommandMock
+      .mockResolvedValueOnce('/usr/local/bin/node\n')
+      .mockRejectedValueOnce(sessionLimitError)
+
+    await expect(
+      resolveRemoteNodePath(conn, undefined, { rethrowSessionLimitErrors: true })
+    ).rejects.toBe(sessionLimitError)
+  })
+
+  it('rethrows SSH session-limit errors from login-shell resolution in strict mode', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    execCommandMock.mockResolvedValueOnce('\n').mockRejectedValueOnce(sessionLimitError)
+
+    await expect(
+      resolveRemoteNodePath(conn, undefined, { rethrowSessionLimitErrors: true })
+    ).rejects.toBe(sessionLimitError)
+  })
+
+  it('rethrows SSH session-limit errors from Windows node resolution in strict mode', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    execCommandMock.mockRejectedValueOnce(sessionLimitError)
+
+    await expect(
+      resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), {
+        rethrowSessionLimitErrors: true
+      })
+    ).rejects.toBe(sessionLimitError)
   })
 
   it('throws when every candidate across both strategies is below the minimum', async () => {

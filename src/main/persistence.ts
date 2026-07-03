@@ -2352,6 +2352,7 @@ function createMinimalPersistedTerminalTab(args: {
   tabId: string
   ptyId: string
   existingTabCount: number
+  startupCwd?: string
 }): TerminalTab {
   const ordinal = args.existingTabCount + 1
   const defaultTitle = `Terminal ${ordinal}`
@@ -2365,6 +2366,7 @@ function createMinimalPersistedTerminalTab(args: {
     color: null,
     sortOrder: args.existingTabCount,
     createdAt: Date.now(),
+    ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
     pendingActivationSpawn: true
   }
 }
@@ -5749,6 +5751,7 @@ export class Store {
     tabId: string
     leafId: string
     ptyId: string
+    startupCwd?: string
   }): void {
     const session = this.state.workspaceSession
     if (!session) {

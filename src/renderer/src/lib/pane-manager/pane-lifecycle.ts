@@ -12,7 +12,7 @@ import {
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
-import { activateOrcaTerminalUnicodeProvider } from './pane-terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
@@ -29,6 +29,7 @@ export { createPaneDOM } from './pane-dom-creation'
 export function openTerminal(pane: ManagedPaneInternal): void {
   const {
     terminal,
+    container,
     xtermContainer,
     linkTooltip,
     terminalTuiScrollSensitivity,
@@ -41,8 +42,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   // Open terminal into DOM
   terminal.open(xtermContainer)
-  const linkTooltipContainer = terminal.element ?? xtermContainer
-  linkTooltipContainer.appendChild(linkTooltip)
+  // Why: terminal.element sits under the padded xterm container. Pane-level
+  // placement keeps the hover URL on the true bottom-left window corner.
+  container.appendChild(linkTooltip)
 
   // Load addons (order matters: WebGL must be after open())
   terminal.loadAddon(fitAddon)
@@ -237,11 +239,7 @@ export function disposePane(
   } catch {
     /* ignore */
   }
-  try {
-    pane.webglAddon?.dispose()
-  } catch {
-    /* ignore */
-  }
+  disposeWebgl(pane)
   try {
     pane.searchAddon.dispose()
   } catch {

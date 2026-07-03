@@ -21,6 +21,7 @@ import {
   isRichMarkdownContextCommandTarget,
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
+import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -72,6 +73,7 @@ export default function RichMarkdownEditor({
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
+  const richMarkdownSpellcheckEnabled = settings?.richMarkdownSpellcheckEnabled ?? true
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
@@ -209,6 +211,7 @@ export default function RichMarkdownEditor({
     worktreeRoot,
     runtimeEnvironmentId,
     isMac,
+    richMarkdownSpellcheckEnabled,
     settings,
     activateMarkdownLink,
     rootRef,
@@ -246,6 +249,7 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+  useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
   // flush runs before useEditor's cleanup destroys the editor instance on tab

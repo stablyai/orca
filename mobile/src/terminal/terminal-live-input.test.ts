@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   TERMINAL_LIVE_INPUT_MAX_BYTES,
+  applyDisabledTerminalLiveInputHandles,
   clearTerminalLiveInputFocusTimer,
   defaultTerminalLiveInputHandles,
+  filterTerminalLiveInputDefaultCandidates,
   getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit,
   pruneTerminalLiveInputHandles,
@@ -99,6 +101,35 @@ describe('terminal live input', () => {
     expect(result.changed).toBe(false)
     expect(result.enabledHandles).toBe(enabled)
     expect(result.defaultedHandles).toBe(defaulted)
+  })
+
+  it('does not default persisted buffered-mode handles back to live input on reentry', () => {
+    const defaultableHandles = filterTerminalLiveInputDefaultCandidates(
+      ['pty-1', 'pty-2'],
+      new Set(['pty-1'])
+    )
+
+    const result = defaultTerminalLiveInputHandles(
+      new Set(),
+      new Set(['pty-1']),
+      defaultableHandles
+    )
+
+    expect(defaultableHandles).toEqual(['pty-2'])
+    expect([...result.enabledHandles]).toEqual(['pty-2'])
+    expect([...result.defaultedHandles]).toEqual(['pty-1', 'pty-2'])
+  })
+
+  it('reconciles persisted buffered-mode handles with currently enabled live input', () => {
+    const result = applyDisabledTerminalLiveInputHandles(
+      new Set(['pty-1', 'pty-2']),
+      new Set(['pty-2']),
+      new Set(['pty-1'])
+    )
+
+    expect(result.changed).toBe(true)
+    expect([...result.enabledHandles]).toEqual(['pty-2'])
+    expect([...result.defaultedHandles]).toEqual(['pty-2', 'pty-1'])
   })
 
   it('prunes terminal handles that disappear from session snapshots', () => {

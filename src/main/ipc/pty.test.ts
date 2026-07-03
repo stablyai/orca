@@ -2331,7 +2331,9 @@ describe('registerPtyHandlers', () => {
         }
 
         expect(controller.kill('remote-pty')).toBe(true)
-        await Promise.resolve()
+        // Why: kill's shutdown now runs through the exit-detection wrapper,
+        // which adds async hops; a single microtask flush is no longer enough.
+        await new Promise((resolve) => setImmediate(resolve))
 
         expect(shutdown).toHaveBeenCalledWith('remote-pty', { immediate: false })
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
@@ -2340,6 +2342,113 @@ describe('registerPtyHandlers', () => {
           'terminated'
         )
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
+      })
+
+      it('controller kill does not duplicate exits when the provider emits exit during shutdown', async () => {
+        const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+        const shutdown = vi.fn(async (id: string) => {
+          for (const listener of exitListeners) {
+            listener({ id, code: 0 })
+          }
+        })
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn((listener: (payload: { id: string; code: number }) => void) => {
+            exitListeners.add(listener)
+            return () => exitListeners.delete(listener)
+          }),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          kill: (ptyId: string) => boolean
+        }
+
+        expect(controller.kill('local-pty')).toBe(true)
+        await Promise.resolve()
+        await Promise.resolve()
+
+        expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0)
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
+      })
+
+      it('controller stopAndWait skips the synthetic exit when the provider emitted one', async () => {
+        vi.useFakeTimers()
+        const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+        const shutdown = vi.fn(async (id: string) => {
+          for (const listener of exitListeners) {
+            listener({ id, code: 0 })
+          }
+        })
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn((listener: (payload: { id: string; code: number }) => void) => {
+            exitListeners.add(listener)
+            return () => exitListeners.delete(listener)
+          }),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
+        }
+
+        const stopPromise = controller.stopAndWait('local-pty')
+        await vi.advanceTimersByTimeAsync(1_200)
+        await expect(stopPromise).resolves.toBe(true)
+
+        expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0)
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
       })
 
       it('passes keepHistory through runtime controller stopAndWait', async () => {
@@ -2566,7 +2675,7 @@ describe('registerPtyHandlers', () => {
         }
 
         expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(true)
-        await Promise.resolve()
+        await new Promise((resolve) => setImmediate(resolve))
 
         expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', { immediate: false })
         expect(localShutdown).not.toHaveBeenCalled()
@@ -2701,8 +2810,7 @@ describe('registerPtyHandlers', () => {
 
         try {
           expect(controller.kill('remote-pty')).toBe(true)
-          await Promise.resolve()
-          await Promise.resolve()
+          await new Promise((resolve) => setImmediate(resolve))
         } finally {
           warnSpy.mockRestore()
           deletePtyOwnership('remote-pty')
@@ -2911,6 +3019,104 @@ describe('registerPtyHandlers', () => {
       keepHistory: true
     })
     expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1)
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+      id: 'local-pty',
+      code: -1
+    })
+  })
+
+  it('does not synthesize a duplicate renderer exit when kill emits provider exit', async () => {
+    const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+    const shutdown = vi.fn(async (id: string) => {
+      for (const listener of exitListeners) {
+        listener({ id, code: 0 })
+      }
+    })
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((listener: (payload: { id: string; code: number }) => void) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:kill')!(null, { id: 'local-pty' })
+
+    expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0)
+    expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
+      [['pty:exit', { id: 'local-pty', code: 0 }]]
+    )
+  })
+
+  it('ignores a late provider exit after synthesizing kill exit', async () => {
+    const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(async () => undefined),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((listener: (payload: { id: string; code: number }) => void) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:kill')!(null, { id: 'local-pty' })
+    for (const listener of exitListeners) {
+      listener({ id: 'local-pty', code: 0 })
+    }
+
+    expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1)
+    expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
+      [['pty:exit', { id: 'local-pty', code: -1 }]]
+    )
   })
 
   it('waits for the desktop startup barrier before renderer local spawns resolve the provider', async () => {
@@ -3623,6 +3829,62 @@ describe('registerPtyHandlers', () => {
       const reported = await handlers.get('pty:getSize')!(null, { id })
       expect(reported).toEqual({ cols: 100, rows: 30 })
     })
+
+    it('fans out accepted desktop resizes to the runtime after provider resize', async () => {
+      const resize = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 120, rows: 30 }, resize })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'host' })),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+
+      resizeListener()(mainWindowIpcEvent, { id, cols: 120, rows: 30 })
+
+      expect(resize).toHaveBeenCalledWith(id, 120, 30)
+      expect(runtime.onExternalPtyResize).toHaveBeenCalledWith(id, 120, 30)
+      expect(resize.mock.invocationCallOrder[0]).toBeLessThan(
+        runtime.onExternalPtyResize.mock.invocationCallOrder[0]!
+      )
+    })
+
+    it('does not fan out rejected desktop resizes to the runtime', async () => {
+      setupProviderWithAppliedSize({
+        applied: { cols: 80, rows: 24 },
+        resize: () => {
+          throw new Error('resize rejected')
+        }
+      })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'host' })),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+
+      resizeListener()(mainWindowIpcEvent, { id, cols: 120, rows: 30 })
+
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
   })
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
@@ -4108,7 +4370,8 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-race',
       leafId,
-      ptyId: 'pty-shared'
+      ptyId: 'pty-shared',
+      startupCwd: '/tmp'
     })
   })
 
@@ -4221,7 +4484,8 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-race',
       leafId,
-      ptyId: 'pty-renderer'
+      ptyId: 'pty-renderer',
+      startupCwd: '/tmp'
     })
   })
 

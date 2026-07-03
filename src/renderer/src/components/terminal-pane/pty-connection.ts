@@ -89,7 +89,11 @@ import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stabl
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentType
+} from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -156,6 +160,10 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
+import {
+  isExpectedAgentProcess,
+  recognizeAgentProcessFromCommandLine
+} from '../../../../shared/agent-process-recognition'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
@@ -165,7 +173,6 @@ import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
 } from '@/lib/agent-startup-delayed-delivery'
-import { isExpectedAgentProcess } from '../../../../shared/agent-process-recognition'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -176,6 +183,7 @@ const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1500
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
+const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
 const STARTUP_DRAFT_PASTE_TIMEOUT_MS = 8000
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
@@ -1035,6 +1043,7 @@ export function connectPanePty(
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
   let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   let cleanupHiddenOutputRestoreForegroundDeadline = (): void => {}
+  let resetRendererOrderedSeqForPtyExit: (exitedPtyId: string) => void = () => {}
   let cleanupStartupDraftPasteTimers = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
@@ -1237,12 +1246,219 @@ export function connectPanePty(
   }
   /**
    * Resolves the authoritative owner agent type for this pane, checking tab launch,
-   * pane startup, and store state configuration.
+   * pane startup, typed command ownership, and store state configuration.
    *
    * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
-   * OMP-owned pane back to Pi; the stored status agentType is only the last-resort
-   * fallback because it can itself be a Pi-compatible frame.
+   * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
+   * in generic terminals where launch metadata does not exist.
    */
+  let commandInferredPaneAgent: TuiAgent | null = null
+  let pendingShellCommandLine = ''
+  let pendingShellCommandCursor = 0
+  let commandInferredPaneAgentGeneration = 0
+  let shellCommandInferenceSuspendedUntilCommandEnd = false
+  const resetPendingShellCommandLine = (): void => {
+    pendingShellCommandLine = ''
+    pendingShellCommandCursor = 0
+  }
+  const rememberCommandInferredPaneAgent = (): void => {
+    const commandLine = pendingShellCommandLine.trim()
+    resetPendingShellCommandLine()
+    const nextAgent = commandLine
+      ? (recognizeAgentProcessFromCommandLine(commandLine)?.agent ?? null)
+      : null
+    commandInferredPaneAgent = nextAgent
+    commandInferredPaneAgentGeneration += 1
+  }
+  const clearCommandInferredPaneAgent = (): void => {
+    commandInferredPaneAgent = null
+    resetPendingShellCommandLine()
+    commandInferredPaneAgentGeneration += 1
+  }
+  const clearCommandInferredPaneAgentAfterPtySideEffects = (): void => {
+    const generation = commandInferredPaneAgentGeneration
+    resetPendingShellCommandLine()
+    queueMicrotask(() => {
+      setTimeout(() => {
+        if (commandInferredPaneAgentGeneration === generation) {
+          clearCommandInferredPaneAgent()
+        }
+      }, 0)
+    })
+  }
+  const appendPendingShellCommandInput = (text: string): void => {
+    const available = MANUAL_AGENT_COMMAND_MAX_CHARS - pendingShellCommandLine.length
+    if (available <= 0) {
+      shellCommandInferenceSuspendedUntilCommandEnd = true
+      return
+    }
+    const inserted = text.slice(0, available)
+    pendingShellCommandLine =
+      pendingShellCommandLine.slice(0, pendingShellCommandCursor) +
+      inserted +
+      pendingShellCommandLine.slice(pendingShellCommandCursor)
+    pendingShellCommandCursor += inserted.length
+    if (inserted.length < text.length) {
+      shellCommandInferenceSuspendedUntilCommandEnd = true
+    }
+  }
+  const deletePendingShellCommandWord = (): void => {
+    const beforeCursor = pendingShellCommandLine.slice(0, pendingShellCommandCursor)
+    const afterCursor = pendingShellCommandLine.slice(pendingShellCommandCursor)
+    const nextBeforeCursor = beforeCursor.replace(/[^\S\r\n]*\S+[^\S\r\n]*$/, '')
+    pendingShellCommandLine = nextBeforeCursor + afterCursor
+    pendingShellCommandCursor = nextBeforeCursor.length
+  }
+  const cancelSuspendedShellCommandInference = (): void => {
+    if (!shellCommandInferenceSuspendedUntilCommandEnd) {
+      return
+    }
+    shellCommandInferenceSuspendedUntilCommandEnd = false
+    resetPendingShellCommandLine()
+  }
+  const deletePendingShellCommandCharacter = (): void => {
+    if (pendingShellCommandCursor === 0) {
+      return
+    }
+    pendingShellCommandLine =
+      pendingShellCommandLine.slice(0, pendingShellCommandCursor - 1) +
+      pendingShellCommandLine.slice(pendingShellCommandCursor)
+    pendingShellCommandCursor -= 1
+  }
+  const deletePendingShellCommandCharacterAtCursor = (): void => {
+    if (pendingShellCommandCursor >= pendingShellCommandLine.length) {
+      return
+    }
+    pendingShellCommandLine =
+      pendingShellCommandLine.slice(0, pendingShellCommandCursor) +
+      pendingShellCommandLine.slice(pendingShellCommandCursor + 1)
+  }
+  const movePendingShellCommandCursor = (delta: number): void => {
+    pendingShellCommandCursor = Math.min(
+      pendingShellCommandLine.length,
+      Math.max(0, pendingShellCommandCursor + delta)
+    )
+  }
+  const consumeShellCommandCsiSequence = (data: string, index: number): number | null => {
+    if (data.charCodeAt(index) !== 0x1b || data[index + 1] !== '[') {
+      return null
+    }
+    let cursor = index + 2
+    while (cursor < data.length && /[0-9;?]/.test(data[cursor]!)) {
+      cursor += 1
+    }
+    const final = data[cursor]
+    if (!final || !/[~A-Za-z]/.test(final)) {
+      return null
+    }
+    const params = data.slice(index + 2, cursor)
+    if (final === 'D') {
+      movePendingShellCommandCursor(-1)
+    } else if (final === 'C') {
+      movePendingShellCommandCursor(1)
+    } else if (final === 'H' || (final === '~' && params === '1')) {
+      pendingShellCommandCursor = 0
+    } else if (final === 'F' || (final === '~' && params === '4')) {
+      pendingShellCommandCursor = pendingShellCommandLine.length
+    } else if (final === '~' && params === '3') {
+      deletePendingShellCommandCharacterAtCursor()
+    } else if (final === '~' && (params === '200' || params === '201')) {
+      // Bracketed paste wrappers are terminal framing, not shell command text.
+    } else {
+      resetPendingShellCommandLine()
+    }
+    return cursor + 1
+  }
+  const getLivePaneAgentTitle = (): string | null => {
+    const state = useAppStore.getState()
+    const runtimeTitle = state.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    const tabTitle = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
+      (entry) => entry.id === deps.tabId
+    )?.title
+    return runtimeTitle ?? tabTitle ?? null
+  }
+  const hasFreshPaneAgentSurface = (): boolean => {
+    const state = useAppStore.getState()
+    const entry = state.agentStatusByPaneKey[cacheKey]
+    const now = Date.now()
+    const entryIsFresh =
+      entry &&
+      typeof entry.updatedAt === 'number' &&
+      now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+    if (entryIsFresh && entry.state !== 'done') {
+      return true
+    }
+    const liveTitle = getLivePaneAgentTitle()
+    return detectAgentStatusFromTitle(liveTitle ?? '') !== null
+  }
+  const observeAcceptedShellCommandInput = (data: string): void => {
+    if (commandInferredPaneAgent) {
+      return
+    }
+    // Why: bytes typed inside a live agent TUI are prompt text, not shell
+    // commands, even if they spell another agent binary name.
+    if (hasFreshPaneAgentSurface()) {
+      resetPendingShellCommandLine()
+      return
+    }
+    if (shellCommandInferenceSuspendedUntilCommandEnd) {
+      if (data.includes('\x03') || data.includes('\x15')) {
+        shellCommandInferenceSuspendedUntilCommandEnd = false
+        resetPendingShellCommandLine()
+      }
+      if (data.includes('\r') || data.includes('\n')) {
+        shellCommandInferenceSuspendedUntilCommandEnd = false
+      }
+      return
+    }
+    if (data.length > MANUAL_AGENT_COMMAND_MAX_CHARS) {
+      resetPendingShellCommandLine()
+      shellCommandInferenceSuspendedUntilCommandEnd = !data.includes('\r') && !data.includes('\n')
+      return
+    }
+    for (let index = 0; index < data.length; index += 1) {
+      const char = data[index]!
+      if (char === '\r' || char === '\n') {
+        shellCommandInferenceSuspendedUntilCommandEnd = false
+        rememberCommandInferredPaneAgent()
+        if (commandInferredPaneAgent) {
+          return
+        }
+        continue
+      }
+      if (char === '\x7f' || char === '\b') {
+        deletePendingShellCommandCharacter()
+        continue
+      }
+      if (char === '\x17') {
+        deletePendingShellCommandWord()
+        continue
+      }
+      if (char === '\x03' || char === '\x15') {
+        resetPendingShellCommandLine()
+        continue
+      }
+      if (char === '\x1b') {
+        const nextIndex = consumeShellCommandCsiSequence(data, index)
+        if (nextIndex !== null) {
+          index = nextIndex - 1
+          continue
+        }
+        resetPendingShellCommandLine()
+        continue
+      }
+      if (char < ' ') {
+        resetPendingShellCommandLine()
+        continue
+      }
+      if (char >= ' ') {
+        appendPendingShellCommandInput(char)
+        if (shellCommandInferenceSuspendedUntilCommandEnd) {
+          return
+        }
+      }
+    }
+  }
   const getAuthoritativePaneAgent = (): AgentType | undefined => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
@@ -1252,6 +1468,7 @@ export function connectPanePty(
       tab?.launchAgent ??
       paneStartup?.launchAgent ??
       paneStartup?.initialAgentStatus?.agent ??
+      commandInferredPaneAgent ??
       state.agentStatusByPaneKey[cacheKey]?.agentType
     )
   }
@@ -1521,6 +1738,7 @@ export function connectPanePty(
   }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandFinished: () => {
+      clearCommandInferredPaneAgentAfterPtySideEffects()
       // Why: the finished command may have moved HEAD or the index (e.g.
       // `git checkout`); nudge git UI now instead of waiting for a poll.
       dispatchTerminalCommandFinishedEvent(deps.worktreeId)
@@ -1700,6 +1918,7 @@ export function connectPanePty(
     if (handledExitPtyId === ptyId) {
       return
     }
+    resetRendererOrderedSeqForPtyExit(ptyId)
     const currentPaneTransport = deps.paneTransportsRef.current.get(pane.id)
     if (currentPaneTransport && currentPaneTransport !== transport) {
       // Why: an old transport can deliver a late exit after this pane has
@@ -2190,6 +2409,7 @@ export function connectPanePty(
     }
   }
   const onAgentExited = (): void => {
+    clearCommandInferredPaneAgent()
     // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
     // the agent has exited. Clear any running cache timer so the sidebar doesn't
     // show a stale countdown for a tab that no longer has an active Claude session.
@@ -2459,6 +2679,11 @@ export function connectPanePty(
     // excluded because those transports do not expose sendInputAccepted.
     const acknowledgedIntent = intent ?? inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && transport.sendInputAccepted) {
+      if (acknowledgedIntent === 'ctrl-c') {
+        // Why: the accepted-write callback is async; let the next command be
+        // inferred if the user cancelled an oversized line and immediately typed.
+        cancelSuspendedShellCommandInference()
+      }
       clearPendingTerminalInputIntent()
       markTerminalInputSent()
       const writePromise = transport
@@ -2466,6 +2691,7 @@ export function connectPanePty(
         .then((accepted) => {
           if (accepted) {
             recordAcceptedTerminalInputForHibernation()
+            observeAcceptedShellCommandInput(data)
             observeAcceptedTerminalInput(data, acknowledgedIntent)
             interruptInference.observeInputIntent(acknowledgedIntent)
             observeTitleOnlyInterrupt()
@@ -2480,6 +2706,7 @@ export function connectPanePty(
     if (intent) {
       if (transport.sendInput(data)) {
         markAcceptedTerminalInputSent()
+        observeAcceptedShellCommandInput(data)
         observeAcceptedTerminalInput(data, intent)
       }
       clearPendingTerminalInputIntent()
@@ -2487,6 +2714,7 @@ export function connectPanePty(
     }
     if (transport.sendInput(data)) {
       markAcceptedTerminalInputSent()
+      observeAcceptedShellCommandInput(data)
       observeAcceptedTerminalInput(data)
       observeSentTerminalInputIntent(data)
     } else {
@@ -2546,6 +2774,14 @@ export function connectPanePty(
       return
     }
     forwardPtyResize(cols, rows)
+  })
+
+  // Why: a rewrite chunk can enter AND exit the alternate screen in one parse
+  // (fast-quitting TUI), netting buffer.active.type back to 'normal'; counting
+  // switches keeps those redraws visible to the atlas-recovery check.
+  let alternateScreenBufferSwitches = 0
+  const onBufferChangeDisposable = pane.terminal.buffer.onBufferChange?.(() => {
+    alternateScreenBufferSwitches += 1
   })
 
   // Why: renderer resize forwarding is fire-and-forget. A visible pane can
@@ -3646,6 +3882,10 @@ export function connectPanePty(
     let hiddenSynchronizedOutputMarkerTail = ''
     let hiddenRewriteChunkEndedWithCarriageReturn = false
     let hiddenRewriteCsiScanTail = ''
+    let rendererOrderedPtyId: string | null = null
+    let rendererOrderedSeq: number | null = null
+    let rendererChannelSeqPtyId: string | null = null
+    let rendererChannelSeq: number | null = null
 
     function canUseMainBufferSnapshot(ptyId: string | null): ptyId is string {
       return Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
@@ -3771,6 +4011,25 @@ export function connectPanePty(
       return decision.prefersRenderRefresh
     }
 
+    // Why: Vim-style TUI redraws are plain-ASCII in-place rewrites whose erased
+    // cells can keep stale WebGL glyphs until the shared atlas rebuilds. Whether
+    // a rewrite touched the alternate screen is only authoritative once xterm
+    // parses the chunk (enter/exit sequences can split across PTY chunks), so
+    // capture the pre-parse state and decide the rest at parse completion.
+    function alternateScreenRewriteAtlasRecoveryOnParsed(): () => void {
+      const wasAlternateScreenBuffer = pane.terminal.buffer.active.type === 'alternate'
+      const switchesBeforeParse = alternateScreenBufferSwitches
+      return () => {
+        if (
+          wasAlternateScreenBuffer ||
+          alternateScreenBufferSwitches !== switchesBeforeParse ||
+          pane.terminal.buffer.active.type === 'alternate'
+        ) {
+          scheduleTerminalWebglAtlasRecovery()
+        }
+      }
+    }
+
     function shouldForceForegroundRenderRefresh(data: string): {
       refresh: boolean
       inPlaceRewrite: boolean
@@ -3858,6 +4117,13 @@ export function connectPanePty(
         !foregroundOutput && hiddenOutputNeedsAtlasRecoveryAfterParse(data)
       const recoverWebglAtlasAfterParse =
         renderRefreshDecision.recoverWebglAtlasAfterParse || recoverHiddenWebglAtlasAfterParse
+      // Why: atlas recovery must repaint from the parsed xterm buffer, not a
+      // pre-write snapshot that a late TUI redraw can immediately stale.
+      const onParsedAtlasRecovery = recoverWebglAtlasAfterParse
+        ? scheduleTerminalWebglAtlasRecovery
+        : renderRefreshDecision.inPlaceRewrite
+          ? alternateScreenRewriteAtlasRecoveryOnParsed()
+          : undefined
       const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
       // Why: see nativeWindowsRewriteNeedsFollowupRenderRefresh — Claude Code's
       // in-place prompt redraws on Windows ConPTY can paint one frame late, so a
@@ -3904,9 +4170,7 @@ export function connectPanePty(
             foregroundRenderRefreshNeeded),
         followupForegroundRefresh:
           nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
-        // Why: atlas recovery must repaint from the parsed xterm buffer, not
-        // a pre-write snapshot that a late TUI redraw can immediately stale.
-        onParsed: recoverWebglAtlasAfterParse ? scheduleTerminalWebglAtlasRecovery : undefined,
+        onParsed: onParsedAtlasRecovery,
         stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
         holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
@@ -4120,6 +4384,79 @@ export function connectPanePty(
       return chunk.data.slice(offset)
     }
 
+    function recordRendererOrderedSeq(meta?: Pick<PtyDataMeta, 'seq'>): void {
+      if (typeof meta?.seq !== 'number') {
+        return
+      }
+      const ptyId = transport.getPtyId()
+      if (!ptyId) {
+        return
+      }
+      if (rendererOrderedPtyId !== ptyId) {
+        rendererOrderedPtyId = ptyId
+        rendererOrderedSeq = meta.seq
+        return
+      }
+      rendererOrderedSeq = Math.max(rendererOrderedSeq ?? 0, meta.seq)
+    }
+
+    resetRendererOrderedSeqForPtyExit = (exitedPtyId: string): void => {
+      // Why: an exit ends this ptyId's seq domain. A revived session can reuse
+      // the id with a restarted main-side counter, and a stale high-water mark
+      // would wrongly cover — and silently drop — every hidden byte it emits.
+      if (rendererOrderedPtyId === exitedPtyId) {
+        rendererOrderedPtyId = null
+        rendererOrderedSeq = null
+      }
+      if (rendererChannelSeqPtyId === exitedPtyId) {
+        rendererChannelSeqPtyId = null
+        rendererChannelSeq = null
+      }
+    }
+
+    function observeRendererOrderedSeqRegression(meta: PtyDataMeta | undefined): void {
+      if (typeof meta?.seq !== 'number') {
+        return
+      }
+      const ptyId = transport.getPtyId()
+      if (!ptyId) {
+        return
+      }
+      if (rendererChannelSeqPtyId !== ptyId) {
+        rendererChannelSeqPtyId = ptyId
+        rendererChannelSeq = meta.seq
+        return
+      }
+      if (rendererChannelSeq !== null && meta.seq < rendererChannelSeq) {
+        // Why: pty:data delivery is FIFO per pty, so seq only moves backwards
+        // when the session was revived without an observed exit and restarted
+        // its counter. Drop the stale ordered baseline instead of letting it
+        // cover the new stream's bytes.
+        if (rendererOrderedPtyId === ptyId) {
+          rendererOrderedPtyId = null
+          rendererOrderedSeq = null
+        }
+      }
+      rendererChannelSeq = meta.seq
+    }
+
+    function getHiddenRendererDataAfterOrderedSeq(
+      data: string,
+      meta: PtyDataMeta | undefined
+    ): string | null {
+      if (
+        rendererOrderedPtyId === null ||
+        rendererOrderedSeq === null ||
+        transport.getPtyId() !== rendererOrderedPtyId
+      ) {
+        return data
+      }
+      return getChunkDataAfterSnapshot(
+        { data, seq: meta?.seq, rawLength: meta?.rawLength },
+        rendererOrderedSeq
+      )
+    }
+
     function drainPendingLiveChunksAfterSnapshot(snapshotSeq: number | undefined): boolean {
       if (hiddenOutputRestorePendingOverflow) {
         hiddenOutputRestorePendingOverflow = false
@@ -4143,6 +4480,7 @@ export function connectPanePty(
           }
           if (data) {
             writePtyOutputToXterm(data, true)
+            recordRendererOrderedSeq(chunk)
           }
         }
         if (hiddenOutputRestorePendingOverflow) {
@@ -4393,10 +4731,18 @@ export function connectPanePty(
         // clearing on restore loses scroll-up after a hidden->visible return.
         // Mirrors the attach-time guard in pty-transport.ts.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      } else {
+        // Why: the snapshot's own ?1049h is a no-op when the pane is already on
+        // the alternate screen, and the serialized frame skips blank cells — so
+        // without clearing the alt screen the pre-hide frame bleeds through
+        // every cell the final frame leaves blank. \x1b[2J on the alt buffer
+        // does not touch the normal buffer's scrollback the TUI returns to.
+        writeReplayData('\x1b[?1049h\x1b[2J\x1b[H')
       }
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
       hiddenRendererStateDirty = false
+      recordRendererOrderedSeq(snapshot)
       resetHiddenRendererRiskState()
       recordTerminalOutput(pane.terminal)
       const currentPtyId = transport.getPtyId()
@@ -4625,6 +4971,21 @@ export function connectPanePty(
         meta,
         pendingForegroundQuery?.consumedCurrentChars ?? 0
       )
+      observeRendererOrderedSeqRegression(meta)
+      const orderedRendererData = foreground
+        ? rendererData
+        : getHiddenRendererDataAfterOrderedSeq(rendererData, rendererMeta)
+      if (orderedRendererData === null) {
+        // Why: renderer-side filtering cannot map cleaned text back onto raw
+        // sequence offsets. Rebuild from main instead of risking stale bytes.
+        markHiddenOutputRestoreNeeded()
+        schedulePendingStartupCommandDelivery()
+        return
+      }
+      if (!foreground && orderedRendererData.length === 0) {
+        schedulePendingStartupCommandDelivery()
+        return
+      }
       if (pendingForegroundQuery?.statelessQueryData) {
         writePtyOutputToXterm(pendingForegroundQuery.statelessQueryData, true, {
           hiddenStartupRendererQuery: true
@@ -4643,11 +5004,11 @@ export function connectPanePty(
         meta?.background === true &&
         shouldWritePtyOutputForeground(deps.isVisibleRef.current) &&
         pane.terminal.buffer.active.type === 'alternate' &&
-        !containsStatefulRendererQuery(data)
+        !containsStatefulRendererQuery(orderedRendererData)
       if (skipBackgroundAlternateScreenFrame) {
-        skipBackgroundAlternateScreenOutput(data)
-      } else if (shouldSkipHiddenRendererOutput(foreground, data)) {
-        skipHiddenRendererOutput(data)
+        skipBackgroundAlternateScreenOutput(orderedRendererData)
+      } else if (shouldSkipHiddenRendererOutput(foreground, orderedRendererData)) {
+        skipHiddenRendererOutput(orderedRendererData)
       } else if (
         (hiddenOutputRestoreNeeded || hiddenOutputRestoreInFlight) &&
         restoreAppliesToCurrentPty
@@ -4656,7 +5017,7 @@ export function connectPanePty(
           if (pendingForegroundQuery?.statefulQueryData) {
             queueLiveChunkDuringRestore(pendingForegroundQuery.statefulQueryData)
           }
-          queueLiveChunkDuringRestore(rendererData, rendererMeta)
+          queueLiveChunkDuringRestore(orderedRendererData, rendererMeta)
           requestHiddenOutputRestoreIfNeeded()
         } else if (hiddenOutputRestoreInFlight) {
           resetSkippedHiddenRendererRiskState()
@@ -4669,7 +5030,10 @@ export function connectPanePty(
             hiddenStartupRendererQuery: true
           })
         }
-        writePtyOutputToXterm(rendererData, foreground)
+        writePtyOutputToXterm(orderedRendererData, foreground)
+        if (foreground) {
+          recordRendererOrderedSeq(rendererMeta)
+        }
       }
 
       schedulePendingStartupCommandDelivery()
@@ -5533,6 +5897,7 @@ export function connectPanePty(
       onDataDisposable.dispose()
       terminalCapabilityRepliesDisposable.dispose()
       onResizeDisposable.dispose()
+      onBufferChangeDisposable?.dispose()
       pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
       geometryReportObserver?.disconnect()
       if (pendingGeometryReportRaf !== null) {

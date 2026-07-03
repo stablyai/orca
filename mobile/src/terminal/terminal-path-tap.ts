@@ -13,11 +13,11 @@ export type TappedFilePath = {
 // a bare filename with an extension (README.md, index.ts), optionally suffixed
 // with :line or :line:col. Like desktop, we propose candidates and let the host
 // existence-check reject non-files — agents often print a bare filename, so
-// requiring a slash would miss the common case. The desktop's spaced-path
-// variants are intentionally not ported: a tap always lands inside one
-// whitespace-bounded segment, so this already covers the real cases.
+// requiring a slash would miss the common case.
 const LOCAL_PATH_REGEX =
   /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
+const SPACED_PATH_REGEX =
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
 
 const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
 const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])
@@ -64,9 +64,116 @@ export function parsePathWithOptionalLineColumn(value: string): TappedFilePath |
   return { pathText, line, column }
 }
 
+function hasSeparatorAfterWhitespace(text: string): boolean {
+  let sawWhitespace = false
+  for (const char of text) {
+    if (/\s/.test(char)) {
+      sawWhitespace = true
+      continue
+    }
+    if (sawWhitespace && (char === '/' || char === '\\')) {
+      return true
+    }
+  }
+  return false
+}
+
+function trimSpacedPathTrailingProse(
+  range: Span & { text: string },
+  col?: number
+): (Span & { text: string }) | null {
+  // Why: a line-end extension token only extends the span when the added
+  // segment is path-like (contains a separator) — "v1.2 reports/result.json"
+  // extends, prose like "failed to start app.py" must not be swallowed.
+  let selected: string | null = null
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  let match: RegExpExecArray | null
+  while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
+    const end = match.index + match[0].length
+    const text = range.text.slice(0, end)
+    if (countPathStarts(text) > 1) {
+      continue
+    }
+    if (
+      end < range.text.length ||
+      selected === null ||
+      /[\\/]/.test(range.text.slice(selected.length, end))
+    ) {
+      selected = text
+    }
+  }
+  if (!selected) {
+    const text = range.text.trimEnd()
+    return {
+      ...range,
+      text,
+      endIndex: range.startIndex + text.length
+    }
+  }
+  if (col !== undefined && col >= range.startIndex + selected.length) {
+    return null
+  }
+  return {
+    text: selected,
+    startIndex: range.startIndex,
+    endIndex: range.startIndex + selected.length
+  }
+}
+
+function countPathStarts(text: string): number {
+  let count = 0
+  for (const match of text.matchAll(/(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g)) {
+    void match
+    count += 1
+  }
+  return count
+}
+
+function hasSpacedPathExtension(text: string): boolean {
+  const trimmed = trimSpacedPathTrailingProse({
+    text,
+    startIndex: 0,
+    endIndex: text.length
+  })?.text.trimEnd()
+  if (!trimmed) {
+    return false
+  }
+  return /\s/.test(trimmed) && /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?$/.test(trimmed)
+}
+
+function matchSpacedFilePathAtColumn(lineText: string, col: number): TappedFilePath | null {
+  SPACED_PATH_REGEX.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = SPACED_PATH_REGEX.exec(lineText)) !== null) {
+    const trimmed = trimBoundaryPunctuation(match[0], match.index)
+    if (
+      !trimmed ||
+      (!hasSeparatorAfterWhitespace(trimmed.text) && !hasSpacedPathExtension(trimmed.text))
+    ) {
+      continue
+    }
+    const candidate = trimSpacedPathTrailingProse(trimmed, col)
+    if (!candidate) {
+      continue
+    }
+    if (col < candidate.startIndex || col >= candidate.endIndex) {
+      continue
+    }
+    const parsed = parsePathWithOptionalLineColumn(candidate.text)
+    if (parsed) {
+      return parsed
+    }
+  }
+  return null
+}
+
 // Returns the file-path span (after punctuation trim) that contains `col`, or
 // null when the tap isn't on a path.
 export function matchFilePathAtColumn(lineText: string, col: number): TappedFilePath | null {
+  const spaced = matchSpacedFilePathAtColumn(lineText, col)
+  if (spaced) {
+    return spaced
+  }
   LOCAL_PATH_REGEX.lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = LOCAL_PATH_REGEX.exec(lineText)) !== null) {
@@ -78,8 +185,7 @@ export function matchFilePathAtColumn(lineText: string, col: number): TappedFile
     if (!trimmed) {
       continue
     }
-    // Inclusive of the trailing edge so a tap on the last glyph still counts.
-    if (col < trimmed.startIndex || col > trimmed.endIndex) {
+    if (col < trimmed.startIndex || col >= trimmed.endIndex) {
       continue
     }
     const parsed = parsePathWithOptionalLineColumn(trimmed.text)

@@ -15,7 +15,11 @@ import {
   resolveOpaqueTerminalBackground,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import type {
+  ManagedPane,
+  PaneExternalDropTarget,
+  PaneManager
+} from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
@@ -62,6 +66,11 @@ import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
+import {
+  detachTerminalPaneToTab,
+  isTerminalTabStripDropTarget,
+  resolveTerminalTabStripDropTarget
+} from './terminal-pane-tab-detach'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
@@ -1298,6 +1307,54 @@ export default function TerminalPane({
     setPendingCloseConfirmation(null)
   }, [])
 
+  const resolveExternalPaneDropTarget = useCallback(
+    ({
+      sourcePaneId,
+      clientX,
+      clientY
+    }: {
+      sourcePaneId: number
+      clientX: number
+      clientY: number
+    }): PaneExternalDropTarget | null => {
+      const manager = managerRef.current
+      const panes = manager?.getPanes() ?? []
+      if (panes.length <= 1 || !panes.some((pane) => pane.id === sourcePaneId)) {
+        return null
+      }
+      return resolveTerminalTabStripDropTarget({
+        clientX,
+        clientY,
+        groupsByWorktree: useAppStore.getState().groupsByWorktree,
+        worktreeId
+      })
+    },
+    [worktreeId]
+  )
+
+  const handleExternalPaneDrop = useCallback(
+    (sourcePaneId: number, target: PaneExternalDropTarget): boolean => {
+      if (!isTerminalTabStripDropTarget(target)) {
+        return false
+      }
+      const fallbackPtyId = paneTransportsRef.current.get(sourcePaneId)?.getPtyId() ?? null
+      return (
+        detachTerminalPaneToTab({
+          fallbackPtyId,
+          getStore: useAppStore.getState,
+          manager: managerRef.current,
+          persistLayoutSnapshot,
+          sourcePaneId,
+          sourceTabId: tabId,
+          targetGroupId: target.groupId,
+          targetIndex: target.insertionIndex,
+          worktreeId
+        }) !== null
+      )
+    },
+    [persistLayoutSnapshot, tabId, worktreeId]
+  )
+
   useTerminalPaneLifecycle({
     tabId,
     worktreeId,
@@ -1354,7 +1411,9 @@ export default function TerminalPane({
     paneTitlesRef,
     setRenamingPaneId,
     setPaneCount,
-    setPaneLayoutRevision
+    setPaneLayoutRevision,
+    resolveExternalPaneDropTarget,
+    onExternalPaneDrop: handleExternalPaneDrop
   })
 
   useEffect(() => {

@@ -30,6 +30,7 @@ import {
   resolveEffectiveProxy,
   spawnProxyCommand,
   wrapRemoteCommandForPosixShell,
+  createSshOperationAbortError,
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
@@ -85,6 +86,16 @@ export class SshConnection {
   usesSystemSshTransport(): boolean {
     return this.useSystemSshTransport
   }
+  canRunConcurrentExecCommands(): boolean {
+    if (!this.useSystemSshTransport) {
+      return true
+    }
+    return (
+      getOrcaControlSocketPath(this.target, {
+        ...this.getSystemSshBuildArgsOptions()
+      }) !== null
+    )
+  }
   getTarget(): SshTarget {
     return { ...this.target }
   }
@@ -107,6 +118,9 @@ export class SshConnection {
   }
 
   async exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
+    if (options?.signal?.aborted) {
+      throw createSshOperationAbortError()
+    }
     if (this.useSystemSshTransport) {
       if (this.disposed || this.state.status !== 'connected') {
         throw new Error('Not connected')
@@ -121,7 +135,8 @@ export class SshConnection {
     return this.waitForSshCallback(
       'SSH exec channel timed out',
       (callback) => client.exec(remoteCommand, callback),
-      (channel) => channel.close()
+      (channel) => channel.close(),
+      options?.signal
     )
   }
 
@@ -143,12 +158,26 @@ export class SshConnection {
   private waitForSshCallback<T>(
     timeoutMessage: string,
     register: (callback: (error: Error | undefined, value: T) => void) => void,
-    cleanupLateValue?: (value: T) => void
+    cleanupLateValue?: (value: T) => void,
+    signal?: AbortSignal
   ): Promise<T> {
     return new Promise((resolve, reject) => {
       let settled = false
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
+      }
+      const onAbort = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(createSshOperationAbortError())
+      }
       const timer = setTimeout(() => {
         settled = true
+        signal?.removeEventListener('abort', onAbort)
         reject(new Error(timeoutMessage))
       }, CONNECT_TIMEOUT_MS)
       const finish = (error: Error | undefined, value?: T): void => {
@@ -166,13 +195,18 @@ export class SshConnection {
           return
         }
         settled = true
-        clearTimeout(timer)
+        cleanup()
         if (error) {
           reject(error)
           return
         }
         resolve(value as T)
       }
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
 
       try {
         // Why: higher-level channel timers start only after ssh2 invokes its
@@ -686,6 +720,9 @@ export class SshConnection {
   }
 
   private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
+    if (options?.signal?.aborted) {
+      throw createSshOperationAbortError()
+    }
     const buildArgsOptions = this.getSystemSshBuildArgsOptions()
     const commandOptions =
       options === undefined && Object.keys(buildArgsOptions).length === 0
@@ -696,9 +733,14 @@ export class SshConnection {
         ? spawnSystemSshCommand(this.target, command)
         : spawnSystemSshCommand(this.target, command, commandOptions)
     this.systemCommandChannels.add(channel)
+    const onAbort = (): void => {
+      channel.close()
+    }
     const cleanup = (): void => {
+      options?.signal?.removeEventListener('abort', onAbort)
       this.systemCommandChannels.delete(channel)
     }
+    options?.signal?.addEventListener('abort', onAbort, { once: true })
     channel.once('close', cleanup)
     channel.once('error', cleanup)
     return channel

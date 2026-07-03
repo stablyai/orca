@@ -258,6 +258,49 @@ describe('fetchViaPty', () => {
     })
   })
 
+  it('parses Claude current-week Fable usage as a distinct weekly window', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData(`
+      Plan usage limits
+
+      Current session
+      8% used
+      Resets 3:39am
+
+      Current week (all models)
+      33% used
+      Resets Jul 3 at 12:59pm
+
+      Current week (Fable)
+      62% used
+      Resets Jul 3 at 12:59pm
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: {
+        usedPercent: 8,
+        resetDescription: '3:39am'
+      },
+      weekly: {
+        usedPercent: 33,
+        resetDescription: 'Jul 3 at 12:59pm'
+      },
+      fableWeekly: {
+        usedPercent: 62,
+        resetDescription: 'Jul 3 at 12:59pm'
+      },
+      error: null
+    })
+  })
+
   it('does not let an incomplete Fable section consume later usage sections', async () => {
     const term = makeMockTerm()
     spawnMock.mockReturnValue(term)

@@ -100,6 +100,13 @@ export function wrapRemoteCommandForPosixShell(command: string): string {
 
 export type SshExecOptions = {
   wrapCommand?: boolean
+  signal?: AbortSignal
+}
+
+export function createSshOperationAbortError(): Error & { name: string } {
+  const error = new Error('SSH operation was cancelled') as Error & { name: string }
+  error.name = 'AbortError'
+  return error
 }
 
 function cmdEscape(s: string): string {

@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { HistoryManager } from './history-manager'
-import { HistoryReader } from './history-reader'
+import { HistoryReader, type ColdRestoreInfo } from './history-reader'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
@@ -19,7 +19,12 @@ import {
   type SessionInfo,
   type TakePendingOutputResult
 } from './types'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
@@ -141,15 +146,29 @@ export class DaemonPtyAdapter implements IPtyProvider {
       await this.replaceUnhealthyMacResolverDaemonBeforeNewPty()
     }
 
+    await this.ensureConnected()
+
     // Why: detect crash-recovery history before spawning a replacement PTY so
     // the revived shell inherits the recovered cwd and dimensions instead of
     // whatever the current renderer happened to request on mount.
-    const restoreInfo = this.historyReader?.detectColdRestore(sessionId) ?? null
+    // Why probe aliveness first: detectColdRestore synchronously replays the
+    // full checkpoint + log (up to ~5MB) through a scratch emulator on the
+    // main process, but a live daemon session ignores spawn params and its
+    // own snapshot supersedes disk — the replay result would be discarded.
+    // getSize is a read-only probe; on error/unsupported it degrades to the
+    // full detect.
+    let restoreInfo: ColdRestoreInfo | null = null
+    let restoreSkippedForLiveSession = false
+    if (this.historyReader?.hasRestorableHistory(sessionId)) {
+      if ((await this.getAppliedSize(sessionId)) !== null) {
+        restoreSkippedForLiveSession = true
+      } else {
+        restoreInfo = this.historyReader.detectColdRestore(sessionId)
+      }
+    }
     const effectiveCwd = restoreInfo?.cwd ?? opts.cwd
     const effectiveCols = restoreInfo?.cols ?? opts.cols
     const effectiveRows = restoreInfo?.rows ?? opts.rows
-
-    await this.ensureConnected()
 
     const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
     const isCodexStartupCommand =
@@ -206,6 +225,19 @@ export class DaemonPtyAdapter implements IPtyProvider {
         coldRestore: cachedRestore,
         ...(!result.isNew ? { isReattach: true } : {})
       }
+    }
+
+    // Why: the probe→createOrAttach gap is racy — the session can exit (or
+    // enter termination) in between, so the daemon spawned a fresh shell.
+    // Detect now so scrollback restore matches the unprobed path; only the
+    // new shell's cwd/dims came from the renderer request in this rare case.
+    // Why ignoreCleanEnd: the raced session's exit event (stream socket) can
+    // beat the createOrAttach reply and write endedAt via closeSession; that
+    // must not null the restore here, or the openSession branch below would
+    // delete the checkpoint instead of restoring it.
+    if (result.isNew && restoreSkippedForLiveSession) {
+      restoreInfo =
+        this.historyReader?.detectColdRestore(sessionId, { ignoreCleanEnd: true }) ?? null
     }
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
@@ -490,7 +522,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return { alive, killed }
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
     return result.sessions
@@ -498,7 +530,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       .map((s) => ({
         id: s.sessionId,
         cwd: s.cwd ?? '',
-        title: 'shell'
+        title: 'shell',
+        ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
       }))
   }
 
