@@ -130,6 +130,21 @@ describe('terminal WebGL auto policy', () => {
     })
   })
 
+  it('keeps Windows auto panes on DOM when WebGL2 is unavailable', () => {
+    stubNavigator('Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+    const probe = stubWebglRendererInfo({ hasWebgl2: false })
+
+    expect(getTerminalWebglAutoDecision()).toEqual({
+      allowWebgl: false,
+      reason: 'non-linux-webgl2-unavailable',
+      renderer: null,
+      vendor: null
+    })
+    expect(probe.loseContext).not.toHaveBeenCalled()
+    expect(probe.canvas.width).toBe(0)
+    expect(probe.canvas.height).toBe(0)
+  })
+
   it('allows Windows auto panes for identifiable hardware renderers', () => {
     stubNavigator('Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
     stubWebglRendererInfo({

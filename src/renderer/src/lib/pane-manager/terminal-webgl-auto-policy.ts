@@ -2,6 +2,7 @@ export type TerminalWebglAutoDecision = {
   allowWebgl: boolean
   reason:
     | 'non-linux'
+    | 'non-linux-webgl2-unavailable'
     | 'non-linux-software-renderer'
     | 'linux-wayland'
     | 'linux-hardware-renderer'
@@ -59,9 +60,16 @@ function releaseWebglProbe(
 function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | 'vendor'> & {
   hasWebgl2: boolean
   hasRendererInfo: boolean
+  probeAvailable: boolean
 } {
   if (typeof document === 'undefined') {
-    return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
+    return {
+      hasWebgl2: false,
+      hasRendererInfo: false,
+      probeAvailable: false,
+      renderer: null,
+      vendor: null
+    }
   }
 
   let canvas: HTMLCanvasElement | null = null
@@ -70,12 +78,24 @@ function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | '
     canvas = document.createElement('canvas')
     gl = canvas.getContext('webgl2')
     if (!gl) {
-      return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
+      return {
+        hasWebgl2: false,
+        hasRendererInfo: false,
+        probeAvailable: true,
+        renderer: null,
+        vendor: null
+      }
     }
 
     const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
     if (!debugInfo) {
-      return { hasWebgl2: true, hasRendererInfo: false, renderer: null, vendor: null }
+      return {
+        hasWebgl2: true,
+        hasRendererInfo: false,
+        probeAvailable: true,
+        renderer: null,
+        vendor: null
+      }
     }
 
     const renderer = String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? '')
@@ -83,11 +103,18 @@ function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | '
     return {
       hasWebgl2: true,
       hasRendererInfo: renderer.length > 0 || vendor.length > 0,
+      probeAvailable: true,
       renderer: renderer || null,
       vendor: vendor || null
     }
   } catch {
-    return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
+    return {
+      hasWebgl2: false,
+      hasRendererInfo: false,
+      probeAvailable: true,
+      renderer: null,
+      vendor: null
+    }
   } finally {
     releaseWebglProbe(canvas, gl)
   }
@@ -100,6 +127,15 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
 
   if (!isLinuxRendererHost()) {
     const rendererInfo = readWebglRendererInfo()
+    if (rendererInfo.probeAvailable && !rendererInfo.hasWebgl2) {
+      cachedDecision = {
+        allowWebgl: false,
+        reason: 'non-linux-webgl2-unavailable',
+        renderer: rendererInfo.renderer,
+        vendor: rendererInfo.vendor
+      }
+      return cachedDecision
+    }
     const identity = `${rendererInfo.vendor ?? ''} ${rendererInfo.renderer ?? ''}`
     if (rendererInfo.hasRendererInfo && SOFTWARE_RENDERER_PATTERN.test(identity)) {
       // Why: Windows software rendering fallback disables GPU compositing, but
