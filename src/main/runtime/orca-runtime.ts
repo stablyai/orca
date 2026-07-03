@@ -5760,7 +5760,21 @@ export class OrcaRuntimeService {
   }
 
   private resizeHeadlessTerminal(ptyId: string, cols: number, rows: number): void {
-    this.headlessTerminals.get(ptyId)?.emulator.resize(cols, rows)
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return
+    }
+    // Why: terminal reflow is a parser operation. It must sit in the same
+    // per-PTY stream as output bytes or restore snapshots can bake in wraps
+    // from the wrong terminal width.
+    state.writeChain = state.writeChain
+      .then(() => {
+        state.emulator.resize(cols, rows)
+      })
+      .catch(() => {
+        // Best-effort mirror tracking; live PTY streaming must continue even
+        // if xterm rejects a raced resize during teardown.
+      })
   }
 
   private createHeadlessEmulator(
@@ -7052,7 +7066,6 @@ export class OrcaRuntimeService {
     if (!resized) {
       return false
     }
-    this.resizeHeadlessTerminal(ptyId, cols, rows)
     this.onExternalPtyResize(ptyId, cols, rows)
     return true
   }
@@ -7880,12 +7893,9 @@ export class OrcaRuntimeService {
     }
   }
 
-  // Why: called from the pty:resize IPC handler whenever the desktop renderer
-  // resizes a PTY (e.g. via safeFit after window resize, split, or desktop-mode
-  // restore). Stores the renderer-reported size so handleMobileSubscribe can use
-  // the actual pane geometry instead of a stale PTY size for previousCols.
-  // This is a passive geometry report — it does NOT call applyLayout; the
-  // PTY is already at the reported size.
+  // Why: called after a desktop renderer path has successfully resized the
+  // PTY (local IPC or remote desktop viewport). The runtime mirror must take
+  // the same accepted geometry so hidden-output restore parses at PTY width.
   onExternalPtyResize(ptyId: string, cols: number, rows: number): void {
     // The pty:resize IPC handler is supposed to gate via `isResizeSuppressed`
     // before calling here, but defend against callers that don't.
@@ -7905,6 +7915,7 @@ export class OrcaRuntimeService {
     if (activeOverride && activeOverride.cols === cols && activeOverride.rows === rows) {
       return
     }
+    this.resizeHeadlessTerminal(ptyId, cols, rows)
     this.refreshRendererGeometry(ptyId, cols, rows)
   }
 

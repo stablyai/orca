@@ -52,6 +52,7 @@ import {
   recentTerminalOutputIncludesPath,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
+import { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
@@ -717,6 +718,64 @@ function syncSinglePty(
       }
     ]
   })
+}
+
+function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
+function makeStatusFrame(index: number, first: boolean): string {
+  const pad = '·'.repeat(60)
+  const rows = [
+    `✻ 执行任务中… (esc to interrupt) [${index}] ${pad}`,
+    `  ⎿ 正在分析代码库结构与依赖关系，请稍候… ${pad}`,
+    `  ⎿ tokens: ${1000 + index * 137} · elapsed: ${index}s ${pad}`
+  ]
+  return `${first ? '' : '\x1b[2A'}\r${rows.map((row) => `\x1b[K${row}`).join('\r\n')}\r`
+}
+
+async function writeHeadless(emulator: HeadlessEmulator, data: string): Promise<void> {
+  await emulator.write(data)
+}
+
+function visibleNonEmptyLines(emulator: HeadlessEmulator): string[] {
+  return emulator.getVisibleLines().filter((line) => line.length > 0)
+}
+
+async function parseHeadlessSnapshotLines(
+  snapshot: { data: string; cols: number; rows: number },
+  display: { cols: number; rows: number }
+): Promise<string[]> {
+  const restored = new HeadlessEmulator({ cols: display.cols, rows: display.rows })
+  try {
+    restored.resize(snapshot.cols, snapshot.rows)
+    await writeHeadless(restored, `\x1b[2J\x1b[3J\x1b[H${snapshot.data}`)
+    restored.resize(display.cols, display.rows)
+    return visibleNonEmptyLines(restored)
+  } finally {
+    restored.dispose()
+  }
+}
+
+async function referenceStatusFrameLines(
+  spawn: { cols: number; rows: number },
+  resized: { cols: number; rows: number }
+): Promise<string[]> {
+  const truth = new HeadlessEmulator({ cols: spawn.cols, rows: spawn.rows })
+  try {
+    await writeHeadless(truth, 'user@host % claude\r\n')
+    truth.resize(resized.cols, resized.rows)
+    for (let index = 0; index < 5; index += 1) {
+      await writeHeadless(truth, makeStatusFrame(index, index === 0))
+    }
+    return visibleNonEmptyLines(truth)
+  } finally {
+    truth.dispose()
+  }
 }
 
 const TEST_WINDOW_ID = 1
@@ -5409,6 +5468,90 @@ describe('OrcaRuntimeService', () => {
       source: 'headless',
       lastTitle: 'Codex working'
     })
+  })
+
+  it('resizes the headless mirror after an accepted desktop PTY resize', async () => {
+    const spawn = { cols: 80, rows: 24 }
+    const resized = { cols: 120, rows: 30 }
+    let currentSize = spawn
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => currentSize
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    runtime.onPtyData('pty-1', 'user@host % claude\r\n', 100)
+    currentSize = resized
+    runtime.onExternalPtyResize('pty-1', resized.cols, resized.rows)
+    for (let index = 0; index < 5; index += 1) {
+      runtime.onPtyData('pty-1', makeStatusFrame(index, index === 0), 200 + index)
+    }
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 5000 })
+    expect(snapshot).toMatchObject({ cols: resized.cols, rows: resized.rows, source: 'headless' })
+    await expect(parseHeadlessSnapshotLines(snapshot!, resized)).resolves.toEqual(
+      await referenceStatusFrameLines(spawn, resized)
+    )
+  })
+
+  it('orders headless mirror resizes behind queued PTY writes', async () => {
+    const spawn = { cols: 80, rows: 10 }
+    const resized = { cols: 120, rows: 10 }
+    let currentSize = spawn
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => currentSize,
+      resize: () => {
+        currentSize = resized
+        return true
+      }
+    })
+    syncSinglePty(runtime, 'pty-1')
+    runtime.onPtyData('pty-1', 'prompt\r\n', 100)
+    await runtime.serializeMainTerminalBuffer('pty-1')
+
+    type HeadlessStateForTest = {
+      emulator: HeadlessEmulator
+      writeChain: Promise<void>
+    }
+    const headless = (
+      runtime as unknown as { headlessTerminals: Map<string, HeadlessStateForTest> }
+    ).headlessTerminals.get('pty-1')
+    expect(headless).toBeDefined()
+    const originalWrite = headless!.emulator.write.bind(headless!.emulator)
+    const queuedWriteStarted = makeDeferred()
+    const releaseQueuedWrite = makeDeferred()
+    headless!.emulator.write = async (data: string): Promise<void> => {
+      queuedWriteStarted.resolve()
+      await releaseQueuedWrite.promise
+      await originalWrite(data)
+    }
+
+    try {
+      runtime.onPtyData('pty-1', '\x1b[90GOLD', 200)
+      await queuedWriteStarted.promise
+      await runtime.updateDesktopViewport('pty-1', resized)
+      runtime.onPtyData('pty-1', '\r\nNEXT', 300)
+      releaseQueuedWrite.resolve()
+
+      const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 100 })
+      expect(snapshot).toMatchObject({ cols: resized.cols, rows: resized.rows })
+      await expect(parseHeadlessSnapshotLines(snapshot!, resized)).resolves.toEqual([
+        'prompt',
+        '                                                                               O',
+        'LD',
+        'NEXT'
+      ])
+    } finally {
+      headless!.emulator.write = originalWrite
+      releaseQueuedWrite.resolve()
+    }
   })
 
   it('adopts renderer-seeded titles into headless main terminal snapshots', async () => {

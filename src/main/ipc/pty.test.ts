@@ -3829,6 +3829,62 @@ describe('registerPtyHandlers', () => {
       const reported = await handlers.get('pty:getSize')!(null, { id })
       expect(reported).toEqual({ cols: 100, rows: 30 })
     })
+
+    it('fans out accepted desktop resizes to the runtime after provider resize', async () => {
+      const resize = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 120, rows: 30 }, resize })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'host' })),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+
+      resizeListener()(mainWindowIpcEvent, { id, cols: 120, rows: 30 })
+
+      expect(resize).toHaveBeenCalledWith(id, 120, 30)
+      expect(runtime.onExternalPtyResize).toHaveBeenCalledWith(id, 120, 30)
+      expect(resize.mock.invocationCallOrder[0]).toBeLessThan(
+        runtime.onExternalPtyResize.mock.invocationCallOrder[0]!
+      )
+    })
+
+    it('does not fan out rejected desktop resizes to the runtime', async () => {
+      setupProviderWithAppliedSize({
+        applied: { cols: 80, rows: 24 },
+        resize: () => {
+          throw new Error('resize rejected')
+        }
+      })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'host' })),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+
+      resizeListener()(mainWindowIpcEvent, { id, cols: 120, rows: 30 })
+
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
   })
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
