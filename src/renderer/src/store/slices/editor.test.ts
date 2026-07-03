@@ -456,6 +456,39 @@ describe('createEditorSlice openDiff', () => {
     ])
   })
 
+  it('derives a runtime owner for source-control diffs from the worktree host', () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [{ id: 'repo-1', executionHostId: 'runtime:env-1' }] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'repo-1::/srv/repo/worktree',
+            repoId: 'repo-1',
+            hostId: 'runtime:env-1'
+          }
+        ]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openDiff(
+        'repo-1::/srv/repo/worktree',
+        '/srv/repo/worktree/src/file.ts',
+        'src/file.ts',
+        'typescript',
+        false
+      )
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        id: 'editor-diff:repo-1%3A%3A%2Fsrv%2Frepo%2Fworktree:env-1:unstaged:src%2Ffile.ts',
+        runtimeEnvironmentId: 'env-1'
+      })
+    )
+  })
+
   it('repairs an existing diff tab entry to the correct mode and staged state', () => {
     const store = createEditorStore()
 
@@ -2764,6 +2797,46 @@ describe('createEditorSlice combined diff exclusions', () => {
           headOid: 'head-oid',
           mergeBase: 'merge-base-oid'
         })
+      })
+    )
+  })
+})
+
+describe('createEditorSlice openBranchDiff', () => {
+  it('derives a runtime owner for branch diffs from the worktree host', () => {
+    const store = createEditorStore()
+    const worktreeId = 'repo-1::/srv/repo/worktree'
+    const branchSummary: GitBranchCompareSummary = {
+      baseRef: 'main',
+      baseOid: 'base-oid',
+      compareRef: 'HEAD',
+      headOid: 'head-oid',
+      mergeBase: 'merge-base-oid',
+      changedFiles: 1,
+      status: 'ready'
+    }
+    store.setState({
+      repos: [{ id: 'repo-1', executionHostId: 'runtime:env-1' }] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [{ id: worktreeId, repoId: 'repo-1', hostId: 'runtime:env-1' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openBranchDiff(
+        worktreeId,
+        '/srv/repo/worktree',
+        { path: 'src/file.ts', status: 'modified' },
+        branchSummary,
+        'typescript'
+      )
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        diffSource: 'branch',
+        filePath: '/srv/repo/worktree/src/file.ts',
+        runtimeEnvironmentId: 'env-1'
       })
     )
   })

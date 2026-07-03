@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["../.oxlintrc.json"],
+  "ignorePatterns": ["src/terminal/terminal-webview-engine.generated.ts"],
   "rules": {
     "react-hooks/exhaustive-deps": "off",
     "react/no-unescaped-entities": "off",

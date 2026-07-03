@@ -106,6 +106,17 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.resolvePartition('nonexistent')).toBe(ORCA_BROWSER_PARTITION)
   })
 
+  it('strictly resolves known profile partitions without downgrading unknown profiles', () => {
+    const profile = browserSessionRegistry.createProfile('isolated', 'Strict Resolve')
+    expect(profile).not.toBeNull()
+
+    expect(browserSessionRegistry.resolveKnownPartition(null)).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition(undefined)).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition('default')).toBe(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.resolveKnownPartition(profile!.id)).toBe(profile!.partition)
+    expect(browserSessionRegistry.resolveKnownPartition('missing-profile')).toBeNull()
+  })
+
   it('lists all profiles', () => {
     const before = browserSessionRegistry.listProfiles().length
     browserSessionRegistry.createProfile('isolated', 'List Test')

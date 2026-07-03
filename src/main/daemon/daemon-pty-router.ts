@@ -1,5 +1,10 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -124,7 +129,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.current.revive(state)
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
     const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))

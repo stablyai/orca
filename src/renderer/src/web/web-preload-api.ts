@@ -632,7 +632,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           sessions: [],
           issues: [],
           scannedAt: new Date().toISOString()
-        })
+        }),
+      onWindowFocused: () => () => {}
     },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
@@ -2170,6 +2171,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleFloatingTerminal: () => noopUnsubscribe,
     onTerminalShortcutCaptured: () => noopUnsubscribe,
     onOpenQuickOpen: () => noopUnsubscribe,
+    onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
@@ -2540,11 +2542,13 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     ackColdRestore: () => {},
     ackData: () => {},
     setActiveRendererPty: () => {},
+    setRendererPtyVisible: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
+    hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({

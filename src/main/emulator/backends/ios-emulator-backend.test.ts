@@ -3,6 +3,7 @@ import type { SimulatorDevice } from '../simctl-simulator-devices'
 import type { ServeSimHelperProcess } from '../serve-sim-helper-processes'
 
 const {
+  ensureSimulatorBootedMock,
   execServeSimCommandMock,
   hideNativeSimulatorAppMock,
   killServeSimHelperProcessesForDeviceMock,
@@ -12,7 +13,8 @@ const {
   sendEmulatorGestureSequenceMock,
   parseServeSimDetachedSessionMock
 } = vi.hoisted(() => ({
-  execServeSimCommandMock: vi.fn(async () => ({})),
+  ensureSimulatorBootedMock: vi.fn(async () => {}),
+  execServeSimCommandMock: vi.fn(async (_executable?: unknown, _args?: string[]) => ({})),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
   killServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
   listSimulatorDevicesMock: vi.fn(async (): Promise<SimulatorDevice[]> => []),
@@ -30,7 +32,7 @@ vi.mock('../serve-sim-execution', () => ({
 }))
 
 vi.mock('../simctl-simulator-devices', () => ({
-  ensureSimulatorBooted: vi.fn(async () => {}),
+  ensureSimulatorBooted: ensureSimulatorBootedMock,
   listSimulatorDevices: listSimulatorDevicesMock,
   resolveSimulatorUdid: vi.fn(async (device: string) => device),
   shutdownSimulatorDevice: shutdownSimulatorDeviceMock
@@ -53,12 +55,15 @@ vi.mock('../serve-sim-detached-session', () => ({
   parseServeSimDetachedSession: parseServeSimDetachedSessionMock
 }))
 
+import { EmulatorError } from '../emulator-errors'
 import { IosEmulatorBackend } from './ios-emulator-backend'
 
 const EXECUTABLE = { command: '/serve-sim', env: {} }
 
 describe('IosEmulatorBackend', () => {
   beforeEach(() => {
+    ensureSimulatorBootedMock.mockReset()
+    ensureSimulatorBootedMock.mockImplementation(async () => {})
     execServeSimCommandMock.mockReset()
     execServeSimCommandMock.mockImplementation(async () => ({}))
     listSimulatorDevicesMock.mockReset()
@@ -184,6 +189,113 @@ describe('IosEmulatorBackend', () => {
     expect(info.deviceUdid).toBe('device-1')
     expect(info.streamCodec).toBe('mjpeg')
     expect(hideNativeSimulatorAppMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('recycles the device and retries when the helper finds no framebuffer', async () => {
+    // The real-world failure: simctl reports Booted but the display IO ports
+    // never came up, so serve-sim --detach dies with the framebuffer error.
+    execServeSimCommandMock
+      .mockRejectedValueOnce(
+        new EmulatorError(
+          'emulator_error',
+          'Helper failed:\n[main] Starting serve-sim-bin\n[main] Failed to start capture: No framebuffer display descriptor found'
+        )
+      )
+      .mockResolvedValueOnce({})
+    parseServeSimDetachedSessionMock.mockReturnValue({
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102',
+      helperPid: 1234
+    })
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    const info = await backend.startSession('device-1')
+    expect(info.deviceUdid).toBe('device-1')
+    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-1')
+    // Booted once up front, again after the recycle shutdown.
+    expect(ensureSimulatorBootedMock).toHaveBeenCalledTimes(2)
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not recycle the device for unrelated helper start failures', async () => {
+    execServeSimCommandMock.mockRejectedValueOnce(
+      new EmulatorError('emulator_error', 'Helper failed:\n[main] Port 3100 already in use')
+    )
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    await expect(backend.startSession('device-1')).rejects.toMatchObject({
+      message: expect.stringContaining('Port 3100 already in use')
+    })
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('propagates mid-recycle failures instead of masking them', async () => {
+    execServeSimCommandMock.mockRejectedValue(
+      new EmulatorError(
+        'emulator_error',
+        'Helper failed:\n[main] Failed to start capture: No framebuffer display descriptor found'
+      )
+    )
+    shutdownSimulatorDeviceMock.mockRejectedValueOnce(
+      new EmulatorError('emulator_error', 'xcrun simctl shutdown timed out')
+    )
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    await expect(backend.startSession('device-1')).rejects.toMatchObject({
+      message: expect.stringContaining('timed out')
+    })
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces an actionable error when the display stays wedged after one recycle', async () => {
+    execServeSimCommandMock.mockRejectedValue(
+      new EmulatorError(
+        'emulator_error',
+        'Helper failed:\n[main] Failed to start capture: No framebuffer display descriptor found'
+      )
+    )
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    await expect(backend.startSession('device-1')).rejects.toMatchObject({
+      code: 'emulator_helper_failed',
+      // Actionable headline plus the raw helper log for diagnosis.
+      message: expect.stringMatching(/simctl erase[\s\S]*No framebuffer display descriptor found/)
+    })
+    // Exactly one recycle attempt; no shutdown/boot loop against a broken device.
+    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledTimes(1)
+    expect(execServeSimCommandMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not recycle more than once during one start attempt', async () => {
+    let detachCalls = 0
+    execServeSimCommandMock.mockImplementation(
+      async (_executable?: unknown, args: string[] = []) => {
+        if (args[0] !== '--detach') {
+          return {}
+        }
+        detachCalls += 1
+        if (detachCalls === 2) {
+          return {}
+        }
+        throw new EmulatorError(
+          'emulator_error',
+          'Helper failed:\n[main] Failed to start capture: No framebuffer display descriptor found'
+        )
+      }
+    )
+    parseServeSimDetachedSessionMock.mockReturnValue({
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102',
+      helperPid: 1234
+    })
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => false })
+
+    await expect(backend.startSession('device-1')).rejects.toMatchObject({
+      code: 'emulator_helper_failed',
+      message: expect.stringContaining('even after a reboot')
+    })
+    expect(detachCalls).toBe(3)
+    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledTimes(1)
+    expect(ensureSimulatorBootedMock).toHaveBeenCalledTimes(2)
   })
 
   it('stops a helper via serve-sim kill plus the orphan sweep', async () => {

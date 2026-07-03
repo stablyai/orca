@@ -57,6 +57,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): void {
     canClosePane: true,
     canExpandPane: true,
     menuPaneIsExpanded: false,
+    linkUrl: null,
+    onOpenLinkInDefaultBrowser: vi.fn(),
     onCopy: vi.fn(),
     onPaste: vi.fn(),
     onSplitRight: vi.fn(),
@@ -112,6 +114,24 @@ describe('TerminalContextMenu', () => {
     expect(onCopyAgentSessionContext).toHaveBeenCalledTimes(1)
     // Why: copying context must not go through the fork dialog path.
     expect(onForkAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('shows "Open in Default Browser" only when a link is under the cursor', () => {
+    renderMenu({ linkUrl: null })
+    expect(
+      items.list.some((item) => childrenText(item.children) === 'Open in Default Browser')
+    ).toBe(false)
+
+    items.list = []
+    const onOpenLinkInDefaultBrowser = vi.fn()
+    renderMenu({ linkUrl: 'https://example.com/docs', onOpenLinkInDefaultBrowser })
+
+    const openLinkItem = items.list.find(
+      (item) => childrenText(item.children) === 'Open in Default Browser'
+    )
+    expect(openLinkItem).toBeDefined()
+    openLinkItem?.onSelect?.()
+    expect(onOpenLinkInDefaultBrowser).toHaveBeenCalledTimes(1)
   })
 
   it('shows one shortcut per terminal menu action on Windows', () => {

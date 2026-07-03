@@ -899,6 +899,70 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
   })
 
+  it('suppresses auto-repeat quick-command menu toggles from before-input-event', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, {
+      getKeybindings: () => ({
+        'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
+      })
+    })
+
+    const isDarwin = process.platform === 'darwin'
+    const input = {
+      type: 'keyDown',
+      code: 'KeyQ',
+      key: 'q',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: true
+    }
+    const firstPreventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault: firstPreventDefault } as never, input)
+    expect(firstPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
+
+    webContents.send.mockClear()
+    const repeatPreventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault: repeatPreventDefault } as never, {
+      ...input,
+      isAutoRepeat: true
+    })
+
+    expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).not.toHaveBeenCalled()
+  })
+
   it('lets Terminal-first pass risky app shortcuts through when terminal input is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

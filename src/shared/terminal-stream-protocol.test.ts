@@ -68,6 +68,20 @@ describe('terminal-stream-protocol', () => {
     expect(resize && decodeTerminalStreamJson(resize.payload)).toEqual({ cols: 120, rows: 40 })
   })
 
+  it('round-trips terminal metadata frames', () => {
+    const metadata = decodeTerminalStreamFrame(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Metadata,
+        streamId: 11,
+        seq: 4,
+        payload: encodeTerminalStreamJson({ cwd: '/repo/src' })
+      })
+    )
+
+    expect(metadata?.opcode).toBe(TerminalStreamOpcode.Metadata)
+    expect(metadata && decodeTerminalStreamJson(metadata.payload)).toEqual({ cwd: '/repo/src' })
+  })
+
   it('round-trips multiplex subscribe, snapshot request, and unsubscribe frames', () => {
     const subscribe = decodeTerminalStreamFrame(
       encodeTerminalStreamFrame({

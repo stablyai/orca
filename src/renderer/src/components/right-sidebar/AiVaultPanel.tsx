@@ -210,6 +210,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const getSessionResumeState = useCallback(
     (session: AiVaultSession) =>
       resolveAiVaultSessionResumeState({
+        sessionFilePath: session.filePath,
         worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         worktrees: allWorktrees,
@@ -229,6 +230,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const getSessionResumeActions = useCallback(
     (session: AiVaultSession) =>
       resolveAiVaultSessionResumeActions({
+        sessionFilePath: session.filePath,
         worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         worktrees: allWorktrees,

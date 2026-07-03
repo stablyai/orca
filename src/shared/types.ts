@@ -845,6 +845,9 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: explorer-created terminals can start below the workspace root while
+   *  still belonging to that workspace for tab/session ownership. */
+  startupCwd?: string
   /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
    *  show the provider icon immediately, before the agent emits its first hook
    *  event (a freshly-launched, idle agent reports no live status yet). Live
@@ -927,6 +930,9 @@ export type BrowserWorkspace = {
   // partition, which keeps backward compat with workspaces persisted before
   // session profiles existed.
   sessionProfileId?: string | null
+  // Why: runtime-created tabs resolve profile partition in main. Persisting it
+  // keeps isolated storage stable when the renderer profile mirror is stale.
+  sessionPartition?: string | null
   activePageId?: string | null
   pageIds?: string[]
   // Why: the active page owns real browser chrome state now, but the top-level
@@ -2483,6 +2489,8 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
+  richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
   /** Why: mirrors terminal selection-paste muscle memory without mutating the
@@ -2502,6 +2510,8 @@ export type GlobalSettings = {
   terminalScrollSensitivity: number
   terminalFastScrollSensitivity: number
   terminalTuiScrollSensitivity: number
+  /** One-shot migration guard for moving inherited TUI wheel reports from 3 to 1. */
+  terminalTuiScrollSensitivityDefaultedToOne?: boolean
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
@@ -3205,9 +3215,11 @@ export type PersistedUIState = {
    *  default workspace statuses in reverse workflow order. Once stamped,
    *  user-authored status ordering is never inferred from IDs/labels again. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
-  /** One-shot migration flag for the default status workflow order/label:
-   *  Done -> In review -> In progress -> Todo. Exact legacy default payloads
-   *  migrate; customized statuses are preserved. */
+  /** One-shot repair flag for the exact default payload that a short-lived
+   *  build persisted in reverse workflow order. */
+  _workspaceStatusesReorderedDefaultRepaired?: boolean
+  /** One-shot migration flag for default status workflow labels/visuals.
+   *  Exact legacy default payloads migrate; customized statuses are preserved. */
   _workspaceStatusesDefaultWorkflowMigrated?: boolean
   /** One-shot migration flag for the old default blue/violet/emerald status
    *  visuals. Once stamped, valid user-authored colors/icons are preserved. */

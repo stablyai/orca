@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Animated, AppState, Linking, type AppStateStatus } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
-import { File as FsFile, Paths } from 'expo-file-system'
 import {
   BackHandler,
   FlatList,
@@ -48,7 +46,6 @@ import {
   X
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
-import type { RuntimeTerminalPathResolution } from '../../../../../src/shared/runtime-types'
 import { loadHosts } from '../../../../src/transport/host-store'
 import {
   loadTerminalAutocompleteEnabled,
@@ -95,14 +92,16 @@ import {
   getVisibleTerminalAccessoryKeys,
   loadTerminalAccessoryLayout
 } from '../../../../src/terminal/terminal-accessory-layout'
+import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
+import { getTerminalLiveAccessoryRawSendTarget } from '../../../../src/terminal/terminal-live-accessory-raw-send-target'
 import {
   clearTerminalLiveInputFocusTimer,
-  defaultTerminalLiveInputHandles,
-  getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit,
-  pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
+import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
+import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
@@ -162,16 +161,13 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
-import {
-  buildMobileImagePastePayload,
-  prepareMobileClipboardImageBase64,
-  saveMobileClipboardImageAsTempFile,
-  type MobileClipboardImageResizer
-} from '../../../../src/session/mobile-clipboard-image'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
+import { useMobileTerminalPaste } from '../../../../src/session/use-mobile-terminal-paste'
+import { useTerminalLiveInputModePreference } from '../../../../src/session/use-terminal-live-input-mode-preference'
 import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import { openMobileTerminalFileTap } from '../../../../src/session/mobile-terminal-file-tap-open'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
   acceptSessionSnapshot,
@@ -233,52 +229,9 @@ import type {
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
 
-const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
-const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
+type TerminalLiveAccessoryInput = ReturnType<typeof createTerminalLiveAccessoryInput>
 
-// Why: clipboard images are re-encoded as lossless PNG, so high-res screenshots and
-// photos can exceed the upload byte budget; resize the raster down to fit before upload.
-// The image is staged to a temp file first because the iOS ImageManipulator loader
-// (Data(contentsOf:)) cannot decode large base64 data URIs — it needs a file:// URI.
-const resizeMobileClipboardImage: MobileClipboardImageResizer = async (source, target) => {
-  const base64 = source.replace(CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE, '')
-  const file = new FsFile(Paths.cache, `orca-clip-resize-${Date.now()}.png`)
-  let context: ReturnType<typeof ImageManipulator.manipulate> | null = null
-  let rendered: Awaited<
-    ReturnType<ReturnType<typeof ImageManipulator.manipulate>['renderAsync']>
-  > | null = null
-  let resultUri: string | null = null
-  try {
-    file.create({ overwrite: true })
-    file.write(base64, { encoding: 'base64' })
-    context = ImageManipulator.manipulate(file.uri)
-    context.resize({ width: target.width, height: target.height })
-    rendered = await context.renderAsync()
-    const result = await rendered.saveAsync({ format: SaveFormat.PNG, base64: true })
-    resultUri = result.uri
-    // Why: empty base64 would pass the downstream base64 check and upload a corrupt
-    // image, so fail loudly here instead of silently sending an invalid payload.
-    if (!result.base64) {
-      throw new Error('Failed to encode resized clipboard image')
-    }
-    return { data: result.base64, width: result.width, height: result.height }
-  } finally {
-    rendered?.release()
-    context?.release()
-    if (resultUri) {
-      try {
-        new FsFile(resultUri).delete()
-      } catch {
-        // Best-effort cleanup; ImageManipulator saves into cache for every retry.
-      }
-    }
-    try {
-      file.delete()
-    } catch {
-      // Best-effort cleanup; the OS reclaims the cache directory regardless.
-    }
-  }
-}
+const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
 function getActiveTabIdForHandle(
   tabs: MobileSessionTab[],
@@ -835,6 +788,21 @@ function FileReader({
   return renderSourceText(doc.content)
 }
 
+function updateTerminalCwdFromStreamEvent(
+  handle: string,
+  data: Record<string, unknown>,
+  terminalCwd: Map<string, string>
+): void {
+  if (!('cwd' in data)) {
+    return
+  }
+  if (typeof data.cwd === 'string' && data.cwd.trim().length > 0) {
+    terminalCwd.set(handle, data.cwd)
+    return
+  }
+  terminalCwd.delete(handle)
+}
+
 export default function SessionScreen() {
   const {
     hostId,
@@ -927,11 +895,14 @@ export default function SessionScreen() {
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
-  const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
-    () => new Set()
-  )
-  const liveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
-  const defaultedLiveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
+  const {
+    clearTerminalLiveInputDefault,
+    defaultTerminalHandlesToLiveInput,
+    liveInputTerminalHandles,
+    liveInputTerminalHandlesRef,
+    pruneTerminalHandlesFromLiveInput,
+    toggleTerminalLiveInput
+  } = useTerminalLiveInputModePreference({ hostId, worktreeId })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
   const activeSessionTabIdRef = useRef<string | null>(null)
@@ -1023,6 +994,7 @@ export default function SessionScreen() {
   const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
   const terminalGestureInputQueuesRef = useRef<Map<string, TerminalGestureInputQueue>>(new Map())
   const terminalGestureInputInFlightRef = useRef<Set<string>>(new Set())
+  const terminalCwdRef = useRef<Map<string, string>>(new Map())
   const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
@@ -1034,6 +1006,7 @@ export default function SessionScreen() {
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -1068,6 +1041,7 @@ export default function SessionScreen() {
   // render where client was still null/connecting, silently no-opping the
   // in-app-browser open). Route through a ref kept current every render.
   const handleCreateBrowserRef = useRef<((rawUrl?: string) => Promise<boolean>) | null>(null)
+
   const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
@@ -1094,6 +1068,24 @@ export default function SessionScreen() {
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
 
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
+  const {
+    clearPendingLiveInputCommit,
+    flushPendingLiveInputBeforeExternalSend,
+    handleLiveInputAccessoryBytes,
+    handleLiveInputChange,
+    handleLiveInputKeyPress,
+    handleLiveInputSubmit
+  } = useTerminalLiveInputCommit({
+    activeHandle,
+    activeHandleRef,
+    activeSessionTabType: activeSessionTab?.type,
+    activeSessionTabTypeRef,
+    liveInputRef,
+    liveInputTerminalHandles,
+    liveInputTerminalHandlesRef,
+    sendLiveTerminalInputRef,
+    setLiveInputCapture
+  })
   const canSend =
     connState === 'connected' &&
     activeHandle != null &&
@@ -1114,7 +1106,6 @@ export default function SessionScreen() {
   sessionTabsRef.current = sessionTabs
   activeSessionTabIdRef.current = activeSessionTabId
   markdownDocsRef.current = markdownDocs
-  liveInputTerminalHandlesRef.current = liveInputTerminalHandles
   const reconciledCreateWarningState = reconcileMobileSessionCreateWarningState(
     createWarningState,
     initialCreateWarning
@@ -1180,52 +1171,6 @@ export default function SessionScreen() {
     [clearToastHideTimer]
   )
 
-  // Why: direct input is now the mobile default, but only once per discovered
-  // handle so a user's buffered-mode toggle survives tab/list refreshes.
-  const defaultTerminalHandlesToLiveInput = useCallback((handles: readonly string[]) => {
-    const result = defaultTerminalLiveInputHandles(
-      liveInputTerminalHandlesRef.current,
-      defaultedLiveInputTerminalHandlesRef.current,
-      handles
-    )
-    if (!result.changed) {
-      return
-    }
-    const nextEnabledHandles = new Set(result.enabledHandles)
-    const nextDefaultedHandles = new Set(result.defaultedHandles)
-    liveInputTerminalHandlesRef.current = nextEnabledHandles
-    defaultedLiveInputTerminalHandlesRef.current = nextDefaultedHandles
-    setLiveInputTerminalHandles(nextEnabledHandles)
-  }, [])
-
-  const pruneTerminalHandlesFromLiveInput = useCallback((liveHandles: ReadonlySet<string>) => {
-    const result = pruneTerminalLiveInputHandles(
-      liveInputTerminalHandlesRef.current,
-      defaultedLiveInputTerminalHandlesRef.current,
-      liveHandles
-    )
-    if (!result.changed) {
-      return
-    }
-    const nextEnabledHandles = new Set(result.enabledHandles)
-    const nextDefaultedHandles = new Set(result.defaultedHandles)
-    liveInputTerminalHandlesRef.current = nextEnabledHandles
-    defaultedLiveInputTerminalHandlesRef.current = nextDefaultedHandles
-    setLiveInputTerminalHandles(nextEnabledHandles)
-  }, [])
-
-  const clearTerminalLiveInputDefault = useCallback(
-    (handle: string) => {
-      const liveHandles = new Set([
-        ...liveInputTerminalHandlesRef.current,
-        ...defaultedLiveInputTerminalHandlesRef.current
-      ])
-      liveHandles.delete(handle)
-      pruneTerminalHandlesFromLiveInput(liveHandles)
-    },
-    [pruneTerminalHandlesFromLiveInput]
-  )
-
   const dictation = useMobileDictation({
     client,
     enabled: canSend,
@@ -1244,8 +1189,16 @@ export default function SessionScreen() {
         if (!insertHandle) {
           return
         }
-        sendLiveTerminalInput(insertHandle, route.text)
-        showToast('Dictation inserted')
+        void (async () => {
+          const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
+          if (!flushedPendingInput) {
+            return
+          }
+          const sent = await sendLiveTerminalInput(insertHandle, route.text)
+          if (sent) {
+            showToast('Dictation inserted')
+          }
+        })()
         return
       }
       setInput((current) => appendBufferedDictation(current, route.text))
@@ -1361,6 +1314,7 @@ export default function SessionScreen() {
     webReadyHandlesRef.current.clear()
     subscribeSeqRef.current.clear()
     layoutSeqRef.current.clear()
+    terminalCwdRef.current.clear()
     setTerminalKeyboardMetrics(new Map())
     for (const term of terminalRefs.current.values()) {
       term.clear()
@@ -1460,6 +1414,7 @@ export default function SessionScreen() {
             if (initializedHandlesRef.current.has(handle)) {
               return
             }
+            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             const cols = (data.cols as number) || 80
             const rows = (data.rows as number) || 24
             const scrollbackCols = cols
@@ -1555,7 +1510,10 @@ export default function SessionScreen() {
                 }
               })()
             }
+          } else if (data.type === 'metadata') {
+            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
           } else if (data.type === 'data') {
+            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             // Why: log when data arrives but the WebView ref is missing
             // — this is the most likely cause of "blank but input works":
             // server stream is alive, sends flow, but writes are dropped
@@ -1578,6 +1536,7 @@ export default function SessionScreen() {
             }
             dataRef.write(data.chunk as string)
           } else if (data.type === 'resized') {
+            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             // Why: inline resize event — the server changed the PTY dimensions
             // (mode toggle, desktop restore, or a width reflow). When the server
             // includes a fresh full-buffer snapshot (width reflow), reinitialize
@@ -2680,19 +2639,23 @@ export default function SessionScreen() {
     terminalsRef.current = []
     setSessionTabs([])
     setActiveSessionTabId(null)
-    setLiveInputCapture('')
-    liveInputTerminalHandlesRef.current = new Set()
-    defaultedLiveInputTerminalHandlesRef.current = new Set()
-    setLiveInputTerminalHandles(new Set())
+    clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
     clearDelayedActionTimers()
     return () => {
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+      clearPendingLiveInputCommit()
       clearDelayedActionTimers()
     }
-  }, [clearDelayedActionTimers, clearTerminalCache, hostId, worktreeId])
+  }, [
+    clearDelayedActionTimers,
+    clearPendingLiveInputCommit,
+    clearTerminalCache,
+    hostId,
+    worktreeId
+  ])
 
   useEffect(() => {
     if (connState !== 'connected') {
@@ -3097,46 +3060,62 @@ export default function SessionScreen() {
     }
   }
 
-  async function handleAccessoryKey(bytes: string) {
+  async function handleAccessoryKey(input: TerminalLiveAccessoryInput) {
     if (!client || !activeHandle || !canSend) {
       return
     }
-
-    try {
-      await client.sendRequest('terminal.send', {
-        terminal: activeHandle,
-        text: bytes,
+    const targetHandle = activeHandle
+    const accessoryCommit = await handleLiveInputAccessoryBytes(input)
+    if (accessoryCommit.kind !== 'allow-raw') {
+      return
+    }
+    const currentClient = clientRef.current
+    // Why: async IME flushing can outlive the original terminal selection.
+    const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
+      targetHandle,
+      activeHandle: activeHandleRef.current,
+      activeSessionTabType: activeSessionTabTypeRef.current
+    })
+    if (!currentClient || !rawSendTarget || connStateRef.current !== 'connected') {
+      return
+    }
+    await currentClient
+      .sendRequest('terminal.send', {
+        terminal: rawSendTarget,
+        text: input.bytes,
         enter: false,
         ...(deviceTokenRef.current
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
           : {})
       })
-    } catch {
-      // Transient failure
-    }
+      .then(
+        () => undefined,
+        () => undefined
+      )
   }
 
   const sendLiveTerminalInput = useCallback(
-    (handle: string, bytes: string) => {
+    async (handle: string, bytes: string): Promise<boolean> => {
       const text = normalizeTerminalTextInput(bytes)
       if (text.length === 0) {
-        return
+        return false
       }
       if (!isTerminalLiveInputWithinByteLimit(text)) {
         triggerError()
         showToast('Input too large (max 256 KiB)', 1500)
-        return
+        return false
       }
       const rpc = clientRef.current
+      // Why: callers suppress follow-up controls/toasts when this live send is stale.
       if (
         !rpc ||
         connStateRef.current !== 'connected' ||
         handle !== activeHandleRef.current ||
         activeSessionTabTypeRef.current !== 'terminal'
       ) {
-        return
+        return false
       }
-      void rpc
+      return rpc
         .sendRequest('terminal.send', {
           terminal: handle,
           text,
@@ -3145,12 +3124,11 @@ export default function SessionScreen() {
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
             : {})
         })
-        .catch(() => {
-          // Transient failure
-        })
+        .then(isTerminalSendRpcAccepted, () => false)
     },
     [showToast]
   )
+  sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
   const focusLiveInput = useCallback(() => {
     if (!canSend || !liveInputEnabled) {
@@ -3238,82 +3216,42 @@ export default function SessionScreen() {
   // Tap on a file path in terminal output → resolve it on the host and open it
   // as a file tab (mirrors desktop Cmd/Ctrl-click). Silent on a miss; the
   // WebView only emits this when the tap landed on a detected path.
+  const handleFileTapActivationSeqRef = useRef(0)
   const handleFileTap = useCallback(
-    (handle: string, pathText: string) => {
+    (handle: string, pathText: string, line: number | null, column: number | null) => {
       if (handle !== activeHandleRef.current || !client) {
         return
       }
-      void (async () => {
-        try {
-          const worktree = `id:${worktreeId}`
-          const response = await client.sendRequest(
-            'files.resolveTerminalPath',
-            { worktree, pathText },
-            { timeoutMs: 10_000 }
-          )
-          if (!response.ok) {
-            return
-          }
-          const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
-          if (!resolved.exists || resolved.isDirectory || !resolved.relativePath) {
-            return
-          }
-          // Confirm the tap landed on something openable before giving feedback.
-          triggerSelection()
-          // Why: HTML opens in a browser pane (streamed from the desktop),
-          // matching desktop's terminal-click behavior, instead of a file view.
-          if (classifyMobileArtifact(resolved.relativePath) === 'html' && resolved.absolutePath) {
-            void handleCreateBrowser('file://' + resolved.absolutePath)
-            return
-          }
-          const openResponse = await client.sendRequest(
-            'files.open',
-            { worktree, relativePath: resolved.relativePath },
-            { timeoutMs: 15_000 }
-          )
-          if (!openResponse.ok) {
-            return
-          }
-          // Why: the host opens the file as a markdown/file/image tab (the type
-          // depends on the file — .md opens as a 'markdown' tab), and from a terminal
-          // the active tab stays on the terminal. Once the new tab syncs in, switch to
-          // it by relativePath across ANY openable type. Poll since it arrives async.
-          const openedPath = resolved.relativePath
-          // Why: retries poll for the async-arriving tab, but once activation lands
-          // a later retry would steal focus back from the user — short-circuit the
-          // remaining ones once the opened tab is (or becomes) the active tab.
-          let activated = false
-          const activateOpenedTab = async (): Promise<void> => {
-            if (activated) {
-              return
-            }
-            await fetchSessionTabs()
-            if (activated) {
-              return
-            }
-            const opened = sessionTabsRef.current.find(
-              (tab): tab is Extract<MobileSessionTab, { relativePath?: string }> =>
-                'relativePath' in tab && tab.relativePath === openedPath
-            )
-            if (!opened) {
-              return
-            }
-            if (activeSessionTabIdRef.current === opened.id) {
-              activated = true
-              return
-            }
-            switchSessionTabRef.current?.(opened)
-            activated = true
-          }
-          scheduleDelayedAction(() => void activateOpenedTab(), 300)
-          scheduleDelayedAction(() => void activateOpenedTab(), 900)
-          scheduleDelayedAction(() => void activateOpenedTab(), 1800)
-        } catch {
-          // Resolution/open is best-effort; a failed tap silently no-ops.
-        }
-      })()
+      const activationSeq = ++handleFileTapActivationSeqRef.current
+      openMobileTerminalFileTap<MobileSessionTab>({
+        client,
+        hostId,
+        worktreeId,
+        worktreeName: routeWorktreeName,
+        terminalHandle: handle,
+        pathText,
+        cwd: terminalCwdRef.current.get(handle) ?? null,
+        line,
+        column,
+        pushPreviewRoute: (href) => router.push(href),
+        openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
+        triggerOpenFeedback: triggerSelection,
+        fetchSessionTabs,
+        getSessionTabs: () => sessionTabsRef.current,
+        getActiveSessionTabId: () => activeSessionTabIdRef.current,
+        getActivationState: (activated) => ({
+          activated,
+          activationSeq,
+          latestActivationSeq: handleFileTapActivationSeqRef.current,
+          sourceTerminalHandle: handle,
+          activeTerminalHandle: activeHandleRef.current,
+          activeTabType: activeSessionTabTypeRef.current
+        }),
+        switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
+        scheduleDelayedAction
+      })
     },
-    [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
+    [client, fetchSessionTabs, hostId, routeWorktreeName, router, scheduleDelayedAction, worktreeId]
   )
 
   const handleOpenedFileDiffActivationSeqRef = useRef(0)
@@ -3376,81 +3314,15 @@ export default function SessionScreen() {
     if (!activeHandle) {
       return
     }
-    const nextEnabled = !liveInputTerminalHandles.has(activeHandle)
-    setLiveInputTerminalHandles((prev) => {
-      const next = new Set(prev)
-      if (nextEnabled) {
-        next.add(activeHandle)
-      } else {
-        next.delete(activeHandle)
-      }
-      liveInputTerminalHandlesRef.current = next
-      return next
-    })
-    setLiveInputCapture('')
+    const nextEnabled = toggleTerminalLiveInput(activeHandle)
+    clearPendingLiveInputCommit()
     if (nextEnabled) {
       scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
       liveInputRef.current?.blur()
     }
-  }, [activeHandle, liveInputTerminalHandles])
-
-  const handleLiveInputChange = useCallback(
-    (text: string) => {
-      if (!activeHandle) {
-        setLiveInputCapture('')
-        liveInputRef.current?.setNativeProps({ text: '' })
-        return
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
-        setLiveInputCapture('')
-        liveInputRef.current?.setNativeProps({ text: '' })
-        return
-      }
-      const normalizedText = normalizeTerminalTextInput(text)
-      if (normalizedText.length > 0) {
-        sendLiveTerminalInput(activeHandle, normalizedText)
-      }
-      setLiveInputCapture('')
-      // Why: the field is only a keyboard capture surface. Clearing the
-      // native value prevents subsequent phone-keyboard events from replaying
-      // already-sent characters when React state remains the empty string.
-      liveInputRef.current?.setNativeProps({ text: '' })
-    },
-    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
-  )
-
-  const handleLiveInputKeyPress = useCallback(
-    (event: { nativeEvent: { key: string } }) => {
-      if (!activeHandle) {
-        return
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
-        return
-      }
-      const bytes = getTerminalLiveSpecialKeyBytes(event.nativeEvent.key)
-      if (!bytes) {
-        return
-      }
-      sendLiveTerminalInput(activeHandle, bytes)
-      setLiveInputCapture('')
-      liveInputRef.current?.setNativeProps({ text: '' })
-    },
-    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
-  )
-
-  const handleLiveInputSubmit = useCallback(() => {
-    if (!activeHandle) {
-      return
-    }
-    if (!liveInputTerminalHandles.has(activeHandle)) {
-      return
-    }
-    sendLiveTerminalInput(activeHandle, '\r')
-    setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
-  }, [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput])
+  }, [activeHandle, clearPendingLiveInputCommit, toggleTerminalLiveInput])
 
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
@@ -3650,11 +3522,11 @@ export default function SessionScreen() {
     }
   }, [])
   const startAccessoryRepeat = useCallback(
-    (bytes: string) => {
+    (input: TerminalLiveAccessoryInput) => {
       stopAccessoryRepeat()
       repeatTimeoutRef.current = setTimeout(() => {
         repeatIntervalRef.current = setInterval(() => {
-          void handleAccessoryKeyRef.current(bytes)
+          void handleAccessoryKeyRef.current(input)
         }, 45)
       }, 400)
     },
@@ -3673,11 +3545,13 @@ export default function SessionScreen() {
       clearToastHideTimer()
       clearDelayedActionTimers()
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      clearPendingLiveInputCommit()
       sessionTabActionSheetRequestSeqRef.current += 1
       clearSessionTabActionSheetKeyboardListener()
       stopAccessoryRepeat()
     },
     [
+      clearPendingLiveInputCommit,
       clearDelayedActionTimers,
       clearSessionTabActionSheetKeyboardListener,
       clearTerminalCache,
@@ -3801,84 +3675,38 @@ export default function SessionScreen() {
     })
   }, [])
 
-  const handlePaste = useCallback(async () => {
-    if (!client || !activeHandle || !canSend) {
-      return
-    }
-    try {
-      const text = await Clipboard.getStringAsync()
-      let payload: string | null = null
-      if (text.length > 0) {
-        const modes = ptyModesRef.current.get(activeHandle) || {
-          bracketedPasteMode: false,
-          altScreen: false,
-          mouseTrackingMode: 'none',
-          sgrMouseMode: false,
-          sgrMousePixelsMode: false
-        }
-        const wrap = modes.bracketedPasteMode && !modes.altScreen
-        // Why: strip embedded bracketed-paste markers from clipboard text so a
-        // malicious copy containing `\x1b[201~` can't terminate paste mode early
-        // and have the trailing bytes interpreted as shell commands. Matches
-        // xterm.js / iTerm2 behavior.
-        // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
-        const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
-        payload = wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
-      } else {
-        const image = await Clipboard.getImageAsync({ format: 'png' })
-        if (!image) {
-          refreshCanPaste()
-          return
-        }
-        const connectionId = await getActiveWorktreeConnectionId()
-        const base64 = await prepareMobileClipboardImageBase64(image, resizeMobileClipboardImage)
-        const imagePath = await saveMobileClipboardImageAsTempFile(client, base64, {
-          connectionId
-        })
-        payload = buildMobileImagePastePayload(imagePath)
-      }
-
-      const wrappedBytes = new TextEncoder().encode(payload).byteLength
-      if (wrappedBytes > 256 * 1024) {
-        triggerError()
-        // eslint-disable-next-line no-console
-        console.warn('[mobile-clip] paste oversized', { wrappedBytes })
-        showToast('Paste too large (max 256 KiB)', 1500)
-        return
-      }
-      await client.sendRequest('terminal.send', {
-        terminal: activeHandle,
-        text: payload,
-        enter: false,
-        ...(deviceTokenRef.current
-          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-          : {})
-      })
-      triggerSelection()
-      refreshCanPaste()
-    } catch (e) {
-      triggerError()
-      const err = e as { name?: string; message?: string }
-      const isDisconnected = connState !== 'connected'
-      // eslint-disable-next-line no-console
-      console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
-      if (isDisconnected) {
-        showToast('Paste failed (disconnected)', 1500)
-      } else if (err.message === 'Clipboard image is too large') {
-        showToast('Image too large to paste', 1500)
-      } else {
-        showToast('Paste failed', 1500)
-      }
-    }
-  }, [
+  const handlePaste = useMobileTerminalPaste({
     client,
     activeHandle,
+    activeHandleRef,
+    activeSessionTabTypeRef,
     canSend,
     connState,
+    connStateRef,
+    clientRef,
+    deviceTokenRef,
+    flushPendingLiveInputBeforeExternalSend,
     getActiveWorktreeConnectionId,
+    onError: triggerError,
+    onSuccess: triggerSelection,
+    ptyModesRef,
     refreshCanPaste,
     showToast
-  ])
+  })
+
+  const flushPendingLiveInputBeforeAttachmentSend = useCallback(
+    async (targetHandle: string): Promise<boolean> => {
+      const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
+      // Why: image picking/upload and IME flushing can outlive the original tab.
+      return (
+        flushedPendingInput &&
+        connStateRef.current === 'connected' &&
+        targetHandle === activeHandleRef.current &&
+        activeSessionTabTypeRef.current === 'terminal'
+      )
+    },
+    [flushPendingLiveInputBeforeExternalSend]
+  )
 
   const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
@@ -3886,6 +3714,7 @@ export default function SessionScreen() {
     canSend,
     connState,
     deviceTokenRef,
+    beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
     getActiveWorktreeConnectionId,
     showToast,
     onSuccess: triggerSelection,
@@ -5046,8 +4875,9 @@ export default function SessionScreen() {
                           if (!key.repeatable) {
                             return
                           }
-                          void handleAccessoryKey(key.bytes)
-                          startAccessoryRepeat(key.bytes)
+                          const input = createTerminalLiveAccessoryInput(key)
+                          void handleAccessoryKey(input)
+                          startAccessoryRepeat(input)
                         }}
                         onPressOut={() => {
                           if (key.repeatable) {
@@ -5058,7 +4888,7 @@ export default function SessionScreen() {
                           if (key.repeatable) {
                             return
                           }
-                          void handleAccessoryKey(key.bytes)
+                          void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
                         }}
                         accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
                       >
@@ -5082,7 +4912,7 @@ export default function SessionScreen() {
                           !canSend && styles.accessoryKeyDisabled
                         ]}
                         disabled={!canSend}
-                        onPress={() => void handleAccessoryKey(key.bytes)}
+                        onPress={() => void handleAccessoryKey({ bytes: key.bytes })}
                         onLongPress={() => {
                           triggerMediumImpact()
                           setDeleteKeyTarget(key)

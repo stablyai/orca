@@ -4,6 +4,7 @@ import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, normalizeWindowsRemotePath } from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 // Why: the relay requires Node.js 18+. Version managers like nvm keep every
 // installed version on disk, so a naive "highest version" glob can hand back
@@ -15,12 +16,18 @@ const MIN_NODE_MAJOR = 18
 // hang a login shell, so keep this short.
 const LOGIN_SHELL_PROBE_TIMEOUT_MS = 8_000
 
+type RemoteNodeResolutionOptions = {
+  rethrowSessionLimitErrors?: boolean
+  signal?: AbortSignal
+}
+
 export async function resolveRemoteNodePath(
   conn: SshConnection,
-  host?: RemoteHostPlatform
+  host?: RemoteHostPlatform,
+  options?: RemoteNodeResolutionOptions
 ): Promise<string> {
   if (host && isWindowsRemoteHost(host)) {
-    return resolveRemoteWindowsNodePath(conn)
+    return resolveRemoteWindowsNodePath(conn, options)
   }
 
   // Strategy 1: probe well-known install directories for every common Node
@@ -28,14 +35,14 @@ export async function resolveRemoteNodePath(
   // This doesn't depend on shell startup-file semantics — bash -lc skips
   // .bashrc and zsh -lc skips .zshrc, but those are exactly the files where
   // nvm/mise/asdf hooks live. Probing directories directly is deterministic.
-  const probedPath = await tryResolveViaKnownPaths(conn)
+  const probedPath = await tryResolveViaKnownPaths(conn, options)
   if (probedPath) {
     return probedPath
   }
 
   // Strategy 2 (fallback): ask the user's login shell. Catches custom PATH
   // setups in ~/.profile / ~/.bash_profile that the probes don't cover.
-  const loginShellPath = await tryResolveViaLoginShell(conn)
+  const loginShellPath = await tryResolveViaLoginShell(conn, options)
   if (loginShellPath) {
     return loginShellPath
   }
@@ -47,7 +54,10 @@ export async function resolveRemoteNodePath(
 // plus system package-manager locations. Every probe runs unconditionally so
 // a missing directory prints nothing rather than short-circuiting later
 // probes. Returns the first candidate that meets the minimum version.
-async function tryResolveViaKnownPaths(conn: SshConnection): Promise<string | null> {
+async function tryResolveViaKnownPaths(
+  conn: SshConnection,
+  options?: RemoteNodeResolutionOptions
+): Promise<string | null> {
   const script = `
 command -v node 2>/dev/null
 nvm_dirs=\${NVM_DIR:-"$HOME/.nvm"}
@@ -94,7 +104,7 @@ true
 `
 
   try {
-    const result = await execCommand(conn, script)
+    const result = await execCommand(conn, script, { signal: options?.signal })
     const seen = new Set<string>()
     for (const line of result.split('\n')) {
       const candidate = line.trim()
@@ -102,12 +112,15 @@ true
         continue
       }
       seen.add(candidate)
-      if (await nodeMeetsVersionRequirement(conn, candidate)) {
+      if (await nodeMeetsVersionRequirement(conn, candidate, options)) {
         console.log(`[ssh-relay] Found node via path probe: ${candidate}`)
         return candidate
       }
     }
-  } catch {
+  } catch (err) {
+    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
+      throw err
+    }
     // Fall through to login shell.
   }
   return null
@@ -116,14 +129,18 @@ true
 // Run `command -v node` under the user's login shell, then verify the result
 // meets the minimum version. Returns null on any failure (shell missing, no
 // node found, version too old, timeout) so callers fall through to the error.
-async function tryResolveViaLoginShell(conn: SshConnection): Promise<string | null> {
+async function tryResolveViaLoginShell(
+  conn: SshConnection,
+  options?: RemoteNodeResolutionOptions
+): Promise<string | null> {
   try {
     // Why: $SHELL is the user's configured login shell (set by chsh / passwd).
     // Using it — rather than hardcoding bash — means zsh/fish users whose
     // custom PATH hooks live in profile files get coverage too. We fall back
     // to sh if $SHELL is unset (rare, e.g. restricted accounts).
     const shellResult = await execCommand(conn, 'echo "${SHELL:-/bin/sh}"', {
-      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS
+      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
+      signal: options?.signal
     })
     const shell = shellResult.trim().split('\n')[0]
     if (!shell) {
@@ -132,18 +149,22 @@ async function tryResolveViaLoginShell(conn: SshConnection): Promise<string | nu
 
     const nodePath = await execCommand(conn, buildCommandInShell(shell, 'command -v node'), {
       wrapCommand: false,
-      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS
+      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
+      signal: options?.signal
     })
     const candidate = nodePath.trim().split('\n')[0]
     if (!candidate) {
       return null
     }
 
-    if (await nodeMeetsVersionRequirement(conn, candidate)) {
+    if (await nodeMeetsVersionRequirement(conn, candidate, options)) {
       console.log(`[ssh-relay] Found node via login shell (${shell}): ${candidate}`)
       return candidate
     }
-  } catch {
+  } catch (err) {
+    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
+      throw err
+    }
     // Fall through.
   }
   return null
@@ -162,11 +183,13 @@ function buildCommandInShell(shell: string, command: string): string {
 // candidate), and the exec round-trip dominates.
 async function nodeMeetsVersionRequirement(
   conn: SshConnection,
-  nodePath: string
+  nodePath: string,
+  options?: RemoteNodeResolutionOptions
 ): Promise<boolean> {
   try {
     const versionOutput = await execCommand(conn, `${shellEscape(nodePath)} --version`, {
-      wrapCommand: false
+      wrapCommand: false,
+      signal: options?.signal
     })
     const match = versionOutput.trim().match(/^v?(\d+)/)
     if (!match) {
@@ -174,13 +197,19 @@ async function nodeMeetsVersionRequirement(
     }
     const major = Number.parseInt(match[1]!, 10)
     return major >= MIN_NODE_MAJOR
-  } catch {
+  } catch (err) {
+    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
+      throw err
+    }
     // Binary missing or fails to run — not usable.
     return false
   }
 }
 
-async function resolveRemoteWindowsNodePath(conn: SshConnection): Promise<string> {
+async function resolveRemoteWindowsNodePath(
+  conn: SshConnection,
+  options?: RemoteNodeResolutionOptions
+): Promise<string> {
   const script = [
     '$paths = @()',
     '$cmd = Get-Command node.exe -ErrorAction SilentlyContinue',
@@ -199,14 +228,20 @@ async function resolveRemoteWindowsNodePath(conn: SshConnection): Promise<string
   ].join('\n')
 
   try {
-    const result = await execCommand(conn, powerShellCommand(script), { wrapCommand: false })
+    const result = await execCommand(conn, powerShellCommand(script), {
+      wrapCommand: false,
+      signal: options?.signal
+    })
     const nodePath = result.trim().split('\n')[0]
     if (nodePath) {
       const normalized = normalizeWindowsRemotePath(nodePath)
       console.log(`[ssh-relay] Found Windows node at: ${normalized}`)
       return normalized
     }
-  } catch {
+  } catch (err) {
+    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
+      throw err
+    }
     // Fall through to the shared error below.
   }
 

@@ -551,6 +551,10 @@ function buildMirroredTerminalTabs(
     // reuse is disabled — getForegroundProcess returns null there), so preserve the
     // client's own record across reconciles instead of dropping it.
     const quickCommandId = existing?.quickCommandId?.trim()
+    // Why: startup cwd is host-owned launch metadata; once the host omits it,
+    // mirrored clients must not resurrect stale subdirectory intent.
+    const startupCwd =
+      activeSurface.startupCwd || surfaces.find((surface) => surface.startupCwd)?.startupCwd
     // Why: tab color/pin echo back through host snapshots, so prefer the client's
     // own record (kept authoritative in tabsByWorktree by the pin/color setters)
     // and fall back to the host value only when this client has no prior tab —
@@ -575,6 +579,7 @@ function buildMirroredTerminalTabs(
         defaultTitle: existing?.defaultTitle ?? title,
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(quickCommandId ? { quickCommandId } : {}),
+        ...(startupCwd ? { startupCwd } : {}),
         customTitle: existing?.customTitle ?? null,
         color,
         isPinned,
@@ -1393,6 +1398,7 @@ function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.defaultTitle === b.defaultTitle &&
     a.quickCommandLabel === b.quickCommandLabel &&
     a.quickCommandId === b.quickCommandId &&
+    a.startupCwd === b.startupCwd &&
     a.generatedTitle === b.generatedTitle &&
     a.customTitle === b.customTitle &&
     a.color === b.color &&

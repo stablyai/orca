@@ -751,6 +751,8 @@ export type OpenCodeUsageApi = {
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  /** Fires when any app window regains OS focus; returns an unsubscribe. */
+  onWindowFocused: (callback: () => void) => () => void
 }
 
 export type NativeChatReadSessionResult = { messages: NativeChatMessage[] } | { error: string }
@@ -1152,11 +1154,13 @@ export type PreloadApi = {
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number) => void
     setActiveRendererPty: (id: string, active: boolean) => void
+    setRendererPtyVisible: (id: string, visible: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
+    hasPty: (id: string) => Promise<boolean | null>
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
@@ -1186,7 +1190,13 @@ export type PreloadApi = {
     }>
     resetRendererDeliveryDebug: () => Promise<void>
     onData: (
-      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+      callback: (data: {
+        id: string
+        data: string
+        seq?: number
+        rawLength?: number
+        background?: boolean
+      }) => void
     ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
@@ -2515,6 +2525,7 @@ export type PreloadApi = {
       callback: (data: { actionId: KeybindingActionId }) => void
     ) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
+    onToggleQuickCommandsMenu: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
     onOpenWorkspaceBoard: (callback: () => void) => () => void
@@ -2530,13 +2541,19 @@ export type PreloadApi = {
         requestId: string
         url: string
         worktreeId?: string
-        sessionProfileId?: string
+        sessionProfileId?: string | null
+        sessionPartition?: string
         activate?: boolean
       }) => void
     ) => () => void
     replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
     onRequestTabSetProfile: (
-      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+      callback: (data: {
+        requestId: string
+        browserPageId: string
+        profileId: string
+        sessionPartition?: string
+      }) => void
     ) => () => void
     replyTabSetProfile: (reply: { requestId: string; error?: string }) => void
     onRequestTabClose: (
@@ -2576,6 +2593,7 @@ export type PreloadApi = {
         requestId?: string
         worktreeId: string
         command?: string
+        cwd?: string
         env?: Record<string, string>
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string

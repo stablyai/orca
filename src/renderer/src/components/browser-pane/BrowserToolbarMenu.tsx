@@ -102,12 +102,14 @@ export function BrowserToolbarMenu({
       return
     }
     const targetId = pendingSwitchProfileId ?? 'default'
+    const profile = browserSessionProfiles.find((p) => p.id === targetId)
     // Why: Must destroy before store update. The webviewRegistry is keyed by
     // workspace ID (stable across switches). Without explicit destroy, the mount
     // effect would reclaim the old webview with the stale partition.
     onDestroyWebview()
-    switchBrowserTabProfile(workspaceId, pendingSwitchProfileId)
-    const profile = browserSessionProfiles.find((p) => p.id === targetId)
+    // Why: persist the resolved partition alongside the profile so the tab stays
+    // isolated even if the renderer profile mirror is later stale (issue #6923).
+    switchBrowserTabProfile(workspaceId, pendingSwitchProfileId, profile?.partition ?? null)
     toast.success(
       translate(
         'auto.components.browser.pane.BrowserToolbarMenu.3ccd29d771',
@@ -147,7 +149,7 @@ export function BrowserToolbarMenu({
       setNewProfileName('')
 
       onDestroyWebview()
-      switchBrowserTabProfile(workspaceId, profile.id)
+      switchBrowserTabProfile(workspaceId, profile.id, profile.partition)
       toast.success(
         translate(
           'auto.components.browser.pane.BrowserToolbarMenu.a7a86702b3',

@@ -25,6 +25,7 @@ type TreeOpsCallbacks = {
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
+  onDragActiveChange?: (active: boolean) => void
   isDestroyed?: () => boolean
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
@@ -223,7 +224,8 @@ export function insertPaneNextTo(
   // Create divider
   const divider = createDivider(isVertical, callbacks.getStyleOptions(), {
     refitPanesUnder: callbacks.refitPanesUnder,
-    onLayoutChanged: callbacks.onLayoutChanged
+    onLayoutChanged: callbacks.onLayoutChanged,
+    onDragActiveChange: callbacks.onDragActiveChange
   })
 
   // Apply flex styles to both panes

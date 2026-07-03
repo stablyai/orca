@@ -1,5 +1,5 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
+import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
 
@@ -254,9 +254,9 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     const result = await this.mux.request('pty.listProcesses')
-    return (result as { id: string; cwd: string; title: string }[]).map((session) => ({
+    return (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)
     }))

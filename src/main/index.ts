@@ -169,6 +169,8 @@ import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
+import { CliInstaller } from './cli/cli-installer'
+import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -1963,6 +1965,56 @@ app.whenReady().then(async () => {
       throw error
     })
     installServeSignalHandlers()
+    // Why: the orca CLI command is normally installed by the renderer onboarding /
+    // Settings "Install CLI" flow via the cli:install IPC. Headless serve has no
+    // renderer, so the command is never created and an in-terminal `orca …` fails
+    // with command-not-found. Run the idempotent installer here for the platforms
+    // where it puts a resolvable command on the managed-terminal PATH: macOS (bare
+    // `orca` in /usr/local/bin or ~/.local/bin) and Linux (`orca-ide`; bare `orca`
+    // is added by the dispatcher below). Windows is excluded — there install() would
+    // only mutate the persistent user-registry PATH without helping the current
+    // serve's child terminals. Best-effort: a failure must not block serve start.
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      try {
+        // Why: serve is headless — never let a missing-write-permission fallback
+        // pop an osascript admin prompt (it would hang serve on a GUI host). Skip
+        // instead; the user-writable ~/.local/bin path needs no elevation anyway.
+        const cliStatus = await new CliInstaller({
+          privilegedRunner: async () => {
+            throw new Error('serve CLI auto-install must not request administrator privileges')
+          }
+        }).install()
+        console.log(
+          `[serve] orca CLI install: ${cliStatus.state}${cliStatus.commandPath ? ` (${cliStatus.commandPath})` : ''}`
+        )
+      } catch (error) {
+        console.warn(
+          '[serve] orca CLI install skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+    // Why: on Linux the CLI installs as `orca-ide`, NOT bare `orca` (above), but the
+    // Claude Team launcher typed into the initial managed terminal invokes bare `orca`.
+    // Drop a bare-`orca` dispatcher on ~/.local/bin (ahead of /usr/bin on the managed
+    // terminal PATH) so `orca claude-teams` resolves. Best-effort: a failure must not
+    // block serve startup. See installLinuxBareOrcaDispatcher for the full rationale.
+    if (process.platform === 'linux' && app.isPackaged && process.resourcesPath) {
+      try {
+        const dispatcher = await installLinuxBareOrcaDispatcher({
+          resourcesPath: process.resourcesPath
+        })
+        console.log(
+          `[serve] bare orca dispatcher ${dispatcher.state}: ${dispatcher.dispatcherPath}` +
+            `${dispatcher.target ? ` -> ${dispatcher.target}` : ''}`
+        )
+      } catch (error) {
+        console.warn(
+          '[serve] bare orca dispatcher install skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
     await printServeReady(serveOptions)
     return
   }

@@ -118,6 +118,48 @@ export function defaultTerminalLiveInputHandles(
   }
 }
 
+export function filterTerminalLiveInputDefaultCandidates(
+  terminalHandles: readonly string[],
+  disabledHandles: ReadonlySet<string>
+): string[] {
+  return terminalHandles.filter((handle) => !disabledHandles.has(handle))
+}
+
+export function applyDisabledTerminalLiveInputHandles(
+  enabledHandles: ReadonlySet<string>,
+  defaultedHandles: ReadonlySet<string>,
+  disabledHandles: ReadonlySet<string>
+): TerminalLiveInputDefaultResult {
+  let nextEnabledHandles: Set<string> | null = null
+  let nextDefaultedHandles: Set<string> | null = null
+
+  for (const handle of enabledHandles) {
+    if (!disabledHandles.has(handle)) {
+      continue
+    }
+    nextEnabledHandles ??= new Set(enabledHandles)
+    nextEnabledHandles.delete(handle)
+  }
+
+  for (const handle of disabledHandles) {
+    if (defaultedHandles.has(handle)) {
+      continue
+    }
+    nextDefaultedHandles ??= new Set(defaultedHandles)
+    nextDefaultedHandles.add(handle)
+  }
+
+  if (!nextEnabledHandles && !nextDefaultedHandles) {
+    return { enabledHandles, defaultedHandles, changed: false }
+  }
+
+  return {
+    enabledHandles: nextEnabledHandles ?? enabledHandles,
+    defaultedHandles: nextDefaultedHandles ?? defaultedHandles,
+    changed: true
+  }
+}
+
 export function pruneTerminalLiveInputHandles(
   enabledHandles: ReadonlySet<string>,
   defaultedHandles: ReadonlySet<string>,

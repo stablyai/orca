@@ -9,6 +9,7 @@ import type {
   DetectedWorktreeListResult,
   FolderWorkspace,
   LocalBaseRefRefreshResult,
+  TerminalTab,
   Worktree,
   WorktreeLineage,
   WorkspaceLineage
@@ -193,6 +194,18 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
     isPinned: false,
     sortOrder: 0,
     lastActivityAt: 0,
+    ...overrides
+  }
+}
+
+function makeTerminalTab(overrides: Partial<TerminalTab> & { id: string; worktreeId: string }) {
+  return {
+    ptyId: null,
+    title: 'Terminal',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1,
     ...overrides
   }
 }
@@ -3227,6 +3240,50 @@ describe('removeWorktree state cleanup', () => {
     expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
   })
 
+  it('cleans up automatic agent resume claims for removed worktree tabs', async () => {
+    const store = createTestStore()
+    const removed = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    const surviving = makeWorktree({
+      id: 'repo1::/path/wt2',
+      repoId: 'repo1',
+      path: '/path/wt2'
+    })
+
+    store.setState({
+      worktreesByRepo: { repo1: [removed, surviving] },
+      tabsByWorktree: {
+        [removed.id]: [makeTerminalTab({ id: 'removed-tab', worktreeId: removed.id })],
+        [surviving.id]: [makeTerminalTab({ id: 'surviving-tab', worktreeId: surviving.id })]
+      },
+      automaticAgentResumeClaimsByTabId: {
+        'removed-tab': {
+          worktreeId: removed.id,
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'removed-session' }
+        },
+        'surviving-tab': {
+          worktreeId: surviving.id,
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'surviving-session' }
+        }
+      }
+    } as Partial<AppState>)
+
+    await store.getState().removeWorktree(removed.id)
+
+    expect(store.getState().automaticAgentResumeClaimsByTabId).toEqual({
+      'surviving-tab': {
+        worktreeId: surviving.id,
+        launchAgent: 'codex',
+        providerSession: { key: 'session_id', id: 'surviving-session' }
+      }
+    })
+  })
+
   it('purges the orphaned project that pointed at a destroyed runtime-owned SSH target', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
@@ -5792,6 +5849,18 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-2': ['pty-2'], 'tab-3': ['pty-3'] },
       runtimePaneTitlesByTabId: { 'tab-1': 'claude', 'tab-3': 'bash' },
+      automaticAgentResumeClaimsByTabId: {
+        'tab-1': {
+          worktreeId: 'repoA::/a/wt1',
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-1' }
+        },
+        'tab-3': {
+          worktreeId: 'repoA::/a/wt2',
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-3' }
+        }
+      },
       openFiles: [
         {
           id: 'file-1',
@@ -5845,6 +5914,13 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.terminalLayoutsByTabId).toEqual({ 'tab-3': { panes: [] } })
     expect(s.ptyIdsByTabId).toEqual({ 'tab-3': ['pty-3'] })
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
+    expect(s.automaticAgentResumeClaimsByTabId).toEqual({
+      'tab-3': {
+        worktreeId: 'repoA::/a/wt2',
+        launchAgent: 'codex',
+        providerSession: { key: 'session_id', id: 'sess-3' }
+      }
+    })
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
     expect(s.markdownFrontmatterVisible).toEqual({ 'file-99': true })
