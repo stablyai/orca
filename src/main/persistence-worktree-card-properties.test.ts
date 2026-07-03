@@ -57,6 +57,44 @@ describe('Store', () => {
   })
   // ── worktree-card property migration ───────────────────────────────
 
+  it('defaults identity properties once for existing profiles', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: { worktreeCardProperties: ['status', 'unread', 'pr'] },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toContain('project-name')
+    expect(store.getUI().worktreeCardProperties).toContain('host-name')
+    expect(store.getUI()._identityWorktreeCardPropertiesDefaulted).toBe(true)
+  })
+
+  it('preserves identity property opt-outs after migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'pr'],
+        _identityWorktreeCardPropertiesDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).not.toContain('project-name')
+    expect(store.getUI().worktreeCardProperties).not.toContain('host-name')
+  })
+
   it('adds split-out default card properties for legacy detailed profiles', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -80,6 +118,8 @@ describe('Store', () => {
       'pr',
       'comment',
       'ports',
+      'project-name',
+      'host-name',
       'inline-agents'
     ])
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
@@ -117,6 +157,8 @@ describe('Store', () => {
       'pr',
       'comment',
       'ports',
+      'project-name',
+      'host-name',
       'inline-agents'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
@@ -147,6 +189,8 @@ describe('Store', () => {
       'cli',
       'comment',
       'ports',
+      'project-name',
+      'host-name',
       'inline-agents'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
@@ -177,6 +221,8 @@ describe('Store', () => {
       'jira-issue',
       'pr',
       'ports',
+      'project-name',
+      'host-name',
       'inline-agents'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
@@ -192,7 +238,8 @@ describe('Store', () => {
         worktreeCardProperties: ['status', 'pr'],
         _inlineAgentsDefaultedForAllUsers: true,
         _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
+        _jiraIssueWorktreeCardPropertyDefaulted: true,
+        _identityWorktreeCardPropertiesDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -203,6 +250,8 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI().worktreeCardProperties).not.toContain('ports')
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+    expect(store.getUI().worktreeCardProperties).not.toContain('project-name')
+    expect(store.getUI().worktreeCardProperties).not.toContain('host-name')
   })
 
   it('does not re-add branch after an explicit Default mode selection', async () => {
@@ -252,7 +301,8 @@ describe('Store', () => {
         ],
         _inlineAgentsDefaultedForAllUsers: true,
         _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
+        _jiraIssueWorktreeCardPropertyDefaulted: true,
+        _identityWorktreeCardPropertiesDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -290,7 +340,8 @@ describe('Store', () => {
           'inline-agents'
         ],
         _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _identityWorktreeCardPropertiesDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -323,7 +374,8 @@ describe('Store', () => {
         worktreeCardProperties: ['status', 'unread', 'issue', 'linear-issue', 'pr'],
         _inlineAgentsDefaultedForAllUsers: true,
         _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
+        _jiraIssueWorktreeCardPropertyDefaulted: true,
+        _identityWorktreeCardPropertiesDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}

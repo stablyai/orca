@@ -11,7 +11,11 @@ import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-a
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo } = props
-  const foundation = useWorktreeCardFoundation({ worktree, repo })
+  const foundation = useWorktreeCardFoundation({
+    worktree,
+    repo,
+    hostContextLabel: props.hostContextLabel
+  })
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,

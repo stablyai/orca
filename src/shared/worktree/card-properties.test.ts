@@ -54,6 +54,22 @@ describe('worktree card properties', () => {
     )
   })
 
+  it('defaults the identity badges on in Default mode and off in Compact', () => {
+    const defaults = getWorktreeCardModeProperties('Default')
+    expect(defaults).toContain('project-name')
+    expect(defaults).toContain('host-name')
+
+    const compact = getWorktreeCardModeProperties('Compact')
+    expect(compact).not.toContain('project-name')
+    expect(compact).not.toContain('host-name')
+  })
+
+  it('preserves the identity properties through normalization', () => {
+    const normalized = normalizeWorktreeCardProperties(['status', 'project-name', 'host-name'])
+    expect(normalized).toContain('project-name')
+    expect(normalized).toContain('host-name')
+  })
+
   it('returns combined mode update payloads', () => {
     expect(getWorktreeCardModeUpdates('Compact')).toEqual({
       settings: { compactWorktreeCards: true },

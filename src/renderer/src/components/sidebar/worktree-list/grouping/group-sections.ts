@@ -9,11 +9,7 @@ import {
 import { PROJECT_GROUP_META, PR_GROUP_META } from './group-keys'
 import type { PRGroupKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
-import {
-  getLaneHostWorktreeCounts,
-  getLaneHostWorktreeIds,
-  getMixedHostContextLabels
-} from './host-labels'
+import { getLaneHostWorktreeCounts, getLaneHostWorktreeIds } from './host-labels'
 import type { OrderedGroupEntry, ProjectGroupingIndex } from './project-grouping'
 import {
   appendWorktreeRows,
@@ -44,7 +40,7 @@ export type SectionAppendContext = {
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
-  mixedWorktreeHostContextLabels: Map<string, string> | undefined
+  nonLocalWorktreeHostContextLabels: Map<string, string> | undefined
   noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>
@@ -64,12 +60,10 @@ export function appendOrderedGroups(
     workspaceStatuses,
     repoMap,
     defaultHostId,
-    hostLabelById,
-    projectIndex,
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
     pendingByRepo,
-    mixedWorktreeHostContextLabels,
+    nonLocalWorktreeHostContextLabels,
     lineageById,
     worktreeMap,
     nestLineage,
@@ -191,23 +185,12 @@ export function appendOrderedGroups(
         }
       }
       const items = groupBy === 'repo' ? orderMainWorktreeFirst(group.items) : group.items
-      const hostContextLabelByRepoId =
-        groupBy === 'repo'
-          ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
-          : undefined
-      // Why (STA-4343): repo grouping normally labels by repo, but one repo id can
-      // be registered on two hosts — then every row in the group shares a repo id
-      // and the per-repo label cannot tell them apart. Fall back to the per-row
-      // host labels, which are keyed by host-qualified identity.
-      const hostContextLabelByWorktreeIdentity =
-        groupBy === 'repo' && hostContextLabelByRepoId ? undefined : mixedWorktreeHostContextLabels
       appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
         nestLineage,
         collapsedGroups,
         groupDepth: projectGroupDepth,
         sectionKey: key,
-        hostContextLabelByRepoId,
-        hostContextLabelByWorktreeIdentity,
+        hostContextLabelByWorktreeIdentity: nonLocalWorktreeHostContextLabels,
         cyclicLineageIds
       })
       for (const pair of folderPairs) {

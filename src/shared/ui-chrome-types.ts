@@ -42,6 +42,8 @@ export type WorktreeCardProperty =
   | 'cli'
   | 'comment'
   | 'ports'
+  | 'project-name'
+  | 'host-name'
   // Inline agent-activity list rendered in each workspace card; on by default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts).
   | 'inline-agents'
 

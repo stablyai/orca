@@ -4402,6 +4402,8 @@
           "219ebf1961": "ブランチ名",
           "automation": "オートメーション",
           "folderPathIdentity": "ブランチ / フォルダーパス",
+          "projectName": "プロジェクト名",
+          "remoteHostname": "リモートホスト名",
           "cli": "Orca CLI"
         },
         "SshTargetRow": {

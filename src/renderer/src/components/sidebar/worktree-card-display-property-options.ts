@@ -67,5 +67,23 @@ export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
         'Agent activity'
       )
     }
+  },
+  {
+    id: 'project-name',
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectName',
+        'Project Name'
+      )
+    }
+  },
+  {
+    id: 'host-name',
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.remoteHostname',
+        'Remote Hostname'
+      )
+    }
   }
 ]

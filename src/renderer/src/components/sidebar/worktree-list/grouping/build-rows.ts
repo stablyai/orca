@@ -16,7 +16,7 @@ import type { SectionAppendContext } from './group-sections'
 import {
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
-  getMixedWorktreeHostContextLabels,
+  getNonLocalWorktreeHostContextLabels,
   getNoticeHostContextLabels
 } from './host-labels'
 import { buildProjectGroupingIndex } from './project-grouping'
@@ -105,8 +105,8 @@ export function buildRows(
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
       : worktrees.filter((worktree) => !pinnedSectionIds.has(getWorktreeHostIdentity(worktree)))
-  const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
-    naturalWorktrees,
+  const nonLocalWorktreeHostContextLabels = getNonLocalWorktreeHostContextLabels(
+    worktrees,
     repoMap,
     hostLabelById,
     defaultHostId
@@ -145,6 +145,7 @@ export function buildRows(
     worktreeMap,
     nestLineage,
     cyclicLineageIds,
+    nonLocalWorktreeHostContextLabels,
     noticeHostContextLabelByRepoId
   )
   if (groupBy === 'none') {
@@ -178,7 +179,7 @@ export function buildRows(
           collapsedGroups,
           groupDepth: 0,
           sectionKey: ALL_GROUP_KEY,
-          hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
+          hostContextLabelByWorktreeIdentity: nonLocalWorktreeHostContextLabels,
           cyclicLineageIds
         })
         for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
@@ -220,7 +221,7 @@ export function buildRows(
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
     pendingByRepo,
-    mixedWorktreeHostContextLabels,
+    nonLocalWorktreeHostContextLabels,
     noticeHostContextLabelByRepoId,
     lineageById,
     worktreeMap,

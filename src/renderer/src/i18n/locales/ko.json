@@ -4404,6 +4404,8 @@
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
           "folderPathIdentity": "브랜치 / 폴더 경로",
+          "projectName": "프로젝트 이름",
+          "remoteHostname": "원격 호스트 이름",
           "cli": "Orca CLI"
         },
         "SshTargetRow": {

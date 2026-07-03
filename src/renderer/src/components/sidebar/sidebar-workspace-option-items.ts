@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/ui-chrome-types'
 import { TASK_WORKTREE_CARD_PROPERTIES } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
+import { IDENTITY_WORKTREE_CARD_PROPERTY_OPTIONS } from './worktree-card-identity-property-options'
 
 export const GROUP_BY_OPTIONS = [
   {
@@ -203,13 +204,19 @@ export function getWorktreeCardPropertyOptions({
     }
   }
   if (newCardStyle) {
-    return [...issueOptions, ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1), branchOption]
+    return [
+      ...issueOptions,
+      ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1),
+      branchOption,
+      ...IDENTITY_WORKTREE_CARD_PROPERTY_OPTIONS
+    ]
   }
   return [
     BASE_WORKTREE_CARD_PROPERTY_OPTIONS[0],
     ...issueOptions,
     ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1),
-    branchOption
+    branchOption,
+    ...IDENTITY_WORKTREE_CARD_PROPERTY_OPTIONS
   ]
 }
 
