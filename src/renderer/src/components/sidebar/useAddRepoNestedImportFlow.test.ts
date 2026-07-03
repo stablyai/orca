@@ -80,7 +80,7 @@ function useTestAddRepoNestedImportFlow(
     activeRuntimeEnvironmentId: null,
     fetchWorktrees: vi.fn(),
     importNestedRepos: vi.fn<() => Promise<ProjectGroupImportResult | null>>(),
-    getNestedRepoRuntimeKind: vi.fn(() => 'local'),
+    getNestedRepoRuntimeKind: vi.fn(() => 'local' as const),
     onGitRepoReady: vi.fn(),
     setIsAdding: vi.fn(),
     ...overrides
