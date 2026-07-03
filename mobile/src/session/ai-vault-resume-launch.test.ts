@@ -3,10 +3,12 @@ import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
+  createMobileAiVaultResumeMutationRegistry,
   readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
-  resumeAiVaultSessionInTerminal
+  resumeAiVaultSessionInTerminal,
+  RESUME_RPC_TIMEOUT_MS
 } from './ai-vault-resume-launch'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
@@ -147,22 +149,34 @@ describe('resumeAiVaultSessionInTerminal', () => {
         clientMutationId: 'resume-1'
       })
     ).resolves.toMatchObject({ id: 'tab-1', terminal: 'pty-1' })
-    expect(sendRequest).toHaveBeenNthCalledWith(1, 'session.tabs.createTerminal', {
-      worktree: 'id:worktree-1',
-      env: { ANTHROPIC_BASE_URL: 'http://localhost:3000' },
-      launchConfig: {
-        agentCommand: 'claude',
-        agentArgs: '',
-        agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      1,
+      'session.tabs.createTerminal',
+      {
+        worktree: 'id:worktree-1',
+        env: { ANTHROPIC_BASE_URL: 'http://localhost:3000' },
+        launchConfig: {
+          agentCommand: 'claude',
+          agentArgs: '',
+          agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
+        },
+        launchAgent: 'claude',
+        clientMutationId: 'resume-1'
       },
-      launchAgent: 'claude',
-      clientMutationId: 'resume-1'
-    })
-    expect(sendRequest).toHaveBeenNthCalledWith(2, 'terminal.send', {
-      terminal: 'pty-1',
-      text: 'claude --resume abc',
-      enter: true
-    })
+      // Why: a socket drop mid-resume must reject within the request timeout
+      // instead of parking on the reconnect waiter with the spinner pinned.
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      2,
+      'terminal.send',
+      {
+        terminal: 'pty-1',
+        text: 'claude --resume abc',
+        enter: true
+      },
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
   })
 
   it('throws when terminal creation fails', async () => {
@@ -208,6 +222,32 @@ describe('resumeAiVaultSessionInTerminal', () => {
         command: 'command'
       })
     ).rejects.toThrow('Terminal input is locked')
+  })
+})
+
+describe('createMobileAiVaultResumeMutationRegistry', () => {
+  it('reuses the claimed id across retries until a success releases it', () => {
+    let mints = 0
+    const registry = createMobileAiVaultResumeMutationRegistry((sessionId) => {
+      mints += 1
+      return `${sessionId}:mutation-${mints}`
+    })
+
+    expect(registry.claim('session-a')).toBe('session-a:mutation-1')
+    // A failed attempt keeps the key so the host can dedup the retry.
+    expect(registry.claim('session-a')).toBe('session-a:mutation-1')
+
+    registry.releaseOnSuccess('session-a')
+    // A resume after success mints fresh so the user can fork intentionally.
+    expect(registry.claim('session-a')).toBe('session-a:mutation-2')
+  })
+
+  it('tracks sessions independently', () => {
+    const registry = createMobileAiVaultResumeMutationRegistry((sessionId) => `${sessionId}:id`)
+    expect(registry.claim('session-a')).toBe('session-a:id')
+    expect(registry.claim('session-b')).toBe('session-b:id')
+    registry.releaseOnSuccess('session-b')
+    expect(registry.claim('session-a')).toBe('session-a:id')
   })
 })
 

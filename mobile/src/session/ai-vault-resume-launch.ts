@@ -136,18 +136,26 @@ function normalizeMobileAiVaultResumeCommandOverrides(
   return normalized
 }
 
+// Why: without an explicit timeout, a socket drop mid-resume parks the request
+// on the reconnect waiter for the full reconnect budget, pinning the spinner.
+export const RESUME_RPC_TIMEOUT_MS = 30_000
+
 export async function resumeAiVaultSessionInTerminal(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,
   launch: MobileAiVaultResumeLaunch & { clientMutationId?: string }
 ): Promise<MobileReviewTerminalTab> {
-  const created = await client.sendRequest('session.tabs.createTerminal', {
-    worktree: `id:${worktreeId}`,
-    ...(launch.env ? { env: launch.env } : {}),
-    ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
-    ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
-    ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {})
-  })
+  const created = await client.sendRequest(
+    'session.tabs.createTerminal',
+    {
+      worktree: `id:${worktreeId}`,
+      ...(launch.env ? { env: launch.env } : {}),
+      ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
+      ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
+      ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {})
+    },
+    { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+  )
   if (!created.ok) {
     throw new Error(created.error?.message || 'Failed to create terminal')
   }
@@ -155,11 +163,15 @@ export async function resumeAiVaultSessionInTerminal(
   if (!terminalTab) {
     throw new Error('Created terminal response was invalid')
   }
-  const sent = await client.sendRequest('terminal.send', {
-    terminal: terminalTab.terminal,
-    text: launch.command,
-    enter: true
-  })
+  const sent = await client.sendRequest(
+    'terminal.send',
+    {
+      terminal: terminalTab.terminal,
+      text: launch.command,
+      enter: true
+    },
+    { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+  )
   if (!sent.ok) {
     throw new Error(sent.error?.message || 'Failed to send resume command')
   }
@@ -167,6 +179,34 @@ export async function resumeAiVaultSessionInTerminal(
     throw new Error('Terminal input is locked')
   }
   return terminalTab
+}
+
+export type MobileAiVaultResumeMutationRegistry = {
+  claim(sessionId: string): string
+  releaseOnSuccess(sessionId: string): void
+}
+
+// Why: a retry after a failed/interrupted resume must reuse the same
+// idempotency key so the host dedups the create, while a resume after success
+// mints a fresh key so the user can intentionally fork the session.
+export function createMobileAiVaultResumeMutationRegistry(
+  mintId: (sessionId: string) => string
+): MobileAiVaultResumeMutationRegistry {
+  const bySessionId = new Map<string, string>()
+  return {
+    claim(sessionId: string): string {
+      const existing = bySessionId.get(sessionId)
+      if (existing) {
+        return existing
+      }
+      const minted = mintId(sessionId)
+      bySessionId.set(sessionId, minted)
+      return minted
+    },
+    releaseOnSuccess(sessionId: string): void {
+      bySessionId.delete(sessionId)
+    }
+  }
 }
 
 export function readMobileRuntimeHostPlatform(statusResult: unknown): NodeJS.Platform | null {

@@ -10,6 +10,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
+  createMobileAiVaultResumeMutationRegistry,
   readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
@@ -57,6 +58,9 @@ export function MobileAgentSessionHistoryPanel({
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
   const resumeLaunchInFlightRef = useRef(false)
+  const resumeMutationRegistryRef = useRef(
+    createMobileAiVaultResumeMutationRegistry(createMobileAiVaultResumeMutationId)
+  )
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
   // Why: the worktree list seeds the host-local scopePaths derivation and the
@@ -156,12 +160,20 @@ export function MobileAgentSessionHistoryPanel({
       setResumingSessionId(session.id)
       setResumeMessage(null)
       try {
-        const { repos, folderWorkspaces, projectGroups, settings } =
-          await loadMobileResumeMetadata(client)
+        const {
+          repos,
+          folderWorkspaces,
+          projectGroups,
+          settings,
+          worktrees: freshWorktrees
+        } = await loadMobileResumeMetadata(client)
         const target = resolveMobileAiVaultSessionResumeTarget({
           session,
           activeWorktreeId: worktreeId,
-          worktrees,
+          // Why: resolve against live worktrees so a workspace deleted or
+          // archived since panel mount can't be picked; the mount-time list is
+          // only a fallback when the fresh fetch fails.
+          worktrees: freshWorktrees ?? worktrees,
           repos,
           folderWorkspaces,
           projectGroups
@@ -192,8 +204,9 @@ export function MobileAgentSessionHistoryPanel({
         })
         await resumeAiVaultSessionInTerminal(client, target.worktreeId, {
           ...launch,
-          clientMutationId: createMobileAiVaultResumeMutationId(session.id)
+          clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
         })
+        resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
         triggerSuccess()
         setResumeMessage('Agent session queued.')
         router.push(
@@ -344,16 +357,23 @@ async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>):
   folderWorkspaces: MobileAiVaultResumeFolderWorkspace[]
   projectGroups: MobileAiVaultResumeProjectGroup[]
   settings: MobileAiVaultResumeSettings | null
+  worktrees: Worktree[] | null
 }> {
   // Why: repo.list can enrich repo remote identities, so fetch resume-only
   // metadata after explicit user intent instead of delaying history browsing.
-  const [repoResponse, folderWorkspaceResponse, projectGroupResponse, settingsResponse] =
-    await Promise.all([
-      client.sendRequest('repo.list'),
-      client.sendRequest('folderWorkspace.list').catch(() => null),
-      client.sendRequest('projectGroup.list').catch(() => null),
-      client.sendRequest('settings.get').catch(() => null)
-    ])
+  const [
+    repoResponse,
+    folderWorkspaceResponse,
+    projectGroupResponse,
+    settingsResponse,
+    worktreeResponse
+  ] = await Promise.all([
+    client.sendRequest('repo.list'),
+    client.sendRequest('folderWorkspace.list').catch(() => null),
+    client.sendRequest('projectGroup.list').catch(() => null),
+    client.sendRequest('settings.get').catch(() => null),
+    client.sendRequest('worktree.ps', { limit: 10000 }).catch(() => null)
+  ])
   if (!repoResponse.ok) {
     throw new Error(repoResponse.error?.message || 'Unable to load workspace metadata.')
   }
@@ -372,11 +392,14 @@ async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>):
     settingsResponse?.ok === true
       ? (settingsResponse.result as { settings?: MobileAiVaultResumeSettings })
       : null
+  const worktreeResult =
+    worktreeResponse?.ok === true ? (worktreeResponse.result as { worktrees?: Worktree[] }) : null
   return {
     repos: repoResult.repos ?? [],
     folderWorkspaces: folderWorkspaceResult?.folderWorkspaces ?? [],
     projectGroups: projectGroupResult?.groups ?? [],
-    settings: settingsResult?.settings ?? null
+    settings: settingsResult?.settings ?? null,
+    worktrees: worktreeResult?.worktrees ?? null
   }
 }
 

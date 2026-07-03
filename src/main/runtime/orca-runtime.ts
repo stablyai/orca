@@ -1071,6 +1071,9 @@ function getAgentLaunchPlatformForRepo(
   return isWindowsAbsolutePathLike(repo.path) ? 'win32' : 'linux'
 }
 
+// Why: long enough for a phone to reconnect and retry a create whose response
+// was lost, short enough that an intentional later re-resume forks fresh.
+const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
@@ -15507,21 +15510,23 @@ export class OrcaRuntimeService {
     const mutationKey = `${worktreeSelector}\0${mutationId}`
     // Why: a retried create (double-tap, reconnect replay) with the same
     // idempotency key must return the in-flight operation instead of spawning a
-    // duplicate terminal. Settled entries are dropped so a later retry — after a
-    // failure or after the result is consumed — can start a fresh create.
+    // duplicate terminal. Successes are kept briefly so a retry whose response
+    // was lost in transit reuses the created terminal; failures are dropped
+    // immediately so a retry can start a fresh create.
     const inflight = this.mobileTerminalCreateByMutationId.get(mutationKey)
     if (inflight) {
       return inflight
     }
     const run = this.runCreateMobileSessionTerminal(worktreeSelector, opts)
     this.mobileTerminalCreateByMutationId.set(mutationKey, run)
-    void run
-      .catch(() => {})
-      .finally(() => {
-        if (this.mobileTerminalCreateByMutationId.get(mutationKey) === run) {
-          this.mobileTerminalCreateByMutationId.delete(mutationKey)
-        }
-      })
+    const drop = (): void => {
+      if (this.mobileTerminalCreateByMutationId.get(mutationKey) === run) {
+        this.mobileTerminalCreateByMutationId.delete(mutationKey)
+      }
+    }
+    void run.then(() => {
+      setTimeout(drop, MOBILE_TERMINAL_CREATE_RESULT_TTL_MS).unref?.()
+    }, drop)
     return run
   }
 
