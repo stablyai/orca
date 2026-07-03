@@ -19,7 +19,12 @@ import {
   type SessionInfo,
   type TakePendingOutputResult
 } from './types'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
@@ -517,7 +522,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return { alive, killed }
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
     return result.sessions
@@ -525,7 +530,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       .map((s) => ({
         id: s.sessionId,
         cwd: s.cwd ?? '',
-        title: 'shell'
+        title: 'shell',
+        ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
       }))
   }
 

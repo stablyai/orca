@@ -89,7 +89,11 @@ import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stabl
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentType
+} from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -156,6 +160,10 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
+import {
+  isExpectedAgentProcess,
+  recognizeAgentProcessFromCommandLine
+} from '../../../../shared/agent-process-recognition'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
@@ -165,7 +173,6 @@ import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
 } from '@/lib/agent-startup-delayed-delivery'
-import { isExpectedAgentProcess } from '../../../../shared/agent-process-recognition'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -176,6 +183,7 @@ const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1500
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
+const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
 const STARTUP_DRAFT_PASTE_TIMEOUT_MS = 8000
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
@@ -1238,12 +1246,219 @@ export function connectPanePty(
   }
   /**
    * Resolves the authoritative owner agent type for this pane, checking tab launch,
-   * pane startup, and store state configuration.
+   * pane startup, typed command ownership, and store state configuration.
    *
    * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
-   * OMP-owned pane back to Pi; the stored status agentType is only the last-resort
-   * fallback because it can itself be a Pi-compatible frame.
+   * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
+   * in generic terminals where launch metadata does not exist.
    */
+  let commandInferredPaneAgent: TuiAgent | null = null
+  let pendingShellCommandLine = ''
+  let pendingShellCommandCursor = 0
+  let commandInferredPaneAgentGeneration = 0
+  let shellCommandInferenceSuspendedUntilCommandEnd = false
+  const resetPendingShellCommandLine = (): void => {
+    pendingShellCommandLine = ''
+    pendingShellCommandCursor = 0
+  }
+  const rememberCommandInferredPaneAgent = (): void => {
+    const commandLine = pendingShellCommandLine.trim()
+    resetPendingShellCommandLine()
+    const nextAgent = commandLine
+      ? (recognizeAgentProcessFromCommandLine(commandLine)?.agent ?? null)
+      : null
+    commandInferredPaneAgent = nextAgent
+    commandInferredPaneAgentGeneration += 1
+  }
+  const clearCommandInferredPaneAgent = (): void => {
+    commandInferredPaneAgent = null
+    resetPendingShellCommandLine()
+    commandInferredPaneAgentGeneration += 1
+  }
+  const clearCommandInferredPaneAgentAfterPtySideEffects = (): void => {
+    const generation = commandInferredPaneAgentGeneration
+    resetPendingShellCommandLine()
+    queueMicrotask(() => {
+      setTimeout(() => {
+        if (commandInferredPaneAgentGeneration === generation) {
+          clearCommandInferredPaneAgent()
+        }
+      }, 0)
+    })
+  }
+  const appendPendingShellCommandInput = (text: string): void => {
+    const available = MANUAL_AGENT_COMMAND_MAX_CHARS - pendingShellCommandLine.length
+    if (available <= 0) {
+      shellCommandInferenceSuspendedUntilCommandEnd = true
+      return
+    }
+    const inserted = text.slice(0, available)
+    pendingShellCommandLine =
+      pendingShellCommandLine.slice(0, pendingShellCommandCursor) +
+      inserted +
+      pendingShellCommandLine.slice(pendingShellCommandCursor)
+    pendingShellCommandCursor += inserted.length
+    if (inserted.length < text.length) {
+      shellCommandInferenceSuspendedUntilCommandEnd = true
+    }
+  }
+  const deletePendingShellCommandWord = (): void => {
+    const beforeCursor = pendingShellCommandLine.slice(0, pendingShellCommandCursor)
+    const afterCursor = pendingShellCommandLine.slice(pendingShellCommandCursor)
+    const nextBeforeCursor = beforeCursor.replace(/[^\S\r\n]*\S+[^\S\r\n]*$/, '')
+    pendingShellCommandLine = nextBeforeCursor + afterCursor
+    pendingShellCommandCursor = nextBeforeCursor.length
+  }
+  const cancelSuspendedShellCommandInference = (): void => {
+    if (!shellCommandInferenceSuspendedUntilCommandEnd) {
+      return
+    }
+    shellCommandInferenceSuspendedUntilCommandEnd = false
+    resetPendingShellCommandLine()
+  }
+  const deletePendingShellCommandCharacter = (): void => {
+    if (pendingShellCommandCursor === 0) {
+      return
+    }
+    pendingShellCommandLine =
+      pendingShellCommandLine.slice(0, pendingShellCommandCursor - 1) +
+      pendingShellCommandLine.slice(pendingShellCommandCursor)
+    pendingShellCommandCursor -= 1
+  }
+  const deletePendingShellCommandCharacterAtCursor = (): void => {
+    if (pendingShellCommandCursor >= pendingShellCommandLine.length) {
+      return
+    }
+    pendingShellCommandLine =
+      pendingShellCommandLine.slice(0, pendingShellCommandCursor) +
+      pendingShellCommandLine.slice(pendingShellCommandCursor + 1)
+  }
+  const movePendingShellCommandCursor = (delta: number): void => {
+    pendingShellCommandCursor = Math.min(
+      pendingShellCommandLine.length,
+      Math.max(0, pendingShellCommandCursor + delta)
+    )
+  }
+  const consumeShellCommandCsiSequence = (data: string, index: number): number | null => {
+    if (data.charCodeAt(index) !== 0x1b || data[index + 1] !== '[') {
+      return null
+    }
+    let cursor = index + 2
+    while (cursor < data.length && /[0-9;?]/.test(data[cursor]!)) {
+      cursor += 1
+    }
+    const final = data[cursor]
+    if (!final || !/[~A-Za-z]/.test(final)) {
+      return null
+    }
+    const params = data.slice(index + 2, cursor)
+    if (final === 'D') {
+      movePendingShellCommandCursor(-1)
+    } else if (final === 'C') {
+      movePendingShellCommandCursor(1)
+    } else if (final === 'H' || (final === '~' && params === '1')) {
+      pendingShellCommandCursor = 0
+    } else if (final === 'F' || (final === '~' && params === '4')) {
+      pendingShellCommandCursor = pendingShellCommandLine.length
+    } else if (final === '~' && params === '3') {
+      deletePendingShellCommandCharacterAtCursor()
+    } else if (final === '~' && (params === '200' || params === '201')) {
+      // Bracketed paste wrappers are terminal framing, not shell command text.
+    } else {
+      resetPendingShellCommandLine()
+    }
+    return cursor + 1
+  }
+  const getLivePaneAgentTitle = (): string | null => {
+    const state = useAppStore.getState()
+    const runtimeTitle = state.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    const tabTitle = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
+      (entry) => entry.id === deps.tabId
+    )?.title
+    return runtimeTitle ?? tabTitle ?? null
+  }
+  const hasFreshPaneAgentSurface = (): boolean => {
+    const state = useAppStore.getState()
+    const entry = state.agentStatusByPaneKey[cacheKey]
+    const now = Date.now()
+    const entryIsFresh =
+      entry &&
+      typeof entry.updatedAt === 'number' &&
+      now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+    if (entryIsFresh && entry.state !== 'done') {
+      return true
+    }
+    const liveTitle = getLivePaneAgentTitle()
+    return detectAgentStatusFromTitle(liveTitle ?? '') !== null
+  }
+  const observeAcceptedShellCommandInput = (data: string): void => {
+    if (commandInferredPaneAgent) {
+      return
+    }
+    // Why: bytes typed inside a live agent TUI are prompt text, not shell
+    // commands, even if they spell another agent binary name.
+    if (hasFreshPaneAgentSurface()) {
+      resetPendingShellCommandLine()
+      return
+    }
+    if (shellCommandInferenceSuspendedUntilCommandEnd) {
+      if (data.includes('\x03') || data.includes('\x15')) {
+        shellCommandInferenceSuspendedUntilCommandEnd = false
+        resetPendingShellCommandLine()
+      }
+      if (data.includes('\r') || data.includes('\n')) {
+        shellCommandInferenceSuspendedUntilCommandEnd = false
+      }
+      return
+    }
+    if (data.length > MANUAL_AGENT_COMMAND_MAX_CHARS) {
+      resetPendingShellCommandLine()
+      shellCommandInferenceSuspendedUntilCommandEnd = !data.includes('\r') && !data.includes('\n')
+      return
+    }
+    for (let index = 0; index < data.length; index += 1) {
+      const char = data[index]!
+      if (char === '\r' || char === '\n') {
+        shellCommandInferenceSuspendedUntilCommandEnd = false
+        rememberCommandInferredPaneAgent()
+        if (commandInferredPaneAgent) {
+          return
+        }
+        continue
+      }
+      if (char === '\x7f' || char === '\b') {
+        deletePendingShellCommandCharacter()
+        continue
+      }
+      if (char === '\x17') {
+        deletePendingShellCommandWord()
+        continue
+      }
+      if (char === '\x03' || char === '\x15') {
+        resetPendingShellCommandLine()
+        continue
+      }
+      if (char === '\x1b') {
+        const nextIndex = consumeShellCommandCsiSequence(data, index)
+        if (nextIndex !== null) {
+          index = nextIndex - 1
+          continue
+        }
+        resetPendingShellCommandLine()
+        continue
+      }
+      if (char < ' ') {
+        resetPendingShellCommandLine()
+        continue
+      }
+      if (char >= ' ') {
+        appendPendingShellCommandInput(char)
+        if (shellCommandInferenceSuspendedUntilCommandEnd) {
+          return
+        }
+      }
+    }
+  }
   const getAuthoritativePaneAgent = (): AgentType | undefined => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
@@ -1253,6 +1468,7 @@ export function connectPanePty(
       tab?.launchAgent ??
       paneStartup?.launchAgent ??
       paneStartup?.initialAgentStatus?.agent ??
+      commandInferredPaneAgent ??
       state.agentStatusByPaneKey[cacheKey]?.agentType
     )
   }
@@ -1522,6 +1738,7 @@ export function connectPanePty(
   }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandFinished: () => {
+      clearCommandInferredPaneAgentAfterPtySideEffects()
       // Why: the finished command may have moved HEAD or the index (e.g.
       // `git checkout`); nudge git UI now instead of waiting for a poll.
       dispatchTerminalCommandFinishedEvent(deps.worktreeId)
@@ -2192,6 +2409,7 @@ export function connectPanePty(
     }
   }
   const onAgentExited = (): void => {
+    clearCommandInferredPaneAgent()
     // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
     // the agent has exited. Clear any running cache timer so the sidebar doesn't
     // show a stale countdown for a tab that no longer has an active Claude session.
@@ -2461,6 +2679,11 @@ export function connectPanePty(
     // excluded because those transports do not expose sendInputAccepted.
     const acknowledgedIntent = intent ?? inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && transport.sendInputAccepted) {
+      if (acknowledgedIntent === 'ctrl-c') {
+        // Why: the accepted-write callback is async; let the next command be
+        // inferred if the user cancelled an oversized line and immediately typed.
+        cancelSuspendedShellCommandInference()
+      }
       clearPendingTerminalInputIntent()
       markTerminalInputSent()
       const writePromise = transport
@@ -2468,6 +2691,7 @@ export function connectPanePty(
         .then((accepted) => {
           if (accepted) {
             recordAcceptedTerminalInputForHibernation()
+            observeAcceptedShellCommandInput(data)
             observeAcceptedTerminalInput(data, acknowledgedIntent)
             interruptInference.observeInputIntent(acknowledgedIntent)
             observeTitleOnlyInterrupt()
@@ -2482,6 +2706,7 @@ export function connectPanePty(
     if (intent) {
       if (transport.sendInput(data)) {
         markAcceptedTerminalInputSent()
+        observeAcceptedShellCommandInput(data)
         observeAcceptedTerminalInput(data, intent)
       }
       clearPendingTerminalInputIntent()
@@ -2489,6 +2714,7 @@ export function connectPanePty(
     }
     if (transport.sendInput(data)) {
       markAcceptedTerminalInputSent()
+      observeAcceptedShellCommandInput(data)
       observeAcceptedTerminalInput(data)
       observeSentTerminalInputIntent(data)
     } else {

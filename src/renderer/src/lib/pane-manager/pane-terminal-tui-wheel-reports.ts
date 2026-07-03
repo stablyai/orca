@@ -67,6 +67,11 @@ function legacyVerticalWheelDelta(event: TerminalTuiWheelEventInput): number | n
   return null
 }
 
+function hasDiscreteLegacyWheelDelta(event: TerminalTuiWheelEventInput): boolean {
+  const legacyDelta = legacyVerticalWheelDelta(event)
+  return legacyDelta !== null && Math.abs(legacyDelta) >= LEGACY_MOUSE_WHEEL_DELTA_MIN
+}
+
 export function isDiscreteTerminalTuiWheelEvent(event: TerminalTuiWheelEventInput): boolean {
   if ((event.deltaMode ?? DOM_DELTA_PIXEL) !== DOM_DELTA_PIXEL) {
     return true
@@ -76,8 +81,21 @@ export function isDiscreteTerminalTuiWheelEvent(event: TerminalTuiWheelEventInpu
     return true
   }
 
-  const legacyDelta = legacyVerticalWheelDelta(event)
-  return legacyDelta !== null && Math.abs(legacyDelta) >= LEGACY_MOUSE_WHEEL_DELTA_MIN
+  return hasDiscreteLegacyWheelDelta(event)
+}
+
+function canBurstBoostWheelEvent(event: TerminalTuiWheelEventInput): boolean {
+  if ((event.deltaMode ?? DOM_DELTA_PIXEL) !== DOM_DELTA_PIXEL) {
+    return true
+  }
+
+  return hasDiscreteLegacyWheelDelta(event)
+}
+
+function isTrackpadLikePixelWheelEvent(event: TerminalTuiWheelEventInput): boolean {
+  return (
+    (event.deltaMode ?? DOM_DELTA_PIXEL) === DOM_DELTA_PIXEL && !hasDiscreteLegacyWheelDelta(event)
+  )
 }
 
 function wheelInputTime(event: TerminalTuiWheelEventInput): number | null {
@@ -130,6 +148,13 @@ function resolveBurstWheelDistanceRows(
   state: TerminalTuiMouseWheelDistanceState,
   distanceRows: number
 ): number {
+  if (!canBurstBoostWheelEvent(event)) {
+    state.fastStreak = 0
+    state.lastDistanceRows = null
+    state.lastInputAt = null
+    return 0
+  }
+
   const currentInputAt = wheelInputTime(event)
   if (currentInputAt === null) {
     state.fastStreak = 0
@@ -165,6 +190,26 @@ function resolveBurstWheelDistanceRows(
   return TUI_WHEEL_BURST_MAX_BONUS_ROWS * cadence * (state.fastStreak / TUI_WHEEL_BURST_RAMP_EVENTS)
 }
 
+function resolveTrackpadPixelWheelReportCount(
+  event: TerminalTuiWheelEventInput,
+  state: TerminalTuiMouseWheelDistanceState,
+  distanceRows: number
+): number | null {
+  if (!isTrackpadLikePixelWheelEvent(event)) {
+    return null
+  }
+
+  // Why: trackpad pixel streams map 1:1 to physical distance: one report per
+  // terminal row scrolled, fractional remainder carried. No per-event cap and
+  // no momentum-tail suppression: the input write queue batches whatever a
+  // busy frame accumulates into a single PTY write, so the TUI applies it at
+  // once instead of replaying it, and inertial scrolling stays real-time.
+  const totalRows = state.pendingRows + distanceRows
+  const reports = Math.trunc(totalRows)
+  state.pendingRows = totalRows - reports
+  return reports
+}
+
 export function normalizeTerminalTuiMouseWheelMultiplier(value: number | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER
@@ -193,6 +238,11 @@ export function resolveTerminalTuiMouseWheelReportCount(
   state.pendingDirection = direction
 
   const distanceRows = resolveWheelDistanceRows(event, metrics)
+  const trackpadReportCount = resolveTrackpadPixelWheelReportCount(event, state, distanceRows)
+  if (trackpadReportCount !== null) {
+    return trackpadReportCount
+  }
+
   const rows =
     Math.min(
       TUI_WHEEL_BURST_MAX_DISTANCE_ROWS_PER_EVENT,

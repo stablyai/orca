@@ -99,6 +99,14 @@ export type PtySpawnResult = {
   }
 }
 
+export type PtyProcessInfo = {
+  id: string
+  cwd: string
+  title: string
+  /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
+  terminalHandle?: string
+}
+
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   attach(id: string): Promise<void>
@@ -128,7 +136,7 @@ export type IPtyProvider = {
   getForegroundProcess(id: string): Promise<string | null>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
-  listProcesses(): Promise<{ id: string; cwd: string; title: string }[]>
+  listProcesses(): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: { id: string; data: string }) => void): () => void

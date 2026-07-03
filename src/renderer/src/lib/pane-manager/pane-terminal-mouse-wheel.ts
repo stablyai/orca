@@ -1,7 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import {
   createTerminalTuiMouseWheelDistanceState,
-  isDiscreteTerminalTuiWheelEvent,
   normalizeTerminalTuiMouseWheelMultiplier,
   resolveTerminalTuiMouseWheelReportCount,
   resolveTerminalWheelDirection
@@ -110,8 +109,7 @@ export function shouldMultiplyTerminalMouseWheel(
     isReplayedWheelEvent(event) ||
     !terminalElement?.classList.contains(XTERM_MOUSE_REPORTING_CLASS) ||
     event.deltaY === 0 ||
-    event.shiftKey ||
-    !isDiscreteTerminalTuiWheelEvent(event)
+    event.shiftKey
   ) {
     return false
   }
