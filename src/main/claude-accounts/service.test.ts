@@ -1106,12 +1106,17 @@ describe('ClaudeAccountService credential capture', () => {
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
+      pid: number
     }
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
+    child.pid = 4242
     const spawnMock = vi.fn(() => child)
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+    // Denial must tear down the whole detached login/browser tree (process-group kill on POSIX),
+    // not just the direct child — otherwise the orphaned auth processes the `detached` spawn guards against leak.
+    const killTree = vi.spyOn(process, 'kill').mockReturnValue(true)
 
     try {
       const { ClaudeAccountService } = await import('./service')
@@ -1137,12 +1142,14 @@ describe('ClaudeAccountService credential capture', () => {
       child.stderr.write('OAuth authorization failed: access_denied\n')
 
       await expect(commandPromise).rejects.toThrow('Claude sign-in was denied. Please try again.')
-      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(killTree).toHaveBeenCalledWith(-child.pid)
+      expect(child.kill).not.toHaveBeenCalled()
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
       expect(child.listenerCount('close')).toBe(0)
     } finally {
+      killTree.mockRestore()
       vi.doUnmock('node:child_process')
     }
   })

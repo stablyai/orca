@@ -929,7 +929,9 @@ export class ClaudeAccountService {
           output = output.slice(-MAX_COMMAND_OUTPUT_CHARS)
         }
         if (CLAUDE_AUTH_DENIED_PATTERN.test(output)) {
-          child.kill()
+          // Use killChild (not child.kill) so the whole login/browser tree is torn down on
+          // Windows (taskkill /t) and the detached POSIX group, matching the timeout/abort paths.
+          killChild()
           settle(() => rejectPromise(new Error('Claude sign-in was denied. Please try again.')))
         }
       }
