@@ -1,5 +1,8 @@
 import type { MarkdownTocItem } from './markdown-table-of-contents'
 
+// Why: must cover every level the TOC exposes (MarkdownTocLevel = 1-5). The
+// original bug was this selector stopping at h3 while the TOC listed h4/h5, so
+// those rows rendered but never resolved a heading to scroll to.
 const RICH_MARKDOWN_TOC_HEADING_SELECTOR = 'h1, h2, h3, h4, h5'
 
 export function findRichMarkdownTocHeadingTarget(
