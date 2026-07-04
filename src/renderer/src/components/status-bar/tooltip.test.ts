@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 vi.mock('@/lib/agent-catalog', () => ({
@@ -20,7 +21,8 @@ import {
   formatResetCountdown,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
-  getWindowSections
+  getWindowSections,
+  ProviderPanel
 } from './tooltip'
 
 function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
@@ -376,5 +378,28 @@ describe('getWindowSections', () => {
     expect(sections[0].label).toBe('Pro')
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')
+  })
+})
+
+describe('ProviderPanel reset rendering', () => {
+  it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
+    const p = provider({
+      status: 'ok',
+      session: null,
+      weekly: null,
+      fableWeekly: {
+        usedPercent: 62,
+        windowMinutes: 10080,
+        resetsAt: Date.now() + (6 * 24 + 17) * 60 * 60_000,
+        resetDescription: 'Jul 10 at 1:00 PM'
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('Fable')
+    expect(markup).toContain('Resets in 6d 17h')
   })
 })

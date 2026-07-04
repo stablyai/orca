@@ -244,6 +244,7 @@ describe('fetchViaPty', () => {
   it('parses the newer Claude weekly limits wording for Fable usage', async () => {
     const term = makeMockTerm()
     spawnMock.mockReturnValue(term)
+    vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
 
     const resultPromise = fetchViaPty()
 
@@ -262,16 +263,20 @@ describe('fetchViaPty', () => {
     `)
     await vi.advanceTimersByTimeAsync(2_000)
 
-    await expect(resultPromise).resolves.toMatchObject({
+    const result = await resultPromise
+
+    expect(result).toMatchObject({
       provider: 'claude',
       status: 'ok',
       session: {
         usedPercent: 82,
+        resetsAt: Date.now() + 2 * 60 * 60_000 + 10 * 60_000,
         resetDescription: '2h 10m'
       },
       weekly: null,
       fableWeekly: {
         usedPercent: 42,
+        resetsAt: Date.now() + 3 * 24 * 60 * 60_000 + 2 * 60 * 60_000,
         resetDescription: '3d 2h'
       },
       error: null
@@ -324,6 +329,7 @@ describe('fetchViaPty', () => {
   it('parses Claude current-week Fable usage as a distinct weekly window', async () => {
     const term = makeMockTerm()
     spawnMock.mockReturnValue(term)
+    vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
 
     const resultPromise = fetchViaPty()
 
@@ -337,11 +343,11 @@ describe('fetchViaPty', () => {
 
       Current week (all models)
       33% used
-      Resets Jul 3 at 12:59pm
+      Resets Jul 10 at 12:59pm
 
       Current week (Fable)
       62% used
-      Resets Jul 3 at 12:59pm
+      Resets Jul10at12:59pm(America/Los_Angeles)
     `)
     await vi.advanceTimersByTimeAsync(2_000)
 
@@ -354,11 +360,13 @@ describe('fetchViaPty', () => {
       },
       weekly: {
         usedPercent: 33,
-        resetDescription: 'Jul 3 at 12:59pm'
+        resetsAt: new Date(2026, 6, 10, 12, 59).getTime(),
+        resetDescription: 'Jul 10 at 12:59pm'
       },
       fableWeekly: {
         usedPercent: 62,
-        resetDescription: 'Jul 3 at 12:59pm'
+        resetsAt: Date.parse('2026-07-10T19:59:00.000Z'),
+        resetDescription: 'Jul 10 at 12:59pm (America/Los_Angeles'
       },
       error: null
     })
