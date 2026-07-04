@@ -12,7 +12,7 @@ describe('ResourceUsageStatusSegment session polling', () => {
     expect(source).not.toContain('SESSIONS_POLL_MS')
     expect(source.match(/window\.api\.pty\.listSessions\(\)/g) ?? []).toHaveLength(1)
 
-    const openEffectIndex = source.indexOf('if (!open || runtimeEnvironmentActive)')
+    const openEffectIndex = source.indexOf('if (!open)')
     const refreshIndex = source.indexOf('void refreshSessions()', openEffectIndex)
 
     // Why: pty.listSessions() is a global daemon inventory and can pause input

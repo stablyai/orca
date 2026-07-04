@@ -178,6 +178,7 @@ import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
+import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -1565,6 +1566,7 @@ app.whenReady().then(async () => {
 
   store = new Store()
   logStartupMilestone('store-loaded')
+  selfHealRuntimeEnvironmentFocus({ store, userDataPath: app.getPath('userData') })
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)

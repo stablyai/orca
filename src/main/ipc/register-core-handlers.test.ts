@@ -443,7 +443,7 @@ describe('registerCoreHandlers', () => {
     expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
-    expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalled()
+    expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
     expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store)
     expect(registerAiVaultHandlersMock).toHaveBeenCalledWith({
       getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths
