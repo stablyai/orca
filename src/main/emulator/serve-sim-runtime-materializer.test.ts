@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -89,14 +90,39 @@ describe('materializeServeSimRuntime', () => {
     await mkdir(join(targetRootDir, '1.0.0', 'dist'), { recursive: true })
     await writeFile(join(targetRootDir, '1.0.0', 'dist', 'serve-sim.js'), 'old')
 
-    materializeServeSimRuntime({
+    const materialized = materializeServeSimRuntime({
       bundledPackageDir,
       targetRootDir,
       version: '1.2.3',
       clearQuarantine: () => {}
     })
 
+    expect(materialized).toBe(join(targetRootDir, '1.2.3'))
     await expect(stat(join(targetRootDir, '1.0.0'))).rejects.toThrow()
+  })
+
+  it('tolerates a concurrent instance winning the rename', async () => {
+    const root = await createRoot()
+    const bundledPackageDir = await createBundledServeSimPackage(root)
+    const targetRootDir = join(root, 'runtime')
+    const targetDir = join(targetRootDir, '1.2.3')
+
+    // Simulate another instance finishing first: right before our rename, drop a
+    // complete target dir in place so renameSync fails but the entry exists.
+    const materialized = materializeServeSimRuntime({
+      bundledPackageDir,
+      targetRootDir,
+      version: '1.2.3',
+      clearQuarantine: () => {
+        mkdirSync(join(targetDir, 'dist'), { recursive: true })
+        writeFileSync(join(targetDir, 'dist', 'serve-sim.js'), 'winner')
+      }
+    })
+
+    expect(materialized).toBe(targetDir)
+    expect(await readFile(join(targetDir, 'dist', 'serve-sim.js'), 'utf8')).toBe('winner')
+    const leftovers = (await readdir(targetRootDir)).filter((name) => name.startsWith('.staging'))
+    expect(leftovers).toEqual([])
   })
 
   it('returns null and leaves no staging behind when quarantine clearing fails', async () => {
@@ -115,7 +141,6 @@ describe('materializeServeSimRuntime', () => {
 
     expect(materialized).toBeNull()
     await expect(stat(join(targetRootDir, '1.2.3'))).rejects.toThrow()
-    const { readdir } = await import('node:fs/promises')
     const leftovers = (await readdir(targetRootDir)).filter((name) => name.startsWith('.staging'))
     expect(leftovers).toEqual([])
   })

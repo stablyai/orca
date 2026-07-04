@@ -23,7 +23,9 @@ function defaultClearQuarantine(dir: string): void {
   // (an iOS-simulator binary Apple never Gatekeeper-tickets) into a simulator
   // process; if that copy is quarantined, syspolicyd malware-rejects the load.
   // Running from an unquarantined copy is what avoids the rejection (#6877).
-  execFileSync('/usr/bin/xattr', ['-cr', dir], { timeout: 30_000 })
+  // Remove only the quarantine attribute (not `-cr`, which strips every xattr);
+  // recursive `-d` exits 0 even for files that never had it.
+  execFileSync('/usr/bin/xattr', ['-rd', 'com.apple.quarantine', dir], { timeout: 30_000 })
 }
 
 function pruneStaleServeSimRuntimes(targetRootDir: string, keepVersion: string): void {
