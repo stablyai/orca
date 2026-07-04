@@ -10,7 +10,8 @@ describe('collectRuntimeDiagnosticCounts', () => {
       getRepos: () => [{}, {}],
       getAllWorktreeMeta: () => ({
         one: { hostId: 'local' },
-        two: { hostId: 'ssh' }
+        two: { hostId: 'ssh' },
+        three: {}
       }),
       getProjects: () => [],
       getProjectHostSetups: () => [],
@@ -41,12 +42,13 @@ describe('collectRuntimeDiagnosticCounts', () => {
 
     expect(collectRuntimeDiagnosticCounts(store)).toMatchObject({
       repoCount: 2,
-      worktreeCount: 2,
+      worktreeCount: 3,
       terminalTabCount: 2,
       terminalPaneCount: 4,
       runtimeHostCounts: {
         local: 1,
-        ssh: 1
+        ssh: 1,
+        'legacy-local': 1
       }
     })
   })

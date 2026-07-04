@@ -13,6 +13,7 @@ export function collectAppDiagnosticSummary(
     nodeVersion: process.versions.node,
     v8Version: process.versions.v8,
     pathRoles: {
+      // Why: real app paths can include usernames; diagnostics only need role labels.
       logs: 'app-logs',
       userData: 'app-user-data',
       crashDumps: 'app-crash-dumps'
