@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { statMock, readFileMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
@@ -18,6 +18,12 @@ vi.mock('os', () => ({
 import { getGhosttyThemeSearchDirs, resolveGhosttyThemeColors } from './theme-resolution'
 
 const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
+const originalGhosttyResourcesDir = process.env.GHOSTTY_RESOURCES_DIR
+
+beforeEach(() => {
+  delete process.env.XDG_CONFIG_HOME
+  delete process.env.GHOSTTY_RESOURCES_DIR
+})
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -25,6 +31,11 @@ afterEach(() => {
     process.env.XDG_CONFIG_HOME = originalXdgConfigHome
   } else {
     delete process.env.XDG_CONFIG_HOME
+  }
+  if (originalGhosttyResourcesDir !== undefined) {
+    process.env.GHOSTTY_RESOURCES_DIR = originalGhosttyResourcesDir
+  } else {
+    delete process.env.GHOSTTY_RESOURCES_DIR
   }
 })
 
@@ -39,11 +50,10 @@ selection-foreground = #eaeaea
 `
 
 describe('getGhosttyThemeSearchDirs', () => {
-  it('probes XDG, macOS app support, then the Ghostty.app resources dir', () => {
+  it('probes XDG, then the Ghostty.app resources dir', () => {
     delete process.env.XDG_CONFIG_HOME
     expect(getGhosttyThemeSearchDirs()).toEqual([
       '/Users/alice/.config/ghostty/themes',
-      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/themes',
       '/Applications/Ghostty.app/Contents/Resources/ghostty/themes'
     ])
   })
@@ -51,6 +61,14 @@ describe('getGhosttyThemeSearchDirs', () => {
   it('honors XDG_CONFIG_HOME for the custom themes dir', () => {
     process.env.XDG_CONFIG_HOME = '/xdg'
     expect(getGhosttyThemeSearchDirs()[0]).toBe('/xdg/ghostty/themes')
+  })
+
+  it('honors GHOSTTY_RESOURCES_DIR for bundled themes', () => {
+    process.env.GHOSTTY_RESOURCES_DIR = '/opt/ghostty'
+    expect(getGhosttyThemeSearchDirs()).toEqual([
+      '/Users/alice/.config/ghostty/themes',
+      '/opt/ghostty/themes'
+    ])
   })
 })
 
@@ -88,6 +106,20 @@ describe('resolveGhosttyThemeColors', () => {
     expect(result).toEqual({ background: '#1d1f21' })
   })
 
+  it('resolves absolute theme paths without searching named theme dirs', async () => {
+    statMock.mockImplementation(async (p: string) => {
+      if (p === '/Users/alice/themes/work') {
+        return { isFile: () => true, size: 64 }
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    readFileMock.mockResolvedValue('background = #1d1f21')
+
+    const result = await resolveGhosttyThemeColors('/Users/alice/themes/work')
+    expect(result).toEqual({ background: '#1d1f21' })
+    expect(statMock).toHaveBeenCalledTimes(1)
+  })
+
   it('drops non-color keys a theme file might carry', async () => {
     statMock.mockImplementation(async (p: string) => {
       if (p === '/Users/alice/.config/ghostty/themes/custom') {
@@ -118,5 +150,22 @@ describe('resolveGhosttyThemeColors', () => {
     statMock.mockImplementation(async () => ({ isFile: () => true, size: 10_000_000 }))
     expect(await resolveGhosttyThemeColors('huge')).toBeNull()
     expect(readFileMock).not.toHaveBeenCalled()
+    expect(statMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fall through when a shadowing theme path is invalid', async () => {
+    statMock.mockImplementation(async (p: string) => {
+      if (p === '/Users/alice/.config/ghostty/themes/night') {
+        return { isFile: () => false, size: 128 }
+      }
+      if (p === '/Applications/Ghostty.app/Contents/Resources/ghostty/themes/night') {
+        return { isFile: () => true, size: 128 }
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+
+    expect(await resolveGhosttyThemeColors('night')).toBeNull()
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(statMock).toHaveBeenCalledTimes(1)
   })
 })

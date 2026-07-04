@@ -62,6 +62,13 @@ function mergeParsedConfig(
   }
 }
 
+function usesConditionalThemePair(themeName: string): boolean {
+  return themeName
+    .split(',')
+    .map((part) => part.trim())
+    .some((part) => part.startsWith('light:') || part.startsWith('dark:'))
+}
+
 // Why: `theme = <name>` is how most Ghostty configs pick their colors, so
 // dropping it silently loses the entire palette. Resolve the referenced theme
 // file and merge its colors as defaults: explicit config keys win, and config
@@ -74,7 +81,7 @@ async function applyThemeReference(parsed: Record<string, string | string[]>): P
   delete parsed['theme']
 
   const themeName = (Array.isArray(rawTheme) ? (rawTheme.at(-1) ?? '') : rawTheme).trim()
-  if (themeName.includes('light:') || themeName.includes('dark:')) {
+  if (usesConditionalThemePair(themeName)) {
     return ['theme (light:/dark: pairs not supported)']
   }
 
