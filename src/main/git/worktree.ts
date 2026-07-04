@@ -121,6 +121,24 @@ function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
   )
 }
 
+// Why: unlike getErrorText (message + stderr only, shared by the classifiers
+// above), this also checks stdout — git can emit this fatal there depending
+// on how the caller's exec wrapper buckets streams — so it is a standalone
+// check rather than a getErrorText-based one.
+function isSubmoduleWorktreeRemovalError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  const parts: string[] = []
+  for (const key of ['message', 'stderr', 'stdout'] as const) {
+    const value = (error as Record<string, unknown>)[key]
+    if (typeof value === 'string') {
+      parts.push(value)
+    }
+  }
+  return /working trees? containing submodules cannot be moved or removed/i.test(parts.join('\n'))
+}
+
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
@@ -982,7 +1000,37 @@ export async function removeWorktree(
     args.push('--force')
   }
   args.push(worktreePath)
-  await gitExecFileAsync(args, gitExecOptions(repoPath, options))
+  try {
+    await gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, options),
+      // Why: git localizes this fatal via gettext, and the classifier below
+      // matches its English text. Pin the locale for just this invocation so
+      // a non-English LC_ALL/LC_MESSAGES on the host cannot silently defeat
+      // the match and skip the recovery below.
+      env: { ...process.env, LC_ALL: 'C', LC_MESSAGES: 'C' }
+    })
+  } catch (error) {
+    if (force || !isSubmoduleWorktreeRemovalError(error)) {
+      throw error
+    }
+    // Why: `git worktree remove` (builtin/worktree.c) refuses removal outright
+    // when the worktree has ANY populated submodule, even if it is otherwise
+    // clean — only `--force` bypasses that hardcoded check. Re-verify
+    // cleanliness ourselves with the stricter `--ignore-submodules=none`
+    // status check (which config like submodule.*.ignore or
+    // diff.ignoreSubmodules cannot defeat) before retrying with --force, so
+    // this auto-recovery can never discard uncommitted or untracked work —
+    // it only routes around git's blanket submodule refusal for a worktree
+    // we independently re-confirmed is clean immediately beforehand.
+    console.debug(
+      `[git] worktree remove blocked only by populated submodules; re-verifying cleanliness before retrying with --force: ${worktreePath}`
+    )
+    await assertWorktreeCleanForRemoval(worktreePath, false, options, { ignoreSubmodules: 'none' })
+    await gitExecFileAsync(
+      ['worktree', 'remove', '--force', worktreePath],
+      gitExecOptions(repoPath, options)
+    )
+  }
 
   if (!branchName) {
     return {}
@@ -1173,13 +1221,24 @@ async function isLocalBranchCheckedOut(
 export async function assertWorktreeCleanForRemoval(
   worktreePath: string,
   force = false,
-  options: GitWorktreeExecOptions = {}
+  options: GitWorktreeExecOptions = {},
+  // Why: the default (no ignoreSubmodules) preflight can be defeated by
+  // submodule.*.ignore / diff.ignoreSubmodules config reporting a dirty
+  // submodule as clean. The auto-force retry in removeWorktree opts into the
+  // stricter `--ignore-submodules=none` re-assert immediately before forcing,
+  // since that path is about to bypass git's own safety check entirely.
+  statusOptions: { ignoreSubmodules?: 'none' } = {}
 ): Promise<void> {
   if (force) {
     return
   }
 
-  const { stdout } = await gitExecFileAsync(['status', '--porcelain', '--untracked-files=all'], {
+  const statusArgs = ['status', '--porcelain', '--untracked-files=all']
+  if (statusOptions.ignoreSubmodules) {
+    statusArgs.push(`--ignore-submodules=${statusOptions.ignoreSubmodules}`)
+  }
+
+  const { stdout } = await gitExecFileAsync(statusArgs, {
     ...gitExecOptions(worktreePath, options)
   })
   if (!stdout.trim()) {
