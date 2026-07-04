@@ -283,6 +283,23 @@ describe('spawnSystemSsh', () => {
     expect(args).toContain('deploy@127.0.0.1')
   })
 
+  it('requests GSSAPI authentication explicitly for manual targets', () => {
+    const args = buildSshArgs(
+      createTarget({ source: 'manual', configHost: 'krb.example.com', gssapiAuthentication: true })
+    )
+
+    expect(args).toContain('GSSAPIAuthentication=yes')
+  })
+
+  it('leaves GSSAPI to the Host block for ssh-config targets', () => {
+    const args = buildSshArgs(
+      createTarget({ configHost: 'krb-host', source: 'ssh-config', gssapiAuthentication: true })
+    )
+
+    expect(args).not.toContain('GSSAPIAuthentication=yes')
+    expect(args).toContain('deploy@krb-host')
+  })
+
   it('does not inject Orca ControlMaster flags when ssh config already owns muxing', () => {
     const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }), {
       resolvedConfig: createResolvedConfig({

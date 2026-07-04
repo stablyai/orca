@@ -24,6 +24,7 @@ import {
   isAuthError,
   isAgentFallbackError,
   isSystemSshFallbackError,
+  isGssapiSystemSshFallbackCandidate,
   isPassphraseError,
   sleep,
   buildConnectConfig,
@@ -342,6 +343,20 @@ export class SshConnection {
       await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
       return
     }
+    // Why: ssh2 has no gssapi-with-mic support, so hosts that explicitly
+    // request GSSAPIAuthentication try Kerberos SSO via the system OpenSSH
+    // binary first. OpenSSH still permits other methods when GSSAPI fails
+    // (e.g. no ticket), so fall through to ssh2 where credential prompts work.
+    if (this.target.gssapiAuthentication === true) {
+      try {
+        await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
+        return
+      } catch (probeErr) {
+        if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
+          throw probeErr
+        }
+      }
+    }
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
 
@@ -438,6 +453,24 @@ export class SshConnection {
               }
             }
           }
+        }
+      }
+
+      // Why: a Kerberos ticket may authenticate where keys did not; try the
+      // system ssh binary before falling back to interactive prompts.
+      if (isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        try {
+          await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
+          return
+        } catch {
+          this.systemSshResolvedConfig = null
+          this.systemSshControlMasterDisabledForSession = false
+          this.useSystemSshTransport = false
+        }
+        if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
+          throw authError
         }
       }
 

@@ -227,6 +227,34 @@ describe('SshConnectionStore', () => {
       )
     })
 
+    it('refreshes gssapiAuthentication on sync', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'krb-box',
+        configHost: 'krb-box',
+        host: 'krb.example.com',
+        port: 22,
+        username: 'dev',
+        source: 'ssh-config'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'krb-box' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({
+          configHost: 'krb-box',
+          host: 'krb.example.com',
+          username: 'dev',
+          gssapiAuthentication: true
+        })
+      ])
+
+      sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).toHaveBeenCalledWith(
+        'ssh-1',
+        expect.objectContaining({ gssapiAuthentication: true })
+      )
+    })
+
     it('never overwrites a manual target that owns the alias', () => {
       mockStore.addSshTarget({
         id: 'ssh-m',

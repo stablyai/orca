@@ -222,6 +222,25 @@ describe('system SSH transport integration', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'connects GSSAPI-flagged targets through system ssh without the force override',
+    async () => {
+      delete process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT
+      const conn = new SshConnection(
+        { ...makeTarget(), gssapiAuthentication: true },
+        { onStateChange: vi.fn() }
+      )
+      await conn.connect()
+      try {
+        expect(conn.usesSystemSshTransport()).toBe(true)
+        expect(conn.getState().status).toBe('connected')
+      } finally {
+        await conn.disconnect()
+      }
+    },
+    20_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'uploads a directory through the system ssh stdin/stdout path',
     async () => {
       const source = join(tempDir, 'source')

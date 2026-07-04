@@ -53,6 +53,12 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     args.push('-o', 'IdentitiesOnly=yes')
   }
 
+  if (!useConfigHost && target.gssapiAuthentication) {
+    // Why: manual targets bypass ssh_config, so Kerberos auth must be
+    // requested explicitly; config-backed hosts inherit it from their entry.
+    args.push('-o', 'GSSAPIAuthentication=yes')
+  }
+
   if (!useConfigHost && target.jumpHost) {
     args.push('-J', target.jumpHost)
   }

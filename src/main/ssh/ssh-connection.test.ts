@@ -911,6 +911,101 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(false)
   })
 
+  it('tries system SSH first for targets that explicitly request GSSAPI authentication', async () => {
+    const conn = new SshConnection(createTarget({ gssapiAuthentication: true }), createCallbacks())
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(clientInstances).toHaveLength(0)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gssapiAuthentication: true }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      { wrapCommand: false }
+    )
+  })
+
+  it('falls back to ssh2 when the GSSAPI-first system SSH attempt fails', async () => {
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'Permission denied (gssapi-with-mic,publickey)')
+    )
+    const conn = new SshConnection(createTarget({ gssapiAuthentication: true }), createCallbacks())
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(clientInstances).toHaveLength(1)
+  })
+
+  it('falls back to system SSH after an ssh2 auth failure when resolved config enables GSSAPI', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'All configured authentication methods failed'
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(
+      createTarget({ configHost: 'krb-host' }),
+      createCallbacks({ onCredentialRequest })
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(onCredentialRequest).not.toHaveBeenCalled()
+  })
+
+  it('connects through the GSSAPI fallback without credential callbacks (headless)', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'All configured authentication methods failed'
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    const conn = new SshConnection(createTarget({ configHost: 'krb-host' }), createCallbacks())
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
+  it('keeps prompting for credentials when the GSSAPI fallback probe fails', async () => {
+    connectSequence = [new Error('All configured authentication methods failed'), 'ready']
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'Permission denied (gssapi-with-mic,password)')
+    )
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(
+      createTarget({ configHost: 'krb-host' }),
+      createCallbacks({ onCredentialRequest })
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'password', expect.any(String))
+  })
+
+  it('does not try system SSH for auth failures when resolved config leaves GSSAPI off', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'All configured authentication methods failed'
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false })
+    )
+    const conn = new SshConnection(createTarget({ configHost: 'plain-host' }), createCallbacks())
+
+    await expect(conn.connect()).rejects.toThrow('All configured authentication methods failed')
+    expect(conn.getState().status).toBe('auth-failed')
+    expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
+  })
+
   it('passes the detected host platform to system SSH file operations', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
