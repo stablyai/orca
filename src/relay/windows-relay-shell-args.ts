@@ -5,6 +5,8 @@ import {
 
 const WINDOWS_POWERSHELL_SAFE_MODE_ENV = 'ORCA_WINDOWS_POWERSHELL_SAFE_MODE'
 
+// Why: safe mode must stay per launch so one relay session cannot force
+// profile-free PowerShell startup for unrelated sessions in the same process.
 function shouldLaunchWindowsPowerShellWithoutProfile(env: Record<string, string>): boolean {
   return env[WINDOWS_POWERSHELL_SAFE_MODE_ENV] === '1'
 }
@@ -25,6 +27,8 @@ export function getWindowsRelayShellArgs(
       ...(shouldLaunchWindowsPowerShellWithoutProfile(env) ? ['-NoProfile'] : []),
       '-NoExit',
       '-EncodedCommand',
+      // Why: EncodedCommand only primes OSC133; startup commands are sent after
+      // shell readiness so profiles can load before user commands run.
       encodePowerShellCommand(getPowerShellOsc133Bootstrap())
     ]
   }
