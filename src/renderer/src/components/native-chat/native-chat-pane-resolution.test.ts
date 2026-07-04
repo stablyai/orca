@@ -190,11 +190,39 @@ describe('resolveNativeChatSession', () => {
     ).toBeNull()
   })
 
+  it('does not fall back to a supported title agent when live status is unsupported', () => {
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    expect(
+      resolveNativeChatSession({
+        paneKey,
+        launchAgent: null,
+        agentStatusEntry: entry({
+          paneKey,
+          agentType: 'gemini',
+          providerSession: { key: 'session_id', id: 'g-1' }
+        }),
+        resolvedAgent: 'codex',
+        ptyId: 'pty-1'
+      })
+    ).toBeNull()
+  })
+
   it('does not resolve an unsupported launch agent', () => {
     expect(
       resolveNativeChatSession({
         paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
         launchAgent: 'grok',
+        ptyId: 'pty-1'
+      })
+    ).toBeNull()
+  })
+
+  it('does not fall back to a supported title agent when launchAgent is unsupported', () => {
+    expect(
+      resolveNativeChatSession({
+        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+        launchAgent: 'grok',
+        resolvedAgent: 'codex',
         ptyId: 'pty-1'
       })
     ).toBeNull()

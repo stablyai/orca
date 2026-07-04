@@ -33,7 +33,7 @@ function renderResolution(
   )
 }
 
-describe('NativeChatView session gate', () => {
+describe('NativeChatSessionGate', () => {
   afterEach(() => {
     cleanup()
   })
