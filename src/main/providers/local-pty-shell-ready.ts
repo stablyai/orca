@@ -406,8 +406,10 @@ function getWrappedShellLaunchConfig(
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],
-      env: {},
-      supportsReadyMarker: false
+      env: {
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
+      },
+      supportsReadyMarker: options.emitReadyMarker
     }
   }
 

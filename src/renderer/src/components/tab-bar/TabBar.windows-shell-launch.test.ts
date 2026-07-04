@@ -362,7 +362,10 @@ describe('TabBar PowerShell launch wiring', () => {
           isAvailable: vi.fn().mockResolvedValue(false),
           listDistros: vi.fn().mockResolvedValue([])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(true) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(true),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -434,7 +437,10 @@ describe('TabBar PowerShell launch wiring', () => {
           isAvailable: vi.fn().mockResolvedValue(true),
           listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -501,7 +507,10 @@ describe('TabBar PowerShell launch wiring', () => {
           isAvailable: vi.fn().mockResolvedValue(true),
           listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(true) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(true),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(true) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -550,7 +559,10 @@ describe('TabBar PowerShell launch wiring', () => {
           isAvailable: vi.fn().mockResolvedValue(true),
           listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -607,7 +619,10 @@ describe('TabBar PowerShell launch wiring', () => {
           isAvailable: vi.fn().mockResolvedValue(true),
           listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -662,7 +677,10 @@ describe('TabBar PowerShell launch wiring', () => {
           isAvailable: vi.fn().mockResolvedValue(false),
           listDistros: vi.fn().mockResolvedValue([])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(true) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -852,7 +870,10 @@ describe('TabBar PowerShell launch wiring', () => {
           isAvailable: vi.fn().mockResolvedValue(false),
           listDistros: vi.fn().mockResolvedValue([])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'linux' }) }
       }

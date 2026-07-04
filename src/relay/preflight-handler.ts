@@ -4,9 +4,10 @@ import { promisify } from 'node:util'
 import path, { win32 } from 'node:path'
 import type { RelayDispatcher } from './dispatcher'
 import { buildRelayCommandEnv } from './relay-command-env'
-import { isPwshAvailable } from '../main/pwsh'
+import { getPwshAvailabilityDiagnostic, isPwshAvailable } from '../main/pwsh'
 import { isWslAvailable, listWslDistros } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
+import type { WindowsPowerShellResolutionDiagnostic } from '../shared/windows-powershell-executable'
 
 const execFileAsync = promisify(execFile)
 
@@ -64,12 +65,14 @@ export class PreflightHandler {
     wslAvailable: boolean
     wslDistros: string[]
     pwshAvailable: boolean
+    pwshDiagnostic: WindowsPowerShellResolutionDiagnostic | null
     gitBashAvailable: boolean
     hostPlatform: NodeJS.Platform | null
   }> {
-    const [wslAvailable, pwshAvailable, gitBashAvailable] = await Promise.all([
+    const [wslAvailable, pwshAvailable, pwshDiagnostic, gitBashAvailable] = await Promise.all([
       Promise.resolve(isWslAvailable()).catch(() => false),
       Promise.resolve(isPwshAvailable()).catch(() => false),
+      Promise.resolve(getPwshAvailabilityDiagnostic()).catch(() => null),
       Promise.resolve(isGitBashAvailable()).catch(() => false)
     ])
     const wslDistros = wslAvailable ? await Promise.resolve(listWslDistros()).catch(() => []) : []
@@ -77,6 +80,7 @@ export class PreflightHandler {
       wslAvailable,
       wslDistros,
       pwshAvailable,
+      pwshDiagnostic,
       gitBashAvailable,
       hostPlatform: process.platform
     }

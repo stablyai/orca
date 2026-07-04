@@ -170,17 +170,23 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const effectiveCols = restoreInfo?.cols ?? opts.cols
     const effectiveRows = restoreInfo?.rows ?? opts.rows
 
-    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+    const supportsShellReadyBarrier = opts.command
+      ? supportsPtyStartupBarrier(opts.env ?? {}, { shellOverride: opts.shellOverride })
+      : false
     const isCodexStartupCommand =
       recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
-    const shouldWaitForShellReady =
-      isCodexStartupCommand &&
-      shouldUseShellReadyStartupDelivery({
-        command: opts.command,
-        startupCommandDelivery: opts.startupCommandDelivery
-      })
+    const shouldUseShellReadyDelivery = shouldUseShellReadyStartupDelivery({
+      command: opts.command,
+      startupCommandDelivery: opts.startupCommandDelivery
+    })
+    const shellReadySupported = supportsShellReadyBarrier
+    // Why: Windows PowerShell marker delivery keeps Session's 15s default
+    // timeout. This short override only bounds legacy Codex non-delivery paths.
     const shellReadyTimeoutMs =
-      shellReadySupported && isCodexStartupCommand && !shouldWaitForShellReady
+      shellReadySupported &&
+      process.platform !== 'win32' &&
+      isCodexStartupCommand &&
+      !shouldUseShellReadyDelivery
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 

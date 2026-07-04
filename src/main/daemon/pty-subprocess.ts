@@ -17,7 +17,10 @@ import {
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
-import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
+import {
+  resolveWindowsShellLaunchArgs,
+  shouldLaunchWindowsPowerShellWithoutProfile
+} from '../providers/windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -41,6 +44,11 @@ import {
 } from '../pty/powerlevel10k-wizard-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import {
+  formatWindowsPowerShellCrashCorrelationHint,
+  formatWindowsPowerShellSpawnDiagnostic,
+  getWindowsPowerShellFallbackStartupDelivery
+} from '../../shared/windows-powershell-spawn-diagnostics'
 import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
 import {
   isAgentForegroundWrapperProcess,
@@ -54,6 +62,7 @@ import {
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
+import { isPowerShellExecutableName } from '../powershell-osc133-bootstrap'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -164,6 +173,10 @@ function getWslContextFromPreferredDistro(
 ): { distro: string } | undefined {
   const trimmed = distro?.trim()
   return trimmed ? { distro: trimmed } : undefined
+}
+
+function isWindowsPowerShellPath(shellPath: string): boolean {
+  return isPowerShellExecutableName(pathWin32.basename(shellPath))
 }
 
 /**
@@ -470,6 +483,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   shellArgs: string[]
   spawnCwd: string
   env: Record<string, string>
+  sessionId: string
   cols: number
   rows: number
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
@@ -480,13 +494,24 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   startupCommandDeliveredInShellArgs?: boolean
 } {
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
-    const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+    let spawnEnv = args.env
+    // Why: only the PowerShell bootstrap consumes this marker. cmd.exe and
+    // other fallback shells would inherit stale marker state, so strip it.
+    if (
+      process.platform === 'win32' &&
+      !isWindowsPowerShellPath(shellPath) &&
+      args.env.ORCA_SHELL_READY_MARKER === '1'
+    ) {
+      spawnEnv = { ...args.env }
+      delete spawnEnv.ORCA_SHELL_READY_MARKER
+    }
+    const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, spawnEnv)
     return pty.spawn(wrapped.file, wrapped.args, {
-      name: args.env.TERM ?? 'xterm-256color',
+      name: spawnEnv.TERM ?? 'xterm-256color',
       cols: args.cols,
       rows: args.rows,
       cwd,
-      env: args.env,
+      env: spawnEnv,
       // Why: bundled ConPTY has the modern wrap-marker behavior xterm expects;
       // legacy system ConPTY can corrupt full-width TUI rows in scrollback.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
@@ -509,7 +534,23 @@ function spawnDaemonPtyWithWindowsFallback(args: {
         const process = spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
         const message = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
         console.warn(
-          `[daemon/pty] Primary shell "${args.shellPath}" failed (${message}), fell back to "${attempt.shellPath}"`
+          [
+            `[daemon/pty] Primary shell "${args.shellPath}" failed (${message}), fell back to "${attempt.shellPath}"`,
+            formatWindowsPowerShellSpawnDiagnostic({
+              sessionId: args.sessionId,
+              fallbackFromShellPath: args.shellPath,
+              shellPath: attempt.shellPath,
+              startupDelivery: getWindowsPowerShellFallbackStartupDelivery({
+                shellReadyMarker: args.env.ORCA_SHELL_READY_MARKER,
+                startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
+              }),
+              safeModeNoProfile: args.env.ORCA_WINDOWS_POWERSHELL_SAFE_MODE === '1'
+            }),
+            formatWindowsPowerShellCrashCorrelationHint({
+              sessionId: args.sessionId,
+              shellPath: args.shellPath
+            })
+          ].join('; ')
         )
         return {
           process,
@@ -587,6 +628,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
+  const windowsPowerShellLaunchOptions = {
+    powerShellNoProfile: shouldLaunchWindowsPowerShellWithoutProfile(env)
+  }
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   const requestedCwd = opts.cwd || getDefaultCwd()
@@ -637,7 +681,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       cwd: spawnCwd,
       defaultCwd: getDefaultCwd(),
       wslContext: sessionWslContext ?? preferredWslContext,
-      startupCommand: opts.command
+      startupCommand: opts.command,
+      launchOptions: windowsPowerShellLaunchOptions
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
@@ -652,7 +697,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         spawnCwd,
         getDefaultCwd(),
         sessionWslContext ?? preferredWslContext,
-        opts.command
+        opts.command,
+        windowsPowerShellLaunchOptions
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
@@ -663,6 +709,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // Why: Git for Windows login startup files otherwise cd to $HOME,
       // ignoring node-pty's cwd for repo-scoped terminals.
       env.CHERE_INVOKING ??= '1'
+    }
+    if (opts.command && !startupCommandDeliveredInShellArgs && isWindowsPowerShellPath(shellPath)) {
+      // Why: PowerShell startup payloads are written only after the OSC marker;
+      // putting them in -EncodedCommand exercises ConsoleHost's crashy path.
+      env.ORCA_SHELL_READY_MARKER = '1'
     }
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
@@ -685,7 +736,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
               {
                 distro: codexHomeWslInfo.distro
               },
-              opts.command
+              opts.command,
+              windowsPowerShellLaunchOptions
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
@@ -784,6 +836,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellArgs,
       spawnCwd,
       env,
+      sessionId: opts.sessionId,
       cols: size.cols,
       rows: size.rows,
       windowsFallbackAttempts

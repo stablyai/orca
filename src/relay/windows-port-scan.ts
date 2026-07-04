@@ -4,6 +4,7 @@ import { getProcessOutputFields } from '../shared/process-output-field-scanner'
 import { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 import type { DetectedPort } from './port-scan-handler'
 import { buildRelayCommandEnv } from './relay-command-env'
+import { resolveWindowsPowerShellExecutablePath } from '../shared/windows-powershell-executable'
 
 const SYSTEM_PORTS_TO_EXCLUDE = new Set([22])
 const MAX_DETECTED_PORTS = 50
@@ -54,14 +55,23 @@ async function runWindowsPortScanPowerShell(signal?: AbortSignal): Promise<strin
   ].join('\n')
   const encoded = encodePowerShellCommand(script)
   const lastError: unknown[] = []
+  const env = buildRelayCommandEnv()
+  const powershell = resolveWindowsPowerShellExecutablePath('powershell.exe', {
+    env,
+    platform: 'win32'
+  })
+  const pwsh = resolveWindowsPowerShellExecutablePath('pwsh.exe', { env, platform: 'win32' })
+  const binaries = [powershell ?? 'powershell.exe', pwsh].filter(
+    (binary): binary is string => typeof binary === 'string'
+  )
 
-  for (const binary of ['powershell.exe', 'pwsh.exe']) {
+  for (const binary of binaries) {
     try {
       const { stdout } = await execFileAsync(
         binary,
         ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
         {
-          env: buildRelayCommandEnv(),
+          env,
           encoding: 'utf-8',
           maxBuffer: 1024 * 1024,
           signal,

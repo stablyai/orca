@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
+import type { WindowsPowerShellResolutionDiagnostic } from '../../../../shared/windows-powershell-executable'
 import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN,
@@ -27,6 +28,7 @@ type TerminalAdvancedSectionProps = {
   searchQuery: string
   showWindowsPowerShellImplementation: boolean
   pwshAvailable?: boolean
+  pwshDiagnostic?: WindowsPowerShellResolutionDiagnostic | null
   isMac: boolean
 }
 
@@ -42,6 +44,7 @@ export function TerminalAdvancedSection({
   searchQuery,
   showWindowsPowerShellImplementation,
   pwshAvailable,
+  pwshDiagnostic,
   isMac
 }: TerminalAdvancedSectionProps): React.JSX.Element {
   const scrollbackRows = normalizeDesktopTerminalScrollbackRows(settings.terminalScrollbackRows)
@@ -59,6 +62,9 @@ export function TerminalAdvancedSection({
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackRows}` : 'custom'
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
+  // Why: WindowsApps pwsh.exe aliases cannot be launched by ConPTY and were
+  // the crash path behind the rc.2.perf terminal startup failures.
+  const pwshAliasOnly = pwshDiagnostic?.reason === 'alias_only'
   const commitScrollbackRowsDraft = (): void => {
     const trimmed = scrollbackRowsDraft.trim()
     const value = Number(trimmed)
@@ -237,6 +243,11 @@ export function TerminalAdvancedSection({
                   translate(
                     'auto.components.settings.TerminalPane.5ed5c95344',
                     'Choose between Windows PowerShell and PowerShell 7+ for new terminal panes.'
+                  )
+                ) : pwshAliasOnly ? (
+                  translate(
+                    'auto.components.settings.TerminalPane.09762e5861',
+                    'PowerShell 7+ was found only as a WindowsApps alias. Orca will use Windows PowerShell until a real PowerShell 7+ install is available.'
                   )
                 ) : (
                   <>

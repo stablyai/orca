@@ -1,5 +1,6 @@
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { WindowsPowerShellResolutionDiagnostic } from '../../../shared/windows-powershell-executable'
 import type { WindowsTerminalCapabilities } from './windows-terminal-capabilities'
 
 export type WindowsTerminalCapabilityLoadTarget = RuntimeClientTarget
@@ -24,12 +25,14 @@ export async function readWindowsTerminalCapabilities(
       .then((capabilities) => ({
         ...capabilities,
         wslDistros: capabilities.wslDistros ?? [],
+        pwshDiagnostic: capabilities.pwshDiagnostic ?? null,
         isLoading: false
       }))
       .catch(() => ({
         wslAvailable: false,
         wslDistros: [],
         pwshAvailable: false,
+        pwshDiagnostic: null,
         gitBashAvailable: false,
         hostPlatform: null,
         isLoading: false
@@ -37,28 +40,36 @@ export async function readWindowsTerminalCapabilities(
   }
 
   if (target.kind === 'local') {
-    const [wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform] =
-      await Promise.all([
-        window.api.wsl.isAvailable().catch(() => false),
-        window.api.wsl.listDistros().catch(() => []),
-        window.api.pwsh.isAvailable().catch(() => false),
-        window.api.gitBash.isAvailable().catch(() => false),
-        window.api.runtime
-          .getStatus()
-          .then((status) => status.hostPlatform ?? null)
-          .catch(() => null)
-      ])
+    const [
+      wslAvailable,
+      wslDistros,
+      pwshAvailable,
+      pwshDiagnostic,
+      gitBashAvailable,
+      hostPlatform
+    ] = await Promise.all([
+      window.api.wsl.isAvailable().catch(() => false),
+      window.api.wsl.listDistros().catch(() => []),
+      window.api.pwsh.isAvailable().catch(() => false),
+      window.api.pwsh.getDiagnostic().catch(() => null),
+      window.api.gitBash.isAvailable().catch(() => false),
+      window.api.runtime
+        .getStatus()
+        .then((status) => status.hostPlatform ?? null)
+        .catch(() => null)
+    ])
     return {
       wslAvailable,
       wslDistros,
       pwshAvailable,
+      pwshDiagnostic,
       gitBashAvailable,
       hostPlatform,
       isLoading: false
     }
   }
 
-  const [wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform] =
+  const [wslAvailable, wslDistros, pwshAvailable, pwshDiagnostic, gitBashAvailable, hostPlatform] =
     await Promise.all([
       callRuntimeRpc<boolean>(target, 'host.wsl.isAvailable', undefined, {
         timeoutMs: 15_000
@@ -69,6 +80,14 @@ export async function readWindowsTerminalCapabilities(
       callRuntimeRpc<boolean>(target, 'host.pwsh.isAvailable', undefined, {
         timeoutMs: 15_000
       }).catch(() => false),
+      callRuntimeRpc<WindowsPowerShellResolutionDiagnostic>(
+        target,
+        'host.pwsh.getDiagnostic',
+        undefined,
+        {
+          timeoutMs: 15_000
+        }
+      ).catch(() => null),
       callRuntimeRpc<boolean>(target, 'host.gitBash.isAvailable', undefined, {
         timeoutMs: 15_000
       }).catch(() => false),
@@ -80,6 +99,7 @@ export async function readWindowsTerminalCapabilities(
     wslAvailable,
     wslDistros,
     pwshAvailable,
+    pwshDiagnostic,
     gitBashAvailable,
     hostPlatform,
     isLoading: false

@@ -1547,7 +1547,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('embeds short PowerShell startup commands in the Windows shell launch', () => {
+  it('defers short PowerShell startup commands to the shell-ready path', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1572,8 +1572,180 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     const encoded = String(lastCall[1][3])
     const command = Buffer.from(encoded, 'base64').toString('utf16le')
-    expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain("& 'codex' '--no-alt-screen'")
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+    expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
+  it('launches Windows PowerShell safe mode without embedding startup commands', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: "& 'codex' '--no-alt-screen'",
+        env: {
+          ORCA_WINDOWS_POWERSHELL_SAFE_MODE: '1'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual([
+      '-NoLogo',
+      '-NoProfile',
+      '-NoExit',
+      '-EncodedCommand',
+      expect.any(String)
+    ])
+    const command = Buffer.from(String(lastCall[1][4]), 'base64').toString('utf16le')
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain("& 'codex' '--no-alt-screen'")
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+  })
+
+  it('defers delivery-hinted Windows PowerShell startup commands to PTY stdin', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: "& 'codex' '--prefill' 'linked issue context'",
+        startupCommandDelivery: 'shell-ready'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    const encoded = String(lastCall[1][3])
+    const command = Buffer.from(encoded, 'base64').toString('utf16le')
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain("& 'codex' '--prefill' 'linked issue context'")
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+    expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
+  it('defers Windows PowerShell Codex native prefill startup commands to PTY stdin', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: "codex --prefill 'linked issue context'"
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    const encoded = String(lastCall[1][3])
+    const command = Buffer.from(encoded, 'base64').toString('utf16le')
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain("codex --prefill 'linked issue context'")
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+    expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
+  it('embeds deferred startup commands when Windows PowerShell falls back to cmd.exe', () => {
+    const proc = mockPtyProcess()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const startupCommand = "& 'codex' '--prefill' 'linked issue context'"
+    const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('ConPTY rejected PowerShell')
+    })
+    spawnMock.mockReturnValue(proc)
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: startupCommand,
+        startupCommandDelivery: 'shell-ready'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls[0]?.[0]).toBe(WINDOWS_POWERSHELL_ABS)
+    expect(spawnMock.mock.calls[1]?.[0]).toBe(CMD_ABS)
+    expect(spawnMock.mock.calls[1]?.[1]).toEqual(['/K', `chcp 65001 > nul & ${startupCommand}`])
+    expect(spawnMock.mock.calls[1]?.[2].env.ORCA_SHELL_READY_MARKER).toBeUndefined()
     expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).toContain('startupDelivery=shell-args')
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).not.toContain('cwd=')
+    warnMock.mockRestore()
+  })
+
+  it('reports no startup delivery when Windows PowerShell fallback has no command', () => {
+    const proc = mockPtyProcess()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('ConPTY rejected PowerShell')
+    })
+    spawnMock.mockReturnValue(proc)
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls[0]?.[0]).toBe(WINDOWS_POWERSHELL_ABS)
+    expect(spawnMock.mock.calls[1]?.[0]).toBe(CMD_ABS)
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).toContain('startupDelivery=none')
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).not.toContain('cwd=')
+    warnMock.mockRestore()
   })
 
   it('keeps oversized Windows startup commands on PTY stdin delivery', () => {
@@ -2029,12 +2201,21 @@ describe('createPtySubprocess', () => {
     }
 
     const spawnCall = spawnMock.mock.calls.at(-1)!
+    const spawnEnv = spawnCall[2].env
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(spawnCall[1]).toEqual(expect.any(Array))
-    expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
+    expect(spawnMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          ORCA_TERMINAL_HANDLE: 'term_wsl'
+        })
+      })
+    )
     // Why: the daemon inherits optional agent-hook env in development. This
     // test owns only the terminal handle and Powerlevel10k WSLENV contract.
-    expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
+    expect(spawnEnv.WSLENV?.split(':')).toEqual(
       expect.arrayContaining(['FOO/u', 'ORCA_TERMINAL_HANDLE/u', POWERLEVEL10K_WIZARD_DISABLE_ENV])
     )
   })

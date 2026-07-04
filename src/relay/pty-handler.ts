@@ -12,6 +12,7 @@ import {
   getForegroundProcessName,
   listShellProfiles
 } from './pty-shell-utils'
+import { resolveWindowsPowerShellShellPath } from './windows-powershell-shell'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
@@ -38,6 +39,16 @@ async function loadPty(): Promise<typeof NodePty | null> {
   } catch {
     return null
   }
+}
+
+function isWindowsPowerShellRelayShell(shellPath: string): boolean {
+  const shellName = shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase()
+  return (
+    shellName === 'powershell.exe' ||
+    shellName === 'powershell' ||
+    shellName === 'pwsh.exe' ||
+    shellName === 'pwsh'
+  )
 }
 
 type ManagedPty = {
@@ -154,7 +165,11 @@ function resolvePtyShellOverride(shellOverride: string): string {
   if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
     throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
   }
-  return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
+  return (
+    resolveWindowsGitBashShellPath(shellOverride) ??
+    resolveWindowsPowerShellShellPath(shellOverride) ??
+    shellOverride
+  )
 }
 
 type PtyProcessSummary = {
@@ -559,13 +574,18 @@ export class PtyHandler {
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
+    const isWindowsPowerShellStartup =
+      process.platform === 'win32' &&
+      launchCommandHint !== undefined &&
+      isWindowsPowerShellRelayShell(shell)
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
-      shouldUseShellReadyStartupDelivery({
-        command: launchCommandHint,
-        startupCommandDelivery:
-          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
-      })
+      (isWindowsPowerShellStartup ||
+        shouldUseShellReadyStartupDelivery({
+          command: launchCommandHint,
+          startupCommandDelivery:
+            params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+        }))
     // Why: renderer- and provider-delivered startup commands both use this
     // marker; the side responsible for delivery also strips it from output.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {

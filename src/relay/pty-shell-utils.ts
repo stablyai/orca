@@ -16,6 +16,7 @@ import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground
 } from '../main/providers/windows-agent-foreground-process'
+import { resolveWindowsPowerShellShellPath } from './windows-powershell-shell'
 
 const execFile = promisify(execFileCb)
 
@@ -28,11 +29,25 @@ type ProcessRow = {
 
 export function resolveWindowsDefaultShell(
   env: NodeJS.ProcessEnv = process.env,
-  existsPath: (path: string) => boolean = existsSync
+  existsPath: (path: string) => boolean = existsSync,
+  isRealPowerShellExecutable?: (path: string) => boolean
 ): string {
+  const powerShellResolveOptions = isRealPowerShellExecutable
+    ? { isRealExecutable: isRealPowerShellExecutable }
+    : undefined
   const envShell = env.SHELL
-  if (envShell && existsPath(envShell)) {
-    return envShell
+  if (envShell) {
+    const resolvedPowerShell = resolveWindowsPowerShellShellPath(
+      envShell,
+      env,
+      powerShellResolveOptions
+    )
+    if (resolvedPowerShell) {
+      return resolvedPowerShell
+    }
+    if (existsPath(envShell)) {
+      return envShell
+    }
   }
 
   const systemRoot = env.SystemRoot || env.WINDIR || env.windir || 'C:\\Windows'
@@ -43,8 +58,16 @@ export function resolveWindowsDefaultShell(
     'v1.0',
     'powershell.exe'
   )
-  if (existsPath(windowsPowerShell)) {
-    return windowsPowerShell
+  const resolvedWindowsPowerShell = resolveWindowsPowerShellShellPath(
+    windowsPowerShell,
+    env,
+    powerShellResolveOptions
+  )
+  if (
+    resolvedWindowsPowerShell &&
+    pathWin32.basename(resolvedWindowsPowerShell).toLowerCase() !== 'cmd.exe'
+  ) {
+    return resolvedWindowsPowerShell
   }
 
   const comspec = env.ComSpec || env.COMSPEC

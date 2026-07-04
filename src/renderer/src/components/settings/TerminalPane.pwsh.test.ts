@@ -299,6 +299,37 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(link?.props.href).toBe('https://github.com/PowerShell/PowerShell/releases/latest')
   })
 
+  it('explains when PowerShell 7+ is only a WindowsApps alias', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackRows: 5_000,
+        terminalWindowsShell: 'powershell.exe',
+        terminalWindowsPowerShellImplementation: 'auto',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      wslAvailable: false,
+      pwshAvailable: false,
+      pwshDiagnostic: {
+        family: 'pwsh.exe',
+        resolvedPath: null,
+        candidateCount: 1,
+        rejectedAliasCandidates: [
+          'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'
+        ],
+        searchedPath: true,
+        reason: 'alias_only'
+      },
+      gitBashAvailable: false
+    })
+
+    const text = collectText(element)
+    expect(text).toContain('PowerShell 7+ was found only as a WindowsApps alias')
+    expect(text).not.toContain('Download PowerShell 7+')
+  })
+
   it('does not show WSL as a Windows default shell option when available', () => {
     const element = TerminalPane({
       settings: {

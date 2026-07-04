@@ -13,8 +13,8 @@ import {
 
 const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
-const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
+const WINDOWS_POWERSHELL_SAFE_MODE_ENV = 'ORCA_WINDOWS_POWERSHELL_SAFE_MODE'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
@@ -44,6 +44,16 @@ export type WindowsShellWslContext = {
   treatPosixCwdAsWsl?: boolean
 }
 
+export type WindowsShellLaunchOptions = {
+  powerShellNoProfile?: boolean
+}
+
+export function shouldLaunchWindowsPowerShellWithoutProfile(
+  env?: Record<string, string | undefined>
+): boolean {
+  return env?.[WINDOWS_POWERSHELL_SAFE_MODE_ENV] === '1'
+}
+
 /**
  * Returns a startup command that is safe to embed in cmd.exe launch args.
  *
@@ -54,6 +64,8 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
   if (!command || command.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
     return null
   }
+  // Why: this is already a shell command payload that would otherwise be
+  // written to PTY stdin; escaping metacharacters would change its behavior.
   const commandArg = `${CMD_UTF8_SETUP_COMMAND} & ${command}`
   if (commandArg.length > CMD_EXE_COMMAND_LINE_MAX_CHARS) {
     return null
@@ -61,33 +73,8 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
   return command
 }
 
-/**
- * Builds the PowerShell -EncodedCommand payload for startup bootstrap.
- *
- * Short startup commands are appended to the bootstrap and marked as delivered;
- * large payloads return the bootstrap alone so stdin delivery remains available.
- */
-function getPowerShellEncodedCommand(startupCommand?: string): {
-  encodedCommand: string
-  startupCommandDeliveredInShellArgs?: boolean
-} {
-  const bootstrap = getPowerShellOsc133Bootstrap()
-  if (!startupCommand || startupCommand.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
-    return { encodedCommand: encodePowerShellCommand(bootstrap) }
-  }
-
-  const command = `${bootstrap}\n${startupCommand}`
-  const encodedCommand = encodePowerShellCommand(command)
-  // Why: -EncodedCommand expands UTF-16 text into base64; keep a conservative
-  // margin under Windows CreateProcess' 32,767-character command line limit.
-  if (encodedCommand.length > POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS) {
-    return { encodedCommand: encodePowerShellCommand(bootstrap) }
-  }
-
-  return {
-    encodedCommand,
-    startupCommandDeliveredInShellArgs: true
-  }
+function getPowerShellBootstrapEncodedCommand(): string {
+  return encodePowerShellCommand(getPowerShellOsc133Bootstrap())
 }
 
 /**
@@ -121,9 +108,9 @@ function normalizeMsysDrivePath(cwd: string): string {
 /** Build the argv + effective cwd for a Windows shell launch.
  *
  *  - cmd.exe: `/K chcp 65001 > nul` so multi-byte CJK output renders correctly.
- *  - powershell.exe / pwsh.exe: dot-source $PROFILE and force UTF-8 I/O so
- *    oh-my-posh / starship / PSReadLine keep working. `-NoExit` alone would
- *    skip the profile.
+ *  - powershell.exe / pwsh.exe: run the OSC bootstrap after normal profiles
+ *    unless safe mode asks for -NoProfile. Startup payloads are never appended
+ *    to -EncodedCommand; callers write them after the ready marker instead.
  *  - wsl.exe: translate the Windows cwd to /mnt/<drive>/... and enter the
  *    distro user's login shell.
  *  - anything else: no args, same cwd. */
@@ -132,7 +119,8 @@ export function resolveWindowsShellLaunchArgs(
   cwd: string,
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
-  startupCommand?: string
+  startupCommand?: string,
+  options?: WindowsShellLaunchOptions
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = normalizeMsysDrivePath(cwd)
@@ -154,14 +142,17 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    const powerShellCommand = getPowerShellEncodedCommand(startupCommand)
     // Why: foreground-process status on Windows depends on OSC 133 C/D, and
-    // PowerShell needs a prompt/readline bootstrap after profiles finish.
+    // startup payloads in -EncodedCommand hit ConsoleHost's initialCommand
+    // path, the crash path behind the rc.2.perf pwsh failures.
     return {
-      shellArgs: ['-NoLogo', '-NoExit', '-EncodedCommand', powerShellCommand.encodedCommand],
-      ...(powerShellCommand.startupCommandDeliveredInShellArgs
-        ? { startupCommandDeliveredInShellArgs: true }
-        : {}),
+      shellArgs: [
+        '-NoLogo',
+        ...(options?.powerShellNoProfile ? ['-NoProfile'] : []),
+        '-NoExit',
+        '-EncodedCommand',
+        getPowerShellBootstrapEncodedCommand()
+      ],
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd
     }

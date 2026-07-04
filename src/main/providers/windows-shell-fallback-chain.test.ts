@@ -77,4 +77,28 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
       expect(pathWin32.isAbsolute(attempt.shellPath)).toBe(true)
     }
   })
+
+  it('keeps startup commands out of PowerShell links but embeds them in cmd.exe fallback', () => {
+    restorePlatform = setPlatform('win32')
+    const startupCommand = "& 'codex' '--prefill' 'linked issue context'"
+    const attempts = buildWindowsPowerShellSpawnAttempts({
+      shellPath: 'pwsh.exe',
+      cwd: 'C:\\repo',
+      defaultCwd: 'C:\\Users\\dev',
+      startupCommand,
+      resolveOptions: {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
+      }
+    })
+
+    expect(attempts.map((a) => a.startupCommandDeliveredInShellArgs)).toEqual([false, false, true])
+    for (const attempt of attempts.slice(0, 2)) {
+      const encoded = String(attempt.shellArgs.at(-1))
+      const command = Buffer.from(encoded, 'base64').toString('utf16le')
+      expect(command).not.toContain(startupCommand)
+    }
+    expect(attempts[2].shellArgs).toEqual(['/K', `chcp 65001 > nul & ${startupCommand}`])
+  })
 })

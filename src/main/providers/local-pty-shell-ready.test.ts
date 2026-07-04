@@ -228,6 +228,22 @@ const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
 
+describe('local PTY shell-ready PowerShell support', () => {
+  it('marks PowerShell launch configs as marker-capable when requested', async () => {
+    const { getAttributionShellLaunchConfig, getShellReadyLaunchConfig } =
+      await importFreshLocalPtyShellReady()
+
+    const readyConfig = getShellReadyLaunchConfig('pwsh.exe')
+    expect(readyConfig.supportsReadyMarker).toBe(true)
+    expect(readyConfig.env.ORCA_SHELL_READY_MARKER).toBe('1')
+    expect(readyConfig.args).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
+
+    const attributionConfig = getAttributionShellLaunchConfig('powershell.exe')
+    expect(attributionConfig.supportsReadyMarker).toBe(false)
+    expect(attributionConfig.env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+})
+
 function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
   const rcfile = join(tempDir, 'bash-osc133-rcfile')
   writeFileSync(rcfile, rcfileContent)

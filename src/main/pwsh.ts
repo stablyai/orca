@@ -1,8 +1,15 @@
 import { execFile, execFileSync } from 'node:child_process'
 
+import {
+  getWindowsPowerShellResolutionDiagnostic,
+  resolveWindowsPowerShellExecutablePath,
+  type WindowsPowerShellResolutionDiagnostic
+} from '../shared/windows-powershell-executable'
+
 const PWSH_SYNC_PROBE_TIMEOUT_MS = 5000
 const PWSH_WARMUP_PROBE_TIMEOUT_MS = 30_000
 const PWSH_NEGATIVE_CACHE_TTL_MS = 30_000
+const PWSH_EXECUTABLE_NAME = 'pwsh.exe'
 
 type PwshAvailabilityCache =
   | { available: true }
@@ -33,13 +40,28 @@ function cachePwshProbeFailure(error: unknown): void {
     pwshAvailableCache = null
     return
   }
+  pwshAvailableCache = { available: false, cachedAt: Date.now(), retryable: false }
+}
+
+function resolvePwshProbeExecutablePath(): string | null {
+  // Why: availability probing must use the same real-executable resolver as
+  // terminal launch so WindowsApps aliases cannot crash before fallback logic.
+  const executablePath = resolveWindowsPowerShellExecutablePath(PWSH_EXECUTABLE_NAME)
+  if (executablePath) {
+    return executablePath
+  }
   pwshAvailableCache = { available: false, cachedAt: Date.now(), retryable: true }
+  return null
+}
+
+export function getPwshAvailabilityDiagnostic(): WindowsPowerShellResolutionDiagnostic {
+  return getWindowsPowerShellResolutionDiagnostic(PWSH_EXECUTABLE_NAME)
 }
 
 /**
  * Check whether pwsh.exe is available on this Windows machine.
- * Positive results are cached for the process lifetime; negative results are
- * retried so transient cold-start failures cannot outlive the daemon.
+ * Positive results are cached for the process lifetime. Missing executables
+ * are retried, but non-timeout launch failures fail closed for this process.
  */
 export function isPwshAvailable(): boolean {
   if (pwshAvailableCache && isCacheFresh(pwshAvailableCache)) {
@@ -51,8 +73,13 @@ export function isPwshAvailable(): boolean {
     return false
   }
 
+  const executablePath = resolvePwshProbeExecutablePath()
+  if (!executablePath) {
+    return false
+  }
+
   try {
-    execFileSync('pwsh.exe', ['-Version'], {
+    execFileSync(executablePath, ['-Version'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: PWSH_SYNC_PROBE_TIMEOUT_MS
     })
@@ -65,8 +92,8 @@ export function isPwshAvailable(): boolean {
 }
 
 export function warmPwshAvailabilityCache(): Promise<boolean> {
-  if (pwshAvailableCache?.available) {
-    return Promise.resolve(true)
+  if (pwshAvailableCache && isCacheFresh(pwshAvailableCache)) {
+    return Promise.resolve(pwshAvailableCache.available)
   }
   if (process.platform !== 'win32') {
     pwshAvailableCache = { available: false, cachedAt: Date.now(), retryable: false }
@@ -76,8 +103,13 @@ export function warmPwshAvailabilityCache(): Promise<boolean> {
     return pwshWarmupInFlight
   }
 
+  const executablePath = resolvePwshProbeExecutablePath()
+  if (!executablePath) {
+    return Promise.resolve(false)
+  }
+
   pwshWarmupInFlight = new Promise((resolve) => {
-    execFile('pwsh.exe', ['-Version'], { timeout: PWSH_WARMUP_PROBE_TIMEOUT_MS }, (error) => {
+    execFile(executablePath, ['-Version'], { timeout: PWSH_WARMUP_PROBE_TIMEOUT_MS }, (error) => {
       pwshWarmupInFlight = null
       if (!error) {
         pwshAvailableCache = { available: true }

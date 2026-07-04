@@ -257,6 +257,7 @@ import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-a
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { WindowsPowerShellResolutionDiagnostic } from '../shared/windows-powershell-executable'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -583,6 +584,7 @@ export type PreflightApi = {
     wslAvailable: boolean
     wslDistros: string[]
     pwshAvailable: boolean
+    pwshDiagnostic: WindowsPowerShellResolutionDiagnostic | null
     gitBashAvailable: boolean
     hostPlatform: NodeJS.Platform | null
   }>
@@ -2885,6 +2887,7 @@ export type PreloadApi = {
   }
   pwsh: {
     isAvailable: () => Promise<boolean>
+    getDiagnostic: () => Promise<WindowsPowerShellResolutionDiagnostic>
   }
   gitBash: {
     isAvailable: () => Promise<boolean>

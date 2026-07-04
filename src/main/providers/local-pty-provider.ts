@@ -4,7 +4,10 @@ tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) 
 files without a cleaner ownership seam. */
 import { basename, delimiter } from 'node:path'
 import { win32 as pathWin32 } from 'node:path'
-import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import {
+  resolveWindowsShellLaunchArgs,
+  shouldLaunchWindowsPowerShellWithoutProfile
+} from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -55,6 +58,7 @@ import { resolveAgentForegroundProcess } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import { isPowerShellExecutableName } from '../powershell-osc133-bootstrap'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -253,6 +257,10 @@ function getSpawnedShellName(shellPath: string): string {
   return process.platform === 'win32' ? pathWin32.basename(shellPath) : basename(shellPath)
 }
 
+function isWindowsPowerShellPath(shellPath: string): boolean {
+  return isPowerShellExecutableName(pathWin32.basename(shellPath))
+}
+
 /**
  * Disposes the native PTY handle while avoiding recycled-pid signals on POSIX.
  */
@@ -368,6 +376,9 @@ export class LocalPtyProvider implements IPtyProvider {
     let validationCwd: string
     let startupCommandDeliveredInShellArgs = false
     let windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts> = []
+    const windowsPowerShellLaunchOptions = {
+      powerShellNoProfile: shouldLaunchWindowsPowerShellWithoutProfile(args.env)
+    }
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
@@ -432,7 +443,8 @@ export class LocalPtyProvider implements IPtyProvider {
         cwd,
         defaultCwd,
         wslContext: worktreeWslContext ?? preferredWslContext,
-        startupCommand: args.command
+        startupCommand: args.command,
+        launchOptions: windowsPowerShellLaunchOptions
       })
       const primaryAttempt = windowsFallbackAttempts[0]
       if (primaryAttempt) {
@@ -447,7 +459,8 @@ export class LocalPtyProvider implements IPtyProvider {
           cwd,
           defaultCwd,
           worktreeWslContext ?? preferredWslContext,
-          args.command
+          args.command,
+          windowsPowerShellLaunchOptions
         )
         shellArgs = resolved.shellArgs
         effectiveCwd = resolved.effectiveCwd
@@ -584,6 +597,16 @@ export class LocalPtyProvider implements IPtyProvider {
     ) {
       addWslEnvKeys(finalEnv, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
     }
+    if (
+      process.platform === 'win32' &&
+      args.command &&
+      !startupCommandDeliveredInShellArgs &&
+      isWindowsPowerShellPath(shellPath)
+    ) {
+      // Why: PowerShell startup payloads are delivered after the marker, not
+      // via -EncodedCommand's initialCommand path that can crash ConsoleHost.
+      finalEnv.ORCA_SHELL_READY_MARKER = '1'
+    }
     if (!wslInfo && process.platform !== 'win32') {
       // Why: OpenCode/Codex path restoration and OMP's typed-command status
       // wrapper need shell-ready code after user startup files run.
@@ -673,6 +696,14 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     if (args.command && getFallbackShellReadyConfig) {
       shellReadyLaunch = getFallbackShellReadyConfig(shellPath)
+    }
+    if (
+      process.platform === 'win32' &&
+      args.command &&
+      !startupCommandDeliveredInShellArgs &&
+      isWindowsPowerShellPath(shellPath)
+    ) {
+      shellReadyLaunch = { args: null, env: {}, supportsReadyMarker: true }
     }
 
     if (process.platform !== 'win32') {

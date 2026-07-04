@@ -8,6 +8,7 @@ import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { WindowsPowerShellResolutionDiagnostic } from '../shared/windows-powershell-executable'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
@@ -497,7 +498,9 @@ const api = {
   },
 
   pwsh: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('pwsh:isAvailable')
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('pwsh:isAvailable'),
+    getDiagnostic: (): Promise<WindowsPowerShellResolutionDiagnostic> =>
+      ipcRenderer.invoke('pwsh:getDiagnostic')
   },
 
   gitBash: {
@@ -1850,6 +1853,7 @@ const api = {
       wslAvailable: boolean
       wslDistros: string[]
       pwshAvailable: boolean
+      pwshDiagnostic: WindowsPowerShellResolutionDiagnostic | null
       gitBashAvailable: boolean
       hostPlatform: NodeJS.Platform | null
     }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)

@@ -1,5 +1,5 @@
 import { defineMethod, type RpcMethod } from '../core'
-import { isPwshAvailable } from '../../../pwsh'
+import { getPwshAvailabilityDiagnostic, isPwshAvailable } from '../../../pwsh'
 import { isWslAvailable, listWslDistros } from '../../../wsl'
 import { isGitBashAvailable } from '../../../git-bash'
 
@@ -23,6 +23,11 @@ export const HOST_CAPABILITY_METHODS: RpcMethod[] = [
     name: 'host.pwsh.isAvailable',
     params: null,
     handler: async () => isPwshAvailable()
+  }),
+  defineMethod({
+    name: 'host.pwsh.getDiagnostic',
+    params: null,
+    handler: async () => getPwshAvailabilityDiagnostic()
   }),
   defineMethod({
     name: 'host.gitBash.isAvailable',

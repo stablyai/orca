@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import type { WindowsPowerShellResolutionDiagnostic } from '../../../../shared/windows-powershell-executable'
 import { Separator } from '../ui/separator'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
@@ -37,6 +38,8 @@ type TerminalPaneProps = {
   wslCapabilitiesLoading?: boolean
   /** Whether PowerShell 7+ (pwsh.exe) is installed on this Windows machine. */
   pwshAvailable?: boolean
+  /** Diagnostic for why pwsh.exe is or is not launchable by ConPTY. */
+  pwshDiagnostic?: WindowsPowerShellResolutionDiagnostic | null
   /** Whether Git for Windows bash.exe is installed on this machine. */
   gitBashAvailable?: boolean
   /** Whether the active terminal host is Windows, even if the client is not. */
@@ -49,6 +52,7 @@ export function TerminalPane({
   scrollbackMode,
   setScrollbackMode,
   pwshAvailable,
+  pwshDiagnostic,
   gitBashAvailable = false,
   isWindowsTerminalHost
 }: TerminalPaneProps): React.JSX.Element {
@@ -116,6 +120,7 @@ export function TerminalPane({
         searchQuery={searchQuery}
         showWindowsPowerShellImplementation={showWindowsPowerShellImplementation}
         pwshAvailable={pwshAvailable}
+        pwshDiagnostic={pwshDiagnostic}
         isMac={isMac}
       />
     ) : null

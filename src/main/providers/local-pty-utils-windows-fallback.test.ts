@@ -44,7 +44,7 @@ const ACCESS_DENIED_5 = 'Cannot create process, error code: 5'
 describe('spawnShellWithFallback on Windows', () => {
   it('repro: recovers when the primary PowerShell spawn fails with error code 5', () => {
     restorePlatform = setPlatform('win32')
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const attempts: WindowsShellSpawnAttempt[] = [
       makeAttempt(PWSH7),
@@ -84,11 +84,13 @@ describe('spawnShellWithFallback on Windows', () => {
       attempts[1].shellArgs,
       expect.objectContaining({ cwd: 'C:\\repo', useConptyDll: true })
     )
+    expect(String(warnMock.mock.calls[0]?.[0])).toContain('startupDelivery=none')
+    expect(String(warnMock.mock.calls[0]?.[0])).not.toContain('cwd=')
   })
 
   it('falls all the way through to cmd.exe and surfaces its argv-delivery flag', () => {
     restorePlatform = setPlatform('win32')
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const attempts: WindowsShellSpawnAttempt[] = [
       makeAttempt(PWSH7),
@@ -112,13 +114,23 @@ describe('spawnShellWithFallback on Windows', () => {
       cols: 80,
       rows: 24,
       cwd: 'C:\\repo',
-      env: {},
+      env: { ORCA_SHELL_READY_MARKER: '1' },
       ptySpawn,
       windowsFallbackAttempts: attempts
     })
 
     expect(result.shellPath).toBe(CMD)
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(ptySpawn).toHaveBeenNthCalledWith(
+      3,
+      CMD,
+      attempts[2].shellArgs,
+      expect.objectContaining({
+        env: expect.not.objectContaining({ ORCA_SHELL_READY_MARKER: '1' })
+      })
+    )
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).toContain('startupDelivery=shell-args')
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).not.toContain('cwd=')
   })
 
   it('throws a descriptive error when every Windows fallback fails', () => {

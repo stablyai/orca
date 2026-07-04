@@ -13,6 +13,16 @@ import {
   selectWindowsTerminalCapabilitiesForOwner,
   useWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
+import type { WindowsPowerShellResolutionDiagnostic } from '../../../shared/windows-powershell-executable'
+
+const RESOLVED_PWSH_DIAGNOSTIC: WindowsPowerShellResolutionDiagnostic = {
+  family: 'pwsh.exe',
+  resolvedPath: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+  candidateCount: 1,
+  rejectedAliasCandidates: [],
+  searchedPath: true,
+  reason: 'resolved'
+}
 
 function stubTerminalCapabilityApi(args: {
   wslAvailable: boolean
@@ -20,16 +30,21 @@ function stubTerminalCapabilityApi(args: {
   wslDistros?: string[]
   gitBashAvailable?: boolean
   hostPlatform?: NodeJS.Platform | null
+  pwshDiagnostic?: WindowsPowerShellResolutionDiagnostic | null
 }): {
   wslIsAvailable: ReturnType<typeof vi.fn>
   wslListDistros: ReturnType<typeof vi.fn>
   pwshIsAvailable: ReturnType<typeof vi.fn>
+  pwshGetDiagnostic: ReturnType<typeof vi.fn>
   isGitBashAvailable: ReturnType<typeof vi.fn>
   runtimeGetStatus: ReturnType<typeof vi.fn>
 } {
   const wslIsAvailable = vi.fn().mockResolvedValue(args.wslAvailable)
   const wslListDistros = vi.fn().mockResolvedValue(args.wslDistros ?? [])
   const pwshIsAvailable = vi.fn().mockResolvedValue(args.pwshAvailable)
+  const pwshGetDiagnostic = vi
+    .fn()
+    .mockResolvedValue('pwshDiagnostic' in args ? args.pwshDiagnostic : RESOLVED_PWSH_DIAGNOSTIC)
   const isGitBashAvailable = vi.fn().mockResolvedValue(args.gitBashAvailable ?? false)
   const runtimeGetStatus = vi
     .fn()
@@ -38,13 +53,20 @@ function stubTerminalCapabilityApi(args: {
   vi.stubGlobal('window', {
     api: {
       wsl: { isAvailable: wslIsAvailable, listDistros: wslListDistros },
-      pwsh: { isAvailable: pwshIsAvailable },
+      pwsh: { isAvailable: pwshIsAvailable, getDiagnostic: pwshGetDiagnostic },
       gitBash: { isAvailable: isGitBashAvailable },
       runtime: { getStatus: runtimeGetStatus }
     }
   })
 
-  return { wslIsAvailable, wslListDistros, pwshIsAvailable, isGitBashAvailable, runtimeGetStatus }
+  return {
+    wslIsAvailable,
+    wslListDistros,
+    pwshIsAvailable,
+    pwshGetDiagnostic,
+    isGitBashAvailable,
+    runtimeGetStatus
+  }
 }
 
 describe('windows terminal capabilities', () => {
@@ -77,6 +99,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: false,
       wslDistros: [],
       pwshAvailable: false,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: null,
       isLoading: false
@@ -86,6 +109,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: RESOLVED_PWSH_DIAGNOSTIC,
       gitBashAvailable: true,
       hostPlatform: 'win32',
       isLoading: false
@@ -108,7 +132,7 @@ describe('windows terminal capabilities', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: wslIsAvailable, listDistros: vi.fn().mockResolvedValue([]) },
-        pwsh: { isAvailable: pwshIsAvailable },
+        pwsh: { isAvailable: pwshIsAvailable, getDiagnostic: vi.fn().mockResolvedValue(null) },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -118,6 +142,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: [],
       pwshAvailable: false,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
@@ -130,7 +155,7 @@ describe('windows terminal capabilities', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: wslIsAvailable, listDistros: vi.fn().mockResolvedValue([]) },
-        pwsh: { isAvailable: pwshIsAvailable },
+        pwsh: { isAvailable: pwshIsAvailable, getDiagnostic: vi.fn().mockResolvedValue(null) },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -155,7 +180,7 @@ describe('windows terminal capabilities', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: wslIsAvailable, listDistros: vi.fn().mockResolvedValue([]) },
-        pwsh: { isAvailable: pwshIsAvailable },
+        pwsh: { isAvailable: pwshIsAvailable, getDiagnostic: vi.fn().mockResolvedValue(null) },
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -186,7 +211,10 @@ describe('windows terminal capabilities', () => {
           isAvailable: vi.fn().mockResolvedValue(false),
           listDistros: vi.fn().mockResolvedValue([])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: isGitBashAvailable },
         runtime: { getStatus: runtimeGetStatus }
       }
@@ -274,6 +302,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: true,
       hostPlatform: 'win32'
     })
@@ -294,6 +323,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: true,
       hostPlatform: 'win32',
       isLoading: false
@@ -306,6 +336,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: true,
       hostPlatform: 'win32',
       isLoading: false
@@ -342,6 +373,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: true,
       hostPlatform: 'win32',
       isLoading: false
@@ -351,6 +383,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: true,
       hostPlatform: 'win32',
       isLoading: false
@@ -359,6 +392,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: false,
       wslDistros: [],
       pwshAvailable: false,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: null,
       isLoading: false
@@ -370,6 +404,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
@@ -379,6 +414,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
@@ -431,6 +467,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
@@ -448,6 +485,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
@@ -456,6 +494,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: false,
       wslDistros: [],
       pwshAvailable: false,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: null,
       isLoading: false
@@ -527,6 +566,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: false,
       wslDistros: [],
       pwshAvailable: false,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: null,
       isLoading: false
@@ -548,6 +588,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: false,
       wslDistros: [],
       pwshAvailable: false,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: null,
       isLoading: false
@@ -565,7 +606,10 @@ describe('windows terminal capabilities', () => {
           isAvailable: vi.fn().mockResolvedValue(false),
           listDistros: vi.fn().mockResolvedValue([])
         },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        pwsh: {
+          isAvailable: vi.fn().mockResolvedValue(false),
+          getDiagnostic: vi.fn().mockResolvedValue(null)
+        },
         gitBash: { isAvailable: isGitBashAvailable },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -583,6 +627,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: false,
       wslDistros: [],
       pwshAvailable: false,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: null,
       isLoading: false
@@ -596,7 +641,7 @@ describe('windows terminal capabilities', () => {
     vi.stubGlobal('window', {
       api: {
         wsl: { isAvailable: wslIsAvailable, listDistros: vi.fn().mockResolvedValue([]) },
-        pwsh: { isAvailable: pwshIsAvailable },
+        pwsh: { isAvailable: pwshIsAvailable, getDiagnostic: vi.fn().mockResolvedValue(null) },
         gitBash: { isAvailable: isGitBashAvailable },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
       }
@@ -606,6 +651,7 @@ describe('windows terminal capabilities', () => {
       wslAvailable: false,
       wslDistros: [],
       pwshAvailable: false,
+      pwshDiagnostic: null,
       gitBashAvailable: false,
       hostPlatform: 'win32',
       isLoading: false
