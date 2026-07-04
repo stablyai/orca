@@ -17,6 +17,7 @@ vi.mock('./transcript-reader', async (importOriginal) => {
   }
 })
 
+import { isTextBlock } from '../../shared/native-chat-types'
 import {
   clearNativeChatTranscriptCache,
   readNativeChatTranscriptCached
@@ -91,10 +92,10 @@ describe('readNativeChatTranscriptCached', () => {
   })
 
   // Why: two worktrees can present the SAME (agent, sessionId) via different
-  // transcript files — e.g. the same session resumed/forked into a second
-  // worktree, re-homed under the new cwd's slug. Keying the cache by sessionId
-  // let one worktree's cached parse be served to the other whenever their file
-  // mtimes coincided, leaking A's chat transcript into C's panel (#7326).
+  // transcript files — e.g. the same session resumed into a second worktree,
+  // which writes a new transcript file. Keying the cache by sessionId let one
+  // worktree's cached parse be served to the other whenever their file mtimes
+  // coincided, leaking A's chat transcript into C's panel (#7326).
   it('never serves one file’s parse for a different file that shares a sessionId', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-xwt-'))
     tempRoots.push(root)
@@ -132,8 +133,8 @@ describe('readNativeChatTranscriptCached', () => {
       'messages' in result
         ? result.messages
             .flatMap((message) => message.blocks)
-            .filter((block) => block.type === 'text')
-            .map((block) => (block.type === 'text' ? block.text : ''))
+            .filter(isTextBlock)
+            .map((block) => block.text)
             .join(' ')
         : ''
 

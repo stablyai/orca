@@ -10,9 +10,9 @@ import { readNativeChatTranscript, type ReadTranscriptResult } from './transcrip
 // against this runtime's home). Keying by connection instead would defeat the
 // multi-client case this feature targets and multiply memory by the connection
 // count. The key is the resolved file path, NOT `agent:sessionId`: two panes can
-// share one sessionId yet resolve to DIFFERENT files (the same session
-// resumed/forked into a second worktree, re-homed under the new cwd's slug), and
-// a sessionId-only key let one worktree's cached parse be served to another when
+// share one sessionId yet resolve to DIFFERENT files (the same session resumed
+// into a second worktree, which writes a new transcript file), and a
+// sessionId-only key let one worktree's cached parse be served to another when
 // their file mtimes momentarily coincided (#7326). The cache stores ONE
 // canonical, unwindowed parse; windowing and per-surface truncation stay in the
 // callers so the same parse is reused across all `limit` values and every client kind.
@@ -45,8 +45,6 @@ function setCached(key: string, value: CachedTranscript): void {
   }
 }
 
-// Why: key by the resolved file path so two different transcript files can never
-// share a cache entry, even when they resolve from the same (agent, sessionId).
 function cacheKey(agent: AgentType, filePath: string): string {
   return `${agent}:${filePath}`
 }
@@ -91,7 +89,7 @@ export async function readNativeChatTranscriptCached(
   return result
 }
 
-/** Test-only: drop the per-session transcript cache between runs. */
+/** Test-only: drop the transcript parse cache between runs. */
 export function clearNativeChatTranscriptCache(): void {
   cache.clear()
 }
