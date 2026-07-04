@@ -123,6 +123,7 @@ import type {
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
+import type { HostSessionsResult } from '../shared/host-session-types'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -3880,6 +3881,9 @@ const api = {
 
     listDetectedPorts: (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
       ipcRenderer.invoke('ssh:listDetectedPorts', args),
+
+    discoverHostSessions: (args: { targetId: string }): Promise<HostSessionsResult> =>
+      ipcRenderer.invoke('ssh:discoverHostSessions', args),
 
     onPortForwardsChanged: (
       callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
