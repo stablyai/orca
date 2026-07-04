@@ -22,6 +22,8 @@ export {
   formatListWindows
 } from './computer-format'
 export type { ComputerActionFollowUpTarget } from './computer-format'
+export { formatDiagnosticBundleExportResult } from './diagnostics-format'
+
 export {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,

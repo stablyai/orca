@@ -1,3 +1,5 @@
+import { recordRendererCrashBreadcrumb } from '../../lib/crash-diagnostics'
+
 type TerminalLifecycleDiagnosticDetails = {
   tabId?: string
   worktreeId?: string
@@ -31,4 +33,13 @@ export function warnTerminalLifecycleAnomaly(
   }
   emittedDiagnostics.add(key)
   console.warn(`[terminal-lifecycle] ${event}`, details)
+  recordRendererCrashBreadcrumb('terminal_lifecycle_anomaly', {
+    event,
+    tabId: details.tabId ?? null,
+    leafId: details.leafId ?? null,
+    paneId: details.paneId ?? null,
+    reason: details.reason ?? null,
+    hasWorktreeId: Boolean(details.worktreeId),
+    hasPtyId: Boolean(details.ptyId)
+  })
 }

@@ -46,4 +46,63 @@ describe('diagnostics RPC methods', () => {
       result: snapshot
     })
   })
+
+  it('exports a diagnostics bundle through the runtime', async () => {
+    const bundle = {
+      bundleId: 'bundle-1',
+      outputPath: 'C:\\tmp\\orca-diagnostics.zip',
+      bytes: 1234,
+      includedCategories: ['app'],
+      skippedCategories: [],
+      errorCategories: [],
+      fileCount: 2
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createDiagnosticBundle: vi.fn().mockResolvedValue(bundle)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: DIAGNOSTICS_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('diagnostics.bundle', {
+        output: 'C:\\tmp\\orca-diagnostics.zip',
+        lookbackMinutes: 120,
+        include: ['app'],
+        exclude: ['native-minidumps'],
+        open: true
+      })
+    )
+
+    expect(runtime.createDiagnosticBundle).toHaveBeenCalledWith({
+      output: 'C:\\tmp\\orca-diagnostics.zip',
+      lookbackMinutes: 120,
+      include: ['app'],
+      exclude: ['native-minidumps'],
+      open: true
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: bundle
+    })
+  })
+
+  it('rejects unknown diagnostic bundle categories', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createDiagnosticBundle: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: DIAGNOSTICS_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('diagnostics.bundle', { include: ['not-a-category'] })
+    )
+
+    expect(runtime.createDiagnosticBundle).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument'
+      }
+    })
+  })
 })

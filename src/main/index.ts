@@ -179,6 +179,7 @@ import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservatio
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
+import { startNativeCrashReporter } from './diagnostics/native-crash-reporter'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -574,6 +575,16 @@ if (hasSingleInstanceLock) {
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+  try {
+    // Why: Crashpad needs a stable per-user path before any renderer exists,
+    // but lock losers must avoid touching userData/logs.
+    startNativeCrashReporter()
+  } catch (error) {
+    console.warn(
+      '[diagnostics] Native crash reporter disabled:',
+      error instanceof Error ? error.message : String(error)
+    )
+  }
   crashReports = CrashReportStore.fromUserData()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,

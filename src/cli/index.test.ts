@@ -3485,6 +3485,57 @@ describe('orca cli worktree awareness', () => {
     expect(output).toContain('- feature  1.0 MB  2.5%  1 session')
   })
 
+  it('exports diagnostics bundles with repeated category filters', async () => {
+    callMock.mockResolvedValueOnce(
+      okFixture('req_diagnostics_bundle', {
+        bundleId: 'bundle-1',
+        outputPath: 'C:\\tmp\\orca-diagnostics.zip',
+        bytes: 2048,
+        includedCategories: ['app', 'memory'],
+        skippedCategories: [],
+        errorCategories: [],
+        fileCount: 3
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'diagnostics',
+        'bundle',
+        '--output',
+        'C:\\tmp\\orca-diagnostics.zip',
+        '--lookback',
+        '2h',
+        '--include',
+        'app',
+        '--include',
+        'memory',
+        '--exclude',
+        'native-minidumps',
+        '--open'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('diagnostics.bundle', {
+      output: 'C:\\tmp\\orca-diagnostics.zip',
+      lookbackMinutes: 120,
+      include: ['app', 'memory'],
+      exclude: ['native-minidumps'],
+      open: true
+    })
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('bundleId: bundle-1')
+    expect(output).toContain('includedCategories: app, memory')
+  })
+
+  it('rejects invalid diagnostics bundle lookback values before RPC', async () => {
+    await main(['diagnostics', 'bundle', '--lookback', 'soon'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('exits nonzero when terminal wait returns an unsatisfied blocked result', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValueOnce({
