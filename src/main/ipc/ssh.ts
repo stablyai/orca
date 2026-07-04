@@ -15,6 +15,7 @@ import type {
   SshConnectionStatus,
   SshConnectionState
 } from '../../shared/ssh-types'
+import type { HostMetricsResult } from '../../shared/host-resource-metrics-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { isAuthError } from '../ssh/ssh-connection-utils'
@@ -1176,6 +1177,19 @@ export function registerSshHandlers(
     const ports = session?.getPortScanner()?.getDetectedPorts(args.targetId) ?? []
     return enrichDetected(args.targetId, ports)
   })
+
+  ipcMain.handle(
+    'ssh:getHostMetrics',
+    async (_event, args: { targetId: string }): Promise<HostMetricsResult> => {
+      const mux = getActiveMultiplexer(args.targetId)
+      if (!mux || mux.isDisposed()) {
+        // Why: metrics are passive polling; a disconnected host has none until
+        // reconnect and should not raise an IPC error.
+        return { metrics: null }
+      }
+      return (await mux.request('host.metrics')) as HostMetricsResult
+    }
+  )
 
   return { connectionManager, sshStore }
 }

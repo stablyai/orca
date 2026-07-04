@@ -123,6 +123,7 @@ import type {
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
+import type { HostMetricsResult } from '../shared/host-resource-metrics-types'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -3880,6 +3881,9 @@ const api = {
 
     listDetectedPorts: (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
       ipcRenderer.invoke('ssh:listDetectedPorts', args),
+
+    getHostMetrics: (args: { targetId: string }): Promise<HostMetricsResult> =>
+      ipcRenderer.invoke('ssh:getHostMetrics', args),
 
     onPortForwardsChanged: (
       callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
