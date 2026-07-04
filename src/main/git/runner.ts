@@ -534,7 +534,7 @@ export function gitOptionalLocksDisabledEnv(
  */
 export function appendGitConfigEnv(
   env: NodeJS.ProcessEnv,
-  entries: ReadonlyArray<readonly [key: string, value: string]>
+  entries: readonly (readonly [key: string, value: string])[]
 ): NodeJS.ProcessEnv {
   const parsed = Number.parseInt(env.GIT_CONFIG_COUNT ?? '', 10)
   const base = Number.isInteger(parsed) && parsed > 0 ? parsed : 0
