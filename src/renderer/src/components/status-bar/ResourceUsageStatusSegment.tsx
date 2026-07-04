@@ -904,6 +904,8 @@ export function ResourceUsageStatusSegment({
     return map
   }, [repos])
 
+  // Why: runtime-hosted repos never have local daemon samples or killable
+  // local sessions; this map drives their per-row exclusion in the merge.
   const repoRuntimeScopedById = useMemo(() => {
     const map = new Map<string, boolean>()
     for (const repo of repos) {

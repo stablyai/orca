@@ -187,6 +187,8 @@ export function mergeSnapshotAndSessions(
   // ── Step 1: ingest snapshot worktrees as the local-truth foundation.
   if (snapshot) {
     for (const wt of snapshot.worktrees as readonly WorktreeMemory[]) {
+      // Why: local snapshot data must never render under a runtime-hosted repo
+      // row; belt-and-braces with the matching session-ingest guard below.
       if (isRuntimeScopedRepo(wt.repoId)) {
         continue
       }

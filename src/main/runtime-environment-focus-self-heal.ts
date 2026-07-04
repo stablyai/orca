@@ -56,6 +56,8 @@ export function selfHealRuntimeEnvironmentFocus({
   try {
     environments = listKnownEnvironments(userDataPath)
   } catch {
+    // Why: an unreadable registry must not clear a possibly-valid focus; keep
+    // it and let a later launch heal once the registry reads again.
     return
   }
 
