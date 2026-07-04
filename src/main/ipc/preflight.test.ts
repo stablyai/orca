@@ -255,6 +255,110 @@ describe('preflight', () => {
     })
   })
 
+  describe('agent detection remote runtime proxying', () => {
+    const remoteAgents = ['openclaude', 'cursor']
+    const remoteRefresh = {
+      agents: remoteAgents,
+      addedPathSegments: ['/srv/bin'],
+      shellHydrationOk: true,
+      pathSource: 'shell_hydrated',
+      pathFailureReason: 'none'
+    }
+
+    it('proxies preflight:detectAgents to the active remote runtime', async () => {
+      callRuntimeEnvironmentMock.mockResolvedValue({
+        id: 'preflight.detectAgents',
+        ok: true,
+        result: remoteAgents,
+        _meta: { runtimeId: 'runtime-1' }
+      })
+
+      registerPreflightHandlers(storeWithActiveEnvironment('env-1'))
+
+      await expect(handlers['preflight:detectAgents']()).resolves.toEqual(remoteAgents)
+      expect(callRuntimeEnvironmentMock).toHaveBeenCalledWith(
+        '/mock/userData',
+        'env-1',
+        'preflight.detectAgents',
+        undefined,
+        15_000
+      )
+      // Why: while a remote runtime is active the local probe must not run.
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('returns an empty agent list (never a local scan) when detection fails', async () => {
+      callRuntimeEnvironmentMock.mockResolvedValue({
+        id: 'preflight.detectAgents',
+        ok: false,
+        error: { code: 'runtime_unavailable', message: 'remote refused' },
+        _meta: { runtimeId: null }
+      })
+
+      registerPreflightHandlers(storeWithActiveEnvironment('env-1'))
+
+      await expect(handlers['preflight:detectAgents']()).resolves.toEqual([])
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('returns an empty agent list when the remote host is unreachable', async () => {
+      callRuntimeEnvironmentMock.mockRejectedValue(new Error('connect ETIMEDOUT'))
+
+      registerPreflightHandlers(storeWithActiveEnvironment('env-1'))
+
+      await expect(handlers['preflight:detectAgents']()).resolves.toEqual([])
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('proxies preflight:refreshAgents to the active remote runtime', async () => {
+      callRuntimeEnvironmentMock.mockResolvedValue({
+        id: 'preflight.refreshAgents',
+        ok: true,
+        result: remoteRefresh,
+        _meta: { runtimeId: 'runtime-1' }
+      })
+
+      registerPreflightHandlers(storeWithActiveEnvironment('env-1'))
+
+      await expect(handlers['preflight:refreshAgents']()).resolves.toEqual(remoteRefresh)
+      expect(callRuntimeEnvironmentMock).toHaveBeenCalledWith(
+        '/mock/userData',
+        'env-1',
+        'preflight.refreshAgents',
+        undefined,
+        15_000
+      )
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('returns the empty-refresh fallback when the remote refresh fails', async () => {
+      callRuntimeEnvironmentMock.mockRejectedValue(new Error('connect ETIMEDOUT'))
+
+      registerPreflightHandlers(storeWithActiveEnvironment('env-1'))
+
+      await expect(handlers['preflight:refreshAgents']()).resolves.toEqual({
+        agents: [],
+        addedPathSegments: [],
+        shellHydrationOk: false,
+        pathSource: 'sync_seed_only',
+        pathFailureReason: 'spawn_error'
+      })
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('runs local detection (no proxy) when no remote runtime is active', async () => {
+      hydrateShellPathMock.mockResolvedValue({ segments: [], ok: true, failureReason: 'none' })
+      execFileAsyncMock.mockRejectedValue(new Error('not found'))
+
+      registerPreflightHandlers(mockStore)
+
+      await handlers['preflight:detectAgents']()
+      await handlers['preflight:refreshAgents']()
+
+      expect(callRuntimeEnvironmentMock).not.toHaveBeenCalled()
+    })
+  })
+
   // Why: every preflight run probes (in order) `git --version`, `gh --version`,
   // `glab --version`, then in parallel `gh auth status` + `glab auth status` —
   // five execFile calls per cycle. Tests below provide values for all five.

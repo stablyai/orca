@@ -1,6 +1,10 @@
-import { app, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import {
+  checkPreflightViaRemoteRuntime,
+  detectAgentsViaRemoteRuntime,
+  refreshAgentsViaRemoteRuntime
+} from './preflight-remote-runtime'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
@@ -282,39 +286,27 @@ export function registerPreflightHandlers(store: Store): void {
       _event,
       args?: PreflightRuntimeContext & { force?: boolean }
     ): Promise<PreflightStatus> => {
-      // Why: when connected to a remote Orca runtime, git/gh/glab are installed
-      // on the server, not the local client. Proxy to the server's preflight RPC
-      // so the check runs against the correct filesystem and shell. Fail loud on
-      // error rather than falling back to the local scan, which would surface
-      // misleading local status while remote — mirrors the web client.
       const environmentId = store.getSettings().activeRuntimeEnvironmentId?.trim()
       if (environmentId) {
-        const response = await callRuntimeEnvironment(
-          app.getPath('userData'),
-          environmentId,
-          'preflight.check',
-          { force: args?.force },
-          15_000
-        ).catch((error: unknown) => {
-          // Why: an unreachable host rejects rather than resolving ok:false.
-          console.warn('[preflight] remote check unavailable:', error)
-          throw error
-        })
-        if (response.ok) {
-          return response.result as PreflightStatus
-        }
-        console.warn('[preflight] remote check failed:', response.error.message)
-        throw new Error(response.error.message)
+        return checkPreflightViaRemoteRuntime(environmentId, args?.force)
       }
       return runPreflightCheck(args?.force, args)
     }
   )
 
-  ipcMain.handle('preflight:detectAgents', async (_event, args?: PreflightRuntimeContext) =>
-    detectInstalledAgentsWithShellPathHydration(args)
-  )
+  ipcMain.handle('preflight:detectAgents', async (_event, args?: PreflightRuntimeContext) => {
+    const environmentId = store.getSettings().activeRuntimeEnvironmentId?.trim()
+    if (environmentId) {
+      return detectAgentsViaRemoteRuntime(environmentId)
+    }
+    return detectInstalledAgentsWithShellPathHydration(args)
+  })
 
   ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
+    const environmentId = store.getSettings().activeRuntimeEnvironmentId?.trim()
+    if (environmentId) {
+      return refreshAgentsViaRemoteRuntime(environmentId)
+    }
     return refreshShellPathAndDetectAgents(args)
   })
 
