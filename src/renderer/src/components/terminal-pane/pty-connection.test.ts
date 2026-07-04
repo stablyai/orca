@@ -9,6 +9,7 @@ import {
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
+import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
@@ -61,6 +62,31 @@ async function renderHeadlessBuffer(writes: string[], cols = 80, rows = 8): Prom
       lines.push(term.buffer.active.getLine(lineIndex)?.translateToString(true) ?? '')
     }
     return lines
+  } finally {
+    term.dispose()
+  }
+}
+
+async function renderHeadlessTerminalState(
+  writes: string[],
+  cols = 80,
+  rows = 8
+): Promise<{ allLines: string[]; visibleLines: string[]; baseY: number }> {
+  const term = new Terminal({ cols, rows, allowProposedApi: true })
+  try {
+    for (const write of writes) {
+      await writeHeadlessTerminal(term, write)
+    }
+    const allLines: string[] = []
+    const buffer = term.buffer.active
+    for (let lineIndex = 0; lineIndex < buffer.length; lineIndex++) {
+      allLines.push(buffer.getLine(lineIndex)?.translateToString(true) ?? '')
+    }
+    const visibleLines: string[] = []
+    for (let row = 0; row < term.rows; row++) {
+      visibleLines.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '')
+    }
+    return { allLines, visibleLines, baseY: buffer.baseY }
   } finally {
     term.dispose()
   }
@@ -5205,6 +5231,114 @@ describe('connectPanePty', () => {
     // the daemon does not redeliver the cold-restore payload on the next
     // reattach.
     expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith('tab-pty')
+  })
+
+  it('blanks restored scrollback before fresh shell output', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    const written: string[] = []
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      callbacks.onData?.('PS >')
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    pane.terminal.rows = 4
+    pane.terminal.cols = 20
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      written.push(data)
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredViewportBlankingPanesRef: { current: new Set([1]) }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const blankViewport = buildFreshShellViewportBlankingSequence(4)
+    expect(written).toContain(blankViewport)
+    expect(written.indexOf(blankViewport)).toBeLessThan(written.indexOf('PS >'))
+
+    const rendered = await renderHeadlessTerminalState(
+      ['old TUI row with a long tail\r\nold TUI row two', blankViewport, 'PS >'],
+      20,
+      4
+    )
+    expect(rendered.baseY).toBeGreaterThan(0)
+    expect(rendered.allLines.some((line) => line.includes('old TUI row'))).toBe(true)
+    expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
+  })
+
+  it('cold-restores scrollback then blanks the viewport without erasing scrollback', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    const written: string[] = []
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: 'fresh-pty',
+          coldRestore: { scrollback: 'cold TUI row one\r\ncold TUI row two', cwd: '/tmp/wt-1' }
+        }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    pane.terminal.rows = 4
+    pane.terminal.cols = 20
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      written.push(data)
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const blankViewport = buildFreshShellViewportBlankingSequence(4)
+    expect(written).not.toContain('\x1b[2J\x1b[3J\x1b[H')
+    expect(written).toEqual(
+      expect.arrayContaining([
+        'cold TUI row one\r\ncold TUI row two',
+        POST_REPLAY_MODE_RESET,
+        blankViewport
+      ])
+    )
+    expect(written.indexOf('cold TUI row one\r\ncold TUI row two')).toBeLessThan(
+      written.indexOf(blankViewport)
+    )
+
+    const rendered = await renderHeadlessTerminalState([...written, 'PS >'], 20, 4)
+    expect(rendered.baseY).toBeGreaterThan(0)
+    expect(rendered.allLines.some((line) => line.includes('cold TUI row'))).toBe(true)
+    expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
   })
 
   it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {
