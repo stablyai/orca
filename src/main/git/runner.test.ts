@@ -2,7 +2,47 @@
 // (transient detection must propagate, not silently retry on 250ms cadence)
 // and stderr extraction from execFile rejections (err.message is unreliable).
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { extractExecError, isTransientGhError, parseRetryAfterMs } from './runner'
+import {
+  extractExecError,
+  isTransientGhError,
+  parseRetryAfterMs,
+  redirectPortedHostnameToEnv
+} from './runner'
+
+describe('redirectPortedHostnameToEnv', () => {
+  it('moves a ported --hostname into GITLAB_HOST and strips the flag', () => {
+    const { args, options } = redirectPortedHostnameToEnv(
+      ['api', '--hostname', 'gitlab.example.com:8443', 'projects/foo%2Fbar/issues'],
+      { cwd: '/repo' }
+    )
+    expect(args).toEqual(['api', 'projects/foo%2Fbar/issues'])
+    expect(options.env?.GITLAB_HOST).toBe('gitlab.example.com:8443')
+    expect(options.cwd).toBe('/repo')
+  })
+
+  it('leaves a port-less --hostname untouched', () => {
+    const input = ['api', '--hostname', 'gitlab.com', 'user']
+    const { args, options } = redirectPortedHostnameToEnv(input, {})
+    expect(args).toEqual(input)
+    expect(options.env).toBeUndefined()
+  })
+
+  it('is a no-op when no --hostname is present', () => {
+    const input = ['auth', 'status']
+    const { args, options } = redirectPortedHostnameToEnv(input, { env: { A: '1' } })
+    expect(args).toEqual(input)
+    expect(options.env).toEqual({ A: '1' })
+  })
+
+  it('preserves existing env entries alongside GITLAB_HOST', () => {
+    const { options } = redirectPortedHostnameToEnv(
+      ['auth', 'status', '--hostname', 'gl.example.org:3001'],
+      { env: { PATH: '/usr/bin' } }
+    )
+    expect(options.env?.PATH).toBe('/usr/bin')
+    expect(options.env?.GITLAB_HOST).toBe('gl.example.org:3001')
+  })
+})
 
 afterEach(() => {
   vi.restoreAllMocks()

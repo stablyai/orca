@@ -2,6 +2,7 @@
 driving, parser, timers, and teardown in one state machine; splitting it would
 make the lifecycle harder to audit. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
@@ -204,6 +205,7 @@ function describeClaudeUsageFailure(output: string): string {
 
 export async function fetchViaPty(options?: {
   authPreparation?: ClaudeRuntimeAuthPreparation
+  networkProxySettings?: NetworkProxySettings
 }): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
 
@@ -228,6 +230,12 @@ export async function fetchViaPty(options?: {
       options?.authPreparation?.envPatch ?? {},
       { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
     )
+    // Why: this hidden usage PTY spawns `claude` directly, not the user's shell
+    // wrapper, so without the configured proxy it would reach api.anthropic.com
+    // from the app's own IP — bypassing the proxy the user set for Claude and
+    // risking rate-limit/geo signals on the account. Falls back to {} when unset.
+    const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
+    Object.assign(spawnEnv, proxyEnv)
     const authPreparation = options?.authPreparation
     const wslConfig =
       authPreparation?.runtime === 'wsl' &&
@@ -246,7 +254,13 @@ export async function fetchViaPty(options?: {
           '--',
           'bash',
           '-lc',
-          `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}; exec claude`
+          // Why: Windows-side env does not cross into the distro without WSLENV,
+          // so export the configured proxy inside the command for the inner claude.
+          [
+            `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}`,
+            ...Object.entries(proxyEnv).map(([key, value]) => `export ${key}=${shellQuote(value)}`),
+            'exec claude'
+          ].join('; ')
         ]
       : isWin32
         ? ['/c', `"${claudeCommand}"`]

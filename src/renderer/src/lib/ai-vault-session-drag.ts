@@ -12,6 +12,9 @@ export type AiVaultSessionDragPayload = {
   sessionId: string
   title: string
   command: string
+  // Why: drop targets must know where the session file lives (host vs local
+  // WSL) to reject SSH panes that cannot reach it.
+  sessionFilePath?: string
   // Why: drag/drop resume must preserve planned env/default args, not just the shell command.
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
@@ -63,6 +66,7 @@ function isSerializedPayload(value: unknown): value is SerializedAiVaultSessionD
     isNonEmptyString(payload.sessionId) &&
     isNonEmptyString(payload.title) &&
     isNonEmptyString(payload.command) &&
+    (payload.sessionFilePath === undefined || isNonEmptyString(payload.sessionFilePath)) &&
     (payload.env === undefined || isStringRecord(payload.env)) &&
     (payload.launchConfig === undefined || isLaunchConfig(payload.launchConfig))
   )
@@ -110,12 +114,13 @@ export function readAiVaultSessionDragData(
     if (!isSerializedPayload(parsed)) {
       return null
     }
-    const { agent, sessionId, title, command, env, launchConfig } = parsed
+    const { agent, sessionId, title, command, sessionFilePath, env, launchConfig } = parsed
     return {
       agent,
       sessionId,
       title,
       command,
+      ...(sessionFilePath ? { sessionFilePath } : {}),
       ...(env ? { env } : {}),
       ...(launchConfig ? { launchConfig } : {})
     }

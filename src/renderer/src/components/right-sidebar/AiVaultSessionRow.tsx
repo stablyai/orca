@@ -101,12 +101,13 @@ export function VaultSessionRow({
         sessionId: session.sessionId,
         title: session.title,
         command: resumeStartup.command,
+        sessionFilePath: session.filePath,
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
         ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {})
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [resumeDisabled, session.agent, session.sessionId, session.title, resumeStartup]
+    [resumeDisabled, session, resumeStartup]
   )
 
   return (

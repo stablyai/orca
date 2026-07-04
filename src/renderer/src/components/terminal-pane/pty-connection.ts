@@ -1914,6 +1914,38 @@ export function connectPanePty(
   // on a brand-new worktree keeps its dead terminal visible instead of bouncing
   // the user to Landing.
   let spawnedFreshPtyId: string | null = null
+  // Why: hibernation suppresses its kill's exit while the pane is hidden, so
+  // onExit must not tear the pane down — but the pane still owes the user a
+  // wake. Remember the hibernated ptyId; the visibility-resume hook consumes
+  // it and relaunches the recorded agent session on next reveal.
+  let hibernatedWakePtyId: string | null = null
+  let wakeHibernatedAgentPane: (() => void) | null = null
+  // Why: reveal is the normal wake trigger, but a reveal that lands *during* the
+  // in-flight hibernation kill runs noteVisibilityResume before onExit arms the
+  // wake. Sharing the guarded consume lets both the reveal hook and the
+  // arm-time foreground check resume the pane exactly once.
+  const consumeHibernatedAgentWake = (): void => {
+    if (hibernatedWakePtyId === null || disposed) {
+      return
+    }
+    if (deps.paneTransportsRef.current.get(pane.id) !== transport) {
+      return
+    }
+    const currentPtyId = transport.getPtyId()
+    // Why: a real pty:exit clears the transport's ptyId before onExit while a
+    // reconcile-driven exit leaves it bound; both mean "nothing respawned since
+    // hibernation". A different non-null id means another flow (e.g. an
+    // intentional restart) already rebound the pane — its spawn wins.
+    if (currentPtyId !== null && currentPtyId !== hibernatedWakePtyId) {
+      hibernatedWakePtyId = null
+      return
+    }
+    hibernatedWakePtyId = null
+    // Why: reveal is the wake signal for a hibernated pane. Resume the recorded
+    // agent session (or fall back to a fresh shell) instead of leaving the
+    // frozen frame with no PTY behind it.
+    wakeHibernatedAgentPane?.()
+  }
   const onExit = (ptyId: string): void => {
     if (handledExitPtyId === ptyId) {
       return
@@ -1957,6 +1989,21 @@ export function connectPanePty(
       // Why: the action that suppressed the exit owns whether the leaf binding
       // is a wake hint or should be discarded; runtime cleanup above is enough.
       manager.setPaneGpuRendering(pane.id, true)
+      if (getSleepingRecordForPane(useAppStore.getState())) {
+        // Why: hibernation killed this pane's PTY while hidden. The frozen TUI
+        // frame still has mouse-tracking/bracketed-paste armed, which silently
+        // eats every click and keystroke against a dead transport — disarm the
+        // modes now and arm the reveal-time wake.
+        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_MODE_RESET)
+        hibernatedWakePtyId = ptyId
+        if (deps.isVisibleRef.current) {
+          // Why: a reveal that raced this kill already ran noteVisibilityResume
+          // before the exit landed, so it saw nothing armed. Consume the wake
+          // now (deferred off the exit handler) so a foreground pane still
+          // resumes without needing a second hide/reveal.
+          queueMicrotask(consumeHibernatedAgentWake)
+        }
+      }
       return
     }
     manager.setPaneGpuRendering(pane.id, true)
@@ -3407,6 +3454,9 @@ export function connectPanePty(
       applyColdRestoreAgentResumeStartup(startup)
       startFreshSpawn(startup)
     }
+    // Why: the hibernation wake fires from noteVisibilityResume in the outer
+    // connection scope, long after this deferred-connect closure has run.
+    wakeHibernatedAgentPane = () => startFreshColdRestoreAgentResume()
     const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
       !disposed &&
       deps.paneTransportsRef.current.get(pane.id) === transport &&
@@ -5816,6 +5866,7 @@ export function connectPanePty(
     // xterm's transient hidden DOM fallback.
     noteVisibilityResume() {
       ptySizeReassertion.request({ fit: false })
+      consumeHibernatedAgentWake()
     },
     reconcileIfSessionDead,
     reconcileIfSessionMissing,

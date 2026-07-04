@@ -95,6 +95,11 @@ export function setupGuestContextMenu(args: {
       screenY: cursor.y,
       pageUrl,
       linkUrl,
+      // Why: forward the native selection so the renderer can offer a Copy that
+      // writes it to the clipboard directly, bypassing pages that suppress copy
+      // via oncopy handlers (the reported bug — the selection is never re-read
+      // through a page-visible copy event).
+      selectionText: params.selectionText ?? '',
       ...navigationState
     })
   }

@@ -1170,7 +1170,9 @@
         "ephemeralVm": "Per-Workspace Environment",
         "chooseRunTarget": "Choose target",
         "noRunTargets": "No run targets are ready for this project.",
-        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe"
+        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe",
+        "branchName": "Branch name",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -2450,6 +2452,7 @@
             "0a917b591a": "Paste",
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
+            "openLinkDefaultBrowser": "Open in Default Browser",
             "925f49f210": "Expand Pane",
             "df766809e0": "Collapse Pane",
             "cff67afad1": "Copy Context"
@@ -2586,7 +2589,8 @@
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Drop it onto a local workspace instead."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
@@ -3522,7 +3526,9 @@
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
-          "24eda6c8b2": "Scanning... {{value0}}"
+          "24eda6c8b2": "Scanning... {{value0}}",
+          "6149d5203f": "No repositories are selected. Open the parent folder instead to use editor, terminal, and search without Git features.",
+          "e52454b7f6": "Open as Folder"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Stop scan",
@@ -9577,7 +9583,8 @@
             "worktreeUnavailable": "Worktree is no longer available.",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -10219,8 +10226,8 @@
           "title": "Custom network address",
           "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
           "label": "Address",
-          "placeholder": "my-mac.ts.net or 192.168.1.50",
-          "hint": "Enter an IP address or a Tailscale hostname (ends in .ts.net).",
+          "placeholder": "my-mac.ts.net, home.example.com, or 192.168.1.50",
+          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.",
           "cancel": "Cancel",
           "use": "Use address"
         },
@@ -11713,7 +11720,8 @@
             "4bb7424d6b": "Canceled",
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "Open",
-            "09a9489aa5": "Show"
+            "09a9489aa5": "Show",
+            "2a4c4b8e1f": "Copy"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",

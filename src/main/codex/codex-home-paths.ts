@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path'
 
 const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'skills',
+  'hooks',
   'plugins',
   'plugin-state',
   'profile-v2',

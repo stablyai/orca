@@ -2,9 +2,11 @@ import React from 'react'
 import type { Components } from 'react-markdown'
 import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 import {
+  GitHubUserAttachmentImage,
   GitHubUserAttachmentVideo,
+  isGitHubUserAttachmentUrl,
   isGitHubUserAttachmentVideoLink
-} from './comment-markdown-github-attachment-video'
+} from './comment-markdown-github-attachment-media'
 
 export type CommentMarkdownLinkClickHandler = (
   event: React.MouseEvent<HTMLElement>,
@@ -230,6 +232,12 @@ export function createDocumentCommentMarkdownComponents(
       </blockquote>
     ),
     img: ({ alt, src }) => {
+      if (isGitHubUserAttachmentUrl(src)) {
+        // Why: private-repo attachment images fail as cross-origin loads; a
+        // top-level link opens them in a GitHub-authenticated tab, and falls
+        // back to a text link when the image itself can't render.
+        return <GitHubUserAttachmentImage src={src} alt={alt} />
+      }
       const imageClassName = [
         'my-3 max-h-96 max-w-full rounded-md object-contain',
         'outline outline-1 outline-black/10 dark:outline-white/10',

@@ -1170,7 +1170,9 @@
         "ephemeralVm": "工作区专属环境",
         "chooseRunTarget": "选择目标",
         "noRunTargets": "此项目还没有可用的运行目标。",
-        "perWorkspaceEnvHint": "根据配方按需创建环境"
+        "perWorkspaceEnvHint": "根据配方按需创建环境",
+        "branchName": "分支名称",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "创建工作树",
@@ -2450,6 +2452,7 @@
             "0a917b591a": "粘贴",
             "f3eeb1de13": "复制",
             "c2f0b72b8d": "插入",
+            "openLinkDefaultBrowser": "在默认浏览器中打开",
             "925f49f210": "展开窗格",
             "df766809e0": "折叠窗格",
             "cff67afad1": "Copy Context"
@@ -2586,7 +2589,8 @@
             "openLocalWorkspace": "恢复会话前请先打开一个本地工作区。",
             "sessionQueued": "会话已排队",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为将其拖放到本地工作区。"
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "新建拆分"
@@ -3488,7 +3492,9 @@
           "8401a7a0d0": "1 个仓库",
           "d4f1df62ef": "{{value0}} 个仓库",
           "b4263a2ac4": "在 {{value1}} 中找到 {{value0}}。",
-          "24eda6c8b2": "正在扫描... {{value0}}"
+          "24eda6c8b2": "正在扫描... {{value0}}",
+          "6149d5203f": "未选择任何仓库。改为打开父文件夹，即可在没有 Git 功能的情况下使用编辑器、终端和搜索。",
+          "e52454b7f6": "作为文件夹打开"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "停止扫描",
@@ -9577,7 +9583,8 @@
             "worktreeUnavailable": "Worktree is no longer available.",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -10219,8 +10226,8 @@
           "title": "自定义网络地址",
           "description": "指定当手机不在同一 Wi-Fi 时可以访问的地址，例如 Tailscale 主机名或静态 IP。",
           "label": "地址",
-          "placeholder": "my-mac.ts.net 或 192.168.1.50",
-          "hint": "请输入 IP 地址或 Tailscale 主机名（以 .ts.net 结尾）。",
+          "placeholder": "my-mac.ts.net、home.example.com 或 192.168.1.50",
+          "hint": "请输入 IP 地址或主机名（Tailscale MagicDNS 名称、DDNS 域名或 LAN 主机名），可选择附加 :端口。",
           "cancel": "取消",
           "use": "使用地址"
         },
@@ -11713,7 +11720,8 @@
             "4bb7424d6b": "已取消",
             "6e776f9ef9": "下载失败",
             "756bfc25c9": "打开",
-            "09a9489aa5": "显示"
+            "09a9489aa5": "显示",
+            "2a4c4b8e1f": "复制"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",

@@ -94,7 +94,6 @@ vi.mock('../git/repo', async () => {
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo: vi.fn().mockReturnValue(true),
     getGitRepoRoot: vi.fn((path: string) => path),
-    getGitUsername: vi.fn().mockReturnValue(''),
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
     getRemoteCount: vi.fn().mockResolvedValue(1),

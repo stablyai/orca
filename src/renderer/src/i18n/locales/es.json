@@ -1170,7 +1170,9 @@
         "ephemeralVm": "Entorno por espacio de trabajo",
         "chooseRunTarget": "Elige objetivo",
         "noRunTargets": "No hay objetivos de ejecución listos para este proyecto.",
-        "perWorkspaceEnvHint": "Proporcione un entorno bajo demanda a partir de una receta"
+        "perWorkspaceEnvHint": "Proporcione un entorno bajo demanda a partir de una receta",
+        "branchName": "Nombre de rama",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Crear árbol de trabajo",
@@ -2450,6 +2452,7 @@
             "0a917b591a": "Pasta",
             "f3eeb1de13": "Copiar",
             "c2f0b72b8d": "Insertar",
+            "openLinkDefaultBrowser": "Abrir en el navegador predeterminado",
             "925f49f210": "Expandir panel",
             "df766809e0": "Contraer panel",
             "cff67afad1": "Copy Context"
@@ -2586,7 +2589,8 @@
             "openLocalWorkspace": "Abre un espacio de trabajo local antes de reanudar una sesión.",
             "sessionQueued": "Sesión en cola",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "El historial de esta sesión está almacenado en este equipo, por lo que no se puede reanudar en un espacio de trabajo SSH. En su lugar, suéltala en un espacio de trabajo local."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "Nueva división"
@@ -3507,7 +3511,9 @@
           "8401a7a0d0": "1 repositorio",
           "d4f1df62ef": "{{value0}} repositorios",
           "b4263a2ac4": "Se encontraron {{value0}} en {{value1}}.",
-          "24eda6c8b2": "Explorando... {{value0}}"
+          "24eda6c8b2": "Explorando... {{value0}}",
+          "6149d5203f": "No hay repositorios seleccionados. Abre la carpeta principal para usar el editor, la terminal y la búsqueda sin funciones de Git.",
+          "e52454b7f6": "Abrir como carpeta"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Detener escaneo",
@@ -9577,7 +9583,8 @@
             "worktreeUnavailable": "Worktree is no longer available.",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "El historial de esta sesión está almacenado en este equipo, por lo que no se puede reanudar en un espacio de trabajo SSH. En su lugar, abre un espacio de trabajo local."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -10219,8 +10226,8 @@
           "title": "Dirección de red personalizada",
           "description": "Anuncia una dirección que tu teléfono pueda alcanzar cuando no esté en la misma red Wi-Fi: por ejemplo, un nombre de host de Tailscale o una IP estática.",
           "label": "Dirección",
-          "placeholder": "my-mac.ts.net o 192.168.1.50",
-          "hint": "Introduce una dirección IP o un nombre de host de Tailscale (termina en .ts.net).",
+          "placeholder": "my-mac.ts.net, home.example.com o 192.168.1.50",
+          "hint": "Introduce una dirección IP o un nombre de host (un nombre MagicDNS de Tailscale, un dominio DDNS o un nombre de host de LAN), opcionalmente con :puerto.",
           "cancel": "Cancelar",
           "use": "Usar dirección"
         },
@@ -11713,7 +11720,8 @@
             "4bb7424d6b": "Canceled",
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "Abrir",
-            "09a9489aa5": "Show"
+            "09a9489aa5": "Show",
+            "2a4c4b8e1f": "Copiar"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",

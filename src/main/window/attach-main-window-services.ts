@@ -41,6 +41,19 @@ import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
+import { logStartupMilestone } from '../startup/startup-diagnostics'
+
+const UPDATER_SETUP_FALLBACK_MS = 15_000
+
+// Why: updater setup is deferred past first paint, but a manual check (app
+// menu or updater:check IPC) can arrive inside that window — it must run
+// against a configured updater (listeners, autoDownload=false, window ref),
+// so those entry points force the pending setup first.
+let pendingAutoUpdaterSetup: (() => void) | null = null
+
+export function ensureAutoUpdaterConfigured(): void {
+  pendingAutoUpdaterSetup?.()
+}
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
@@ -116,37 +129,54 @@ export function attachMainWindowServices(
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
-  setupAutoUpdater(mainWindow, {
-    getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-    onBeforeQuit: async () => {
-      try {
-        await options?.onBeforeUpdateQuit?.()
-      } finally {
-        store.flush()
-      }
-    },
-    setLastUpdateCheckAt: (timestamp) => {
-      store.updateUI({ lastUpdateCheckAt: timestamp })
-    },
-    getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-    getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-    setPendingUpdateNudgeId: (id) => {
-      // Why: the nudge lifecycle is owned by the main process. When applying a
-      // new campaign, persist the pending id AND clear the version dismissal
-      // together so relaunches cannot resurrect the old hidden-card state
-      // between nudge apply and renderer sync. When clearing (id is null),
-      // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
-      // would silently un-dismiss an update if the flow ever changes.
-      if (id) {
-        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-      } else {
-        store.updateUI({ pendingUpdateNudgeId: null })
-      }
-    },
-    setDismissedUpdateNudgeId: (id) => {
-      store.updateUI({ dismissedUpdateNudgeId: id })
+  // Why: setupAutoUpdater's first getAutoUpdater() call synchronously
+  // require()s electron-updater in packaged builds — seconds on a cold
+  // Windows disk under Defender scanning (part of issue #7225's pre-paint
+  // stall) — so defer it past first paint. The timer fallback keeps update
+  // checks alive for renderers that crash-loop before ever painting.
+  let updaterSetupDone = false
+  const setupAutoUpdaterDeferred = (): void => {
+    if (updaterSetupDone || mainWindow.isDestroyed()) {
+      return
     }
-  })
+    updaterSetupDone = true
+    setupAutoUpdater(mainWindow, {
+      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+      onBeforeQuit: async () => {
+        try {
+          await options?.onBeforeUpdateQuit?.()
+        } finally {
+          store.flush()
+        }
+      },
+      setLastUpdateCheckAt: (timestamp) => {
+        store.updateUI({ lastUpdateCheckAt: timestamp })
+      },
+      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+      setPendingUpdateNudgeId: (id) => {
+        // Why: the nudge lifecycle is owned by the main process. When applying a
+        // new campaign, persist the pending id AND clear the version dismissal
+        // together so relaunches cannot resurrect the old hidden-card state
+        // between nudge apply and renderer sync. When clearing (id is null),
+        // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
+        // would silently un-dismiss an update if the flow ever changes.
+        if (id) {
+          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+        } else {
+          store.updateUI({ pendingUpdateNudgeId: null })
+        }
+      },
+      setDismissedUpdateNudgeId: (id) => {
+        store.updateUI({ dismissedUpdateNudgeId: id })
+      }
+    })
+    logStartupMilestone('updater-setup-done')
+  }
+  pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
+  mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
+  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
+  updaterSetupFallback.unref?.()
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
@@ -415,9 +445,10 @@ export function registerUpdaterHandlers(_store: Store): void {
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
-  ipcMain.handle('updater:check', (_event, options?: { includePrerelease?: boolean }) =>
-    checkForUpdatesFromMenu(options)
-  )
+  ipcMain.handle('updater:check', (_event, options?: { includePrerelease?: boolean }) => {
+    ensureAutoUpdaterConfigured()
+    return checkForUpdatesFromMenu(options)
+  })
   ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())

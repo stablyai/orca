@@ -19,10 +19,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../git/repo', () => ({
-  getGitUsername: vi.fn().mockReturnValue('testuser')
-}))
-
 async function createStore() {
   vi.resetModules()
   const { Store, initDataPath } = await import('../persistence')

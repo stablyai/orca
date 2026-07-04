@@ -141,6 +141,7 @@ import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-foc
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
 import { getForkPushWarning } from './fork-push-warning'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
@@ -163,6 +164,7 @@ import {
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchReuse,
   resolveComposerBranchSelection,
+  resolveComposerManualBranchNameChange,
   resolveComposerReuseOverride
 } from './composer-branch-selection'
 import { isCurrentComposerDropOwner } from './composer-drop-owner'
@@ -255,9 +257,12 @@ export type ComposerCardProps = {
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
   name: string
   onNameValueChange: (value: string) => void
+  branchNameOverride: string | undefined
+  onBranchNameOverrideChange: (value: string | undefined) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
+  onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   /** GitLab parallel of onBaseBranchPrSelect. */
@@ -1021,6 +1026,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
   const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] =
     useState(false)
+  const [smartNameMode, setSmartNameMode] = useState<SmartNameMode>('smart')
   // Why (#5181): when the user picks an existing LOCAL branch, let them reuse it
   // (check it out) instead of creating a new branch from it. `reuseEligibleBranch`
   // is the local branch name eligible for reuse (null = not a reusable local
@@ -2275,6 +2281,23 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [branchNameOverride, branchNameOverridePreservesNameEdits, name]
   )
+  const handleBranchNameOverrideChange = useCallback(
+    (value: string | undefined): void => {
+      const next = resolveComposerManualBranchNameChange({
+        value,
+        pushTarget,
+        forkPushWarning
+      })
+      setBranchNameOverride(next.branchNameOverride)
+      setBranchNameOverridePreservesNameEdits(Boolean(next.branchNameOverride))
+      setPushTarget(next.pushTarget)
+      setForkPushWarning(next.forkPushWarning)
+      setReuseEligibleBranch(null)
+      setReuseSelectedBranch(false)
+      branchAutoNameRef.current = ''
+    },
+    [forkPushWarning, pushTarget]
+  )
 
   const addComposerAttachments = useCallback((paths: string[]): void => {
     if (paths.length === 0) {
@@ -3456,7 +3479,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         branchAutoName: branchAutoNameRef.current,
         workspaceName,
         preserveWorkspaceNameEdits:
-          smartGitHubResolution.kind === 'pr-start-point' || branchNameOverridePreservesNameEdits
+          smartGitHubResolution.kind === 'pr-start-point' || branchNameOverridePreservesNameEdits,
+        createBranchFromWorkspaceName:
+          smartGitHubResolution.kind === 'none' && smartNameMode === 'branches'
       })
       const createDisplayName =
         smartGitHubResolution.kind === 'none'
@@ -3658,6 +3683,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     settings?.agentDefaultArgs,
     settings?.agentDefaultEnv,
     settings?.autoRenameBranchFromWork,
+    smartNameMode,
     setSidebarOpen,
     setupDecision,
     sparseEnabled,
@@ -3855,7 +3881,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           branchAutoName: branchAutoNameRef.current,
           workspaceName,
           preserveWorkspaceNameEdits:
-            smartGitHubResolution.kind === 'pr-start-point' || branchNameOverridePreservesNameEdits
+            smartGitHubResolution.kind === 'pr-start-point' || branchNameOverridePreservesNameEdits,
+          createBranchFromWorkspaceName:
+            smartGitHubResolution.kind === 'none' && smartNameMode === 'branches'
         })
         const submitBaseBranch = selectedRepoIsGit
           ? await resolveWorktreeCreateBaseBranch({
@@ -4108,6 +4136,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      smartNameMode,
       disabledTuiAgents,
       setupDecision,
       sparseEnabled,
@@ -4166,9 +4195,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     smartNameRepoSwitchTarget: isProjectGroupTarget ? 'task-source' : 'project',
     name,
     onNameValueChange: handleNameValueChange,
+    branchNameOverride: isProjectGroupTarget ? undefined : branchNameOverride,
+    onBranchNameOverrideChange: isProjectGroupTarget ? () => {} : handleBranchNameOverrideChange,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
     onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
     onSmartBranchSelect: isProjectGroupTarget ? () => {} : handleSmartBranchSelect,
+    onSmartNameModeChange: setSmartNameMode,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
     smartNameGitHubSourceContext: selectedRepoGitHubSourceContext,
     smartNameSelection,

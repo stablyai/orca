@@ -150,6 +150,46 @@ describe('computeTrustedHash', () => {
     expect(a).not.toBe(b)
   })
 
+  it('drops the matcher on user_prompt_submit/stop like matcher_pattern_for_event', () => {
+    // Why: Codex ignores matchers on these two events and hashes the
+    // identity WITHOUT the matcher field. A definition carrying
+    // `"matcher": ""` (common in third-party installers) must therefore
+    // hash identically to one without a matcher, or the system-trust
+    // mirror misses and the stale-entry sweep deletes the trust Codex
+    // wrote — re-prompting the user on every launch.
+    for (const eventLabel of ['user_prompt_submit', 'stop'] as const) {
+      const base: CodexTrustEntry = {
+        sourcePath: '/x/hooks.json',
+        eventLabel,
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'foo'
+      }
+      const bare = computeTrustedHash(base)
+      expect(computeTrustedHash({ ...base, matcher: '' })).toBe(bare)
+      expect(computeTrustedHash({ ...base, matcher: 'anything' })).toBe(bare)
+    }
+  })
+
+  it('pins the matcher-omitted hash for a Stop entry that carries an empty matcher', () => {
+    // Why: regression pin for the shape observed in the wild (a real
+    // Codex 0.140 config.toml, path anonymized): Codex stores the
+    // matcher-omitted hash for Stop even when hooks.json carries
+    // `"matcher": ""`, so we must never fold the matcher into this
+    // identity. If serialization or normalization drifts, this constant
+    // fails loudly.
+    expect(
+      computeTrustedHash({
+        sourcePath: '/home/user/.codex/hooks.json',
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: '/home/user/.tma1/hooks/agent-hook.sh',
+        matcher: ''
+      })
+    ).toBe('sha256:f8b48c31eabfba63f117b8570b839a5f6efc1d67867512d661775b5312df946f')
+  })
+
   it('produces a different hash when statusMessage is set', () => {
     const a = computeTrustedHash({
       sourcePath: '/x/hooks.json',

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitUsernameModule from '../git/git-username'
 import { performance } from 'node:perf_hooks'
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
@@ -491,9 +492,13 @@ vi.mock('../git/repo', async (importOriginal) => {
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null),
-    getGitUsername: vi.fn().mockReturnValue('')
+    getBranchConflictKind: vi.fn().mockResolvedValue(null)
   }
+})
+
+vi.mock('../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+  return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
 function resetRuntimeTestMocks(): void {

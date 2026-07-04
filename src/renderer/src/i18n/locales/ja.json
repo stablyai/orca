@@ -1170,7 +1170,9 @@
         "ephemeralVm": "ワークスペースごとの環境",
         "chooseRunTarget": "ターゲットを選択",
         "noRunTargets": "このプロジェクトには実行ターゲットが準備されていません。",
-        "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする"
+        "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする",
+        "branchName": "ブランチ名",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "ワークツリーを作成する",
@@ -2450,6 +2452,7 @@
             "0a917b591a": "ペースト",
             "f3eeb1de13": "コピー",
             "c2f0b72b8d": "入れる",
+            "openLinkDefaultBrowser": "既定のブラウザで開く",
             "925f49f210": "ペインを展開する",
             "df766809e0": "ペインを折りたたむ",
             "cff67afad1": "Copy Context"
@@ -2586,7 +2589,8 @@
             "openLocalWorkspace": "セッションを再開する前にローカルワークスペースを開いてください。",
             "sessionQueued": "セッションをキューに追加しました",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースにドロップしてください。"
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "新しい分割"
@@ -3488,7 +3492,9 @@
           "8401a7a0d0": "1 個の repos",
           "d4f1df62ef": "{{value0}} 個の repos",
           "b4263a2ac4": "{{value1}} で {{value0}} が見つかりました。",
-          "24eda6c8b2": "スキャン中... {{value0}}"
+          "24eda6c8b2": "スキャン中... {{value0}}",
+          "6149d5203f": "選択されている repos がありません。代わりに親フォルダーを開くと、Git 機能なしでエディター、terminal、検索を利用できます。",
+          "e52454b7f6": "フォルダーとして開く"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "スキャンの停止",
@@ -9577,7 +9583,8 @@
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -10219,8 +10226,8 @@
           "title": "カスタムネットワークアドレス",
           "description": "同じ Wi-Fi に接続していないときにスマートフォンから到達できるアドレスを指定します。たとえば Tailscale のホスト名や静的 IP です。",
           "label": "アドレス",
-          "placeholder": "my-mac.ts.net または 192.168.1.50",
-          "hint": "IP アドレスまたは Tailscale のホスト名（.ts.net で終わる）を入力してください。",
+          "placeholder": "my-mac.ts.net、home.example.com、または 192.168.1.50",
+          "hint": "IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :ポート を付けられます。",
           "cancel": "キャンセル",
           "use": "アドレスを使用"
         },
@@ -11713,7 +11720,8 @@
             "4bb7424d6b": "Canceled",
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "開く",
-            "09a9489aa5": "Show"
+            "09a9489aa5": "Show",
+            "2a4c4b8e1f": "コピー"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",

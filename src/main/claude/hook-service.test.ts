@@ -269,6 +269,12 @@ describe('ClaudeHookService.installRemote', () => {
     const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
     expect(script).toContain('#!/bin/sh')
     expect(script).toContain('DEVIN_PROJECT_DIR')
+    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+    // on the curl command line (EDR oversized-command-line false positive),
+    // matching the Windows curl.exe hook post.
+    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
   })
 

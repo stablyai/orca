@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitUsernameModule from '../git/git-username'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -24,7 +25,7 @@ const {
   addSparseWorktreeMock,
   removeWorktreeMock,
   forceDeleteLocalBranchMock,
-  getGitUsernameMock,
+  resolveLocalGitUsernameMock,
   getDefaultBaseRefMock,
   resolveDefaultBaseRefViaExecMock,
   getDefaultRemoteMock,
@@ -73,7 +74,7 @@ const {
   addSparseWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
   forceDeleteLocalBranchMock: vi.fn(),
-  getGitUsernameMock: vi.fn(),
+  resolveLocalGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
   resolveDefaultBaseRefViaExecMock: vi.fn(),
   getDefaultRemoteMock: vi.fn(),
@@ -127,12 +128,16 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../git/repo', () => ({
-  getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getDefaultRemote: getDefaultRemoteMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
+
+vi.mock('../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+  return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
+})
 
 vi.mock('../github/client', () => ({
   getPRForBranch: getPRForBranchMock,
@@ -286,7 +291,7 @@ describe('registerWorktreeHandlers', () => {
       addSparseWorktreeMock,
       removeWorktreeMock,
       forceDeleteLocalBranchMock,
-      getGitUsernameMock,
+      resolveLocalGitUsernameMock,
       getDefaultBaseRefMock,
       resolveDefaultBaseRefViaExecMock,
       getDefaultRemoteMock,
@@ -386,7 +391,7 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
     store.getAllWorktreeLineage.mockReturnValue({})
-    getGitUsernameMock.mockReturnValue('')
+    resolveLocalGitUsernameMock.mockResolvedValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
     resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getDefaultRemoteMock.mockResolvedValue('origin')

@@ -1,6 +1,6 @@
 import React from 'react'
 
-function isGitHubUserAttachmentUrl(href: string | undefined): href is string {
+export function isGitHubUserAttachmentUrl(href: string | undefined): href is string {
   if (!href) {
     return false
   }
@@ -65,5 +65,50 @@ export function GitHubUserAttachmentVideo({
         {children}
       </a>
     </video>
+  )
+}
+
+export function GitHubUserAttachmentImage({
+  src,
+  alt
+}: {
+  src: string
+  alt: string | undefined
+}): React.ReactElement {
+  const [failed, setFailed] = React.useState(false)
+  const label = alt?.trim() || src
+
+  // Why: private-repo attachment images can't load cross-origin without the
+  // user's GitHub session cookies, so wrap in a top-level link (opening the
+  // URL where that session exists) and drop to a text link on load error.
+  if (failed) {
+    return (
+      <a
+        href={src}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {label}
+      </a>
+    )
+  }
+
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-block max-w-full"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <img
+        src={src}
+        alt={alt ?? ''}
+        className="my-3 max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-black/10 dark:outline-white/10"
+        onError={() => setFailed(true)}
+      />
+    </a>
   )
 }

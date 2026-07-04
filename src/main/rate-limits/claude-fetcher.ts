@@ -14,6 +14,7 @@ import type {
   UsageRateLimitSource
 } from '../../shared/rate-limit-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import type { NetworkProxySettings } from '../../shared/network-proxy'
 import { fetchViaPty } from './claude-pty'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import {
@@ -505,9 +506,13 @@ async function fetchClaudeUsageViaCli(input: {
   authPreparation?: ClaudeRuntimeAuthPreparation
   oauthCredentials: OAuthCredentialReadResult
   attempts: ClaudeUsageAttemptState
+  networkProxySettings?: NetworkProxySettings
 }): Promise<ProviderRateLimits> {
   recordAttempt(input.attempts, 'cli')
-  const limits = await fetchViaPty({ authPreparation: input.authPreparation })
+  const limits = await fetchViaPty({
+    authPreparation: input.authPreparation,
+    networkProxySettings: input.networkProxySettings
+  })
   return withClaudeUsageMetadata(
     limits,
     metadataForAttempt({
@@ -561,6 +566,7 @@ async function supplementOAuthUsageFromCli(input: {
   oauthCredentials: OAuthCredentialReadResult
   attempts: ClaudeUsageAttemptState
   allowUsagePanelSupplement: boolean
+  networkProxySettings?: NetworkProxySettings
 }): Promise<ProviderRateLimits> {
   if (!canSupplementOAuthUsageFromCli(input)) {
     return input.oauthLimits
@@ -569,7 +575,8 @@ async function supplementOAuthUsageFromCli(input: {
     const cliLimits = await fetchClaudeUsageViaCli({
       authPreparation: input.authPreparation,
       oauthCredentials: input.oauthCredentials,
-      attempts: input.attempts
+      attempts: input.attempts,
+      networkProxySettings: input.networkProxySettings
     })
     return mergeClaudeUsageWindows(input.oauthLimits, cliLimits)
   } catch (err) {
@@ -635,7 +642,8 @@ async function attemptCliRepairThenRetryOAuth(input: {
     cliResult = await fetchClaudeUsageViaCli({
       authPreparation: input.options?.authPreparation,
       oauthCredentials: input.oauthCredentials,
-      attempts: input.attempts
+      attempts: input.attempts,
+      networkProxySettings: input.options?.networkProxySettings
     })
   } catch (err) {
     warnClaudeUsageFetchFailure(input.options?.authPreparation, input.oauthCredentials, err)
@@ -674,6 +682,12 @@ export type FetchClaudeRateLimitsOptions = {
   authPreparation?: ClaudeRuntimeAuthPreparation
   allowPtyFallback?: boolean
   allowUsagePanelSupplement?: boolean
+  networkProxySettings?: NetworkProxySettings
+}
+
+export type FetchManagedAccountUsageOptions = {
+  allowUsagePanelSupplement?: boolean
+  networkProxySettings?: NetworkProxySettings
 }
 
 export async function fetchClaudeRateLimits(
@@ -711,6 +725,7 @@ export async function fetchClaudeRateLimits(
         authPreparation: options?.authPreparation,
         oauthCredentials,
         attempts,
+        networkProxySettings: options?.networkProxySettings,
         allowUsagePanelSupplement:
           options?.allowUsagePanelSupplement ?? isManagedClaudeAuth(options?.authPreparation)
       })
@@ -751,7 +766,8 @@ export async function fetchClaudeRateLimits(
           return await fetchClaudeUsageViaCli({
             authPreparation: options?.authPreparation,
             oauthCredentials,
-            attempts
+            attempts,
+            networkProxySettings: options?.networkProxySettings
           })
         } catch (ptyError) {
           warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, ptyError)
@@ -808,7 +824,8 @@ export async function fetchClaudeRateLimits(
       return await fetchClaudeUsageViaCli({
         authPreparation: options?.authPreparation,
         oauthCredentials,
-        attempts
+        attempts,
+        networkProxySettings: options?.networkProxySettings
       })
     } catch (err) {
       warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, err)
@@ -853,7 +870,8 @@ export async function fetchClaudeRateLimits(
       return await fetchClaudeUsageViaCli({
         authPreparation: options?.authPreparation,
         oauthCredentials,
-        attempts
+        attempts,
+        networkProxySettings: options?.networkProxySettings
       })
     } catch (err) {
       warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, err)
@@ -1060,13 +1078,17 @@ async function fetchManagedUsagePanelSupplement(input: {
   location: ManagedCredentialsLocation
   credentialsJson: string
   oauthLimits: ProviderRateLimits
+  networkProxySettings?: NetworkProxySettings
 }): Promise<ProviderRateLimits | null> {
   const authPreparation = getManagedUsagePanelAuthPreparation(input.account, input.location)
   if (!authPreparation) {
     return null
   }
   return withManagedPreviewKeychainCredentials(input.location, input.credentialsJson, async () => {
-    const cliLimits = await fetchViaPty({ authPreparation })
+    const cliLimits = await fetchViaPty({
+      authPreparation,
+      networkProxySettings: input.networkProxySettings
+    })
     if (
       !canTrustManagedUsagePanelSupplement(input.oauthLimits, cliLimits, {
         requireMatchingOAuthWindow: input.location.kind === 'keychain'
@@ -1084,7 +1106,7 @@ async function fetchManagedUsagePanelSupplement(input: {
 
 export async function fetchManagedAccountUsage(
   account: InactiveClaudeAccountInfo,
-  options: { allowUsagePanelSupplement?: boolean } = {}
+  options: FetchManagedAccountUsageOptions = {}
 ): Promise<ProviderRateLimits> {
   const location = resolveManagedCredentialsLocation(account)
   let credentialsJson = location ? await readManagedCredentialsJson(location) : null
@@ -1148,7 +1170,8 @@ export async function fetchManagedAccountUsage(
       account,
       location,
       credentialsJson,
-      oauthLimits
+      oauthLimits,
+      networkProxySettings: options.networkProxySettings
     })
     return mergeClaudeUsageWindows(oauthLimits, cliLimits)
   } catch (err) {

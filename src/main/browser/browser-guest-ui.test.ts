@@ -105,9 +105,28 @@ describe('setupGuestContextMenu', () => {
       screenY: 375,
       pageUrl: 'https://test.dev/page',
       linkUrl: 'https://test.dev/link',
+      selectionText: '',
       canGoBack: true,
       canGoForward: true
     })
+  })
+
+  it('forwards the native selection text so the renderer can offer Copy', () => {
+    const guest = makeGuest()
+    const renderer = makeRenderer()
+
+    setupGuestContextMenu({
+      browserTabId,
+      guest,
+      resolveRenderer: () => renderer
+    })
+
+    triggerContextMenu(guest, { x: 10, y: 20, selectionText: 'copied selection' })
+
+    expect(rendererSendMock).toHaveBeenCalledWith(
+      'browser:context-menu-requested',
+      expect.objectContaining({ selectionText: 'copied selection' })
+    )
   })
 
   it('reads navigation state from navigationHistory', () => {

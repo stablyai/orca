@@ -13,6 +13,7 @@ import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetche
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import type { NetworkProxySettings } from '../../shared/network-proxy'
 import {
   normalizeClaudeAccountSelectionTarget,
   type ClaudeAccountSelectionTarget,
@@ -121,6 +122,7 @@ export class RateLimitService {
   private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
+  private networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
   private inactiveClaudeCache = new Map<string, ProviderRateLimits>()
   private inactiveCodexCache = new Map<string, ProviderRateLimits>()
   private inactiveClaudeFetching = new Set<string>()
@@ -162,6 +164,10 @@ export class RateLimitService {
 
   setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
     this.geminiCliOAuthEnabledResolver = resolver
+  }
+
+  setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
+    this.networkProxySettingsResolver = resolver
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
@@ -383,7 +389,8 @@ export class RateLimitService {
       }
       try {
         const fresh = await fetchManagedAccountUsage(account, {
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
+          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+          networkProxySettings: this.networkProxySettingsResolver?.()
         })
         if (
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
@@ -890,7 +897,8 @@ export class RateLimitService {
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
           allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
+          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+          networkProxySettings: this.networkProxySettingsResolver?.()
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -1066,7 +1074,8 @@ export class RateLimitService {
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
       allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-      allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
+      allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+      networkProxySettings: this.networkProxySettingsResolver?.()
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',

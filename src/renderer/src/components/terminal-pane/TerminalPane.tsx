@@ -2971,6 +2971,8 @@ export default function TerminalPane({
         menuPaneIsExpanded={
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
+        linkUrl={contextMenu.menuLinkUrl}
+        onOpenLinkInDefaultBrowser={contextMenu.onOpenLinkInDefaultBrowser}
         onCopy={() => void contextMenu.onCopy()}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}

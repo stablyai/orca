@@ -86,7 +86,6 @@ import {
   type SshTarget
 } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
-import { getGitUsername } from './git/repo'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
 import {
   getDefaultPersistedState,
@@ -3805,9 +3804,8 @@ export class Store {
 
   /**
    * O(1) read of the persisted repo count. Use this when you only need the
-   * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo and
-   * may run a synchronous git subprocess via `getGitUsername()`, which is
-   * wasteful when the caller only reads `.length`.
+   * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo, which
+   * is wasteful when the caller only reads `.length`.
    */
   getRepoCount(): number {
     return this.state.repos.length
@@ -3816,6 +3814,32 @@ export class Store {
   getRepo(id: string): Repo | undefined {
     const repo = this.state.repos.find((r) => r.id === id)
     return repo ? this.hydrateRepo(repo) : undefined
+  }
+
+  /**
+   * Record a background-resolved git username (repo-git-username-enrichment).
+   * Kept out of updateRepo's whitelist so the renderer-facing update surface
+   * cannot write it directly. Returns true when the hydrated value changed.
+   */
+  setResolvedRepoGitUsername(id: string, username: string): boolean {
+    const repo = this.state.repos.find((r) => r.id === id)
+    if (!repo) {
+      return false
+    }
+    const previous = this.gitUsernameCache.get(repo.path) ?? repo.gitUsername ?? ''
+    this.gitUsernameCache.set(repo.path, username)
+    if (previous === username) {
+      return false
+    }
+    if (username) {
+      // Why: persisting the resolved value lets the next launch hydrate repos
+      // with the right branch prefix before enrichment has re-run.
+      repo.gitUsername = username
+    } else {
+      delete repo.gitUsername
+    }
+    this.scheduleSave()
+    return true
   }
 
   getProjectGroups(): ProjectGroup[] {
@@ -4351,14 +4375,15 @@ export class Store {
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
+    // Why: username resolution spawns git/gh subprocesses, so it must never
+    // run inside hydration — the first getRepos() of a launch executes on the
+    // Electron main thread and a stuck probe froze startup for minutes on
+    // Windows (issue #7225). Hydration only reads the enrichment cache or the
+    // value persisted by a previous launch; repo-git-username-enrichment.ts
+    // refreshes both in the background.
     const gitUsername = isFolderRepo(repo)
       ? ''
-      : (this.gitUsernameCache.get(repo.path) ??
-        (() => {
-          const username = getGitUsername(repo.path)
-          this.gitUsernameCache.set(repo.path, username)
-          return username
-        })())
+      : (this.gitUsernameCache.get(repo.path) ?? repo.gitUsername ?? '')
 
     return {
       ...repoWithoutIcon,

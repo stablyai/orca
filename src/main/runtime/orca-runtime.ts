@@ -558,7 +558,6 @@ import type {
   UpdatePullRequestBySlugArgs
 } from '../../shared/github-project-types'
 import {
-  getGitUsername,
   getBaseRefDefault,
   getDefaultBaseRef,
   getDefaultRemote,
@@ -578,6 +577,7 @@ import {
   getRecentDriftSubjects
 } from '../git/repo'
 import { hasLocalCommitObject } from '../git/commit-object-ref'
+import { resolveLocalGitUsername } from '../git/git-username'
 import {
   listWorktrees,
   listWorktreesStrict,
@@ -12917,7 +12917,7 @@ export class OrcaRuntimeService {
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
     let effectiveSanitizedName = sanitizedName
-    const username = getGitUsername(repo.path)
+    const username = await resolveLocalGitUsername(repo.path)
 
     const baseBranch =
       args.baseBranch ||
@@ -14584,7 +14584,7 @@ export class OrcaRuntimeService {
       } catch (error) {
         return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
       }
-      const knownHosts = await getGlabKnownHosts()
+      const knownHosts = await getGlabKnownHosts(repo.connectionId ?? null)
       const projectRef = await getGitLabProjectRefForRemote(
         repo.path,
         remote,
@@ -14709,7 +14709,7 @@ export class OrcaRuntimeService {
     connectionId?: string | null,
     localGitOptions: { wslDistro?: string } = {}
   ): Promise<string> {
-    const knownHosts = await getGlabKnownHosts()
+    const knownHosts = await getGlabKnownHosts(connectionId)
     const localGitOptionArgs =
       Object.keys(localGitOptions).length > 0 ? ([localGitOptions] as const) : []
     if (preference === 'origin') {

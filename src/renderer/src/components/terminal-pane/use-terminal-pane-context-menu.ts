@@ -41,6 +41,8 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
+import { getTerminalHttpLinkForMouseEvent } from './terminal-url-link-hit-testing'
+import { openHttpLink } from '@/lib/http-link-routing'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -81,6 +83,8 @@ type TerminalMenuState = {
   menuOpenedAtRef: React.RefObject<number>
   paneCount: number
   menuPaneId: number | null
+  menuLinkUrl: string | null
+  onOpenLinkInDefaultBrowser: () => void
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
@@ -124,6 +128,7 @@ export function useTerminalPaneContextMenu({
   const menuOpenedAtRef = useRef(0)
   const [open, setOpen] = useState(false)
   const [point, setPoint] = useState({ x: 0, y: 0 })
+  const [menuLinkUrl, setMenuLinkUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const closeMenu = (): void => {
@@ -180,6 +185,17 @@ export function useTerminalPaneContextMenu({
       )
     )
     pane.terminal.focus()
+  }
+
+  const onOpenLinkInDefaultBrowser = (): void => {
+    if (!menuLinkUrl) {
+      return
+    }
+    // Why: route through the shared funnel (not shell.openUrl directly) so this
+    // matches shift+click's system-browser path, including the loopback
+    // worktree-label rewrite for local dev-server links.
+    openHttpLink(menuLinkUrl, { worktreeId, forceSystemBrowser: true })
+    resolveMenuPane()?.terminal.focus()
   }
 
   const getShortcutPlatform = (): NodeJS.Platform => {
@@ -472,6 +488,7 @@ export function useTerminalPaneContextMenu({
     const manager = managerRef.current
     if (!manager) {
       contextPaneIdRef.current = null
+      setMenuLinkUrl(null)
       return
     }
     const clickedPane =
@@ -499,6 +516,11 @@ export function useTerminalPaneContextMenu({
       return
     }
 
+    // Why: only hit-test the link once the menu is actually opening; the Windows
+    // copy/paste path above returns without a menu and needs no link lookup.
+    setMenuLinkUrl(
+      clickedPane ? getTerminalHttpLinkForMouseEvent(clickedPane.terminal, event.nativeEvent) : null
+    )
     menuOpenedAtRef.current = Date.now()
     const bounds = boundsElement.getBoundingClientRect()
     setPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
@@ -510,12 +532,14 @@ export function useTerminalPaneContextMenu({
     if (!manager) {
       event.preventDefault()
       contextPaneIdRef.current = null
+      setMenuLinkUrl(null)
       return
     }
     const target = event.target
     if (!(target instanceof Node)) {
       event.preventDefault()
       contextPaneIdRef.current = null
+      setMenuLinkUrl(null)
       return
     }
     const clickedPane = manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
@@ -544,6 +568,8 @@ export function useTerminalPaneContextMenu({
     menuOpenedAtRef,
     paneCount,
     menuPaneId,
+    menuLinkUrl,
+    onOpenLinkInDefaultBrowser,
     onContextMenuCapture,
     onPaneTitleContextMenu,
     onCopy,

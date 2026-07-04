@@ -921,6 +921,9 @@ export type BrowserWorkspace = {
   // partition, which keeps backward compat with workspaces persisted before
   // session profiles existed.
   sessionProfileId?: string | null
+  // Why: runtime-created tabs resolve profile partition in main. Persisting it
+  // keeps isolated storage stable when the renderer profile mirror is stale.
+  sessionPartition?: string | null
   activePageId?: string | null
   pageIds?: string[]
   // Why: the active page owns real browser chrome state now, but the top-level

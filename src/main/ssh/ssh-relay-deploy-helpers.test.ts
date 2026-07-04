@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
+import { shouldProbeBuildToolchainAfterNativeDepsFailure } from './ssh-relay-build-toolchain'
 import { RELAY_SENTINEL } from './relay-protocol'
 import {
   RelayVersionMismatchError,
@@ -14,6 +15,17 @@ function createMockChannel(): ClientChannel {
     stdin: { write: vi.fn() },
     close: vi.fn()
   }) as unknown as ClientChannel
+}
+
+// execCommand only rejects with Error; narrow the caught reason (its resolve
+// type is string) and fail loudly if the command unexpectedly succeeds.
+async function execCommandRejection(promise: Promise<string>): Promise<Error> {
+  return promise.then(
+    () => {
+      throw new Error('expected execCommand to reject')
+    },
+    (err: Error) => err
+  )
 }
 
 describe('waitForSentinel', () => {
@@ -190,6 +202,50 @@ describe('execCommand', () => {
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('surfaces stdout alongside stderr on nonzero exit instead of masking it', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'npm install 2>&1')
+
+    await Promise.resolve()
+    // Why: the system-ssh transport routes the local OpenSSH client's own
+    // diagnostics to channel.stderr while the remote command's merged output
+    // arrives on stdout. stderr must not mask the real failure.
+    channel.stderr.emit('data', Buffer.from("Warning: Permanently added 'host' (ED25519)\n"))
+    channel.emit('data', Buffer.from("npm error g++: unrecognized '-std=gnu++20'\n"))
+    channel.emit('close', 1)
+
+    const error = await execCommandRejection(commandPromise)
+    expect(error.message).toContain('Permanently added')
+    expect(error.message).toContain('gnu++20')
+  })
+
+  it('keeps the merged error message greppable by the build-toolchain probe', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'npm install 2>&1')
+
+    await Promise.resolve()
+    // Why: the OpenSSH banner alone never matches the probe, so the old
+    // `stderr || stdout` masking suppressed the actionable "install build
+    // tools" hint. The merged message keeps the node-gyp failure visible.
+    channel.stderr.emit('data', Buffer.from("Warning: Permanently added 'host' (ED25519)\n"))
+    channel.emit(
+      'data',
+      Buffer.from(
+        'npm error gyp ERR! configure error\nnpm error gyp ERR! stack Error: not found: make\n'
+      )
+    )
+    channel.emit('close', 1)
+
+    const error = await execCommandRejection(commandPromise)
+    expect(shouldProbeBuildToolchainAfterNativeDepsFailure(error.message)).toBe(true)
   })
 
   it('cleans command channel listeners when a command times out', async () => {

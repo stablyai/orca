@@ -27,7 +27,8 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import { getGitUsername, getBranchConflictKind, resolveDefaultBaseRefViaExec } from '../git/repo'
+import { getBranchConflictKind, resolveDefaultBaseRefViaExec } from '../git/repo'
+import { resolveLocalGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
@@ -1451,6 +1452,7 @@ export async function createRemoteWorktree(
   // commit author identity rather than hosted-account usernames.
   const username = await getSshGitUsername(provider, repo.path)
 
+  const branchConflictSubject = args.branchNameOverride ? 'branch name' : 'worktree name'
   // Determine base branch
   // Why: previously fell back to a hardcoded 'origin/main' when
   // symbolic-ref failed. That silently handed addWorktree a ref that may
@@ -1530,7 +1532,7 @@ export async function createRemoteWorktree(
   if (!remotePathResolved) {
     if (lastBranchConflictKind) {
       throw new Error(
-        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different worktree name.`
+        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
       )
     }
     throw new Error(
@@ -1872,7 +1874,7 @@ export async function createLocalWorktree(
     return { ...options, ...localWorktreeGitOptions }
   }
 
-  const username = getGitUsername(repo.path)
+  const username = await resolveLocalGitUsername(repo.path)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const requestedDisplayName = args.displayName
@@ -1988,6 +1990,7 @@ export async function createLocalWorktree(
   let branchName = ''
   let worktreePath = ''
 
+  const branchConflictSubject = args.branchNameOverride ? 'branch name' : 'worktree name'
   let resolved = false
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
@@ -2110,12 +2113,12 @@ export async function createLocalWorktree(
     // failed instead of a generic error or (worse) an infinite spinner.
     if (lastExistingReviewNumber !== null) {
       throw new Error(
-        `Branch "${branchName}" already has PR #${lastExistingReviewNumber}. Pick a different worktree name.`
+        `Branch "${branchName}" already has PR #${lastExistingReviewNumber}. Pick a different ${branchConflictSubject}.`
       )
     }
     if (lastBranchConflictKind) {
       throw new Error(
-        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different worktree name.`
+        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
       )
     }
     throw new Error(

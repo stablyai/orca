@@ -91,13 +91,20 @@ import {
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
-import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import {
+  isStartupDiagnosticsEnabled,
+  logStartupDiagnostic,
+  logStartupMilestone
+} from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
-import { attachMainWindowServices } from './window/attach-main-window-services'
+import {
+  attachMainWindowServices,
+  ensureAutoUpdaterConfigured
+} from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { createSystemTray, destroySystemTray } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
@@ -169,6 +176,8 @@ import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
+import { CliInstaller } from './cli/cli-installer'
+import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -395,6 +404,11 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
+
+// Why: just past createMainWindow's win32 10s ready-to-show reveal fallback,
+// so a window revealed on that path still gets its tray icon.
+const TRAY_CREATE_FALLBACK_MS = 12_000
+
 const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('before-single-instance-lock', {
@@ -406,14 +420,6 @@ if (startupDiagnosticsEnabled) {
     e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
   })
   startEventLoopStallProbe()
-}
-
-// Why: startup benchmarking needs in-process timestamps — harness-side stderr
-// arrival times include pipe buffering jitter. `t` is ms since process start.
-function logStartupMilestone(event: string, details: Record<string, unknown> = {}): void {
-  if (startupDiagnosticsEnabled) {
-    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
-  }
 }
 
 function focusExistingWindow(): void {
@@ -779,9 +785,45 @@ function openMainWindow(): BrowserWindow {
   })
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
+  // Why: new Tray() is a synchronous Shell_NotifyIcon call that can block for
+  // seconds while explorer.exe's notification area is busy (part of issue
+  // #7225's pre-paint stall), so create it after first paint. The timer
+  // fallback covers windows revealed without ready-to-show ever firing
+  // (createMainWindow's win32 10s reveal fallback) — those can still be
+  // hidden to the tray on close, so the icon must exist by then.
+  let trayCreated = false
+  const createSystemTrayDeferred = (): void => {
+    if (trayCreated || window.isDestroyed() || isQuitting || !store) {
+      return
+    }
+    trayCreated = true
+    // Why: Windows-only system tray. createSystemTray is idempotent and a
+    // no-op off win32, so calling it on each window open keeps exactly one
+    // live icon.
+    createSystemTray({
+      appIcon: store.getSettings().appIcon,
+      onOpen: showMainWindowFromTray,
+      onQuit: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          // Why: a real quit can still surface renderer save/discard prompts;
+          // the window must be visible if a hidden-to-tray session vetoes
+          // shutdown.
+          showMainWindowFromTray()
+        }
+        // Why: set the quit latch before app.quit() so the window 'close'
+        // handler proceeds to teardown instead of re-hiding to the tray.
+        isQuitting = true
+        app.quit()
+      }
+    })
+    logStartupMilestone('tray-created')
+  }
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
+    setImmediate(createSystemTrayDeferred)
   })
+  const trayCreateFallback = setTimeout(createSystemTrayDeferred, TRAY_CREATE_FALLBACK_MS)
+  trayCreateFallback.unref?.()
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
   // `app_opened` to the first main-window load. Existing users in the
@@ -877,23 +919,6 @@ function openMainWindow(): BrowserWindow {
     stopAllSyntheticTitleSpinners()
   })
   mainWindow = window
-  // Why: Windows-only system tray. createSystemTray is idempotent and a no-op
-  // off win32, so calling it on each window open keeps exactly one live icon.
-  createSystemTray({
-    appIcon: store.getSettings().appIcon,
-    onOpen: showMainWindowFromTray,
-    onQuit: () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        // Why: a real quit can still surface renderer save/discard prompts; the
-        // window must be visible if a hidden-to-tray session vetoes shutdown.
-        showMainWindowFromTray()
-      }
-      // Why: set the quit latch before app.quit() so the window 'close' handler
-      // proceeds to teardown instead of re-hiding the window to the tray.
-      isQuitting = true
-      app.quit()
-    }
-  })
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
@@ -1610,6 +1635,7 @@ app.whenReady().then(async () => {
     }
   })
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)
+  rateLimits.setNetworkProxySettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store!.getSettings().keybindings
@@ -1819,7 +1845,12 @@ app.whenReady().then(async () => {
   logStartupMilestone('i18n-ready')
 
   registerAppMenu({
-    onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
+    onCheckForUpdates: (options) => {
+      // Why: the menu is clickable before first paint; a manual check must
+      // run against a configured updater (see attach-main-window-services).
+      ensureAutoUpdaterConfigured()
+      return checkForUpdatesFromMenu(options)
+    },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {
         markExpectedRendererReload(webContentsId)
@@ -1963,6 +1994,56 @@ app.whenReady().then(async () => {
       throw error
     })
     installServeSignalHandlers()
+    // Why: the orca CLI command is normally installed by the renderer onboarding /
+    // Settings "Install CLI" flow via the cli:install IPC. Headless serve has no
+    // renderer, so the command is never created and an in-terminal `orca …` fails
+    // with command-not-found. Run the idempotent installer here for the platforms
+    // where it puts a resolvable command on the managed-terminal PATH: macOS (bare
+    // `orca` in /usr/local/bin or ~/.local/bin) and Linux (`orca-ide`; bare `orca`
+    // is added by the dispatcher below). Windows is excluded — there install() would
+    // only mutate the persistent user-registry PATH without helping the current
+    // serve's child terminals. Best-effort: a failure must not block serve start.
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      try {
+        // Why: serve is headless — never let a missing-write-permission fallback
+        // pop an osascript admin prompt (it would hang serve on a GUI host). Skip
+        // instead; the user-writable ~/.local/bin path needs no elevation anyway.
+        const cliStatus = await new CliInstaller({
+          privilegedRunner: async () => {
+            throw new Error('serve CLI auto-install must not request administrator privileges')
+          }
+        }).install()
+        console.log(
+          `[serve] orca CLI install: ${cliStatus.state}${cliStatus.commandPath ? ` (${cliStatus.commandPath})` : ''}`
+        )
+      } catch (error) {
+        console.warn(
+          '[serve] orca CLI install skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+    // Why: on Linux the CLI installs as `orca-ide`, NOT bare `orca` (above), but the
+    // Claude Team launcher typed into the initial managed terminal invokes bare `orca`.
+    // Drop a bare-`orca` dispatcher on ~/.local/bin (ahead of /usr/bin on the managed
+    // terminal PATH) so `orca claude-teams` resolves. Best-effort: a failure must not
+    // block serve startup. See installLinuxBareOrcaDispatcher for the full rationale.
+    if (process.platform === 'linux' && app.isPackaged && process.resourcesPath) {
+      try {
+        const dispatcher = await installLinuxBareOrcaDispatcher({
+          resourcesPath: process.resourcesPath
+        })
+        console.log(
+          `[serve] bare orca dispatcher ${dispatcher.state}: ${dispatcher.dispatcherPath}` +
+            `${dispatcher.target ? ` -> ${dispatcher.target}` : ''}`
+        )
+      } catch (error) {
+        console.warn(
+          '[serve] bare orca dispatcher install skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
     await printServeReady(serveOptions)
     return
   }
