@@ -9,10 +9,15 @@ import type {
   SearchOptions,
   SearchResult
 } from '../../../shared/types'
-import type { RuntimeFilePreviewResult, RuntimeFileReadResult } from '../../../shared/runtime-types'
+import type {
+  RuntimeFilePreviewResult,
+  RuntimeFileReadChunkResult,
+  RuntimeFileReadResult
+} from '../../../shared/runtime-types'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
+  RuntimeRpcCallError,
   unwrapRuntimeRpcResult
 } from './runtime-rpc-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -48,6 +53,10 @@ export type RuntimeFileOperationArgs = {
   worktreePath: string | null | undefined
   connectionId?: string
 }
+
+export type RuntimeFileDownloadResult =
+  | { canceled: true }
+  | { canceled: false; destinationPath: string }
 
 type StagedRuntimeImportSource =
   | {
@@ -93,6 +102,7 @@ type RuntimeFileWatchEvent =
   | { type: 'end' }
 
 const REMOTE_UPLOAD_BASE64_CHUNK_CHARS = 512 * 1024
+const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
 
 type RuntimeFileWatchListener = {
   onPayload: (payload: FsChangedPayload) => void
@@ -146,12 +156,29 @@ export async function readRuntimeFileContent({
     throw new Error('Remote file is outside the owning runtime worktree')
   }
 
-  const result = await callRuntimeRpc<RuntimeFileReadResult>(
-    target,
-    'files.read',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), relativePath },
-    { timeoutMs: 15_000 }
-  )
+  const worktree = toRuntimeWorktreeSelector(worktreeId)
+  let result: RuntimeFileReadResult
+  try {
+    result = await callRuntimeRpc<RuntimeFileReadResult>(
+      target,
+      'files.read',
+      { worktree, relativePath },
+      { timeoutMs: 15_000 }
+    )
+  } catch (err) {
+    // Why: files.read rejects binary paths with the typed 'binary_file' error; fall
+    // back to the base64 preview RPC so PDFs/images render like local/SSH paths.
+    // Match the exact typed error so an unrelated failure can't spoof the fallback.
+    if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
+      return callRuntimeRpc<RuntimeFilePreviewResult>(
+        target,
+        'files.readPreview',
+        { worktree, relativePath },
+        { timeoutMs: 15_000 }
+      )
+    }
+    throw err
+  }
   if (result.truncated) {
     // Why: the runtime file RPC is preview-sized today; treating a truncated
     // payload as editable content would make saves overwrite the rest of the file.
@@ -177,6 +204,71 @@ export async function readRuntimeFilePreview(
     { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
     { timeoutMs: 15_000 }
   )
+}
+
+export async function downloadRuntimeFile(
+  context: RuntimeFileOperationArgs,
+  filePath: string,
+  suggestedName: string
+): Promise<RuntimeFileDownloadResult> {
+  const remoteArgs = getRemoteFileArgs(context, filePath)
+  if (!remoteArgs) {
+    if (hasRemoteRuntimeOwner(context)) {
+      throw new Error('Remote file is outside the owning runtime worktree')
+    }
+    if (context.connectionId) {
+      return window.api.fs.downloadFile({ filePath, connectionId: context.connectionId })
+    }
+    const result = await readRuntimeFilePreview(context, filePath)
+    return window.api.fs.saveDownloadedFile({
+      suggestedName,
+      content: result.content,
+      encoding: result.isBinary ? 'base64' : 'utf8'
+    })
+  }
+
+  const download = await window.api.fs.startDownloadedFile({ suggestedName })
+  if (download.canceled) {
+    return download
+  }
+
+  let finished = false
+  try {
+    let offset = 0
+    for (;;) {
+      const chunk = await callRuntimeRpc<RuntimeFileReadChunkResult>(
+        remoteArgs.target,
+        'files.readChunk',
+        {
+          worktree: remoteArgs.worktreeSelector,
+          relativePath: remoteArgs.relativePath,
+          offset,
+          length: REMOTE_DOWNLOAD_CHUNK_BYTES
+        },
+        { timeoutMs: 60_000 }
+      )
+      if (chunk.bytesRead > 0) {
+        await window.api.fs.appendDownloadedFileChunk({
+          transferId: download.transferId,
+          contentBase64: chunk.contentBase64
+        })
+      }
+      offset += chunk.bytesRead
+      if (chunk.eof) {
+        break
+      }
+      if (chunk.bytesRead <= 0) {
+        throw new Error('Remote download stalled before reaching EOF')
+      }
+    }
+    const result = await window.api.fs.finishDownloadedFile({ transferId: download.transferId })
+    finished = true
+    return result
+  } finally {
+    if (!finished) {
+      await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
+    }
+  }
 }
 
 export async function readRuntimeDirectory(

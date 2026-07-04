@@ -9,6 +9,7 @@ import {
 
 type SaveClipboardImageAsTempFile = (args?: {
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
 }) => Promise<string | null>
 
 type PasteTerminalClipboardDeps = {
@@ -19,6 +20,7 @@ type PasteTerminalClipboardDeps = {
     options?: TerminalPasteTextOptions
   ) => boolean | void | Promise<boolean | void>
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
   forceBracketedMultilineTextPaste?: boolean
   onTextPasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
@@ -42,6 +44,7 @@ export async function pasteTerminalClipboard({
   saveClipboardImageAsTempFile,
   pasteText,
   connectionId,
+  runtimeEnvironmentId,
   forceBracketedMultilineTextPaste = false,
   onTextPasteError,
   onImagePasteError
@@ -73,7 +76,7 @@ export async function pasteTerminalClipboard({
   }
 
   try {
-    const filePath = await saveClipboardImageAsTempFile({ connectionId })
+    const filePath = await saveClipboardImageAsTempFile({ connectionId, runtimeEnvironmentId })
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
     }

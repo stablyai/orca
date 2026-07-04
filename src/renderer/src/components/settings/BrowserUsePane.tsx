@@ -56,14 +56,12 @@ export function BrowserUseSetup({
   const [cliBusy, setCliBusy] = useState(false)
   const mountedRef = useMountedRef()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const browserUseInstallCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
-      : ORCA_CLI_SKILL_INSTALL_COMMAND
-  const browserUseUpdateCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
-      : ORCA_CLI_SKILL_UPDATE_COMMAND
+  const browserUseInstallCommand = !activeSkillRuntime.installDisabledReason
+    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
+    : ORCA_CLI_SKILL_INSTALL_COMMAND
+  const browserUseUpdateCommand = !activeSkillRuntime.installDisabledReason
+    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
+    : ORCA_CLI_SKILL_UPDATE_COMMAND
 
   const handleCliStatusChange = useCallback(
     (nextStatus: CliInstallStatus | null): void => {

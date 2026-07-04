@@ -10,9 +10,11 @@ import type {
   TabGroup,
   TabGroupLayoutNode,
   TerminalTab,
+  TuiAgent,
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import {
   dedupeTabOrder,
   ensureGroup,
@@ -110,6 +112,11 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
+  /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
+  setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
+  /** Flip a tab between the terminal and native chat renderings. The live
+   *  TerminalPane stays mounted — this only changes which surface is shown. */
+  toggleTabViewMode: (tabId: string) => void
   setTabCustomLabel: (
     tabId: string,
     label: string | null,
@@ -207,6 +214,31 @@ function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: boolean
   const worktreeId = found.worktreeId
   void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
     setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
+  )
+}
+
+// Why: viewMode is host-tracked like color/pin, so mirror the local toggle/set to
+// the host or it's lost on reconnect/restart and never reaches paired clients.
+// Only the user/RPC-set action path mirrors — never the reconcile that applies a
+// host value — so the echoed snapshot can't re-trigger an outbound RPC (no loop).
+function mirrorTabViewModeToHost(
+  state: AppState,
+  tabId: string,
+  viewMode: 'terminal' | 'chat'
+): void {
+  const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+  // Why: only terminal tab viewMode is persisted host-side; skip the RPC for other
+  // types instead of a no-op round trip.
+  if (
+    !found ||
+    found.tab.contentType !== 'terminal' ||
+    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+  ) {
+    return
+  }
+  const worktreeId = found.worktreeId
+  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+    setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
   )
 }
 
@@ -1033,6 +1065,48 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   setTabLabel: (tabId, label) => {
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
+  },
+
+  setTabViewMode: (tabId, mode) => {
+    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode }) ?? {})
+    mirrorTabViewModeToHost(get(), tabId, mode)
+  },
+
+  toggleTabViewMode: (tabId) => {
+    let toggled: {
+      from: 'terminal' | 'chat'
+      to: 'terminal' | 'chat'
+      agent: TuiAgent | null
+    } | null = null
+    set((state) => {
+      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      if (!found) {
+        return {}
+      }
+      // Why: default is 'terminal' for legacy/missing, so the first toggle flips
+      // to 'chat'. patchTab mutates only this tab, leaving split siblings intact.
+      const fromMode: 'terminal' | 'chat' = found.tab.viewMode === 'chat' ? 'chat' : 'terminal'
+      const nextMode = fromMode === 'chat' ? 'terminal' : 'chat'
+      // Why: `launchAgent` lives on the legacy terminal tab keyed by the unified
+      // tab's entityId — resolve it here so the toggle telemetry can attribute
+      // adoption by agent without threading it through every caller.
+      const agent =
+        (state.tabsByWorktree[found.worktreeId] ?? []).find(
+          (terminal) => terminal.id === found.tab.entityId
+        )?.launchAgent ?? null
+      toggled = { from: fromMode, to: nextMode, agent }
+      return patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }) ?? {}
+    })
+    // Why: emit after the state write so the event reflects the committed mode.
+    const committed = toggled as {
+      from: 'terminal' | 'chat'
+      to: 'terminal' | 'chat'
+      agent: TuiAgent | null
+    } | null
+    if (committed) {
+      emitNativeChatToggled(committed)
+      mirrorTabViewModeToHost(get(), tabId, committed.to)
+    }
   },
 
   setRenamingTabId: (tabId) => {

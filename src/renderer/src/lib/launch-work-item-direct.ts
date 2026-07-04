@@ -264,7 +264,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         draftContent,
         promptDelivery,
         settings,
-        launchPlatform
+        launchPlatform,
+        // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
+        // rename must not be applied for remote launches.
+        isRemote: typeof launchConnectionId === 'string'
       }))
 
     const activation = activateAndRevealWorktree(worktreeId, {
@@ -299,6 +302,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   // were launched with the draft already on argv (Claude --prefill today),
   // the context is in the input box already — pasting again would duplicate it.
   if (!primaryTabId || !startupPlan || draftLaunchedNatively) {
+    return true
+  }
+  if (promptDelivery === 'draft' && startupPlan.draftPrompt) {
+    // Why: startup-owned draft paste observes the first PTY frames; the older
+    // delayed sidecar path can attach too late and miss Codex's ready marker.
     return true
   }
 

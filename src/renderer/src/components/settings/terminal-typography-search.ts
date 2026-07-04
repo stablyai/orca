@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const getTerminalTypographySearchEntries = createLocalizedCatalog(() => [
+const getTerminalTypographySearchEntryCatalog = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.5930244899', 'Font Size'),
     description: translate(
@@ -99,6 +99,14 @@ export const getTerminalTypographySearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+export const getTerminalTypographySearchEntries = createLocalizedCatalog(() => [
+  ...getTerminalTypographySearchEntryCatalog()
+])
+
+export const getTerminalAdvancedTypographySearchEntries = createLocalizedCatalog(() =>
+  getTerminalTypographySearchEntryCatalog().slice(2)
+)
 
 export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
   {

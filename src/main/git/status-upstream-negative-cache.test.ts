@@ -30,6 +30,14 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
+function isConfigListSnapshotCommand(args: string[]): boolean {
+  return args[0] === 'config' && args[1] === '--list' && args[2] === '-z'
+}
+
+function emptyGitConfigSnapshot(): { stdout: string } {
+  return { stdout: 'core.repositoryformatversion\n0\0' }
+}
+
 import {
   clearEffectiveUpstreamNegativeStatusCache,
   clearEffectiveUpstreamStatusCacheForTests,
@@ -62,6 +70,9 @@ describe('local upstream negative cache', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
       }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
+      }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
@@ -92,8 +103,10 @@ describe('local upstream negative cache', () => {
   it('keeps an older automatic negative probe from overwriting a strict positive result', async () => {
     let originBranchExists = false
     let deferredOriginReject: ((error: Error) => void) | null = null
+    let statusCommandCalls = 0
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
+        statusCommandCalls += 1
         return {
           stdout: '# branch.oid abcdef1234567890\n# branch.head feature\n'
         }
@@ -103,6 +116,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         if (originBranchExists) {
@@ -123,6 +139,7 @@ describe('local upstream negative cache', () => {
 
     originBranchExists = true
     const strict = await getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
+    expect(statusCommandCalls).toBe(2)
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }
@@ -162,6 +179,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         if (originBranchExists) {
@@ -224,6 +244,9 @@ describe('local upstream negative cache', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
+      }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
@@ -279,6 +302,9 @@ describe('local upstream negative cache', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
+      }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         throw new Error('missing remote branch')
       }
@@ -309,6 +335,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${currentBranch}`)) {
         return { stdout: 'abc123\n' }

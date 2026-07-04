@@ -486,6 +486,9 @@ function buildRuntimeMobileAgentStatusProjection(
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
+        // Why: include so a newly-captured AskUserQuestion prompt re-fires the
+        // mobile session republish even when no other field changed.
+        interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         interrupted: entry.interrupted ?? null
       }))
@@ -700,7 +703,11 @@ export function buildMobileSessionTabSnapshots(
     const unifiedTabByIdForWorktree = new Map(
       (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
-    const editorIds = openFileIndexes.idsByWorktree.get(worktreeId) ?? []
+    const openFilesForWorktree = openFileIndexes.byWorktreeAndId.get(worktreeId)
+    const editorIds = (openFileIndexes.idsByWorktree.get(worktreeId) ?? []).filter((fileId) => {
+      const file = openFilesForWorktree?.get(fileId)
+      return file ? isMobilePublishableOpenFile(file) : false
+    })
     const publishableTerminalIds = [...terminalTabByIdForWorktree.values()]
       .filter((terminal) => !isWebOnlyMirroredTerminalTab(state, terminal))
       .map((terminal) => terminal.id)
@@ -732,8 +739,8 @@ export function buildMobileSessionTabSnapshots(
           )
         )
       } else if (item.type === 'editor') {
-        const file = openFileIndexes.byWorktreeAndId.get(worktreeId)?.get(item.id)
-        if (!file) {
+        const file = openFilesForWorktree?.get(item.id)
+        if (!file || !isMobilePublishableOpenFile(file)) {
           continue
         }
         const markdown = buildMobileMarkdownTab(
@@ -774,7 +781,6 @@ export function buildMobileSessionTabSnapshots(
     // Why: split-group projection can miss plain editor files during hydration.
     // Publish the missing file so paired mobile/web clients still mirror it.
     const fallbackEditorTabs: FallbackEditorTabTarget[] = []
-    const openFilesForWorktree = openFileIndexes.byWorktreeAndId.get(worktreeId)
     if (openFilesForWorktree) {
       const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
       const unifiedEditorFileIds = new Set(unifiedEditorTabs.map((tab) => tab.entityId))
@@ -783,7 +789,7 @@ export function buildMobileSessionTabSnapshots(
           continue
         }
         const file = openFilesForWorktree.get(unifiedTab.entityId)
-        if (!file) {
+        if (!file || !isMobilePublishableOpenFile(file)) {
           continue
         }
         const markdown = buildMobileMarkdownTab(
@@ -802,6 +808,9 @@ export function buildMobileSessionTabSnapshots(
         emittedEditorTabIds.add(unifiedTab.id)
       }
       for (const file of openFilesForWorktree.values()) {
+        if (!isMobilePublishableOpenFile(file)) {
+          continue
+        }
         if (emittedEditorFileIds.has(file.id)) {
           continue
         }
@@ -1433,6 +1442,23 @@ function isMobileFileDiffSource(
   diffSource: AppState['openFiles'][number]['diffSource']
 ): diffSource is 'staged' | 'unstaged' {
   return diffSource === 'staged' || diffSource === 'unstaged'
+}
+
+function isMobileUnsupportedCombinedDiffSource(
+  diffSource: AppState['openFiles'][number]['diffSource']
+): boolean {
+  return (
+    diffSource === 'combined-all' ||
+    diffSource === 'combined-uncommitted' ||
+    diffSource === 'combined-branch' ||
+    diffSource === 'combined-commit'
+  )
+}
+
+function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
+  // Why: combined diff tabs use display labels as relative paths and require
+  // the desktop combined renderer; mobile would otherwise try files.read.
+  return !isMobileUnsupportedCombinedDiffSource(file.diffSource)
 }
 
 function buildMobileBrowserTab(

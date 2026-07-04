@@ -19,10 +19,10 @@
 // can reconnect by running relay.js --connect, which bridges the new
 // SSH channel's stdin/stdout to the existing relay's socket.
 
-import { createServer, createConnection, type Socket, type Server } from 'net'
-import { homedir } from 'os'
-import { resolve, join } from 'path'
-import { unlinkSync, existsSync, statSync } from 'fs'
+import { createServer, createConnection, type Socket, type Server } from 'node:net'
+import { homedir } from 'node:os'
+import { resolve, join } from 'node:path'
+import { unlinkSync, existsSync, statSync } from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -57,6 +57,7 @@ import {
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
+import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
@@ -536,8 +537,10 @@ async function main(): Promise<void> {
       // Why: source-dir defaulting is keyed on which Pi-compatible agent is
       // being launched (Pi vs OMP). Install Orca's guarded extension into that
       // real remote agent dir without redirecting PI_CODING_AGENT_DIR.
-      const kind = detectPiAgentKindFromCommand(ctx.command)
-      const hasLaunchCommand = typeof ctx.command === 'string' && ctx.command.trim().length > 0
+      const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(ctx.env, ctx.command)
+      const kind = detectPiAgentKindFromCommand(launchCommandHint)
+      const hasLaunchCommand =
+        typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
       const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
       if (kind === 'pi') {
         const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')
@@ -892,12 +895,13 @@ async function main(): Promise<void> {
   function startGrace(reason: string): void {
     const startupEmptyDetached =
       detached && !hasAcceptedSocketClient && ptyHandler.activePtyCount === 0
-    const timeoutMs =
-      graceTimeMs === 0
-        ? 0
-        : startupEmptyDetached
-          ? Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
-          : graceTimeMs
+    // Why: "until reset" preserves real PTYs, but a detached relay that never
+    // accepted a client has no terminal state and should not linger forever.
+    const timeoutMs = startupEmptyDetached
+      ? graceTimeMs === 0
+        ? EMPTY_DETACHED_STARTUP_GRACE_MS
+        : Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
+      : graceTimeMs
     graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
     graceReason = reason
     process.stderr.write(

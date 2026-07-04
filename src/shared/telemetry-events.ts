@@ -293,11 +293,14 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'openLinksInApp',
   'experimentalMobile',
   'experimentalPet',
+  'experimentalNativeChat',
   'experimentalActivity',
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
+  'experimentalEphemeralVms',
   'experimentalWorktreeSymlinks',
-  'geminiCliOAuthEnabled'
+  'geminiCliOAuthEnabled',
+  'openAgentTabsInChatByDefault'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
@@ -437,6 +440,28 @@ const settingsChangedSchema = z
   .object({
     setting_key: settingsChangedKeySchema,
     value_kind: z.enum(['bool', 'enum'])
+  })
+  .strict()
+
+// Native chat view (per-tab terminal⇄chat toggle) adoption signals.
+// `agent_kind` reuses the shared closed enum so dashboards can slice adoption
+// by agent. The view-mode enum mirrors `Tab.viewMode` in shared/types.ts.
+const nativeChatViewModeSchema = z.enum(['terminal', 'chat'])
+const nativeChatToggledSchema = z
+  .object({
+    from_mode: nativeChatViewModeSchema,
+    to_mode: nativeChatViewModeSchema,
+    agent_kind: agentKindSchema
+  })
+  .strict()
+// `runtime` records whether the agent PTY runs locally or over an SSH/remote
+// runtime; `'unknown'` when the owning runtime cannot be resolved at send time.
+const nativeChatRuntimeSchema = z.enum(['local', 'remote', 'unknown'])
+export type NativeChatRuntime = z.infer<typeof nativeChatRuntimeSchema>
+const nativeChatMessageSentSchema = z
+  .object({
+    agent_kind: agentKindSchema,
+    runtime: nativeChatRuntimeSchema
   })
   .strict()
 
@@ -1377,6 +1402,9 @@ export const eventSchemas = {
   agent_hook_unattributed: agentHookUnattributedSchema,
 
   settings_changed: settingsChangedSchema,
+
+  native_chat_toggled: nativeChatToggledSchema,
+  native_chat_message_sent: nativeChatMessageSentSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,

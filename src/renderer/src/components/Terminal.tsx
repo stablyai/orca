@@ -58,13 +58,14 @@ import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
-import { addBackgroundMountedTerminalWorktree } from './terminal/background-terminal-worktree-mount'
+import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { setForegroundTerminalWorktreeIds } from '@/lib/foreground-terminal-worktrees'
+import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
@@ -83,6 +84,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { listBoundAgentTabActions, resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
 import {
   createFloatingWorkspaceBrowserTab,
@@ -231,6 +233,7 @@ function Terminal(): React.JSX.Element | null {
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+  const hydrationSucceeded = useAppStore((s) => s.hydrationSucceeded)
   const openFiles = useAppStore((s) => s.openFiles)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
@@ -277,23 +280,23 @@ function Terminal(): React.JSX.Element | null {
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
     activeView === 'activity'
   )
-  const foregroundTerminalWorktreeIds = useMemo(() => {
+  const foregroundTerminalTabIds = useMemo(() => {
     const ids = new Set<string>()
-    if (activeView === 'terminal' && renderedActiveWorktreeId) {
-      ids.add(renderedActiveWorktreeId)
+    if (activeView === 'terminal' && activeTabType === 'terminal' && activeTabId) {
+      ids.add(activeTabId)
     }
     for (const portal of activityTerminalPortals) {
-      ids.add(portal.worktreeId)
+      ids.add(portal.tabId)
     }
     return Array.from(ids)
-  }, [activeView, activityTerminalPortals, renderedActiveWorktreeId])
+  }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
 
   useEffect(() => {
     // Why: hibernation must treat terminals portaled into foreground surfaces
-    // as visible even when they are not the singular active worktree.
-    setForegroundTerminalWorktreeIds(foregroundTerminalWorktreeIds)
-    return () => setForegroundTerminalWorktreeIds([])
-  }, [foregroundTerminalWorktreeIds])
+    // as visible even when they are not the singular active terminal tab.
+    setForegroundTerminalTabIds(foregroundTerminalTabIds)
+    return () => setForegroundTerminalTabIds([])
+  }, [foregroundTerminalTabIds])
 
   const tabs = useMemo(
     () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
@@ -714,27 +717,15 @@ function Terminal(): React.JSX.Element | null {
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
       const worktreeId = customEvent.detail?.worktreeId
-      addBackgroundMountedTerminalWorktree(mountedWorktreeIdsRef.current, worktreeId, () =>
-        setBackgroundMountRevision((revision) => revision + 1)
-      )
-      if (!worktreeId) {
-        return
-      }
-      measurableBackgroundWorktreeIdsRef.current.add(worktreeId)
-      const existingTimer = timers.get(worktreeId)
-      if (existingTimer !== undefined) {
-        window.clearTimeout(existingTimer)
-      }
-      // Why: background renderer-backed terminal creation must be measurable
-      // for the first xterm fit, but it must not keep hidden worktrees laid
-      // out indefinitely after the PTY has started.
-      const timer = window.setTimeout(() => {
-        measurableBackgroundWorktreeIdsRef.current.delete(worktreeId)
-        timers.delete(worktreeId)
-        setBackgroundMountRevision((revision) => revision + 1)
-      }, 3000)
-      timers.set(worktreeId, timer)
-      setBackgroundMountRevision((revision) => revision + 1)
+      scheduleBackgroundTerminalWorktreeMeasure({
+        mountedWorktreeIds: mountedWorktreeIdsRef.current,
+        measurableBackgroundWorktreeIds: measurableBackgroundWorktreeIdsRef.current,
+        timers,
+        worktreeId,
+        onRevision: () => setBackgroundMountRevision((revision) => revision + 1),
+        setTimeoutFn: window.setTimeout,
+        clearTimeoutFn: window.clearTimeout
+      })
     }
     window.addEventListener(
       BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
@@ -807,6 +798,21 @@ function Terminal(): React.JSX.Element | null {
     // (handleNewTab below) still bump normally.
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
   }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+
+  const startupResumeWorktreeIdsRef = useRef(new Set<string>())
+  useEffect(() => {
+    if (!workspaceSessionReady || !hydrationSucceeded || !activeWorktreeId) {
+      return
+    }
+    if (startupResumeWorktreeIdsRef.current.has(activeWorktreeId)) {
+      return
+    }
+    startupResumeWorktreeIdsRef.current.add(activeWorktreeId)
+    // Why: startup hydration restores the active worktree without calling
+    // activateAndRevealWorktree, so orphaned live/quit records need a terminal
+    // surface pass after pane-level cold restore had first chance.
+    resumeSleepingAgentSessionsForWorktree(activeWorktreeId)
+  }, [activeWorktreeId, hydrationSucceeded, workspaceSessionReady])
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
@@ -968,8 +974,7 @@ function Terminal(): React.JSX.Element | null {
         return
       }
       createBrowserTab(activeWorktreeId, source.url, {
-        title: source.title,
-        sessionProfileId: source.sessionProfileId
+        ...buildDuplicatedBrowserTabOptions(source)
       })
     },
     [activeWorktreeId, createBrowserTab]
@@ -1881,7 +1886,7 @@ function Terminal(): React.JSX.Element | null {
                           key={`${tab.id}-${tab.generation ?? 0}`}
                           tabId={tab.id}
                           worktreeId={workspace.id}
-                          cwd={workspace.path}
+                          cwd={tab.startupCwd ?? workspace.path}
                           isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
                           // Why: the activity page hosts this existing pane via
                           // portal while the workspace surface remains hidden.

@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: this integration-style RPC test keeps the request/response contract together so regressions in the external CLI surface are easier to spot. */
-import { existsSync, mkdtempSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { createConnection, type Socket } from 'net'
-import { EventEmitter } from 'events'
+import { existsSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createConnection, type Socket } from 'node:net'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import Database from '../sqlite/sync-database'
@@ -351,6 +351,7 @@ describe('OrcaRuntimeRpcServer', () => {
       expect(parsed?.endpoint).toBe(offer.endpoint)
       expect(parsed?.deviceToken).toBeTruthy()
       expect(parsed?.publicKeyB64).toBeTruthy()
+      expect(parsed?.scope).toBe('runtime')
       expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.scope).toBe('runtime')
     }
 
@@ -2049,6 +2050,46 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
+  it('stamps the authenticated device scope onto status.get for WebSocket clients', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const mobile = server['deviceRegistry']!.addDevice('phone', 'mobile')
+    const runtimeDevice = server['deviceRegistry']!.addDevice('browser', 'runtime')
+
+    const sendStatus = async (token: string): Promise<Record<string, unknown>> => {
+      const replies: Record<string, unknown>[] = []
+      await server['handleWebSocketMessage'](
+        JSON.stringify({ id: 'req_status', method: 'status.get', deviceToken: token }),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {}
+      )
+      return replies[0]!
+    }
+
+    const mobileReply = await sendStatus(mobile.token)
+    expect(mobileReply).toMatchObject({ id: 'req_status', ok: true })
+    // Why: the mobile-scope web client reads this to refuse the full app.
+    expect((mobileReply.result as { deviceScope?: string }).deviceScope).toBe('mobile')
+
+    const runtimeReply = await sendStatus(runtimeDevice.token)
+    expect((runtimeReply.result as { deviceScope?: string }).deviceScope).toBe('runtime')
+
+    // Other methods stay unmodified — only status.get carries the scope.
+    const replies: Record<string, unknown>[] = []
+    await server['handleWebSocketMessage'](
+      JSON.stringify({ id: 'req_forbidden', method: 'files.delete', deviceToken: mobile.token }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    expect(replies[0]).toMatchObject({
+      id: 'req_forbidden',
+      ok: false,
+      error: { code: 'forbidden' }
+    })
+  })
+
   it('rejects requests with the wrong auth token', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -2498,7 +2539,8 @@ describe('OrcaRuntimeRpcServer', () => {
         worktree: 'id:repo-1::/tmp/worktree-a',
         command: "claude 'work on the issue'",
         tabId: 'laptop-tab',
-        leafId
+        leafId,
+        presentation: 'background'
       }
     })
 
@@ -2512,6 +2554,9 @@ describe('OrcaRuntimeRpcServer', () => {
         }
       }
     })
+    expect(
+      (createResponse.result as { terminal?: { warning?: string } } | undefined)?.terminal?.warning
+    ).toBeUndefined()
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 456)
     runtime.onPtyData('laptop-created-pty', 'Claude is working...\r\n', 456)
 
@@ -2604,6 +2649,7 @@ describe('OrcaRuntimeRpcServer', () => {
     if (!phoneOffer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
+    expect(parsePairingCode(phoneOffer.pairingUrl)?.scope).toBe('mobile')
     const phone = await authenticateMobileWsSession(phoneOffer.pairingUrl)
     const phoneResponses = createEncryptedWsResponseReader(phone)
     const metadata = readRuntimeMetadata(userDataPath)

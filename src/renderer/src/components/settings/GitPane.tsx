@@ -8,6 +8,10 @@ import { getGitPaneSearchEntries } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
+import {
+  CompareAgainstUpstreamSetting,
+  compareAgainstUpstreamMatchesSearch
+} from './CompareAgainstUpstreamSetting'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
@@ -281,6 +285,13 @@ export function GitPane({
     }) ? (
       <SourceControlGroupOrderSetting
         key="source-control-group-order"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
+    compareAgainstUpstreamMatchesSearch(searchQuery) ? (
+      <CompareAgainstUpstreamSetting
+        key="compare-against-upstream"
         settings={settings}
         updateSettings={updateSettings}
       />

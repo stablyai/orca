@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect } from 'react'
 import { useEmulatorFrameStream } from './use-emulator-frame-stream'
+import { useEmulatorVideoStream } from './use-emulator-video-stream'
 import { translate } from '@/i18n/i18n'
 
 type StreamSize = {
@@ -18,6 +19,9 @@ type EmulatorScreenStreamContentProps = {
   streamKey?: string
 }
 
+// Android sessions stream H.264 over scrcpy://<serial>; iOS uses an MJPEG http URL.
+const SCRCPY_PREFIX = 'scrcpy://'
+
 export function EmulatorScreenStreamContent({
   loading,
   onStreamError,
@@ -27,17 +31,41 @@ export function EmulatorScreenStreamContent({
   streamError,
   streamKey
 }: EmulatorScreenStreamContentProps) {
-  const frameStream = useEmulatorFrameStream(
-    previewUrl,
+  const androidDeviceId =
+    previewUrl && previewUrl.startsWith(SCRCPY_PREFIX)
+      ? previewUrl.slice(SCRCPY_PREFIX.length)
+      : null
+
+  const video = useEmulatorVideoStream(
+    androidDeviceId ?? undefined,
     streamKey,
-    showStream && Boolean(previewUrl)
+    showStream && Boolean(androidDeviceId),
+    onStreamSize
+  )
+  const frameStream = useEmulatorFrameStream(
+    androidDeviceId ? undefined : previewUrl,
+    streamKey,
+    showStream && Boolean(previewUrl) && !androidDeviceId
   )
 
   useEffect(() => {
-    if (frameStream.error) {
+    if (frameStream.error || video.error) {
       onStreamError()
     }
-  }, [frameStream.error, onStreamError])
+  }, [frameStream.error, video.error, onStreamError])
+
+  if (androidDeviceId && showStream && !video.error) {
+    return (
+      <canvas
+        ref={video.canvasRef}
+        className="block h-full w-full bg-black object-contain"
+        aria-label={translate(
+          'auto.components.emulator.pane.emulator.screen.stream.content.5ee64cd44e',
+          'Emulator screen'
+        )}
+      />
+    )
+  }
 
   if (showStream && frameStream.frameUrl) {
     return (
@@ -62,8 +90,8 @@ export function EmulatorScreenStreamContent({
     )
   }
 
-  const waitingForFrame = showStream && !frameStream.error
-  const displayError = streamError || Boolean(frameStream.error)
+  const waitingForFrame = showStream && !frameStream.error && !video.error
+  const displayError = streamError || Boolean(frameStream.error) || Boolean(video.error)
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">

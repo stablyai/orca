@@ -324,6 +324,65 @@ describe('local preflight context', () => {
     expect(localPreflightContextKey(context)).toBe('repo-1:repair:wsl-distro-required:default')
   })
 
+  it('uses the global WSL runtime for local agent checks without an active project', () => {
+    const state = {
+      ...makeState({ repoPath: undefined }),
+      activeRepoId: null,
+      activeWorktreeId: null,
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    const context = getLocalAgentPreflightContext(state, 'win32')
+
+    expect(context).toEqual({
+      wslDistro: 'Ubuntu',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'local-project',
+          distro: 'Ubuntu',
+          reason: 'global-default',
+          cacheKey: 'local-project:wsl:Ubuntu'
+        }
+      }
+    })
+    expect(localPreflightContextKey(context)).toBe('local-project:wsl:Ubuntu')
+  })
+
+  it('uses the global runtime default over stale legacy agent location without an active project', () => {
+    const state = {
+      ...makeState({ repoPath: undefined }),
+      activeRepoId: null,
+      activeWorktreeId: null,
+      settings: {
+        localAgentRuntime: 'host',
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    const context = getLocalAgentPreflightContext(state, 'win32')
+
+    expect(localPreflightContextKey(context)).toBe('local-project:wsl:Ubuntu')
+  })
+
+  it('does not use the global runtime default for active SSH projects', () => {
+    const state = {
+      ...makeState({
+        repoPath: '/home/alice/repo',
+        repo: { connectionId: 'builder', executionHostId: 'ssh:builder' }
+      }),
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    } as unknown as AppState
+
+    expect(getLocalAgentPreflightContext(state, 'win32')).toBeUndefined()
+  })
+
   it('uses the project override over legacy agent location for local agent checks', () => {
     const state = {
       ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),

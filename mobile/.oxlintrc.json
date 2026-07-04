@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["../.oxlintrc.json"],
+  "ignorePatterns": ["src/terminal/terminal-webview-engine.generated.ts"],
   "rules": {
     "react-hooks/exhaustive-deps": "off",
     "react/no-unescaped-entities": "off",
@@ -10,7 +11,8 @@
     "prefer-template": "off",
     "no-useless-return": "off",
     "unicorn/prefer-at": "off",
-    "unicorn/prefer-ternary": "off"
+    "unicorn/prefer-ternary": "off",
+    "unicorn/prefer-node-protocol": "off"
   },
   "overrides": [
     {
@@ -22,7 +24,7 @@
     {
       "files": ["app/h/*/session/*.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 4988, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 5015, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
@@ -34,7 +36,7 @@
     {
       "files": ["src/terminal/terminal-webview-html.ts"],
       "rules": {
-        "max-lines": ["error", { "max": 1778, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 1784, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

@@ -152,6 +152,10 @@ export function mergeSnapshotAndSessions(
     return ctx.repoConnectionIdById.get(repoId) != null
   }
 
+  function isRuntimeScopedRepo(repoId: string): boolean {
+    return ctx.repoRuntimeScopedById.get(repoId) === true
+  }
+
   function ensureRepo(
     repoId: string,
     repoName: string,
@@ -183,6 +187,11 @@ export function mergeSnapshotAndSessions(
   // ── Step 1: ingest snapshot worktrees as the local-truth foundation.
   if (snapshot) {
     for (const wt of snapshot.worktrees as readonly WorktreeMemory[]) {
+      // Why: local snapshot data must never render under a runtime-hosted repo
+      // row; belt-and-braces with the matching session-ingest guard below.
+      if (isRuntimeScopedRepo(wt.repoId)) {
+        continue
+      }
       const repo = ensureRepo(wt.repoId, wt.repoName)
       const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
         seenSessionIds.add(s.sessionId)
@@ -242,6 +251,12 @@ export function mergeSnapshotAndSessions(
     const finalWorktreeName = isUnattributed
       ? session.title || session.id.slice(0, 12)
       : deriveWorktreeNameFromWorktreeId(finalWorktreeId)
+
+    // Why: the current daemon inputs are local/SSH only; this guard prevents a
+    // future local daemon row accidentally exposing kill actions for runtime PTYs.
+    if (isRuntimeScopedRepo(finalRepoId)) {
+      continue
+    }
 
     const repoIsRemote = isRepoRemote(finalRepoId)
     const repo = ensureRepo(finalRepoId, finalRepoName, repoIsRemote)

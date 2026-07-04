@@ -123,6 +123,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    vi.doUnmock('../../runtime/remote-runtime-terminal-multiplexer')
     vi.clearAllMocks()
     subscriptionCallbacks = null
     subscriptionSendBinary.mockReset()
@@ -292,6 +293,207 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getPtyId()).toBeNull()
   })
 
+  it('ignores stale stream end after reattaching a newer remote terminal', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-old',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const oldStreamId = latestSubscribePayload().streamId
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-new',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'end', streamId: oldStreamId }
+    })
+
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-new')
+    expect(transport.isConnected()).toBe(true)
+
+    await vi.waitFor(() => {
+      expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-new' })
+    })
+    const newStreamId = latestSubscribePayload().streamId
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'end', streamId: newStreamId }
+    })
+
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-new')
+    expect(transport.getPtyId()).toBeNull()
+    expect(transport.isConnected()).toBe(false)
+  })
+
+  it('drops pending input when attaching a different remote terminal handle', async () => {
+    vi.useFakeTimers()
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-old',
+        cols: 80,
+        rows: 24,
+        callbacks: {}
+      })
+      expect(transport.sendInput('queued-for-old')).toBe(true)
+
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-new',
+        cols: 80,
+        rows: 24,
+        callbacks: {}
+      })
+      runtimeCall.mockClear()
+
+      await vi.advanceTimersByTimeAsync(10)
+
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.send'
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores stale attach subscription rejection after reattaching a newer remote terminal', async () => {
+    const oldSubscription = {
+      reject: null as ((error: Error) => void) | null
+    }
+    const newStream = {
+      streamId: 2,
+      sendInput: vi.fn(() => true),
+      resize: vi.fn(() => true),
+      serializeBuffer: vi.fn(async () => null),
+      close: vi.fn()
+    }
+    const subscribeTerminal = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            oldSubscription.reject = reject
+          })
+      )
+      .mockResolvedValueOnce(newStream)
+    vi.doMock('../../runtime/remote-runtime-terminal-multiplexer', () => ({
+      getRemoteRuntimeTerminalMultiplexer: vi.fn(() => ({ subscribeTerminal }))
+    }))
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-old',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-new',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscribeTerminal).toHaveBeenCalledTimes(2))
+
+    oldSubscription.reject?.(new Error('terminal_handle_stale'))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(onPtyExit).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-new')
+    expect(transport.isConnected()).toBe(true)
+  })
+
+  it('does not send queued input through a stale stream during remote handle replacement', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-old',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+
+    vi.useFakeTimers()
+    try {
+      subscriptionSendBinary.mockClear()
+      runtimeCall.mockClear()
+
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-new',
+        cols: 80,
+        rows: 24,
+        callbacks: {}
+      })
+      subscriptionSendBinary.mockClear()
+
+      expect(transport.sendInput('x')).toBe(true)
+      vi.advanceTimersByTime(8)
+
+      const inputFrames = subscriptionSendBinary.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
+      expect(inputFrames).toEqual([])
+      expect(runtimeCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'terminal.send',
+        params: {
+          terminal: 'terminal-new',
+          text: 'x',
+          client: { id: 'desktop:tab-1:pane:1', type: 'desktop' }
+        },
+        timeoutMs: 15_000
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('closes a remote terminal created after the pane was destroyed', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
     runtimeCall.mockImplementation((args) => {
@@ -341,7 +543,33 @@ describe('createRemoteRuntimePtyTransport', () => {
           tabId: 'tab-1',
           leafId: 'pane:1',
           focus: false,
+          presentation: 'background',
           activate: true
+        })
+      })
+    )
+  })
+
+  it('scopes ephemeral setup terminals to the floating-terminal selector (#6789)', async () => {
+    const { brandEphemeralSetupTerminalWorktreeId } =
+      await import('../../../../shared/ephemeral-setup-terminal-worktree-id')
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: brandEphemeralSetupTerminalWorktreeId(
+        'feature-wall-orchestration-skill-terminal'
+      ),
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.create',
+        params: expect.objectContaining({
+          worktree: 'id:global-floating-terminal'
         })
       })
     )
@@ -764,12 +992,77 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(
         runtimeCall.mock.calls.filter((call) => call[0].method === 'session.tabs.list')
       ).toHaveLength(1)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(
+        runtimeCall.mock.calls.some((call) => call[0].method.startsWith('session.tabs.close'))
+      ).toBe(false)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('stops polling when a host session mirror never publishes a ready handle', async () => {
+  it('does not close a split parent when the requested leaf times out but a sibling is ready', async () => {
+    vi.useFakeTimers()
+    try {
+      const splitSnapshot = {
+        worktree: 'id:wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: 'group-1',
+        activeTabId: 'host-tab-1::leaf-2',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'host-tab-1::leaf-1',
+            parentTabId: 'host-tab-1',
+            leafId: 'leaf-1',
+            title: 'Terminal 1',
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-1'
+          },
+          {
+            type: 'terminal',
+            id: 'host-tab-1::leaf-2',
+            parentTabId: 'host-tab-1',
+            leafId: 'leaf-2',
+            title: 'Terminal 2',
+            isActive: true,
+            status: 'pending-handle',
+            terminal: null
+          }
+        ]
+      }
+      runtimeCall.mockImplementation((args) => {
+        if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
+          return Promise.resolve({ ok: true, result: splitSnapshot })
+        }
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-host-tab-1',
+        leafId: 'leaf-2'
+      })
+
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await expect(connect).resolves.toBeUndefined()
+      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(
+        runtimeCall.mock.calls.some((call) => call[0].method.startsWith('session.tabs.close'))
+      ).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops polling without closing the host tab when a mirror never publishes a ready handle', async () => {
     vi.useFakeTimers()
     try {
       const pendingSnapshot = {
@@ -818,12 +1111,16 @@ describe('createRemoteRuntimePtyTransport', () => {
         (call) => call[0].method === 'session.tabs.list'
       )
       expect(listCalls.length).toBeGreaterThan(0)
-      expect(listCalls.length).toBeLessThanOrEqual(100)
+      expect(listCalls.length).toBeLessThanOrEqual(101)
       expect(runtimeCall).not.toHaveBeenCalledWith(
         expect.objectContaining({
           method: 'terminal.create'
         })
       )
+      const closeCalls = runtimeCall.mock.calls.filter((call) =>
+        String(call[0].method).startsWith('session.tabs.close')
+      )
+      expect(closeCalls).toEqual([])
     } finally {
       vi.useRealTimers()
     }

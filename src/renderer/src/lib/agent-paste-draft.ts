@@ -184,6 +184,19 @@ export async function submitPromptToAgentTab(args: {
   })
 }
 
+export async function submitPromptToAgentPty(args: {
+  tabId: string
+  ptyId: string
+  content: string
+}): Promise<boolean> {
+  return await sendBracketedPasteToAgent({
+    settings: getSettingsForAgentTabRuntimeOwner(args.tabId),
+    ptyId: args.ptyId,
+    content: args.content,
+    submit: true
+  })
+}
+
 export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string

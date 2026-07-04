@@ -139,6 +139,58 @@ describe('hydrateWorkspaceSession', () => {
     })
   })
 
+  it('moves restored active focus from a dead split leaf to a pty-backed sibling', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    const liveLeftLeafId = '9ee09218-72a5-4e1c-b075-729e937d4e29'
+    const liveRightLeafId = 'f5fc66b1-ec43-404b-b7b0-a06f0db34940'
+    const deadActiveLeafId = 'fbf63fd9-34d6-4387-9109-562f7c02bc4c'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'old-pty' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: liveLeftLeafId },
+            second: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', leafId: liveRightLeafId },
+              second: { type: 'leaf', leafId: deadActiveLeafId }
+            }
+          },
+          activeLeafId: deadActiveLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [liveLeftLeafId]: 'daemon-session-left',
+            [liveRightLeafId]: 'daemon-session-right'
+          },
+          buffersByLeafId: {
+            [deadActiveLeafId]: 'retained scrollback'
+          }
+        }
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    // Why: restart can preserve scrollback for an exited pane while live siblings
+    // reattach. Keyboard focus must land on a PTY-backed pane, not the dead leaf.
+    expect(store.getState().terminalLayoutsByTabId['tab-1']?.activeLeafId).toBe(liveLeftLeafId)
+  })
+
   it('hydrates floating terminal tabs even though they are not repo worktrees', () => {
     const store = createTestStore()
     const session: WorkspaceSessionState = {
@@ -170,6 +222,58 @@ describe('hydrateWorkspaceSession', () => {
       'floating-tab-1'
     )
     expect(store.getState().pendingReconnectWorktreeIds).toEqual([FLOATING_TERMINAL_WORKTREE_ID])
+  })
+
+  it('batches restored terminal reconnect wake hints into one store update', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-1' }),
+          makeTab({ id: 'tab-2', worktreeId, ptyId: 'pty-2' }),
+          makeTab({ id: 'tab-3', worktreeId, ptyId: 'pty-3' })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout(),
+        'tab-2': makeLayout(),
+        'tab-3': makeLayout()
+      },
+      activeWorktreeIdsOnShutdown: [worktreeId]
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    let updateCount = 0
+    const unsubscribe = store.subscribe(() => {
+      updateCount += 1
+    })
+    await store.getState().reconnectPersistedTerminals()
+    unsubscribe()
+
+    // Why: startup restores every daemon wake hint, but subscribers should see
+    // one ready-state transition instead of one update per restored tab.
+    expect(updateCount).toBe(1)
+    expect(store.getState().workspaceSessionReady).toBe(true)
+    expect(store.getState().ptyIdsByTabId).toMatchObject({
+      'tab-1': ['pty-1'],
+      'tab-2': ['pty-2'],
+      'tab-3': ['pty-3']
+    })
+    expect(store.getState().tabsByWorktree[worktreeId]).toEqual([
+      expect.objectContaining({ id: 'tab-1', ptyId: 'pty-1' }),
+      expect.objectContaining({ id: 'tab-2', ptyId: 'pty-2' }),
+      expect.objectContaining({ id: 'tab-3', ptyId: 'pty-3' })
+    ])
   })
 
   it('resets persisted agent titles to the fallback label on hydration', () => {

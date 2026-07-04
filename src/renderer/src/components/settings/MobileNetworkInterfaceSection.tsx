@@ -1,10 +1,11 @@
+import React from 'react'
 import { ExternalLink, Loader2, QrCode, RefreshCw, Wifi } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion'
 import { Button } from '../ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import { translate } from '@/i18n/i18n'
+import { NetworkInterfacePicker } from '../mobile/NetworkInterfacePicker'
+import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 
 const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 
@@ -17,10 +18,6 @@ type MobileNetworkInterfaceSectionProps = {
   loading: boolean
   hasQrCode: boolean
   onGenerateQr: () => void
-}
-
-function formatInterfaceLabel(iface: MobileNetworkInterface): string {
-  return `${iface.address} (${iface.name})`
 }
 
 export function MobileNetworkInterfaceSection({
@@ -52,25 +49,12 @@ export function MobileNetworkInterfaceSection({
       </p>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={selectedAddress} onValueChange={onSelectedAddressChange}>
-            <SelectTrigger size="sm" className="min-w-[220px]">
-              <SelectValue
-                placeholder={translate(
-                  'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
-                  'No interfaces found'
-                )}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {networkInterfaces.map((iface) => (
-                <SelectItem key={`${iface.name}-${iface.address}`} value={iface.address}>
-                  {formatInterfaceLabel(iface)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {/* Why: VPN/tailnet interfaces can appear after this pane mounts.
-              Re-enumerating OS state here avoids requiring an Orca restart. */}
+          <NetworkInterfacePicker
+            networkInterfaces={networkInterfaces}
+            selectedAddress={selectedAddress}
+            onSelectedAddressChange={onSelectedAddressChange}
+            className="min-w-[220px] justify-between font-normal"
+          />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

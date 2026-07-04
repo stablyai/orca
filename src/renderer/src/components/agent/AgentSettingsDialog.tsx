@@ -9,6 +9,12 @@ import {
 import { AgentsPane } from '@/components/settings/AgentsPane'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import {
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 type AgentSettingsDialogProps = {
   open: boolean
@@ -21,6 +27,20 @@ export default function AgentSettingsDialog({
 }: AgentSettingsDialogProps): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const runtimeTarget = getActiveRuntimeTarget(settings)
+  const runtimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  const capabilitiesOwnerKey = getWindowsTerminalCapabilityOwnerKey(runtimeEnvironmentId)
+  const isWindowsRenderer =
+    typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+  const isWebClient = isWebClientLocation()
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    open && (isWindowsRenderer || isWebClient || runtimeTarget.kind === 'environment'),
+    false,
+    capabilitiesOwnerKey,
+    runtimeTarget
+  )
+  const wslSupportedPlatform =
+    isWindowsRenderer || windowsTerminalCapabilities.hostPlatform === 'win32'
 
   if (!settings) {
     return null
@@ -45,7 +65,14 @@ export default function AgentSettingsDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="scrollbar-sleek -mr-2 max-h-[70vh] overflow-y-auto pr-2">
-          <AgentsPane settings={settings} updateSettings={updateSettings} />
+          <AgentsPane
+            settings={settings}
+            updateSettings={updateSettings}
+            wslSupportedPlatform={wslSupportedPlatform}
+            wslAvailable={windowsTerminalCapabilities.wslAvailable}
+            wslDistros={windowsTerminalCapabilities.wslDistros}
+            wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+          />
         </div>
       </DialogContent>
     </Dialog>

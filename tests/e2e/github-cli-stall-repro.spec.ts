@@ -1,7 +1,7 @@
-import { execSync } from 'child_process'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
+import { execSync } from 'node:child_process'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { test as base, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 

@@ -289,6 +289,33 @@ describe('createDetectedAgentsSlice WSL context', () => {
     })
   })
 
+  it('detects agents in the global WSL runtime when no project is active', async () => {
+    const store = createTestStore({
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      } as AppState['settings'],
+      activeRepoId: null,
+      activeWorktreeId: null
+    })
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
+
+    expect(detectAgents).toHaveBeenCalledWith({
+      wslDistro: 'Ubuntu',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'local-project',
+          distro: 'Ubuntu',
+          reason: 'global-default',
+          cacheKey: 'local-project:wsl:Ubuntu'
+        }
+      }
+    })
+  })
+
   it('detects agents in the project override runtime instead of legacy agent location', async () => {
     const store = createTestStore({
       settings: {

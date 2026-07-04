@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import type { TabDragItemData } from './useTabDragSplit'
+import { shouldActivateTabDragFromDistanceSample } from './tab-drag-pointer-sensor'
 import {
   canDropTabForPaneColumnSplit,
   canDropTabIntoPaneBody,
@@ -192,6 +193,27 @@ describe('tab drag activation distance', () => {
   it('uses an impossible activation distance when tab dragging is disabled', () => {
     expect(getTabDragActivationDistance(false)).toBe(Number.MAX_SAFE_INTEGER)
   })
+
+  it('requires confirmation for an immediate over-threshold distance sample', () => {
+    expect(
+      shouldActivateTabDragFromDistanceSample({
+        elapsedMs: 10,
+        overThresholdSampleCount: 1
+      })
+    ).toBe(false)
+    expect(
+      shouldActivateTabDragFromDistanceSample({
+        elapsedMs: 10,
+        overThresholdSampleCount: 2
+      })
+    ).toBe(true)
+    expect(
+      shouldActivateTabDragFromDistanceSample({
+        elapsedMs: 60,
+        overThresholdSampleCount: 1
+      })
+    ).toBe(true)
+  })
 })
 
 describe('canDropTabIntoPaneBody', () => {
@@ -245,6 +267,68 @@ describe('canDropTabIntoPaneBody', () => {
 })
 
 describe('useTabDragSplit', () => {
+  it.each(['pointerup', 'pointercancel', 'blur', 'focus'])(
+    'clears a stuck active drag when %s arrives without a dnd end event',
+    async (eventName) => {
+      const activeData = makeDragData('group-1')
+      const drag = renderDragHook()
+
+      act(() => {
+        drag.onDragStart(
+          makeDragEvent(activeData, { x: 120, y: 20 }) as unknown as Parameters<
+            typeof drag.onDragStart
+          >[0]
+        )
+        // Why: dispatch in the same turn as drag start so the fallback must be
+        // installed synchronously, before React can run passive effects.
+        window.dispatchEvent(new MouseEvent(eventName, { bubbles: true }))
+      })
+      expect(drag.isTabDragActiveRef.current).toBe(true)
+
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 0))
+      })
+
+      expect(drag.isTabDragActiveRef.current).toBe(false)
+    }
+  )
+
+  it('does not cancel a legitimate drag end when the fallback timer is pending', async () => {
+    addPanelGeometry(
+      'group-2',
+      rect({ left: 500, top: 0, width: 400, height: 600 }),
+      rect({ left: 500, top: 32, width: 400, height: 568 })
+    )
+    const activeData = makeDragData('group-1')
+    const dropUnifiedTab = vi.fn(() => true)
+    useAppStore.setState({ dropUnifiedTab } as Partial<ReturnType<typeof useAppStore.getState>>)
+
+    const drag = renderDragHook()
+
+    act(() => {
+      drag.onDragStart(
+        makeDragEvent(activeData, { x: 120, y: 20 }) as unknown as Parameters<
+          typeof drag.onDragStart
+        >[0]
+      )
+      window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      drag.onDragEnd(
+        makeDragEvent(activeData, { x: 880, y: 300 }) as unknown as Parameters<
+          typeof drag.onDragEnd
+        >[0]
+      )
+    })
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(drag.isTabDragActiveRef.current).toBe(false)
+    expect(dropUnifiedTab).toHaveBeenCalledWith('tab-1', {
+      groupId: 'group-2',
+      splitDirection: 'right'
+    })
+  })
+
   it('commits a geometry-only pane split when drag end has no over target', () => {
     addPanelGeometry(
       'group-2',

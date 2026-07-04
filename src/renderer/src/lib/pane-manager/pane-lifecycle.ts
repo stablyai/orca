@@ -12,11 +12,12 @@ import {
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
-import { activateOrcaTerminalUnicodeProvider } from './pane-terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
+import { resolveCursorAgentImeAnchor } from './terminal-ime-anchor'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -28,6 +29,7 @@ export { createPaneDOM } from './pane-dom-creation'
 export function openTerminal(pane: ManagedPaneInternal): void {
   const {
     terminal,
+    container,
     xtermContainer,
     linkTooltip,
     terminalTuiScrollSensitivity,
@@ -40,8 +42,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   // Open terminal into DOM
   terminal.open(xtermContainer)
-  const linkTooltipContainer = terminal.element ?? xtermContainer
-  linkTooltipContainer.appendChild(linkTooltip)
+  // Why: terminal.element sits under the padded xterm container. Pane-level
+  // placement keeps the hover URL on the true bottom-left window corner.
+  container.appendChild(linkTooltip)
 
   // Load addons (order matters: WebGL must be after open())
   terminal.loadAddon(fitAddon)
@@ -70,11 +73,10 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   activateOrcaTerminalUnicodeProvider(terminal)
 
   // Why: the OS reads the focused textarea's screen rect at compositionstart to
-  // decide where to display the IME candidate window. xterm.js only repositions
-  // the textarea on compositionupdate (via updateCompositionElements), not on
-  // compositionstart, so the window can appear at a stale cursor position. We
-  // force-sync the textarea position in a capture-phase listener so the OS sees
-  // the correct location before it opens the candidate window.
+  // decide where to display the IME candidate window. xterm positions that
+  // textarea from its own cursor, which can be stale or intentionally hidden by
+  // TUIs. We force-sync after xterm's own composition handlers so the OS sees
+  // the corrected location before it opens the candidate window.
   //
   // Cell dimensions are derived from the public .xterm-screen element's bounds
   // (xterm sizes that element to cols*cellWidth × rows*cellHeight) rather than
@@ -94,11 +96,34 @@ export function openTerminal(pane: ManagedPaneInternal): void {
         return
       }
       const buf = terminal.buffer.active
-      const x = Math.min(buf.cursorX, terminal.cols - 1)
-      textarea.style.top = `${buf.cursorY * cellHeight}px`
-      textarea.style.left = `${x * cellWidth}px`
+      // Why: Cursor Agent draws its prompt UI while leaving xterm's public cursor
+      // on a blank row, so the OS IME anchor needs the rendered prompt row instead.
+      const cursorAgentAnchor = resolveCursorAgentImeAnchor({
+        buffer: buf,
+        rows: terminal.rows,
+        cols: terminal.cols,
+        cursorX: buf.cursorX,
+        cursorY: buf.cursorY
+      })
+      const anchor = cursorAgentAnchor ?? {
+        row: buf.cursorY,
+        column: Math.min(buf.cursorX, terminal.cols - 1)
+      }
+      const applyAnchor = (): void => {
+        textarea.style.top = `${anchor.row * cellHeight}px`
+        textarea.style.left = `${anchor.column * cellWidth}px`
+      }
+      applyAnchor()
+      if (cursorAgentAnchor) {
+        window.setTimeout(() => {
+          if (textarea.isConnected) {
+            applyAnchor()
+          }
+        }, 0)
+      }
     }
-    terminal.element.addEventListener('compositionstart', handler, true)
+    terminal.element.addEventListener('compositionstart', handler)
+    terminal.element.addEventListener('compositionupdate', handler)
     // Store so disposePane() can remove it and avoid a memory leak.
     pane.compositionHandler = handler
   }
@@ -200,7 +225,8 @@ export function disposePane(
   pane.terminalScrollIntentDisposable?.dispose()
   pane.terminalScrollIntentDisposable = null
   if (pane.compositionHandler) {
-    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
+    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
+    pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
     pane.compositionHandler = null
   }
   try {
@@ -213,11 +239,7 @@ export function disposePane(
   } catch {
     /* ignore */
   }
-  try {
-    pane.webglAddon?.dispose()
-  } catch {
-    /* ignore */
-  }
+  disposeWebgl(pane)
   try {
     pane.searchAddon.dispose()
   } catch {

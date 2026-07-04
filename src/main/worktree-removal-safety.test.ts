@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { homedir } from 'node:os'
 import type { GitWorktreeInfo } from '../shared/types'
 import {
+  canCleanupUnregisteredOrcaLeftoverDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   getRegisteredDeletableWorktree
 } from './worktree-removal-safety'
@@ -297,5 +299,210 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
         ])
       )
     ).resolves.toBe(true)
+  })
+
+  it('rejects POSIX home directories even when host homedir has a different path shape', async () => {
+    await expect(
+      canSafelyRemoveOrphanedWorktreeDirectory(
+        '/home/dev',
+        '/repos/main',
+        makeStatPath(['/home/dev/.git'], ['/repos/main/.git']),
+        makeReadPath([
+          ['/home/dev/.git', 'gitdir: /repos/main/.git/worktrees/dev\n'],
+          ['/repos/main/.git/worktrees/dev/gitdir', '/home/dev/.git\n']
+        ])
+      )
+    ).resolves.toBe(false)
+  })
+})
+
+describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
+  const repo = { path: '/repos/main' }
+  const ownedMeta = { orcaCreatedAt: 1, orcaCreationSource: 'runtime' as const }
+  const baseArgs = {
+    meta: ownedMeta,
+    worktreePath: '/workspaces/orca-owned',
+    runtimeWorktreePath: '/workspaces/orca-owned',
+    repo,
+    runtimeRepoPath: repo.path,
+    registeredWorktrees: [makeGitWorktree(repo.path, true)]
+  }
+
+  it('rejects unregistered existing targets that are files or symlinks', async () => {
+    const isGitRepository = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        statPath: makeStatPath(['/workspaces/orca-owned']),
+        isGitRepository
+      })
+    ).resolves.toBe(false)
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        statPath: async (path) => {
+          if (path === '/workspaces/orca-owned') {
+            return { type: 'symlink' }
+          }
+          throw missingPath(path)
+        },
+        isGitRepository
+      })
+    ).resolves.toBe(false)
+
+    expect(isGitRepository).not.toHaveBeenCalled()
+  })
+
+  it('rejects unregistered leftover directories with a .git marker', async () => {
+    const isGitRepository = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        statPath: makeStatPath(['/workspaces/orca-owned/.git'], ['/workspaces/orca-owned']),
+        isGitRepository
+      })
+    ).resolves.toBe(false)
+
+    expect(isGitRepository).not.toHaveBeenCalled()
+  })
+
+  it('rejects no-marker cleanup when only the Orca path shape matches', async () => {
+    const isGitRepository = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        meta: undefined,
+        statPath: makeStatPath([], ['/workspaces/orca-owned']),
+        isGitRepository
+      })
+    ).resolves.toBe(false)
+
+    expect(isGitRepository).not.toHaveBeenCalled()
+  })
+
+  it('checks dangerous paths in the original path space before runtime translation', async () => {
+    const homePath = homedir()
+    const runtimeHomePath = homePath
+      .replace(/^([A-Za-z]):/, (_match, drive: string) => `/mnt/${drive.toLowerCase()}`)
+      .replace(/\\/g, '/')
+    const isGitRepository = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        worktreePath: homePath,
+        runtimeWorktreePath: runtimeHomePath,
+        repo: { path: 'C:\\repos\\main' },
+        runtimeRepoPath: '/mnt/c/repos/main',
+        registeredWorktrees: [makeGitWorktree('C:\\repos\\main', true)],
+        statPath: makeStatPath([], [runtimeHomePath]),
+        isGitRepository
+      })
+    ).resolves.toBe(false)
+
+    expect(isGitRepository).not.toHaveBeenCalled()
+  })
+
+  it('checks dangerous POSIX runtime home paths before no-marker cleanup', async () => {
+    const isGitRepository = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        worktreePath: '/home/dev',
+        runtimeWorktreePath: '/home/dev',
+        repo: { path: '/repos/main' },
+        runtimeRepoPath: '/repos/main',
+        registeredWorktrees: [makeGitWorktree('/repos/main', true)],
+        statPath: makeStatPath([], ['/home/dev']),
+        isGitRepository
+      })
+    ).resolves.toBe(false)
+
+    expect(isGitRepository).not.toHaveBeenCalled()
+  })
+
+  it('rejects unregistered leftover directories that still answer git status', async () => {
+    const isGitRepository = vi.fn().mockResolvedValue(true)
+
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        statPath: makeStatPath([], ['/workspaces/orca-owned']),
+        isGitRepository
+      })
+    ).resolves.toBe(false)
+
+    expect(isGitRepository).toHaveBeenCalledWith('/workspaces/orca-owned')
+  })
+
+  it('rejects unregistered leftover directories that contain a registered child worktree', async () => {
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        registeredWorktrees: [
+          makeGitWorktree(repo.path, true),
+          makeGitWorktree('/workspaces/orca-owned/child')
+        ],
+        statPath: makeStatPath([], ['/workspaces/orca-owned']),
+        isGitRepository: vi.fn().mockResolvedValue(false)
+      })
+    ).rejects.toThrow(
+      'Refusing to delete worktree because it contains another registered worktree: /workspaces/orca-owned/child'
+    )
+  })
+
+  it('uses runtime paths for filesystem proof and original paths for nested worktree checks', async () => {
+    const statPath = vi.fn(async (path: string) => {
+      if (path === '/mnt/c/workspaces/orca-owned') {
+        return { type: 'directory' }
+      }
+      throw missingPath(path)
+    })
+    const isGitRepository = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        worktreePath: 'C:\\workspaces\\orca-owned',
+        runtimeWorktreePath: '/mnt/c/workspaces/orca-owned',
+        repo: { path: 'C:\\repos\\main' },
+        runtimeRepoPath: '/mnt/c/repos/main',
+        registeredWorktrees: [
+          makeGitWorktree('C:\\repos\\main', true),
+          makeGitWorktree('C:\\workspaces\\orca-owned-sibling')
+        ],
+        statPath,
+        isGitRepository
+      })
+    ).resolves.toBe(true)
+
+    expect(statPath).toHaveBeenCalledWith('/mnt/c/workspaces/orca-owned')
+    expect(statPath).toHaveBeenCalledWith('/mnt/c/workspaces/orca-owned/.git')
+    expect(statPath).not.toHaveBeenCalledWith('C:\\workspaces\\orca-owned')
+    expect(isGitRepository).toHaveBeenCalledWith('/mnt/c/workspaces/orca-owned')
+  })
+
+  it('rejects translated-runtime cleanup when original path contains a registered child', async () => {
+    await expect(
+      canCleanupUnregisteredOrcaLeftoverDirectory({
+        ...baseArgs,
+        worktreePath: 'C:\\workspaces\\orca-owned',
+        runtimeWorktreePath: '/mnt/c/workspaces/orca-owned',
+        repo: { path: 'C:\\repos\\main' },
+        runtimeRepoPath: '/mnt/c/repos/main',
+        registeredWorktrees: [
+          makeGitWorktree('C:\\repos\\main', true),
+          makeGitWorktree('C:\\workspaces\\orca-owned\\child')
+        ],
+        statPath: makeStatPath([], ['/mnt/c/workspaces/orca-owned']),
+        isGitRepository: vi.fn().mockResolvedValue(false)
+      })
+    ).rejects.toThrow(
+      'Refusing to delete worktree because it contains another registered worktree: C:\\workspaces\\orca-owned\\child'
+    )
   })
 })

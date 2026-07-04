@@ -361,7 +361,8 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--dangerously-skip-permissions',
       agentEnv: {},
-      platform: 'win32'
+      platform: 'win32',
+      isRemote: false
     })
     expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -475,7 +476,8 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
-      platform: 'linux'
+      platform: 'linux',
+      isRemote: true
     })
     expect(buildAgentStartupPlan).toHaveBeenCalledWith({
       agent: 'cursor',
@@ -484,16 +486,18 @@ describe('launchWorkItemDirect', () => {
       agentArgs: '--yolo',
       agentEnv: {},
       platform: 'linux',
+      isRemote: true,
       allowEmptyPromptLaunch: true
     })
-    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      content: 'https://github.com/acme/repo/issues/77',
-      agent: 'cursor',
-      submit: false,
-      forcePaste: false,
-      onTimeout: expect.any(Function)
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-ssh',
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          draftPrompt: 'https://github.com/acme/repo/issues/77'
+        })
+      })
+    )
+    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
   it('does not launch a disabled saved agent even when another agent is available', async () => {

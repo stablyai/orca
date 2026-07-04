@@ -15,6 +15,7 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from './pane-terminal-options'
+import { buildTerminalKeyboardProtocolOptions } from './terminal-keyboard-protocol'
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
@@ -88,6 +89,10 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
   })
 
+  it('uses the shared desktop scrollback row default', () => {
+    expect(buildDefaultTerminalOptions().scrollback).toBe(5_000)
+  })
+
   it('slightly increases default terminal wheel scrolling while preserving fast scroll', () => {
     const options = buildDefaultTerminalOptions()
 
@@ -123,6 +128,51 @@ describe('buildDefaultTerminalOptions', () => {
     // bytes once the terminal advertises support. Regressing this flag
     // silently breaks enhanced chords, especially inside tmux.
     expect(buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard).toBe(true)
+  })
+
+  it('lets a local Windows ConPTY pane override the default and withhold kitty keyboard', () => {
+    // Regression for #2434: per-pane options merge over the default the same way
+    // createPaneDOM merges them, so a local Windows ConPTY override must win and
+    // turn the advertised kittyKeyboard off (CSI-u-blind local CLIs ignore nav keys).
+    const merged = {
+      ...buildDefaultTerminalOptions(),
+      ...buildTerminalKeyboardProtocolOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe',
+        executionHostId: 'local'
+      })
+    }
+
+    expect(merged.vtExtensions?.kittyKeyboard).toBe(false)
+  })
+
+  it('keeps the advertised kitty keyboard default for SSH and macOS/Linux panes', () => {
+    for (const context of [
+      {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: 'ssh-1',
+        cwd: 'C:\\repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      },
+      {
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)',
+        connectionId: null,
+        cwd: '/repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      }
+    ] as const) {
+      const merged = {
+        ...buildDefaultTerminalOptions(),
+        ...buildTerminalKeyboardProtocolOptions(context)
+      }
+
+      expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
+    }
   })
 })
 
@@ -394,14 +444,32 @@ describe('openTerminal — Unicode 11 ordering', () => {
       }
     }
 
-    const fakeContainer = {
+    const fakePaneContainer = {
       appendChild: vi.fn(),
       addEventListener: vi.fn()
     } as unknown as HTMLDivElement
+    const fakeXtermContainer = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    } as unknown as HTMLDivElement
     const fakeTooltip = {} as unknown as HTMLDivElement
+    const fakeTerminalElement = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      querySelector: vi.fn(() => null),
+      classList: { contains: vi.fn(() => false) }
+    } as unknown as HTMLElement
+    vi.stubGlobal(
+      'MutationObserver',
+      vi.fn(function MutationObserver() {
+        return { observe: vi.fn(), disconnect: vi.fn() }
+      })
+    )
 
     const terminal = {
-      element: null as HTMLElement | null,
+      element: fakeTerminalElement,
       textarea: null,
       cols: 80,
       rows: 24,
@@ -435,8 +503,8 @@ describe('openTerminal — Unicode 11 ordering', () => {
       leafId,
       stablePaneId: leafId,
       terminal,
-      container: fakeContainer,
-      xtermContainer: fakeContainer,
+      container: fakePaneContainer,
+      xtermContainer: fakeXtermContainer,
       linkTooltip: fakeTooltip,
       terminalGpuAcceleration: 'off',
       gpuRenderingEnabled: false,
@@ -457,19 +525,26 @@ describe('openTerminal — Unicode 11 ordering', () => {
       debugLabel: null
     }
 
-    openTerminal(pane)
+    try {
+      openTerminal(pane)
 
-    expect(events).toContain('loadAddon:unicode11')
-    expect(events).toContain('activeVersion=11')
+      expect(fakePaneContainer.appendChild).toHaveBeenCalledWith(fakeTooltip)
+      expect(fakeXtermContainer.appendChild).not.toHaveBeenCalled()
+      expect(fakeTerminalElement.appendChild).not.toHaveBeenCalled()
+      expect(events).toContain('loadAddon:unicode11')
+      expect(events).toContain('activeVersion=11')
 
-    const unicodeIdx = events.indexOf('activeVersion=11')
-    const writeIdx = events.indexOf('write')
-    if (writeIdx !== -1) {
-      expect(unicodeIdx).toBeLessThan(writeIdx)
+      const unicodeIdx = events.indexOf('activeVersion=11')
+      const writeIdx = events.indexOf('write')
+      if (writeIdx !== -1) {
+        expect(unicodeIdx).toBeLessThan(writeIdx)
+      }
+
+      const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
+      expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
+      expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
+    } finally {
+      vi.unstubAllGlobals()
     }
-
-    const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
-    expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
-    expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
   })
 })

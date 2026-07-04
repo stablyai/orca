@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'http'
+import { createServer, type Server } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MjpegFrameStream } from './mjpeg-frame-stream'
 

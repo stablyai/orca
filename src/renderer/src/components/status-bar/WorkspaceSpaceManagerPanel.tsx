@@ -183,7 +183,7 @@ function getBranchStatus(
   return parts.join(', ')
 }
 
-function getWorkspaceDecisionDetails(
+export function getWorkspaceDecisionDetails(
   worktree: WorkspaceSpaceWorktree,
   inputs: WorkspaceDecisionInputs
 ): WorkspaceDecisionDetails {
@@ -197,11 +197,15 @@ function getWorkspaceDecisionDetails(
   const branch = workspaceRecord
     ? branchDisplayName(workspaceRecord.branch)
     : getWorkspaceSpaceBranchLabel(worktree)
+  const repo = inputs.repoMap.get(worktree.repoId)
   const reviewCacheKey = getHostedReviewCacheKey(
     worktree.repoPath,
     branch,
     inputs.settings,
-    worktree.repoId
+    worktree.repoId,
+    repo?.connectionId,
+    repo?.executionHostId,
+    repo !== undefined
   )
   const hostedReview = inputs.hostedReviewCache[reviewCacheKey]?.data
   const linkedPR = workspaceRecord?.linkedPR ?? null
@@ -214,7 +218,6 @@ function getWorkspaceDecisionDetails(
         ? `PR #${linkedPR}`
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
-  const repo = inputs.repoMap.get(worktree.repoId)
   const issue =
     linkedIssue && repo
       ? inputs.issueCache[
@@ -224,7 +227,8 @@ function getWorkspaceDecisionDetails(
             linkedIssue,
             inputs.settings,
             repo.connectionId,
-            repo.executionHostId
+            repo.executionHostId,
+            true
           )
         ]?.data
       : null

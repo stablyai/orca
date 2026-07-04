@@ -495,6 +495,16 @@ test.describe('Terminal Shortcuts', () => {
     )
   })
 
+  test('Ctrl+Enter writes the kitty modified-enter chord for terminal TUIs', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    await installMainProcessPtyWriteSpy(electronApp)
+    await waitForActivePanePtyId(orcaPage)
+
+    await pressAndExpectWrite(orcaPage, electronApp, 'Control+Enter', '\x1b[13;5u')
+  })
+
   test('plain Ctrl+C sends ETX under kitty keyboard reporting', async ({
     orcaPage,
     electronApp

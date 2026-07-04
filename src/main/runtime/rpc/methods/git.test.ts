@@ -105,6 +105,35 @@ describe('git RPC methods', () => {
     })
   })
 
+  it('returns submodule status for a selected worktree area', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitSubmoduleStatus: vi.fn().mockResolvedValue({
+        entries: [{ path: 'lib.ts', status: 'modified', area: 'unstaged' }],
+        conflictOperation: 'unknown'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.submoduleStatus', {
+        worktree: 'id:wt-1',
+        submodulePath: 'vendor/lib',
+        area: 'staged'
+      })
+    )
+
+    expect(runtime.getRuntimeGitSubmoduleStatus).toHaveBeenCalledWith(
+      'id:wt-1',
+      'vendor/lib',
+      'staged'
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { entries: [{ path: 'lib.ts' }] }
+    })
+  })
+
   it('returns a worktree file diff', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

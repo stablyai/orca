@@ -19,6 +19,7 @@ function createMockRuntime(): CoordinatorRuntime & {
   sentMessages: { handle: string; text: string }[]
   terminals: { handle: string; worktreeId: string; connected: boolean; writable: boolean }[]
   createdTerminals: string[]
+  createdTerminalOptions: { title?: string }[]
   probeDriftCalls: string[]
   probeDriftResult: DriftResult
   setProbeDrift(result: DriftResult): void
@@ -33,6 +34,7 @@ function createMockRuntime(): CoordinatorRuntime & {
       writable: boolean
     }[],
     createdTerminals: [] as string[],
+    createdTerminalOptions: [] as { title?: string }[],
     probeDriftCalls: [] as string[],
     probeDriftResult: null as DriftResult,
     throwProbeDrift: null as Error | null,
@@ -49,6 +51,7 @@ function createMockRuntime(): CoordinatorRuntime & {
     async createTerminal(_worktree?: string, opts?: { title?: string }) {
       const handle = `term_worker_${mock.createdTerminals.length}`
       mock.createdTerminals.push(handle)
+      mock.createdTerminalOptions.push(opts ?? {})
       mock.terminals.push({ handle, worktreeId: 'wt1', connected: true, writable: true })
       return { handle, worktreeId: 'wt1', title: opts?.title ?? '' }
     },
@@ -223,6 +226,7 @@ describe('Coordinator', () => {
     })
 
     expect(runtime.createdTerminals.length).toBe(1)
+    expect(runtime.createdTerminalOptions[0]).not.toHaveProperty('presentation')
 
     // Complete the task
     insertWorkerDone(db, { taskId: task.id, from: runtime.createdTerminals[0] })

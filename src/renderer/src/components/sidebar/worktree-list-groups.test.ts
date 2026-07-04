@@ -165,7 +165,7 @@ describe('getPRGroupKey', () => {
     expect(getPRGroupKey(worktree, repoMap, prCache)).toBe('closed')
   })
 
-  it('does not fall back to local PR cache while runtime scoped data is loading', () => {
+  it('uses local PR cache for a known local repo while a runtime is focused', () => {
     const prCache = {
       'repo-1::feature/super-critical': {
         data: { state: 'merged' }
@@ -176,7 +176,7 @@ describe('getPRGroupKey', () => {
       getPRGroupKey(worktree, repoMap, prCache, {
         activeRuntimeEnvironmentId: 'env-1'
       } as never)
-    ).toBe('in-progress')
+    ).toBe('done')
   })
 
   it('uses SSH-scoped PR cache entries instead of local entries for SSH repos', () => {
@@ -351,6 +351,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       { projects: [project], projectHostSetups }
     )
@@ -441,6 +442,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       {
         projects: projection.projects,
@@ -458,6 +460,95 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'item', worktree: { id: localWorktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
       { type: 'item', worktree: { id: sshWorktree.id }, hostContextLabel: 'build server' },
       { type: 'item', worktree: { id: runtimeWorktree.id }, hostContextLabel: 'dev-container' }
+    ])
+  })
+
+  it('keeps mixed-host project item order while inserting inbox rows before worktrees', () => {
+    const localRepo: Repo = {
+      ...repo,
+      id: 'local-sample-app',
+      displayName: 'sample-app',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'https://git.company.test/team/sample-app.git'
+      }
+    }
+    const sshRepo: Repo = {
+      ...repo,
+      id: 'ssh-sample-app',
+      path: '/home/alice/src/sample-app',
+      displayName: 'sample-app',
+      connectionId: 'build server',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'https://git.company.test/team/sample-app.git'
+      }
+    }
+    const localFirst: Worktree = {
+      ...worktree,
+      id: 'wt-local-first',
+      repoId: localRepo.id,
+      path: '/Users/alice/work/sample-app-a'
+    }
+    const sshWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-ssh',
+      repoId: sshRepo.id,
+      path: '/home/alice/src/sample-app-b'
+    }
+    const localSecond: Worktree = {
+      ...worktree,
+      id: 'wt-local-second',
+      repoId: localRepo.id,
+      path: '/Users/alice/work/sample-app-c'
+    }
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo])
+    const rows = buildRows(
+      'repo',
+      [localFirst, sshWorktree, localSecond],
+      new Map([
+        [localRepo.id, localRepo],
+        [sshRepo.id, sshRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [localFirst.id, localFirst],
+        [sshWorktree.id, sshWorktree],
+        [localSecond.id, localSecond]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([
+        [
+          localRepo.id,
+          { repo: localRepo, inboxWorktrees: [makeDetectedWorktree({ id: 'local-inbox' })] }
+        ],
+        [sshRepo.id, { repo: sshRepo, inboxWorktrees: [makeDetectedWorktree({ id: 'ssh-inbox' })] }]
+      ]),
+      [],
+      {
+        projects: projection.projects,
+        projectHostSetups: projection.setups
+      }
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header' },
+      { type: 'new-external-worktrees-inbox', repo: { id: localRepo.id } },
+      { type: 'new-external-worktrees-inbox', repo: { id: sshRepo.id } },
+      { type: 'item', worktree: { id: localFirst.id } },
+      { type: 'item', worktree: { id: sshWorktree.id } },
+      { type: 'item', worktree: { id: localSecond.id } }
     ])
   })
 
@@ -519,6 +610,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       {
         projects: [project, analyticsProject],
@@ -538,9 +630,6 @@ describe('buildRows with pinned worktrees', () => {
   })
 
   it('splits same-host checkouts of one project into separate per-setup groups', () => {
-    // Why: multiple local clones/worktrees of one repo share the GitHub slug, so
-    // collapsing to the project would merge them into one arbitrarily-named group.
-    // They are distinct ProjectHostSetups on the same host and must stay separate.
     const repoB: Repo = { ...repo, id: 'repo-2', path: '/tmp/orca-2', displayName: 'orca-2' }
     const worktreeB: Worktree = {
       ...worktree,
@@ -578,6 +667,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       {
         projects: [{ ...project, sourceRepoIds: [repo.id, repoB.id] }],
@@ -599,6 +689,307 @@ describe('buildRows with pinned worktrees', () => {
         })
       ])
     )
+  })
+
+  it('splits all project setups when one host has duplicate checkouts', () => {
+    const localRepoB: Repo = {
+      ...repo,
+      id: 'repo-local-b',
+      path: '/tmp/orca-b',
+      displayName: 'orca-b'
+    }
+    const localWorktreeB: Worktree = {
+      ...worktree,
+      id: 'wt-local-b',
+      repoId: localRepoB.id,
+      path: '/tmp/orca-b-feature',
+      displayName: 'feature-b'
+    }
+    const localSetupB: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: localRepoB.id,
+      repoId: localRepoB.id,
+      path: localRepoB.path,
+      displayName: localRepoB.displayName
+    }
+    const rows = buildRows(
+      'repo',
+      [worktree, localWorktreeB, remoteWorktree],
+      new Map([
+        [repo.id, repo],
+        [localRepoB.id, localRepoB],
+        [remoteRepo.id, remoteRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [localWorktreeB.id, localWorktreeB],
+        [remoteWorktree.id, remoteWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [repo.id, localRepoB.id, remoteRepo.id] }],
+        projectHostSetups: [projectHostSetups[0]!, localSetupB, projectHostSetups[1]!]
+      }
+    )
+
+    const headers = rows.filter((row) => row.type === 'header')
+    expect(headers.map((row) => row.key)).toEqual([
+      'project:github:stablyai/orca::setup:repo-1',
+      'project:github:stablyai/orca::setup:repo-local-b',
+      'project:github:stablyai/orca::setup:repo-remote'
+    ])
+  })
+
+  it('keeps a provisioned runtime copy under the project header alongside a same-host checkout', () => {
+    const runtimeRepoB: Repo = {
+      ...repo,
+      id: 'repo-runtime-b',
+      path: '/tmp/orca-runtime-b',
+      displayName: 'orca-runtime-b'
+    }
+    const runtimeWorktreeB: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-b',
+      repoId: runtimeRepoB.id,
+      path: '/tmp/orca-runtime-b-feature',
+      displayName: 'feature-runtime-b'
+    }
+    // Why: a `provisioned` (recipe-created ephemeral) copy shares the project's
+    // remote identity but must not split the user's real checkout into two
+    // headers; it nests under the project. See #6320 / #5374.
+    const runtimeSetupB: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: runtimeRepoB.id,
+      repoId: runtimeRepoB.id,
+      path: runtimeRepoB.path,
+      displayName: runtimeRepoB.displayName,
+      setupMethod: 'provisioned'
+    }
+    const rows = buildRows(
+      'repo',
+      [worktree, runtimeWorktreeB],
+      new Map([
+        [repo.id, repo],
+        [runtimeRepoB.id, runtimeRepoB]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [runtimeWorktreeB.id, runtimeWorktreeB]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [repo.id, runtimeRepoB.id] }],
+        projectHostSetups: [projectHostSetups[0]!, runtimeSetupB]
+      }
+    )
+
+    const headers = rows.filter((row) => row.type === 'header')
+    expect(headers).toHaveLength(1)
+    expect(headers[0]).toMatchObject({
+      key: 'project:github:stablyai/orca',
+      label: 'Orca',
+      count: 2
+    })
+  })
+
+  it('splits duplicate user checkouts while a provisioned copy nests, on one host', () => {
+    // Why: guards the intersection of #5374 (real same-host checkouts split) and
+    // #6320 (provisioned copies nest). Two legacy checkouts must each get their own
+    // header while a provisioned copy of the same project stays under the plain
+    // project header — all on one host surface, simultaneously.
+    const localRepoB: Repo = {
+      ...repo,
+      id: 'repo-local-b',
+      path: '/tmp/orca-b',
+      displayName: 'orca-b'
+    }
+    const localWorktreeB: Worktree = {
+      ...worktree,
+      id: 'wt-local-b',
+      repoId: localRepoB.id,
+      path: '/tmp/orca-b-feature',
+      displayName: 'feature-b'
+    }
+    const localSetupB: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: localRepoB.id,
+      repoId: localRepoB.id,
+      path: localRepoB.path,
+      displayName: localRepoB.displayName
+    }
+    const runtimeRepoB: Repo = {
+      ...repo,
+      id: 'repo-runtime-b',
+      path: '/tmp/orca-runtime-b',
+      displayName: 'orca-runtime-b'
+    }
+    const runtimeWorktreeB: Worktree = {
+      ...worktree,
+      id: 'wt-runtime-b',
+      repoId: runtimeRepoB.id,
+      path: '/tmp/orca-runtime-b-feature',
+      displayName: 'feature-runtime-b'
+    }
+    const runtimeSetupB: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: runtimeRepoB.id,
+      repoId: runtimeRepoB.id,
+      path: runtimeRepoB.path,
+      displayName: runtimeRepoB.displayName,
+      setupMethod: 'provisioned'
+    }
+    const rows = buildRows(
+      'repo',
+      [worktree, localWorktreeB, runtimeWorktreeB],
+      new Map([
+        [repo.id, repo],
+        [localRepoB.id, localRepoB],
+        [runtimeRepoB.id, runtimeRepoB]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [worktree.id, worktree],
+        [localWorktreeB.id, localWorktreeB],
+        [runtimeWorktreeB.id, runtimeWorktreeB]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [repo.id, localRepoB.id, runtimeRepoB.id] }],
+        projectHostSetups: [projectHostSetups[0]!, localSetupB, runtimeSetupB]
+      }
+    )
+
+    const headers = rows.filter((row) => row.type === 'header')
+    expect(headers.map((row) => row.key).sort()).toEqual([
+      'project:github:stablyai/orca',
+      'project:github:stablyai/orca::setup:repo-1',
+      'project:github:stablyai/orca::setup:repo-local-b'
+    ])
+    // The provisioned copy nests under the plain project key with only its own
+    // worktree; it never gets a path-scoped `::setup:` header like the real
+    // checkouts do. (buildRows disambiguates its visible label to the repo name.)
+    expect(
+      headers.some((row) => row.key === 'project:github:stablyai/orca::setup:repo-runtime-b')
+    ).toBe(false)
+    expect(headers.find((row) => row.key === 'project:github:stablyai/orca')).toMatchObject({
+      count: 1
+    })
+  })
+
+  it('groups Windows host and WSL setups on the same runtime host', () => {
+    const runtimeHostId = 'runtime:g16'
+    const windowsRepo: Repo = {
+      ...repo,
+      id: 'repo-windows',
+      path: String.raw`C:\Users\alice\git\orca`,
+      displayName: 'orca',
+      executionHostId: runtimeHostId
+    }
+    const wslRepo: Repo = {
+      ...repo,
+      id: 'repo-wsl',
+      path: String.raw`\\wsl.localhost\Ubuntu\home\alice\git\orca`,
+      displayName: 'orca',
+      executionHostId: runtimeHostId
+    }
+    const windowsWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-windows',
+      repoId: windowsRepo.id,
+      path: String.raw`C:\Users\alice\git\orca\feature`
+    }
+    const wslWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-wsl',
+      repoId: wslRepo.id,
+      path: String.raw`\\wsl.localhost\Ubuntu\home\alice\git\orca\feature`
+    }
+    const windowsSetup: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      id: windowsRepo.id,
+      hostId: runtimeHostId,
+      repoId: windowsRepo.id,
+      path: windowsRepo.path,
+      displayName: windowsRepo.displayName
+    }
+    const wslSetup: ProjectHostSetup = {
+      ...windowsSetup,
+      id: wslRepo.id,
+      repoId: wslRepo.id,
+      path: wslRepo.path
+    }
+    const rows = buildRows(
+      'repo',
+      [windowsWorktree, wslWorktree],
+      new Map([
+        [windowsRepo.id, windowsRepo],
+        [wslRepo.id, wslRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [windowsWorktree.id, windowsWorktree],
+        [wslWorktree.id, wslWorktree]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [windowsRepo.id, wslRepo.id] }],
+        projectHostSetups: [windowsSetup, wslSetup]
+      }
+    )
+
+    expect(rows.filter((row) => row.type === 'header')).toMatchObject([
+      {
+        key: 'project:github:stablyai/orca',
+        label: 'Orca',
+        count: 2
+      }
+    ])
   })
 
   it('uses saved host labels for mixed-host sidebar card badges', () => {
@@ -643,6 +1034,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       { projects: [project], projectHostSetups: [projectHostSetups[0]!, runtimeSetup] },
       [],
@@ -683,6 +1075,7 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
+      new Map(),
       new Map(),
       [],
       {
@@ -896,6 +1289,117 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows.some((row) => row.type === 'imported-worktrees-card')).toBe(false)
+  })
+
+  it('emits a new external worktrees inbox row before repo worktree rows', () => {
+    const inboxWorktrees = [
+      makeDetectedWorktree({ id: 'inbox-1', displayName: 'payments-refactor' }),
+      makeDetectedWorktree({ id: 'inbox-2', displayName: 'auth-cache-debug' })
+    ]
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees }]])
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-1' },
+      {
+        type: 'new-external-worktrees-inbox',
+        key: 'new-external-worktrees-inbox:repo-1',
+        repo: { id: 'repo-1' },
+        inboxWorktrees: [{ id: 'inbox-1' }, { id: 'inbox-2' }]
+      },
+      { type: 'item', worktree: { id: 'wt-1' } }
+    ])
+  })
+
+  it('suppresses the new external worktrees inbox row when the repo group is collapsed', () => {
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      repoMap,
+      null,
+      new Set(['repo:repo-1']),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toMatchObject([{ type: 'header', key: 'repo:repo-1' }])
+  })
+
+  it('emits a repo header and inbox row when no visible worktree rows remain', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-1' },
+      {
+        type: 'new-external-worktrees-inbox',
+        key: 'new-external-worktrees-inbox:repo-1'
+      }
+    ])
+  })
+
+  it('does not emit new external worktrees inbox rows outside repo grouping', () => {
+    const rows = buildRows(
+      'workspace-status',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows.some((row) => row.type === 'new-external-worktrees-inbox')).toBe(false)
   })
 
   it('emits imported worktree cards in repo groups when visible rows are pinned', () => {
@@ -1940,6 +2444,67 @@ describe('project groups', () => {
     ])
   })
 
+  it('orders Project Group siblings by tabOrder within each parent bucket', () => {
+    const rootA: ProjectGroup = {
+      id: 'group-root-a',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 20,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const rootB: ProjectGroup = {
+      ...rootA,
+      id: 'group-root-b',
+      name: 'Infrastructure',
+      tabOrder: 10
+    }
+    const childLate: ProjectGroup = {
+      ...rootA,
+      id: 'group-child-late',
+      name: 'late',
+      parentGroupId: rootB.id,
+      tabOrder: 30
+    }
+    const childEarly: ProjectGroup = {
+      ...rootA,
+      id: 'group-child-early',
+      name: 'early',
+      parentGroupId: rootB.id,
+      tabOrder: 5
+    }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      'recent',
+      {},
+      undefined,
+      false,
+      undefined,
+      [rootA, rootB, childLate, childEarly]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-root-b',
+      'project-group:group-child-early',
+      'project-group:group-child-late',
+      'project-group:group-root-a'
+    ])
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.projectGroupDepth)).toEqual(
+      [0, 1, 1, 0]
+    )
+  })
+
   it('renders nested Project Groups before repos assigned to their leaf group', () => {
     const rootGroup: ProjectGroup = {
       id: 'group-root',
@@ -2049,6 +2614,7 @@ describe('project groups', () => {
       [group],
       new Set(),
       new Map(),
+      new Map(),
       [],
       undefined,
       [folderWorkspace]
@@ -2126,6 +2692,7 @@ describe('project groups', () => {
       [rootGroup, childGroup],
       new Set(),
       new Map(),
+      new Map(),
       [],
       undefined,
       [folderWorkspace]
@@ -2194,6 +2761,7 @@ describe('project groups', () => {
       undefined,
       [group],
       new Set(),
+      new Map(),
       new Map(),
       [],
       undefined,
@@ -2637,6 +3205,7 @@ describe('buildRows pending creations', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [makePendingCreation('c1', repo.id)]
     )
 
@@ -2668,6 +3237,7 @@ describe('buildRows pending creations', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [makePendingCreation('c1', repo.id)]
     )
 
@@ -2690,6 +3260,7 @@ describe('buildRows pending creations', () => {
       undefined,
       [],
       new Set(),
+      new Map(),
       new Map(),
       [makePendingCreation('c1', repo.id)]
     )
@@ -2716,6 +3287,7 @@ describe('buildRows pending creations', () => {
       undefined,
       [],
       new Set(),
+      new Map(),
       new Map(),
       [makePendingCreation('c1', repo.id)]
     )

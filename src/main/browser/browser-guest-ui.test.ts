@@ -105,9 +105,28 @@ describe('setupGuestContextMenu', () => {
       screenY: 375,
       pageUrl: 'https://test.dev/page',
       linkUrl: 'https://test.dev/link',
+      selectionText: '',
       canGoBack: true,
       canGoForward: true
     })
+  })
+
+  it('forwards the native selection text so the renderer can offer Copy', () => {
+    const guest = makeGuest()
+    const renderer = makeRenderer()
+
+    setupGuestContextMenu({
+      browserTabId,
+      guest,
+      resolveRenderer: () => renderer
+    })
+
+    triggerContextMenu(guest, { x: 10, y: 20, selectionText: 'copied selection' })
+
+    expect(rendererSendMock).toHaveBeenCalledWith(
+      'browser:context-menu-requested',
+      expect.objectContaining({ selectionText: 'copied selection' })
+    )
   })
 
   it('reads navigation state from navigationHistory', () => {
@@ -528,6 +547,29 @@ describe('setupGuestShortcutForwarding', () => {
     expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:browserHistoryNavigate', 'back')
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
+  })
+
+  it('forwards quick-command menu shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
+      })
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'KeyQ',
+      key: 'q',
+      meta: isMac,
+      control: !isMac,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
   })
 
   it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {

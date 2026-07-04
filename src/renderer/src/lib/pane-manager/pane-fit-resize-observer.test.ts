@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import {
   attachPaneFitResizeObserver,
-  detachPaneFitResizeObserver
+  detachPaneFitResizeObserver,
+  requestStablePaneFit
 } from './pane-fit-resize-observer'
 
 type ResizeObserverCallbackLike = ConstructorParameters<typeof ResizeObserver>[0]
@@ -139,6 +140,38 @@ describe('attachPaneFitResizeObserver', () => {
     flushAnimationFrames()
 
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits through a transient grid wobble before notifying settled callbacks', () => {
+    const proposed = [
+      { cols: 80, rows: 24 },
+      { cols: 81, rows: 24 },
+      { cols: 81, rows: 24 }
+    ]
+    const onSettled = vi.fn()
+    const pane = createPane(() => proposed.shift() ?? { cols: 81, rows: 24 })
+
+    requestStablePaneFit(pane, onSettled)
+    flushAnimationFrames()
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(onSettled).not.toHaveBeenCalled()
+
+    flushAnimationFrames()
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('notifies settled callbacks when the terminal already matches the stable grid', () => {
+    const onSettled = vi.fn()
+    const pane = createPane(() => ({ cols: 79, rows: 24 }))
+
+    requestStablePaneFit(pane, onSettled)
+    flushAnimationFrames()
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(onSettled).toHaveBeenCalledTimes(1)
   })
 
   it('skips observer fits while the terminal has no visible geometry', () => {

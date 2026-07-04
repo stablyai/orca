@@ -5,6 +5,7 @@
  * debounced restore, inline restore on timer cancel, and cleanup paths.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
 
 vi.mock('../git/worktree', () => ({
@@ -40,9 +41,13 @@ vi.mock('../git/repo', async (importOriginal) => {
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null),
-    getGitUsername: vi.fn().mockReturnValue('')
+    getBranchConflictKind: vi.fn().mockResolvedValue(null)
   }
+})
+
+vi.mock('../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+  return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
 // Why: many tests pre-date the mobileAutoRestoreFitMs preference. Default
@@ -227,7 +232,10 @@ describe('mobile subscribe integration', () => {
       cols: 90,
       rows: 30,
       seq: 17,
-      source: 'headless'
+      source: 'headless',
+      // Non-alt-screen buffer reports alternateScreen=false so the renderer
+      // keeps its destructive scrollback clear on restore.
+      alternateScreen: false
     })
     await expect(runtime.serializeTerminalBuffer('pty-empty')).resolves.toBeNull()
   })

@@ -21,11 +21,19 @@ import {
   type ElectronApplication,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { execSync } from 'child_process'
-import { randomUUID } from 'crypto'
-import os from 'os'
-import path from 'path'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { execSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import os from 'node:os'
+import path from 'node:path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
@@ -133,7 +141,10 @@ function isValidGitRepo(repoPath: string): boolean {
 }
 
 function createSeededTestRepo(): string {
-  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
+  // Why: realpathSync so the seeded path matches the store's repo.path on
+  // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
+  // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
+  const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -303,23 +314,38 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       await window.api.repos.add({ path: repoPath })
     }, repoPath)
 
-    // Fetch repos in the renderer store so it picks up the new repo
-    await page.evaluate(async (repoPath) => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-
-      await store.getState().fetchRepos()
-      const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
-      if (!repo) {
-        throw new Error(`Expected e2e repo to be loaded: ${repoPath}`)
-      }
-      // Why: the fixture deliberately creates external Git worktrees. New
-      // repos hide those by default after the visibility rollout, so opt this
-      // disposable repo into showing them before specs assert on worktree state.
-      await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-    }, repoPath)
+    // Fetch repos in the renderer store so it picks up the new repo, then opt
+    // this disposable repo into showing external worktrees.
+    // Why: repos.add() fires a repos:changed echo that triggers a *concurrent*
+    // fetchRepos() in the renderer; the store's generation guard can then drop
+    // this awaited fetch's result, leaving `repos` briefly stale. Poll the
+    // public fetch path until the repo lands instead of asserting on the first
+    // tick (mirrors the seeded-worktree poll below). updateRepo is idempotent,
+    // so running it once the repo appears is safe across poll ticks.
+    await playwrightExpect
+      .poll(
+        () =>
+          page.evaluate(async (repoPath) => {
+            const store = window.__store
+            if (!store) {
+              return false
+            }
+            await store.getState().fetchRepos()
+            const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+            if (!repo) {
+              return false
+            }
+            // Why: the fixture deliberately creates external Git worktrees. New
+            // repos hide those by default after the visibility rollout.
+            await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+            return true
+          }, repoPath),
+        {
+          timeout: 30_000,
+          message: `Expected e2e repo to be loaded: ${repoPath}`
+        }
+      )
+      .toBe(true)
 
     // Wait for the repo to appear and fetch its worktrees
     await page.evaluate(async () => {

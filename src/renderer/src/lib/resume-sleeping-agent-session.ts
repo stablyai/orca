@@ -10,15 +10,17 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab
-} from '../../../shared/types'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
 import { translate } from '@/i18n/i18n'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import {
+  getProviderSessionClaimKey,
+  isPassiveCompletedHibernationEvidence,
+  recordPaneIsOwnedByPreservedPane
+} from './sleeping-agent-pane-ownership'
 
 function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
   const state = useAppStore.getState()
@@ -90,6 +92,7 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
+    resumeProviderSession: record.providerSession,
     launchAgent: record.agent,
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
@@ -101,109 +104,127 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
       request_kind: 'resume'
     }
   })
+  state.claimAutomaticAgentResume(tab.id, {
+    worktreeId: record.worktreeId,
+    launchAgent: record.agent,
+    providerSession: record.providerSession
+  })
   state.clearSleepingAgentSession(record.paneKey)
   state.setActiveTabType('terminal')
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
   return true
 }
 
-function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
-  return [
-    record.worktreeId,
-    record.agent,
-    record.providerSession.key,
-    record.providerSession.id
-  ].join('\0')
-}
-
-function getLegacyPaneTabId(record: SleepingAgentSessionRecord): string | null {
-  const legacy = parseLegacyNumericPaneKey(record.paneKey)
-  if (!legacy || (record.tabId && record.tabId !== legacy.tabId)) {
-    return null
+function clearPassiveCompletedRecordsForClaimKey(
+  records: readonly SleepingAgentSessionRecord[],
+  claimKey: string,
+  keepPaneKey: string
+): void {
+  const state = useAppStore.getState()
+  for (const record of records) {
+    if (record.paneKey === keepPaneKey || !isPassiveCompletedHibernationEvidence(record)) {
+      continue
+    }
+    if (getProviderSessionClaimKey(record) === claimKey) {
+      state.clearSleepingAgentSession(record.paneKey)
+    }
   }
-  return record.tabId ?? legacy.tabId
 }
 
-function getLegacyProviderSessionKeysForTab(
-  state: ReturnType<typeof useAppStore.getState>,
-  worktreeId: string,
-  tabId: string
-): Set<string> {
+function getCurrentPaneOwnedClaimKeys(records: readonly SleepingAgentSessionRecord[]): Set<string> {
+  const state = useAppStore.getState()
   const keys = new Set<string>()
-  for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
-    if (record.worktreeId === worktreeId && getLegacyPaneTabId(record) === tabId) {
+  for (const record of records) {
+    if (
+      state.sleepingAgentSessionsByPaneKey[record.paneKey] !== record ||
+      isInvalidWorktreeActivationRecord(record) ||
+      isPassiveCompletedHibernationEvidence(record)
+    ) {
+      continue
+    }
+    if (recordPaneIsOwnedByPreservedPane(record, state)) {
       keys.add(getProviderSessionClaimKey(record))
     }
   }
   return keys
 }
 
-function hasRestorableLegacyTabPty(
-  tab: TerminalTab,
-  ptyIdsByTabId: Record<string, string[] | undefined>
-): boolean {
-  return Boolean(tab.ptyId) || (ptyIdsByTabId[tab.id]?.length ?? 0) > 0
-}
-
-function layoutContainsLeaf(
-  node: TerminalPaneLayoutNode | null | undefined,
-  leafId: string
-): boolean {
-  if (!node) {
-    return false
+function getNewestActiveRecordsByClaimKey(
+  records: readonly SleepingAgentSessionRecord[]
+): Map<string, SleepingAgentSessionRecord> {
+  const newestRecords = new Map<string, SleepingAgentSessionRecord>()
+  for (const record of records) {
+    const claimKey = getProviderSessionClaimKey(record)
+    const current = newestRecords.get(claimKey)
+    if (
+      !current ||
+      record.capturedAt > current.capturedAt ||
+      (record.capturedAt === current.capturedAt && record.updatedAt > current.updatedAt)
+    ) {
+      newestRecords.set(claimKey, record)
+    }
   }
-  if (node.type === 'leaf') {
-    return node.leafId === leafId
-  }
-  return layoutContainsLeaf(node.first, leafId) || layoutContainsLeaf(node.second, leafId)
+  return newestRecords
 }
 
-function hasMatchingStablePaneLayout(
-  tabId: string,
-  leafId: string,
-  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
+function providerSessionsMatch(
+  left: AgentProviderSessionMetadata | undefined,
+  right: AgentProviderSessionMetadata
 ): boolean {
-  // Why: hibernation intentionally clears the live PTY binding after the pane
-  // exits, but the preserved leaf still owns cold-restore for its session.
-  return layoutContainsLeaf(terminalLayoutsByTabId[tabId]?.root, leafId)
+  return Boolean(left && left.key === right.key && left.id === right.id)
 }
 
-function findSameWorktreeTab(
-  worktreeTabs: readonly TerminalTab[],
-  tabId: string
-): TerminalTab | null {
-  return worktreeTabs.find((tab) => tab.id === tabId) ?? null
+function getAgentStatusTabId(entry: {
+  paneKey: string
+  tabId?: string | undefined
+}): string | null {
+  if (entry.tabId) {
+    return entry.tabId
+  }
+  const separatorIndex = entry.paneKey.indexOf(':')
+  return separatorIndex === -1 ? null : entry.paneKey.slice(0, separatorIndex)
 }
 
-function recordPaneIsOwnedByPreservedPane(
+function activeOrQueuedResumeClaimsProviderSession(
   record: SleepingAgentSessionRecord,
   state: ReturnType<typeof useAppStore.getState>
 ): boolean {
-  const worktreeTabs = state.tabsByWorktree[record.worktreeId] ?? []
-  const stable = parsePaneKey(record.paneKey)
-  if (stable) {
-    if (record.tabId && record.tabId !== stable.tabId) {
-      return false
+  const worktreeTabIds = new Set(
+    (state.tabsByWorktree[record.worktreeId] ?? []).map((tab) => tab.id)
+  )
+  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+    if (
+      worktreeTabIds.has(getAgentStatusTabId(entry) ?? '') &&
+      entry.worktreeId === record.worktreeId &&
+      entry.agentType === record.agent &&
+      entry.state !== 'done' &&
+      providerSessionsMatch(entry.providerSession, record.providerSession)
+    ) {
+      return true
     }
-    const tabId = record.tabId ?? stable.tabId
-    const tab = findSameWorktreeTab(worktreeTabs, tabId)
-    return Boolean(
-      tab && hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)
-    )
   }
 
-  const tabId = getLegacyPaneTabId(record)
-  if (!tabId) {
-    return false
+  for (const [tabId, startup] of Object.entries(state.pendingStartupByTabId)) {
+    if (
+      worktreeTabIds.has(tabId) &&
+      startup.launchAgent === record.agent &&
+      providerSessionsMatch(startup.resumeProviderSession, record.providerSession)
+    ) {
+      return true
+    }
   }
-  const tab = findSameWorktreeTab(worktreeTabs, tabId)
-  const providerKeys = getLegacyProviderSessionKeysForTab(state, record.worktreeId, tabId)
-  // Why: legacy numeric pane keys lack leaf identity, so only a preserved
-  // tab-level wake hint plus a single provider session is strong enough to
-  // claim pane recovery without risking the wrong split-pane session.
-  return Boolean(
-    tab && hasRestorableLegacyTabPty(tab, state.ptyIdsByTabId) && providerKeys.size === 1
-  )
+
+  for (const [tabId, claim] of Object.entries(state.automaticAgentResumeClaimsByTabId)) {
+    if (
+      worktreeTabIds.has(tabId) &&
+      claim.worktreeId === record.worktreeId &&
+      claim.launchAgent === record.agent &&
+      providerSessionsMatch(claim.providerSession, record.providerSession)
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
@@ -223,34 +244,64 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
-  const records = worktreeRecords
-    // Why: pane-owned captures (#5232/#5626) cover panes that still exist in
-    // the restored session. Those panes own their own recovery — warm reattach
-    // when the daemon kept the agent alive, or pane-level cold-restore resume.
-    .filter((record) => record.origin !== 'quit' && record.origin !== 'live')
-
-  const paneOwnedClaimKeys = new Set(
-    worktreeRecords
-      .filter((record) => recordPaneIsOwnedByPreservedPane(record, state))
-      .map(getProviderSessionClaimKey)
+  const validWorktreeRecords = worktreeRecords.filter(
+    (record) => !isInvalidWorktreeActivationRecord(record)
   )
+  const activeWorktreeRecords = validWorktreeRecords.filter(
+    (record) => !isPassiveCompletedHibernationEvidence(record)
+  )
+  const activeClaimKeys = new Set(activeWorktreeRecords.map(getProviderSessionClaimKey))
+  const newestActiveRecordByClaimKey = getNewestActiveRecordsByClaimKey(activeWorktreeRecords)
+  const freshlyLaunchedClaimKeys = new Set<string>()
 
   let launched = 0
-  for (const record of records) {
+  for (const record of worktreeRecords) {
+    const currentState = useAppStore.getState()
+    if (currentState.sleepingAgentSessionsByPaneKey[record.paneKey] !== record) {
+      continue
+    }
     const claimKey = getProviderSessionClaimKey(record)
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)
       continue
     }
-    if (paneOwnedClaimKeys.has(claimKey)) {
-      if (!recordPaneIsOwnedByPreservedPane(record, state)) {
+    const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)
+    if (isPassiveCompletedHibernationEvidence(record)) {
+      // Why: completed-agent hibernation is passive history; activation should
+      // only keep displayable evidence, never start new work from it.
+      if (!isPaneOwned || activeClaimKeys.has(claimKey)) {
         state.clearSleepingAgentSession(record.paneKey)
       }
       continue
     }
+    if (activeOrQueuedResumeClaimsProviderSession(record, currentState)) {
+      // Why: main can replay the old wake record after the same provider
+      // session was already queued in a fresh tab; clear the stale replay.
+      state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    const paneOwnedClaimKeys = getCurrentPaneOwnedClaimKeys(activeWorktreeRecords)
+    if (paneOwnedClaimKeys.has(claimKey)) {
+      if (!isPaneOwned) {
+        state.clearSleepingAgentSession(record.paneKey)
+      }
+      continue
+    }
+    if (freshlyLaunchedClaimKeys.has(claimKey)) {
+      state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    if (newestActiveRecordByClaimKey.get(claimKey) !== record) {
+      state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    if (isPaneOwned) {
+      continue
+    }
     if (launchSleepingAgentSession(record)) {
       launched += 1
-      paneOwnedClaimKeys.add(claimKey)
+      freshlyLaunchedClaimKeys.add(claimKey)
+      clearPassiveCompletedRecordsForClaimKey(worktreeRecords, claimKey, record.paneKey)
     }
   }
   return launched

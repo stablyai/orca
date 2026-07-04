@@ -1,9 +1,21 @@
 /* eslint-disable max-lines -- Why: Codex hook trust parsing, hashing, and byte-preserving TOML edits share one fragile file-format contract; splitting would make the compatibility shim harder to audit. */
-import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
-import { createHash, randomUUID } from 'crypto'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
+import { dirname, join } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
 import { escapeRegex } from '../../shared/string-utils'
 import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import {
+  createTomlLineScanState,
+  isTomlStructuralLine,
+  updateTomlLineScanState
+} from './config-toml-line-scan'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
 // ~/.codex/config.toml under [hooks.state."<key>"]. Without it the hook is in
@@ -88,10 +100,37 @@ function canonicalize(value: unknown): unknown {
   return value
 }
 
+// Why: reproduces matcher_pattern_for_event (codex-rs
+// hooks/src/events/common.rs). Codex ignores matchers on
+// UserPromptSubmit/Stop and drops them from the hook identity BEFORE
+// hashing, so a hooks.json entry carrying `"matcher": ""` on those
+// events must hash the same as one without it. Including it computes a
+// hash Codex never writes: system trust then looks stale, and
+// removeStaleRuntimeHookTrustEntries deletes the entry Codex wrote on
+// every launch — an endless re-trust prompt for those two events.
+function matcherPatternForEvent(
+  eventLabel: CodexEventLabel,
+  matcher: string | undefined
+): string | undefined {
+  switch (eventLabel) {
+    case 'user_prompt_submit':
+    case 'stop':
+      return undefined
+    case 'pre_tool_use':
+    case 'permission_request':
+    case 'post_tool_use':
+    case 'pre_compact':
+    case 'post_compact':
+    case 'session_start':
+      return matcher
+  }
+}
+
 // Why: reproduces command_hook_hash. NormalizedHookIdentity has `group:
 // MatcherGroup` flattened in, so the wire shape is { event_name, matcher?,
 // hooks: [<normalized handler>] }. `matcher` is omitted (not null) when
-// absent — Rust's Option<String>=None drops through the TOML→JSON path.
+// absent — Rust's Option<String>=None drops through the TOML→JSON path —
+// and normalized per event first (see matcherPatternForEvent).
 // Handler is normalized to timeout=600 (or explicit, min 1) and async=false.
 export function computeTrustedHash(entry: CodexTrustEntry): string {
   const handler: Record<string, unknown> = {
@@ -107,8 +146,9 @@ export function computeTrustedHash(entry: CodexTrustEntry): string {
     event_name: entry.eventLabel,
     hooks: [handler]
   }
-  if (entry.matcher !== undefined) {
-    identity.matcher = entry.matcher
+  const matcher = matcherPatternForEvent(entry.eventLabel, entry.matcher)
+  if (matcher !== undefined) {
+    identity.matcher = matcher
   }
   const serialized = JSON.stringify(canonicalize(identity))
   return `sha256:${createHash('sha256').update(serialized).digest('hex')}`
@@ -122,12 +162,29 @@ export function getCodexCanonicalTrustPath(sourcePath: string): string {
   try {
     // Why: Codex canonicalizes trust paths before building config keys. On
     // macOS, /var is a symlink to /private/var; trusting the raw path still
-    // leaves the TUI in review/trust prompts. Forward-slash normalization
-    // prevents separator mismatch against Codex-written literal-string keys on Windows.
-    return normalizeWindowsPathSeparators(realpathSync.native(sourcePath))
+    // leaves the TUI in review/trust prompts. On Windows, Codex 0.140 writes
+    // hook state keys with native raw backslashes under an explicit parent table.
+    return realpathSync.native(sourcePath)
   } catch {
-    return normalizeWindowsPathSeparators(sourcePath)
+    return normalizeWindowsPathForCodexLookup(sourcePath)
   }
+}
+
+function getCodexCanonicalProjectPath(projectPath: string): string {
+  try {
+    // Why: local project trust still needs Codex's realpath shape, but remote
+    // SSH callers pass an already-canonical remote path string.
+    return realpathSync.native(projectPath)
+  } catch {
+    return projectPath
+  }
+}
+
+function normalizeWindowsPathForCodexLookup(sourcePath: string): string {
+  if (!usesWindowsPathSeparators(sourcePath)) {
+    return sourcePath
+  }
+  return sourcePath.replace(/\//g, '\\')
 }
 
 function normalizeWindowsPathSeparators(sourcePath: string): string {
@@ -242,9 +299,17 @@ export function upsertHookTrustEntriesInContent(
 ): string {
   const existing =
     existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
-  let updated = existing
+  let updated = entries.some((entry) =>
+    usesWindowsPathSeparators(getCodexCanonicalTrustPath(entry.sourcePath))
+  )
+    ? ensureHooksStateParentTable(existing)
+    : existing
   for (const entry of entries) {
-    updated = upsertTrustBlock(updated, computeTrustKey(entry), computeTrustedHash(entry))
+    updated = upsertTrustBlocks(
+      updated,
+      getTrustKeyWriteVariants(computeTrustKey(entry)),
+      computeTrustedHash(entry)
+    )
   }
   return updated
 }
@@ -265,11 +330,14 @@ export function upsertProjectTrustLevel(
 export function upsertProjectTrustLevelInContent(
   existingContent: string,
   projectPath: string,
-  trustLevel: CodexProjectTrustLevel
+  trustLevel: CodexProjectTrustLevel,
+  options?: { alreadyCanonical?: boolean }
 ): string {
   const existing =
     existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
-  const trustedProjectPath = getCodexCanonicalTrustPath(projectPath)
+  const trustedProjectPath = options?.alreadyCanonical
+    ? projectPath
+    : getCodexCanonicalProjectPath(projectPath)
   const headerPattern = buildProjectHeaderPattern(trustedProjectPath)
   const match = headerPattern.exec(existing)
   const eol = existing.includes('\r\n') ? '\r\n' : '\n'
@@ -311,10 +379,32 @@ export function upsertProjectTrustLevelInContent(
 // `enabled = false` survives reinstall.
 function buildTrustBlock(key: string, hash: string, enabled: boolean): string {
   return [
-    `[hooks.state."${escapeTomlString(key)}"]`,
+    `[hooks.state.${formatHookStateTableKey(key)}]`,
     `enabled = ${enabled}`,
     `trusted_hash = "${escapeTomlString(hash)}"`
   ].join('\n')
+}
+
+function formatHookStateTableKey(key: string): string {
+  const parsed = parseTrustKey(key)
+  if (parsed && usesWindowsPathSeparators(parsed.sourcePath) && !key.includes("'")) {
+    // Why: Codex 0.140 trusts Windows hooks only when the state table keys
+    // match the raw native path shape it writes after /hooks approval.
+    return `'${key}'`
+  }
+  return `"${escapeTomlString(key)}"`
+}
+
+function getTrustKeyWriteVariants(key: string): string[] {
+  const parsed = parseTrustKey(key)
+  if (!parsed || !usesWindowsPathSeparators(parsed.sourcePath)) {
+    return [key]
+  }
+  const suffix = `:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
+  return [
+    `${parsed.sourcePath.replace(/\//g, '\\')}${suffix}`,
+    `${parsed.sourcePath.replace(/\\/g, '/')}${suffix}`
+  ].filter((variant, index, variants) => variants.indexOf(variant) === index)
 }
 
 // Why: TOML basic strings forbid raw control chars; escape backslash first so
@@ -330,10 +420,18 @@ export function escapeTomlString(value: string): string {
     .replaceAll('\t', '\\t')
 }
 
-function upsertTrustBlock(content: string, key: string, hash: string): string {
-  const ranges = findTrustBlockRanges(content, key)
+function upsertTrustBlocks(content: string, keys: readonly string[], hash: string): string {
+  const ranges = keys
+    .flatMap((key) => findTrustBlockRanges(content, key))
+    .filter(
+      (range, index, ranges) =>
+        ranges.findIndex(
+          (candidate) => candidate.start === range.start && candidate.end === range.end
+        ) === index
+    )
+    .sort((a, b) => a.start - b.start)
   if (ranges.length === 0) {
-    const block = buildTrustBlock(key, hash, true)
+    const block = buildTrustBlocks(keys, hash, true)
     if (content.length === 0) {
       return `${block}\n`
     }
@@ -355,7 +453,7 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
     )
     return enabledMatch?.[1] === 'false'
   })
-  const block = buildTrustBlock(key, hash, enabled)
+  const block = buildTrustBlocks(keys, hash, enabled)
   let cursor = 0
   let deduped = ''
   ranges.forEach((range, index) => {
@@ -366,6 +464,29 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
     cursor = range.end
   })
   return deduped + content.slice(cursor)
+}
+
+function buildTrustBlocks(keys: readonly string[], hash: string, enabled: boolean): string {
+  // Why: Codex 0.140 can expose Windows hook-state keys with either native
+  // backslashes or forward slashes depending on the cwd string used at startup.
+  return keys.map((key) => buildTrustBlock(key, hash, enabled)).join('\n\n')
+}
+
+function ensureHooksStateParentTable(content: string): string {
+  if (/^[ \t]*\[hooks\.state\][ \t]*(?:#[^\r\n]*)?$/m.test(content)) {
+    return content
+  }
+  const eol = content.includes('\r\n') ? '\r\n' : '\n'
+  const parent = `[hooks.state]${eol}`
+  const hookHeader = /^[ \t]*\[hooks\.state\.(?:"|')/m.exec(content)
+  if (hookHeader) {
+    return `${content.slice(0, hookHeader.index)}${parent}${eol}${content.slice(hookHeader.index)}`
+  }
+  if (content.length === 0) {
+    return parent
+  }
+  const separator = content.endsWith(`${eol}${eol}`) ? '' : content.endsWith(eol) ? eol : eol + eol
+  return `${content}${separator}${parent}`
 }
 
 type TrustBlockRange = {
@@ -388,16 +509,14 @@ export function normalizeHookTrustKeyForLookup(key: string): string {
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
   const ranges: TrustBlockRange[] = []
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < content.length) {
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
-    const headerKey = isInsideTomlMultilineString(multilineState)
-      ? null
-      : parseHookStateHeaderKey(line)
+    const headerKey = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
     if (
       headerKey !== null &&
       normalizeHookTrustKeyForLookup(headerKey) === normalizeHookTrustKeyForLookup(key)
@@ -410,17 +529,20 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
       cursor = Math.max(blockEnd, nextCursor)
       continue
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     cursor = nextCursor
   }
   return ranges
 }
 
 function buildProjectHeaderPattern(projectPath: string): RegExp {
-  const headerPaths = [escapeRegex(escapeTomlString(projectPath))]
+  const headerPathValues = [projectPath]
   if (usesWindowsPathSeparators(projectPath)) {
-    headerPaths.push(escapeRegex(escapeTomlString(projectPath.replace(/\//g, '\\'))))
+    headerPathValues.push(projectPath.replace(/\//g, '\\'), projectPath.replace(/\\/g, '/'))
   }
+  const headerPaths = [...new Set(headerPathValues)].map((path) =>
+    escapeRegex(escapeTomlString(path))
+  )
   return new RegExp(
     `(^|\\r?\\n)[ \\t]*\\[projects\\."(?:${headerPaths.join('|')})"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`,
     process.platform === 'win32' ? 'i' : undefined
@@ -505,13 +627,13 @@ function skipTomlInlineWhitespace(line: string, startIndex: number): number {
 // a flat regex misclassifies both cases.
 function findNextTableHeader(text: string): number {
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < text.length) {
     const newlineIdx = text.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? text.length : newlineIdx
     const rawLine = text.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
-    if (!isInsideTomlMultilineString(multilineState)) {
+    if (isTomlStructuralLine(scanState)) {
       const trimmed = line.trimStart()
       // Why: stop at both `[table]` and `[[array.of.tables]]` — both end our
       // block. Skipping `[[ ]]` here would let our slice consume past array
@@ -520,7 +642,7 @@ function findNextTableHeader(text: string): number {
         return cursor
       }
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     if (newlineIdx === -1) {
       return -1
     }
@@ -585,92 +707,6 @@ function isCompleteTableHeader(line: string): boolean {
     i++
   }
   return false
-}
-
-type TomlMultilineState = {
-  basic: boolean
-  literal: boolean
-}
-
-type TomlMultilineMode = 'basic' | 'literal' | null
-
-function isInsideTomlMultilineString(state: TomlMultilineState): boolean {
-  return state.basic || state.literal
-}
-
-function updateTomlMultilineState(state: TomlMultilineState, line: string): TomlMultilineState {
-  let mode: TomlMultilineMode = state.basic ? 'basic' : state.literal ? 'literal' : null
-  let index = 0
-  while (index < line.length) {
-    if (mode === 'basic') {
-      if (line[index] === '\\') {
-        index += 2
-        continue
-      }
-      if (line.startsWith('"""', index)) {
-        mode = null
-        index += 3
-        continue
-      }
-      index++
-      continue
-    }
-    if (mode === 'literal') {
-      if (line.startsWith("'''", index)) {
-        mode = null
-        index += 3
-        continue
-      }
-      index++
-      continue
-    }
-
-    const char = line[index]
-    if (char === '#') {
-      break
-    }
-    if (line.startsWith('"""', index)) {
-      mode = 'basic'
-      index += 3
-      continue
-    }
-    if (line.startsWith("'''", index)) {
-      mode = 'literal'
-      index += 3
-      continue
-    }
-    if (char === '"') {
-      index = skipTomlBasicString(line, index + 1)
-      continue
-    }
-    if (char === "'") {
-      index = skipTomlLiteralString(line, index + 1)
-      continue
-    }
-    index++
-  }
-  return { basic: mode === 'basic', literal: mode === 'literal' }
-}
-
-function skipTomlBasicString(line: string, startIndex: number): number {
-  let index = startIndex
-  while (index < line.length) {
-    const char = line[index]
-    if (char === '\\') {
-      index += 2
-      continue
-    }
-    if (char === '"') {
-      return index + 1
-    }
-    index++
-  }
-  return index
-}
-
-function skipTomlLiteralString(line: string, startIndex: number): number {
-  const endIndex = line.indexOf("'", startIndex)
-  return endIndex === -1 ? line.length : endIndex + 1
 }
 
 // Why: same atomic-rename + .bak rotation pattern as writeHooksJson — a
@@ -739,14 +775,14 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
   // Why: walk line-by-line so `[hooks.state."..."]` inside a `"""..."""` or
   // `'''...'''` multi-line string isn't mistaken for a real header.
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < content.length) {
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
-    const key = isInsideTomlMultilineString(multilineState) ? null : parseHookStateHeaderKey(line)
+    const key = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
     if (key !== null) {
       // Why: block ends at the next *real* header (multi-line aware).
       const after = content.slice(nextCursor)
@@ -757,14 +793,22 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
       // a line scan beats pulling in a full TOML value parser.
       const hashMatch = /^[ \t]*trusted_hash[ \t]*=[ \t]*"((?:[^"\\]|\\.)*)"/m.exec(block)
       const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
-      result.set(normalizeHookTrustKeyForLookup(key), {
-        trustedHash: hashMatch ? unescapeTomlString(hashMatch[1]) : undefined,
-        enabled: enabledMatch ? enabledMatch[1] === 'true' : undefined
+      const normalizedKey = normalizeHookTrustKeyForLookup(key)
+      const existingState = result.get(normalizedKey)
+      const enabled = enabledMatch ? enabledMatch[1] === 'true' : undefined
+      result.set(normalizedKey, {
+        trustedHash: hashMatch ? unescapeTomlString(hashMatch[1]) : existingState?.trustedHash,
+        // Why: Windows writes both slash variants for one hook; a disabled copy
+        // must remain authoritative regardless of which variant appears last.
+        enabled:
+          existingState?.enabled === false || enabled === false
+            ? false
+            : (enabled ?? existingState?.enabled)
       })
       cursor = nextCursor
       continue
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     cursor = nextCursor
   }
   return result

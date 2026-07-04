@@ -215,6 +215,13 @@ describe('isGitLabIssueUrl', () => {
     expect(isGitLabIssueUrl('https://gitlab.example.com/group/project/-/issues/123')).toBe(true)
   })
 
+  it('detects modern /-/work_items/<iid> issue URLs (incl. non-default port)', () => {
+    expect(isGitLabIssueUrl('https://gitlab.com/group/project/-/work_items/123')).toBe(true)
+    expect(
+      isGitLabIssueUrl('https://gitlab.example.com:8443/group/project/-/work_items/7')
+    ).toBe(true)
+  })
+
   it('does not classify GitHub issue URLs as GitLab issues', () => {
     expect(isGitLabIssueUrl('https://github.com/group/project/issues/123')).toBe(false)
   })
