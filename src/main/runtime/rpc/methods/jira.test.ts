@@ -35,12 +35,101 @@ describe('jira RPC methods', () => {
     expect(runtime.jiraStatus).toHaveBeenCalled()
     expect(runtime.jiraTestConnection).toHaveBeenCalled()
     expect(runtime.jiraConnect).toHaveBeenCalledWith({
+      deploymentType: 'cloud',
       siteUrl: 'https://example.atlassian.net',
       email: 'ada@example.com',
       apiToken: 'token'
     })
     expect(runtime.jiraSelectSite).toHaveBeenCalledWith('site-1')
     expect(runtime.jiraDisconnect).toHaveBeenCalled()
+  })
+
+  it('routes Jira Server connect payloads to the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      jiraConnect: vi.fn().mockResolvedValue({ ok: true, viewer: { displayName: 'Ada' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('jira.connect', {
+        deploymentType: 'server',
+        authMode: 'basic',
+        siteUrl: 'https://jira.example.internal',
+        username: 'ada',
+        passwordOrToken: 'secret'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('jira.connect', {
+        deploymentType: 'server',
+        authMode: 'bearer',
+        siteUrl: 'https://jira.example.internal',
+        bearerToken: 'pat-secret'
+      })
+    )
+
+    expect(runtime.jiraConnect).toHaveBeenNthCalledWith(1, {
+      deploymentType: 'server',
+      authMode: 'basic',
+      siteUrl: 'https://jira.example.internal',
+      username: 'ada',
+      passwordOrToken: 'secret'
+    })
+    expect(runtime.jiraConnect).toHaveBeenNthCalledWith(2, {
+      deploymentType: 'server',
+      authMode: 'bearer',
+      siteUrl: 'https://jira.example.internal',
+      bearerToken: 'pat-secret'
+    })
+  })
+
+  it('rejects mixed Jira connect auth payloads', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      jiraConnect: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('jira.connect', {
+        deploymentType: 'server',
+        authMode: 'bearer',
+        siteUrl: 'https://jira.example.internal',
+        username: 'ada',
+        bearerToken: 'pat-secret'
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
+    })
+    expect(runtime.jiraConnect).not.toHaveBeenCalled()
+  })
+
+  it('rejects mixed Jira assignee identifier issue updates', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      jiraUpdateIssue: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('jira.updateIssue', {
+        key: 'ABC-3',
+        updates: {
+          assigneeUserId: 'ada',
+          assigneeAccountId: 'account-1'
+        }
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
+    })
+    expect(runtime.jiraUpdateIssue).not.toHaveBeenCalled()
   })
 
   it('routes Jira issue queries and mutations to the runtime server', async () => {
@@ -79,7 +168,7 @@ describe('jira RPC methods', () => {
         siteId: 'site-1',
         updates: {
           title: 'Fixed title',
-          assigneeAccountId: null,
+          assigneeUserId: null,
           priorityId: '2',
           labels: ['bug'],
           transitionId: '31'
@@ -106,7 +195,7 @@ describe('jira RPC methods', () => {
       'ABC-3',
       {
         title: 'Fixed title',
-        assigneeAccountId: null,
+        assigneeUserId: null,
         priorityId: '2',
         labels: ['bug'],
         transitionId: '31'

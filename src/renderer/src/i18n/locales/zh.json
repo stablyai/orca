@@ -4080,7 +4080,7 @@
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
           "sidebarRowMissing": "目标不再存在",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "无法取消嵌套工作区"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -7527,7 +7527,8 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "通过 gh CLI 进行 GitHub 身份验证。",
-            "f16e41cc72": "GitHub 集成"
+            "f16e41cc72": "GitHub 集成",
+            "bdbb6555ca": "Connect Jira Cloud or Server/Data Center credentials."
           }
         },
         "jira": {
@@ -8404,7 +8405,11 @@
                 "fe9231215b": "在显示设置操作前正在检查 Linear 访问权限。",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "断开连接",
-                "account_scope_prefix": "账户范围"
+                "account_scope_prefix": "账户范围",
+                "0532cb79e5": "Connect a Jira Cloud or Server/Data Center site. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "bb4969ab86": "Connect a Jira Cloud or Server/Data Center site. Credentials are stored locally and encrypted when local runtime storage supports it.",
+                "1f53303b5e": "Browse, create, and start work from Jira issues.",
+                "cf506ae83c": "Each connected Jira site has one credential stored by the active runtime."
               }
             }
           }
@@ -12142,7 +12147,27 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud 站点 URL",
             "d785c42b8b": "使用 Jira Cloud 站点 URL、Atlassian 邮箱和 API 令牌来浏览议题。",
-            "8388bdea2b": "连接 Jira 站点"
+            "8388bdea2b": "连接 Jira 站点",
+            "cbc27fa599": "https://jira.example.com",
+            "d9c1d14dfc": "Connect a Jira Cloud or Server/Data Center site to browse and update issues.",
+            "aa36f6b51e": "Jira type",
+            "f7c6874229": "Server/Data Center",
+            "3489e186d6": "Jira site URL",
+            "a98cdac833": "Your credential is sent to the selected remote runtime and stored there with runtime-supported encryption.",
+            "3d156acced": "Your credential is stored locally and encrypted when local runtime storage supports it.",
+            "78ce04423a": "Cloud"
+          }
+        },
+        "server": {
+          "auth": {
+            "fields": {
+              "babc323094": "Auth mode",
+              "007396fe30": "Username + password/PAT",
+              "bfc1a4ebc6": "Bearer PAT",
+              "cfd0fe8fe2": "Username",
+              "61b0dd9ad7": "Password or token",
+              "ccf0daaaa7": "Bearer token"
+            }
           }
         }
       },

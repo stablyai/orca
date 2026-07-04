@@ -143,8 +143,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.integrations.search.617603509b', 'Jira Integration'),
     description: translate(
-      'auto.components.settings.integrations.search.76f6af7c57',
-      'Connect Jira Cloud or update Jira API token credentials.'
+      'auto.components.settings.integrations.search.bdbb6555ca',
+      'Connect Jira Cloud or Server/Data Center credentials.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.integrations.search.e1263dd748', 'jira'),
@@ -163,6 +163,14 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword(
         'auto.components.settings.integrations.search.20540996ef',
         'credentials'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.073c16b77d',
+        'server'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.13824817e1',
+        'data center'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.integrations.search.3c3d3d8ffa',
