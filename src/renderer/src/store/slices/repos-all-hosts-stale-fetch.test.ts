@@ -45,7 +45,7 @@ beforeEach(() => {
 // could resolve out of order and resurrect removed projects (#7020). The
 // single-flight coalescing must keep the sidebar on the final persisted state.
 describe('fetchReposForAllHosts stale-fetch race (#7020)', () => {
-  it('coalesces a burst into one trailing reload that reads the final state', async () => {
+  it('coalesces a burst into one trailing reload and makes every caller await it', async () => {
     const store = createTestStore()
     let resolveLeading!: (repos: Repo[]) => void
     const leadingPromise = new Promise<Repo[]>((resolve) => {
@@ -58,21 +58,32 @@ describe('fetchReposForAllHosts stale-fetch race (#7020)', () => {
     const leading = store.getState().fetchReposForAllHosts()
     // Further burst events while the leading load is in flight collapse into a
     // single pending trailing reload rather than starting overlapping loads.
-    const coalescedA = store.getState().fetchReposForAllHosts()
-    const coalescedB = store.getState().fetchReposForAllHosts()
-    await coalescedA
-    await coalescedB
+    let coalescedResolved = false
+    const coalesced = Promise.all([
+      store.getState().fetchReposForAllHosts(),
+      store.getState().fetchReposForAllHosts()
+    ]).then(() => {
+      coalescedResolved = true
+    })
+
+    // Flush pending microtasks: the leading load is still stuck on leadingPromise.
+    await Promise.resolve()
     // Only the leading load has hit the network so far; the burst was absorbed.
     expect(reposList).toHaveBeenCalledTimes(1)
+    // Overlapping callers must NOT resolve before the refresh their event
+    // triggered lands — they await the same in-flight cycle.
+    expect(coalescedResolved).toBe(false)
 
     resolveLeading([localRepo, remoteRepo])
-    await leading
+    await Promise.all([leading, coalesced])
 
+    // The overlapping callers only settled once the cycle drained.
+    expect(coalescedResolved).toBe(true)
     // Leading (both repos) + exactly one trailing reload — not one load per event.
     expect(reposList).toHaveBeenCalledTimes(2)
     // The trailing reload's post-removal read wins, so the removed project is gone.
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo'])
-    expect(store.getState().reposAllHostsLoadInFlight).toBe(false)
+    expect(store.getState().reposAllHostsLoadCyclePromise).toBeNull()
     expect(store.getState().reposAllHostsReloadRequested).toBe(false)
   })
 
@@ -84,6 +95,6 @@ describe('fetchReposForAllHosts stale-fetch race (#7020)', () => {
 
     expect(reposList).toHaveBeenCalledTimes(1)
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo'])
-    expect(store.getState().reposAllHostsLoadInFlight).toBe(false)
+    expect(store.getState().reposAllHostsLoadCyclePromise).toBeNull()
   })
 })

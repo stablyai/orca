@@ -1156,7 +1156,9 @@ export type RepoSlice = {
   reposFetchGeneration: number
   // Single-flight gate for fetchReposForAllHosts: a repos:changed burst coalesces
   // into one trailing all-host reload instead of racing overlapping loads (#7020).
-  reposAllHostsLoadInFlight: boolean
+  // Holds the in-flight cycle promise so overlapping callers await the same
+  // refresh (null when idle); a component never selects it, so no extra renders.
+  reposAllHostsLoadCyclePromise: Promise<void> | null
   reposAllHostsReloadRequested: boolean
   fetchRepos: () => Promise<void>
   fetchReposForAllHosts: () => Promise<void>
@@ -1277,7 +1279,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   folderWorkspacePathStatuses: {},
   activeRepoId: null,
   reposFetchGeneration: 0,
-  reposAllHostsLoadInFlight: false,
+  reposAllHostsLoadCyclePromise: null,
   reposAllHostsReloadRequested: false,
 
   fetchRepos: async () => {
@@ -1448,19 +1450,27 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // run exactly one trailing reload afterwards. The trailing reload reads at or
     // after the final mutation, so the sidebar settles on the final persisted
     // state; the burst's O(N²) host fetches also collapse to ~1 trailing reload.
-    if (get().reposAllHostsLoadInFlight) {
+    const activeCycle = get().reposAllHostsLoadCyclePromise
+    if (activeCycle) {
+      // Await the SAME in-flight cycle so callers don't continue before the
+      // trailing reload their event requested lands (e.g. cold-start metrics /
+      // dependent fetches that read repos right after awaiting this).
       set({ reposAllHostsReloadRequested: true })
+      await activeCycle
       return
     }
-    set({ reposAllHostsLoadInFlight: true })
-    try {
-      do {
-        set({ reposAllHostsReloadRequested: false })
-        await loadReposForAllHosts()
-      } while (get().reposAllHostsReloadRequested)
-    } finally {
-      set({ reposAllHostsLoadInFlight: false })
-    }
+    const cycle = (async () => {
+      try {
+        do {
+          set({ reposAllHostsReloadRequested: false })
+          await loadReposForAllHosts()
+        } while (get().reposAllHostsReloadRequested)
+      } finally {
+        set({ reposAllHostsLoadCyclePromise: null })
+      }
+    })()
+    set({ reposAllHostsLoadCyclePromise: cycle })
+    await cycle
   },
 
   fetchProjectGroups: async () => {
