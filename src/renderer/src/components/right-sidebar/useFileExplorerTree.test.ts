@@ -142,4 +142,69 @@ describe('refreshFileExplorerExpandedDirs', () => {
       children: [{ name: 'guide.md' }]
     })
   })
+
+  it('drops a result superseded after its read resolved but before the batch commit', async () => {
+    const tracker = createFileExplorerDirLoadTracker()
+    let cache: Record<string, DirCache> = {
+      '/repo/src': { children: [], loading: false },
+      '/repo/docs': { children: [], loading: false }
+    }
+    const setDirCache = vi.fn((update: CacheUpdate) => {
+      cache = typeof update === 'function' ? update(cache) : update
+    })
+    let releaseDocs!: () => void
+    const docsGate = new Promise<void>((resolve) => {
+      releaseDocs = resolve
+    })
+    const readDirectory = vi.fn(async (dirPath: string) => {
+      if (dirPath === '/repo/src') {
+        return [entry('stale.ts')]
+      }
+      await docsGate
+      return [entry('guide.md')]
+    })
+
+    const refreshPromise = refreshFileExplorerExpandedDirs({
+      dirs: [
+        { dirPath: '/repo/src', depth: 0 },
+        { dirPath: '/repo/docs', depth: 0 }
+      ],
+      worktreePath: '/repo',
+      dirLoadTracker: tracker,
+      setDirCache,
+      readDirectory
+    })
+
+    // Let /repo/src resolve (and pass its resolve-time token check) while
+    // /repo/docs is still in flight — the batch commit is gated on docs.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // A newer load (e.g. a watcher-driven refreshDir) supersedes /repo/src in
+    // the window between its resolved read and the final batched commit.
+    tracker.begin('/repo/src')
+    const newerSrcCache: DirCache = {
+      loading: false,
+      children: [
+        {
+          name: 'fresh.ts',
+          path: '/repo/src/fresh.ts',
+          relativePath: 'src/fresh.ts',
+          isDirectory: false,
+          depth: 1
+        }
+      ]
+    }
+    setDirCache((prev) => ({ ...prev, '/repo/src': newerSrcCache }))
+
+    releaseDocs()
+    const refreshed = await refreshPromise
+
+    expect(refreshed).toBe(false)
+    // The stale /repo/src read must not clobber the newer committed cache.
+    expect(cache['/repo/src']).toEqual(newerSrcCache)
+    expect(cache['/repo/docs']).toMatchObject({
+      loading: false,
+      children: [{ name: 'guide.md' }]
+    })
+  })
 })

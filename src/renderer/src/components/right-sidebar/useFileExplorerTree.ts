@@ -123,8 +123,13 @@ export async function refreshFileExplorerExpandedDirs({
     })
   )
 
+  // Why: the batch commits only after the slowest read, so a dir can be
+  // superseded (watcher refreshDir, worktree reset) after its own read
+  // resolved. Re-check tokens at commit time so the batched write never
+  // clobbers a newer load — preserving the old per-dir commit ordering.
   const currentResults = results.filter(
-    (result): result is Extract<typeof result, { current: true }> => result.current
+    (result): result is Extract<typeof result, { current: true }> =>
+      result.current && dirLoadTracker.isCurrent(loadTokens.get(result.dirPath)!)
   )
   if (currentResults.length === 0) {
     return false
