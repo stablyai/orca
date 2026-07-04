@@ -62,6 +62,7 @@ export type DiagnosticBundleExportResult = {
   bundleId: string
   outputPath: string
   bytes: number
+  lookbackMinutes: number
   includedCategories: DiagnosticBundleCategory[]
   skippedCategories: DiagnosticBundleCategoryResult[]
   errorCategories: DiagnosticBundleCategoryResult[]

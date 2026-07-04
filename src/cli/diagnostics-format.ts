@@ -6,6 +6,7 @@ export function formatDiagnosticBundleExportResult(result: DiagnosticBundleExpor
     `outputPath: ${result.outputPath}`,
     `bytes: ${result.bytes}`,
     `files: ${result.fileCount}`,
+    `lookbackMinutes: ${result.lookbackMinutes}`,
     `includedCategories: ${result.includedCategories.join(', ') || 'none'}`
   ]
   if (result.skippedCategories.length > 0) {

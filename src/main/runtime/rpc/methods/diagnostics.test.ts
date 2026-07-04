@@ -54,6 +54,7 @@ describe('diagnostics RPC methods', () => {
       outputPath:
         'C:\\Users\\example\\AppData\\Local\\Orca\\logs\\diagnostics\\orca-diagnostics.zip',
       bytes: 1234,
+      lookbackMinutes: 120,
       includedCategories: ['app'],
       skippedCategories: [],
       errorCategories: [],
@@ -127,6 +128,39 @@ describe('diagnostics RPC methods', () => {
       error: {
         code: 'invalid_argument'
       }
+    })
+  })
+
+  it('accepts diagnostics bundle lookbacks at the shared cap', async () => {
+    const bundle = {
+      bundleId: 'bundle-1',
+      outputPath:
+        'C:\\Users\\example\\AppData\\Local\\Orca\\logs\\diagnostics\\orca-diagnostics.zip',
+      bytes: 1234,
+      lookbackMinutes: MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES,
+      includedCategories: ['app'],
+      skippedCategories: [],
+      errorCategories: [],
+      fileCount: 2
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createDiagnosticBundle: vi.fn().mockResolvedValue(bundle)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: DIAGNOSTICS_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('diagnostics.bundle', {
+        lookbackMinutes: MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES
+      })
+    )
+
+    expect(runtime.createDiagnosticBundle).toHaveBeenCalledWith({
+      lookbackMinutes: MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: bundle
     })
   })
 

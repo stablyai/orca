@@ -1,8 +1,7 @@
 import { z } from 'zod'
 import {
   DIAGNOSTIC_BUNDLE_CATEGORIES,
-  MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES,
-  type DiagnosticBundleCategory
+  MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES
 } from '../../../../shared/diagnostic-bundle-export-types'
 import {
   DIAGNOSTIC_OUTPUT_PATH_ERROR,
@@ -43,11 +42,7 @@ export const DIAGNOSTICS_METHODS: RpcMethod[] = [
     name: 'diagnostics.bundle',
     params: DiagnosticBundleParams,
     handler: async (params, { runtime }) => {
-      return await runtime.createDiagnosticBundle({
-        ...params,
-        include: params.include as DiagnosticBundleCategory[] | undefined,
-        exclude: params.exclude as DiagnosticBundleCategory[] | undefined
-      })
+      return await runtime.createDiagnosticBundle(params)
     }
   })
 ]

@@ -3492,6 +3492,7 @@ describe('orca cli worktree awareness', () => {
         outputPath:
           'C:\\Users\\example\\AppData\\Local\\Orca\\logs\\diagnostics\\orca-diagnostics.zip',
         bytes: 2048,
+        lookbackMinutes: 120,
         includedCategories: ['app', 'memory'],
         skippedCategories: [],
         errorCategories: [],
@@ -3528,6 +3529,7 @@ describe('orca cli worktree awareness', () => {
     })
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('bundleId: bundle-1')
+    expect(output).toContain('lookbackMinutes: 120')
     expect(output).toContain('includedCategories: app, memory')
   })
 

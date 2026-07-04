@@ -75,6 +75,7 @@ export async function exportDiagnosticBundle(
     bundleId,
     outputPath,
     bytes: archive.bytes,
+    lookbackMinutes,
     includedCategories: categoryResults
       .filter((result) => result.status === 'included' || result.status === 'truncated')
       .map((result) => result.category),
@@ -88,5 +89,7 @@ function normalizeLookbackMinutes(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value) || value <= 0) {
     return DEFAULT_LOOKBACK_MINUTES
   }
+  // Why: crash/event scans are filesystem and OS-log bounded, so direct callers
+  // get the same cap enforced by CLI/RPC validation.
   return Math.min(MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES, Math.max(1, Math.floor(value)))
 }

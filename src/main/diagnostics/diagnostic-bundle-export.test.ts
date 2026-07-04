@@ -155,6 +155,7 @@ describe('exportDiagnosticBundle', () => {
     expect(manifestFile?.bytes).toBe(entries.get('manifest.json')!.byteLength)
     expect(result).toMatchObject({
       outputPath: join(tmpdir(), 'orca-test', 'logs', 'diagnostics', output),
+      lookbackMinutes: 30,
       includedCategories: expect.arrayContaining(['app', 'system', 'memory']),
       skippedCategories: [expect.objectContaining({ category: 'native-minidumps' })],
       fileCount: manifest.files.length
@@ -191,6 +192,7 @@ describe('exportDiagnosticBundle', () => {
       lookbackMinutes: number
     }
     expect(manifest.lookbackMinutes).toBe(MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES)
+    expect(result.lookbackMinutes).toBe(MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES)
   })
 })
 
