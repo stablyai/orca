@@ -1019,9 +1019,11 @@ export async function removeWorktree(
     // cleanliness ourselves with the stricter `--ignore-submodules=none`
     // status check (which config like submodule.*.ignore or
     // diff.ignoreSubmodules cannot defeat) before retrying with --force, so
-    // this auto-recovery can never discard uncommitted or untracked work —
-    // it only routes around git's blanket submodule refusal for a worktree
-    // we independently re-confirmed is clean immediately beforehand.
+    // this auto-recovery does not discard uncommitted or untracked work that
+    // exists at check time — it only routes around git's blanket submodule
+    // refusal for a worktree we independently re-confirmed clean immediately
+    // beforehand. A concurrent write in the narrow window between that check
+    // and the forced removal is the only residual, as with any check-then-act.
     console.debug(
       `[git] worktree remove blocked only by populated submodules; re-verifying cleanliness before retrying with --force: ${worktreePath}`
     )

@@ -200,7 +200,9 @@ export async function removeWorktreeOp(
   } catch (error) {
     // Why: `git worktree remove` refuses a worktree with ANY populated
     // submodule even when clean; only --force bypasses that specific check.
-    // Re-check with --ignore-submodules=none so auto-force never discards work.
+    // Re-check with --ignore-submodules=none so auto-force does not discard
+    // work present at check time (a concurrent write before the forced remove
+    // is the only residual, as with any check-then-act removal).
     // Relay GitExec has no env option, so this fatal-text match depends on the
     // SSH host locale; the renderer's force-retry classifier is the fallback.
     if (force || !isSubmoduleWorktreeRemovalError(error)) {
