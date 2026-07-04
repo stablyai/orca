@@ -7,7 +7,8 @@ import {
   Switch,
   StyleSheet,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Keyboard
 } from 'react-native'
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
@@ -689,7 +690,13 @@ function NewWorktreeModalContent({
           <>
             <View style={styles.field}>
               <Text style={styles.label}>Repository</Text>
-              <Pressable style={styles.fieldButton} onPress={() => setShowRepoPicker(true)}>
+              <Pressable
+                style={styles.fieldButton}
+                onPress={() => {
+                  Keyboard.dismiss()
+                  setShowRepoPicker(true)
+                }}
+              >
                 {selectedRepo ? (
                   <View
                     style={[styles.repoDot, { backgroundColor: repoBadgeColor(selectedRepo) }]}
@@ -775,7 +782,10 @@ function NewWorktreeModalContent({
               <Pressable
                 style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
                 disabled={sshGate.requiresConnection}
-                onPress={() => setShowAgentPicker(true)}
+                onPress={() => {
+                  Keyboard.dismiss()
+                  setShowAgentPicker(true)
+                }}
               >
                 <MobileAgentIcon agentId={selectedAgent.id} size={16} />
                 <Text style={styles.fieldButtonText} numberOfLines={1}>
