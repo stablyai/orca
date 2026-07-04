@@ -3531,9 +3531,12 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('rejects invalid diagnostics bundle lookback values before RPC', async () => {
-    await main(['diagnostics', 'bundle', '--lookback', 'soon'], '/tmp/repo')
+    for (const lookback of ['soon', '0', '31d']) {
+      callMock.mockClear()
+      await main(['diagnostics', 'bundle', '--lookback', lookback], '/tmp/repo')
 
-    expect(callMock).not.toHaveBeenCalled()
+      expect(callMock).not.toHaveBeenCalled()
+    }
   })
 
   it('exits nonzero when terminal wait returns an unsatisfied blocked result', async () => {

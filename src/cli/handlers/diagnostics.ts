@@ -1,5 +1,8 @@
 import type { MemorySnapshot } from '../../shared/types'
-import type { DiagnosticBundleExportResult } from '../../shared/diagnostic-bundle-export-types'
+import {
+  MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES,
+  type DiagnosticBundleExportResult
+} from '../../shared/diagnostic-bundle-export-types'
 import type { CommandHandler } from '../dispatch'
 import { formatDiagnosticBundleExportResult, formatMemorySnapshot, printResult } from '../format'
 import { getOptionalStringFlag, getRepeatedStringFlag } from '../flags'
@@ -41,5 +44,16 @@ function parseLookbackMinutes(value: string | undefined): number | undefined {
   const amount = Number.parseInt(match[1], 10)
   const unit = match[2] ?? 'm'
   const multiplier = unit === 'd' ? 24 * 60 : unit === 'h' ? 60 : 1
-  return amount * multiplier
+  const minutes = amount * multiplier
+  if (
+    !Number.isSafeInteger(minutes) ||
+    minutes < 1 ||
+    minutes > MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES
+  ) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Invalid --lookback value. Use a range from 1m through 30d.'
+    )
+  }
+  return minutes
 }

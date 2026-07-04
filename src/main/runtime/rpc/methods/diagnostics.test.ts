@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES } from '../../../../shared/diagnostic-bundle-export-types'
 import { DIAGNOSTICS_METHODS } from './diagnostics'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -95,6 +96,28 @@ describe('diagnostics RPC methods', () => {
 
     const response = await dispatcher.dispatch(
       makeRequest('diagnostics.bundle', { include: ['not-a-category'] })
+    )
+
+    expect(runtime.createDiagnosticBundle).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument'
+      }
+    })
+  })
+
+  it('rejects diagnostics bundle lookbacks beyond the shared cap', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createDiagnosticBundle: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: DIAGNOSTICS_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('diagnostics.bundle', {
+        lookbackMinutes: MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES + 1
+      })
     )
 
     expect(runtime.createDiagnosticBundle).not.toHaveBeenCalled()

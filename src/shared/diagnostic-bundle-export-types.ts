@@ -17,6 +17,8 @@ export const DIAGNOSTIC_BUNDLE_CATEGORIES = [
   'linux-shells'
 ] as const
 
+export const MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES = 30 * 24 * 60
+
 export type DiagnosticBundleCategory = (typeof DIAGNOSTIC_BUNDLE_CATEGORIES)[number]
 
 export type DiagnosticBundleCategoryStatus = 'included' | 'skipped' | 'error' | 'truncated'

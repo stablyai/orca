@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   DIAGNOSTIC_BUNDLE_CATEGORIES,
+  MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES,
   type DiagnosticBundleCategory
 } from '../../../../shared/diagnostic-bundle-export-types'
 import { defineMethod, type RpcMethod } from '../core'
@@ -14,7 +15,7 @@ const DiagnosticBundleParams = z
       .number()
       .int()
       .positive()
-      .max(30 * 24 * 60)
+      .max(MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES)
       .optional(),
     include: z.array(DiagnosticBundleCategory).optional(),
     exclude: z.array(DiagnosticBundleCategory).optional(),

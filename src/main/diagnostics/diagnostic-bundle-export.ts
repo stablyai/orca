@@ -6,6 +6,7 @@ import type {
   DiagnosticBundleExportResult,
   DiagnosticBundleManifest
 } from '../../shared/diagnostic-bundle-export-types'
+import { MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES } from '../../shared/diagnostic-bundle-export-types'
 import { resolveDiagnosticOrcaChannel } from '../observability/diagnostic-upload-endpoint'
 import {
   resolveDiagnosticBundleCategories,
@@ -87,5 +88,5 @@ function normalizeLookbackMinutes(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value) || value <= 0) {
     return DEFAULT_LOOKBACK_MINUTES
   }
-  return Math.max(1, Math.floor(value))
+  return Math.min(MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES, Math.max(1, Math.floor(value)))
 }

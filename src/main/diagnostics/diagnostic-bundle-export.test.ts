@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES } from '../../shared/diagnostic-bundle-export-types'
 import type { DiagnosticBundleRuntimeStore } from './diagnostic-bundle-category-collector'
 
 const {
@@ -169,6 +170,24 @@ describe('exportDiagnosticBundle', () => {
     })
 
     expect(showItemInFolderMock).toHaveBeenCalledWith(output)
+  })
+
+  it('caps direct caller lookback windows before running collectors', async () => {
+    const { exportDiagnosticBundle } = await import('./diagnostic-bundle-export')
+    const output = join(tempRoot, 'bundle-lookback-cap.zip')
+
+    await exportDiagnosticBundle({
+      output,
+      include: ['app'],
+      lookbackMinutes: Number.MAX_SAFE_INTEGER,
+      store: makeStore()
+    })
+
+    const entries = readStoredZipEntries(await readFile(output))
+    const manifest = JSON.parse(entries.get('manifest.json')!.toString('utf8')) as {
+      lookbackMinutes: number
+    }
+    expect(manifest.lookbackMinutes).toBe(MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES)
   })
 })
 
