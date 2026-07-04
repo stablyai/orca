@@ -36,6 +36,7 @@ describe('hosted review RPC methods', () => {
     expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith({
       repoSelector: 'C:\\repo',
       branch: 'feature/windows',
+      currentHeadOid: null,
       linkedGitHubPR: 12,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,

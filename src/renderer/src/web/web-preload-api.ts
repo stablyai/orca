@@ -1,8 +1,16 @@
 /* eslint-disable max-lines -- Why: the web preload adapter is the browser-side
    replacement for Electron preload, so the compatibility surface is necessarily
    centralized at this boundary. */
-import type { PreloadApi, PreflightStatus, RefreshAgentsResult } from '../../../preload/api-types'
+import type {
+  PreloadApi,
+  PreflightStatus,
+  RefreshAgentsResult,
+  NativeChatApi,
+  NativeChatReadSessionResult,
+  NativeChatAppendedMessages
+} from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
@@ -456,6 +464,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
+      startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
@@ -480,7 +489,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     platform: {
       get: () => ({
         platform: getBrowserPlatform(),
-        osRelease: ''
+        osRelease: '',
+        displayServer: null
       })
     },
     e2e: {
@@ -591,6 +601,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       }
     },
     runtime: createRuntimeApi(),
+    nativeChat: createNativeChatApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),
@@ -621,7 +632,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           sessions: [],
           issues: [],
           scannedAt: new Date().toISOString()
-        })
+        }),
+      onWindowFocused: () => () => {}
     },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
@@ -972,6 +984,72 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
       return () => {
         webKeybindingListeners.delete(callback)
         window.removeEventListener('storage', onStorage)
+      }
+    }
+  }
+}
+
+// Why: the desktop reads native-chat transcripts over IPC; the web client has
+// no IPC, so route readSession/subscribe through the runtime RPC (the same
+// methods the mobile app uses). Without this, window.api.nativeChat was
+// undefined on web and the chat view showed no messages.
+function createNativeChatApi(): NativeChatApi {
+  return {
+    readSession: (agent, sessionId, limit, transcriptPath) =>
+      callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
+        agent,
+        sessionId,
+        limit,
+        transcriptPath
+      }),
+    subscribe: (args, onAppended) => {
+      // No paired runtime yet: nothing to subscribe to, and
+      // requireActiveEnvironment() would throw. Return a no-op teardown so the
+      // chat view mounts cleanly until a runtime is paired (only the not-paired
+      // case is swallowed — real subscribe errors still surface via .catch).
+      const environment = requireActiveEnvironmentOrNull()
+      if (!environment) {
+        return () => {}
+      }
+      let handle: { unsubscribe: () => void } | null = null
+      let cancelled = false
+      void getClientForEnvironment(environment)
+        .subscribe(
+          'nativeChat.subscribe',
+          { agent: args.agent, sessionId: args.sessionId, transcriptPath: args.transcriptPath },
+          {
+            onResponse: (response) => {
+              if (cancelled || !response.ok) {
+                return
+              }
+              const result = response.result as {
+                type?: string
+                messages?: NativeChatAppendedMessages
+              }
+              if (result?.type === 'appended' && Array.isArray(result.messages)) {
+                onAppended(result.messages)
+              }
+            }
+          },
+          {
+            // Why: send nativeChat.unsubscribe on teardown so the server reaps
+            // the transcript fs-watcher on view-toggle, not just on socket close
+            // (the watcher-leak fix). Uses the same agent:sessionId cleanup token
+            // mobile sends, via the shared key-builder so it can't drift.
+            buildUnsubscribe: () => buildNativeChatUnsubscribe(args.agent, args.sessionId)
+          }
+        )
+        .then((h) => {
+          if (cancelled) {
+            h.unsubscribe()
+          } else {
+            handle = h
+          }
+        })
+        .catch(() => {})
+      return () => {
+        cancelled = true
+        handle?.unsubscribe()
       }
     }
   }
@@ -1408,6 +1486,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         includeIgnored
       })
     },
+    submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.submoduleStatus', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        submodulePath,
+        area
+      })
+    },
     checkIgnored: async ({ worktreePath, paths }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.checkIgnored', {
@@ -1736,6 +1822,7 @@ function createGitHubApi(): WebGitHubApi {
       }),
     workItemDetails: (args) =>
       route<WebGitHubResult<'workItemDetails'>>(GITHUB_WEB_RPC_METHODS.workItemDetails, args),
+    notifyWorkItemMutated: () => Promise.resolve(false),
     prFileContents: (args) =>
       route<WebGitHubResult<'prFileContents'>>(GITHUB_WEB_RPC_METHODS.prFileContents, args),
     listIssues: (args) =>
@@ -2084,6 +2171,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleFloatingTerminal: () => noopUnsubscribe,
     onTerminalShortcutCaptured: () => noopUnsubscribe,
     onOpenQuickOpen: () => noopUnsubscribe,
+    onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
@@ -2179,6 +2267,20 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     pathSource: 'sync_seed_only',
     pathFailureReason: 'spawn_error'
   }
+  type WindowsTerminalCapabilityBridgeResult = {
+    wslAvailable: boolean
+    wslDistros: string[]
+    pwshAvailable: boolean
+    gitBashAvailable: boolean
+    hostPlatform: NodeJS.Platform | null
+  }
+  const fallbackWindowsTerminalCapabilities = {
+    wslAvailable: false,
+    wslDistros: [],
+    pwshAvailable: false,
+    gitBashAvailable: false,
+    hostPlatform: null
+  }
   return {
     check: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
@@ -2201,7 +2303,14 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     detectRemoteAgents: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => [])
-        : []
+        : [],
+    detectRemoteWindowsTerminalCapabilities: async (args) =>
+      requireActiveEnvironmentOrNull()
+        ? callRuntimeResult<WindowsTerminalCapabilityBridgeResult>(
+            'preflight.detectRemoteWindowsTerminalCapabilities',
+            args
+          ).catch(() => fallbackWindowsTerminalCapabilities)
+        : Promise.resolve(fallbackWindowsTerminalCapabilities)
   }
 }
 
@@ -2315,8 +2424,8 @@ function createComputerUsePermissionsApi(): NonNullable<
 
 function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
   return {
-    discover: () =>
-      callRuntimeResult<SkillDiscoveryResult>('skills.discover', undefined, 15_000).catch(() => ({
+    discover: (target) =>
+      callRuntimeResult<SkillDiscoveryResult>('skills.discover', target, 15_000).catch(() => ({
         skills: [],
         sources: [],
         scannedAt: Date.now()
@@ -2373,6 +2482,7 @@ function createAccountsApi(): never {
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
+    cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)
@@ -2432,10 +2542,13 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     ackColdRestore: () => {},
     ackData: () => {},
     setActiveRendererPty: () => {},
+    setRendererPtyVisible: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
+    getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
+    hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({
@@ -2464,7 +2577,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     settlePaneSerializer: () => Promise.resolve(),
     clearPendingPaneSerializer: () => Promise.resolve(),
     management: {
-      listSessions: () => Promise.resolve({ sessions: [] }),
+      listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0 }),
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false })

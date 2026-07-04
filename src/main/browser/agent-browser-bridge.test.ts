@@ -1512,6 +1512,87 @@ describe('AgentBrowserBridge', () => {
     expect(chunks).toEqual(['z'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'qq'])
   })
 
+  // ── Cross-worktree text-injection guard ──
+
+  describe('scoped target for text-mutating commands', () => {
+    function twoWorktreeBridge(): AgentBrowserBridge {
+      const tabs = new Map([
+        ['tab-a', 1],
+        ['tab-b', 2]
+      ])
+      const worktrees = new Map([
+        ['tab-a', 'wt-1'],
+        ['tab-b', 'wt-2']
+      ])
+      const wc1 = mockWebContents(1, 'https://a.com', 'A')
+      const wc2 = mockWebContents(2, 'https://b.com', 'B')
+      webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
+      return new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
+    }
+
+    function sessionNamesUsed(): string[] {
+      return execFileMock.mock.calls
+        .filter((call: unknown[]) => (call[1] as string[]).includes('--session'))
+        .map((call: unknown[]) => {
+          const args = call[1] as string[]
+          return args[args.indexOf('--session') + 1]
+        })
+    }
+
+    it.each([
+      ['inserttext', (b: AgentBrowserBridge) => b.keyboardInsertText('x', undefined, undefined)],
+      ['type', (b: AgentBrowserBridge) => b.type('x', undefined, undefined)],
+      ['fill', (b: AgentBrowserBridge) => b.fill('@input', 'x', undefined, undefined)]
+    ])(
+      'refuses %s when worktrees are ambiguous instead of routing to the global active tab',
+      async (_name, run) => {
+        const b = twoWorktreeBridge()
+        // Why: simulates the user viewing worktree B's tab, which sets the global
+        // active webContents — the bug would route the agent's text there.
+        b.onTabChanged(2, 'wt-2')
+        succeedWith({ inserted: true })
+
+        await expect(run(b)).rejects.toMatchObject({
+          code: 'browser_target_ambiguous'
+        })
+        // Must not have dispatched the command to worktree B's session.
+        expect(sessionNamesUsed()).not.toContain('orca-tab-tab-b')
+      }
+    )
+
+    it('auto-scopes inserttext to the lone worktree that has a live tab', async () => {
+      const tabs = new Map([['tab-a', 1]])
+      const worktrees = new Map([['tab-a', 'wt-1']])
+      const wc1 = mockWebContents(1, 'https://a.com', 'A')
+      webContentsFromIdMock.mockReturnValue(wc1)
+      const b = new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
+      succeedWith({ inserted: true })
+
+      await b.keyboardInsertText('x', undefined, undefined)
+
+      expect(sessionNamesUsed()).toContain('orca-tab-tab-a')
+    })
+
+    it('throws browser_no_tab for inserttext when no live tab exists', async () => {
+      const b = new AgentBrowserBridge(mockBrowserManager(new Map()))
+      await expect(b.keyboardInsertText('x', undefined, undefined)).rejects.toMatchObject({
+        code: 'browser_no_tab'
+      })
+    })
+
+    it('keeps read-only snapshot on the lenient global active-tab fallback', async () => {
+      const b = twoWorktreeBridge()
+      // Why: read/navigation commands intentionally keep the global fallback so
+      // discovery still works without a worktree; only text writes are guarded.
+      b.onTabChanged(2, 'wt-2')
+      succeedWith({ snapshot: 'tree' })
+
+      await b.snapshot(undefined, undefined)
+
+      expect(sessionNamesUsed()).toContain('orca-tab-tab-b')
+    })
+  })
+
   // ── Cookie command arg building ──
 
   it('builds cookie set args with all options', async () => {

@@ -1,5 +1,5 @@
-import { createConnection } from 'net'
-import { randomUUID } from 'crypto'
+import { createConnection } from 'node:net'
+import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'

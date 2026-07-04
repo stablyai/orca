@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { homedir } from 'os'
+import { homedir } from 'node:os'
 import { buildRelayCommandEnv } from './relay-command-env'
 
 // homedir() is the fallback when the relay env carries no HOME; mock it so the

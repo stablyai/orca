@@ -3,8 +3,9 @@ import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { ShellIcon } from './shell-icons'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { stripLeadingAgentTitleDecoration } from '@/lib/agent-title-decoration'
+import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { useTabAgent } from '@/lib/use-tab-agent'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -24,6 +25,7 @@ import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -45,6 +47,13 @@ type SortableTabProps = {
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
+  /** True when this tab is an agent terminal that can switch to the native chat
+   *  view. Surfaces the "Switch view" item in the tab context menu. */
+  canToggleViewMode?: boolean
+  /** True when the tab is currently showing the native chat view. */
+  isChatView?: boolean
+  /** Toggle the tab between terminal and native chat view. */
+  onToggleViewMode?: () => void
 }
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -68,7 +77,10 @@ export default function SortableTab({
   onToggleExpand,
   dragData,
   dropIndicator,
-  includeTopTabBorder = true
+  includeTopTabBorder = true,
+  canToggleViewMode = false,
+  isChatView = false,
+  onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
   // Why: subscribe to the per-tab boolean directly so only the tab whose unread
   // status actually flipped re-renders. Reading the whole `unreadTerminalTabs`
@@ -83,7 +95,7 @@ export default function SortableTab({
   // Older persisted tabs without this field fall back to the generic icon.
   const shellForIcon = tab.shellOverride
 
-  // Why: foreground process and hook status make the tab icon reflect the
+  // Why: hook status and title evidence make the tab icon reflect the
   // coding harness currently running in the pane, not just the launch command.
   const tabAgent = useTabAgent(tab)
 
@@ -199,6 +211,16 @@ export default function SortableTab({
   // so dnd-kit's a11y attributes (aria-roledescription, etc.) remain on the element — only
   // the pointer listeners are gated so a drag can't start while typing.
   const dragListeners = isEditing ? undefined : listeners
+  const handleActivate = useCallback(() => {
+    onActivate(tab.id)
+  }, [onActivate, tab.id])
+  // Why: defer activation to pointer-up so pressing a tab to drag it (reorder /
+  // move into another pane / split) does not switch the active tab or steal
+  // terminal focus mid-gesture. See tab-strip-pointer-activation.
+  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+    onActivate: handleActivate,
+    disabled: isEditing
+  })
   const closeShortcut = useShortcutKeyDetails('tab.close')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
@@ -232,11 +254,10 @@ export default function SortableTab({
         handleRenameOpen()
       }}
       onPointerDown={(e) => {
-        if (isEditing || e.button !== 0) {
-          return
-        }
-        onActivate(tab.id)
-        dragListeners?.onPointerDown?.(e)
+        onTabPointerDown(
+          e,
+          dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
       }}
       onMouseDown={(e) => {
         // Why: prevent default browser middle-click behavior (auto-scroll)
@@ -323,6 +344,11 @@ export default function SortableTab({
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={(event) => {
+            // Why: an Enter that only confirms a CJK IME candidate must not
+            // commit the rename; wait for a non-composition Enter.
+            if (isImeCompositionKeyDown(event)) {
+              return
+            }
             if (event.key === 'Enter') {
               event.preventDefault()
               commitRename()
@@ -477,6 +503,9 @@ export default function SortableTab({
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}
+        canToggleViewMode={canToggleViewMode}
+        isChatView={isChatView}
+        onToggleViewMode={onToggleViewMode}
       />
     </>
   )

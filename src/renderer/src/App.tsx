@@ -50,7 +50,10 @@ import { ActivityTitlebarControls } from './components/activity/ActivityTitlebar
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
-import { useSystemPrefersDark } from './components/terminal-pane/use-system-prefers-dark'
+import {
+  getSystemPrefersDarkSnapshot,
+  useSystemPrefersDark
+} from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
@@ -117,9 +120,13 @@ import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
 } from './lib/startup-ui-hydration'
+import {
+  logRendererStartupDiagnostic,
+  timeRendererStartupStep,
+  timeRendererStartupSyncStep
+} from './startup/startup-diagnostics'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
-import { getSystemPrefersDark } from './lib/terminal-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -841,39 +848,84 @@ function App(): React.JSX.Element {
     // UI mounts.
     let reconnectStarted = false
     void (async () => {
+      const startupStartedAt = performance.now()
+      logRendererStartupDiagnostic('startup-chain-start')
       try {
         // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
-        await actions.fetchSettings()
+        await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why: these three reads are main-side store/file reads with no
+        // dependency on anything fetched below, so start them now and await
+        // them at their original positions — the round-trips overlap the
+        // repo/worktree scans instead of queuing after them. Browser session
+        // profiles are deliberately NOT started early: on a remote runtime
+        // they route through a runtime RPC that may not be connected this
+        // early, and a failed fetch clears the profile list. The floating
+        // .catch marks the rejection handled if an earlier awaited step
+        // throws first; each await still rethrows its own failure.
+        const uiGetPromise = timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        uiGetPromise.catch(() => {})
+        const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
+          actions.fetchKeybindings()
+        )
+        keybindingsPromise.catch(() => {})
+        const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
+          window.api.onboarding.get()
+        )
+        onboardingPromise.catch(() => {})
         // Why: load local + every configured runtime environment (not just the
         // active one) so a cold start that restored a remote workspace doesn't
         // hide local repos. The sidebar "All hosts" scope then shows them all.
-        await actions.fetchReposForAllHosts()
-        await actions.fetchProjectGroupsForAllHosts()
-        await actions.fetchFolderWorkspacesForAllHosts()
-        await actions.fetchAllWorktrees()
-        await actions.fetchWorktreeLineage()
-        const persistedUI = await window.api.ui.get()
-        uiHydrated = hydratePersistedUIAfterStartupRead({
-          persistedUI,
-          cancelled,
-          hydratePersistedUI: actions.hydratePersistedUI
-        })
+        await timeRendererStartupStep('fetch-repos', () => actions.fetchReposForAllHosts())
+        // Why: project-groups/folder-workspaces read neither the repos store nor
+        // worktrees, so once repos land they can overlap the per-repo
+        // `git worktree list` fan-out (#7225) instead of queuing ahead of it — a
+        // slow remote host's 15s scope RPCs no longer block the scan. folders
+        // still follow project-groups (they read projectGroups); all settle
+        // before the hydrate steps below.
+        const projectScopeChain = (async () => {
+          await timeRendererStartupStep('fetch-project-groups', () =>
+            actions.fetchProjectGroupsForAllHosts()
+          )
+          await timeRendererStartupStep('fetch-folder-workspaces', () =>
+            actions.fetchFolderWorkspacesForAllHosts()
+          )
+        })()
+        // Why: worktrees + lineage both fan out `git worktree list` per repo on
+        // the main process. Running them concurrently lets it share one
+        // in-flight scan per repo instead of paying the process-spawn fan-out
+        // twice back-to-back — the dominant renderer-chain cost on Windows
+        // (issue #7225). Lineage only reads settings + its own slice, so it
+        // does not depend on the worktrees fetch having landed.
+        await Promise.all([
+          projectScopeChain,
+          timeRendererStartupStep('fetch-worktrees', () => actions.fetchAllWorktrees()),
+          timeRendererStartupStep('fetch-worktree-lineage', () => actions.fetchWorktreeLineage())
+        ])
+        const persistedUI = await uiGetPromise
+        uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
+          hydratePersistedUIAfterStartupRead({
+            persistedUI,
+            cancelled,
+            hydratePersistedUI: actions.hydratePersistedUI
+          })
+        )
         // Why: runtime-owned worktree slices live in per-host partitions.
         // Repos were fetched above, so the known runtime hosts are derivable
         // here; merge their slices into the unified session the hydrators
         // expect. An unreadable host partition is skipped (fail-soft).
-        const session = await fetchWorkspaceSessionFromHosts(
-          window.api.session,
-          useAppStore.getState().repos
+        const session = await timeRendererStartupStep('session-get', () =>
+          fetchWorkspaceSessionFromHosts(window.api.session, useAppStore.getState().repos)
         )
-        await actions.fetchKeybindings()
+        await keybindingsPromise
         if (!cancelled) {
-          actions.hydrateWorkspaceSession(session)
-          actions.hydrateTabsSession(session)
-          actions.hydrateEditorSession(session)
-          actions.hydrateBrowserSession(session)
+          timeRendererStartupSyncStep('hydrate-session-stores', () => {
+            actions.hydrateWorkspaceSession(session)
+            actions.hydrateTabsSession(session)
+            actions.hydrateEditorSession(session)
+            actions.hydrateBrowserSession(session)
+          })
           // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
           // no longer exist. Must run AFTER hydration — before this point,
           // async repo loads may not have populated worktreesByRepo yet and
@@ -882,10 +934,14 @@ function App(): React.JSX.Element {
           // so users upgrading from a pre-feature build don't see the active
           // worktree sink in the empty-query list.
           // See docs/cmd-j-empty-query-ordering.md.
-          actions.pruneLastVisitedTimestamps()
-          actions.seedActiveWorktreeLastVisitedIfMissing()
-          await actions.fetchBrowserSessionProfiles()
-          const onboardingState = await window.api.onboarding.get()
+          timeRendererStartupSyncStep('visit-timestamp-prune', () => {
+            actions.pruneLastVisitedTimestamps()
+            actions.seedActiveWorktreeLastVisitedIfMissing()
+          })
+          await timeRendererStartupStep('fetch-browser-session-profiles', () =>
+            actions.fetchBrowserSessionProfiles()
+          )
+          const onboardingState = await onboardingPromise
           if (!cancelled) {
             setOnboarding(onboardingState)
             setOnboardingLoaded(true)
@@ -900,7 +956,9 @@ function App(): React.JSX.Element {
           if (connectionIds.length > 0) {
             try {
               const SSH_RECONNECT_TIMEOUT_MS = 15_000
-              const allTargets = await window.api.ssh.listTargets()
+              const allTargets = await timeRendererStartupStep('ssh-list-targets', () =>
+                window.api.ssh.listTargets()
+              )
               const targetMap = new Map(allTargets.map((t) => [t.id, t]))
               const targets = connectionIds.map((targetId) => ({
                 targetId,
@@ -921,25 +979,33 @@ function App(): React.JSX.Element {
               // reattached when the user focuses the tab (by which time the
               // slow connect will likely have succeeded).
               const timedOutTargets: string[] = []
-              await Promise.allSettled(
-                eagerTargets.map(({ targetId }) =>
-                  Promise.race([
-                    window.api.ssh.connect({ targetId }),
-                    new Promise((_, reject) =>
-                      setTimeout(
-                        () => reject(new Error('SSH reconnect timeout')),
-                        SSH_RECONNECT_TIMEOUT_MS
-                      )
+              await timeRendererStartupStep(
+                'ssh-reconnect',
+                () =>
+                  Promise.allSettled(
+                    eagerTargets.map(({ targetId }) =>
+                      Promise.race([
+                        window.api.ssh.connect({ targetId }),
+                        new Promise((_, reject) =>
+                          setTimeout(
+                            () => reject(new Error('SSH reconnect timeout')),
+                            SSH_RECONNECT_TIMEOUT_MS
+                          )
+                        )
+                      ]).catch((err) => {
+                        const isTimeout =
+                          err instanceof Error && err.message === 'SSH reconnect timeout'
+                        if (isTimeout) {
+                          timedOutTargets.push(targetId)
+                        }
+                        console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
+                      })
                     )
-                  ]).catch((err) => {
-                    const isTimeout =
-                      err instanceof Error && err.message === 'SSH reconnect timeout'
-                    if (isTimeout) {
-                      timedOutTargets.push(targetId)
-                    }
-                    console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
-                  })
-                )
+                  ),
+                {
+                  eagerTargets: eagerTargets.length,
+                  deferredTargets: deferredTargets.length
+                }
               )
               if (timedOutTargets.length > 0) {
                 actions.setDeferredSshReconnectTargets([
@@ -972,14 +1038,20 @@ function App(): React.JSX.Element {
             } catch (err) {
               console.warn('SSH startup reconnect failed:', err)
             }
+          } else {
+            logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
           }
 
           // Why: main overlaps daemon/hook startup with renderer hydration for
           // first paint, but restored terminals still need those services ready
           // before they mount and spawn/reconnect PTYs.
-          await window.api.app.awaitFirstWindowStartupServices()
+          await timeRendererStartupStep('first-window-services-await', () =>
+            window.api.app.awaitFirstWindowStartupServices()
+          )
           reconnectStarted = true
-          await actions.reconnectPersistedTerminals(abortController.signal)
+          await timeRendererStartupStep('reconnect-terminals', () =>
+            actions.reconnectPersistedTerminals(abortController.signal)
+          )
           syncZoomCSSVar()
           // Why (issue #1158): unlock the debounced session writer only after
           // hydration AND all dependent startup steps (SSH reconnect, terminal
@@ -989,6 +1061,9 @@ function App(): React.JSX.Element {
           // and the writer would serialize a partially-mutated store back to
           // disk — the exact data-loss mode this PR fixes.
           actions.setHydrationSucceeded(true)
+          logRendererStartupDiagnostic('startup-hydration-done', {
+            durationMs: Math.round(performance.now() - startupStartedAt)
+          })
         }
       } catch (error) {
         // Why (issue #1158): previously this catch called hydrateWorkspaceSession
@@ -1113,7 +1188,12 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      const systemPrefersDark = getSystemPrefersDark()
+      // Why: this subscriber fires on every store mutation (PTY/agent-status
+      // ticks). Read the cached prefers-dark snapshot — kept fresh by the shared
+      // listener that useSystemPrefersDark() below already mounts — instead of
+      // allocating a throwaway MediaQueryList via matchMedia on every tick,
+      // before the skip-gate even runs.
+      const systemPrefersDark = getSystemPrefersDarkSnapshot()
       // Why: skip the key build entirely when every input field is unchanged
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the

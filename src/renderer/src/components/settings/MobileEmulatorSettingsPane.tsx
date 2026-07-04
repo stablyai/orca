@@ -5,8 +5,11 @@ import { cn } from '@/lib/utils'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { AndroidLogo, IosBrandIcon } from '../mobile/MobileBrandIcons'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
+import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityDetails'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
@@ -21,10 +24,12 @@ type SimulatorDeviceRow = {
 }
 
 type EmulatorAvailability = {
+  platform: string
   available: boolean
   devices: SimulatorDeviceRow[]
   simctl: { ok: boolean; message?: string }
   serveSim: { ok: boolean; message?: string }
+  android: { sdkFound: boolean; sdkPath?: string; message: string }
   message: string
 }
 
@@ -77,14 +82,38 @@ function deviceLabel(device: SimulatorDeviceRow): string {
   return `${name} (${state})`
 }
 
+function isAndroidDevice(device: SimulatorDeviceRow): boolean {
+  return device.runtime === 'Android'
+}
+
+function DeviceSelectItemLabel({ device }: { device: SimulatorDeviceRow }): React.JSX.Element {
+  const Icon = isAndroidDevice(device) ? AndroidLogo : IosBrandIcon
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <Icon className="size-3.5 shrink-0 fill-current text-muted-foreground" />
+      <span className="truncate">{deviceLabel(device)}</span>
+    </span>
+  )
+}
+
 function availabilityDetail(availability: EmulatorAvailability | null): string {
   if (!availability) {
-    return 'Checking Xcode, simctl, serve-sim, and available devices.'
+    return translate(
+      'auto.components.settings.MobileEmulatorSettingsPane.06b06429c6',
+      'Checking Android SDK and iOS Simulator support.'
+    )
   }
   if (availability.available) {
-    return `${availability.devices.length} emulator device${
-      availability.devices.length === 1 ? '' : 's'
-    } detected.`
+    return availability.devices.length === 1
+      ? translate(
+          'auto.components.settings.MobileEmulatorSettingsPane.6d1483d4a0',
+          '1 emulator device detected.'
+        )
+      : translate(
+          'auto.components.settings.MobileEmulatorSettingsPane.0a452d4d3b',
+          '{{value0}} emulator devices detected.',
+          { value0: availability.devices.length }
+        )
   }
   return availability.simctl.message || availability.serveSim.message || availability.message
 }
@@ -108,10 +137,12 @@ export function MobileEmulatorSettingsPane({
       setAvailability(result)
     } catch (error) {
       setAvailability({
+        platform: '',
         available: false,
         devices: [],
         simctl: { ok: false },
         serveSim: { ok: false },
+        android: { sdkFound: false, message: '' },
         message: error instanceof Error ? error.message : 'Could not check emulator availability.'
       })
     } finally {
@@ -134,9 +165,15 @@ export function MobileEmulatorSettingsPane({
 
   const defaultDeviceDescription = useMemo(() => {
     if (devices.length === 0) {
-      return 'Orca will auto-select an emulator device after devices are detected.'
+      return translate(
+        'auto.components.settings.MobileEmulatorSettingsPane.f62a1bb759',
+        'Orca will auto-select an emulator device after devices are detected.'
+      )
     }
-    return 'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running iPhone.'
+    return translate(
+      'auto.components.settings.MobileEmulatorSettingsPane.b2fd62ea75',
+      'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.'
+    )
   }, [devices.length])
 
   return (
@@ -166,15 +203,18 @@ export function MobileEmulatorSettingsPane({
           onChange={() => updateSettings({ mobileEmulatorEnabled: !enabled })}
         />
 
-        <SettingsRow
-          alignTop
-          label={translate(
-            'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
-            'Availability'
-          )}
-          description={availabilityDetail(availability)}
-          control={
-            <div className="flex items-center gap-2">
+        <div className="py-2">
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
+                  'Availability'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">{availabilityDetail(availability)}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <Badge
                 variant="outline"
                 className={cn('text-[11px]', statusBadgeClassName(availability, enabled))}
@@ -200,8 +240,19 @@ export function MobileEmulatorSettingsPane({
                 )}
               </Button>
             </div>
-          }
-        />
+          </div>
+
+          {enabled ? (
+            <MobileEmulatorAvailabilityDetails
+              availability={availability}
+              configuredPath={settings.androidSdkPath ?? null}
+              onSetAndroidSdkPath={async (path) => {
+                await updateSettings({ androidSdkPath: path })
+                await refreshAvailability()
+              }}
+            />
+          ) : null}
+        </div>
 
         <SettingsRow
           alignTop
@@ -229,9 +280,10 @@ export function MobileEmulatorSettingsPane({
                   <SelectItem
                     key={device.udid}
                     value={device.udid}
+                    textValue={deviceLabel(device)}
                     disabled={device.isAvailable === false}
                   >
-                    {deviceLabel(device)}
+                    <DeviceSelectItemLabel device={device} />
                   </SelectItem>
                 ))}
               </SelectContent>

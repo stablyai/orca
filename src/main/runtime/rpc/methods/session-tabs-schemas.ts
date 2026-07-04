@@ -104,13 +104,16 @@ export const SetTabProps = WorktreeTabSelector.extend({
     .pipe(z.string().min(1, 'Missing tab id')),
   // undefined = leave unchanged; null = clear color / unset.
   color: z.string().max(64).nullable().optional(),
-  isPinned: z.boolean().optional()
+  isPinned: z.boolean().optional(),
+  // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
+  viewMode: z.enum(['terminal', 'chat']).optional()
 })
 
 export const CreateTerminalTab = WorktreeTabSelector.extend({
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
   command: z.string().optional(),
+  cwd: z.string().min(1).optional(),
   env: z.record(z.string(), z.string()).optional(),
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   launchConfig: sleepingAgentLaunchConfigSchema,

@@ -6,6 +6,7 @@ import { ChevronLeft, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
+import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
 import { useMobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
 import { MobilePRSidebar } from '../MobilePRSidebar'
 
@@ -15,6 +16,7 @@ type Props = {
   worktreeId: string
   branch: string | null
   headSha: string | null
+  gitStatus: MobileGitStatusResult | null
   isGithubRepo?: boolean
   branchContextLoaded?: boolean
   // Embedded (docked) drops the full-screen SafeAreaView chrome and shows a close
@@ -29,6 +31,7 @@ export function MobilePrViewPanel({
   worktreeId,
   branch,
   headSha,
+  gitStatus,
   isGithubRepo = true,
   branchContextLoaded = true,
   embedded = false,
@@ -79,6 +82,7 @@ export function MobilePrViewPanel({
       connState={connState}
       worktreeId={worktreeId}
       gitBranch={branch}
+      gitStatus={gitStatus}
       headSha={headSha}
       bottomInset={insets.bottom}
     />

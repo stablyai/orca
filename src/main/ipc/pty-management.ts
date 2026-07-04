@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
+import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import { getDaemonProvider, restartDaemon } from '../daemon/daemon-init'
 import type { DaemonSessionInfo } from '../daemon/types'
@@ -25,10 +26,17 @@ function getDaemonAdapters(): DaemonPtyAdapter[] {
   if (!provider) {
     return []
   }
-  if (provider instanceof DaemonPtyRouter) {
+  if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
     return [...provider.getAllAdapters()]
   }
   return [provider]
+}
+
+// Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the
+// session-management UI can warn that new terminals lack daemon persistence
+// until the daemon is restarted, instead of it being a silent console.warn.
+function isDaemonDegraded(): boolean {
+  return getDaemonProvider() instanceof DegradedDaemonPtyProvider
 }
 
 async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
@@ -52,9 +60,9 @@ export function registerDaemonManagementHandlers(): void {
 
   ipcMain.handle(
     'pty:management:listSessions',
-    async (): Promise<{ sessions: DaemonSessionInfo[] }> => {
+    async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
       const sessions = await collectSessions(getDaemonAdapters())
-      return { sessions }
+      return { sessions, degraded: isDaemonDegraded() }
     }
   )
 

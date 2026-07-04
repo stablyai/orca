@@ -12,6 +12,9 @@ type BuildSourceControlAgentDeliveryPlanArgs = {
   detectedAgents: TuiAgent[]
   connectionUnavailable: boolean
   launchPlatform?: NodeJS.Platform
+  /** Why: keep the previewed command label in sync with the real remote launch,
+   * which omits the Linux-only `orca-ide` rename for SSH hosts. */
+  isRemote?: boolean
 }
 
 export function buildSourceControlAgentDeliveryPlan({
@@ -21,7 +24,8 @@ export function buildSourceControlAgentDeliveryPlan({
   promptDelivery,
   detectedAgents,
   connectionUnavailable,
-  launchPlatform
+  launchPlatform,
+  isRemote
 }: BuildSourceControlAgentDeliveryPlanArgs): SourceControlAgentActionDeliveryPlanState {
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
@@ -34,7 +38,8 @@ export function buildSourceControlAgentDeliveryPlan({
     detectedAgents,
     disabledAgents: useAppStore.getState().settings?.disabledTuiAgents,
     cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides,
-    platform: launchPlatform
+    platform: launchPlatform,
+    isRemote
   })
   if (!result.ok) {
     return { status: 'error', error: result.error }

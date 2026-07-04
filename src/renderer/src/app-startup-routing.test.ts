@@ -6,16 +6,38 @@ describe('renderer startup runtime routing', () => {
   it('loads settings before repo and worktree hydration', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const startupBlockStart = source.indexOf('void (async () => {')
-    const startupBlockEnd = source.indexOf('const persistedUI = await window.api.ui.get()')
+    const startupBlockEnd = source.indexOf('const persistedUI = await uiGetPromise')
     const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
 
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeGreaterThanOrEqual(0)
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
-      startupBlock.indexOf('await actions.fetchReposForAllHosts()')
-    )
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
-      startupBlock.indexOf('await actions.fetchAllWorktrees()')
-    )
+    const settingsIndex = startupBlock.indexOf('actions.fetchSettings()')
+    expect(settingsIndex).toBeGreaterThanOrEqual(0)
+    expect(settingsIndex).toBeLessThan(startupBlock.indexOf('actions.fetchReposForAllHosts()'))
+    expect(settingsIndex).toBeLessThan(startupBlock.indexOf('actions.fetchAllWorktrees()'))
+  })
+
+  it('overlaps sidebar scope loads with worktree hydration before session hydration', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const startupBlockStart = source.indexOf('void (async () => {')
+    const startupBlockEnd = source.indexOf('const persistedUI = await uiGetPromise')
+    const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
+
+    const reposIndex = startupBlock.indexOf('actions.fetchReposForAllHosts()')
+    const scopeChainIndex = startupBlock.indexOf('const projectScopeChain = (async () => {')
+    const projectGroupsIndex = startupBlock.indexOf('actions.fetchProjectGroupsForAllHosts()')
+    const folderWorkspacesIndex = startupBlock.indexOf('actions.fetchFolderWorkspacesForAllHosts()')
+    const promiseAllIndex = startupBlock.indexOf('await Promise.all([')
+    const awaitedScopeChainIndex = startupBlock.indexOf('projectScopeChain', promiseAllIndex)
+    const worktreesIndex = startupBlock.indexOf('actions.fetchAllWorktrees()')
+    const lineageIndex = startupBlock.indexOf('actions.fetchWorktreeLineage()')
+
+    expect(reposIndex).toBeGreaterThanOrEqual(0)
+    expect(scopeChainIndex).toBeGreaterThan(reposIndex)
+    expect(projectGroupsIndex).toBeGreaterThan(scopeChainIndex)
+    expect(folderWorkspacesIndex).toBeGreaterThan(projectGroupsIndex)
+    expect(promiseAllIndex).toBeGreaterThan(scopeChainIndex)
+    expect(awaitedScopeChainIndex).toBeGreaterThan(promiseAllIndex)
+    expect(worktreesIndex).toBeGreaterThan(promiseAllIndex)
+    expect(lineageIndex).toBeGreaterThan(promiseAllIndex)
   })
 
   it('waits for first-window startup services before terminal reconnect', () => {

@@ -43,7 +43,7 @@ export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
     ),
     description: translate(
       'auto.components.settings.appearance.search.workspaceCardLayout.description',
-      'Switch between compact and detailed workspace cards from the workspace sidebar options menu.'
+      'Workspace cards can use compact or detailed layouts.'
     ),
     keywords: [
       ...translateSearchKeyword(

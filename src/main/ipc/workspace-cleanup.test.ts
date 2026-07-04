@@ -10,6 +10,7 @@ import type {
   Repo,
   WorktreeMeta
 } from '../../shared/types'
+import type { WorkspaceCleanupScanProgress } from '../../shared/workspace-cleanup'
 
 const {
   listRepoWorktreesMock,
@@ -171,6 +172,58 @@ describe('workspace cleanup scan', () => {
     })
   })
 
+  it('reports cleanup scan progress as inactive workspaces are checked', async () => {
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: '/repo-feature-a',
+        head: 'abc123',
+        branch: 'refs/heads/feature-a',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/repo-feature-b',
+        head: 'def456',
+        branch: 'refs/heads/feature-b',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const progress: unknown[] = []
+
+    const result = await scanWorkspaceCleanup(
+      makeStore(),
+      { scanId: 'scan-1' },
+      { onProgress: (event) => progress.push(event) }
+    )
+
+    expect(result.candidates).toHaveLength(2)
+    expect(progress[0]).toMatchObject({
+      scanId: 'scan-1',
+      scannedWorktreeCount: 0,
+      totalWorktreeCount: 2,
+      candidates: []
+    })
+    const candidateProgress = progress.filter(
+      (event): event is WorkspaceCleanupScanProgress =>
+        (event as WorkspaceCleanupScanProgress).candidateMode === 'append' &&
+        (event as WorkspaceCleanupScanProgress).candidates.length > 0
+    )
+    expect(candidateProgress).toHaveLength(2)
+    expect(candidateProgress.every((event) => event.candidates.length === 1)).toBe(true)
+    const progressWorktreeIds = candidateProgress.flatMap((event) =>
+      event.candidates.map((candidate) => candidate.worktreeId)
+    )
+    expect(progressWorktreeIds).toEqual(
+      expect.arrayContaining(['repo-1::/repo-feature-a', 'repo-1::/repo-feature-b'])
+    )
+    expect(progress.at(-1)).toMatchObject({
+      scanId: 'scan-1',
+      scannedWorktreeCount: 2,
+      totalWorktreeCount: 2
+    })
+  })
+
   it('keeps raw scan errors out of renderer-facing results', async () => {
     listRepoWorktreesMock.mockRejectedValue(new Error('fatal: path /Users/alice/private failed'))
 
@@ -183,6 +236,30 @@ describe('workspace cleanup scan', () => {
         message: 'Git could not list worktrees.'
       }
     ])
+  })
+
+  it('aborts a hung worktree list when the cleanup timeout fires', async () => {
+    let signal: AbortSignal | undefined
+    listRepoWorktreesMock.mockImplementation((_repo: Repo, options?: { signal?: AbortSignal }) => {
+      signal = options?.signal
+      return new Promise<GitWorktreeInfo[]>(() => {})
+    })
+
+    const scan = scanWorkspaceCleanup(makeStore())
+    await vi.advanceTimersByTimeAsync(8_000)
+
+    await expect(scan).resolves.toEqual({
+      scannedAt: NOW,
+      candidates: [],
+      errors: [
+        {
+          repoId: 'repo-1',
+          repoName: 'Repo',
+          message: 'Timed out listing worktrees.'
+        }
+      ]
+    })
+    expect(signal?.aborted).toBe(true)
   })
 
   it('skips disconnected remote workspaces without a scan warning', async () => {
@@ -263,8 +340,12 @@ describe('workspace cleanup scan', () => {
       })
     )
 
-    expect(provider.listWorktrees).toHaveBeenCalledWith('/repo')
-    expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo-feature')
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/repo', {
+      signal: expect.any(AbortSignal)
+    })
+    expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo-feature', {
+      signal: expect.any(AbortSignal)
+    })
     expect(result.errors).toEqual([])
     expect(result.candidates[0]).toMatchObject({
       connectionId: 'ssh-1',
@@ -287,7 +368,9 @@ describe('workspace cleanup scan', () => {
       })
     )
 
-    expect(provider.listWorktrees).toHaveBeenCalledWith('/repo')
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/repo', {
+      signal: expect.any(AbortSignal)
+    })
     expect(result.errors).toEqual([])
     expect(result.candidates).toEqual([])
   })
@@ -324,6 +407,52 @@ describe('workspace cleanup scan', () => {
     })
   })
 
+  it('only inspects the target repo during focused scans', async () => {
+    const repoTwo = { ...REPO, id: 'repo-2', path: '/repo-two', displayName: 'Repo Two' }
+    listRepoWorktreesMock.mockImplementation((repo: Repo) =>
+      Promise.resolve([
+        {
+          path: `${repo.path}-feature`,
+          head: 'abc123',
+          branch: 'refs/heads/feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    )
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        repos: [REPO, repoTwo]
+      }),
+      { worktreeId: 'repo-2::/repo-two-feature' }
+    )
+
+    expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1)
+    expect(listRepoWorktreesMock).toHaveBeenCalledWith(repoTwo, {
+      signal: expect.any(AbortSignal)
+    })
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]).toMatchObject({
+      worktreeId: 'repo-2::/repo-two-feature',
+      repoId: 'repo-2'
+    })
+  })
+
+  it('returns no focused scan rows when the encoded repo id is unknown', async () => {
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      worktreeId: 'missing-repo::/repo-feature'
+    })
+
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
+    expect(getStatusMock).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      scannedAt: NOW,
+      candidates: [],
+      errors: []
+    })
+  })
+
   it('honors renderer git deferrals without hiding the workspace', async () => {
     const result = await scanWorkspaceCleanup(makeStore(), {
       skipGitWorktreeIds: ['repo-1::/repo-feature']
@@ -353,7 +482,7 @@ describe('workspace cleanup scan', () => {
     expect(getStatusMock).toHaveBeenCalledTimes(1)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-list', '--count', 'HEAD', '--not', '--remotes'],
-      { cwd: '/repo-feature' }
+      { cwd: '/repo-feature', signal: expect.any(AbortSignal) }
     )
     expect(result.candidates[0]).toMatchObject({
       tier: 'ready',

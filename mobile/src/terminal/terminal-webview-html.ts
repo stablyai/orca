@@ -4,6 +4,7 @@ import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-typ
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
@@ -47,7 +48,15 @@ export const XTERM_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.285/css/xterm.min.css">
+<script>
+window.__engineErrors = [];
+window.onerror = function(msg) {
+  // Why: a degraded engine can throw per frame; cap so the capture buffer
+  // and downstream reporting stay bounded for the document's lifetime.
+  if (window.__engineErrors.length < 20) window.__engineErrors.push(String(msg));
+};
+</script>
+<style>${XTERM_ENGINE_CSS}</style>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -192,7 +201,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
     <button id="sel-menu-all">Select All</button>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.285/lib/xterm.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.10.0-beta.285/lib/addon-unicode11.js"></script><script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.20.0-beta.284/lib/addon-webgl.js"></script>
+<script>${XTERM_ENGINE_JS}</script>
 <script>
 (function() {
   var surface = document.getElementById('terminal-surface');
@@ -214,6 +223,10 @@ export const XTERM_HTML = `<!DOCTYPE html>
   var afterDrainCallbacks = [];
   var termObserverDisposables = [];
   var ready = false;
+  // Why: init() flips ready false on every re-init (live width reflow included)
+  // while the old surface stays visible; a document-scoped latch drives the
+  // fatal/non-fatal decision so a transient reflow cannot blank a live terminal.
+  var everReady = false;
   var currentScale = 1;
   // Why: userScale is transient pinch zoom (CSS) for smooth feedback DURING a
   // gesture only; it resets to 1 on release. The persistent "text size" is the
@@ -240,6 +253,14 @@ export const XTERM_HTML = `<!DOCTYPE html>
   function fontPxForScale(scale) {
     return Math.max(MIN_FONT_PX, Math.round(BASE_FONT_PX * scale));
   }
+  function isIOSWebView() {
+    if (/iP(ad|hone|od)/.test(navigator.userAgent)) return true;
+    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  }
+  // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
+  // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
+  var TERMINAL_FONT_FALLBACKS = '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
+  var terminalFontFamily = (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS;
   // Why: change the real font size, then resize the grid to fit the viewport at
   // the new cell metrics so the text shows at its true size immediately. RN's
   // refit (measure → updateViewport) then makes the server reflow the PTY to the
@@ -716,7 +737,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
       cols: cols || 80,
       rows: rows || 24,
       theme: terminalTheme,
-      fontFamily: '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace',
+      fontFamily: terminalFontFamily,
       fontSize: fontPxForScale(currentTextScale),
       fontWeight: '300',
       fontWeightBold: '500',
@@ -745,6 +766,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
     requestAnimationFrame(function() {
       if (gen !== terminalGeneration) return;
       ready = true;
+      everReady = true;
       afterWritesDrained(function() {
         if (gen !== terminalGeneration) return;
         if (nextSurface && oldSurface) {
@@ -803,6 +825,47 @@ export const XTERM_HTML = `<!DOCTYPE html>
       window.ReactNativeWebView.postMessage(JSON.stringify(msg));
     }
   }
+
+  function engineErrorText(err) {
+    if (!err) return '';
+    if (typeof err === 'string') return err;
+    if (err && typeof err.message === 'string') return err.message;
+    try { return String(err); } catch (e) { return ''; }
+  }
+
+  function chromeVersionText() {
+    var match = String(navigator.userAgent || '').match(/(?:Chrome|Chromium)\\/([0-9.]+)/);
+    return match ? 'Chrome ' + match[1] : 'Chrome version unknown';
+  }
+
+  var nonFatalErrorNotifies = 0;
+
+  function reportEngineError(context, err, fatal) {
+    var isFatal = fatal === undefined ? !everReady : !!fatal;
+    if (!isFatal) {
+      // Why: a constructed-but-degraded engine can throw per frame; cap
+      // non-fatal notifies so RN isn't flooded. Fatal reports always emit.
+      nonFatalErrorNotifies++;
+      if (nonFatalErrorNotifies > 5) return;
+    }
+    var parts = [context];
+    var errText = engineErrorText(err);
+    if (errText) parts.push(errText);
+    if (window.__engineErrors && window.__engineErrors.length) {
+      parts.push('captured: ' + window.__engineErrors.join(' | '));
+    }
+    parts.push(chromeVersionText());
+    notify({
+      type: 'error',
+      fatal: isFatal,
+      message: parts.join(' - ')
+    });
+  }
+
+  window.onerror = function(msg, source, line, column, err) {
+    if (window.__engineErrors.length < 20) window.__engineErrors.push(String(msg));
+    reportEngineError('terminal runtime error', err || msg);
+  };
 
   function measureFitDimensions(containerHeightPx, retriesLeft) {
     if (typeof retriesLeft !== 'number') retriesLeft = 30;
@@ -1801,17 +1864,27 @@ export const XTERM_HTML = `<!DOCTYPE html>
 
   attachSurfaceEventHandlers(surface);
 
-  window.addEventListener('message', function(e) {
+  function handleIncomingMessage(e) {
+    var msg;
     try {
-      handleMsg(typeof e.data === 'string' ? JSON.parse(e.data) : e.data);
-    } catch(ex) {}
-  });
+      msg = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    } catch (ex) {
+      return;
+    }
+    try {
+      handleMsg(msg);
+    } catch(ex) {
+      reportEngineError(
+        msg && msg.type === 'init' ? 'terminal init failed' : 'terminal message failed',
+        ex,
+        msg && msg.type === 'init' && !everReady
+      );
+    }
+  }
 
-  document.addEventListener('message', function(e) {
-    try {
-      handleMsg(typeof e.data === 'string' ? JSON.parse(e.data) : e.data);
-    } catch(ex) {}
-  });
+  window.addEventListener('message', handleIncomingMessage);
+
+  document.addEventListener('message', handleIncomingMessage);
 
   window.addEventListener('resize', function() {
     // Why: viewport changed (keyboard open/close, orientation, RN container
@@ -1828,9 +1901,13 @@ export const XTERM_HTML = `<!DOCTYPE html>
   if (window.Terminal) {
     notify({ type: 'web-ready' });
   } else {
-    notify({ type: 'error', message: 'xterm failed to load' });
+    reportEngineError('terminal engine missing', 'xterm failed to load', true);
   }
 })();
 </script>
 </body>
 </html>`
+
+// Why: WebView treats source identity as page identity on some platforms; keep
+// parent/session re-renders from reloading xterm and forcing fresh snapshots.
+export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }

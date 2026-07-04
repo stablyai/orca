@@ -5,6 +5,7 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
 import type { GlobalSettings, TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
@@ -162,7 +163,14 @@ function getEligiblePane(args: {
     return null
   }
   const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
-  if (typeof inputAt === 'number' && Number.isFinite(inputAt) && inputAt > entry.updatedAt) {
+  // Why: killing the PTY discards the TUI composer's draft and any queued
+  // messages. The old input-after-done compare missed drafts typed while the
+  // agent was still working — the class that lost a user's draft in prod.
+  if (
+    typeof inputAt === 'number' &&
+    Number.isFinite(inputAt) &&
+    lastInputBlocksHibernation(entry, inputAt)
+  ) {
     return null
   }
   const livePane = getPaneLivePtyId(entry, layout)

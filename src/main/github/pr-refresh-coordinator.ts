@@ -34,7 +34,7 @@ type PRRefreshOutcomeObserver = (
 
 type PRBranchLookupCandidate = Pick<
   GitHubPRRefreshCandidate,
-  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource'
+  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'currentHeadOid'
 >
 
 function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
@@ -54,6 +54,9 @@ function hostedReviewOptionArgs(
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
+  }
+  if (typeof candidate.currentHeadOid === 'string' && candidate.currentHeadOid.trim().length > 0) {
+    options.currentHeadOid = candidate.currentHeadOid.trim()
   }
   return Object.keys(options).length > 0 ? [options] : []
 }
@@ -145,6 +148,50 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
     // Why: visible follow-ups are owned by the renderer that reported them.
     // If that WebContents is destroyed, no later visibility report may arrive.
     removeInvisibleVisibleRefreshes()
+  }
+}
+
+/**
+ * Drop a removed worktree's aliases from every queue entry.
+ *
+ * Why: many local branches/worktrees that resolve to the same PR coalesce into
+ * one queue entry whose `aliases` map keeps one entry per worktree. Aliases are
+ * only pruned when a candidate is re-enqueued as invalid — never when a worktree
+ * is simply removed. Over a long session with churning worktrees these maps grow
+ * unbounded, contributing to the renderer/process memory creep behind the OOM
+ * reports. Called from worktree removal so stale aliases are released promptly.
+ */
+export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
+  for (const [key, entry] of queue) {
+    let removed = false
+    for (const [cacheKey, alias] of entry.aliases) {
+      if (alias.worktreeId === worktreeId) {
+        entry.aliases.delete(cacheKey)
+        removed = true
+      }
+    }
+    if (!removed) {
+      continue
+    }
+    // No aliases left means no worktree still cares about this refresh.
+    if (entry.aliases.size === 0) {
+      queue.delete(key)
+      errorBackoff.delete(key)
+      continue
+    }
+    // Keep the entry alive but ensure its representative candidate is not a
+    // dangling reference to the removed worktree.
+    if (entry.candidate.worktreeId === worktreeId) {
+      const replacementAlias = entry.aliases.values().next().value
+      if (replacementAlias) {
+        entry.candidate = {
+          ...entry.candidate,
+          cacheKey: replacementAlias.cacheKey,
+          branch: replacementAlias.branch,
+          worktreeId: replacementAlias.worktreeId
+        }
+      }
+    }
   }
 }
 
@@ -807,6 +854,14 @@ export function _getVisiblePRRefreshWindowCountForTests(): number {
 
 export function _getPRRefreshErrorBackoffCountForTests(): number {
   return errorBackoff.size
+}
+
+export function _getPRRefreshQueueSizeForTests(): number {
+  return queue.size
+}
+
+export function _getPRRefreshAliasCountForTests(key: string): number {
+  return queue.get(key)?.aliases.size ?? 0
 }
 
 export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {

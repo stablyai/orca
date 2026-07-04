@@ -5,19 +5,15 @@
  * co-locating the global handler maps that both the transport factory
  * and the eager-buffer reconnection logic share.
  */
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { EventProps } from '../../../../shared/telemetry-events'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
-import type { TuiAgent } from '../../../../shared/types'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
 import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
 import {
   bufferPreHandlerPtyData,
   bufferPreHandlerPtyExit,
-  clearPreHandlerPtyState
+  clearPreHandlerPtyState,
+  drainPreHandlerPtyData,
+  drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
@@ -28,17 +24,8 @@ import {
 export type PtyDataMeta = {
   seq?: number
   rawLength?: number
+  background?: boolean
 }
-
-export type PtyBufferSnapshot = {
-  data: string
-  cols: number
-  rows: number
-  seq?: number
-  source?: 'headless' | 'renderer'
-}
-
-export type LocalPtySessionMetadata = { cwd?: string; shellOverride?: string }
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
@@ -128,6 +115,10 @@ export function ensurePtyDispatcher(): void {
       if (typeof payload.rawLength === 'number') {
         meta ??= {}
         meta.rawLength = payload.rawLength
+      }
+      if (payload.background === true) {
+        meta ??= {}
+        meta.background = true
       }
       const handler = ptyDataHandlers.get(payload.id)
       if (handler) {
@@ -284,126 +275,16 @@ export function registerEagerPtyBuffer(
   }
 
   eagerPtyHandles.set(ptyId, handle)
+  drainPreHandlerPtyData(ptyId, dataHandler)
+  // Why: launcher callbacks often capture the returned handle so they can
+  // flush output on exit. Defer a pre-handler exit by one microtask so the
+  // caller receives that handle before onExit fires.
+  queueMicrotask(() => {
+    if (ptyExitHandlers.get(ptyId) === exitHandler) {
+      drainPreHandlerPtyExit(ptyId, exitHandler)
+    } else {
+      clearPreHandlerPtyState(ptyId)
+    }
+  })
   return handle
-}
-
-// ── PtyTransport interface ───────────────────────────────────────────
-// Why: lives here so pty-transport.ts stays under the 300-line limit.
-
-export type PtyConnectResult = {
-  id: string
-  launchConfig?: SleepingAgentLaunchConfig
-  snapshot?: string
-  snapshotCols?: number
-  snapshotRows?: number
-  isAlternateScreen?: boolean
-  sessionExpired?: boolean
-  coldRestore?: { scrollback: string; cwd: string }
-  replay?: string
-}
-
-export type PtyTransport = {
-  connect: (options: {
-    url: string
-    cols?: number
-    rows?: number
-    /** Daemon session ID for reattach. When provided, the daemon reconnects
-     *  to an existing session instead of creating a new one. */
-    sessionId?: string
-    command?: string
-    env?: Record<string, string>
-    launchConfig?: SleepingAgentLaunchConfig
-    launchToken?: string
-    launchAgent?: TuiAgent
-    startupCommandDelivery?: StartupCommandDelivery
-    callbacks: {
-      onConnect?: () => void
-      onDisconnect?: () => void
-      onData?: (data: string, meta?: PtyDataMeta) => void
-      /** Replay bytes from a prior session (eager buffers, attach-time screen
-       *  clears). Routed separately from onData so the renderer can engage
-       *  the replay guard — otherwise xterm auto-replies to embedded query
-       *  sequences leak into the shell. See replay-guard.ts. */
-      onReplayData?: (data: string) => void
-      onStatus?: (shell: string) => void
-      onError?: (message: string, errors?: string[]) => void
-      onExit?: (code: number) => void
-    }
-  }) => void | Promise<void | string | PtyConnectResult>
-  /** Attach to an existing PTY that was eagerly spawned during startup.
-   *  Skips pty:spawn — registers handlers and replays buffered data instead. */
-  attach: (options: {
-    existingPtyId: string
-    cols?: number
-    rows?: number
-    /** When true, the session uses the alternate screen buffer (e.g., Codex).
-     *  Skips the delayed double-resize since a single resize already triggers
-     *  a full TUI repaint without content loss. */
-    isAlternateScreen?: boolean
-    callbacks: {
-      onConnect?: () => void
-      onDisconnect?: () => void
-      onData?: (data: string, meta?: PtyDataMeta) => void
-      /** See note on connect.callbacks.onReplayData. */
-      onReplayData?: (data: string) => void
-      onStatus?: (shell: string) => void
-      onError?: (message: string, errors?: string[]) => void
-      onExit?: (code: number) => void
-    }
-  }) => void
-  disconnect: () => void
-  sendInput: (data: string) => boolean
-  sendInputAccepted?: (data: string) => Promise<boolean>
-  resize: (
-    cols: number,
-    rows: number,
-    meta?: { widthPx?: number; heightPx?: number; cellW?: number; cellH?: number }
-  ) => boolean
-  isConnected: () => boolean
-  getPtyId: () => string | null
-  getConnectionId?: () => string | null | undefined
-  getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
-  serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
-  preserve?: () => void
-  /** Unregister PTY handlers without killing the process for pane remounts. */
-  detach?: () => void
-  destroy?: () => void | Promise<void>
-}
-
-export type IpcPtyTransportOptions = {
-  cwd?: string
-  env?: Record<string, string>
-  command?: string
-  launchConfig?: SleepingAgentLaunchConfig
-  launchToken?: string
-  launchAgent?: TuiAgent
-  startupCommandDelivery?: StartupCommandDelivery
-  connectionId?: string | null
-  /** Orca worktree identity for scoped shell history. */
-  worktreeId?: string
-  /** Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
-   *  main patch + sync-flush the (worktreeId, tabId, leafId → ptyId) binding
-   *  before pty:spawn returns. Only the renderer's daemon-host path threads
-   *  these from the calling pane's (tabId, leafId). */
-  tabId?: string
-  leafId?: string
-  /** Whether renderer-backed runtime reveal should focus the created tab. */
-  activate?: boolean
-  /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
-  shellOverride?: string
-  projectRuntime?: ProjectExecutionRuntimeResolution
-  /** Telemetry metadata for the `agent_started` event. Forwarded verbatim
-   *  to `pty:spawn` so main can fire the event after confirmed launch. The
-   *  IPC handler re-validates the schema; this type is the renderer-side
-   *  contract. */
-  telemetry?: EventProps<'agent_started'>
-  onPtyExit?: (ptyId: string) => void
-  onTitleChange?: (title: string, rawTitle: string) => void
-  onPtySpawn?: (ptyId: string) => void
-  onBell?: () => void
-  onAgentBecameIdle?: (title: string) => void
-  onAgentBecameWorking?: () => void
-  onAgentExited?: () => void
-  /** Callback for OSC 9999 agent status payloads parsed from PTY output. */
-  onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
 }

@@ -57,6 +57,18 @@ export function isExternalReloadableEditorTab(file: OpenFile): boolean {
   )
 }
 
+// Why: combined "Changes"/"All Changes" tabs render working-tree diffs but
+// match no single path (their relativePath is a label, filePath the worktree
+// root). The fs watcher must still notify them so terminal/agent edits reload
+// the affected section. Branch/commit combined diffs compare committed refs, so
+// working-tree changes don't affect them and are intentionally excluded.
+export function isWorkingTreeCombinedDiffTab(file: OpenFile): boolean {
+  return (
+    file.mode === 'diff' &&
+    (file.diffSource === 'combined-uncommitted' || file.diffSource === 'combined-all')
+  )
+}
+
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
   // Why: single-file editors and one-file unstaged diffs have an unambiguous
   // write target. Combined diff and conflict-review tabs can represent multiple

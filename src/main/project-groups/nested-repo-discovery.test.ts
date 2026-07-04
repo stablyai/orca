@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: nested scan behavior is intentionally covered in one
 suite so traversal order, ignore rules, cancellation, and filesystem fixtures stay aligned. */
-import { mkdtemp, mkdir, writeFile, rm, symlink } from 'fs/promises'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanNestedRepos } from './nested-repo-discovery'
 

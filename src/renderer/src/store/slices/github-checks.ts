@@ -17,7 +17,10 @@ export function deriveCheckStatusFromChecks(checks: PRCheckDetail[]): CheckStatu
     if (
       check.conclusion === 'failure' ||
       check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled'
+      check.conclusion === 'cancelled' ||
+      // Why: action_required (e.g. an unapproved workflow run) blocks merge until
+      // someone acts; treat it as needs-attention rather than a silent pass.
+      check.conclusion === 'action_required'
     ) {
       return 'failure'
     }

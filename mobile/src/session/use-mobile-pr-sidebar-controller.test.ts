@@ -85,10 +85,10 @@ describe('loadPrSidebarData', () => {
     expect(d.fetchWorkItemDetails).not.toHaveBeenCalled()
     // forBranch's PR number is threaded into prForBranch as the linked hint.
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
-    // headSha forwarded to checks (status SHA wins over pr.headSha).
+    // The fetched PR head wins over the route's cached status SHA.
     expect(d.fetchPRChecks).toHaveBeenCalledWith('w', {
       prNumber: 7,
-      headSha: 'sha-status',
+      headSha: 'sha-pr',
       prRepo: null
     })
   })

@@ -107,6 +107,12 @@ export type AgentStatusEntry = {
   toolName?: string
   /** Short preview of the tool input (e.g. file path, command). */
   toolInput?: string
+  /** JSON string of the AskUserQuestion tool input (`{ questions: [...] }`),
+   *  captured live when the agent calls AskUserQuestion. Unlike toolInput this
+   *  is NOT truncated to a short preview — clients render the full structured
+   *  prompt as a live card. Cleared (undefined) once the agent moves on to a
+   *  different tool or state so a stale prompt doesn't linger. */
+  interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
   /** True when the current `done` state was reached via an interrupt rather
@@ -148,6 +154,9 @@ export type AgentStatusPayload = {
   agentType?: AgentType
   toolName?: string
   toolInput?: string
+  /** JSON string of the AskUserQuestion tool input, captured live. See the
+   *  AgentStatusEntry field for semantics. Not truncated like toolInput. */
+  interactivePrompt?: string
   lastAssistantMessage?: string
   interrupted?: boolean
 }
@@ -200,6 +209,13 @@ export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
  *  second line of defense against a buggy/malicious agent spamming huge
  *  strings into the cache (which lives per pane with bounded history). */
 export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
+/** Maximum character length for the interactivePrompt field.
+ *  Why: this holds the full JSON of an AskUserQuestion tool input
+ *  (`{ questions: [...] }`), which clients render as a structured live card —
+ *  truncating to a 160-char preview like toolInput would corrupt the JSON and
+ *  drop options. Capped generously so multi-question prompts survive intact
+ *  while still bounding per-pane cache growth from a buggy/malicious agent. */
+export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 /**
  * Freshness threshold for explicit agent status. Retained past this point so
  * WorktreeCard's sidebar dot can decay "working" back to "active" when the
@@ -364,6 +380,19 @@ function isEcmaTrimWhitespace(code: number): boolean {
 // Why: tool/assistant fields are optional on the entry (absence = "no update
 // for this field"). We only surface them when the caller actually provided a
 // string value so a missing field doesn't overwrite the prior cached state.
+// Why: interactivePrompt carries raw JSON (`{ questions: [...] }`) that clients
+// JSON.parse to render a structured card. Unlike the other normalizers we must
+// NOT trim, collapse newlines, or fold blank-line runs — any of those would
+// corrupt the JSON or alter option text inside it. Only guard the length cap
+// (preserving surrogate pairs) and drop empty strings to undefined.
+function normalizeInteractivePromptField(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined
+  }
+  const truncated = truncatePreservingSurrogates(value, maxLength)
+  return truncated.length > 0 ? truncated : undefined
+}
+
 function normalizeOptionalField(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') {
     return undefined
@@ -413,6 +442,10 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     toolName: normalizeOptionalField(obj.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
     toolInput: normalizeOptionalField(obj.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
+    interactivePrompt: normalizeInteractivePromptField(
+      obj.interactivePrompt,
+      AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
+    ),
     lastAssistantMessage: normalizeOptionalMultilineField(
       obj.lastAssistantMessage,
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH

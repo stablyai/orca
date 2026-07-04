@@ -5,11 +5,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { execFileSync } from 'child_process'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../shared/large-diff-render-limit'
 import {
   createMockDispatcher,
@@ -129,6 +129,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.worktreeIsClean')
     expect(methods).toContain('git.refreshLocalBaseRefForWorktreeCreate')
     expect(methods).toContain('git.renameCurrentBranch')
+    expect(methods).toContain('git.forceDeletePreservedBranch')
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.clone')
     expect(methods).toContain('git.isGitRepo')
@@ -262,6 +263,66 @@ describe('GitHandler', () => {
           newBranch: '-bad'
         })
       ).rejects.toThrow('Branch name must not start with "-"')
+    })
+  })
+
+  describe('forceDeletePreservedBranch', () => {
+    function headOf(cwd: string, ref: string): string {
+      return execFileSync('git', ['rev-parse', ref], { cwd, encoding: 'utf-8' }).trim()
+    }
+
+    it('deletes a preserved branch at its expected head through the narrow RPC', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+      execFileSync('git', ['branch', 'feature/preserved'], { cwd: tmpDir, stdio: 'pipe' })
+      const head = headOf(tmpDir, 'refs/heads/feature/preserved')
+
+      await dispatcher.callRequest('git.forceDeletePreservedBranch', {
+        repoPath: tmpDir,
+        branchName: 'feature/preserved',
+        expectedHead: head
+      })
+
+      const refs = execFileSync('git', ['branch', '--list', 'feature/preserved'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(refs).toBe('')
+    })
+
+    it('refuses to delete when the branch moved past the expected head', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+      const staleHead = headOf(tmpDir, 'HEAD')
+      execFileSync('git', ['checkout', '-b', 'feature/preserved'], { cwd: tmpDir, stdio: 'pipe' })
+      // Advance the branch so the saved (stale) head no longer matches its tip.
+      gitCommit(tmpDir, 'second')
+      execFileSync('git', ['checkout', '-'], { cwd: tmpDir, stdio: 'pipe' })
+
+      await expect(
+        dispatcher.callRequest('git.forceDeletePreservedBranch', {
+          repoPath: tmpDir,
+          branchName: 'feature/preserved',
+          expectedHead: staleHead
+        })
+      ).rejects.toThrow('changed after the workspace was deleted')
+      const refs = execFileSync('git', ['branch', '--list', 'feature/preserved'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(refs).toContain('feature/preserved')
+    })
+
+    it('rejects an empty repoPath at the RPC boundary', async () => {
+      await expect(
+        dispatcher.callRequest('git.forceDeletePreservedBranch', {
+          repoPath: '',
+          branchName: 'feature/preserved',
+          expectedHead: 'abc123'
+        })
+      ).rejects.toThrow('Invalid preserved branch force-delete request.')
     })
   })
 
@@ -589,6 +650,167 @@ describe('GitHandler', () => {
           staged: false
         })
       ).rejects.toThrow('outside the worktree')
+    })
+  })
+
+  describe('submodule', () => {
+    const extraDirs: string[] = []
+
+    afterEach(async () => {
+      await Promise.all(
+        extraDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true }))
+      )
+    })
+
+    // Why: `git submodule add` against a local path is blocked since git 2.38
+    // unless protocol.file.allow=always is set explicitly.
+    function addSubmodule(parent: string, name: string): string {
+      const src = mkdtempSync(path.join(tmpdir(), 'relay-subsrc-'))
+      extraDirs.push(src)
+      gitInit(src)
+      writeFileSync(path.join(src, 'lib.txt'), 'v1\n')
+      gitCommit(src, 'sub initial')
+      execFileSync('git', ['-c', 'protocol.file.allow=always', 'submodule', 'add', src, name], {
+        cwd: parent,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['commit', '-m', 'add submodule'], { cwd: parent, stdio: 'pipe' })
+      return path.join(parent, name)
+    }
+
+    it('returns inner per-file changes via git.submoduleStatus', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+
+      const result = (await dispatcher.callRequest('git.submoduleStatus', {
+        worktreePath: tmpDir,
+        submodulePath: 'flutter_mine'
+      })) as { entries: { path?: unknown; status?: unknown; area?: unknown }[] }
+
+      const inner = result.entries.find((e) => e.path === 'lib.txt')
+      expect(inner).toBeDefined()
+      expect(inner!.status).toBe('modified')
+      expect(inner!.area).toBe('unstaged')
+    })
+
+    it('rejects submoduleStatus paths that escape the worktree', async () => {
+      gitInit(tmpDir)
+      await expect(
+        dispatcher.callRequest('git.submoduleStatus', {
+          worktreePath: tmpDir,
+          submodulePath: '../outside'
+        })
+      ).rejects.toThrow('outside the worktree')
+    })
+
+    it('routes inner submodule files into the submodule worktree diff', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+
+      const result = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'flutter_mine/lib.txt',
+        staged: false
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+
+      expect(result.kind).toBe('text')
+      expect(normalizeGitFileText(result.originalContent)).toBe('v1\n')
+      expect(normalizeGitFileText(result.modifiedContent)).toBe('v2\n')
+    })
+
+    it('synthesizes a Subproject commit pointer diff for the gitlink root', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      const oldOid = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: sub,
+        encoding: 'utf-8'
+      }).trim()
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+      execFileSync('git', ['add', 'lib.txt'], { cwd: sub, stdio: 'pipe' })
+      gitCommit(sub, 'sub second')
+      const newOid = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: sub,
+        encoding: 'utf-8'
+      }).trim()
+
+      const result = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'flutter_mine',
+        staged: false
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+
+      expect(result.kind).toBe('text')
+      expect(result.originalContent).toBe(`Subproject commit ${oldOid}\n`)
+      expect(result.modifiedContent).toBe(`Subproject commit ${newOid}\n`)
+    })
+
+    // Why: a moved gitlink with a clean submodule worktree has no uncommitted
+    // rows, so status/diff must surface the committed file changes between the
+    // recorded and checked-out commits.
+    it('lists commit-range files and diffs them when the pointer moved', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+      execFileSync('git', ['add', 'lib.txt'], { cwd: sub, stdio: 'pipe' })
+      gitCommit(sub, 'sub second')
+
+      const status = (await dispatcher.callRequest('git.submoduleStatus', {
+        worktreePath: tmpDir,
+        submodulePath: 'flutter_mine'
+      })) as { entries: { path?: unknown; status?: unknown; area?: unknown }[] }
+      const ranged = status.entries.find((e) => e.path === 'lib.txt')
+      expect(ranged).toBeDefined()
+      expect(ranged!.status).toBe('modified')
+      expect(ranged!.area).toBe('unstaged')
+
+      const diff = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'flutter_mine/lib.txt',
+        staged: false
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+      expect(diff.kind).toBe('text')
+      expect(normalizeGitFileText(diff.originalContent)).toBe('v1\n')
+      expect(normalizeGitFileText(diff.modifiedContent)).toBe('v2\n')
+    })
+
+    it('lists and diffs staged submodule pointer changes from parent HEAD to index', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+      execFileSync('git', ['add', 'lib.txt'], { cwd: sub, stdio: 'pipe' })
+      gitCommit(sub, 'sub second')
+      execFileSync('git', ['add', 'flutter_mine'], { cwd: tmpDir, stdio: 'pipe' })
+
+      const status = (await dispatcher.callRequest('git.submoduleStatus', {
+        worktreePath: tmpDir,
+        submodulePath: 'flutter_mine',
+        area: 'staged'
+      })) as { entries: { path?: unknown; status?: unknown; area?: unknown }[] }
+      const ranged = status.entries.find((e) => e.path === 'lib.txt')
+      expect(ranged).toBeDefined()
+      expect(ranged!.status).toBe('modified')
+      expect(ranged!.area).toBe('unstaged')
+
+      const diff = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'flutter_mine/lib.txt',
+        staged: true
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+      expect(diff.kind).toBe('text')
+      expect(normalizeGitFileText(diff.originalContent)).toBe('v1\n')
+      expect(normalizeGitFileText(diff.modifiedContent)).toBe('v2\n')
     })
   })
 
@@ -1659,6 +1881,97 @@ describe('GitHandler', () => {
       expect(result.length).toBeGreaterThanOrEqual(1)
       expect(result[0].isMainWorktree).toBe(true)
     })
+
+    it.skipIf(process.platform === 'win32')(
+      'normalizes the main worktree path for a separate-git-dir repo',
+      async () => {
+        const sourcePath = path.join(tmpDir, 'source')
+        const worktreePath = path.join(tmpDir, 'worktree')
+        const gitDirPath = path.join(tmpDir, 'git-store', 'project.git')
+        mkdirSync(sourcePath)
+        mkdirSync(path.dirname(gitDirPath), { recursive: true })
+        gitInit(sourcePath)
+        writeFileSync(path.join(sourcePath, 'file.txt'), 'hello')
+        gitCommit(sourcePath, 'initial')
+
+        execFileSync('git', [
+          'clone',
+          '--quiet',
+          `--separate-git-dir=${gitDirPath}`,
+          sourcePath,
+          worktreePath
+        ])
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: await fs.realpath(worktreePath)
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(worktreePath),
+          isMainWorktree: true
+        })
+        expect(mainWorktree?.path).not.toBe(await fs.realpath(gitDirPath))
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'leaves an ordinary repo reached via a symlinked path unchanged',
+      async () => {
+        // A symlink alias defeats the path-string gate (git reports the
+        // realpath toplevel); the git-common-dir gate must still skip the
+        // rewrite for an ordinary repo so the reported path is untouched.
+        const repoPath = path.join(tmpDir, 'plain-repo')
+        mkdirSync(repoPath)
+        gitInit(repoPath)
+        writeFileSync(path.join(repoPath, 'file.txt'), 'hello')
+        gitCommit(repoPath, 'initial')
+        const linkedRepoPath = path.join(tmpDir, 'linked-repo')
+        symlinkSync(repoPath, linkedRepoPath)
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: linkedRepoPath
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(repoPath),
+          isMainWorktree: true
+        })
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'leaves the main entry unchanged when scanned via a linked worktree',
+      async () => {
+        // A linked worktree has a `.git` pointer file like a separate-git-dir
+        // checkout, but its porcelain main entry is the real main working root.
+        // The git-common-dir gate must skip the rewrite so the main entry is
+        // not overwritten with the linked worktree's own toplevel.
+        const repoPath = path.join(tmpDir, 'main-repo')
+        mkdirSync(repoPath)
+        gitInit(repoPath)
+        writeFileSync(path.join(repoPath, 'file.txt'), 'hello')
+        gitCommit(repoPath, 'initial')
+        const linkedWorktreePath = path.join(tmpDir, 'linked-wt')
+        execFileSync('git', ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'], {
+          cwd: repoPath,
+          stdio: 'pipe'
+        })
+        const resolvedLinked = await fs.realpath(linkedWorktreePath)
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: resolvedLinked
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(repoPath),
+          isMainWorktree: true
+        })
+        expect(mainWorktree?.path).not.toBe(resolvedLinked)
+      }
+    )
 
     it.skipIf(process.platform === 'win32')(
       'lists worktrees whose paths contain newlines',

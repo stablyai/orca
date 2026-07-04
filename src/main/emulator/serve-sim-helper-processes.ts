@@ -1,5 +1,5 @@
-import { execFile } from 'child_process'
-import { platform } from 'os'
+import { execFile } from 'node:child_process'
+import { platform } from 'node:os'
 import { commandContainsToken } from '../../shared/command-token-scanner'
 import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
 

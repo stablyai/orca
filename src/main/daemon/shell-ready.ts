@@ -2,9 +2,9 @@
    wrapper generation for zsh, bash, and PowerShell plus the launch-config
    plumbing; keeping them together lets the wrapper/marker contract be
    reviewed as a unit (mirrors src/main/providers/local-pty-shell-ready.ts). */
-import { tmpdir } from 'os'
-import { basename, dirname, join, win32 as pathWin32 } from 'path'
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join, win32 as pathWin32 } from 'node:path'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,

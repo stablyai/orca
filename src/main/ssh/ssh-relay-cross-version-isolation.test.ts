@@ -50,6 +50,7 @@ import type { SshConnection } from './ssh-connection'
 
 function makeMockConnection(): SshConnection {
   return {
+    canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),
       stderr: { on: vi.fn() },

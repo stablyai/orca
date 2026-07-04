@@ -9,6 +9,7 @@ import {
   Bell,
   Blocks,
   Bot,
+  Bug,
   Cable,
   FlaskConical,
   GitBranch,
@@ -80,17 +81,44 @@ import { translate } from '@/i18n/i18n'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
 
+function getDevToolsPaneSearchEntries(): SettingsNavSection['searchEntries'] {
+  return [
+    {
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlayground',
+        'Notification playground'
+      ),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlaygroundDescription',
+        'Trigger representative toast and notification UI states.'
+      ),
+      keywords: [
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordDev', 'dev'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordToast', 'toast'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordSonner', 'sonner'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordError', 'error'),
+        translate(
+          'auto.hooks.useSettingsNavigationMetadata.devSearchKeywordNotification',
+          'notification'
+        )
+      ]
+    }
+  ]
+}
+
 export function buildSettingsNavigationMetadata({
   isMac,
   isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
+  isDev = import.meta.env.DEV,
   repos
 }: {
   isMac: boolean
   isWindows: boolean
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
+  isDev?: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -225,6 +253,21 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getIntegrationsPaneSearchEntries(),
       group: 'setup'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'mobile',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
+              'Control terminals and agents from your phone.'
+            ),
+            icon: Smartphone,
+            searchEntries: getMobileSettingsPaneSearchEntries(),
+            group: 'setup'
+          }
+        ]
+      : []),
     {
       id: 'git',
       title: translate(
@@ -293,7 +336,7 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
-    ...(showDesktopOnlySettings && isMac
+    ...(showDesktopOnlySettings
       ? [
           {
             id: 'mobile-emulator',
@@ -387,6 +430,21 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getStatsPaneSearchEntries(),
       group: 'interface'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'ssh',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
+              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
+            ),
+            icon: Cable,
+            searchEntries: getSshPaneSearchEntries(),
+            group: 'remote'
+          }
+        ]
+      : []),
     {
       id: 'servers',
       title: translate(
@@ -401,32 +459,6 @@ export function buildSettingsNavigationMetadata({
       group: 'remote',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'ssh',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
-              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
-            ),
-            icon: Cable,
-            searchEntries: getSshPaneSearchEntries(),
-            group: 'remote'
-          },
-          {
-            id: 'mobile',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
-              'Control terminals and agents from your phone.'
-            ),
-            icon: Smartphone,
-            searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'mobile'
-          }
-        ]
-      : []),
     ...(showDesktopOnlySettings && isMac
       ? [
           {
@@ -474,6 +506,26 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
+    // Why: dev tooling must not be reachable from packaged/web builds even if
+    // this pure metadata builder is called manually with isDev=true.
+    ...(showDesktopOnlySettings && import.meta.env.DEV && isDev
+      ? [
+          {
+            id: 'dev',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.devDescription',
+              'Dev-only tools for exercising UI states.'
+            ),
+            // Why: distinct from the sibling Advanced section's Wrench so the two
+            // entries in the same 'advanced' group stay visually distinguishable.
+            icon: Bug,
+            searchEntries: getDevToolsPaneSearchEntries(),
+            group: 'advanced',
+            badge: translate('auto.hooks.useSettingsNavigationMetadata.devBadge', 'Dev')
+          }
+        ]
+      : []),
     {
       id: 'experimental',
       title: translate('auto.hooks.useSettingsNavigationMetadata.225071c560', 'Experimental'),
@@ -499,9 +551,12 @@ export function buildSettingsNavigationMetadata({
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
-  // Why: subscribe metadata consumers to language changes; translated memo
-  // contents refresh on rerender without depending on i18n.language directly.
-  useTranslation()
+  // Why: useTranslation subscribes to language changes, but the active locale
+  // must also be a memo dependency below — a rerender alone returns the cached
+  // previous-language sections, leaving the Settings sidebar and Cmd+J palette
+  // stuck in the old language until Settings is remounted.
+  const { i18n } = useTranslation()
+  const activeLocale = i18n.language
   const repos = useAppStore((state) => state.repos)
   const settings = useAppStore((state) => state.settings)
   const isMac = isMacUserAgent()
@@ -529,8 +584,10 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWindows,
         isWindowsTerminalHost,
         isWebClient,
+        isDev: import.meta.env.DEV,
         repos
       }),
-    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
+    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos, activeLocale]
   )
 }

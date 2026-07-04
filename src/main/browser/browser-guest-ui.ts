@@ -11,6 +11,7 @@ import {
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord,
+  nativeZoomCommandMatchesKeybindings,
   resolveWindowShortcutAction,
   type WindowShortcutInput
 } from '../../shared/window-shortcut-policy'
@@ -29,6 +30,38 @@ type IsMobileEmulatorEnabled = () => boolean
 const CONTROL_MODIFIERS = new Set(['control', 'ctrl'])
 const MAC_COMMAND_MODIFIERS = new Set(['meta', 'command', 'cmd'])
 const WHEEL_ZOOM_BLOCKING_MODIFIERS = new Set(['alt', 'shift'])
+const GUEST_WHEEL_ZOOM_DEDUPE_MS = 250
+
+type GuestWheelZoomDirection = Exclude<BrowserPageZoomDirection, 'reset'>
+
+const recentGuestWheelZoomByGuest = new WeakMap<
+  Electron.WebContents,
+  { direction: GuestWheelZoomDirection; at: number }
+>()
+
+function markGuestWheelZoom(guest: Electron.WebContents, direction: GuestWheelZoomDirection): void {
+  recentGuestWheelZoomByGuest.set(guest, { direction, at: Date.now() })
+}
+
+function consumeRecentGuestWheelZoom(
+  guest: Electron.WebContents,
+  direction: GuestWheelZoomDirection
+): boolean {
+  const recent = recentGuestWheelZoomByGuest.get(guest)
+  if (!recent) {
+    return false
+  }
+  const elapsed = Date.now() - recent.at
+  if (elapsed < 0 || elapsed > GUEST_WHEEL_ZOOM_DEDUPE_MS) {
+    recentGuestWheelZoomByGuest.delete(guest)
+    return false
+  }
+  if (recent.direction !== direction) {
+    return false
+  }
+  recentGuestWheelZoomByGuest.delete(guest)
+  return true
+}
 
 function hasModifier(mouse: Electron.MouseInputEvent, modifiers: ReadonlySet<string>): boolean {
   return mouse.modifiers?.some((modifier) => modifiers.has(modifier)) ?? false
@@ -37,7 +70,7 @@ function hasModifier(mouse: Electron.MouseInputEvent, modifiers: ReadonlySet<str
 export function resolveGuestMouseWheelZoomDirection(
   mouse: Electron.MouseInputEvent,
   platform: NodeJS.Platform = process.platform
-): BrowserPageZoomDirection | null {
+): GuestWheelZoomDirection | null {
   if (mouse.type !== 'mouseWheel') {
     return null
   }
@@ -95,6 +128,11 @@ export function setupGuestContextMenu(args: {
       screenY: cursor.y,
       pageUrl,
       linkUrl,
+      // Why: forward the native selection so the renderer can offer a Copy that
+      // writes it to the clipboard directly, bypassing pages that suppress copy
+      // via oncopy handlers (the reported bug — the selection is never re-read
+      // through a page-visible copy event).
+      selectionText: params.selectionText ?? '',
       ...navigationState
     })
   }
@@ -272,6 +310,15 @@ export function setupGuestShortcutForwarding(args: {
   const resetDoubleTapDetector = (): void => doubleTapDetector.reset()
   type GuestShortcutInput = WindowShortcutInput & { isAutoRepeat?: boolean }
 
+  const forwardBrowserPageZoom = (
+    event: Electron.Event,
+    direction: BrowserPageZoomDirection
+  ): void => {
+    event.preventDefault()
+    const renderer = resolveRenderer(browserTabId)
+    renderer?.send('ui:zoomBrowserPage', direction)
+  }
+
   const forwardShortcutInput = (
     event: Electron.Event,
     input: GuestShortcutInput,
@@ -279,11 +326,9 @@ export function setupGuestShortcutForwarding(args: {
   ): boolean => {
     const keybindings = getKeybindings?.()
     if (action?.type === 'zoom') {
-      // Why: keyboard zoom is Orca chrome zoom. Focused guests bypass the
-      // main-window shortcut path, so forward to the shared renderer zoom router.
-      event.preventDefault()
-      const renderer = resolveRenderer(browserTabId)
-      renderer?.send('terminal:zoom', action.direction)
+      // Why: focused browser guests own page zoom, but their key events never
+      // reach the renderer-owned webview ref that can apply Orca's page zoom.
+      forwardBrowserPageZoom(event, action.direction)
       return true
     }
     if (input.isAutoRepeat) {
@@ -426,6 +471,8 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:toggleWorktreePalette')
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
+    } else if (action?.type === 'toggleQuickCommandsMenu') {
+      renderer.send('ui:toggleQuickCommandsMenu')
     } else if (action?.type === 'openNewWorkspace') {
       renderer.send('ui:openNewWorkspace')
     } else if (action?.type === 'openWorkspaceBoard') {
@@ -514,11 +561,32 @@ export function setupGuestShortcutForwarding(args: {
     forwardShortcutInput(event, input, action)
   }
 
+  const zoomCommandHandler = (
+    event: Electron.Event,
+    zoomDirection: 'in' | 'out' | 'reset'
+  ): void => {
+    if (zoomDirection !== 'in' && zoomDirection !== 'out') {
+      return
+    }
+    // Why: some keyboard layouts/platforms turn Ctrl/Cmd +/- into Electron's
+    // native zoom command before `before-input-event` reaches the guest.
+    if (consumeRecentGuestWheelZoom(guest, zoomDirection)) {
+      event.preventDefault()
+      return
+    }
+    if (!nativeZoomCommandMatchesKeybindings(zoomDirection, process.platform, getKeybindings?.())) {
+      return
+    }
+    forwardBrowserPageZoom(event, zoomDirection)
+  }
+
   guest.on('before-input-event', handler)
+  guest.on('zoom-changed', zoomCommandHandler)
   guest.on('blur', resetDoubleTapDetector)
   return () => {
     try {
       guest.off('before-input-event', handler)
+      guest.off('zoom-changed', zoomCommandHandler)
       guest.off('blur', resetDoubleTapDetector)
     } catch {
       // Why: best-effort — guest may already be destroyed during teardown.
@@ -540,6 +608,7 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     // Why: wheel input over a focused webview does not reach renderer DOM
     // handlers, so consume it here and forward to the existing page-zoom path.
     event.preventDefault()
+    markGuestWheelZoom(guest, direction)
     resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
   }
 

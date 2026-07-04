@@ -151,6 +151,40 @@ describe('project host setup projection', () => {
     )
   })
 
+  it('uses git remote identity as a provider identity fallback', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      repo({
+        id: 'canonical-local-repo',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        gitRemoteIdentity: {
+          canonicalKey: 'github.com/stablyai/orca',
+          remoteName: 'origin',
+          remoteUrl: 'git@github.com:stablyai/orca.git'
+        }
+      }),
+      repo({
+        id: 'old-branch-checkout',
+        path: '/Users/alice/orca/workspaces/orca/re-enable-webgl-for-remote-runtime-terminals',
+        displayName: 're-enable-webgl-for-remote-runtime-terminals',
+        repoIcon: {
+          type: 'image',
+          src: 'https://github.com/stablyai.png?size=64',
+          source: 'github',
+          label: 'stablyai/orca'
+        }
+      })
+    ])
+
+    expect(projection.projects).toHaveLength(1)
+    expect(projection.projects[0]).toMatchObject({
+      id: 'github:stablyai/orca',
+      displayName: 'orca',
+      sourceRepoIds: ['canonical-local-repo', 'old-branch-checkout'],
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+    })
+  })
+
   it('does not guess that same-named folders are the same project without identity', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({ id: 'local-repo', path: '/Users/alice/app', displayName: 'app' }),
