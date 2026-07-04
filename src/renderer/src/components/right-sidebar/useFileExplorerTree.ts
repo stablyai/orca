@@ -1,17 +1,21 @@
-import type React from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useRef, useState } from 'react'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import type { DirEntry } from '../../../../shared/types'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
 import { readRuntimeDirectory, statRuntimePath } from '@/runtime/runtime-file-client'
-import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
+import {
+  createFileExplorerDirLoadTracker,
+  type FileExplorerDirLoadTracker
+} from './file-explorer-dir-load-tracker'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
-  setDirCache: React.Dispatch<React.SetStateAction<Record<string, DirCache>>>
+  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
   rootCache: DirCache | undefined
   rootError: string | null
   loadDir: (
@@ -24,6 +28,122 @@ type UseFileExplorerTreeResult = {
   refreshTree: () => Promise<void>
   refreshDir: (dirPath: string) => Promise<void>
   resetAndLoad: () => void
+}
+
+type RefreshFileExplorerTreeDir = {
+  dirPath: string
+  depth: number
+}
+
+type RefreshFileExplorerExpandedDirsParams = {
+  dirs: RefreshFileExplorerTreeDir[]
+  worktreePath: string
+  dirLoadTracker: FileExplorerDirLoadTracker
+  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  readDirectory: (dirPath: string) => Promise<DirEntry[]>
+}
+
+function entriesToTreeNodes(
+  entries: DirEntry[],
+  dirPath: string,
+  depth: number,
+  worktreePath: string | null
+): TreeNode[] {
+  return entries.filter(shouldIncludeFileExplorerEntry).map((entry) => {
+    const path = joinPath(dirPath, entry.name)
+    return {
+      name: entry.name,
+      path,
+      relativePath: worktreePath
+        ? normalizeRelativePath(path.slice(worktreePath.length + 1))
+        : entry.name,
+      isDirectory: entry.isDirectory,
+      isSymlink: entry.isSymlink,
+      depth: depth + 1
+    }
+  })
+}
+
+export async function refreshFileExplorerExpandedDirs({
+  dirs,
+  worktreePath,
+  dirLoadTracker,
+  setDirCache,
+  readDirectory
+}: RefreshFileExplorerExpandedDirsParams): Promise<boolean> {
+  if (dirs.length === 0) {
+    return true
+  }
+
+  const uniqueDirs = Array.from(new Map(dirs.map((dir) => [dir.dirPath, dir])).values())
+  const loadTokens = new Map(
+    uniqueDirs.map((dir) => [dir.dirPath, dirLoadTracker.begin(dir.dirPath)])
+  )
+
+  // Why: expanded refresh can touch many directories; commit the loading and
+  // result states in two batched setDirCache writes (rather than per-directory)
+  // so refreshing large worktrees stays O(N) instead of O(N²) cache spreads.
+  setDirCache((prev) => {
+    const next = { ...prev }
+    for (const { dirPath } of uniqueDirs) {
+      next[dirPath] = {
+        children: prev[dirPath]?.children ?? [],
+        loading: true
+      }
+    }
+    return next
+  })
+
+  const results = await Promise.all(
+    uniqueDirs.map(async ({ dirPath, depth }) => {
+      const loadToken = loadTokens.get(dirPath)!
+      try {
+        const entries = await readDirectory(dirPath)
+        if (!dirLoadTracker.isCurrent(loadToken)) {
+          return { current: false as const }
+        }
+        return {
+          current: true as const,
+          dirPath,
+          cache: {
+            children: entriesToTreeNodes(entries, dirPath, depth, worktreePath),
+            loading: false
+          }
+        }
+      } catch {
+        if (!dirLoadTracker.isCurrent(loadToken)) {
+          return { current: false as const }
+        }
+        return {
+          current: true as const,
+          dirPath,
+          cache: { children: [], loading: false }
+        }
+      }
+    })
+  )
+
+  // Why: the batch commits only after the slowest read, so a dir can be
+  // superseded (watcher refreshDir, worktree reset) after its own read
+  // resolved. Re-check tokens at commit time so the batched write never
+  // clobbers a newer load — preserving the old per-dir commit ordering.
+  const currentResults = results.filter(
+    (result): result is Extract<typeof result, { current: true }> =>
+      result.current && dirLoadTracker.isCurrent(loadTokens.get(result.dirPath)!)
+  )
+  if (currentResults.length === 0) {
+    return false
+  }
+
+  setDirCache((prev) => {
+    const next = { ...prev }
+    for (const result of currentResults) {
+      next[result.dirPath] = result.cache
+    }
+    return next
+  })
+
+  return currentResults.length === uniqueDirs.length
 }
 
 export function useFileExplorerTree(
@@ -76,18 +196,7 @@ export function useFileExplorerTree(
         if (depth === -1) {
           setRootError(null)
         }
-        const children: TreeNode[] = entries
-          .filter(shouldIncludeFileExplorerEntry)
-          .map((entry) => ({
-            name: entry.name,
-            path: joinPath(dirPath, entry.name),
-            relativePath: worktreePath
-              ? normalizeRelativePath(joinPath(dirPath, entry.name).slice(worktreePath.length + 1))
-              : entry.name,
-            isDirectory: entry.isDirectory,
-            isSymlink: entry.isSymlink,
-            depth: depth + 1
-          }))
+        const children = entriesToTreeNodes(entries, dirPath, depth, worktreePath)
         setDirCache((prev) => ({ ...prev, [dirPath]: { children, loading: false } }))
         return true
       } catch (error) {
@@ -156,13 +265,33 @@ export function useFileExplorerTree(
     if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
       return
     }
-    await Promise.all(
-      Array.from(expanded).map(async (dirPath) => {
-        const depth = splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-        await loadDir(dirPath, depth, { force: true })
-      })
-    )
-  }, [expanded, loadDir, worktreePath])
+    // Why: root (worktreePath) was just force-loaded above; exclude it here so
+    // refreshFileExplorerExpandedDirs doesn't queue a duplicate read of root.
+    const expandedDirs = Array.from(expanded)
+      .filter((dirPath) => dirPath !== worktreePath)
+      .map((dirPath) => ({
+        dirPath,
+        depth: splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
+      }))
+    await refreshFileExplorerExpandedDirs({
+      dirs: expandedDirs,
+      worktreePath,
+      dirLoadTracker: dirLoadTrackerRef.current,
+      setDirCache,
+      readDirectory: async (dirPath) => {
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        return readRuntimeDirectory(
+          {
+            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          dirPath
+        )
+      }
+    })
+  }, [activeWorktreeId, expanded, loadDir, worktreePath])
 
   const refreshDir = useCallback(
     async (dirPath: string) => {

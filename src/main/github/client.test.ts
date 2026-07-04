@@ -33,7 +33,9 @@ const {
   getRemoteUrlForRepoMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getRateLimitMock: vi.fn(),
-  rateLimitGuardMock: vi.fn<() => RateLimitGuardResult>(() => ({ blocked: false })),
+  rateLimitGuardMock: vi.fn<(bucket?: string) => RateLimitGuardResult>(() => ({
+    blocked: false
+  })),
   noteRateLimitSpendMock: vi.fn(),
   ghRepoExecOptionsMock: vi.fn((context) =>
     context.connectionId
@@ -121,6 +123,7 @@ import {
   __resetTrackedUpstreamBranchCacheForTests
 } from './client'
 import { __resetPRConflictSummaryGitCapabilityCacheForTests } from './conflict-summary'
+import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 
 describe('checkOrcaStarred', () => {
   beforeEach(() => {
@@ -192,6 +195,7 @@ describe('getPRForBranch', () => {
     _resetMergeQueueCacheForTests()
     __resetTrackedUpstreamBranchCacheForTests()
     __resetPRConflictSummaryGitCapabilityCacheForTests()
+    resetMergedPRCommitMembershipCacheForTest()
   })
 
   it('queries GitHub by head branch when the remote is on github.com', async () => {
@@ -743,6 +747,185 @@ describe('getPRForBranch', () => {
       title: 'Merged current branch PR',
       state: 'merged',
       headSha: 'current-head-oid'
+    })
+  })
+
+  const mockMergedBranchPRLookupBehindHead = (prNumber = 6011): void => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: prNumber,
+            title: 'Merged PR with unpulled final head',
+            state: 'closed',
+            merged_at: '2026-07-03T21:27:36Z',
+            html_url: `https://github.com/acme/widgets/pull/${prNumber}`,
+            updated_at: '2026-07-03T21:27:36Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'fix-hibernation-wake', sha: 'aaaa1111aaaa1111' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: prNumber,
+          title: 'Merged PR with unpulled final head',
+          state: 'MERGED',
+          url: `https://github.com/acme/widgets/pull/${prNumber}`,
+          statusCheckRollup: [],
+          updatedAt: '2026-07-03T21:27:36Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fix-hibernation-wake',
+          baseRefOid: 'base-oid',
+          headRefOid: 'aaaa1111aaaa1111'
+        })
+      })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'bbbb2222bbbb2222\n',
+      stderr: ''
+    })
+  }
+
+  it('shows a merged branch PR when the worktree head is one of its own commits', async () => {
+    mockMergedBranchPRLookupBehindHead()
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([{ number: 6011 }, { number: 42 }])
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      ['api', 'repos/acme/widgets/commits/bbbb2222bbbb2222/pulls?per_page=100'],
+      expect.anything()
+    )
+    expect(pr).toMatchObject({
+      number: 6011,
+      state: 'merged',
+      headSha: 'aaaa1111aaaa1111',
+      confirmedContainedHeadOid: 'bbbb2222bbbb2222'
+    })
+  })
+
+  it('keeps hiding a merged branch PR when the head belongs to a different PR (reused branch)', async () => {
+    mockMergedBranchPRLookupBehindHead()
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([{ number: 42 }])
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
+
+    expect(pr).toBeNull()
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+
+    // A definitive "not part of this PR" answer is immutable for a merged PR:
+    // repeated polls must not re-probe GitHub.
+    mockMergedBranchPRLookupBehindHead()
+    const second = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
+
+    expect(second).toBeNull()
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('keeps hiding a merged branch PR when the commit membership probe fails', async () => {
+    mockMergedBranchPRLookupBehindHead()
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 422: No commit found'))
+
+    const pr = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
+
+    expect(pr).toBeNull()
+  })
+
+  it('skips the membership probe while the core rate-limit budget is blocked', async () => {
+    mockMergedBranchPRLookupBehindHead()
+    rateLimitGuardMock.mockImplementation((bucket?: string) =>
+      bucket === 'core'
+        ? { blocked: true, remaining: 0, limit: 5000, resetAt: 0 }
+        : { blocked: false }
+    )
+
+    const pr = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
+
+    expect(pr).toBeNull()
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reuses the cached membership answer instead of re-querying per poll', async () => {
+    mockMergedBranchPRLookupBehindHead()
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([{ number: 6011 }])
+    })
+    const first = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
+    expect(first).toMatchObject({ number: 6011, confirmedContainedHeadOid: 'bbbb2222bbbb2222' })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+
+    mockMergedBranchPRLookupBehindHead()
+    const second = await getPRForBranch('/repo-root', 'fix-hibernation-wake')
+
+    expect(second).toMatchObject({ number: 6011, confirmedContainedHeadOid: 'bbbb2222bbbb2222' })
+    // No fourth membership call: the confirmed answer is immutable and cached.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('uses the caller-supplied worktree head for the membership probe without shelling out', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 6012,
+            title: 'Merged PR queried by checks panel',
+            state: 'closed',
+            merged_at: '2026-07-03T21:27:36Z',
+            html_url: 'https://github.com/acme/widgets/pull/6012',
+            updated_at: '2026-07-03T21:27:36Z',
+            draft: false,
+            mergeable_state: 'clean',
+            head: { ref: 'fix-hibernation-wake', sha: 'aaaa1111aaaa1111' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 6012,
+          title: 'Merged PR queried by checks panel',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/6012',
+          statusCheckRollup: [],
+          updatedAt: '2026-07-03T21:27:36Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fix-hibernation-wake',
+          baseRefOid: 'base-oid',
+          headRefOid: 'aaaa1111aaaa1111'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([{ number: 6012 }])
+      })
+
+    const outcome = await getPRForBranchOutcome(
+      '/repo-root',
+      'fix-hibernation-wake',
+      null,
+      null,
+      null,
+      {
+        currentHeadOid: 'cccc3333cccc3333'
+      }
+    )
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(outcome).toMatchObject({
+      kind: 'found',
+      pr: { number: 6012, confirmedContainedHeadOid: 'cccc3333cccc3333' }
     })
   })
 

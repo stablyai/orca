@@ -47,6 +47,9 @@ import {
 const LOGIN_TIMEOUT_MS = 180_000
 const STATUS_TIMEOUT_MS = 20_000
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
+// Claude leaves the login process running after an OAuth denial; fail fast so Settings can clear loading state.
+const CLAUDE_AUTH_DENIED_PATTERN =
+  /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 
 type ClaudeIdentity = {
   email: string | null
@@ -924,6 +927,12 @@ export class ClaudeAccountService {
         output = `${output}${chunk.toString()}`
         if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
           output = output.slice(-MAX_COMMAND_OUTPUT_CHARS)
+        }
+        if (CLAUDE_AUTH_DENIED_PATTERN.test(output)) {
+          // Use killChild (not child.kill) so the whole login/browser tree is torn down on
+          // Windows (taskkill /t) and the detached POSIX group, matching the timeout/abort paths.
+          killChild()
+          settle(() => rejectPromise(new Error('Claude sign-in was denied. Please try again.')))
         }
       }
       let timeout: ReturnType<typeof setTimeout> | null = null

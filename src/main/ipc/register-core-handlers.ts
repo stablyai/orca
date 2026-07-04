@@ -166,7 +166,7 @@ export function registerCoreHandlers(
   }
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
-  registerRuntimeEnvironmentHandlers()
+  registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store)
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths

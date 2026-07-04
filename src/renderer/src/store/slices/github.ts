@@ -1038,8 +1038,14 @@ function buildPRRefreshCandidate(
     true
   )
   const cachedFallbackPRNumber = cachedPR?.number ?? null
+  // Why: a merged PR stays a valid fallback when the worktree sits on its head
+  // or on a commit main confirmed as part of the PR; anything else means the
+  // branch moved on and the number must not resurrect the old merged PR.
   const cachedMergedPRMovedPastHead =
-    worktree.linkedPR == null && cachedPR?.state === 'merged' && cachedPR.headSha !== worktree.head
+    worktree.linkedPR == null &&
+    cachedPR?.state === 'merged' &&
+    cachedPR.headSha !== worktree.head &&
+    cachedPR.confirmedContainedHeadOid !== worktree.head
   const fallbackPRNumber =
     worktree.linkedPR == null && !cachedMergedPRMovedPastHead
       ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber)
@@ -1060,6 +1066,7 @@ function buildPRRefreshCandidate(
     branch,
     cacheKey,
     worktreeId: worktree.id,
+    currentHeadOid: worktree.head ?? null,
     // Why: persisted linked PR metadata is exact, while PR cache numbers are
     // only fallback hints after branch lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
@@ -1264,7 +1271,8 @@ function shouldPreserveExistingPRForFallbackMiss(args: {
   const worktree = args.worktreeId ? findWorktreeById(args.state, args.worktreeId) : null
   const worktreeHead = worktree?.head
   // Why: merged branch PRs are only safe to keep when cached PR metadata still
-  // matches the commit this stored worktree is actually on.
+  // matches the commit this stored worktree is actually on — exactly, or via a
+  // head main confirmed to be part of the merged PR.
   const preservesMergedPRForCurrentHead =
     args.nextPR === null &&
     args.linkedPRNumber == null &&
@@ -1273,7 +1281,8 @@ function shouldPreserveExistingPRForFallbackMiss(args: {
     args.currentPR.headSha.length > 0 &&
     typeof worktreeHead === 'string' &&
     worktreeHead.length > 0 &&
-    args.currentPR.headSha === worktreeHead
+    (args.currentPR.headSha === worktreeHead ||
+      args.currentPR.confirmedContainedHeadOid === worktreeHead)
 
   // Why: fallback PR numbers come from already-visible cache, not durable
   // worktree metadata. A branch/fallback miss is weaker than the current exact
@@ -2941,6 +2950,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async () => {
       try {
         const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+        const candidateWorktree = options?.worktreeId
+          ? findWorktreeById(get(), options.worktreeId)
+          : null
         const outcome = runtimeRepo
           ? await callRuntimeRpc<PRInfo | null>(
               runtimeRepo.target,
@@ -2949,6 +2961,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 repo: runtimeRepo.repo.id,
                 branch,
                 linkedPRNumber,
+                currentHeadOid: candidateWorktree?.head ?? null,
                 ...(fallbackPRNumber !== null
                   ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                   : {})
@@ -2967,6 +2980,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 branch,
                 cacheKey,
                 worktreeId: options?.worktreeId,
+                currentHeadOid: candidateWorktree?.head ?? null,
                 linkedPRNumber,
                 fallbackPRNumber,
                 fallbackPRSource,
@@ -2988,7 +3002,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                       branch,
                       linkedPRNumber,
                       fallbackPRNumber,
-                      acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null
+                      acceptMergedFallbackPR:
+                        fallbackPRNumber !== null && fallbackPRSource !== null,
+                      currentHeadOid: candidateWorktree?.head ?? null
                     })
                     .then((pr) =>
                       pr

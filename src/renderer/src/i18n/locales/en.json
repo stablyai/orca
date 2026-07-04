@@ -2695,7 +2695,7 @@
             "39676a184c": "Open any file, URL, agent, ..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "Add Quick Command…",
+            "a2c7a33831": "Command",
             "20bbd75896": "No commands",
             "b82e237a4b": "More quick commands",
             "85482c57bc": "Run quick command",
@@ -2845,10 +2845,7 @@
             "41ae4fa725": "Killing…",
             "138b99bd80": "this session",
             "888dad8c55": "Loading…",
-            "56b6888304": "Local resource usage hidden for runtime servers.",
-            "14ff448686": "Unavailable for runtime servers",
             "6d9793d4bc": "Resource Manager - Terminals",
-            "6a822b06a7": "Resource Manager",
             "ca95d077db": "Daemon unreachable",
             "a82253b458": "Delete workspace.",
             "946724a70a": "The main workspace cannot be deleted.",

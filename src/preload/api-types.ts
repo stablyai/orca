@@ -1258,6 +1258,7 @@ export type PreloadApi = {
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
       acceptMergedFallbackPR?: boolean
+      currentHeadOid?: string | null
     }) => Promise<PRInfo | null>
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) => Promise<PRRefreshOutcome>
     enqueuePRRefresh: (args: {

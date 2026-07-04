@@ -107,7 +107,8 @@ function makeWorktreeInfo(
 }
 
 const HOST_SESSION_FILE = '/Users/ada/.claude/projects/-repo-orca/session-1.jsonl'
-const WSL_SESSION_FILE = '\\\\wsl$\\Ubuntu\\home\\ada\\.claude\\projects\\-repo-orca\\session-1.jsonl'
+const WSL_SESSION_FILE =
+  '\\\\wsl$\\Ubuntu\\home\\ada\\.claude\\projects\\-repo-orca\\session-1.jsonl'
 
 describe('resolveAiVaultSessionResumeState', () => {
   it('prefers the session worktree over the active workspace', () => {

@@ -547,6 +547,39 @@ describe('hosted review slice', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
   })
 
+  it('serves a cached merged review whose confirmed contained head matches the worktree', async () => {
+    const mergedBehindHead: HostedReviewInfo = {
+      provider: 'github',
+      number: 7,
+      title: 'Merged with unpulled final head',
+      state: 'merged',
+      url: 'https://github.com/acme/orca/pull/7',
+      status: 'success',
+      updatedAt: '2026-05-10T00:00:00.000Z',
+      mergeable: 'MERGEABLE',
+      headSha: 'aaaaaaa',
+      confirmedContainedHeadOid: 'bbbbbbb'
+    }
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(mergedBehindHead)
+    const store = makeStore()
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
+        currentHeadOid: 'bbbbbbb'
+      })
+    ).resolves.toEqual(mergedBehindHead)
+
+    // Why one call: a merged review confirmed for this worktree head is not
+    // stale, so the second read must reuse the branch-scoped cache instead of
+    // refetching every poll.
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
+        currentHeadOid: 'bbbbbbb'
+      })
+    ).resolves.toEqual(mergedBehindHead)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
+  })
+
   it('does not preserve a merged GitHub review after the worktree moves off its head', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const cacheKey = getHostedReviewCacheKey(

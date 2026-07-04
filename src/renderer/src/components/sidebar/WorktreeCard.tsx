@@ -36,8 +36,7 @@ import type {
   Worktree,
   Repo,
   IssueInfo,
-  LinearIssue,
-  PRInfo
+  LinearIssue
 } from '../../../../shared/types'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import {
@@ -48,7 +47,10 @@ import {
 } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
-import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
+import {
+  getWorktreeCardPrDisplay,
+  isCachedMergedBranchPRCurrentForWorktree
+} from './worktree-card-pr-display'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import {
   coerceWorktreeCardVisibleTitle,
@@ -151,20 +153,6 @@ function formatSparseDirectoryPreview(directories: string[]): string {
 
 function isWebClient(): boolean {
   return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
-}
-
-function isCachedMergedBranchPRCurrentForWorktree(
-  cachedPR: PRInfo | null | undefined,
-  worktree: Worktree
-): boolean {
-  return (
-    cachedPR?.state === 'merged' &&
-    typeof cachedPR.headSha === 'string' &&
-    cachedPR.headSha.length > 0 &&
-    typeof worktree.head === 'string' &&
-    worktree.head.length > 0 &&
-    cachedPR.headSha === worktree.head
-  )
 }
 
 function getDirectoryName(folderPath: string): string {
@@ -1816,11 +1804,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
         automationHostId={worktree.hostId}
         branchName={hoverBranchName}
         workspaceTitle={hoverWorkspaceTitle}
+        workspaceTitleRenameDisabled={isDeleting || affiliateListMode}
         detailsAfter={
           workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
         }
         openDelay={100}
         hoverControl={detailsHoverControl}
+        onRenameWorkspaceTitle={affiliateListMode ? undefined : handleRenameTitle}
         onEditIssue={affiliateListMode ? undefined : handleEditIssue}
         onEditComment={affiliateListMode ? undefined : handleEditComment}
         onOpenGitHubIssueInOrca={

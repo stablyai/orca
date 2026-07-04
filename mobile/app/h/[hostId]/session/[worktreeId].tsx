@@ -4571,28 +4571,27 @@ export default function SessionScreen() {
                     </View>
                   </Pressable>
                 ))}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.newTerminalButton,
-                    pressed && styles.newTerminalButtonPressed,
-                    (creating ||
-                      creatingBrowser ||
-                      creatingMarkdown ||
-                      connState !== 'connected') &&
-                      styles.newTerminalButtonDisabled
-                  ]}
-                  disabled={
-                    creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
-                  }
-                  onPress={() => {
-                    setCreateError('')
-                    setShowCreateTabDrawer(true)
-                  }}
-                  accessibilityLabel="New tab"
-                >
-                  <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-                </Pressable>
               </ScrollView>
+              {/* Why: pinned outside the scroll strip so the new-agent button
+                  stays reachable no matter how far the tabs scroll. */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.newTerminalButton,
+                  pressed && styles.newTerminalButtonPressed,
+                  (creating || creatingBrowser || creatingMarkdown || connState !== 'connected') &&
+                    styles.newTerminalButtonDisabled
+                ]}
+                disabled={
+                  creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                }
+                onPress={() => {
+                  setCreateError('')
+                  setShowCreateTabDrawer(true)
+                }}
+                accessibilityLabel="New tab"
+              >
+                <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
+              </Pressable>
             </View>
           )}
         </SafeAreaView>

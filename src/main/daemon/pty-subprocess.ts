@@ -16,6 +16,7 @@ import {
   getNodePtySpawnHelperCandidates,
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
+import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
@@ -478,8 +479,9 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   spawnCwd: string
   startupCommandDeliveredInShellArgs?: boolean
 } {
-  const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty =>
-    pty.spawn(shellPath, shellArgs, {
+  const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
+    const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+    return pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,
       rows: args.rows,
@@ -489,6 +491,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       // legacy system ConPTY can corrupt full-width TUI rows in scrollback.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+  }
 
   try {
     return {

@@ -95,7 +95,7 @@ export default function SortableTab({
   // Older persisted tabs without this field fall back to the generic icon.
   const shellForIcon = tab.shellOverride
 
-  // Why: foreground process and hook status make the tab icon reflect the
+  // Why: hook status and title evidence make the tab icon reflect the
   // coding harness currently running in the pane, not just the launch command.
   const tabAgent = useTabAgent(tab)
 

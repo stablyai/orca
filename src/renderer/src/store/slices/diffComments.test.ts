@@ -131,6 +131,7 @@ import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createAgentStatusSlice } from './agent-status'
+import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
@@ -167,6 +168,7 @@ function createTestStore() {
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
     ...createAgentStatusSlice(...a),
+    ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),

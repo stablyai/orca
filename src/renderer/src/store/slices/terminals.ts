@@ -1184,6 +1184,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
     get().dropAgentStatusByTabPrefix(tabId)
+    // Why: retired pane keys never recur, so stranded foreground entries would
+    // accumulate for the renderer's whole lifetime.
+    get().clearPaneForegroundAgentByTabPrefix(tabId)
     // Why: closing a tab permanently retires every pane under it (a reopen mints
     // a fresh leafId at epoch 0), so drop the panes' hibernation output epochs to
     // keep that module-level map from growing for the renderer's whole lifetime.
@@ -2374,6 +2377,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       sleepingPaneKeys: opts?.sleepingPaneKeys,
       retainedCompletionEvidence
     })
+    get().clearPaneForegroundAgentByWorktree(worktreeId)
 
     if (ptyIds.length === 0 && expectedRuntimePtyIds.length === 0) {
       return

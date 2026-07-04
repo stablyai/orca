@@ -156,6 +156,8 @@ type StoreState = {
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
+  setPaneForegroundAgent: ReturnType<typeof vi.fn>
+  clearPaneForegroundAgent: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
   markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>
@@ -743,6 +745,8 @@ describe('connectPanePty', () => {
       ),
       removeAgentStatus: vi.fn(),
       dropAgentStatus: vi.fn(),
+      setPaneForegroundAgent: vi.fn(),
+      clearPaneForegroundAgent: vi.fn(),
       markTerminalTabUnread: vi.fn(),
       markTerminalPaneUnread: vi.fn(),
       markAgentCompletionPaneUnread: vi.fn()
@@ -1701,6 +1705,67 @@ describe('connectPanePty', () => {
     binding.noteVisibilityResume()
     await flushAsyncTicks()
     expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
+  })
+
+  it('records hibernation activity from the core user-input signal, not synthetic onData replies', async () => {
+    // Regression: xterm auto-replies (focus in/out reports, DA/DSR responses)
+    // arrive through the same onData stream as typing. Recording them as pane
+    // input made the hibernation planner treat a pane hidden after its agent
+    // finished as "input after done" and never hibernate it.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps()
+    const pane = createPane(2)
+    let userInputListener: (() => void) | null = null
+    const userInputDispose = vi.fn()
+    ;(pane.terminal as unknown as { _core: unknown })._core = {
+      coreService: {
+        onUserInput: vi.fn((listener: () => void) => {
+          userInputListener = listener
+          return { dispose: userInputDispose }
+        })
+      }
+    }
+
+    const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
+      dispose: () => void
+    }
+    await flushAsyncTicks()
+    expect(userInputListener).toBeTypeOf('function')
+    ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
+
+    // A focus-out report forwarded to the PTY must not count as activity.
+    sendTerminalInputThroughPane(pane, '\x1b[O')
+    expect(mockStoreState.recordTerminalInput).not.toHaveBeenCalled()
+    // The reply still reaches the shell; only the activity recording is gated.
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O')
+
+    // Real user input fires the core signal and records activity.
+    ;(userInputListener as unknown as () => void)()
+    expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
+
+    binding.dispose()
+    expect(userInputDispose).toHaveBeenCalled()
+  })
+
+  it('falls back to onData hibernation recording when the core user-input signal is unavailable', async () => {
+    // If an xterm upgrade removes the internal signal, activity recording must
+    // degrade to the historical onData behavior — never to no tracking at all.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps()
+    const pane = createPane(2)
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
+
+    sendTerminalInputThroughPane(pane, 'x')
+    expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {

@@ -47,6 +47,7 @@ import {
 import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
+import { resolveWindowCloseAction } from './window-close-decision'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -169,6 +170,11 @@ type CreateMainWindowOptions = {
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
+  /** Why: the in-place renderer-recovery reload re-fires did-finish-load, whose
+   *  local-PTY orphan sweep would kill live sessions across the single window
+   *  before session restore re-attaches them (#5787). This callback lets the host
+   *  mark that one reload so the sweep can be skipped for it. */
+  onBeforeRecoveryReload?: (webContentsId: number) => void
 }
 
 export function loadMainWindow(mainWindow: BrowserWindow): void {
@@ -711,6 +717,9 @@ export function createMainWindow(
       // Why: a transient Network Service / renderer loss can leave Chromium
       // showing a blank shell. Reload the app document once so the user gets
       // back to a usable window instead of needing a full relaunch.
+      // Why: mark this one in-place reload so the did-finish-load orphan sweep
+      // spares live local PTYs until session restore re-attaches them (#5787).
+      opts?.onBeforeRecoveryReload?.(mainWindow.webContents.id)
       loadMainWindow(mainWindow)
     }, 250)
   }
@@ -1084,24 +1093,28 @@ export function createMainWindow(
       return
     }
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
-    if (windowCloseConfirmed) {
-      windowCloseConfirmed = false
+    // Why: a hung-but-ALIVE renderer (neither gone nor crashed) must still hit
+    // the renderer's save/running-process confirmation; only a genuinely gone or
+    // crashed renderer — which cannot answer window:close-requested — may bypass
+    // it. Routing this through the pure decision locks that invariant (#5787).
+    const closeAction = resolveWindowCloseAction({
+      windowCloseConfirmed,
+      rendererProcessGone,
+      isRendererCrashed
+    })
+    if (closeAction !== 'request-confirmation') {
+      // allow-confirmed: the renderer already replied and re-entered close().
+      // bypass-gone: after a native renderer crash the renderer cannot answer
+      // window:close-requested, so let Cmd+Q / OS close complete instead of
+      // trapping the user in a blank, unquittable window.
+      if (closeAction === 'allow-confirmed') {
+        windowCloseConfirmed = false
+      }
       // Why: past this point Electron/OS may emit resize/move/unmaximize as
       // the window is destroyed. Freeze bounds persistence so those
       // teardown events can't clobber the user's saved window size — which
       // would otherwise make the post-update relaunch come up at minWidth ×
       // minHeight (issue surfaced in v1.3.26-rc2).
-      windowClosing = true
-      if (boundsTimer) {
-        clearTimeout(boundsTimer)
-        boundsTimer = null
-      }
-      return
-    }
-    if (rendererProcessGone || isRendererCrashed) {
-      // Why: after a native renderer crash the renderer cannot answer
-      // window:close-requested. Let Cmd+Q / OS close complete instead of
-      // trapping the user in a blank, unquittable window.
       windowClosing = true
       if (boundsTimer) {
         clearTimeout(boundsTimer)

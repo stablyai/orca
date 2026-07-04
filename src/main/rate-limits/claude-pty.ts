@@ -8,6 +8,7 @@ import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-au
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
+import { extractClaudePtyResetMetadata } from './claude-pty-reset-parser'
 
 const PTY_TIMEOUT_MS = 25_000
 const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
@@ -26,7 +27,6 @@ const FABLE_LABEL_RE = /^\s*fable\s*$/i
 const FABLE_WEEKLY_LABEL_RE =
   /(?:current\s*week|weekly\s*(?:limits?|usage|rate\s*limits?)|7\s*[- ]?\s*day)\s*(?:\([^)]*\bfable\b[^)]*\)|[-:]?\s*\bfable\b)/i
 const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|consumed|left|remaining|available)/i
-const RESET_LINE_RE = /resets?\s+(?:at\s+|in\s+)?(.+)/i
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
 const OSC_SEQUENCE_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, 'g')
@@ -83,27 +83,6 @@ function extractPercentAfterLabel(
   return null
 }
 
-function extractResetAfterLabel(
-  lines: string[],
-  matchesLabel: (line: string) => boolean
-): string | null {
-  for (let i = 0; i < lines.length; i++) {
-    if (!matchesLabel(lines[i])) {
-      continue
-    }
-    for (let j = i; j < Math.min(i + 14, lines.length); j++) {
-      if (j > i && isSectionLabel(lines[j])) {
-        break
-      }
-      const m = RESET_LINE_RE.exec(lines[j])
-      if (m) {
-        return m[1].trim().replace(/[)]+$/, '')
-      }
-    }
-  }
-  return null
-}
-
 function parsePtyUsage(output: string): {
   session: RateLimitWindow | null
   weekly: RateLimitWindow | null
@@ -114,14 +93,25 @@ function parsePtyUsage(output: string): {
   const sessionPct = extractPercentAfterLabel(lines, (line) => SESSION_RE.test(line))
   const weeklyPct = extractPercentAfterLabel(lines, matchesWeeklyLabel)
   const fableWeeklyPct = extractPercentAfterLabel(lines, matchesFableUsageLabel)
+  const sessionReset = extractClaudePtyResetMetadata(
+    lines,
+    (line) => SESSION_RE.test(line),
+    isSectionLabel
+  )
+  const weeklyReset = extractClaudePtyResetMetadata(lines, matchesWeeklyLabel, isSectionLabel)
+  const fableWeeklyReset = extractClaudePtyResetMetadata(
+    lines,
+    matchesFableUsageLabel,
+    isSectionLabel
+  )
 
   const session: RateLimitWindow | null =
     sessionPct !== null
       ? {
           usedPercent: Math.min(100, Math.max(0, sessionPct)),
           windowMinutes: 300,
-          resetsAt: null,
-          resetDescription: extractResetAfterLabel(lines, (line) => SESSION_RE.test(line))
+          resetsAt: sessionReset.resetsAt,
+          resetDescription: sessionReset.resetDescription
         }
       : null
 
@@ -130,8 +120,8 @@ function parsePtyUsage(output: string): {
       ? {
           usedPercent: Math.min(100, Math.max(0, weeklyPct)),
           windowMinutes: 10080,
-          resetsAt: null,
-          resetDescription: extractResetAfterLabel(lines, matchesWeeklyLabel)
+          resetsAt: weeklyReset.resetsAt,
+          resetDescription: weeklyReset.resetDescription
         }
       : null
 
@@ -140,8 +130,8 @@ function parsePtyUsage(output: string): {
       ? {
           usedPercent: Math.min(100, Math.max(0, fableWeeklyPct)),
           windowMinutes: 10080,
-          resetsAt: null,
-          resetDescription: extractResetAfterLabel(lines, matchesFableUsageLabel)
+          resetsAt: fableWeeklyReset.resetsAt,
+          resetDescription: fableWeeklyReset.resetDescription
         }
       : null
 

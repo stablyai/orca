@@ -31,10 +31,12 @@ type WorktreeTitleInlineRenameProps = {
   disabled?: boolean
   showUnreadEmphasis?: boolean
   dimReadTitle?: boolean
+  editingPresentation?: 'text' | 'field'
   className?: string
   editingClassName?: string
   inputClassName?: string
   titleWrapper?: (title: React.ReactElement) => React.ReactElement
+  wrapTitle?: boolean
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
   // Why: lets a parent (e.g. the workspace.rename shortcut via WorktreeCard)
@@ -49,10 +51,12 @@ export function WorktreeTitleInlineRename({
   disabled = false,
   showUnreadEmphasis = false,
   dimReadTitle = false,
+  editingPresentation = 'text',
   className,
   editingClassName,
   inputClassName,
   titleWrapper,
+  wrapTitle = false,
   onEditingChange,
   onRename,
   beginEditing = false,
@@ -109,6 +113,14 @@ export function WorktreeTitleInlineRename({
   )
 
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
+  // Why: the sidebar row needs a text-only editor to avoid layout jumps; the
+  // hovercard can use a compact field that reads more like native rename UI.
+  const editingInputClassName =
+    editingPresentation === 'field'
+      ? 'h-6 rounded-sm border border-input bg-input/40 px-1.5 py-0 shadow-xs selection:bg-[Highlight] selection:text-[HighlightText] focus-visible:border-ring focus-visible:ring-[1px] focus-visible:ring-ring/50 dark:bg-input/30'
+      : 'h-[1lh] rounded-none border-0 !border-transparent !bg-transparent p-0 !shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:outline-none dark:!bg-transparent'
+  const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
+  const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
@@ -252,6 +264,7 @@ export function WorktreeTitleInlineRename({
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
+          spellCheck={false}
           aria-label={translate(
             'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
             'Rename workspace'
@@ -264,14 +277,19 @@ export function WorktreeTitleInlineRename({
           onPointerDown={stopCardEvent}
           onKeyDown={handleKeyDown}
           className={cn(
-            'col-start-1 row-start-1 h-[1lh] min-w-0 select-text truncate rounded-none border-0 !border-transparent !bg-transparent p-0 text-foreground !shadow-none outline-none dark:!bg-transparent',
-            'focus-visible:border-transparent focus-visible:ring-0 focus-visible:outline-none',
-            saving && 'pr-4',
+            'col-start-1 row-start-1 min-w-0 select-text truncate text-foreground outline-none',
+            editingInputClassName,
+            saving && savingInputClassName,
             inputClassName
           )}
         />
         {saving ? (
-          <LoaderCircle className="pointer-events-none absolute right-0 top-1/2 size-3 -translate-y-1/2 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            className={cn(
+              'pointer-events-none absolute top-1/2 size-3 -translate-y-1/2 animate-spin text-muted-foreground',
+              savingSpinnerClassName
+            )}
+          />
         ) : null}
       </span>
     )
@@ -288,7 +306,8 @@ export function WorktreeTitleInlineRename({
       key={`title:${titleElementKey}`}
       ref={handleRootRef}
       className={cn(
-        'block min-w-0 truncate leading-tight focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        'block min-w-0 leading-tight focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        wrapTitle ? 'break-words whitespace-normal' : 'truncate',
         titleEmphasisClassName,
         className
       )}
@@ -310,7 +329,7 @@ export function WorktreeTitleInlineRename({
     return titleWrapper(title)
   }
 
-  if (!titleTruncated) {
+  if (wrapTitle || !titleTruncated) {
     return title
   }
 

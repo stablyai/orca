@@ -2695,7 +2695,7 @@
             "39676a184c": "Abra cualquier archivo, URL, agente, ..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "Agregar comando rápido…",
+            "a2c7a33831": "Comando",
             "20bbd75896": "Sin comandos",
             "b82e237a4b": "Comandos más rápidos",
             "85482c57bc": "Ejecutar comando rápido",
@@ -2845,10 +2845,7 @@
             "41ae4fa725": "Asesinato…",
             "138b99bd80": "esta sesión",
             "888dad8c55": "Cargando…",
-            "56b6888304": "Uso de recursos locales oculto para servidores de ejecución.",
-            "14ff448686": "No disponible para servidores de ejecución",
             "6d9793d4bc": "Administrador de recursos - Terminales",
-            "6a822b06a7": "Administrador de recursos",
             "ca95d077db": "demonio inalcanzable",
             "a82253b458": "Eliminar espacio de trabajo.",
             "946724a70a": "El espacio de trabajo principal no se puede eliminar.",

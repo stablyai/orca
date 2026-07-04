@@ -39,17 +39,21 @@ function compareDesktopReleaseTags(a, b) {
   return a.rc - b.rc
 }
 
-export function latestPreviousDesktopReleaseTag(tags, tag) {
+export function latestPreviousPublishedDesktopReleaseTag(releases, tag) {
   const current = parseDesktopReleaseTag(tag)
   if (!current) {
     return ''
   }
-  const previousTags = tags
-    .map((candidate) => parseDesktopReleaseTag(candidate))
+  const previousReleases = releases
+    .filter((release) => release?.draft === false && typeof release.tag_name === 'string')
+    .map((release) => parseDesktopReleaseTag(release.tag_name))
     .filter((candidate) => candidate && candidate.tag !== current.tag)
     .filter((candidate) => compareDesktopReleaseTags(candidate, current) < 0)
+    // Why: public changelogs should be bounded by releases users could see;
+    // stable releases summarize since the prior stable, not the latest RC.
+    .filter((candidate) => current.rc !== null || candidate.rc === null)
     .sort(compareDesktopReleaseTags)
-  return previousTags.at(-1)?.tag ?? ''
+  return previousReleases.at(-1)?.tag ?? ''
 }
 
 function githubHeaders(token) {
@@ -75,27 +79,23 @@ async function githubJson(fetchImpl, url, token, options = {}) {
   return res.json()
 }
 
-async function fetchRepoTags(repo, token, fetchImpl) {
-  const tags = []
+async function fetchRepoReleases(repo, token, fetchImpl) {
+  const releases = []
   for (let page = 1; ; page += 1) {
-    const pageTags = await githubJson(
+    const pageReleases = await githubJson(
       fetchImpl,
-      `https://api.github.com/repos/${repo}/tags?per_page=100&page=${page}`,
+      `https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`,
       token
     )
-    if (!Array.isArray(pageTags)) {
-      throw new Error(`GitHub tags response page ${page} for ${repo} was not an array`)
+    if (!Array.isArray(pageReleases)) {
+      throw new Error(`GitHub releases response page ${page} for ${repo} was not an array`)
     }
-    for (const tag of pageTags) {
-      if (typeof tag?.name === 'string') {
-        tags.push(tag.name)
-      }
-    }
-    if (pageTags.length < 100) {
+    releases.push(...pageReleases)
+    if (pageReleases.length < 100) {
       break
     }
   }
-  return tags
+  return releases
 }
 
 export function truncateReleaseBody(body, maxLength = MAX_RELEASE_BODY_LENGTH) {
@@ -128,8 +128,8 @@ export async function createDraftRelease({
     throw new Error('token is required')
   }
 
-  const previousTag = latestPreviousDesktopReleaseTag(
-    await fetchRepoTags(repo, token, fetchImpl),
+  const previousTag = latestPreviousPublishedDesktopReleaseTag(
+    await fetchRepoReleases(repo, token, fetchImpl),
     tag
   )
   const generateNotesBody = {
@@ -138,9 +138,8 @@ export async function createDraftRelease({
     ...(previousTag ? { previous_tag_name: previousTag } : {})
   }
 
-  // Why: draft releases are invisible to GitHub's generate-notes baseline.
-  // Passing the previous desktop tag keeps each release from accumulating
-  // notes from older drafts.
+  // Why: GitHub's generate-notes baseline ignores draft releases, so pass the
+  // previous public changelog boundary explicitly.
   const releaseNotes = await githubJson(
     fetchImpl,
     `https://api.github.com/repos/${repo}/releases/generate-notes`,
