@@ -11,6 +11,32 @@
   background: var(--editor-surface);
 }
 
+/* Why: markdownPreviewLightBackground forces a light reading surface here
+   regardless of app theme. The rest of the file is entirely token-driven
+   (var(--editor-surface), var(--background), color-mix(...) with theme vars),
+   so remapping the tokens this subtree reads is enough to relight every
+   descendant without touching each rule. Values match main.css's light theme.
+   `color` is set explicitly (not just --foreground) because it's an inherited
+   property computed at `body` (text-foreground) using the app's dark-theme
+   value; without re-declaring it here, descendants inherit that stale computed
+   color instead of picking up the remapped variable. */
+.rich-markdown-editor-shell.markdown-light {
+  --editor-surface: #ffffff;
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #f5f5f5;
+  --border: #e5e5e5;
+  --ring: #a1a1a1;
+  --annotation-highlight: #f59e0b;
+  color: var(--foreground);
+}
+
 .rich-markdown-editor-layout {
   position: relative;
   display: flex;

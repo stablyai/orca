@@ -5152,6 +5152,8 @@
           "4aa4d9fb73": "가로 스크롤을 요구하는 대신 diff 편집기에서 긴 줄을 줄 바꿈합니다.",
           "bf16ef0af2": "끄다",
           "3f6892f307": "~에",
+          "7a2b9c4e1f": "Markdown Preview Light Background",
+          "3d8f1a6b2e": "Use a light reading background for markdown file previews (only affects the preview surface).",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
@@ -7407,6 +7409,8 @@
             "8e593f04fc": "고정된 탭을 닫기 전에 확인 대화상자를 표시합니다.",
             "defaultProjectRuntime": "기본 프로젝트 런타임",
             "defaultProjectRuntimeDescription": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다.",
+            "markdownPreviewLightBackground": "Markdown Preview Light Background",
+            "9f2e4c1a7b": "Use a light reading background for markdown file previews.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
@@ -8828,7 +8832,7 @@
             "b234ab25b4": "파일을 클립보드에 복사하지 못했습니다",
             "f9d7ca753d": "경로 복사",
             "3161c4e425": "폴더",
-            "e887fa4b2e": "터미널에서 열기"
+            "e887fa4b2e": "Open in Terminal"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git이 무시한 파일 표시",
@@ -11023,14 +11027,16 @@
           "c98ce191da": "이 차이점에는 열 수 있는 수정된 측면 파일이 없습니다.",
           "9b80bbe1de": "파일 탭 열기",
           "f0fd4174b5": "풍부한 markdown 편집을 사용하려면 파일 탭을 엽니다.",
-          "a10d9b8337": "파일 열기"
+          "a10d9b8337": "파일 열기",
+          "markdownPreviewLightBackground": "Markdown Preview Light Background"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDF로 내보내기",
           "561251019a": "추가 작업",
           "8c8b7f5ff5": "머리말 표시",
           "10c39d58c1": "머리말 숨기기",
-          "1eef809708": "단어 줄 바꿈"
+          "1eef809708": "단어 줄 바꿈",
+          "markdownPreviewLightBackground": "Light background"
         },
         "EditorPanelShell": {
           "e2c4dec350": "편집기 로드 중..."

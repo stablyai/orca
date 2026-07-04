@@ -5152,6 +5152,8 @@
           "4aa4d9fb73": "水平スクロールを必要とせずに、差分エディターで長い行を折り返します。",
           "bf16ef0af2": "オフ",
           "3f6892f307": "オン",
+          "7a2b9c4e1f": "Markdown Preview Light Background",
+          "3d8f1a6b2e": "Use a light reading background for markdown file previews (only affects the preview surface).",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
@@ -7444,6 +7446,8 @@
             "8e593f04fc": "ピン留めしたタブを閉じる前に確認ダイアログを表示します。",
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "markdownPreviewLightBackground": "Markdown Preview Light Background",
+            "9f2e4c1a7b": "Use a light reading background for markdown file previews.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
@@ -8828,7 +8832,7 @@
             "b234ab25b4": "ファイルをクリップボードにコピーできませんでした",
             "f9d7ca753d": "パスのコピー",
             "3161c4e425": "フォルダ",
-            "e887fa4b2e": "ターミナルで開く"
+            "e887fa4b2e": "Open in Terminal"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git で無視されたファイルを表示",
@@ -11023,14 +11027,16 @@
           "c98ce191da": "この差分には開くための変更側ファイルがありません",
           "9b80bbe1de": "ファイルタブを開く",
           "f0fd4174b5": "ファイル タブを開いてリッチ markdown 編集を使用する",
-          "a10d9b8337": "ファイルを開く"
+          "a10d9b8337": "ファイルを開く",
+          "markdownPreviewLightBackground": "Markdown Preview Light Background"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDFとしてエクスポート",
           "561251019a": "その他の操作",
           "8c8b7f5ff5": "前付を表示",
           "10c39d58c1": "前付を隠す",
-          "1eef809708": "ワードラップ"
+          "1eef809708": "ワードラップ",
+          "markdownPreviewLightBackground": "Light background"
         },
         "EditorPanelShell": {
           "e2c4dec350": "エディターを読み込み中..."

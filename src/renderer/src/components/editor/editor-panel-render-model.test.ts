@@ -120,3 +120,54 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
     ).toBe(false)
   })
 })
+
+describe('getEditorPanelRenderModel isMarkdownPreviewSurface', () => {
+  it('is false for a markdown file open in edit (source/rich) mode', () => {
+    expect(
+      renderModel({ activeFile: markdownFile({ mode: 'edit' }) }).isMarkdownPreviewSurface
+    ).toBe(false)
+  })
+
+  it('is true for a markdown file open in markdown-preview mode', () => {
+    const preview = markdownFile({
+      id: 'preview:/repo/README.md',
+      mode: 'markdown-preview',
+      markdownPreviewSourceFileId: '/repo/README.md'
+    } as Partial<OpenFile>)
+
+    expect(renderModel({ activeFile: preview }).isMarkdownPreviewSurface).toBe(true)
+  })
+})
+
+describe('getEditorPanelRenderModel isRichMarkdownSurface', () => {
+  it('is true when a markdown edit tab renders the rich editor', () => {
+    const model = renderModel({ markdownViewMode: { '/repo/README.md': 'rich' } })
+
+    expect(model.isRichMarkdownSurface).toBe(true)
+  })
+
+  it('is false when the markdown edit tab renders source (Monaco)', () => {
+    const model = renderModel({ markdownViewMode: { '/repo/README.md': 'source' } })
+
+    expect(model.isRichMarkdownSurface).toBe(false)
+  })
+
+  it('is false for a large file that falls back to source despite rich view mode', () => {
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'rich' },
+      editorDrafts: { '/repo/README.md': `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES)}é` }
+    })
+
+    expect(model.isRichMarkdownSurface).toBe(false)
+  })
+
+  it('is false for markdown-preview mode (that surface is isMarkdownPreviewSurface instead)', () => {
+    const preview = markdownFile({
+      id: 'preview:/repo/README.md',
+      mode: 'markdown-preview',
+      markdownPreviewSourceFileId: '/repo/README.md'
+    } as Partial<OpenFile>)
+
+    expect(renderModel({ activeFile: preview }).isRichMarkdownSurface).toBe(false)
+  })
+})

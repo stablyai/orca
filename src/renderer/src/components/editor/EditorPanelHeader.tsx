@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
+import { Columns2, Eye, FileText, ListTree, Rows2, Sun } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -27,6 +27,8 @@ type EditorPanelHeaderProps = {
   effectiveToggleValue: EditorToggleValue
   canOpenPreviewToSide: boolean
   canShowMarkdownPreview: boolean
+  isMarkdownPreviewSurface: boolean
+  isRichMarkdownSurface: boolean
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
   shouldShowMarkdownExportAction: boolean
@@ -61,6 +63,8 @@ export function EditorPanelHeader({
   effectiveToggleValue,
   canOpenPreviewToSide,
   canShowMarkdownPreview,
+  isMarkdownPreviewSurface,
+  isRichMarkdownSurface,
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
   shouldShowMarkdownExportAction,
@@ -85,6 +89,12 @@ export function EditorPanelHeader({
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const markdownPreviewLightBackground = useAppStore(
+    (s) => !!s.settings?.markdownPreviewLightBackground
+  )
+  const toggleMarkdownPreviewLightBackground = (): void => {
+    void updateSettings({ markdownPreviewLightBackground: !markdownPreviewLightBackground })
+  }
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
     [activeFile.relativePath, diffComments]
@@ -246,16 +256,50 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
+      {isMarkdown && !isDiffSurface && (isMarkdownPreviewSurface || isRichMarkdownSurface) && (
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={`p-1 rounded hover:bg-accent hover:text-foreground transition-colors flex-shrink-0 ${
+                  markdownPreviewLightBackground
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground'
+                }`}
+                onClick={toggleMarkdownPreviewLightBackground}
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.markdownPreviewLightBackground',
+                  'Markdown Preview Light Background'
+                )}
+                aria-pressed={markdownPreviewLightBackground}
+              >
+                <Sun size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate(
+                'auto.components.editor.EditorPanelHeader.markdownPreviewLightBackground',
+                'Markdown Preview Light Background'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       <EditorPanelMarkdownActionsMenu
         isMarkdown={isMarkdown}
         isDiffSurface={isDiffSurface}
+        isMarkdownPreviewSurface={isMarkdownPreviewSurface}
+        isRichMarkdownSurface={isRichMarkdownSurface}
         diffWordWrap={diffWordWrap}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
+        markdownPreviewLightBackground={markdownPreviewLightBackground}
         onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
+        onToggleMarkdownPreviewLightBackground={toggleMarkdownPreviewLightBackground}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />
     </div>

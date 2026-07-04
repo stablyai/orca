@@ -16,43 +16,18 @@ import {
   SettingsSwitchRow
 } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import {
+  createAutoSaveDelayDraftState,
+  resolveAutoSaveDelayDraftState,
+  updateAutoSaveDelayDraftState
+} from './auto-save-delay-draft-state'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 
-export type AutoSaveDelayDraftState = {
-  sourceDelayMs: number
-  draft: string
-}
-
-export function createAutoSaveDelayDraftState(
-  editorAutoSaveDelayMs: number
-): AutoSaveDelayDraftState {
-  return {
-    sourceDelayMs: editorAutoSaveDelayMs,
-    draft: String(editorAutoSaveDelayMs)
-  }
-}
-
-function resolveAutoSaveDelayDraftState(
-  state: AutoSaveDelayDraftState,
-  editorAutoSaveDelayMs: number
-): AutoSaveDelayDraftState {
-  return state.sourceDelayMs === editorAutoSaveDelayMs
-    ? state
-    : createAutoSaveDelayDraftState(editorAutoSaveDelayMs)
-}
-
-export function updateAutoSaveDelayDraftState(
-  state: AutoSaveDelayDraftState,
-  editorAutoSaveDelayMs: number,
-  draft: string
-): AutoSaveDelayDraftState {
-  return {
-    // Why: settings persistence is async, so a committed draft must stay tied
-    // to the current source until the persisted value reloads.
-    ...resolveAutoSaveDelayDraftState(state, editorAutoSaveDelayMs),
-    draft
-  }
-}
+export {
+  createAutoSaveDelayDraftState,
+  updateAutoSaveDelayDraftState,
+  type AutoSaveDelayDraftState
+} from './auto-save-delay-draft-state'
 
 type GeneralEditorSettingsSectionProps = {
   settings: GlobalSettings

@@ -5152,6 +5152,8 @@
           "4aa4d9fb73": "在差异编辑器中换行显示长行，而不是要求水平滚动。",
           "bf16ef0af2": "关闭",
           "3f6892f307": "开启",
+          "7a2b9c4e1f": "Markdown Preview Light Background",
+          "3d8f1a6b2e": "Use a light reading background for markdown file previews (only affects the preview surface).",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
@@ -7407,6 +7409,8 @@
             "8e593f04fc": "关闭固定标签页前显示确认对话框。",
             "defaultProjectRuntime": "默认项目运行时",
             "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。",
+            "markdownPreviewLightBackground": "Markdown Preview Light Background",
+            "9f2e4c1a7b": "Use a light reading background for markdown file previews.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
@@ -8828,7 +8832,7 @@
             "b234ab25b4": "无法将文件复制到剪贴板",
             "f9d7ca753d": "复制路径",
             "3161c4e425": "文件夹",
-            "e887fa4b2e": "在终端中打开"
+            "e887fa4b2e": "Open in Terminal"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",
@@ -11023,14 +11027,16 @@
           "c98ce191da": "此差异没有可打开的修改端文件",
           "9b80bbe1de": "打开文件选项卡",
           "f0fd4174b5": "打开文件选项卡以使用丰富的 Markdown 编辑",
-          "a10d9b8337": "打开文件"
+          "a10d9b8337": "打开文件",
+          "markdownPreviewLightBackground": "Markdown Preview Light Background"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "导出为 PDF",
           "561251019a": "更多操作",
           "8c8b7f5ff5": "显示前面的内容",
           "10c39d58c1": "隐藏前面的内容",
-          "1eef809708": "自动换行"
+          "1eef809708": "自动换行",
+          "markdownPreviewLightBackground": "Light background"
         },
         "EditorPanelShell": {
           "e2c4dec350": "正在加载编辑器..."

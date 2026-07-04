@@ -5167,6 +5167,8 @@
           "4aa4d9fb73": "Ajuste líneas largas en editores de diferencias en lugar de requerir desplazamiento horizontal.",
           "bf16ef0af2": "Apagado",
           "3f6892f307": "En",
+          "7a2b9c4e1f": "Markdown Preview Light Background",
+          "3d8f1a6b2e": "Use a light reading background for markdown file previews (only affects the preview surface).",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
@@ -7422,6 +7424,8 @@
             "8e593f04fc": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "markdownPreviewLightBackground": "Markdown Preview Light Background",
+            "9f2e4c1a7b": "Use a light reading background for markdown file previews.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
@@ -8828,7 +8832,7 @@
             "b234ab25b4": "No se pudo copiar el archivo al portapapeles",
             "f9d7ca753d": "Copiar rutas",
             "3161c4e425": "carpeta",
-            "e887fa4b2e": "Abrir en terminal"
+            "e887fa4b2e": "Open in Terminal"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados de Git",
@@ -11023,14 +11027,16 @@
           "c98ce191da": "Esta diferenciación no tiene ningún archivo del lado modificado para abrir",
           "9b80bbe1de": "Abrir pestaña de archivo",
           "f0fd4174b5": "Abra la pestaña de archivo para utilizar la edición de markdowns enriquecida",
-          "a10d9b8337": "Abrir archivo"
+          "a10d9b8337": "Abrir archivo",
+          "markdownPreviewLightBackground": "Markdown Preview Light Background"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Exportar como PDF",
           "561251019a": "Más acciones",
           "8c8b7f5ff5": "Mostrar portada",
           "10c39d58c1": "Ocultar materia preliminar",
-          "1eef809708": "Ajuste de palabras"
+          "1eef809708": "Ajuste de palabras",
+          "markdownPreviewLightBackground": "Light background"
         },
         "EditorPanelShell": {
           "e2c4dec350": "Cargando editor..."

@@ -9,6 +9,240 @@
   flex: 1;
 }
 
+/* Why: when markdownPreviewLightBackground is enabled we apply .markdown-light
+   exclusively to this container so the reading surface (bg + text) becomes
+   light while the global app (and its CSS vars) stay in the chosen theme.
+   Rules are scoped to .markdown-preview.markdown-light so they never leak. */
+.markdown-light {
+  /* GitHub-markdown light palette, local to this scope so it stays
+     independent of main.css's theme tokens (see AGENTS.md token rule). */
+  --md-light-bg: #ffffff;
+  --md-light-fg: #24292f;
+  --md-light-muted: #6e7781;
+  --md-light-accent: #0969da;
+  --md-light-surface: #f6f8fa;
+  --md-light-surface-hover: #f3f4f6;
+  --md-light-border: #d0d7de;
+  --md-light-border-soft: rgba(0, 0, 0, 0.08);
+  --md-light-border-strong: rgba(0, 0, 0, 0.12);
+  --md-light-hairline: rgba(0, 0, 0, 0.1);
+  --md-light-scrim: rgba(0, 0, 0, 0.06);
+  --md-light-scrim-soft: rgba(0, 0, 0, 0.04);
+}
+
+.markdown-preview-shell.markdown-light,
+.markdown-preview.markdown-light,
+.markdown-light .markdown-body,
+.markdown-preview.markdown-light .markdown-body {
+  background: var(--md-light-bg) !important;
+  color: var(--md-light-fg) !important;
+}
+
+/* Scope toolbar and search to light surface values when preview light mode is active.
+   Why: when app theme is dark, global --* vars are dark; these ensure the forced-light
+   preview surface and its controls remain legible and isolated (no leakage to chrome/terminal). */
+.markdown-preview.markdown-light .markdown-preview-search,
+.markdown-preview.markdown-light .markdown-review-toolbar {
+  background: color-mix(in srgb, var(--md-light-surface) 94%, white);
+  border-color: var(--md-light-border-soft);
+}
+
+/* Comprehensive light overrides for descendants (search, toolbar, headings, links,
+   checkboxes, details, tables, frontmatter) so forced light preview never inherits
+   dark app vars for contrast/visibility. Scoped to .markdown-preview.markdown-light
+   or .markdown-light to preserve strict isolation. */
+.markdown-preview.markdown-light .markdown-preview-search-field {
+  border-color: rgba(0, 0, 0, 0.15);
+  background: var(--md-light-bg);
+}
+.markdown-preview.markdown-light .markdown-preview-search-status,
+.markdown-preview.markdown-light .markdown-preview-search-input::placeholder,
+.markdown-preview.markdown-light .markdown-preview-search-button {
+  color: var(--md-light-muted);
+}
+.markdown-preview.markdown-light .markdown-preview-search-divider {
+  background: var(--md-light-hairline);
+}
+.markdown-preview.markdown-light .markdown-preview-search-button:hover:not(:disabled) {
+  background: var(--md-light-surface-hover);
+  color: var(--md-light-fg);
+}
+
+.markdown-preview.markdown-light .markdown-review-toolbar-button,
+.markdown-preview.markdown-light .markdown-review-icon-button {
+  color: var(--md-light-muted);
+}
+.markdown-preview.markdown-light .markdown-review-toolbar-button:hover:not(:disabled),
+.markdown-preview.markdown-light .markdown-review-toolbar-button[aria-expanded='true'],
+.markdown-preview.markdown-light .markdown-review-icon-button:hover:not(:disabled) {
+  border-color: var(--md-light-border-strong);
+  background: var(--md-light-surface);
+  color: var(--md-light-fg);
+}
+.markdown-preview.markdown-light .markdown-review-count {
+  background: var(--md-light-border-soft);
+  color: var(--md-light-muted);
+}
+
+.markdown-light .markdown-body h5 {
+  color: var(--md-light-muted);
+}
+
+.markdown-light .markdown-body .markdown-doc-link-broken {
+  color: var(--md-light-muted);
+}
+
+.markdown-preview.markdown-light .markdown-body details.orca-details > summary::before {
+  color: var(--md-light-muted);
+}
+
+/* Light checkbox rendering for contrast on white preview surface (avoids dark --foreground mix). */
+.markdown-light .markdown-body li > input[type='checkbox'] {
+  border-color: color-mix(in srgb, var(--md-light-fg) 55%, transparent);
+}
+.markdown-light .markdown-body li > input[type='checkbox']:checked {
+  background: var(--md-light-accent);
+  border-color: var(--md-light-accent);
+}
+.markdown-light .markdown-body li > input[type='checkbox']:checked::after {
+  border-color: var(--md-light-bg);
+}
+
+/* Table borders and frontmatter use light values inside forced-light surface. */
+.markdown-light .markdown-body th,
+.markdown-light .markdown-body td {
+  border-color: var(--md-light-border);
+}
+.markdown-preview.markdown-light .markdown-body .border-border\/60 {
+  border-color: var(--md-light-border-strong) !important;
+}
+.markdown-preview.markdown-light .markdown-body .bg-muted\/40 {
+  background-color: var(--md-light-scrim-soft) !important;
+}
+.markdown-preview.markdown-light .markdown-body .text-muted-foreground {
+  color: var(--md-light-muted) !important;
+}
+
+/* TOC panel light treatment for visual continuity when next to light preview surface.
+   Class applied to shell so sibling panel inherits. */
+.markdown-light .markdown-toc-panel {
+  background: var(--md-light-surface);
+  border-right-color: var(--md-light-border-soft);
+}
+.markdown-light .markdown-toc-header {
+  color: var(--md-light-muted);
+  border-bottom-color: var(--md-light-border-soft);
+}
+.markdown-light .markdown-toc-row {
+  color: var(--md-light-fg);
+}
+.markdown-light .markdown-toc-row:hover {
+  background: var(--md-light-surface-hover);
+}
+.markdown-light .markdown-toc-level-button {
+  color: var(--md-light-muted);
+}
+.markdown-light .markdown-toc-level-button:hover {
+  color: var(--md-light-fg);
+}
+.markdown-light .markdown-toc-empty {
+  color: var(--md-light-muted);
+}
+.markdown-light .markdown-toc-disclosure:hover {
+  background: var(--md-light-scrim);
+}
+
+/* Why: complete isolation for the light reading surface (annotations, composer, diff comment cards, actions pill, copy buttons, TOC icons and all descendants) when markdownPreviewLightBackground enabled. No dark cards or low-contrast elements inside the preview area. Annotation/composer/diff cards use var(--editor-surface) etc (dark on light when app theme dark). .code-block-copy-btn hover used muted/accent vars. TOC ListTree/Chevron use text-muted-foreground. Override with explicit light values + !important for var/tailwind descendants. Scoped to .markdown-light (applied to shell+preview) + .markdown-preview.markdown-light. */
+.markdown-light .text-muted-foreground,
+.markdown-preview.markdown-light .text-muted-foreground {
+  color: var(--md-light-muted) !important;
+}
+
+/* Force via added markdown-toc-icon class on ListTree/Chevron (per isolation pass) */
+.markdown-light .markdown-toc-icon {
+  color: var(--md-light-muted) !important;
+}
+
+.markdown-light .orca-diff-comment-card,
+.markdown-preview.markdown-light .orca-diff-comment-card {
+  background: var(--md-light-bg) !important;
+  border-color: var(--md-light-hairline) !important;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 4px 12px var(--md-light-scrim-soft) !important;
+}
+
+.markdown-light .orca-diff-comment-actions-pill,
+.markdown-preview.markdown-light .orca-diff-comment-actions-pill {
+  background: var(--md-light-bg) !important;
+  border-color: var(--md-light-hairline) !important;
+}
+
+.markdown-light .orca-diff-comment-pill-btn,
+.markdown-preview.markdown-light .orca-diff-comment-pill-btn {
+  color: var(--md-light-muted);
+}
+.markdown-light .orca-diff-comment-pill-btn:hover,
+.markdown-preview.markdown-light .orca-diff-comment-pill-btn:hover {
+  background: var(--md-light-scrim);
+  color: var(--md-light-fg);
+}
+
+.markdown-light .markdown-annotation-composer,
+.markdown-preview.markdown-light .markdown-annotation-composer {
+  background: var(--md-light-bg);
+  border-color: var(--md-light-border-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  color: var(--md-light-fg);
+}
+
+.markdown-light .markdown-annotation-card.is-active > .orca-diff-comment-card,
+.markdown-preview.markdown-light .markdown-annotation-card.is-active > .orca-diff-comment-card {
+  background: var(--md-light-bg) !important;
+  border-color: var(--md-light-hairline) !important;
+}
+
+.markdown-light .orca-diff-comment-popover,
+.markdown-preview.markdown-light .orca-diff-comment-popover,
+.markdown-light .orca-diff-comment-popover-textarea,
+.markdown-preview.markdown-light .orca-diff-comment-popover-textarea {
+  background: var(--md-light-bg) !important;
+  border-color: var(--md-light-border-strong) !important;
+  color: var(--md-light-fg) !important;
+}
+
+.markdown-light .orca-diff-comment-popover-label,
+.markdown-preview.markdown-light .orca-diff-comment-popover-label {
+  color: var(--md-light-muted);
+}
+
+.markdown-light .orca-diff-comment-body,
+.markdown-preview.markdown-light .orca-diff-comment-body {
+  color: var(--md-light-fg);
+}
+
+/* code-block-copy-btn hover on light code blocks (inside forced light preview) */
+.markdown-preview.markdown-light .code-block-copy-btn {
+  color: var(--md-light-muted);
+}
+.markdown-preview.markdown-light .code-block-copy-btn:hover {
+  background: var(--md-light-surface-hover);
+  color: var(--md-light-fg);
+}
+
+/* Annotation rail add button inside light preview surface */
+.markdown-preview.markdown-light .markdown-annotation-add,
+.markdown-light .markdown-annotation-add {
+  background: var(--md-light-bg);
+  color: var(--md-light-muted);
+  border-color: var(--md-light-border-strong);
+}
+.markdown-preview.markdown-light .markdown-annotation-add:hover,
+.markdown-light .markdown-annotation-add:hover {
+  background: var(--md-light-surface-hover);
+  color: var(--md-light-fg);
+}
+
 .markdown-preview-shell {
   position: relative;
   display: flex;
@@ -583,7 +817,7 @@
 }
 
 .markdown-light .markdown-body a {
-  color: #0969da;
+  color: var(--md-light-accent);
 }
 
 .markdown-dark .markdown-body a {
@@ -624,8 +858,8 @@
 }
 
 .markdown-light .markdown-body pre {
-  background: #f6f8fa;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--md-light-surface);
+  border: 1px solid var(--md-light-border-soft);
 }
 
 .markdown-body pre code {
@@ -849,12 +1083,12 @@
 /* ── Syntax Highlighting (GitHub-inspired) ────────── */
 
 .markdown-light .hljs {
-  color: #24292f;
+  color: var(--md-light-fg);
 }
 
 .markdown-light .hljs-comment,
 .markdown-light .hljs-quote {
-  color: #6e7781;
+  color: var(--md-light-muted);
   font-style: italic;
 }
 

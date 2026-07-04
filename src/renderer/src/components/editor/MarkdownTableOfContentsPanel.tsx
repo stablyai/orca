@@ -79,7 +79,7 @@ function MarkdownTocRow({
           >
             <ChevronRight
               className={cn(
-                'size-3 shrink-0 text-muted-foreground transition-transform',
+                'size-3 shrink-0 text-muted-foreground markdown-toc-icon transition-transform',
                 expanded && 'rotate-90'
               )}
             />
@@ -171,7 +171,7 @@ export function MarkdownTableOfContentsPanel({
       )}
     >
       <div className="markdown-toc-header">
-        <ListTree className="size-3.5 text-muted-foreground" />
+        <ListTree className="size-3.5 text-muted-foreground markdown-toc-icon" />
         <span>
           {translate(
             'auto.components.editor.MarkdownTableOfContentsPanel.06357eea60',

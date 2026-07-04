@@ -162,6 +162,10 @@ export function getEditorPanelRenderModel({
     canShowMarkdownTableOfContents:
       resolvedLanguage === 'markdown' &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
+    // Why: gates the light-background toggle to surfaces it can actually affect
+    // (mirrors EditorContent's render-mode decision; Monaco has no light styling).
+    isMarkdownPreviewSurface: activeFile.mode === 'markdown-preview',
+    isRichMarkdownSurface: activeFile.mode === 'edit' && inlineMarkdownRenderMode === 'rich-editor',
     canShowMarkdownPreview: canOpenMarkdownPreview({
       language: resolvedLanguage,
       mode: activeFile.mode,

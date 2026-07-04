@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import type { Worktree } from '../../../../shared/types'
 import {
   decodeMarkdownPreviewAnchor,
@@ -10,6 +11,41 @@ import {
   resolveMarkdownPreviewSourceWorktree
 } from './MarkdownPreview'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+
+// Additional tests for markdownPreviewLightBackground flag (per plan for issue #1).
+// We render the real MarkdownPreview to verify the class applied to the preview
+// container is controlled by the flag (light forced) vs app theme.
+
+// Mocks must be hoisted before any imports that use them.
+vi.mock('@/store', () => {
+  const useAppStore = vi.fn()
+  return { useAppStore }
+})
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  settingsForRuntimeOwner: (s: unknown) => s
+}))
+vi.mock('@/runtime/runtime-file-client', () => ({
+  statRuntimePath: vi.fn(async () => ({ isDirectory: false }))
+}))
+vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
+vi.mock('@/i18n/i18n', () => ({ translate: (_k: string, fb: string) => fb }))
+vi.mock('./useLocalImageSrc', () => ({ useLocalImageSrc: (src?: string) => src }))
+vi.mock('./MermaidBlock', () => ({ default: () => null }))
+vi.mock('./CodeBlockCopyButton', () => ({
+  default: ({ children }: { children: React.ReactNode }) => children
+}))
+vi.mock('../diff-comments/DiffCommentCard', () => ({ DiffCommentCard: () => null }))
+vi.mock('./NotesSendMenu', () => ({ NotesSendMenu: () => null }))
+vi.mock('./MarkdownTableOfContentsPanel', () => ({ MarkdownTableOfContentsPanel: () => null }))
+vi.mock('./usePreserveSectionDuringExternalEdit', () => ({
+  usePreserveSectionDuringExternalEdit: (c: string) => c
+}))
+
+import MarkdownPreview from './MarkdownPreview'
+import { useAppStore } from '@/store'
+import { createRoot, type Root } from 'react-dom/client'
+import { act } from 'react'
+import * as React from 'react'
 
 function makeWorktree(id: string, path: string): Worktree {
   return {
@@ -170,5 +206,124 @@ describe('MarkdownPreview source link routing', () => {
     }
 
     expect(getMarkdownPreviewAnchorScrollTop(container, target)).toBe(493)
+  })
+})
+
+// --- markdownPreviewLightBackground flag + isolated class tests ---
+
+const mockSettingsBase = {
+  theme: 'dark' as const,
+  markdownPreviewLightBackground: false
+}
+
+let containerEl: HTMLDivElement
+let root: Root | null = null
+
+function setupStore(
+  overrides: { markdownPreviewLightBackground?: boolean; theme?: 'dark' | 'light' | 'system' } = {}
+) {
+  const settings = { ...mockSettingsBase, ...overrides }
+  const storeState = {
+    settings,
+    openFile: vi.fn(),
+    activateMarkdownLink: vi.fn(),
+    openMarkdownPreview: vi.fn(),
+    setMarkdownViewMode: vi.fn(),
+    markdownFrontmatterVisible: {},
+    setPendingEditorReveal: vi.fn(),
+    addDiffComment: vi.fn(),
+    deleteDiffComment: vi.fn(),
+    updateDiffComment: vi.fn(),
+    clearDeliveredDiffComments: vi.fn(),
+    keybindings: {},
+    worktreesByRepo: {},
+    openFiles: [],
+    activeFileIdByWorktree: {},
+    editorFontZoomLevel: 0
+  }
+  // Store fixture is intentionally partial (only fields this component reads),
+  // so the mock is typed against `unknown` rather than the full AppState shape.
+  const mockedUseAppStore = useAppStore as unknown as Mock<
+    (selector: (state: unknown) => unknown) => unknown
+  >
+  mockedUseAppStore.mockImplementation((selector) => selector(storeState))
+  // also support getState if used
+  Object.assign(useAppStore, { getState: () => storeState })
+  return storeState
+}
+
+describe('MarkdownPreview light background flag (isolated surface)', () => {
+  beforeEach(() => {
+    containerEl = document.createElement('div')
+    document.body.appendChild(containerEl)
+    // default to dark app theme
+    setupStore({ markdownPreviewLightBackground: false, theme: 'dark' })
+  })
+
+  afterEach(() => {
+    if (root) {
+      root.unmount()
+    }
+    if (containerEl && containerEl.parentNode) {
+      containerEl.parentNode.removeChild(containerEl)
+    }
+    vi.clearAllMocks()
+  })
+
+  it('renders with markdown-dark class by default (follows app dark theme)', async () => {
+    await act(async () => {
+      root = createRoot(containerEl)
+      root.render(
+        React.createElement(MarkdownPreview, {
+          content: '# hi',
+          filePath: '/tmp/test.md',
+          scrollCacheKey: 'test-dark'
+        })
+      )
+    })
+    // allow effects
+    await act(async () => {})
+    const preview = containerEl.querySelector('.markdown-preview')
+    expect(preview?.className).toContain('markdown-dark')
+    expect(preview?.className).not.toContain('markdown-light') // when not forced
+  })
+
+  it('renders with markdown-light class when markdownPreviewLightBackground is true (even on dark app theme)', async () => {
+    setupStore({ markdownPreviewLightBackground: true, theme: 'dark' })
+    await act(async () => {
+      root = createRoot(containerEl)
+      root.render(
+        React.createElement(MarkdownPreview, {
+          content: '# hi light',
+          filePath: '/tmp/test.md',
+          scrollCacheKey: 'test-light'
+        })
+      )
+    })
+    await act(async () => {})
+    const preview = containerEl.querySelector('.markdown-preview')
+    expect(preview?.className).toContain('markdown-light')
+    // does not have dark
+    expect(preview?.className).not.toContain('markdown-dark')
+    // TOC shell receives light class too for visual continuity (see UI review)
+    const shell = containerEl.querySelector('.markdown-preview-shell')
+    expect(shell?.className).toContain('markdown-light')
+  })
+
+  it('uses markdown-light when app is light and flag is unset (follows theme)', async () => {
+    setupStore({ markdownPreviewLightBackground: false, theme: 'light' })
+    await act(async () => {
+      root = createRoot(containerEl)
+      root.render(
+        React.createElement(MarkdownPreview, {
+          content: '# hi',
+          filePath: '/tmp/test.md',
+          scrollCacheKey: 'test-light-app'
+        })
+      )
+    })
+    await act(async () => {})
+    const preview = containerEl.querySelector('.markdown-preview')
+    expect(preview?.className).toContain('markdown-light')
   })
 })

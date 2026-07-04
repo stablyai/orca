@@ -108,6 +108,8 @@ export function EditorPanelShell({
           effectiveToggleValue={model.effectiveToggleValue}
           canOpenPreviewToSide={model.canOpenPreviewToSide}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
+          isMarkdownPreviewSurface={model.isMarkdownPreviewSurface}
+          isRichMarkdownSurface={model.isRichMarkdownSurface}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
           shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
