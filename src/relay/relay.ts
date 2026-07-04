@@ -42,6 +42,7 @@ import { PreflightHandler } from './preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { HostMetricsHandler } from './host-metrics-handler'
+import { HostSessionsHandler } from './host-sessions-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
@@ -440,6 +441,9 @@ async function main(): Promise<void> {
 
   const _hostMetricsHandler = new HostMetricsHandler(dispatcher)
   void _hostMetricsHandler
+
+  const _hostSessionsHandler = new HostSessionsHandler(dispatcher)
+  void _hostSessionsHandler
 
   const _agentExecHandler = new AgentExecHandler(dispatcher)
   void _agentExecHandler

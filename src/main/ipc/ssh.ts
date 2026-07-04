@@ -16,6 +16,7 @@ import type {
   SshConnectionState
 } from '../../shared/ssh-types'
 import type { HostMetricsResult } from '../../shared/host-resource-metrics-types'
+import type { HostSessionsResult } from '../../shared/host-session-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { isAuthError } from '../ssh/ssh-connection-utils'
@@ -1188,6 +1189,19 @@ export function registerSshHandlers(
         return { metrics: null }
       }
       return (await mux.request('host.metrics')) as HostMetricsResult
+    }
+  )
+
+  ipcMain.handle(
+    'ssh:discoverHostSessions',
+    async (_event, args: { targetId: string }): Promise<HostSessionsResult> => {
+      const mux = getActiveMultiplexer(args.targetId)
+      if (!mux || mux.isDisposed()) {
+        // Why: discovery is passive UI polling. A disconnected host has nothing to
+        // observe until reconnect and should not surface an IPC error.
+        return { sessions: [], tmuxAvailable: false }
+      }
+      return (await mux.request('host.discoverSessions')) as HostSessionsResult
     }
   )
 
