@@ -150,7 +150,9 @@ export async function connect(
       site = {
         id,
         siteUrl,
-        email: viewer.email ?? username,
+        // Why: bearer auth collects no username, so use the stable Server/DC
+        // user id instead of persisting a blank renderer compatibility field.
+        email: viewer.email ?? (username || viewer.userId),
         displayName: viewer.displayName,
         accountId: viewer.accountId,
         viewerUserId: viewer.userId,

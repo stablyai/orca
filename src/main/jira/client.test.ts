@@ -358,6 +358,34 @@ describe('Jira client credential storage', () => {
     expect(jira.getClients(savedSite?.id)[0]?.authorization).toBe('Bearer bearer-secret')
   })
 
+  it('uses Server user id as the saved email fallback for Bearer credentials', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          name: 'pat-user',
+          displayName: 'PAT User'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        deploymentType: 'server',
+        authMode: 'bearer',
+        siteUrl: 'https://jira.example.internal/',
+        bearerToken: 'bearer-secret'
+      })
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(jira.getStatus().sites?.[0]).toMatchObject({
+      email: 'pat-user',
+      authUsername: 'pat-user',
+      viewerUserId: 'pat-user'
+    })
+  })
+
   it('rejects Server Bearer connections when Jira returns no stable user identity', async () => {
     netFetchMock.mockResolvedValueOnce(
       new Response(

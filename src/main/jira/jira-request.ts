@@ -9,6 +9,9 @@ import type { JiraSite } from '../../shared/types'
 // all 403'd while GET calls (connect, /myself) passed. A non-browser UA is the
 // reliable fix; X-Atlassian-Token: no-check is not honored for this case.
 const JIRA_API_USER_AGENT = 'Orca'
+const JIRA_REQUEST_TIMEOUT_MS = 30_000
+const JIRA_REQUEST_TIMEOUT_MESSAGE = 'Jira request timed out.'
+const JIRA_HTTPS_REQUIRED_MESSAGE = 'Jira sites must use HTTPS to send credentials.'
 
 export type JiraClientForSite = {
   site: JiraSite
@@ -55,25 +58,65 @@ function describeErrorCause(error: unknown): string | undefined {
   return cause === undefined ? undefined : String(cause)
 }
 
+function createJiraRequestTimeoutError(): JiraApiError {
+  return new JiraApiError(JIRA_REQUEST_TIMEOUT_MESSAGE, null)
+}
+
+function assertHttpsJiraSiteUrl(siteUrl: string): void {
+  if (new URL(siteUrl).protocol !== 'https:') {
+    throw new JiraApiError(JIRA_HTTPS_REQUIRED_MESSAGE, null)
+  }
+}
+
 async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
   return withSpan(
     'jira.request',
     async (span) => {
       span.setAttribute('jira.siteUrl', new URL(url).origin)
-      await ensureElectronProxyFromEnvironment({
-        proxySession: session.defaultSession,
-        probeUrl: url
-      }).catch((error) => {
-        span.addEvent('jira.proxySetupFailed', {
-          errorName: error instanceof Error ? error.name : typeof error,
-          errorMessage: error instanceof Error ? error.message : String(error)
-        })
+      const controller = new AbortController()
+      const callerSignal = init.signal ?? undefined
+      const abortFromCaller = (): void => {
+        controller.abort(callerSignal?.reason)
+      }
+      if (callerSignal?.aborted) {
+        abortFromCaller()
+      } else {
+        callerSignal?.addEventListener('abort', abortFromCaller, { once: true })
+      }
+      let timedOut = false
+      let timeoutError: JiraApiError | null = null
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          timedOut = true
+          timeoutError = createJiraRequestTimeoutError()
+          reject(timeoutError)
+          controller.abort(timeoutError)
+        }, JIRA_REQUEST_TIMEOUT_MS)
       })
       try {
+        await Promise.race([
+          ensureElectronProxyFromEnvironment({
+            proxySession: session.defaultSession,
+            probeUrl: url
+          }).catch((error) => {
+            span.addEvent('jira.proxySetupFailed', {
+              errorName: error instanceof Error ? error.name : typeof error,
+              errorMessage: error instanceof Error ? error.message : String(error)
+            })
+          }),
+          timeoutPromise
+        ])
         // Why: Electron's network stack follows Chromium proxy/session state,
         // avoiding undici's stale keep-alive sockets after VPN path changes.
-        return await net.fetch(url, init)
+        return await Promise.race([
+          net.fetch(url, { ...init, signal: controller.signal }),
+          timeoutPromise
+        ])
       } catch (error) {
+        if (timedOut) {
+          throw timeoutError ?? createJiraRequestTimeoutError()
+        }
         span.setAttribute(
           'jira.transportErrorName',
           error instanceof Error ? error.name : typeof error
@@ -87,6 +130,11 @@ async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
           span.setAttribute('jira.transportErrorCause', cause)
         }
         throw error
+      } finally {
+        if (timeout !== undefined) {
+          clearTimeout(timeout)
+        }
+        callerSignal?.removeEventListener('abort', abortFromCaller)
       }
     },
     { kind: 'client' }
@@ -133,6 +181,7 @@ export async function jiraRequestWithAuthorization(
   path: string,
   init?: RequestInit
 ): Promise<unknown> {
+  assertHttpsJiraSiteUrl(siteUrl)
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')

@@ -170,8 +170,8 @@ Compatibility rules:
   This avoids storing or hashing Bearer token material while still keeping
   multiple Server/DC users on the same site separate.
 - Server/DC sites should keep the existing `email` field populated with
-  `emailAddress ?? username ?? ''` for renderer compatibility, but UI labels
-  should prefer `authUsername` when the site is Server/DC.
+  `emailAddress ?? username ?? viewerUserId` for renderer compatibility, but UI
+  labels should prefer `authUsername` when the site is Server/DC.
 - Populate `viewerUserId` with the deployment-specific stable identity. Server/DC
   must not use mutable `displayName` as persisted identity. Keep `accountId`
   populated for backward compatibility, but treat it as a legacy alias outside
@@ -325,16 +325,25 @@ Cloud tests should assert these paths remain unchanged.
 
 ## User Identity Rules
 
-Define a deployment-aware user identity layer:
+Use the exported deployment-aware user types as the identity layer:
 
 ```ts
-export type JiraUserIdentity = {
+export type JiraViewer = {
   userId: string
+  accountId: string
+  displayName: string
+  email: string | null
+  avatarUrl?: string
+}
+
+export type JiraUser = {
+  // userId is deployment-specific; accountId remains as a deprecated
+  // Cloud-era alias for legacy renderer callers.
+  userId: string
+  accountId: string
   displayName: string
   email?: string | null
   avatarUrl?: string
-  serverName?: string
-  serverKey?: string
 }
 ```
 
