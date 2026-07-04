@@ -33,6 +33,23 @@ function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
   )
 }
 
+function isSubmoduleWorktreeRemovalError(error: unknown): boolean {
+  return /working trees? containing submodules cannot be moved or removed/i.test(
+    getErrorText(error)
+  )
+}
+
+async function isRelayWorktreeCleanIgnoringSubmodules(
+  git: GitExec,
+  worktreePath: string
+): Promise<boolean> {
+  const { stdout } = await git(
+    ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
+    worktreePath
+  )
+  return stdout.trim().length === 0
+}
+
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
@@ -178,7 +195,22 @@ export async function removeWorktreeOp(
     args.push('--force')
   }
   args.push(worktreePath)
-  await git(args, repoPath)
+  try {
+    await git(args, repoPath)
+  } catch (error) {
+    // Why: `git worktree remove` refuses a worktree with ANY populated
+    // submodule even when clean; only --force bypasses that specific check.
+    // Re-check with --ignore-submodules=none so auto-force never discards work.
+    // Relay GitExec has no env option, so this fatal-text match depends on the
+    // SSH host locale; the renderer's force-retry classifier is the fallback.
+    if (force || !isSubmoduleWorktreeRemovalError(error)) {
+      throw error
+    }
+    if (!(await isRelayWorktreeCleanIgnoringSubmodules(git, worktreePath))) {
+      throw error
+    }
+    await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+  }
 
   if (!branchName) {
     return {}
