@@ -186,9 +186,11 @@ import {
   setPtyOwnership,
   setLocalPtyProvider,
   rebindLocalProviderListeners,
-  unregisterSshPtyProvider
+  unregisterSshPtyProvider,
+  getLocalPtyProvider
 } from './pty'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
+import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
@@ -7928,6 +7930,176 @@ describe('registerPtyHandlers', () => {
     expect(
       secondWindow.webContents.on.mock.calls.some(([eventName]) => eventName === 'did-finish-load')
     ).toBe(false)
+  })
+
+  // Why (#5787): a crash/freeze-recovery reload re-fires did-finish-load on the
+  // single window. The orphan sweep must be suppressed for it so live LOCAL PTYs
+  // stay attached until session restore re-adopts them.
+  it('does not sweep local PTYs during a recovery reload', async () => {
+    const killSpy = vi.fn()
+    const proc = {
+      onData: vi.fn(() => makeDisposable()),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpy,
+      process: 'zsh',
+      pid: 12345
+    }
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    spawnMock.mockReturnValue(proc)
+    const isRecoveryReloadInFlight = vi.fn(() => true)
+    const markClaudePtyExitedSpy = vi.spyOn(livePtyGate, 'markClaudePtyExited')
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    const didFinishLoad = mainWindow.webContents.on.mock.calls.find(
+      ([eventName]) => eventName === 'did-finish-load'
+    )?.[1] as (() => void) | undefined
+    expect(didFinishLoad).toBeTypeOf('function')
+
+    const spawnResult = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
+      id: string
+    }
+
+    // Without the guard the second load would sweep this PTY as a prior-generation
+    // orphan. Under recovery-in-flight neither load may touch it.
+    didFinishLoad?.()
+    didFinishLoad?.()
+
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(markClaudePtyExitedSpy).not.toHaveBeenCalled()
+    const listed = await getLocalPtyProvider().listProcesses()
+    expect(listed.some((info) => info.id === spawnResult.id)).toBe(true)
+
+    markClaudePtyExitedSpy.mockRestore()
+  })
+
+  // Why: guard against over-suppression — when no recovery reload is in flight the
+  // sweep MUST still reclaim genuinely orphaned local PTYs.
+  it('still sweeps orphaned local PTYs when no recovery reload is in flight', async () => {
+    const killSpy = vi.fn()
+    const proc = {
+      onData: vi.fn(() => makeDisposable()),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpy,
+      process: 'zsh',
+      pid: 12345
+    }
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    spawnMock.mockReturnValue(proc)
+    const isRecoveryReloadInFlight = vi.fn(() => false)
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    const didFinishLoad = mainWindow.webContents.on.mock.calls.find(
+      ([eventName]) => eventName === 'did-finish-load'
+    )?.[1] as (() => void) | undefined
+
+    const spawnResult = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
+      id: string
+    }
+
+    // First load only advances the generation; the second sees this PTY as a
+    // prior-load orphan. With the flag false the guard must NOT suppress the sweep.
+    didFinishLoad?.()
+    didFinishLoad?.()
+
+    expect(killSpy).toHaveBeenCalled()
+    expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1)
+    const listed = await getLocalPtyProvider().listProcesses()
+    expect(listed.some((info) => info.id === spawnResult.id)).toBe(false)
+  })
+
+  // Why (#5787): two PTYs spawned in different load generations must BOTH survive a
+  // recovery reload — even the older one that a normal sweep would reclaim.
+  it('keeps local PTYs from different generations alive across recovery reloads', async () => {
+    const killSpyA = vi.fn()
+    const killSpyB = vi.fn()
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    const isRecoveryReloadInFlight = vi.fn(() => true)
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    const didFinishLoad = mainWindow.webContents.on.mock.calls.find(
+      ([eventName]) => eventName === 'did-finish-load'
+    )?.[1] as (() => void) | undefined
+
+    spawnMock.mockReturnValue({
+      onData: vi.fn(() => makeDisposable()),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpyA,
+      process: 'zsh',
+      pid: 111
+    })
+    const ptyA = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as { id: string }
+
+    // Advance the generation without sweeping (recovery-in-flight), then spawn a
+    // second PTY so the two live in different load generations.
+    didFinishLoad?.()
+
+    spawnMock.mockReturnValue({
+      onData: vi.fn(() => makeDisposable()),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpyB,
+      process: 'zsh',
+      pid: 222
+    })
+    const ptyB = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as { id: string }
+
+    didFinishLoad?.()
+
+    expect(killSpyA).not.toHaveBeenCalled()
+    expect(killSpyB).not.toHaveBeenCalled()
+    const ids = (await getLocalPtyProvider().listProcesses()).map((info) => info.id)
+    expect(ids).toContain(ptyA.id)
+    expect(ids).toContain(ptyB.id)
   })
 
   it('clears PTY state even when kill reports the process is already gone', async () => {

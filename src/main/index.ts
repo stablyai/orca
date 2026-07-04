@@ -210,6 +210,9 @@ let watcherShutdownDone = false
 let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
+// Why: the crash/freeze-recovery reload re-fires did-finish-load; flag it so the
+// local-PTY orphan sweep spares live sessions across that one reload (#5787).
+let recoveryReloadInFlight: { webContentsId: number; until: number } | null = null
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 // Why: GPU child crashes clustered right after launch indicate a broken driver;
 // track them so Orca can move this build onto software rendering.
@@ -456,6 +459,27 @@ function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope
   return webContentsId !== undefined && expectedRendererReload.webContentsId === webContentsId
     ? 'renderer-reload'
     : 'none'
+}
+
+function markRecoveryReloadInFlight(webContentsId: number, durationMs = 10_000): void {
+  recoveryReloadInFlight = { webContentsId, until: Date.now() + durationMs }
+}
+
+function isRecoveryReloadInFlight(webContentsId: number): boolean {
+  if (!recoveryReloadInFlight) {
+    return false
+  }
+  if (Date.now() > recoveryReloadInFlight.until) {
+    recoveryReloadInFlight = null
+    return false
+  }
+  if (recoveryReloadInFlight.webContentsId !== webContentsId) {
+    return false
+  }
+  // Why: consume on read — the recovery reload fires exactly one did-finish-load,
+  // so clearing here keeps a later genuine reload sweeping orphaned local PTYs.
+  recoveryReloadInFlight = null
+  return true
 }
 
 function recordAgentStateCrashBreadcrumb(agentType: string, state: string): void {
@@ -782,6 +806,12 @@ function openMainWindow(): BrowserWindow {
         markExpectedRendererReload(webContentsId)
       }
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
+    },
+    // Why: the in-place recovery reload re-fires did-finish-load; flag it so the
+    // local-PTY orphan sweep is skipped for that one reload (#5787).
+    onBeforeRecoveryReload: (webContentsId) => {
+      markRecoveryReloadInFlight(webContentsId)
+      recordCrashBreadcrumb('renderer_recovery_reload')
     }
   })
   recordCrashBreadcrumb('main_window_created')
@@ -890,6 +920,9 @@ function openMainWindow(): BrowserWindow {
         }
         recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
       },
+      // Why: let the PTY layer skip its orphan sweep on the one recovery reload
+      // that re-fires did-finish-load, so live local sessions survive it (#5787).
+      isRecoveryReloadInFlight,
       onBeforeUpdateQuit: () =>
         preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
     }

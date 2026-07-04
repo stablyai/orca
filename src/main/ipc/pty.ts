@@ -1247,6 +1247,9 @@ export function registerPtyHandlers(
   store?: Store,
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
+    // Why: returns true (once, consuming the flag) for the crash-recovery reload
+    // so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
+    isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   }
 ): void {
   registerRendererLifecycleResetHandlers(mainWindow.webContents)
@@ -1934,7 +1937,16 @@ export function registerPtyHandlers(
   if (localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
     didFinishLoadHandler = () => {
-      const killed = lp.killOrphanedPtys(lp.advanceGeneration() - 1)
+      // Why: always advance so the load generation stays monotonic, but skip the
+      // sweep (and its per-PTY cleanup) on the crash/freeze-recovery reload — it
+      // would kill live LOCAL PTYs across the single window before session
+      // restore re-attaches them (#5787). The getter consumes the flag, so the
+      // next genuine reload still reclaims genuinely-orphaned PTYs.
+      const generation = lp.advanceGeneration()
+      if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
+        return
+      }
+      const killed = lp.killOrphanedPtys(generation - 1)
       for (const { id } of killed) {
         clearProviderPtyState(id)
         ptyOwnership.delete(id)

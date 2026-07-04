@@ -71,6 +71,8 @@ export function attachMainWindowServices(
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
+    // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
+    isRecoveryReloadInFlight?: (webContentsId: number) => boolean
     onBeforeUpdateQuit?: () => void | Promise<void>
   }
 ): void {
@@ -89,7 +91,8 @@ export function attachMainWindowServices(
     prepareClaudeAuth,
     store,
     {
-      awaitLocalPtyStartup: options?.awaitLocalPtyStartup
+      awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
+      isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
     }
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
