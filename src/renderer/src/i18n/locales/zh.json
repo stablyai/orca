@@ -12331,15 +12331,15 @@
         "localAttachmentUnsupported": "远程会话不支持本地附件。",
         "removeAttachment": "移除附件",
         "pastedImageLabel": "粘贴的图片",
-        "pendingApproval": "Resolve the approval above to continue.",
-        "pendingQuestion": "Use the question panel above to answer.",
-        "noCommands": "No matching commands",
-        "mentionAction": "Reference a file or path"
+        "pendingApproval": "请先处理上方的批准请求以继续。",
+        "pendingQuestion": "请在上方的问题面板中回答。",
+        "noCommands": "没有匹配的命令",
+        "mentionAction": "引用文件或路径"
       },
       "tool": {
         "running": "正在运行…",
         "result": "结果",
-        "failed": "Failed"
+        "failed": "失败"
       },
       "status": {
         "responding": "智能体正在回复"
@@ -12382,18 +12382,18 @@
         "cancel": "取消",
         "send": "发送回答",
         "next": "下一步",
-        "pending": "Pending question",
+        "pending": "待回答的问题",
         "progress": "{{value0}}/{{value1}}",
-        "multiSelectHint": "Select all that apply."
+        "multiSelectHint": "选择所有适用项。"
       },
       "approval": {
         "title": "允许 {{value0}}？",
         "allow": "允许",
         "deny": "拒绝",
-        "pending": "Pending approval"
+        "pending": "待批准"
       },
-      "showLessMessage": "Show less",
-      "showFullMessage": "Show full message"
+      "showLessMessage": "收起",
+      "showFullMessage": "显示完整消息"
     },
     "tab": {
       "bar": {

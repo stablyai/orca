@@ -12331,15 +12331,15 @@
         "localAttachmentUnsupported": "원격 세션에는 로컬 첨부 파일을 사용할 수 없습니다.",
         "removeAttachment": "첨부파일 삭제",
         "pastedImageLabel": "붙여넣은 이미지",
-        "pendingApproval": "Resolve the approval above to continue.",
-        "pendingQuestion": "Use the question panel above to answer.",
-        "noCommands": "No matching commands",
-        "mentionAction": "Reference a file or path"
+        "pendingApproval": "계속하려면 위의 승인을 처리하세요.",
+        "pendingQuestion": "위의 질문 패널에서 답변하세요.",
+        "noCommands": "일치하는 명령 없음",
+        "mentionAction": "파일 또는 경로 참조"
       },
       "tool": {
         "running": "실행 중…",
         "result": "결과",
-        "failed": "Failed"
+        "failed": "실패"
       },
       "status": {
         "responding": "Agent이 응답 중입니다."
@@ -12382,18 +12382,18 @@
         "cancel": "취소",
         "send": "답변 보내기",
         "next": "다음",
-        "pending": "Pending question",
+        "pending": "대기 중인 질문",
         "progress": "{{value0}}/{{value1}}",
-        "multiSelectHint": "Select all that apply."
+        "multiSelectHint": "해당하는 항목을 모두 선택하세요."
       },
       "approval": {
         "title": "{{value0}}을(를) 허용하시겠습니까?",
         "allow": "허용하다",
         "deny": "부인하다",
-        "pending": "Pending approval"
+        "pending": "대기 중인 승인"
       },
-      "showLessMessage": "Show less",
-      "showFullMessage": "Show full message"
+      "showLessMessage": "간략히 표시",
+      "showFullMessage": "전체 메시지 표시"
     },
     "tab": {
       "bar": {

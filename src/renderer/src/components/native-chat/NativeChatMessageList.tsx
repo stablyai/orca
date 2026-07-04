@@ -38,13 +38,16 @@ function proseToMarkdown(blocks: NativeChatBlock[]): string {
     .join('\n\n')
 }
 
+const messageTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit'
+})
+
 function formatMessageTimestamp(timestamp: number | null): string | null {
   if (timestamp === null) {
     return null
   }
-  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
-    new Date(timestamp)
-  )
+  return messageTimestampFormatter.format(new Date(timestamp))
 }
 
 function ImageAttachmentRefs({ blocks }: { blocks: NativeChatBlock[] }): React.JSX.Element | null {

@@ -12331,15 +12331,15 @@
         "localAttachmentUnsupported": "ローカル添付ファイルはリモート セッションでは使用できません。",
         "removeAttachment": "添付ファイルを削除する",
         "pastedImageLabel": "貼り付けた画像",
-        "pendingApproval": "Resolve the approval above to continue.",
-        "pendingQuestion": "Use the question panel above to answer.",
-        "noCommands": "No matching commands",
-        "mentionAction": "Reference a file or path"
+        "pendingApproval": "続行するには上の承認を解決してください。",
+        "pendingQuestion": "上の質問パネルで回答してください。",
+        "noCommands": "一致するコマンドがありません",
+        "mentionAction": "ファイルまたはパスを参照"
       },
       "tool": {
         "running": "実行中…",
         "result": "結果",
-        "failed": "Failed"
+        "failed": "失敗"
       },
       "status": {
         "responding": "Agent が応答中です"
@@ -12382,18 +12382,18 @@
         "cancel": "キャンセル",
         "send": "回答を送信する",
         "next": "次へ",
-        "pending": "Pending question",
+        "pending": "保留中の質問",
         "progress": "{{value0}}/{{value1}}",
-        "multiSelectHint": "Select all that apply."
+        "multiSelectHint": "該当するものをすべて選択してください。"
       },
       "approval": {
         "title": "{{value0}} を許可しますか?",
         "allow": "許可する",
         "deny": "拒否",
-        "pending": "Pending approval"
+        "pending": "保留中の承認"
       },
-      "showLessMessage": "Show less",
-      "showFullMessage": "Show full message"
+      "showLessMessage": "折りたたむ",
+      "showFullMessage": "メッセージ全体を表示"
     },
     "tab": {
       "bar": {

@@ -12331,15 +12331,15 @@
         "localAttachmentUnsupported": "Los archivos adjuntos locales no están disponibles para sesiones remotas.",
         "removeAttachment": "Quitar archivo adjunto",
         "pastedImageLabel": "Imagen pegada",
-        "pendingApproval": "Resolve the approval above to continue.",
-        "pendingQuestion": "Use the question panel above to answer.",
-        "noCommands": "No matching commands",
-        "mentionAction": "Reference a file or path"
+        "pendingApproval": "Resuelve la aprobación anterior para continuar.",
+        "pendingQuestion": "Usa el panel de preguntas anterior para responder.",
+        "noCommands": "Sin comandos coincidentes",
+        "mentionAction": "Referenciar un archivo o ruta"
       },
       "tool": {
         "running": "Ejecutando…",
         "result": "Resultado",
-        "failed": "Failed"
+        "failed": "Falló"
       },
       "status": {
         "responding": "El agente está respondiendo"
@@ -12382,18 +12382,18 @@
         "cancel": "Cancelar",
         "send": "Enviar respuesta",
         "next": "Siguiente",
-        "pending": "Pending question",
+        "pending": "Pregunta pendiente",
         "progress": "{{value0}}/{{value1}}",
-        "multiSelectHint": "Select all that apply."
+        "multiSelectHint": "Selecciona todas las opciones que correspondan."
       },
       "approval": {
         "title": "¿Permitir {{value0}}?",
         "allow": "Permitir",
         "deny": "Denegar",
-        "pending": "Pending approval"
+        "pending": "Aprobación pendiente"
       },
-      "showLessMessage": "Show less",
-      "showFullMessage": "Show full message"
+      "showLessMessage": "Mostrar menos",
+      "showFullMessage": "Mostrar mensaje completo"
     },
     "tab": {
       "bar": {
