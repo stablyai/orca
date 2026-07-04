@@ -206,6 +206,7 @@ function MessageRow({
                 <button
                   type="button"
                   onClick={() => setUserExpanded((expanded) => !expanded)}
+                  aria-expanded={userExpanded}
                   className="mt-2 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {userExpanded

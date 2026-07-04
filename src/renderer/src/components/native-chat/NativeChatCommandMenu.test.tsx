@@ -100,6 +100,9 @@ describe('NativeChatCommandMenu', () => {
     const compactRow = [...container.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('/compact')
     )
+    expect(container.querySelector('[role="listbox"]')).toBeTruthy()
+    expect(compactRow?.getAttribute('role')).toBe('option')
+    expect(compactRow?.getAttribute('aria-selected')).toBe('true')
     expect(compactRow?.getAttribute('data-active')).toBe('true')
 
     await act(async () => {
@@ -131,6 +134,8 @@ describe('NativeChatCommandMenu', () => {
       button.textContent?.includes('$react')
     )
     expect(reactRow).toBeTruthy()
+    expect(reactRow?.getAttribute('role')).toBe('option')
+    expect(reactRow?.getAttribute('aria-selected')).toBe('false')
     expect(reactRow?.textContent).toContain('Repository')
 
     await act(async () => {

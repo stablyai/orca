@@ -42,7 +42,10 @@ export function NativeChatCommandMenu({
   }
 
   return (
-    <div className="scrollbar-sleek absolute bottom-full left-0 right-0 z-20 mb-1 max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+    <div
+      role="listbox"
+      className="scrollbar-sleek absolute bottom-full left-0 right-0 z-20 mb-1 max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+    >
       {autocomplete.mode === 'slash' ? (
         autocomplete.suggestions.length > 0 ? (
           autocomplete.suggestions.map((command, index) => (
@@ -126,6 +129,8 @@ const CommandMenuRow = forwardRef<HTMLButtonElement, CommandMenuRowProps>(functi
     <button
       ref={ref}
       type="button"
+      role="option"
+      aria-selected={active}
       data-active={active ? 'true' : undefined}
       onMouseEnter={onMouseEnter}
       onClick={onClick}

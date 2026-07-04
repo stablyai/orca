@@ -21,32 +21,13 @@ import {
   clearNativeChatTranscriptCache,
   readNativeChatTranscriptCached
 } from './transcript-read-cache'
+import { installNativeChatTestHome } from './native-chat-test-home'
 
 let tempRoots: string[] = []
 let restoreTestHome: (() => void) | null = null
 
 function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
-}
-
-function installTestHome(root: string): void {
-  restoreTestHome?.()
-  const previousHome = process.env.HOME
-  const previousUserProfile = process.env.USERPROFILE
-  process.env.HOME = root
-  process.env.USERPROFILE = root
-  restoreTestHome = () => {
-    if (previousHome === undefined) {
-      delete process.env.HOME
-    } else {
-      process.env.HOME = previousHome
-    }
-    if (previousUserProfile === undefined) {
-      delete process.env.USERPROFILE
-    } else {
-      process.env.USERPROFILE = previousUserProfile
-    }
-  }
 }
 
 async function seedSession(sessionId: string, turns: number): Promise<string> {
@@ -62,7 +43,8 @@ async function seedSession(sessionId: string, turns: number): Promise<string> {
   }))
   const filePath = join(projectDir, `${sessionId}.jsonl`)
   await writeFile(filePath, jsonLines(records))
-  installTestHome(root)
+  restoreTestHome?.()
+  restoreTestHome = installNativeChatTestHome(root)
   return filePath
 }
 

@@ -72,6 +72,48 @@ describe('native chat interactive cards', () => {
     act(() => root.unmount())
   })
 
+  it('re-enables approval controls when a new keyed approval replaces a response', async () => {
+    const onChoose = vi.fn()
+    const firstApproval = {
+      title: 'Allow Edit?',
+      detail: 'src/App.tsx',
+      options: [
+        { label: 'Allow', send: '1' },
+        { label: 'Deny', send: '\x1b' }
+      ]
+    }
+    const secondApproval = {
+      title: 'Allow Shell?',
+      detail: 'pnpm test',
+      options: [
+        { label: 'Allow', send: '1' },
+        { label: 'Deny', send: '\x1b' }
+      ]
+    }
+    const { container, root } = await renderCard(
+      <NativeChatApprovalCard key="approval:first" approval={firstApproval} onChoose={onChoose} />
+    )
+
+    await act(async () => {
+      buttonWithText(container, 'Deny').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(buttonWithText(container, 'Allow').disabled).toBe(true)
+
+    await act(async () => {
+      root.render(
+        <NativeChatApprovalCard
+          key="approval:second"
+          approval={secondApproval}
+          onChoose={onChoose}
+        />
+      )
+    })
+
+    expect(container.textContent).toContain('Allow Shell?')
+    expect(buttonWithText(container, 'Allow').disabled).toBe(false)
+    act(() => root.unmount())
+  })
+
   it('keeps multi-step question answers formatted in question order', async () => {
     const onAnswer = vi.fn()
     const { container, root } = await renderCard(

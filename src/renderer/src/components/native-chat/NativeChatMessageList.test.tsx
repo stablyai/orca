@@ -87,6 +87,9 @@ describe('NativeChatMessageList', () => {
     const { container, root } = await renderList(sessionWithUserText('x'.repeat(601)))
 
     expect(container.textContent).toContain('Show full message')
+    expect(buttonWithText(container, 'Show full message').getAttribute('aria-expanded')).toBe(
+      'false'
+    )
 
     await act(async () => {
       buttonWithText(container, 'Show full message').dispatchEvent(
@@ -95,6 +98,7 @@ describe('NativeChatMessageList', () => {
     })
 
     expect(container.textContent).toContain('Show less')
+    expect(buttonWithText(container, 'Show less').getAttribute('aria-expanded')).toBe('true')
     act(() => root.unmount())
   })
 

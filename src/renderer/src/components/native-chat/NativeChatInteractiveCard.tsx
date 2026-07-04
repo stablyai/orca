@@ -57,19 +57,20 @@ export function NativeChatInteractiveCard({
     }
   }, [present])
 
-  const visibleKind = !card || !canSend || cardKey === dismissedKey ? null : card.kind
+  const visibleCard = !card || !canSend || cardKey === dismissedKey ? null : card
+  const visibleKind = visibleCard?.kind ?? null
   useEffect(() => {
     onVisibleKindChange?.(visibleKind)
   }, [onVisibleKindChange, visibleKind])
 
-  if (!card || !canSend || cardKey === dismissedKey) {
+  if (!visibleCard) {
     return null
   }
-  if (card.kind === 'question') {
+  if (visibleCard.kind === 'question') {
     return (
       <NativeChatQuestionCard
         key={cardKey ?? 'question'}
-        prompt={card.prompt}
+        prompt={visibleCard.prompt}
         onAnswer={(text) => {
           setDismissedKey(cardKey)
           sendAnswer(text)
@@ -83,7 +84,8 @@ export function NativeChatInteractiveCard({
   }
   return (
     <NativeChatApprovalCard
-      approval={card.approval}
+      key={cardKey ?? 'approval'}
+      approval={visibleCard.approval}
       onChoose={(raw) => {
         setDismissedKey(cardKey)
         sendRaw(raw)
