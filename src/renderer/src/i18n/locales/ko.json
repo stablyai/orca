@@ -2935,7 +2935,8 @@
             "972a1ff497": "Codex 한도를 재설정할까요?",
             "6d1042aa6f": "활성 계정의 Codex rate-limit 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 창을 즉시 초기화합니다.",
             "f077f586db": "다시 묻지 않기",
-            "c0e972d726": "취소"
+            "c0e972d726": "취소",
+            "b82b5ecf03": "Host Metrics"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -3098,6 +3099,24 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
+          },
+          "HostStatusSegment": {
+            "6641a07d35": "attached",
+            "3b6f0532da": "No sessions detected",
+            "a08d335b74": "tmux is not running on this host",
+            "0ff2a9cbee": "Sessions on host",
+            "b54da3f1ac": "Loading host metrics...",
+            "ac42f3d00f": "GB ·",
+            "ae01984a93": "Memory",
+            "0b550095d7": "Uptime",
+            "518f1762a3": "Load avg",
+            "164c53f8d4": "{{value0}} cores",
+            "63dec15e89": ", memory",
+            "63e5e9dbdf": "— load",
+            "acdc4e06b5": "Host",
+            "aa85babed1": "Remote host metrics",
+            "tooltip": "Host {{label}} — load {{load}}, memory {{percent}}%",
+            "memory": "{{used}} / {{total}} GB · {{percent}}%"
           }
         }
       },

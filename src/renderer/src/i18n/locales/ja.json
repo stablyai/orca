@@ -2935,7 +2935,8 @@
             "972a1ff497": "Codex の制限をリセットしますか？",
             "6d1042aa6f": "アクティブなアカウントの Codex レート制限リセット枠を 1 回使用し、対象の使用量ウィンドウを直ちにリセットします。",
             "f077f586db": "今後表示しない",
-            "c0e972d726": "キャンセル"
+            "c0e972d726": "キャンセル",
+            "b82b5ecf03": "Host Metrics"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3098,6 +3099,24 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"
+          },
+          "HostStatusSegment": {
+            "6641a07d35": "attached",
+            "3b6f0532da": "No sessions detected",
+            "a08d335b74": "tmux is not running on this host",
+            "0ff2a9cbee": "Sessions on host",
+            "b54da3f1ac": "Loading host metrics...",
+            "ac42f3d00f": "GB ·",
+            "ae01984a93": "Memory",
+            "0b550095d7": "Uptime",
+            "518f1762a3": "Load avg",
+            "164c53f8d4": "{{value0}} cores",
+            "63dec15e89": ", memory",
+            "63e5e9dbdf": "— load",
+            "acdc4e06b5": "Host",
+            "aa85babed1": "Remote host metrics",
+            "tooltip": "Host {{label}} — load {{load}}, memory {{percent}}%",
+            "memory": "{{used}} / {{total}} GB · {{percent}}%"
           }
         }
       },
