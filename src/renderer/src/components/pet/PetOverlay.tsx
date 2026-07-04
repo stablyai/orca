@@ -65,11 +65,8 @@ function SpriteFrame({
   const startY = -(row * sprite.frameHeight * scale)
   const endX = -(frames * sprite.frameWidth * scale)
   const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
-  // Why: build the @keyframes as a plain string variable so the localization
-  // coverage audit does not classify the CSS as a user-visible JSX expression.
-  // CSS must never pass through translate()/i18n — translated keywords
-  // (transform, background-position, to) produce invalid CSS the browser
-  // discards, freezing the sprite on frame 0.
+  // Why: sprite keyframes are runtime CSS, not user-visible copy; translated
+  // CSS keywords make the browser discard the animation.
   const keyframesCss = `@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`
   return (
     <>
@@ -261,9 +258,8 @@ function defaultPosition(size: number = SIZE): Position {
   )
 }
 
-// Why: static CSS keyframes for the pet bob float. Declared as a module-level
-// string constant (not via translate()/i18n) so the CSS keywords are never
-// localized — translated CSS keywords produce invalid CSS the browser discards.
+// Why: the bob float is runtime CSS, not user-visible copy; keep CSS keywords
+// out of i18n so translated locales cannot invalidate the keyframes.
 const PET_BOB_KEYFRAMES_CSS =
   '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
 export function PetOverlay(): React.JSX.Element {
