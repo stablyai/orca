@@ -2933,6 +2933,7 @@ export default function TerminalPane({
                 paneKey={makePaneKey(tabId, chatPane.leafId)}
                 targetPtyId={chatPanePtyId}
                 launchAgent={terminalTab?.launchAgent}
+                resolvedAgent={titleResolvedAgent}
                 onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
                 contextMenuActions={{
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
