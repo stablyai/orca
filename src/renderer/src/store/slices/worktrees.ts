@@ -72,7 +72,10 @@ const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
 const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
-const WORKTREE_REFRESH_CONCURRENCY = 5
+// Why: each repo's `git worktree list` is an independent main-process child, so
+// a higher ceiling cuts startup scan batches (#7225) while staying bounded so
+// one UI moment can't launch every git probe at once.
+export const WORKTREE_REFRESH_CONCURRENCY = 8
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
