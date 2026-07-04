@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatWindowsPowerShellCrashCorrelationHint,
-  formatWindowsPowerShellSpawnDiagnostic
+  formatWindowsPowerShellSpawnDiagnostic,
+  getWindowsPowerShellFallbackStartupDelivery
 } from './windows-powershell-spawn-diagnostics'
 
 describe('windows PowerShell spawn diagnostics', () => {
@@ -18,6 +19,20 @@ describe('windows PowerShell spawn diagnostics', () => {
     ).toBe(
       'windows-powershell-spawn sessionId=session-1 fallbackFrom=C:\\Program Files\\PowerShell\\7\\pwsh.exe shell=C:\\Windows\\System32\\cmd.exe cwd=C:\\repo startupDelivery=shell-args safeModeNoProfile=false'
     )
+  })
+
+  it('classifies fallback startup delivery accurately', () => {
+    expect(
+      getWindowsPowerShellFallbackStartupDelivery({
+        startupCommandDeliveredInShellArgs: true
+      })
+    ).toBe('shell-args')
+    expect(
+      getWindowsPowerShellFallbackStartupDelivery({
+        shellReadyMarker: '1'
+      })
+    ).toBe('stdin')
+    expect(getWindowsPowerShellFallbackStartupDelivery({})).toBe('none')
   })
 
   it('formats the Windows Event Log crash-correlation hint', () => {

@@ -1683,6 +1683,7 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     const startupCommand = "& 'codex' '--prefill' 'linked issue context'"
+    const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
     spawnMock.mockImplementationOnce(() => {
@@ -1711,6 +1712,40 @@ describe('createPtySubprocess', () => {
     expect(spawnMock.mock.calls[1]?.[1]).toEqual(['/K', `chcp 65001 > nul & ${startupCommand}`])
     expect(spawnMock.mock.calls[1]?.[2].env.ORCA_SHELL_READY_MARKER).toBeUndefined()
     expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).toContain('startupDelivery=shell-args')
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).not.toContain('cwd=')
+    warnMock.mockRestore()
+  })
+
+  it('reports no startup delivery when Windows PowerShell fallback has no command', () => {
+    const proc = mockPtyProcess()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('ConPTY rejected PowerShell')
+    })
+    spawnMock.mockReturnValue(proc)
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls[0]?.[0]).toBe(WINDOWS_POWERSHELL_ABS)
+    expect(spawnMock.mock.calls[1]?.[0]).toBe(CMD_ABS)
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).toContain('startupDelivery=none')
+    expect(String(warnMock.mock.calls.at(-1)?.[0])).not.toContain('cwd=')
+    warnMock.mockRestore()
   })
 
   it('keeps oversized Windows startup commands on PTY stdin delivery', () => {

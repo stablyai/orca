@@ -4,7 +4,8 @@ import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   formatWindowsPowerShellCrashCorrelationHint,
-  formatWindowsPowerShellSpawnDiagnostic
+  formatWindowsPowerShellSpawnDiagnostic,
+  getWindowsPowerShellFallbackStartupDelivery
 } from '../../shared/windows-powershell-spawn-diagnostics'
 import { wslUncDirectoryExists } from '../wsl'
 import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
@@ -214,8 +215,10 @@ function spawnWindowsFallbackChain(
           formatWindowsPowerShellSpawnDiagnostic({
             fallbackFromShellPath: params.shellPath,
             shellPath: attempt.shellPath,
-            cwd: attempt.effectiveCwd,
-            startupDelivery: attempt.startupCommandDeliveredInShellArgs ? 'shell-args' : 'stdin',
+            startupDelivery: getWindowsPowerShellFallbackStartupDelivery({
+              shellReadyMarker: env.ORCA_SHELL_READY_MARKER,
+              startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
+            }),
             safeModeNoProfile: env.ORCA_WINDOWS_POWERSHELL_SAFE_MODE === '1'
           }),
           formatWindowsPowerShellCrashCorrelationHint({ shellPath: params.shellPath })

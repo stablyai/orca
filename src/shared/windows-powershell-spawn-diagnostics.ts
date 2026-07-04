@@ -2,7 +2,7 @@ export type WindowsPowerShellStartupDeliveryKind = 'shell-args' | 'stdin' | 'non
 
 export type WindowsPowerShellSpawnDiagnostic = {
   shellPath: string
-  cwd: string
+  cwd?: string
   startupDelivery: WindowsPowerShellStartupDeliveryKind
   safeModeNoProfile: boolean
   sessionId?: string
@@ -21,10 +21,20 @@ export function formatWindowsPowerShellSpawnDiagnostic(
     ...formatOptionalField('sessionId', diagnostic.sessionId),
     ...formatOptionalField('fallbackFrom', diagnostic.fallbackFromShellPath),
     `shell=${diagnostic.shellPath}`,
-    `cwd=${diagnostic.cwd}`,
+    ...formatOptionalField('cwd', diagnostic.cwd),
     `startupDelivery=${diagnostic.startupDelivery}`,
     `safeModeNoProfile=${diagnostic.safeModeNoProfile ? 'true' : 'false'}`
   ].join(' ')
+}
+
+export function getWindowsPowerShellFallbackStartupDelivery(args: {
+  shellReadyMarker?: string
+  startupCommandDeliveredInShellArgs?: boolean
+}): WindowsPowerShellStartupDeliveryKind {
+  if (args.startupCommandDeliveredInShellArgs === true) {
+    return 'shell-args'
+  }
+  return args.shellReadyMarker === '1' ? 'stdin' : 'none'
 }
 
 export function formatWindowsPowerShellCrashCorrelationHint(args: {

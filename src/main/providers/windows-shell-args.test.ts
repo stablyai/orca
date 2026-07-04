@@ -7,7 +7,10 @@ import {
   buildWslInteractiveLoginShellCommand,
   escapeWslShCommandForWindows
 } from '../../shared/wsl-login-shell-command'
-import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import {
+  resolveWindowsShellLaunchArgs,
+  shouldLaunchWindowsPowerShellWithoutProfile
+} from './windows-shell-args'
 
 function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
   const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
@@ -143,6 +146,20 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const command = Buffer.from(result.shellArgs[4] ?? '', 'base64').toString('utf16le')
     expect(command).toContain('function Global:prompt')
     expect(command).not.toContain("& 'codex' '--no-alt-screen'")
+  })
+
+  it('does not read PowerShell safe mode from process.env', () => {
+    const previous = process.env.ORCA_WINDOWS_POWERSHELL_SAFE_MODE
+    process.env.ORCA_WINDOWS_POWERSHELL_SAFE_MODE = '1'
+    try {
+      expect(shouldLaunchWindowsPowerShellWithoutProfile({})).toBe(false)
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ORCA_WINDOWS_POWERSHELL_SAFE_MODE
+      } else {
+        process.env.ORCA_WINDOWS_POWERSHELL_SAFE_MODE = previous
+      }
+    }
   })
 
   it('keeps complex PowerShell startup command text off EncodedCommand', () => {

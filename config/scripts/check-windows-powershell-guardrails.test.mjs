@@ -39,6 +39,16 @@ describe('check-windows-powershell-guardrails', () => {
     ])
   })
 
+  it('reports bare pwsh command strings passed through exec in source files', () => {
+    const root = createRepoFixture({
+      'src/main/pwsh-probe.ts': "exec('pwsh.exe -Version')"
+    })
+
+    expect(checkWindowsPowerShellSourceGuardrails(root)).toMatchObject([
+      { ruleId: 'bare-pwsh-process-launch' }
+    ])
+  })
+
   it('accepts PowerShell launches through a resolved executable variable', () => {
     const root = createRepoFixture({
       'src/main/pwsh-probe.ts':
@@ -48,10 +58,32 @@ describe('check-windows-powershell-guardrails', () => {
     expect(checkWindowsPowerShellGuardrails(root)).toEqual([])
   })
 
+  it('reports startup commands appended to interactive PowerShell EncodedCommand', () => {
+    const root = createRepoFixture({
+      'src/main/providers/windows-shell-args.ts':
+        'const encoded = `${bootstrap}\\n${startupCommand}`'
+    })
+
+    expect(checkWindowsPowerShellSourceGuardrails(root)).toMatchObject([
+      { ruleId: 'interactive-powershell-startup-encodedcommand' }
+    ])
+  })
+
   it('reports relay imports that reach back into main providers', () => {
     const root = createRepoFixture({
       'src/relay/windows-shell.ts':
         "import { resolveWindowsPowerShellSpawnChain } from '../main/providers/windows-powershell-executable'"
+    })
+
+    expect(checkWindowsPowerShellSourceGuardrails(root)).toMatchObject([
+      { ruleId: 'relay-main-powershell-resolver-import' }
+    ])
+  })
+
+  it('reports nested relay imports that reach back into main providers', () => {
+    const root = createRepoFixture({
+      'src/relay/nested/windows-shell.ts':
+        "import { resolveWindowsPowerShellSpawnChain } from '../../main/providers/windows-powershell-executable'"
     })
 
     expect(checkWindowsPowerShellSourceGuardrails(root)).toMatchObject([
@@ -74,6 +106,26 @@ describe('check-windows-powershell-guardrails', () => {
 
     expect(checkWindowsPowerShellBuiltGuardrails(root)).toMatchObject([
       { ruleId: 'packaged-bare-pwsh-probe' }
+    ])
+  })
+
+  it('reports bare pwsh command strings in built output', () => {
+    const root = createRepoFixture({
+      'out/main/index.js': 'require("node:child_process").exec("pwsh.exe -Version")'
+    })
+
+    expect(checkWindowsPowerShellBuiltGuardrails(root)).toMatchObject([
+      { ruleId: 'packaged-bare-pwsh-probe' }
+    ])
+  })
+
+  it('reports startup commands appended to packaged PowerShell EncodedCommand output', () => {
+    const root = createRepoFixture({
+      'out/main/index.js': 'const encoded = `${bootstrap}\\n${startupCommand}`'
+    })
+
+    expect(checkWindowsPowerShellBuiltGuardrails(root)).toMatchObject([
+      { ruleId: 'packaged-powershell-startup-payload' }
     ])
   })
 })

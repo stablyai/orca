@@ -6,10 +6,7 @@ import {
 const WINDOWS_POWERSHELL_SAFE_MODE_ENV = 'ORCA_WINDOWS_POWERSHELL_SAFE_MODE'
 
 function shouldLaunchWindowsPowerShellWithoutProfile(env: Record<string, string>): boolean {
-  return (
-    env[WINDOWS_POWERSHELL_SAFE_MODE_ENV] === '1' ||
-    process.env[WINDOWS_POWERSHELL_SAFE_MODE_ENV] === '1'
-  )
+  return env[WINDOWS_POWERSHELL_SAFE_MODE_ENV] === '1'
 }
 
 export function getWindowsRelayShellArgs(

@@ -44,7 +44,7 @@ function stubTerminalCapabilityApi(args: {
   const pwshIsAvailable = vi.fn().mockResolvedValue(args.pwshAvailable)
   const pwshGetDiagnostic = vi
     .fn()
-    .mockResolvedValue(args.pwshDiagnostic ?? RESOLVED_PWSH_DIAGNOSTIC)
+    .mockResolvedValue('pwshDiagnostic' in args ? args.pwshDiagnostic : RESOLVED_PWSH_DIAGNOSTIC)
   const isGitBashAvailable = vi.fn().mockResolvedValue(args.gitBashAvailable ?? false)
   const runtimeGetStatus = vi
     .fn()

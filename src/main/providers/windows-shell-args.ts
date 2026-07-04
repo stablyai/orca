@@ -51,10 +51,7 @@ export type WindowsShellLaunchOptions = {
 export function shouldLaunchWindowsPowerShellWithoutProfile(
   env?: Record<string, string | undefined>
 ): boolean {
-  return (
-    env?.[WINDOWS_POWERSHELL_SAFE_MODE_ENV] === '1' ||
-    process.env[WINDOWS_POWERSHELL_SAFE_MODE_ENV] === '1'
-  )
+  return env?.[WINDOWS_POWERSHELL_SAFE_MODE_ENV] === '1'
 }
 
 /**
@@ -67,6 +64,8 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
   if (!command || command.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
     return null
   }
+  // Why: this is already a shell command payload that would otherwise be
+  // written to PTY stdin; escaping metacharacters would change its behavior.
   const commandArg = `${CMD_UTF8_SETUP_COMMAND} & ${command}`
   if (commandArg.length > CMD_EXE_COMMAND_LINE_MAX_CHARS) {
     return null

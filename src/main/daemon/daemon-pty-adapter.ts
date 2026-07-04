@@ -180,6 +180,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       startupCommandDelivery: opts.startupCommandDelivery
     })
     const shellReadySupported = supportsShellReadyBarrier
+    // Why: Windows PowerShell marker delivery keeps Session's 15s default
+    // timeout. This short override only bounds legacy Codex non-delivery paths.
     const shellReadyTimeoutMs =
       shellReadySupported &&
       process.platform !== 'win32' &&

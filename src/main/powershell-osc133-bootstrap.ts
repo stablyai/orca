@@ -32,6 +32,7 @@ $Global:__OrcaOsc133State = @{
     OriginalPrompt = $function:prompt
     OriginalReadLine = $function:PSConsoleHostReadLine
     HasSeenPrompt = $false
+    ReadyMarkerEmitted = $false
     HasPSReadLine = $null -ne (Get-Module -Name PSReadLine)
     Esc = [char]27
     Bel = [char]7
@@ -51,8 +52,12 @@ function Global:prompt {
     $Global:__OrcaOsc133State.HasSeenPrompt = $true
 
     $result += "$($Global:__OrcaOsc133State.Esc)]133;A$($Global:__OrcaOsc133State.Bel)"
-    if ($env:ORCA_SHELL_READY_MARKER -eq "1") {
+    # Why: the startup scanner only consumes the first marker; later prompts
+    # must not leak marker OSC bytes into normal terminal output.
+    if ($env:ORCA_SHELL_READY_MARKER -eq "1" -and
+        -not $Global:__OrcaOsc133State.ReadyMarkerEmitted) {
         $result += "$($Global:__OrcaOsc133State.Esc)]777;orca-shell-ready$($Global:__OrcaOsc133State.Bel)"
+        $Global:__OrcaOsc133State.ReadyMarkerEmitted = $true
     }
     # Preserve the previous success/failure value for prompts that inspect it.
     if ($fakeExitCode -ne 0) { Write-Error "failure" -ea ignore }

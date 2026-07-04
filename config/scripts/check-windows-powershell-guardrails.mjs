@@ -9,12 +9,13 @@ const SOURCE_RULES = [
   {
     id: 'bare-pwsh-process-launch',
     message: 'Resolve pwsh.exe through shared/windows-powershell-executable before spawning it.',
-    pattern: /\b(?:spawn|spawnSync|execFile|execFileSync|exec)\s*\(\s*(['"`])pwsh(?:\.exe)?\1/gi
+    pattern:
+      /\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(\s*(['"`])pwsh(?:\.exe)?\1|\bexec\s*\(\s*(['"`])pwsh(?:\.exe)?\b[^)]*\2/gi
   },
   {
     id: 'relay-main-powershell-resolver-import',
     message: 'Relay code must import the shared PowerShell resolver, not main/providers.',
-    pattern: /from\s+['"]\.\.\/main\/providers\/windows-powershell-executable['"]/g
+    pattern: /from\s+['"](?:\.\.\/)+main\/providers\/windows-powershell-executable['"]/g
   },
   {
     id: 'interactive-powershell-startup-encodedcommand',
@@ -27,7 +28,8 @@ const BUILT_RULES = [
   {
     id: 'packaged-bare-pwsh-probe',
     message: 'Packaged output must not contain a bare pwsh.exe process probe.',
-    pattern: /\b(?:spawn|spawnSync|execFile|execFileSync|exec)\s*\(\s*(['"`])pwsh(?:\.exe)?\1/gi
+    pattern:
+      /\b(?:spawn|spawnSync|execFile|execFileSync)\s*\(\s*(['"`])pwsh(?:\.exe)?\1|\bexec\s*\(\s*(['"`])pwsh(?:\.exe)?\b[^)]*\2/gi
   },
   {
     id: 'packaged-powershell-startup-payload',

@@ -46,7 +46,8 @@ import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../gi
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import {
   formatWindowsPowerShellCrashCorrelationHint,
-  formatWindowsPowerShellSpawnDiagnostic
+  formatWindowsPowerShellSpawnDiagnostic,
+  getWindowsPowerShellFallbackStartupDelivery
 } from '../../shared/windows-powershell-spawn-diagnostics'
 import { resolveAgentForegroundProcess } from '../providers/agent-foreground-process'
 import {
@@ -494,6 +495,8 @@ function spawnDaemonPtyWithWindowsFallback(args: {
 } {
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     let spawnEnv = args.env
+    // Why: only the PowerShell bootstrap consumes this marker. cmd.exe and
+    // other fallback shells would inherit stale marker state, so strip it.
     if (
       process.platform === 'win32' &&
       !isWindowsPowerShellPath(shellPath) &&
@@ -537,8 +540,10 @@ function spawnDaemonPtyWithWindowsFallback(args: {
               sessionId: args.sessionId,
               fallbackFromShellPath: args.shellPath,
               shellPath: attempt.shellPath,
-              cwd: attempt.effectiveCwd,
-              startupDelivery: attempt.startupCommandDeliveredInShellArgs ? 'shell-args' : 'stdin',
+              startupDelivery: getWindowsPowerShellFallbackStartupDelivery({
+                shellReadyMarker: args.env.ORCA_SHELL_READY_MARKER,
+                startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
+              }),
               safeModeNoProfile: args.env.ORCA_WINDOWS_POWERSHELL_SAFE_MODE === '1'
             }),
             formatWindowsPowerShellCrashCorrelationHint({

@@ -62,6 +62,8 @@ export function TerminalAdvancedSection({
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackRows}` : 'custom'
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
+  // Why: WindowsApps pwsh.exe aliases cannot be launched by ConPTY and were
+  // the crash path behind the rc.2.perf terminal startup failures.
   const pwshAliasOnly = pwshDiagnostic?.reason === 'alias_only'
   const commitScrollbackRowsDraft = (): void => {
     const trimmed = scrollbackRowsDraft.trim()
