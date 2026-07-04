@@ -64,6 +64,23 @@ function entriesToTreeNodes(
   })
 }
 
+async function readWorktreeDirectory(
+  activeWorktreeId: string | null | undefined,
+  worktreePath: string | null,
+  dirPath: string
+): Promise<DirEntry[]> {
+  const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+  return readRuntimeDirectory(
+    {
+      settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+      worktreeId: activeWorktreeId,
+      worktreePath,
+      connectionId
+    },
+    dirPath
+  )
+}
+
 export async function refreshFileExplorerExpandedDirs({
   dirs,
   worktreePath,
@@ -180,16 +197,7 @@ export function useFileExplorerTree(
         }
       }))
       try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        const entries = await readRuntimeDirectory(
-          {
-            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          dirPath
-        )
+        const entries = await readWorktreeDirectory(activeWorktreeId, worktreePath, dirPath)
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
@@ -278,18 +286,7 @@ export function useFileExplorerTree(
       worktreePath,
       dirLoadTracker: dirLoadTrackerRef.current,
       setDirCache,
-      readDirectory: async (dirPath) => {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        return readRuntimeDirectory(
-          {
-            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          dirPath
-        )
-      }
+      readDirectory: (dirPath) => readWorktreeDirectory(activeWorktreeId, worktreePath, dirPath)
     })
   }, [activeWorktreeId, expanded, loadDir, worktreePath])
 

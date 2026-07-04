@@ -1038,9 +1038,9 @@ function buildPRRefreshCandidate(
     true
   )
   const cachedFallbackPRNumber = cachedPR?.number ?? null
-  // Why: a merged PR stays a valid fallback when the worktree sits on its head
-  // or on a commit main confirmed as part of the PR; anything else means the
-  // branch moved on and the number must not resurrect the old merged PR.
+  // Why: a merged PR stays a valid fallback when the worktree sits on its head or
+  // on a commit confirmed to be part of the PR; anything else means the branch
+  // moved on and the number must not resurrect the old merged PR.
   const cachedMergedPRMovedPastHead =
     worktree.linkedPR == null &&
     cachedPR?.state === 'merged' &&
@@ -1272,7 +1272,7 @@ function shouldPreserveExistingPRForFallbackMiss(args: {
   const worktreeHead = worktree?.head
   // Why: merged branch PRs are only safe to keep when cached PR metadata still
   // matches the commit this stored worktree is actually on — exactly, or via a
-  // head main confirmed to be part of the merged PR.
+  // head confirmed to be part of the merged PR.
   const preservesMergedPRForCurrentHead =
     args.nextPR === null &&
     args.linkedPRNumber == null &&

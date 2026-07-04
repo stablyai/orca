@@ -3626,7 +3626,8 @@ function BrowserPagePane({
     let needsInitialDefaultZoom = ensuredWebview.created
 
     if (!ensuredWebview.created) {
-      webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
+      // pointerEvents is already applied inside ensureBrowserPageWebview for the
+      // reused-webview path, so it isn't repeated here.
       syncNavigationState(webview)
       // Why: seed the ref with the store URL so the URL sync effect does not
       // force-navigate an already-mounted webview that is on the right page.

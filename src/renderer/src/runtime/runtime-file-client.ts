@@ -166,11 +166,9 @@ export async function readRuntimeFileContent({
       { timeoutMs: 15_000 }
     )
   } catch (err) {
-    // Why: files.read (readMobileFile) rejects binary paths — PDFs/images/etc —
-    // with the exact runtime error code 'binary_file'. Fetch the previewable
-    // base64 payload via files.readPreview so the editor renders them like the
-    // local/SSH paths do, keeping the server as the single binary-detection
-    // authority. Match the typed RPC error so an unrelated failure can't spoof it.
+    // Why: files.read rejects binary paths with the typed 'binary_file' error; fall
+    // back to the base64 preview RPC so PDFs/images render like local/SSH paths.
+    // Match the exact typed error so an unrelated failure can't spoof the fallback.
     if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
       return callRuntimeRpc<RuntimeFilePreviewResult>(
         target,

@@ -28,6 +28,28 @@ export function isGitHubUserAttachmentVideoLink(
   return isGitHubUserAttachmentUrl(href) && isBareAutolink(children, href)
 }
 
+// Shared fallback link for attachments that can't render inline (see the image
+// note below on why load failures drop to a session-scoped link).
+function AttachmentFallbackLink({
+  href,
+  children
+}: {
+  href: string
+  children: React.ReactNode
+}): React.ReactElement {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+    </a>
+  )
+}
+
 export function GitHubUserAttachmentVideo({
   href,
   children
@@ -38,17 +60,7 @@ export function GitHubUserAttachmentVideo({
   const [failed, setFailed] = React.useState(false)
 
   if (failed) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </a>
-    )
+    return <AttachmentFallbackLink href={href}>{children}</AttachmentFallbackLink>
   }
 
   return (
@@ -82,17 +94,7 @@ export function GitHubUserAttachmentImage({
   // user's GitHub session cookies, so wrap in a top-level link (opening the
   // URL where that session exists) and drop to a text link on load error.
   if (failed) {
-    return (
-      <a
-        href={src}
-        target="_blank"
-        rel="noreferrer"
-        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {label}
-      </a>
-    )
+    return <AttachmentFallbackLink href={src}>{label}</AttachmentFallbackLink>
   }
 
   return (

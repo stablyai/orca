@@ -117,8 +117,6 @@ export function resolveComposerBranchNameOverrideForCreate(args: {
   createBranchFromWorkspaceName?: boolean
 }): string | undefined {
   if (!args.branchNameOverride) {
-    // Why: branch mode keeps slash-containing git branch names while the
-    // workspace folder name may still be sanitized separately.
     return args.createBranchFromWorkspaceName && args.workspaceName.includes('/')
       ? args.workspaceName
       : undefined

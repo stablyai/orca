@@ -89,7 +89,9 @@ export function WorktreeTitleInlineRename({
       // root owns that stale-write guard without a mount-only Effect.
       mountedRef.current = node !== null
       titleElementRef.current = node
-      if (!node || editingRef.current) {
+      // Why: wrapped titles render in full and never truncate, so skip the measure +
+      // ResizeObserver entirely — for that mode it could only churn unused state.
+      if (!node || editingRef.current || wrapTitle) {
         measureTitleTruncated(null)
         return
       }
@@ -109,7 +111,7 @@ export function WorktreeTitleInlineRename({
       observer.observe(node)
       titleResizeObserverRef.current = observer
     },
-    [measureTitleTruncated]
+    [measureTitleTruncated, wrapTitle]
   )
 
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`

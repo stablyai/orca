@@ -1699,61 +1699,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
         if (existingPreviewIdx !== -1) {
           const replacedPreview = s.openFiles[existingPreviewIdx]
-          const nextEditorDrafts =
-            replacedPreview.id === id
-              ? s.editorDrafts
-              : Object.fromEntries(
-                  Object.entries(s.editorDrafts).filter(([fileId]) => fileId !== replacedPreview.id)
-                )
-          const nextMarkdownViewMode =
-            replacedPreview.id === id
-              ? s.markdownViewMode
-              : Object.fromEntries(
-                  Object.entries(s.markdownViewMode).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
-          const nextEditorViewMode =
-            replacedPreview.id === id
-              ? s.editorViewMode
-              : Object.fromEntries(
-                  Object.entries(s.editorViewMode).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
-          const markdownVisibilityKeys = new Set([replacedPreview.id])
-          if (replacedPreview.markdownPreviewSourceFileId) {
-            markdownVisibilityKeys.add(replacedPreview.markdownPreviewSourceFileId)
-          }
-          const visibilityKeysToRemove = [...markdownVisibilityKeys].filter(
-            (key) =>
-              !s.openFiles.some(
-                (file, index) =>
-                  index !== existingPreviewIdx &&
-                  (file.id === key || file.markdownPreviewSourceFileId === key)
-              )
-          )
-          const nextMarkdownFrontmatterVisible =
-            replacedPreview.id === id || visibilityKeysToRemove.length === 0
-              ? s.markdownFrontmatterVisible
-              : removeMarkdownVisibilityKeys(s.markdownFrontmatterVisible, visibilityKeysToRemove)
-          const nextMarkdownTableOfContentsVisible =
-            replacedPreview.id === id || visibilityKeysToRemove.length === 0
-              ? s.markdownTableOfContentsVisible
-              : removeMarkdownVisibilityKeys(
-                  s.markdownTableOfContentsVisible,
-                  visibilityKeysToRemove
-                )
-          // Why: editorCursorLine entries accumulate per file; clean up the
-          // evicted preview's entry so it does not leak across tab replacements.
-          const nextEditorCursorLine =
-            replacedPreview.id === id
-              ? s.editorCursorLine
-              : Object.fromEntries(
-                  Object.entries(s.editorCursorLine).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
+          // Why: reuse the shared eviction helper (as the four other preview-
+          // replacement paths do) so per-file cursor/draft/visibility cleanup stays
+          // defined in one place instead of a hand-rolled copy that drifts.
+          const {
+            editorDrafts: nextEditorDrafts,
+            editorCursorLine: nextEditorCursorLine,
+            markdownViewMode: nextMarkdownViewMode,
+            editorViewMode: nextEditorViewMode,
+            markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
+            markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible
+          } = removeEditorStateForReplacedPreview(s, replacedPreview, id)
           // Replace in-place to preserve tab position
           newFiles = s.openFiles.map((f, i) =>
             i === existingPreviewIdx
