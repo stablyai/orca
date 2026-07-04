@@ -1,6 +1,6 @@
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { statMock, readFileMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
@@ -20,6 +20,12 @@ vi.mock('os', () => ({
 import { previewGhosttyImport } from './index'
 
 const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
+const originalGhosttyResourcesDir = process.env.GHOSTTY_RESOURCES_DIR
+
+beforeEach(() => {
+  delete process.env.XDG_CONFIG_HOME
+  delete process.env.GHOSTTY_RESOURCES_DIR
+})
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -27,6 +33,11 @@ afterEach(() => {
     process.env.XDG_CONFIG_HOME = originalXdgConfigHome
   } else {
     delete process.env.XDG_CONFIG_HOME
+  }
+  if (originalGhosttyResourcesDir !== undefined) {
+    process.env.GHOSTTY_RESOURCES_DIR = originalGhosttyResourcesDir
+  } else {
+    delete process.env.GHOSTTY_RESOURCES_DIR
   }
 })
 
