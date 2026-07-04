@@ -1154,6 +1154,10 @@ export type RepoSlice = {
   activeRepoId: string | null
   // Monotonic sequence so an overlapping fetchRepos can drop its own stale result (#7020).
   reposFetchGeneration: number
+  // Single-flight gate for fetchReposForAllHosts: a repos:changed burst coalesces
+  // into one trailing all-host reload instead of racing overlapping loads (#7020).
+  reposAllHostsLoadInFlight: boolean
+  reposAllHostsReloadRequested: boolean
   fetchRepos: () => Promise<void>
   fetchReposForAllHosts: () => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
@@ -1273,6 +1277,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   folderWorkspacePathStatuses: {},
   activeRepoId: null,
   reposFetchGeneration: 0,
+  reposAllHostsLoadInFlight: false,
+  reposAllHostsReloadRequested: false,
 
   fetchRepos: async () => {
     // Why: overlapping repos:changed fetches can resolve out of order; an earlier
@@ -1374,60 +1380,86 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // sidebar "All hosts" scope shows them together regardless of which
     // environment is active. Each host fails soft: an unreachable/disconnected
     // host is skipped without blocking the others.
-    const applyResult = (result: Awaited<ReturnType<typeof fetchReposForTarget>>): void => {
-      const validRepoIds = new Set(result.repos.map((repo) => repo.id))
-      set((s) => {
-        const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
-          previous: {
-            projects: s.projects,
-            projectHostSetups: s.projectHostSetups
-          },
-          fetched: result.projectCompatibility,
-          repos: result.repos,
-          hostId: result.hostId
+    const loadReposForAllHosts = async (): Promise<void> => {
+      const applyResult = (result: Awaited<ReturnType<typeof fetchReposForTarget>>): void => {
+        const validRepoIds = new Set(result.repos.map((repo) => repo.id))
+        set((s) => {
+          const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
+            previous: {
+              projects: s.projects,
+              projectHostSetups: s.projectHostSetups
+            },
+            fetched: result.projectCompatibility,
+            repos: result.repos,
+            hostId: result.hostId
+          })
+          return {
+            repos: result.repos,
+            ...mergedProjectCompatibility,
+            folderWorkspacePathStatuses: {},
+            activeRepoId:
+              s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+            filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
+            setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+              s.setupScriptPromptDismissedRepoIds,
+              validRepoIds
+            )
+          }
         })
-        return {
-          repos: result.repos,
-          ...mergedProjectCompatibility,
-          folderWorkspacePathStatuses: {},
-          activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-          filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
-          setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
-            s.setupScriptPromptDismissedRepoIds,
-            validRepoIds
-          )
-        }
-      })
-      // Why: preserve the safe-auto fork sync that fetchRepos /
-      // fetchRuntimeEnvironmentRepos schedule after merging each host, so
-      // cold-start (which now routes through here) keeps updating safe-auto forks.
-      scheduleSafeAutoForkSync(
-        get,
-        result.repos.filter((repo) => getRepoExecutionHostId(repo) === result.hostId)
-      )
-    }
-
-    // Local first so local repos are present even if a remote fetch stalls.
-    try {
-      applyResult(await fetchReposForTarget({ kind: 'local' }, get().repos))
-    } catch (err) {
-      console.error('Failed to fetch local repos for all-host load:', err)
-    }
-
-    const environments = await listRuntimeEnvironmentsForAllHostLoad()
-
-    // Sequential to avoid concurrent set() races on the merged repos array.
-    for (const environment of environments) {
-      try {
-        applyResult(
-          await fetchReposForTarget(
-            { kind: 'environment', environmentId: environment.id },
-            get().repos
-          )
+        // Why: preserve the safe-auto fork sync that fetchRepos /
+        // fetchRuntimeEnvironmentRepos schedule after merging each host, so
+        // cold-start (which now routes through here) keeps updating safe-auto forks.
+        scheduleSafeAutoForkSync(
+          get,
+          result.repos.filter((repo) => getRepoExecutionHostId(repo) === result.hostId)
         )
-      } catch (err) {
-        console.warn(`Skipped repos for runtime environment ${environment.id}:`, err)
       }
+
+      // Local first so local repos are present even if a remote fetch stalls.
+      try {
+        applyResult(await fetchReposForTarget({ kind: 'local' }, get().repos))
+      } catch (err) {
+        console.error('Failed to fetch local repos for all-host load:', err)
+      }
+
+      const environments = await listRuntimeEnvironmentsForAllHostLoad()
+
+      // Sequential to avoid concurrent set() races on the merged repos array.
+      for (const environment of environments) {
+        try {
+          applyResult(
+            await fetchReposForTarget(
+              { kind: 'environment', environmentId: environment.id },
+              get().repos
+            )
+          )
+        } catch (err) {
+          console.warn(`Skipped repos for runtime environment ${environment.id}:`, err)
+        }
+      }
+    }
+
+    // Why: repos:changed fires once per persisted mutation, so deleting a project
+    // group with contained projects emits an N+1 burst. Without coalescing, each
+    // event starts an overlapping all-host load and an earlier one that read
+    // pre-removal state can resolve last and resurrect the removed projects
+    // (#7020 — #7024 guards fetchRepos but left this all-host path unprotected).
+    // Single-flight it: run one load at a time and, when events arrive mid-load,
+    // run exactly one trailing reload afterwards. The trailing reload reads at or
+    // after the final mutation, so the sidebar settles on the final persisted
+    // state; the burst's O(N²) host fetches also collapse to ~1 trailing reload.
+    if (get().reposAllHostsLoadInFlight) {
+      set({ reposAllHostsReloadRequested: true })
+      return
+    }
+    set({ reposAllHostsLoadInFlight: true })
+    try {
+      do {
+        set({ reposAllHostsReloadRequested: false })
+        await loadReposForAllHosts()
+      } while (get().reposAllHostsReloadRequested)
+    } finally {
+      set({ reposAllHostsLoadInFlight: false })
     }
   },
 
