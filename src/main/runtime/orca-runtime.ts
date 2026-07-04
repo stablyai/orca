@@ -14000,7 +14000,13 @@ export class OrcaRuntimeService {
     }
 
     const promise = this.enqueueRemoteFetch(key, () =>
-      gitExecFileAsync(['fetch', remote], { cwd: repoPath, ...gitOptions })
+      gitExecFileAsync(['fetch', remote], {
+        cwd: repoPath,
+        ...gitOptions,
+        // Why: cap the create-path base-ref fetch so a stuck first-auth on
+        // Windows (GCM prompt) fails fast instead of hanging creation (STA-1292).
+        timeout: REMOTE_FETCH_TIMEOUT_MS
+      })
         .then((): RemoteFetchResult => {
           // Why (§3.3 Lifecycle): timestamp on success ONLY. Writing on rejection
           // would make the freshness cache lie about the last known remote state.
@@ -14059,7 +14065,7 @@ export class OrcaRuntimeService {
           // Why: exact remote-base refresh is the network gate for worktree
           // creation, so honor repo SSH routing and bound custom wrappers.
           useConfiguredSshCommandForNetwork: true,
-          timeout: 60_000
+          timeout: REMOTE_FETCH_TIMEOUT_MS
         }
       )
         .then((): RemoteFetchResult => {
@@ -22385,6 +22391,10 @@ const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
 // clicks and successive coordinator dispatches feel snappy, while still being
 // short enough that a genuinely-changed remote is observed on the next action.
 const FETCH_FRESHNESS_MS = 30_000
+// Why: bound create-path remote fetches so a Windows credential-manager GUI hang
+// (STA-1292) can't wedge worktree creation forever; parity with the exact-base
+// refresh sibling's timeout.
+const REMOTE_FETCH_TIMEOUT_MS = 60_000
 const REMOTE_FETCH_CACHE_MAX = 512
 const DRIFT_PROBE_SUBJECT_LIMIT = 5
 

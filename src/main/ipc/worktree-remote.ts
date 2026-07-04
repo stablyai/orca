@@ -118,6 +118,9 @@ import {
 
 const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
 const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
+// Why: bound the create-path fallback `git fetch origin` so a Windows
+// credential-manager GUI hang (STA-1292) can't wedge worktree creation forever.
+const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
 const sshWorktreeCreateFetchInflight = new Map<string, Promise<void>>()
 const sshWorktreeCreateFetchCompletedAt = new Map<string, number>()
 const sshWorktreeCreateFetchQueueTail = new Map<string, Promise<void>>()
@@ -1944,7 +1947,10 @@ export async function createLocalWorktree(
     }
   } else {
     if (!(await hasLocalCommitObjectWithOptions(repo.path, baseBranch, localWorktreeGitOptions))) {
-      legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], localGitExecOptions)
+      legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], {
+        ...localGitExecOptions,
+        timeout: CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS
+      })
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
