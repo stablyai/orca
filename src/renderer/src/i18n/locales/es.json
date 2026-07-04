@@ -2935,7 +2935,8 @@
             "972a1ff497": "¿Restablecer límites de Codex?",
             "6d1042aa6f": "Esto usa un crédito de restablecimiento de límite de Codex para la cuenta activa y restablece de inmediato las ventanas de uso aptas.",
             "f077f586db": "No volver a preguntar",
-            "c0e972d726": "Cancelar"
+            "c0e972d726": "Cancelar",
+            "b82b5ecf03": "Host Metrics"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -3098,6 +3099,24 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
+          },
+          "HostStatusSegment": {
+            "6641a07d35": "attached",
+            "3b6f0532da": "No sessions detected",
+            "a08d335b74": "tmux is not running on this host",
+            "0ff2a9cbee": "Sessions on host",
+            "b54da3f1ac": "Loading host metrics...",
+            "ac42f3d00f": "GB ·",
+            "ae01984a93": "Memory",
+            "0b550095d7": "Uptime",
+            "518f1762a3": "Load avg",
+            "164c53f8d4": "{{value0}} cores",
+            "63dec15e89": ", memory",
+            "63e5e9dbdf": "— load",
+            "acdc4e06b5": "Host",
+            "aa85babed1": "Remote host metrics",
+            "tooltip": "Host {{label}} — load {{load}}, memory {{percent}}%",
+            "memory": "{{used}} / {{total}} GB · {{percent}}%"
           }
         }
       },

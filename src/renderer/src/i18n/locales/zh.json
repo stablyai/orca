@@ -2935,7 +2935,8 @@
             "972a1ff497": "重置 Codex 限额？",
             "6d1042aa6f": "这会为当前账户使用一次 Codex 速率限制重置额度，并立即重置所有符合条件的用量窗口。",
             "f077f586db": "不再询问",
-            "c0e972d726": "取消"
+            "c0e972d726": "取消",
+            "b82b5ecf03": "Host Metrics"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3098,6 +3099,24 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
+          },
+          "HostStatusSegment": {
+            "6641a07d35": "attached",
+            "3b6f0532da": "No sessions detected",
+            "a08d335b74": "tmux is not running on this host",
+            "0ff2a9cbee": "Sessions on host",
+            "b54da3f1ac": "Loading host metrics...",
+            "ac42f3d00f": "GB ·",
+            "ae01984a93": "Memory",
+            "0b550095d7": "Uptime",
+            "518f1762a3": "Load avg",
+            "164c53f8d4": "{{value0}} cores",
+            "63dec15e89": ", memory",
+            "63e5e9dbdf": "— load",
+            "acdc4e06b5": "Host",
+            "aa85babed1": "Remote host metrics",
+            "tooltip": "Host {{label}} — load {{load}}, memory {{percent}}%",
+            "memory": "{{used}} / {{total}} GB · {{percent}}%"
           }
         }
       },

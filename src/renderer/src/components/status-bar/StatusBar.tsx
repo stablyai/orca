@@ -11,7 +11,8 @@ import {
   Loader2,
   PanelsTopLeft,
   RefreshCw,
-  Server
+  Server,
+  Gauge
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -90,6 +91,9 @@ const PortsStatusSegment = lazyWithRetry(() =>
 )
 const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+)
+const HostStatusSegment = lazyWithRetry(() =>
+  import('./HostStatusSegment').then((module) => ({ default: module.HostStatusSegment }))
 )
 
 export type CodexStatusRuntimeTarget = {
@@ -1865,6 +1869,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
+  const showHost = statusBarItems.includes('host')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible =
@@ -1994,6 +1999,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
           ) : null}
           {showPorts ? <PortsStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
+          {showHost ? <HostStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
           {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
         </React.Suspense>
         {showFloatingTerminalToggle && (
@@ -2116,6 +2122,15 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           >
             <Plug className="size-3.5" />
             {translate('auto.components.status.bar.StatusBar.9659e38343', 'Ports')}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('host')}
+            onCheckedChange={() => {
+              toggleStatusBarItem('host')
+            }}
+          >
+            <Gauge className="size-3.5" />
+            {translate('auto.components.status.bar.StatusBar.b82b5ecf03', 'Host Metrics')}
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
