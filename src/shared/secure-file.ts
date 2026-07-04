@@ -140,7 +140,7 @@ export function hardenSecurePath(
   )
 }
 
-/** Restricts a path to the current user (Windows ACL or POSIX chmod). Returns whether it applied. */
+/** Applies hardening; async Windows calls only report that best-effort ACL work was accepted. */
 function applySecurePathRestriction(
   targetPath: string,
   isDirectory: boolean,
