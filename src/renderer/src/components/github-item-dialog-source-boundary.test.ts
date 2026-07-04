@@ -57,7 +57,11 @@ describe('GitHubItemDialog source host boundaries', () => {
 
     expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
     expect(section).toContain('useRepoLabels(')
-    expect(section).toContain('useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)')
+    // Why (issue #1715): the slug lookups gained a trailing repoTarget arg for
+    // multi-host gh routing; sourceSettings must still be the source-routing arg.
+    expect(section).toContain(
+      'useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings, repoTarget)'
+    )
     expect(section).toContain('useRepoAssignees(')
     expect(section).toContain('useRepoAssigneesBySlug(')
     expect(section).toContain('sourceSettings')

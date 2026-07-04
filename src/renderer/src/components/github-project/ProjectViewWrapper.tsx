@@ -41,6 +41,7 @@ import type {
   GitHubProjectTable,
   GitHubProjectViewError,
   GitHubProjectViewSummary,
+  GitHubRepoTarget,
   ListProjectViewsResult
 } from '../../../../shared/github-project-types'
 import type { GitHubWorkItem } from '../../../../shared/types'
@@ -72,14 +73,18 @@ const ORCA_FEATURE_REQUEST_URL = 'https://github.com/stablyai/orca/issues/new'
 
 function listProjectViewsForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0],
-  args: { owner: string; ownerType: 'organization' | 'user'; projectNumber: number }
+  args: { owner: string; ownerType: 'organization' | 'user'; projectNumber: number },
+  repoTarget: GitHubRepoTarget
 ): Promise<ListProjectViewsResult> {
   const target = getActiveRuntimeTarget(settings)
+  // Why (issue #1715): merge the repo-routing hint into the IPC/RPC payload
+  // so listProjectViews lands on the host that owns the active repo.
+  const payload = { ...repoTarget, ...args }
   return target.kind === 'environment'
-    ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', args, {
+    ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', payload, {
         timeoutMs: 30_000
       })
-    : window.api.gh.listProjectViews(args)
+    : window.api.gh.listProjectViews(payload)
 }
 
 function getProjectViewSourceScope(settings: Parameters<typeof getActiveRuntimeTarget>[0]): string {
@@ -97,11 +102,26 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
   const patchProjectRowIssueType = useAppStore((s) => s.patchProjectRowIssueType)
   const addRepoFromStore = useAppStore((s) => s.addRepo)
   const repos = useAppStore((s) => s.repos)
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
   const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
   const mountedRef = useMountedRef()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
   const projectViewSourceScope = useMemo(() => getProjectViewSourceScope(settings), [settings])
+  // Why (issue #1715): pass the active repo as a gh-host hint to all
+  // project-related gh calls (picker, project view fetch, mutations). gh
+  // resolves the API host from that repo's git remote; without this, GHES
+  // users hit github.com and see misleading scope errors.
+  const activeRepoTarget = useMemo<GitHubRepoTarget>(() => {
+    const repo = activeRepoId ? repos.find((r) => r.id === activeRepoId) : null
+    if (!repo) {
+      return {}
+    }
+    return {
+      repoPath: repo.path,
+      connectionId: repo.connectionId ?? null
+    }
+  }, [activeRepoId, repos])
   const lastViewByProject = useMemo(
     () => settings?.githubProjects?.lastViewByProject ?? {},
     [settings?.githubProjects?.lastViewByProject]
@@ -193,7 +213,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       activeProject.number,
       viewId,
       queryOverride,
-      projectViewSourceScope
+      projectViewSourceScope,
+      activeRepoTarget
     )
     if (projectViewCache[cacheKey]?.data) {
       return
@@ -214,7 +235,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     projectViewCache,
     doFetch,
     appliedQueryByView,
-    projectViewSourceScope
+    projectViewSourceScope,
+    activeRepoTarget
   ])
 
   // Load the project's view list whenever the active project changes so the
@@ -229,11 +251,15 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       return
     }
     let cancelled = false
-    void listProjectViewsForRuntime(settings, {
-      owner: activeProject.owner,
-      ownerType: activeProject.ownerType,
-      projectNumber: activeProject.number
-    })
+    void listProjectViewsForRuntime(
+      settings,
+      {
+        owner: activeProject.owner,
+        ownerType: activeProject.ownerType,
+        projectNumber: activeProject.number
+      },
+      activeRepoTarget
+    )
       .then((res) => {
         if (cancelled) {
           return
@@ -255,7 +281,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     return () => {
       cancelled = true
     }
-  }, [activeProject, viewListByProject, settings, projectViewSourceScope])
+  }, [activeProject, viewListByProject, settings, projectViewSourceScope, activeRepoTarget])
 
   const handleSwitchView = useCallback(
     async (viewId: string) => {
@@ -329,9 +355,16 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       activeProject.number,
       viewId,
       currentAppliedOverride,
-      projectViewSourceScope
+      projectViewSourceScope,
+      activeRepoTarget
     )
-  }, [activeProject, lastViewByProject, currentAppliedOverride, projectViewSourceScope])
+  }, [
+    activeProject,
+    lastViewByProject,
+    currentAppliedOverride,
+    projectViewSourceScope,
+    activeRepoTarget
+  ])
 
   const table: GitHubProjectTable | null = currentCacheKey
     ? (projectViewCache[currentCacheKey]?.data ?? null)
@@ -775,6 +808,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
                 : null
           }
           onSelect={handleSelect}
+          repoTarget={activeRepoTarget}
         />
         {currentProjectViewKey ? (
           // Why: render the search input whenever a view is selected — even

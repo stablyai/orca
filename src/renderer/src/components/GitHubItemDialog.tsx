@@ -190,6 +190,7 @@ import {
   getGithubWorkItemWorkspaceAttachmentLabel
 } from '@/lib/github-work-item-workspace-attachment'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
+import { activeGitHubRepoTargetFromState } from '@/lib/github-active-repo-target'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
 import type {
@@ -745,6 +746,25 @@ function PRReviewersPanel({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+  // Why (issue #1715): the slug-addressed reviewer/label/assignee lookups need
+  // the repo-host routing hint so they resolve against the host that owns the
+  // dialog's repo (github.com vs GHES).
+  const repoForTarget = useAppStore((s) =>
+    repoPath
+      ? (s.repos.find((repo) => repo.path === repoPath) ?? null)
+      : s.activeRepoId
+        ? (s.repos.find((repo) => repo.id === s.activeRepoId) ?? null)
+        : null
+  )
+  const repoTarget = useMemo(
+    () =>
+      repoForTarget
+        ? { repoPath: repoForTarget.path, connectionId: repoForTarget.connectionId ?? null }
+        : repoPath
+          ? { repoPath }
+          : {},
+    [repoForTarget, repoPath]
+  )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -819,7 +839,8 @@ function PRReviewersPanel({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    sourceSettings
+    sourceSettings,
+    repoTarget
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewSlug ? repoPath : null,
@@ -5251,6 +5272,15 @@ function getGitHubMutationSettings(repoId: string | null | undefined) {
   return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
 }
 
+function getGitHubMutationRepoTarget(repoId: string | null | undefined) {
+  const state = useAppStore.getState()
+  const repo = repoId ? state.repos.find((candidate) => candidate.id === repoId) : null
+  if (repo) {
+    return { repoPath: repo.path, connectionId: repo.connectionId ?? null }
+  }
+  return activeGitHubRepoTargetFromState(state)
+}
+
 async function runIssueUpdate(args: {
   repoPath: string | null
   repoId?: string | null
@@ -5266,6 +5296,7 @@ async function runIssueUpdate(args: {
         : getGitHubMutationSettings(args.repoId)
     const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
+      ...getGitHubMutationRepoTarget(args.repoId),
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
       number: args.number,
@@ -5359,6 +5390,7 @@ async function runWorkItemBodyUpdate(args: {
         : getGitHubMutationSettings(args.item.repoId)
     const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
+      ...getGitHubMutationRepoTarget(args.item.repoId),
       owner: targetSlug.owner,
       repo: targetSlug.repo,
       number: args.item.number,
@@ -5418,6 +5450,7 @@ async function runPullRequestStateUpdate(args: {
         : getGitHubMutationSettings(args.repoId)
     const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
+      ...getGitHubMutationRepoTarget(args.repoId),
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
       number: args.number,
@@ -5607,6 +5640,27 @@ function GHEditSection({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+  // Why (issue #1715): the slug-addressed label/assignee lookups need the
+  // repo-host routing hint so they resolve against the host that owns the
+  // dialog's repo (github.com vs GHES).
+  const repoForTarget = useAppStore((s) =>
+    repoId
+      ? (s.repos.find((repo) => repo.id === repoId) ?? null)
+      : repoPath
+        ? (s.repos.find((repo) => repo.path === repoPath) ?? null)
+        : s.activeRepoId
+          ? (s.repos.find((repo) => repo.id === s.activeRepoId) ?? null)
+          : null
+  )
+  const repoTarget = useMemo(
+    () =>
+      repoForTarget
+        ? { repoPath: repoForTarget.path, connectionId: repoForTarget.connectionId ?? null }
+        : repoPath
+          ? { repoPath }
+          : {},
+    [repoForTarget, repoPath]
+  )
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
@@ -5633,7 +5687,7 @@ function GHEditSection({
     projectOrigin ? null : repoId,
     sourceSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings, repoTarget)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
   const repoAssigneesByPath = useRepoAssignees(
@@ -5641,7 +5695,13 @@ function GHEditSection({
     projectOrigin ? null : repoId,
     sourceSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assignees,
+    sourceSettings,
+    repoTarget
+  )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
   const hasAttachedWorkspace =
     attachedWorkspaceLabel !== null && attachedWorkspaceLabel !== undefined

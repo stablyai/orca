@@ -20,6 +20,7 @@ import type {
   GitHubProjectSummary,
   GitHubProjectViewError,
   GitHubProjectViewSummary,
+  GitHubRepoTarget,
   ListAccessibleProjectsResult,
   ListProjectViewsResult,
   ResolveProjectRefResult
@@ -47,6 +48,12 @@ type Props = {
     title?: string
   } | null
   onSelect: (selection: ResolvedProjectSelection) => void
+  // Why (issue #1715): repo target hint so the picker's gh calls land on the
+  // right host in multi-host setups (e.g. github.com + GHES). The wrapping
+  // ProjectViewWrapper derives this from the active worktree's owning repo;
+  // main resolves the gh API host from that repo's git remote. Omit both to
+  // accept gh's globally-active host (legitimate when no repo context exists).
+  repoTarget?: GitHubRepoTarget
 }
 
 const BROWSE_CACHE_TTL_MS = 5 * 60_000
@@ -56,6 +63,9 @@ type BrowseCacheEntry = {
   partialFailures?: { owner: string; message: string }[]
 }
 
+// Why (issue #1715): the cache is keyed by both the runtime scope AND the
+// repo-target routing key so a GHES vs github.com switch (or runtime switch)
+// can't serve projects discovered against the wrong host.
 const browseCacheByRuntimeScope = new Map<string, BrowseCacheEntry>()
 
 function getProjectPickerRuntimeScope(
@@ -65,51 +75,72 @@ function getProjectPickerRuntimeScope(
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
 }
 
+function repoTargetCacheKey(repoTarget: GitHubRepoTarget): string {
+  return `${repoTarget.connectionId ?? 'local'}:${repoTarget.repoPath ?? ''}`
+}
+
 async function listAccessibleProjectsForRuntime(
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+  settings: Parameters<typeof getActiveRuntimeTarget>[0],
+  repoTarget: GitHubRepoTarget
 ): Promise<ListAccessibleProjectsResult> {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<ListAccessibleProjectsResult>(
         target,
         'github.project.listAccessible',
-        {},
+        repoTarget,
         { timeoutMs: 60_000 }
       )
-    : window.api.gh.listAccessibleProjects()
+    : window.api.gh.listAccessibleProjects(repoTarget)
 }
 
 async function listProjectViewsForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0],
-  args: { owner: string; ownerType: GitHubProjectOwnerType; projectNumber: number }
+  args: { owner: string; ownerType: GitHubProjectOwnerType; projectNumber: number },
+  repoTarget: GitHubRepoTarget
 ): Promise<ListProjectViewsResult> {
   const target = getActiveRuntimeTarget(settings)
+  const payload = { ...args, ...repoTarget }
   return target.kind === 'environment'
-    ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', args, {
+    ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', payload, {
         timeoutMs: 30_000
       })
-    : window.api.gh.listProjectViews(args)
+    : window.api.gh.listProjectViews(payload)
 }
 
 async function resolveProjectRefForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0],
-  input: string
+  input: string,
+  repoTarget: GitHubRepoTarget
 ): Promise<ResolveProjectRefResult> {
   const target = getActiveRuntimeTarget(settings)
+  const payload = { input, ...repoTarget }
   return target.kind === 'environment'
-    ? callRuntimeRpc<ResolveProjectRefResult>(
-        target,
-        'github.project.resolveRef',
-        { input },
-        { timeoutMs: 30_000 }
-      )
-    : window.api.gh.resolveProjectRef({ input })
+    ? callRuntimeRpc<ResolveProjectRefResult>(target, 'github.project.resolveRef', payload, {
+        timeoutMs: 30_000
+      })
+    : window.api.gh.resolveProjectRef(payload)
 }
 
-export default function ProjectPicker({ activeProject, onSelect }: Props): React.JSX.Element {
+export default function ProjectPicker({
+  activeProject,
+  onSelect,
+  repoTarget
+}: Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const mountedRef = useMountedRef()
+  // Why (issue #1715): stable wire payload for gh routing. Memoized on the
+  // primitive fields so a new object identity on every render doesn't bust
+  // useCallback caches (loadBrowse, handleChooseProject, handlePaste).
+  const ghRepoTarget = useMemo<GitHubRepoTarget>(
+    () => ({
+      ...(repoTarget?.repoPath ? { repoPath: repoTarget.repoPath } : {}),
+      ...(repoTarget?.connectionId !== undefined ? { connectionId: repoTarget.connectionId } : {})
+    }),
+    [repoTarget?.repoPath, repoTarget?.connectionId]
+  )
+  const ghRepoTargetKey = useMemo(() => repoTargetCacheKey(ghRepoTarget), [ghRepoTarget])
   const projectSettings: GitHubProjectSettings = useMemo(
     () =>
       settings?.githubProjects ?? {
@@ -125,7 +156,8 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [query, setQuery] = useState('')
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<GitHubProjectViewError | null>(null)
-  const browseCache = browseCacheByRuntimeScope.get(getProjectPickerRuntimeScope(settings))
+  const browseCacheKey = `${getProjectPickerRuntimeScope(settings)}:${ghRepoTargetKey}`
+  const browseCache = browseCacheByRuntimeScope.get(browseCacheKey)
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => browseCache?.projects ?? []
   )
@@ -146,7 +178,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [viewLoading, setViewLoading] = useState(false)
 
   const loadBrowse = useCallback(async () => {
-    const cacheKey = getProjectPickerRuntimeScope(settings)
+    const cacheKey = `${getProjectPickerRuntimeScope(settings)}:${ghRepoTargetKey}`
     const cached = browseCacheByRuntimeScope.get(cacheKey) ?? null
     if (cached && Date.now() - cached.fetchedAt < BROWSE_CACHE_TTL_MS) {
       setBrowseProjects(cached.projects)
@@ -156,7 +188,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     setBrowseLoading(true)
     setBrowseError(null)
     try {
-      const res = await listAccessibleProjectsForRuntime(settings)
+      const res = await listAccessibleProjectsForRuntime(settings, ghRepoTarget)
       if (res.ok) {
         browseCacheByRuntimeScope.set(cacheKey, {
           fetchedAt: Date.now(),
@@ -186,7 +218,21 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         setBrowseLoading(false)
       }
     }
-  }, [mountedRef, settings])
+  }, [mountedRef, settings, ghRepoTarget, ghRepoTargetKey])
+
+  // Why (issue #1715): when the repo-target routing key changes (repo switch),
+  // rehydrate from the matching cache entry or clear so stale projects from
+  // the previous host don't linger.
+  useEffect(() => {
+    const cached = browseCacheByRuntimeScope.get(browseCacheKey)
+    if (cached) {
+      setBrowseProjects(cached.projects)
+      setPartialFailures(cached.partialFailures ?? [])
+      return
+    }
+    setBrowseProjects([])
+    setPartialFailures([])
+  }, [browseCacheKey])
 
   useEffect(() => {
     if (open && !viewPickFor) {
@@ -282,11 +328,15 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
       })
       setViewLoading(true)
       try {
-        const res = await listProjectViewsForRuntime(settings, {
-          owner: selection.owner,
-          ownerType: selection.ownerType,
-          projectNumber: selection.number
-        })
+        const res = await listProjectViewsForRuntime(
+          settings,
+          {
+            owner: selection.owner,
+            ownerType: selection.ownerType,
+            projectNumber: selection.number
+          },
+          ghRepoTarget
+        )
         if (!mountedRef.current) {
           return
         }
@@ -336,7 +386,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         }
       }
     },
-    [commitSelection, mountedRef, projectSettings.lastViewByProject, settings]
+    [commitSelection, mountedRef, projectSettings.lastViewByProject, settings, ghRepoTarget]
   )
 
   const handlePaste = useCallback(async () => {
@@ -353,7 +403,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     setPasteError(null)
     setPasteBusy(true)
     try {
-      const res = await resolveProjectRefForRuntime(settings, input)
+      const res = await resolveProjectRefForRuntime(settings, input, ghRepoTarget)
       if (!mountedRef.current) {
         return
       }
@@ -376,7 +426,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         setPasteBusy(false)
       }
     }
-  }, [handleChooseProject, mountedRef, pasteInput, settings])
+  }, [handleChooseProject, mountedRef, pasteInput, settings, ghRepoTarget])
 
   const canSubmitPasteInput = !pasteBusy && hasBoundedGitHubProjectRefInputText(pasteInput)
 
@@ -822,7 +872,10 @@ function parseProjectInput(
   }
   try {
     const url = new URL(input)
-    if (url.hostname !== 'github.com') {
+    // Why (issue #1715): accept any host so GHES project URLs parse. The host
+    // itself is re-parsed by the main process resolver for explicit host
+    // routing. Require at least one dot to reject obvious garbage hosts.
+    if (!url.hostname.includes('.')) {
       return null
     }
     const parts = url.pathname.split('/').filter(Boolean)

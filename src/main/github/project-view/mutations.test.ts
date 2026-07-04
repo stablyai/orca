@@ -21,6 +21,7 @@ vi.mock('./internals', () => ({
   rateLimitedError: () => ({ type: 'rate_limited', message: 'rate limited' }),
   runGraphql: vi.fn(),
   runRest: runRestMock,
+  targetToGhApiRoute: vi.fn(async () => ({})),
   validateSlugArgs: (owner: string, repo: string) =>
     owner && repo ? { ok: true } : { ok: false, error: { type: 'validation_error' } },
   assertPositiveInt: (value: number, name: string) =>

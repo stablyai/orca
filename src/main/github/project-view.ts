@@ -19,6 +19,8 @@ import {
   isValidOwnerSlug,
   assertSlug,
   assertPositiveInt,
+  targetToGhApiRoute,
+  type GhApiRoute,
   type GhGraphqlErrorShape,
   type GraphqlVars
 } from './project-view/internals'
@@ -41,6 +43,7 @@ import type {
   GitHubProjectViewError,
   GitHubProjectViewLayout,
   GitHubProjectViewSummary,
+  ListAccessibleProjectsArgs,
   ListAccessibleProjectsResult,
   ListProjectViewsArgs,
   ListProjectViewsResult,
@@ -51,6 +54,7 @@ import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   isGitHubProjectRefInputTooLarge
 } from '../../shared/github-project-ref-input'
+import { normalizeGitHubApiHost } from './github-remote-identity-parsing'
 
 // Re-export the public API so existing call sites (`./project-view`) keep
 // working unchanged. The split is internal-only.
@@ -133,10 +137,8 @@ function getProjectViewCacheEntry<K, V>(cache: Map<K, V>, key: K): V | undefined
 // module locals so a dev-time code swap naturally re-runs capability probes
 // instead of carrying a stale "unsupported" flag into fresh code.
 const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
-// Why: keyed by `${owner}\0${ownerType}` rather than a process-global flag so
-// a single owner's capability gap (e.g. token without scope on org A) doesn't
-// poison every subsequent fetch for unrelated owners that DO support
-// Issue.parent. See bug-scan finding 2.
+// Why: capability probes are host-scoped. Same-named owners can exist on
+// github.com and GHES; caching only by owner would let one host poison another.
 const parentFieldRetriedByOwner = new Map<string, true>()
 const parentFieldWarningLoggedByOwner = new Map<string, true>()
 // Why: concurrent fetchAllItems calls for the same owner all observe the
@@ -145,16 +147,38 @@ const parentFieldWarningLoggedByOwner = new Map<string, true>()
 // one caller drives the probe; siblings await the same result.
 const parentFieldProbeInFlight = new Map<string, Promise<void>>()
 
-function ownerScopeKey(owner: string, ownerType: GitHubProjectOwnerType): string {
-  return `${owner}\u0000${ownerType}`
+function routeCacheScope(route: GhApiRoute): string {
+  if (route.hostname) {
+    return `host:${route.hostname.toLowerCase()}`
+  }
+  return route.cwd ? `cwd:${route.cwd}` : 'global'
 }
 
-function rememberOwnerType(owner: string, ownerType: GitHubProjectOwnerType | null): void {
-  rememberProjectViewCacheEntry(ownerTypeCache, owner, ownerType)
+function ownerTypeCacheKey(owner: string, route: GhApiRoute): string {
+  return `${routeCacheScope(route)}\u0000${owner}`
 }
 
-function getCachedOwnerType(owner: string): GitHubProjectOwnerType | null | undefined {
-  return getProjectViewCacheEntry(ownerTypeCache, owner)
+function ownerScopeKey(
+  owner: string,
+  ownerType: GitHubProjectOwnerType,
+  route: GhApiRoute
+): string {
+  return `${ownerTypeCacheKey(owner, route)}\u0000${ownerType}`
+}
+
+function rememberOwnerType(
+  owner: string,
+  ownerType: GitHubProjectOwnerType | null,
+  route: GhApiRoute
+): void {
+  rememberProjectViewCacheEntry(ownerTypeCache, ownerTypeCacheKey(owner, route), ownerType)
+}
+
+function getCachedOwnerType(
+  owner: string,
+  route: GhApiRoute
+): GitHubProjectOwnerType | null | undefined {
+  return getProjectViewCacheEntry(ownerTypeCache, ownerTypeCacheKey(owner, route))
 }
 
 function markParentFieldRetried(scopeKey: string): void {
@@ -197,36 +221,62 @@ export function _getProjectViewCacheSizesForTests(): {
 /** @internal - exposed for cache-bound tests only. */
 export function _rememberProjectViewOwnerTypeForTests(
   owner: string,
-  ownerType: GitHubProjectOwnerType | null
+  ownerType: GitHubProjectOwnerType | null,
+  route: GhApiRoute = {}
 ): void {
-  rememberOwnerType(owner, ownerType)
+  rememberOwnerType(owner, ownerType, route)
 }
 
 /** @internal - exposed for cache-bound tests only. */
 export function _getProjectViewOwnerTypeForTests(
-  owner: string
+  owner: string,
+  route: GhApiRoute = {}
 ): GitHubProjectOwnerType | null | undefined {
-  return getCachedOwnerType(owner)
+  return getCachedOwnerType(owner, route)
 }
 
 /** @internal - exposed for cache-bound tests only. */
-export function _markProjectViewParentFieldRetriedForTests(scopeKey: string): void {
-  markParentFieldRetried(scopeKey)
+export function _markProjectViewParentFieldRetriedForTests(
+  scopeKeyOrOwner: string,
+  ownerType?: GitHubProjectOwnerType,
+  route: GhApiRoute = {}
+): void {
+  markParentFieldRetried(
+    ownerType ? ownerScopeKey(scopeKeyOrOwner, ownerType, route) : scopeKeyOrOwner
+  )
 }
 
 /** @internal - exposed for cache-bound tests only. */
-export function _hasProjectViewParentFieldRetriedForTests(scopeKey: string): boolean {
-  return hasParentFieldRetried(scopeKey)
+export function _hasProjectViewParentFieldRetriedForTests(
+  scopeKeyOrOwner: string,
+  ownerType?: GitHubProjectOwnerType,
+  route: GhApiRoute = {}
+): boolean {
+  return hasParentFieldRetried(
+    ownerType ? ownerScopeKey(scopeKeyOrOwner, ownerType, route) : scopeKeyOrOwner
+  )
 }
 
 /** @internal - exposed for cache-bound tests only. */
-export function _markProjectViewParentFieldWarningLoggedForTests(scopeKey: string): void {
-  markParentFieldWarningLogged(scopeKey)
+export function _markProjectViewParentFieldWarningLoggedForTests(
+  scopeKeyOrOwner: string,
+  ownerType?: GitHubProjectOwnerType,
+  route: GhApiRoute = {}
+): void {
+  markParentFieldWarningLogged(
+    ownerType ? ownerScopeKey(scopeKeyOrOwner, ownerType, route) : scopeKeyOrOwner
+  )
 }
 
 /** @internal - exposed for cache-bound tests only. */
-export function _hasProjectViewParentFieldWarningLoggedForTests(scopeKey: string): boolean {
-  return hasParentFieldWarningLogged(scopeKey)
+export function _hasProjectViewParentFieldWarningLoggedForTests(
+  scopeKeyOrOwner: string,
+  ownerType?: GitHubProjectOwnerType,
+  route: GhApiRoute = {}
+): boolean {
+  return hasParentFieldWarningLogged(
+    ownerType ? ownerScopeKey(scopeKeyOrOwner, ownerType, route) : scopeKeyOrOwner
+  )
 }
 
 // ─── Normalizers ───────────────────────────────────────────────────────
@@ -638,12 +688,15 @@ function ownerQueryRoot(ownerType: GitHubProjectOwnerType): string {
   return ownerType === 'organization' ? 'organization' : 'user'
 }
 
-async function fetchProjectViewsPage(args: {
-  owner: string
-  ownerType: GitHubProjectOwnerType
-  projectNumber: number
-  after: string | null
-}): Promise<
+async function fetchProjectViewsPage(
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    after: string | null
+  },
+  route: GhApiRoute
+): Promise<
   | {
       ok: true
       project: { id: string; title: string; url: string }
@@ -686,7 +739,8 @@ async function fetchProjectViewsPage(args: {
   }
   const res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
     query,
-    vars
+    vars,
+    route
   )
   if (!res.ok) {
     return res
@@ -709,7 +763,8 @@ async function fetchProjectViewsPage(args: {
 
 async function fetchViewFieldsContinuation(
   viewId: string,
-  after: string
+  after: string,
+  route: GhApiRoute
 ): Promise<
   { ok: true; fields: RawProjectV2Field[] } | { ok: false; error: GitHubProjectViewError }
 > {
@@ -745,7 +800,7 @@ async function fetchViewFieldsContinuation(
           nodes?: (RawProjectV2Field | null)[]
         }
       } | null
-    }>(query, { viewId, after: cursor })
+    }>(query, { viewId, after: cursor }, route)
     if (!res.ok) {
       return res
     }
@@ -847,15 +902,18 @@ type RawItemsPage = {
 // Why: runGraphql returns the classified error but not the raw GraphQL
 // errors; for the parent-field retry decision we need those. This variant
 // returns the raw envelope so callers can re-inspect.
-async function fetchItemsPageWithRaw(args: {
-  owner: string
-  ownerType: GitHubProjectOwnerType
-  projectNumber: number
-  query: string
-  first: number
-  after: string | null
-  includeParent: boolean
-}): Promise<
+async function fetchItemsPageWithRaw(
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    query: string
+    first: number
+    after: string | null
+    includeParent: boolean
+  },
+  route: GhApiRoute
+): Promise<
   | { ok: true; page: RawItemsPage }
   | {
       ok: false
@@ -887,7 +945,13 @@ async function fetchItemsPageWithRaw(args: {
     }
     ${FIELD_CONFIG_FRAGMENT}
   `
-  const argsArr: string[] = ['api', 'graphql', '-f', `query=${query}`]
+  const argsArr: string[] = [
+    'api',
+    ...(route.hostname ? ['--hostname', route.hostname] : []),
+    'graphql',
+    '-f',
+    `query=${query}`
+  ]
   argsArr.push('-f', `owner=${args.owner}`)
   argsArr.push('-F', `num=${args.projectNumber}`)
   argsArr.push('-f', `q=${args.query}`)
@@ -912,7 +976,10 @@ async function fetchItemsPageWithRaw(args: {
     let stderr = ''
     let execFailed = false
     try {
-      const r = await ghExecFileAsync(argsArr, { encoding: 'utf-8' })
+      const r = await ghExecFileAsync(argsArr, {
+        encoding: 'utf-8',
+        ...(route.cwd ? { cwd: route.cwd } : {})
+      })
       stdout = r.stdout
       stderr = r.stderr
     } catch (err) {
@@ -978,19 +1045,21 @@ async function fetchItemsPageWithRaw(args: {
   }
 }
 
-async function fetchAllItems(args: {
-  owner: string
-  ownerType: GitHubProjectOwnerType
-  projectNumber: number
-  query: string
-}): Promise<
+async function fetchAllItems(
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    query: string
+  },
+  route: GhApiRoute
+): Promise<
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
   | { ok: false; error: GitHubProjectViewError; totalCount?: number }
 > {
-  // Why: caches keyed by (owner, ownerType) so a single owner's lack of
-  // Issue.parent capability (e.g. token without scope on org A) doesn't
-  // poison fetches for unrelated owners. See bug-scan finding 2.
-  const scopeKey = ownerScopeKey(args.owner, args.ownerType)
+  // Why: include the gh route so a same-named owner on github.com and GHES
+  // can't inherit each other's Issue.parent capability decision.
+  const scopeKey = ownerScopeKey(args.owner, args.ownerType, route)
   // Why: if another caller for the SAME owner is currently probing whether
   // Issue.parent is supported, await its decision so we don't fire a
   // duplicate with-parent probe. We must re-read the retried flag AFTER
@@ -1017,15 +1086,18 @@ async function fetchAllItems(args: {
     parentFieldProbeInFlight.set(scopeKey, probe)
     probePromise = (async () => {
       try {
-        const result = await fetchItemsPageWithRaw({
-          owner: args.owner,
-          ownerType: args.ownerType,
-          projectNumber: args.projectNumber,
-          query: args.query,
-          first: ITEM_PAGE_SIZE,
-          after: null,
-          includeParent: true
-        })
+        const result = await fetchItemsPageWithRaw(
+          {
+            owner: args.owner,
+            ownerType: args.ownerType,
+            projectNumber: args.projectNumber,
+            query: args.query,
+            first: ITEM_PAGE_SIZE,
+            after: null,
+            includeParent: true
+          },
+          route
+        )
         // Why: flip parentFieldRetriedByOwner BEFORE resolveProbe()/clearing
         // parentFieldProbeInFlight so siblings that awoke on `inFlight.catch()`
         // observe the updated flag. Doing this in the outer block (after
@@ -1043,15 +1115,18 @@ async function fetchAllItems(args: {
     })()
     first = await probePromise
   } else {
-    first = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
-      first: ITEM_PAGE_SIZE,
-      after: null,
-      includeParent
-    })
+    first = await fetchItemsPageWithRaw(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        query: args.query,
+        first: ITEM_PAGE_SIZE,
+        after: null,
+        includeParent
+      },
+      route
+    )
   }
   if (!first.ok && includeParent && errorsIndicateParentField(first.rawErrors, first.stderr)) {
     // Retry the whole table without parent. Mark this owner as retried so
@@ -1066,15 +1141,18 @@ async function fetchAllItems(args: {
       )
       markParentFieldWarningLogged(scopeKey)
     }
-    first = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
-      first: ITEM_PAGE_SIZE,
-      after: null,
-      includeParent: false
-    })
+    first = await fetchItemsPageWithRaw(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        query: args.query,
+        first: ITEM_PAGE_SIZE,
+        after: null,
+        includeParent: false
+      },
+      route
+    )
   }
   if (!first.ok) {
     return { ok: false, error: first.error }
@@ -1133,15 +1211,18 @@ async function fetchAllItems(args: {
     }
   }
   while (hasNext) {
-    const next = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
-      first: ITEM_PAGE_SIZE,
-      after: cursor as string,
-      includeParent
-    })
+    const next = await fetchItemsPageWithRaw(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        query: args.query,
+        first: ITEM_PAGE_SIZE,
+        after: cursor as string,
+        includeParent
+      },
+      route
+    )
     if (!next.ok) {
       return { ok: false, error: next.error, totalCount }
     }
@@ -1174,12 +1255,15 @@ async function fetchAllItems(args: {
 
 // ─── Cheap count-only query (for unsupported_layout) ──────────────────
 
-async function fetchItemsCountOnly(args: {
-  owner: string
-  ownerType: GitHubProjectOwnerType
-  projectNumber: number
-  query: string
-}): Promise<number | null> {
+async function fetchItemsCountOnly(
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    query: string
+  },
+  route: GhApiRoute
+): Promise<number | null> {
   const root = ownerQueryRoot(args.ownerType)
   const query = `
     query($owner:String!, $num:Int!, $q:String!) {
@@ -1192,7 +1276,7 @@ async function fetchItemsCountOnly(args: {
   `
   const res = await runGraphql<
     Record<string, { projectV2?: { items?: { totalCount?: number } | null } | null } | null>
-  >(query, { owner: args.owner, num: args.projectNumber, q: args.query })
+  >(query, { owner: args.owner, num: args.projectNumber, q: args.query }, route)
   if (!res.ok) {
     return null
   }
@@ -1219,6 +1303,7 @@ export async function getProjectViewTable(
       error: { type: 'validation_error', message: 'Invalid ownerType.' }
     }
   }
+  const ghRoute = await targetToGhApiRoute(args)
 
   // Paginate views until a match is found.
   let cursor: string | null = null
@@ -1227,12 +1312,15 @@ export async function getProjectViewTable(
   let matchStrength: 'id' | 'number' | 'name' | 'default' | null = null
   const viewsSeen: RawProjectView[] = []
   while (true) {
-    const page = await fetchProjectViewsPage({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      after: cursor
-    })
+    const page = await fetchProjectViewsPage(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        after: cursor
+      },
+      ghRoute
+    )
     if (!page.ok) {
       return { ok: false, error: page.error }
     }
@@ -1287,7 +1375,7 @@ export async function getProjectViewTable(
   let extraFields: RawProjectV2Field[] = []
   const fieldsPi = selectedRaw.fields?.pageInfo
   if (fieldsPi?.hasNextPage === true && typeof fieldsPi.endCursor === 'string' && selectedRaw.id) {
-    const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor)
+    const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor, ghRoute)
     if (!cont.ok) {
       return { ok: false, error: cont.error }
     }
@@ -1310,12 +1398,15 @@ export async function getProjectViewTable(
   // Unsupported layout: return without paginating items; attempt a cheap
   // count-only query best-effort.
   if (selectedView.layout !== 'TABLE_LAYOUT') {
-    const count = await fetchItemsCountOnly({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: effectiveQuery
-    })
+    const count = await fetchItemsCountOnly(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        query: effectiveQuery
+      },
+      ghRoute
+    )
     return {
       ok: false,
       error: {
@@ -1327,12 +1418,15 @@ export async function getProjectViewTable(
   }
 
   // Fetch items.
-  const items = await fetchAllItems({
-    owner: args.owner,
-    ownerType: args.ownerType,
-    projectNumber: args.projectNumber,
-    query: effectiveQuery
-  })
+  const items = await fetchAllItems(
+    {
+      owner: args.owner,
+      ownerType: args.ownerType,
+      projectNumber: args.projectNumber,
+      query: effectiveQuery
+    },
+    ghRoute
+  )
   if (!items.ok) {
     return {
       ok: false,
@@ -1386,7 +1480,10 @@ type RawViewerDiscovery = {
   }
 }
 
-export async function listAccessibleProjects(): Promise<ListAccessibleProjectsResult> {
+export async function listAccessibleProjects(
+  args: ListAccessibleProjectsArgs = {}
+): Promise<ListAccessibleProjectsResult> {
+  const ghRoute = await targetToGhApiRoute(args)
   const viewerProjects: GitHubProjectSummary[] = []
   const orgProjects: GitHubProjectSummary[] = []
   // Why: per-org failures are collected so the picker can render a "some orgs
@@ -1421,7 +1518,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     if (viewerCursor) {
       vars.after = viewerCursor
     }
-    const res = await runGraphql<RawViewerDiscovery>(query, vars)
+    const res = await runGraphql<RawViewerDiscovery>(query, vars, ghRoute)
     if (!res.ok) {
       // Why: a viewer-level failure is structural — if we can't list the
       // user's own projects, we have nothing to build on. Propagate as a
@@ -1496,7 +1593,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     if (orgCursor) {
       vars.orgAfter = orgCursor
     }
-    const res = await runGraphql<RawViewerDiscovery>(query, vars)
+    const res = await runGraphql<RawViewerDiscovery>(query, vars, ghRoute)
     if (!res.ok) {
       // Why: the org-listing query itself failed (not a nested projectsV2).
       // Record it as a partial failure against a synthetic `*` owner so the
@@ -1519,7 +1616,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
       // Cache owner → ownerType for downstream paste/resolve even when the
       // nested projects query was empty or partially failed — paste-to-add
       // uses this to disambiguate /orgs/ vs /users/ URLs.
-      rememberOwnerType(login, 'organization')
+      rememberOwnerType(login, 'organization', ghRoute)
       const nodes = org.projectsV2?.nodes ?? []
       let ownerCount = 0
       for (const n of nodes) {
@@ -1547,7 +1644,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
   }
 
   if (viewerLogin) {
-    rememberOwnerType(viewerLogin, 'user')
+    rememberOwnerType(viewerLogin, 'user', ghRoute)
   }
 
   return {
@@ -1560,8 +1657,8 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
 // ─── resolveProjectRef ─────────────────────────────────────────────────
 
 type ParsedPaste =
-  | { kind: 'org'; owner: string; number: number; viewNumber?: number }
-  | { kind: 'user'; owner: string; number: number; viewNumber?: number }
+  | { kind: 'org'; owner: string; number: number; viewNumber?: number; host: string }
+  | { kind: 'user'; owner: string; number: number; viewNumber?: number; host: string }
   | { kind: 'bare'; owner: string; number: number }
 
 export function parseProjectPaste(input: string): ParsedPaste | null {
@@ -1572,12 +1669,17 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
   if (isGitHubProjectRefInputTooLarge(trimmed)) {
     return null
   }
-  // URL forms
-  const urlRe =
-    /^https?:\/\/github\.com\/(orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/(\d+))?/i
+  // URL forms — Why (issue #1715): accept any host so GHES project URLs (e.g.
+  // https://ghe.example.com/orgs/foo/projects/3) parse. The host is captured
+  // so callers can route gh against the right server with `gh api --hostname`.
+  const urlRe = /^https?:\/\/([^/\s]+)\/(orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/(\d+))?/i
   const m = trimmed.match(urlRe)
   if (m) {
-    const [, kindSeg, owner, nStr, vStr] = m
+    const [, rawHost, kindSeg, owner, nStr, vStr] = m
+    const host = normalizeProjectUrlHost(rawHost)
+    if (!host) {
+      return null
+    }
     const number = parseInt(nStr, 10)
     if (!Number.isInteger(number) || number < 1) {
       return null
@@ -1590,6 +1692,7 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
       kind: kindSeg === 'orgs' ? 'org' : 'user',
       owner,
       number,
+      host,
       ...(viewNumber !== undefined && Number.isInteger(viewNumber) && viewNumber >= 1
         ? { viewNumber }
         : {})
@@ -1608,9 +1711,16 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
   return null
 }
 
+function normalizeProjectUrlHost(host: string): string | null {
+  // Why: pasted URLs should observe the same host allow/drop rules as repo
+  // remotes, so known non-GitHub providers fail before we invoke gh.
+  return normalizeGitHubApiHost(host)
+}
+
 async function resolveOwnerType(
   owner: string,
-  preferred: GitHubProjectOwnerType | null
+  preferred: GitHubProjectOwnerType | null,
+  route: GhApiRoute
 ): Promise<
   | { ok: true; ownerType: GitHubProjectOwnerType; title: string }
   | { ok: false; error: GitHubProjectViewError }
@@ -1638,7 +1748,7 @@ async function resolveOwnerType(
     }
     const res = await runGraphql<
       Record<string, { projectV2?: { id?: string; title?: string } | null; login?: string } | null>
-    >(query, vars)
+    >(query, vars, route)
     if (!res.ok) {
       return { ok: false, error: res.error }
     }
@@ -1656,7 +1766,7 @@ async function resolveOwnerType(
     return { ok: true, title: '' }
   }
 
-  const cached = getCachedOwnerType(owner)
+  const cached = getCachedOwnerType(owner, route)
   const candidates: GitHubProjectOwnerType[] = preferred
     ? [preferred]
     : cached
@@ -1674,7 +1784,7 @@ async function resolveOwnerType(
   for (const ot of ordered) {
     const r = await tryOne(ot, null)
     if (r.ok) {
-      rememberOwnerType(owner, ot)
+      rememberOwnerType(owner, ot, route)
       return { ok: true, ownerType: ot, title: r.title }
     }
     lastError = r.error
@@ -1683,7 +1793,7 @@ async function resolveOwnerType(
       return { ok: false, error: r.error }
     }
   }
-  rememberOwnerType(owner, null)
+  rememberOwnerType(owner, null, route)
   return {
     ok: false,
     error: lastError ?? { type: 'not_found', message: 'Owner not found.' }
@@ -1718,8 +1828,16 @@ export async function resolveProjectRef(
   }
   const preferred: GitHubProjectOwnerType | null =
     parsed.kind === 'org' ? 'organization' : parsed.kind === 'user' ? 'user' : null
+  const baseRoute = await targetToGhApiRoute(args)
+  // Why: pasted project URLs carry an explicit host. Prefer that over the
+  // active repo hint so users can paste a GHES URL even when the active repo
+  // context is absent or points at another GitHub host.
+  const ghRoute =
+    parsed.kind === 'bare'
+      ? baseRoute
+      : { ...baseRoute, hostname: parsed.host.trim().toLowerCase() }
   // Verify by fetching project title.
-  const ownerRes = await resolveOwnerType(parsed.owner, preferred)
+  const ownerRes = await resolveOwnerType(parsed.owner, preferred, ghRoute)
   if (!ownerRes.ok) {
     return { ok: false, error: ownerRes.error }
   }
@@ -1732,7 +1850,7 @@ export async function resolveProjectRef(
   `
   const res = await runGraphql<
     Record<string, { projectV2?: { id?: string; title?: string } | null } | null>
-  >(query, { owner: parsed.owner, num: parsed.number })
+  >(query, { owner: parsed.owner, num: parsed.number }, ghRoute)
   if (!res.ok) {
     return { ok: false, error: res.error }
   }
@@ -1771,15 +1889,19 @@ export async function listProjectViews(
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
     return { ok: false, error: { type: 'validation_error', message: 'Invalid ownerType.' } }
   }
+  const ghRoute = await targetToGhApiRoute(args)
   const summaries: GitHubProjectViewSummary[] = []
   let cursor: string | null = null
   while (true) {
-    const page = await fetchProjectViewsPage({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      after: cursor
-    })
+    const page = await fetchProjectViewsPage(
+      {
+        owner: args.owner,
+        ownerType: args.ownerType,
+        projectNumber: args.projectNumber,
+        after: cursor
+      },
+      ghRoute
+    )
     if (!page.ok) {
       return { ok: false, error: page.error }
     }

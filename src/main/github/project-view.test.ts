@@ -136,7 +136,8 @@ describe('parseProjectPaste', () => {
       kind: 'org',
       owner: 'acme',
       number: 42,
-      viewNumber: 3
+      viewNumber: 3,
+      host: 'github.com'
     })
   })
 
@@ -144,12 +145,38 @@ describe('parseProjectPaste', () => {
     expect(parseProjectPaste('https://github.com/users/octocat/projects/1')).toEqual({
       kind: 'user',
       owner: 'octocat',
-      number: 1
+      number: 1,
+      host: 'github.com'
+    })
+  })
+
+  it('parses GitHub Enterprise project URL hosts', () => {
+    expect(parseProjectPaste('https://ghe/orgs/acme/projects/2')).toEqual({
+      kind: 'org',
+      owner: 'acme',
+      number: 2,
+      host: 'ghe'
+    })
+    expect(parseProjectPaste('https://ghe.acme.internal:8443/users/octocat/projects/3')).toEqual({
+      kind: 'user',
+      owner: 'octocat',
+      number: 3,
+      host: 'ghe.acme.internal:8443'
     })
   })
 
   it('rejects URLs whose owner has invalid characters', () => {
     expect(parseProjectPaste('https://github.com/orgs/co_op/projects/1')).toBeNull()
+  })
+
+  it('rejects URLs whose host has invalid characters', () => {
+    expect(parseProjectPaste('https://github.com@evil.example/orgs/acme/projects/1')).toBeNull()
+  })
+
+  it('rejects known non-GitHub project URL hosts', () => {
+    expect(parseProjectPaste('https://gitlab.com/orgs/acme/projects/1')).toBeNull()
+    expect(parseProjectPaste('https://bitbucket.org/orgs/acme/projects/1')).toBeNull()
+    expect(parseProjectPaste('https://dev.azure.com/orgs/acme/projects/1')).toBeNull()
   })
 
   it('returns null for empty input', () => {
@@ -208,6 +235,15 @@ describe('project view owner caches', () => {
     expect(_getProjectViewOwnerTypeForTests('owner-1')).toBe('user')
   })
 
+  it('keeps owner type probes isolated by gh route', () => {
+    _rememberProjectViewOwnerTypeForTests('acme', 'user', { hostname: 'github.com' })
+
+    expect(_getProjectViewOwnerTypeForTests('acme', { hostname: 'github.com' })).toBe('user')
+    expect(_getProjectViewOwnerTypeForTests('acme', { hostname: 'ghe.acme.internal' })).toBe(
+      undefined
+    )
+  })
+
   it('LRU-evicts old parent-field retry and warning probes', () => {
     for (let i = 0; i <= PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES; i++) {
       const scopeKey = `owner-${i}\u0000organization`
@@ -223,5 +259,33 @@ describe('project view owner caches', () => {
     expect(_hasProjectViewParentFieldWarningLoggedForTests('owner-0\u0000organization')).toBe(false)
     expect(_hasProjectViewParentFieldRetriedForTests('owner-1\u0000organization')).toBe(true)
     expect(_hasProjectViewParentFieldWarningLoggedForTests('owner-1\u0000organization')).toBe(true)
+  })
+
+  it('keeps parent-field capability probes isolated by gh route', () => {
+    _markProjectViewParentFieldRetriedForTests('acme', 'organization', { hostname: 'github.com' })
+    _markProjectViewParentFieldWarningLoggedForTests('acme', 'organization', {
+      hostname: 'github.com'
+    })
+
+    expect(
+      _hasProjectViewParentFieldRetriedForTests('acme', 'organization', {
+        hostname: 'github.com'
+      })
+    ).toBe(true)
+    expect(
+      _hasProjectViewParentFieldWarningLoggedForTests('acme', 'organization', {
+        hostname: 'github.com'
+      })
+    ).toBe(true)
+    expect(
+      _hasProjectViewParentFieldRetriedForTests('acme', 'organization', {
+        hostname: 'ghe.acme.internal'
+      })
+    ).toBe(false)
+    expect(
+      _hasProjectViewParentFieldWarningLoggedForTests('acme', 'organization', {
+        hostname: 'ghe.acme.internal'
+      })
+    ).toBe(false)
   })
 })

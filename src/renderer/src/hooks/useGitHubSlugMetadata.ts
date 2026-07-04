@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GitHubAssignableUser, GlobalSettings } from '../../../shared/types'
 import type {
+  GitHubRepoTarget,
   ListAssignableUsersBySlugResult,
   ListLabelsBySlugResult
 } from '../../../shared/github-project-types'
@@ -33,10 +34,15 @@ export function clearGitHubSlugMetadataCache(): void {
   clearMetadataRequestStore(slugAssigneeStore)
 }
 
+function repoTargetKey(repoTarget?: GitHubRepoTarget): string {
+  return `${repoTarget?.connectionId ?? 'local'}:${repoTarget?.repoPath ?? ''}`
+}
+
 export function useRepoLabelsBySlug(
   owner: string | null,
   repo: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  repoTarget?: GitHubRepoTarget
 ): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
     data: [],
@@ -50,10 +56,11 @@ export function useRepoLabelsBySlug(
       return
     }
     const target = getActiveRuntimeTarget(settings)
+    const routeKey = repoTargetKey(repoTarget)
     const key =
       target.kind === 'environment'
-        ? `runtime:${target.environmentId}:${owner}/${repo}`
-        : `${owner}/${repo}`
+        ? `runtime:${target.environmentId}:${routeKey}:${owner}/${repo}`
+        : `${routeKey}:${owner}/${repo}`
 
     const cached = getFreshMetadata(slugLabelStore, key)
     if (cached) {
@@ -82,10 +89,10 @@ export function useRepoLabelsBySlug(
         ? callRuntimeRpc<ListLabelsBySlugResult>(
             target,
             'github.project.listLabelsBySlug',
-            { owner, repo },
+            { ...repoTarget, owner, repo },
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.listLabelsBySlug({ owner, repo })
+        : window.api.gh.listLabelsBySlug({ ...repoTarget, owner, repo })
       ).then((res) => {
         if (!res.ok) {
           throw new Error(res.error.message)
@@ -110,7 +117,7 @@ export function useRepoLabelsBySlug(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [owner, repo, settings])
+  }, [owner, repo, settings, repoTarget])
 
   return state
 }
@@ -119,7 +126,8 @@ export function useRepoAssigneesBySlug(
   owner: string | null,
   repo: string | null,
   seedLogins?: string[],
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  repoTarget?: GitHubRepoTarget
 ): MetadataState<GitHubAssignableUser[]> {
   const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
     data: [],
@@ -137,10 +145,11 @@ export function useRepoAssigneesBySlug(
       return
     }
     const target = getActiveRuntimeTarget(settings)
+    const routeKey = repoTargetKey(repoTarget)
     const key =
       target.kind === 'environment'
-        ? `runtime:${target.environmentId}:${owner}/${repo}#${seedKey}`
-        : `${owner}/${repo}#${seedKey}`
+        ? `runtime:${target.environmentId}:${routeKey}:${owner}/${repo}#${seedKey}`
+        : `${routeKey}:${owner}/${repo}#${seedKey}`
 
     const cached = getFreshMetadata(slugAssigneeStore, key)
     if (cached) {
@@ -165,6 +174,7 @@ export function useRepoAssigneesBySlug(
       error: null
     }))
     const args = {
+      ...repoTarget,
       owner,
       repo,
       ...(seedKey ? { seedLogins: seedKey.split(',') } : {})
@@ -202,7 +212,7 @@ export function useRepoAssigneesBySlug(
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [owner, repo, seedKey, settings])
+  }, [owner, repo, seedKey, settings, repoTarget])
 
   return state
 }

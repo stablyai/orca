@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { useAppStore } from '@/store'
+import { activeGitHubRepoTargetFromState } from '@/lib/github-active-repo-target'
 import type { GlobalSettings } from '../../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -21,6 +23,16 @@ export function AssigneesEditor({
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  // Why (issue #1715): route the assignee lookup to the host that owns the
+  // active repo so GHES projects don't fall through to gh's global host.
+  // Memoized on the primitive id so a fresh target object per render doesn't
+  // refire the metadata IPC.
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const repos = useAppStore((s) => s.repos)
+  const repoTarget = useMemo(
+    () => activeGitHubRepoTargetFromState({ activeRepoId, repos }),
+    [activeRepoId, repos]
+  )
   // Why: stabilize the assignee seed identity. `selected` is a fresh array on
   // every parent render — depending on it directly would refire the IPC for
   // every unrelated re-render while the popover is open.
@@ -29,7 +41,8 @@ export function AssigneesEditor({
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    sourceSettings
+    sourceSettings,
+    repoTarget
   )
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>

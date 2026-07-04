@@ -8,6 +8,7 @@ import {
   type GitHubRemoteIdentity
 } from './github-remote-identity-parsing'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import { _resetRepoHostCache } from './github-api-host-resolution'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -66,6 +67,7 @@ const ownerRepoInFlight = new Map<string, Promise<OwnerRepo | null>>()
 export function _resetOwnerRepoCache(): void {
   ownerRepoCache.clear()
   ownerRepoInFlight.clear()
+  _resetRepoHostCache()
 }
 
 /** @internal - exposed for tests only */

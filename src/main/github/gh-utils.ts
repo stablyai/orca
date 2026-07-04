@@ -7,6 +7,7 @@ import { gitExecFileAsync, ghExecFileAsync, extractExecError } from '../git/runn
 export const execFileAsync = promisify(execFile)
 export { ghExecFileAsync, gitExecFileAsync, extractExecError }
 export { classifyGhError, classifyListIssuesError } from './gh-error-classification'
+export { getGitHubApiHostForRepo } from './github-api-host-resolution'
 export {
   _getOwnerRepoCacheSize,
   _resetOwnerRepoCache,

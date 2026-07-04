@@ -22,6 +22,7 @@ import {
   _resetOwnerRepoCache,
   classifyGhError,
   classifyListIssuesError,
+  getGitHubApiHostForRepo,
   getIssueOwnerRepo,
   getOwnerRepo,
   getOwnerRepoForRemote,
@@ -87,6 +88,28 @@ describe('github owner/repo resolution', () => {
       repo: 'orca'
     })
     expect(parseGitHubOwnerRepo('https://ghe.acme.internal/acme/orca.git')).toBeNull()
+  })
+
+  it('resolves a GitHub Enterprise host for gh api routing', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('upstream missing'))
+      .mockResolvedValueOnce({ stdout: 'https://ghe.acme.internal/acme/orca.git\n' })
+
+    await expect(getGitHubApiHostForRepo('/repo')).resolves.toBe('ghe.acme.internal')
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'upstream'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+  })
+
+  it('does not route gh api to known non-GitHub hosts', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('upstream missing'))
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:acme/orca.git\n' })
+
+    await expect(getGitHubApiHostForRepo('/repo')).resolves.toBeNull()
   })
 
   it('keeps getOwnerRepo origin-based', async () => {
