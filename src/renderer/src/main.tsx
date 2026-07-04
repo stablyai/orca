@@ -10,6 +10,7 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
+import { installElectronAutofillImeGuard } from './lib/electron-autofill-ime-guard'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
@@ -29,6 +30,13 @@ if (
 }
 
 applyDocumentTheme('system', { disableTransitions: false })
+
+// Why: macOS-only — that is where Electron's per-keystroke autofill popup
+// churn blocks the browser process on WindowServer transactions (see module
+// header). Other platforms keep stock behavior until Electron ships a fix.
+if (navigator.userAgent.includes('Mac')) {
+  installElectronAutofillImeGuard()
+}
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
