@@ -157,6 +157,53 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
       expect(lastSubprocess.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
     })
+
+    it('waits for the Windows PowerShell ready marker for delivery-hinted Codex startup', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          command: "codex 'linked issue context'",
+          startupCommandDelivery: 'shell-ready',
+          shellOverride: 'powershell.exe'
+        })
+
+        await new Promise((resolve) => setTimeout(resolve, 350))
+        expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+        lastSubprocess._simulateData('\x1b]777;orca-shell-ready\x07')
+        lastSubprocess._simulateData('\r\nPS C:\\repo> ')
+
+        await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
+        expect(lastSubprocess.write).toHaveBeenCalledWith("codex 'linked issue context'\r")
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+    })
+
+    it('keeps Windows PowerShell fast startup off the daemon shell-ready barrier', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          command: 'codex',
+          startupCommandDelivery: 'fast',
+          shellOverride: 'powershell.exe'
+        })
+
+        expect(lastSubprocess.write).toHaveBeenCalledWith('codex\r')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+    })
   })
 
   describe('write', () => {
@@ -946,6 +993,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         rows: 24,
         cwd: '/home/user',
         command: 'printf ready',
+        startupCommandDelivery: 'shell-ready',
         env: { SHELL: '/bin/zsh' },
         sessionId: 'sleep-checkpoint-tail'
       })

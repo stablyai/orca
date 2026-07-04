@@ -58,11 +58,29 @@ describe('resolveWindowsDefaultShell', () => {
         {
           SHELL: 'C:\\Tools\\pwsh.exe',
           SystemRoot: 'C:\\Windows',
+          PATH: '',
           ComSpec: 'C:\\Windows\\System32\\cmd.exe'
         },
         (path) => path === 'C:\\Tools\\pwsh.exe'
       )
     ).toBe('C:\\Tools\\pwsh.exe')
+  })
+
+  it('does not keep a WindowsApps pwsh alias as the default shell', () => {
+    const alias = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'
+    const powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+    expect(
+      resolveWindowsDefaultShell(
+        {
+          SHELL: alias,
+          PATH: 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps',
+          SystemRoot: 'C:\\Windows',
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe'
+        },
+        (path) => path === alias || path === powershell || path === 'C:\\Windows\\System32\\cmd.exe'
+      )
+    ).toBe(powershell)
   })
 
   it('prefers inbox PowerShell before ComSpec for an interactive Windows PTY', () => {

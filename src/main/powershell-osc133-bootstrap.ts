@@ -51,6 +51,9 @@ function Global:prompt {
     $Global:__OrcaOsc133State.HasSeenPrompt = $true
 
     $result += "$($Global:__OrcaOsc133State.Esc)]133;A$($Global:__OrcaOsc133State.Bel)"
+    if ($env:ORCA_SHELL_READY_MARKER -eq "1") {
+        $result += "$($Global:__OrcaOsc133State.Esc)]777;orca-shell-ready$($Global:__OrcaOsc133State.Bel)"
+    }
     # Preserve the previous success/failure value for prompts that inspect it.
     if ($fakeExitCode -ne 0) { Write-Error "failure" -ea ignore }
     $result += $Global:__OrcaOsc133State.OriginalPrompt.Invoke()

@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileAsyncMock, execFileMock, promisifyCustom } = vi.hoisted(() => ({
+const {
+  execFileAsyncMock,
+  execFileMock,
+  promisifyCustom,
+  resolveWindowsPowerShellExecutablePathMock
+} = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn(),
   execFileMock: vi.fn(),
-  promisifyCustom: Symbol.for('nodejs.util.promisify.custom')
+  promisifyCustom: Symbol.for('nodejs.util.promisify.custom'),
+  resolveWindowsPowerShellExecutablePathMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
@@ -16,11 +22,21 @@ vi.mock('./relay-command-env', () => ({
   buildRelayCommandEnv: () => ({ PATH: 'C:\\Windows\\System32' })
 }))
 
+vi.mock('../main/providers/windows-powershell-executable', () => ({
+  resolveWindowsPowerShellExecutablePath: resolveWindowsPowerShellExecutablePathMock
+}))
+
 const { scanWindowsListeningPorts } = await import('./windows-port-scan')
 
 describe('scanWindowsListeningPorts', () => {
   beforeEach(() => {
     execFileAsyncMock.mockReset()
+    resolveWindowsPowerShellExecutablePathMock.mockReset()
+    resolveWindowsPowerShellExecutablePathMock.mockImplementation((family: string) =>
+      family === 'powershell.exe'
+        ? 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+        : null
+    )
   })
 
   it('bounds the PowerShell scan with the caller abort signal and timeout', async () => {
@@ -35,7 +51,7 @@ describe('scanWindowsListeningPorts', () => {
     ])
 
     expect(execFileAsyncMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
       expect.arrayContaining(['-EncodedCommand', expect.any(String)]),
       expect.objectContaining({
         signal: controller.signal,
@@ -49,7 +65,6 @@ describe('scanWindowsListeningPorts', () => {
     const controller = new AbortController()
     execFileAsyncMock
       .mockRejectedValueOnce(new Error('powershell unavailable'))
-      .mockRejectedValueOnce(new Error('pwsh unavailable'))
       .mockResolvedValueOnce({
         stdout: [
           '  Proto  Local Address          Foreign Address        State           PID',
@@ -71,6 +86,31 @@ describe('scanWindowsListeningPorts', () => {
         windowsHide: true
       })
     )
+    expect(execFileAsyncMock).not.toHaveBeenCalledWith(
+      'pwsh.exe',
+      expect.any(Array),
+      expect.any(Object)
+    )
+  })
+
+  it('tries resolved PowerShell 7 before netstat when inbox PowerShell fails', async () => {
+    resolveWindowsPowerShellExecutablePathMock.mockImplementation((family: string) =>
+      family === 'powershell.exe'
+        ? 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+        : 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+    )
+    execFileAsyncMock
+      .mockRejectedValueOnce(new Error('powershell unavailable'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ host: '127.0.0.1', port: 9229, pid: 4321 }),
+        stderr: ''
+      })
+
+    await expect(scanWindowsListeningPorts()).resolves.toEqual([
+      { host: '127.0.0.1', port: 9229, pid: 4321 }
+    ])
+
+    expect(execFileAsyncMock.mock.calls[1]?.[0]).toBe('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
   })
 
   it('does not start the netstat fallback after the scan is cancelled', async () => {

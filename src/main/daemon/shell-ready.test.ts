@@ -159,6 +159,45 @@ function expectFinalZdotdirRestoreContext(content: string) {
   expect(content).toContain('export ZDOTDIR="$_orca_home"')
 }
 
+describe('daemon shell-ready PowerShell support', () => {
+  it('marks PowerShell launch configs as marker-capable when requested', async () => {
+    const { getAttributionShellLaunchConfig, getShellReadyLaunchConfig } =
+      await importFreshShellReady()
+
+    const readyConfig = getShellReadyLaunchConfig('pwsh.exe')
+    expect(readyConfig.supportsReadyMarker).toBe(true)
+    expect(readyConfig.env.ORCA_SHELL_READY_MARKER).toBe('1')
+    expect(readyConfig.args).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
+
+    const attributionConfig = getAttributionShellLaunchConfig('powershell.exe')
+    expect(attributionConfig.supportsReadyMarker).toBe(false)
+    expect(attributionConfig.env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
+  it('detects Windows PowerShell shells as startup-barrier capable', async () => {
+    const { supportsPtyStartupBarrier } = await importFreshShellReady()
+
+    expect(supportsPtyStartupBarrier({}, { platform: 'win32', shellOverride: 'pwsh.exe' })).toBe(
+      true
+    )
+    expect(
+      supportsPtyStartupBarrier(
+        {},
+        {
+          platform: 'win32',
+          shellOverride: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+        }
+      )
+    ).toBe(true)
+    expect(supportsPtyStartupBarrier({}, { platform: 'win32', shellOverride: 'cmd.exe' })).toBe(
+      false
+    )
+    expect(supportsPtyStartupBarrier({}, { platform: 'win32', shellOverride: 'wsl.exe' })).toBe(
+      false
+    )
+  })
+})
+
 describePosix('daemon shell-ready launch config', () => {
   let previousUserDataPath: string | undefined
   let previousOrcaOrigZdotdir: string | undefined

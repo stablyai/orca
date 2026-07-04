@@ -24,8 +24,16 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   }
 }))
 
+const { resolveWindowsPowerShellSpawnChainMock } = vi.hoisted(() => ({
+  resolveWindowsPowerShellSpawnChainMock: vi.fn()
+}))
+
 vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
+}))
+
+vi.mock('../main/providers/windows-powershell-executable', () => ({
+  resolveWindowsPowerShellSpawnChain: resolveWindowsPowerShellSpawnChainMock
 }))
 
 import { PtyHandler } from './pty-handler'
@@ -87,6 +95,9 @@ function createMockDispatcher() {
 describe('PtyHandler', () => {
   let dispatcher: ReturnType<typeof createMockDispatcher>
   let handler: PtyHandler
+  const windowsPowerShell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  const pwsh7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+  const cmd = 'C:\\Windows\\System32\\cmd.exe'
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -97,6 +108,10 @@ describe('PtyHandler', () => {
     mockPtyInstance.resize.mockReset()
     mockPtyInstance.kill.mockReset()
     mockPtyInstance.clear.mockReset()
+    resolveWindowsPowerShellSpawnChainMock.mockReset()
+    resolveWindowsPowerShellSpawnChainMock.mockImplementation((family: string) =>
+      family === 'pwsh.exe' ? [pwsh7, windowsPowerShell, cmd] : [windowsPowerShell, cmd]
+    )
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -187,7 +202,7 @@ describe('PtyHandler', () => {
         shellOverride: 'powershell.exe'
       })
       expect(mockPtySpawn).toHaveBeenCalledWith(
-        'powershell.exe',
+        windowsPowerShell,
         expect.any(Array),
         expect.any(Object)
       )
@@ -202,6 +217,33 @@ describe('PtyHandler', () => {
       )
     } finally {
       resolveDefaultShellSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('resolves a pwsh override before handing it to node-pty on Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'pwsh.exe'
+      })
+
+      expect(resolveWindowsPowerShellSpawnChainMock).toHaveBeenCalledWith(
+        'pwsh.exe',
+        expect.objectContaining({ platform: 'win32' })
+      )
+      expect(mockPtySpawn).toHaveBeenCalledWith(pwsh7, expect.any(Array), expect.any(Object))
+      expect(mockPtySpawn.mock.calls[0]?.[0]).not.toBe('pwsh.exe')
+    } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform

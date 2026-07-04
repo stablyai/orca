@@ -25,6 +25,8 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(script).toContain(')]133;A$(')
     expect(script).toContain(')]133;B$(')
     expect(script).toContain(')]133;C$(')
+    expect(script).toContain('$env:ORCA_SHELL_READY_MARKER -eq "1"')
+    expect(script).toContain(')]777;orca-shell-ready$(')
     expect(script).not.toContain('`e]133')
     expect(script).not.toContain('$PROFILE')
     expect(script).not.toContain('ExecutionPolicy')

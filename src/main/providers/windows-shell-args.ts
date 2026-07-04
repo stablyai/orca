@@ -44,6 +44,10 @@ export type WindowsShellWslContext = {
   treatPosixCwdAsWsl?: boolean
 }
 
+export type WindowsShellLaunchOptions = {
+  deferPowerShellStartupCommandToStdin?: boolean
+}
+
 /**
  * Returns a startup command that is safe to embed in cmd.exe launch args.
  *
@@ -132,7 +136,8 @@ export function resolveWindowsShellLaunchArgs(
   cwd: string,
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
-  startupCommand?: string
+  startupCommand?: string,
+  options?: WindowsShellLaunchOptions
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = normalizeMsysDrivePath(cwd)
@@ -154,7 +159,9 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    const powerShellCommand = getPowerShellEncodedCommand(startupCommand)
+    const powerShellCommand = getPowerShellEncodedCommand(
+      options?.deferPowerShellStartupCommandToStdin ? undefined : startupCommand
+    )
     // Why: foreground-process status on Windows depends on OSC 133 C/D, and
     // PowerShell needs a prompt/readline bootstrap after profiles finish.
     return {

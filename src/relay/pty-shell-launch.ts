@@ -7,6 +7,10 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../main/shell-templates'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../main/powershell-osc133-bootstrap'
 
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
@@ -29,11 +33,18 @@ function windowsShellArgs(
   shellName: string,
   options: { terminalWindowsWslDistro?: string | null } = {}
 ): string[] | null {
-  if (shellName === 'powershell.exe' || shellName === 'powershell') {
-    return ['-NoLogo']
-  }
-  if (shellName === 'pwsh.exe' || shellName === 'pwsh') {
-    return ['-NoLogo']
+  if (
+    shellName === 'powershell.exe' ||
+    shellName === 'powershell' ||
+    shellName === 'pwsh.exe' ||
+    shellName === 'pwsh'
+  ) {
+    return [
+      '-NoLogo',
+      '-NoExit',
+      '-EncodedCommand',
+      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+    ]
   }
   if (shellName === 'cmd.exe' || shellName === 'cmd') {
     return []
@@ -271,7 +282,14 @@ export function getRelayShellLaunchConfig(
         windowsShellArgs(shellName, {
           terminalWindowsWslDistro: options.terminalWindowsWslDistro
         }) ?? [],
-      env: {}
+      env:
+        emitReadyMarker &&
+        (shellName === 'powershell.exe' ||
+          shellName === 'powershell' ||
+          shellName === 'pwsh.exe' ||
+          shellName === 'pwsh')
+          ? { ORCA_SHELL_READY_MARKER: '1' }
+          : {}
     }
   }
 

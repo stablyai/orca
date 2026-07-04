@@ -54,6 +54,7 @@ import {
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
+import { isPowerShellExecutableName } from '../powershell-osc133-bootstrap'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -164,6 +165,10 @@ function getWslContextFromPreferredDistro(
 ): { distro: string } | undefined {
   const trimmed = distro?.trim()
   return trimmed ? { distro: trimmed } : undefined
+}
+
+function isWindowsPowerShellPath(shellPath: string): boolean {
+  return isPowerShellExecutableName(pathWin32.basename(shellPath))
 }
 
 /**
@@ -587,6 +592,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
+  const deferWindowsPowerShellStartupCommandToStdin = shouldUseShellReadyStartupDelivery({
+    command: opts.command,
+    startupCommandDelivery: opts.startupCommandDelivery
+  })
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   const requestedCwd = opts.cwd || getDefaultCwd()
@@ -637,7 +646,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       cwd: spawnCwd,
       defaultCwd: getDefaultCwd(),
       wslContext: sessionWslContext ?? preferredWslContext,
-      startupCommand: opts.command
+      startupCommand: opts.command,
+      launchOptions: {
+        deferPowerShellStartupCommandToStdin: deferWindowsPowerShellStartupCommandToStdin
+      }
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
@@ -652,7 +664,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         spawnCwd,
         getDefaultCwd(),
         sessionWslContext ?? preferredWslContext,
-        opts.command
+        opts.command,
+        {
+          deferPowerShellStartupCommandToStdin: deferWindowsPowerShellStartupCommandToStdin
+        }
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
@@ -663,6 +678,15 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // Why: Git for Windows login startup files otherwise cd to $HOME,
       // ignoring node-pty's cwd for repo-scoped terminals.
       env.CHERE_INVOKING ??= '1'
+    }
+    if (
+      opts.command &&
+      deferWindowsPowerShellStartupCommandToStdin &&
+      isWindowsPowerShellPath(shellPath)
+    ) {
+      // Why: stdin-delivered Codex startup on Windows waits for the PowerShell
+      // prompt wrapper rather than racing profile/bootstrap initialization.
+      env.ORCA_SHELL_READY_MARKER = '1'
     }
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
@@ -685,7 +709,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
               {
                 distro: codexHomeWslInfo.distro
               },
-              opts.command
+              opts.command,
+              {
+                deferPowerShellStartupCommandToStdin: deferWindowsPowerShellStartupCommandToStdin
+              }
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd

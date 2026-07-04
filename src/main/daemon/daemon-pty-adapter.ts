@@ -170,17 +170,19 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const effectiveCols = restoreInfo?.cols ?? opts.cols
     const effectiveRows = restoreInfo?.rows ?? opts.rows
 
-    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+    const supportsShellReadyBarrier = opts.command
+      ? supportsPtyStartupBarrier(opts.env ?? {}, { shellOverride: opts.shellOverride })
+      : false
     const isCodexStartupCommand =
       recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
-    const shouldWaitForShellReady =
-      isCodexStartupCommand &&
-      shouldUseShellReadyStartupDelivery({
-        command: opts.command,
-        startupCommandDelivery: opts.startupCommandDelivery
-      })
+    const shouldUseShellReadyDelivery = shouldUseShellReadyStartupDelivery({
+      command: opts.command,
+      startupCommandDelivery: opts.startupCommandDelivery
+    })
+    const shellReadySupported =
+      supportsShellReadyBarrier && (process.platform !== 'win32' || shouldUseShellReadyDelivery)
     const shellReadyTimeoutMs =
-      shellReadySupported && isCodexStartupCommand && !shouldWaitForShellReady
+      shellReadySupported && isCodexStartupCommand && !shouldUseShellReadyDelivery
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 

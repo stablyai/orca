@@ -110,8 +110,22 @@ describe('getRelayShellLaunchConfig', () => {
         'win32'
       )
     ).toEqual({
-      args: ['-NoLogo'],
+      args: ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)],
       env: {}
+    })
+  })
+
+  it('enables the shell-ready marker for requested Windows PowerShell startup delivery', () => {
+    expect(
+      getRelayShellLaunchConfig(
+        'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        { HOME: homeDir },
+        'win32',
+        { emitReadyMarker: true }
+      )
+    ).toEqual({
+      args: ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)],
+      env: { ORCA_SHELL_READY_MARKER: '1' }
     })
   })
 

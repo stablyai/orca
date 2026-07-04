@@ -12,6 +12,7 @@ import {
   getForegroundProcessName,
   listShellProfiles
 } from './pty-shell-utils'
+import { resolveWindowsPowerShellShellPath } from './windows-powershell-shell'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
@@ -154,7 +155,11 @@ function resolvePtyShellOverride(shellOverride: string): string {
   if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
     throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
   }
-  return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
+  return (
+    resolveWindowsGitBashShellPath(shellOverride) ??
+    resolveWindowsPowerShellShellPath(shellOverride) ??
+    shellOverride
+  )
 }
 
 type PtyProcessSummary = {

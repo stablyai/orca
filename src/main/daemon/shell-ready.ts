@@ -335,12 +335,19 @@ export function resolvePtyShellPath(env: Record<string, string>): string {
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
 
-export function supportsPtyStartupBarrier(env: Record<string, string>): boolean {
-  if (process.platform === 'win32') {
-    return false
-  }
-  const resolvedShell = resolvePtyShellPath(env)
+export function supportsPtyStartupBarrier(
+  env: Record<string, string>,
+  options: { shellOverride?: string; platform?: NodeJS.Platform } = {}
+): boolean {
+  const platform = options.platform ?? process.platform
+  const resolvedShell =
+    platform === 'win32'
+      ? (options.shellOverride ?? resolvePtyShellPath(env))
+      : resolvePtyShellPath(env)
   const shellName = pathWin32.basename(basename(resolvedShell)).toLowerCase()
+  if (platform === 'win32') {
+    return isPowerShellExecutableName(shellName)
+  }
   return shellName === 'zsh' || shellName === 'bash'
 }
 
@@ -391,8 +398,10 @@ function getWrappedShellLaunchConfig(
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],
-      env: {},
-      supportsReadyMarker: false
+      env: {
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
+      },
+      supportsReadyMarker: options.emitReadyMarker
     }
   }
 

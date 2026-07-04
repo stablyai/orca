@@ -1,6 +1,6 @@
 import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
-import type { WindowsShellWslContext } from './windows-shell-args'
+import type { WindowsShellLaunchOptions, WindowsShellWslContext } from './windows-shell-args'
 import {
   resolveWindowsPowerShellSpawnChain,
   type WindowsPowerShellResolveOptions
@@ -21,14 +21,16 @@ function toAttempt(
   cwd: string,
   defaultCwd: string,
   wslContext: WindowsShellWslContext | undefined,
-  startupCommand: string | undefined
+  startupCommand: string | undefined,
+  launchOptions: WindowsShellLaunchOptions | undefined
 ): WindowsShellSpawnAttempt {
   const resolved = resolveWindowsShellLaunchArgs(
     shellPath,
     cwd,
     defaultCwd,
     wslContext,
-    startupCommand
+    startupCommand,
+    launchOptions
   )
   return {
     shellPath,
@@ -58,6 +60,7 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
   defaultCwd: string
   wslContext?: WindowsShellWslContext
   startupCommand?: string
+  launchOptions?: WindowsShellLaunchOptions
   resolveOptions?: WindowsPowerShellResolveOptions
 }): WindowsShellSpawnAttempt[] {
   const basename = pathWin32.basename(args.shellPath).toLowerCase()
@@ -66,6 +69,13 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
   }
   const chain = resolveWindowsPowerShellSpawnChain(basename, args.resolveOptions)
   return chain.map((candidate) =>
-    toAttempt(candidate, args.cwd, args.defaultCwd, args.wslContext, args.startupCommand)
+    toAttempt(
+      candidate,
+      args.cwd,
+      args.defaultCwd,
+      args.wslContext,
+      args.startupCommand,
+      args.launchOptions
+    )
   )
 }

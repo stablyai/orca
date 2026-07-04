@@ -36,6 +36,19 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
+  it('continues embedding safe cmd.exe startup commands when PowerShell deferral is requested', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      'codex --no-alt-screen',
+      { deferPowerShellStartupCommandToStdin: true }
+    )
+    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul & codex --no-alt-screen'])
+    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
   it('keeps large cmd.exe startup commands on stdin delivery', () => {
     const result = resolveWindowsShellLaunchArgs(
       'cmd.exe',
@@ -113,6 +126,22 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
     expect(command).toContain('function Global:prompt')
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+  })
+
+  it('defers PowerShell startup commands to stdin when requested', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      "& 'codex' '--no-alt-screen'",
+      { deferPowerShellStartupCommandToStdin: true }
+    )
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+
+    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain("& 'codex' '--no-alt-screen'")
   })
 
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {
