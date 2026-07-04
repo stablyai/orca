@@ -8475,6 +8475,134 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('does not report tui-idle while a name-only agent title keeps streaming output', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      // 'Codex' is a name-only title → detectAgentStatusFromTitle defaults it to
+      // 'idle' even though the agent is actively working (the spinner and "esc to
+      // interrupt" live in the terminal body, not the OSC title). Pre-fix this
+      // made tui-idle satisfy in ~0s mid-work.
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex\x07working 1\n', Date.now())
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000
+      })
+      let settled = false
+      void waitPromise.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+
+      // Keep streaming: each chunk refreshes lastOutputAt, so the debounce
+      // window never elapses and the wait must not resolve.
+      for (let i = 2; i <= 6; i++) {
+        runtime.onPtyData('pty-bg', `working ${i}\n`, Date.now())
+        await vi.advanceTimersByTimeAsync(2_000)
+      }
+      expect(settled).toBe(false)
+
+      // Agent finishes: output goes quiet. After >= TUI_IDLE_QUIESCENCE_MS the
+      // sustained-idle debounce elapses and the wait resolves without waiting
+      // for another fallback poll interval.
+      await vi.advanceTimersByTimeAsync(999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(waitPromise).resolves.toMatchObject({
+        handle,
+        condition: 'tui-idle',
+        satisfied: true,
+        status: 'running'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves tui-idle immediately on an explicit idle OSC title', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex working\x07working\n', Date.now())
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000
+      })
+
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex done\x07done\n', Date.now())
+
+      await expect(waitPromise).resolves.toMatchObject({
+        handle,
+        condition: 'tui-idle',
+        satisfied: true,
+        status: 'running'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves ambiguous tui-idle at the quiet deadline instead of the next poll', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData('pty-bg', '\x1b]0;Codex\x07last chunk\n', Date.now())
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000
+      })
+      let settled = false
+      void waitPromise.then(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(2_999)
+      expect(settled).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(waitPromise).resolves.toMatchObject({
+        handle,
+        condition: 'tui-idle',
+        satisfied: true,
+        status: 'running'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves tui-idle from a Codex ready prompt preview', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -10632,6 +10760,39 @@ describe('OrcaRuntimeService', () => {
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
       expect(unread[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('delays push-on-idle message delivery for ambiguous name-only idle titles', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'quiet hello' })
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07working\n', Date.now())
+      runtime.onPtyData('pty-1', '\x1b]0;Codex\x07working 1\n', Date.now())
+
+      await vi.advanceTimersByTimeAsync(2_999)
+      expect(write).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: quiet hello'))
+
+      await vi.advanceTimersByTimeAsync(500)
       db.close()
     } finally {
       vi.useRealTimers()
