@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, SquareChevronRight } from 'lucide-react'
+import { AlertCircle, ChevronDown, SquareChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
@@ -44,9 +44,12 @@ function ToolLine({ block }: { block: NativeChatBlock }): React.JSX.Element | nu
       <button
         type="button"
         onClick={() => hasDetail && setExpanded((v) => !v)}
+        aria-expanded={hasDetail ? expanded : undefined}
         className={cn(
-          'flex w-full items-center gap-1.5 py-0.5 text-left',
-          hasDetail ? 'cursor-pointer' : 'cursor-default'
+          'flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          hasDetail
+            ? 'cursor-pointer hover:bg-accent hover:text-accent-foreground'
+            : 'cursor-default'
         )}
       >
         {expanded ? (
@@ -107,6 +110,7 @@ export function NativeChatToolRun({
 
   const callCount = countToolCalls(blocks) || blocks.length
   const summary = summarizeToolRun(blocks)
+  const hasFailure = blocks.some((block) => isToolResultBlock(block) && block.isError)
   const fallbackLabel = translate(
     callCount === 1 ? 'components.native-chat.tool.countOne' : 'components.native-chat.tool.countN',
     callCount === 1 ? '1 tool call' : `${callCount} tool calls`,
@@ -118,7 +122,8 @@ export function NativeChatToolRun({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 py-0.5 text-left"
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {open ? (
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -131,6 +136,12 @@ export function NativeChatToolRun({
         <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
           {summary || fallbackLabel}
         </span>
+        {hasFailure ? (
+          <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-destructive">
+            <AlertCircle className="size-3" />
+            {translate('components.native-chat.tool.failed', 'Failed')}
+          </span>
+        ) : null}
       </button>
       {open ? (
         <div className="mt-1 border-l-2 border-border/60 pl-2.5">

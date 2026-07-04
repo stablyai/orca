@@ -5,7 +5,8 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
-  useState
+  useState,
+  type ReactNode
 } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -36,6 +37,7 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import {
   nativeChatComposerTargetIsRemote,
+  type NativeChatComposerPendingPromptKind,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
 import { useNativeChatSkills } from './use-native-chat-skills'
@@ -74,6 +76,10 @@ export type NativeChatComposerProps = {
    *  a small "Ran /clear" system line — slash commands aren't chat turns and
    *  otherwise leave no visible trace that anything happened. */
   onSlashCommand?: (command: string) => void
+  /** Optional prompt section rendered inside the visual composer frame. */
+  pendingPrompt?: ReactNode
+  /** Visible pending prompt kind, used only to derive accurate placeholder copy. */
+  pendingPromptKind?: NativeChatComposerPendingPromptKind | null
 }
 
 export type NativeChatComposerHandle = {
@@ -110,7 +116,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       isWorking = false,
       onStop,
       onOptimisticSend,
-      onSlashCommand
+      onSlashCommand,
+      pendingPrompt = null,
+      pendingPromptKind = null
     },
     ref
   ): React.JSX.Element {
@@ -396,6 +404,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         autocomplete={autocomplete}
         activeSuggestion={activeSuggestion}
         notice={notice}
+        pendingPrompt={pendingPrompt}
+        pendingPromptKind={pendingPromptKind}
         imageAttachments={imageAttachments}
         sendButtonDisabled={sendButtonDisabled}
         isWorking={isWorking}
@@ -412,6 +422,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         onTextareaSelect={syncCaret}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
+        onActiveSuggestionChange={setActiveSuggestion}
         onChooseSlash={chooseSlash}
         onAcceptMention={() => {
           if (autocomplete.mode !== 'mention') {

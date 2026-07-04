@@ -12330,11 +12330,16 @@
         "noSkills": "Sin habilidades coincidentes",
         "localAttachmentUnsupported": "Los archivos adjuntos locales no están disponibles para sesiones remotas.",
         "removeAttachment": "Quitar archivo adjunto",
-        "pastedImageLabel": "Imagen pegada"
+        "pastedImageLabel": "Imagen pegada",
+        "pendingApproval": "Resolve the approval above to continue.",
+        "pendingQuestion": "Use the question panel above to answer.",
+        "noCommands": "No matching commands",
+        "mentionAction": "Reference a file or path"
       },
       "tool": {
         "running": "Ejecutando…",
-        "result": "Resultado"
+        "result": "Resultado",
+        "failed": "Failed"
       },
       "status": {
         "responding": "El agente está respondiendo"
@@ -12376,13 +12381,19 @@
         "otherPlaceholder": "Escribe tu respuesta",
         "cancel": "Cancelar",
         "send": "Enviar respuesta",
-        "next": "Siguiente"
+        "next": "Siguiente",
+        "pending": "Pending question",
+        "progress": "{{value0}}/{{value1}}",
+        "multiSelectHint": "Select all that apply."
       },
       "approval": {
         "title": "¿Permitir {{value0}}?",
         "allow": "Permitir",
-        "deny": "Denegar"
-      }
+        "deny": "Denegar",
+        "pending": "Pending approval"
+      },
+      "showLessMessage": "Show less",
+      "showFullMessage": "Show full message"
     },
     "tab": {
       "bar": {

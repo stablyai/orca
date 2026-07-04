@@ -20,6 +20,7 @@ import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { shouldCollapseNativeChatUserMessage } from './native-chat-user-message-collapse'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -35,6 +36,15 @@ function proseToMarkdown(blocks: NativeChatBlock[]): string {
     })
     .filter((part) => part.length > 0)
     .join('\n\n')
+}
+
+function formatMessageTimestamp(timestamp: number | null): string | null {
+  if (timestamp === null) {
+    return null
+  }
+  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(
+    new Date(timestamp)
+  )
 }
 
 function ImageAttachmentRefs({ blocks }: { blocks: NativeChatBlock[] }): React.JSX.Element | null {
@@ -67,20 +77,25 @@ function ImageAttachmentRefs({ blocks }: { blocks: NativeChatBlock[] }): React.J
   )
 }
 
-/** Inline controls for an agent message (mobile AgentControls parity): copy the
- *  message's prose, and scroll so this message's top aligns to the viewport top.
- *  Reveals on hover / keyboard focus like the prior copy affordance. */
-function AgentControls({
+/** Inline metadata controls for a rendered message. Revealed on hover/focus on
+ * pointer devices, but left visible on touch where hover does not exist. */
+function MessageControls({
   markdown,
+  timestamp,
   onScrollToTop,
   className
 }: {
   markdown: string
+  timestamp: number | null
   onScrollToTop: () => void
   className?: string
 }): React.JSX.Element {
+  const timeLabel = formatMessageTimestamp(timestamp)
   return (
     <div className={cn('flex items-center gap-1', className)}>
+      {timeLabel ? (
+        <span className="px-1 text-[11px] text-muted-foreground">{timeLabel}</span>
+      ) : null}
       <NativeChatCopyButton text={markdown} />
       <button
         type="button"
@@ -143,6 +158,9 @@ function MessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
+  const shouldCollapseUser = isUser && shouldCollapseNativeChatUserMessage(markdown)
+  const [userExpanded, setUserExpanded] = useState(false)
+  const userCollapsed = shouldCollapseUser && !userExpanded
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -164,23 +182,47 @@ function MessageRow({
     // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
     // transcript caught up.)
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
+      <div ref={rowRef} className="group flex flex-col items-end gap-1">
         <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-card-foreground">
           {markdown ? (
             <>
               <ImageAttachmentRefs blocks={prose} />
-              <CommentMarkdown
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
+              <div className={cn('relative', userCollapsed && 'max-h-48 overflow-hidden')}>
+                <CommentMarkdown
+                  content={markdown}
+                  variant="document"
+                  className="text-sm"
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={allowFileUriLinks}
+                />
+                {userCollapsed ? (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-b from-transparent to-card" />
+                ) : null}
+              </div>
+              {shouldCollapseUser ? (
+                <button
+                  type="button"
+                  onClick={() => setUserExpanded((expanded) => !expanded)}
+                  className="mt-2 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {userExpanded
+                    ? translate('components.native-chat.showLessMessage', 'Show less')
+                    : translate('components.native-chat.showFullMessage', 'Show full message')}
+                </button>
+              ) : null}
             </>
           ) : (
             <ImageAttachmentRefs blocks={prose} />
           )}
         </div>
+        {markdown ? (
+          <MessageControls
+            markdown={markdown}
+            timestamp={message.timestamp}
+            onScrollToTop={scrollToTop}
+            className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+          />
+        ) : null}
       </div>
     )
   }
@@ -200,10 +242,11 @@ function MessageRow({
       )}
     >
       {showControls ? (
-        <AgentControls
+        <MessageControls
           markdown={markdown}
+          timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
-          className="absolute -top-1 right-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          className="absolute -top-1 right-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"
         />
       ) : null}
       <ImageAttachmentRefs blocks={prose} />

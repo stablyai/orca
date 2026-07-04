@@ -12330,11 +12330,16 @@
         "noSkills": "一致するスキルがありません",
         "localAttachmentUnsupported": "ローカル添付ファイルはリモート セッションでは使用できません。",
         "removeAttachment": "添付ファイルを削除する",
-        "pastedImageLabel": "貼り付けた画像"
+        "pastedImageLabel": "貼り付けた画像",
+        "pendingApproval": "Resolve the approval above to continue.",
+        "pendingQuestion": "Use the question panel above to answer.",
+        "noCommands": "No matching commands",
+        "mentionAction": "Reference a file or path"
       },
       "tool": {
         "running": "実行中…",
-        "result": "結果"
+        "result": "結果",
+        "failed": "Failed"
       },
       "status": {
         "responding": "Agent が応答中です"
@@ -12376,13 +12381,19 @@
         "otherPlaceholder": "答えを入力してください",
         "cancel": "キャンセル",
         "send": "回答を送信する",
-        "next": "次へ"
+        "next": "次へ",
+        "pending": "Pending question",
+        "progress": "{{value0}}/{{value1}}",
+        "multiSelectHint": "Select all that apply."
       },
       "approval": {
         "title": "{{value0}} を許可しますか?",
         "allow": "許可する",
-        "deny": "拒否"
-      }
+        "deny": "拒否",
+        "pending": "Pending approval"
+      },
+      "showLessMessage": "Show less",
+      "showFullMessage": "Show full message"
     },
     "tab": {
       "bar": {

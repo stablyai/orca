@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check, CircleHelp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { formatAskAnswer, type AskPrompt } from './native-chat-interactive-prompt'
@@ -31,8 +31,12 @@ export function NativeChatQuestionCard({
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<string[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
+  const [responding, setResponding] = useState(false)
 
   const toggle = (qi: number, label: string, multi: boolean): void => {
+    if (responding) {
+      return
+    }
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[qi] ?? []
@@ -46,6 +50,9 @@ export function NativeChatQuestionCard({
   }
 
   const setOther = (qi: number, value: string): void => {
+    if (responding) {
+      return
+    }
     setOtherText((prev) => {
       const next = [...prev]
       next[qi] = value
@@ -70,6 +77,9 @@ export function NativeChatQuestionCard({
   )
 
   const submit = (): void => {
+    if (responding) {
+      return
+    }
     // Build per-question label lists, substituting the typed Other value, then
     // format to one line per answered question.
     const resolved = prompt.questions.map((_, i) => {
@@ -79,11 +89,15 @@ export function NativeChatQuestionCard({
     })
     const text = formatAskAnswer(prompt, resolved)
     if (text.length > 0) {
+      setResponding(true)
       onAnswer(text)
     }
   }
 
   const advance = (): void => {
+    if (responding) {
+      return
+    }
     if (isLast) {
       submit()
     } else {
@@ -95,8 +109,22 @@ export function NativeChatQuestionCard({
   const otherSelected = (selections[index] ?? []).includes(OTHER)
 
   return (
-    <div className="shrink-0 border-t border-border bg-muted/30">
-      <div className="mx-auto flex max-h-[22rem] w-full max-w-3xl flex-col px-3 py-2 sm:px-4">
+    <div className="border-b border-border bg-muted/30 px-3 py-3">
+      <div className="flex max-h-[22rem] w-full flex-col">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            <CircleHelp className="size-3.5 shrink-0" />
+            <span>{translate('components.native-chat.question.pending', 'Pending question')}</span>
+          </div>
+          {total > 1 ? (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {translate('components.native-chat.question.progress', '{{value0}}/{{value1}}', {
+                value0: index + 1,
+                value1: total
+              })}
+            </span>
+          ) : null}
+        </div>
         {total > 1 ? (
           <div className="flex gap-1 overflow-x-auto border-b border-border pb-2 scrollbar-sleek">
             {prompt.questions.map((qq, i) => (
@@ -104,8 +132,9 @@ export function NativeChatQuestionCard({
                 key={i}
                 type="button"
                 onClick={() => setIndex(i)}
+                disabled={responding}
                 className={cn(
-                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium',
+                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium disabled:pointer-events-none disabled:opacity-50',
                   i === index
                     ? 'bg-accent text-accent-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -127,6 +156,14 @@ export function NativeChatQuestionCard({
 
         <div className="min-h-0 flex-1 overflow-y-auto py-2 scrollbar-sleek">
           <p className="mb-2 text-sm font-semibold text-foreground">{q.question}</p>
+          {q.multiSelect ? (
+            <p className="mb-2 text-xs text-muted-foreground">
+              {translate(
+                'components.native-chat.question.multiSelectHint',
+                'Select all that apply.'
+              )}
+            </p>
+          ) : null}
           <div className="flex flex-col gap-1.5">
             {q.options.map((opt) => (
               <OptionRow
@@ -135,18 +172,21 @@ export function NativeChatQuestionCard({
                 description={opt.description}
                 selected={(selections[index] ?? []).includes(opt.label)}
                 onSelect={() => toggle(index, opt.label, q.multiSelect)}
+                disabled={responding}
               />
             ))}
             <OptionRow
               label={translate('components.native-chat.question.other', 'Other…')}
               selected={otherSelected}
               onSelect={() => toggle(index, OTHER, q.multiSelect)}
+              disabled={responding}
             />
             {otherSelected ? (
               <textarea
                 autoFocus
                 value={otherText[index]}
                 onChange={(e) => setOther(index, e.target.value)}
+                disabled={responding}
                 placeholder={translate(
                   'components.native-chat.question.otherPlaceholder',
                   'Type your answer'
@@ -161,20 +201,21 @@ export function NativeChatQuestionCard({
         <div className="flex items-center justify-between gap-2 border-t border-border pt-2">
           <button
             type="button"
-            onClick={onCancel}
-            className="rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => {
+              if (!responding) {
+                setResponding(true)
+                onCancel()
+              }
+            }}
+            disabled={responding}
+            className="rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           >
             {translate('components.native-chat.question.cancel', 'Cancel')}
           </button>
-          {total > 1 ? (
-            <span className="text-xs text-muted-foreground">
-              {index + 1}/{total}
-            </span>
-          ) : null}
           <button
             type="button"
             onClick={advance}
-            disabled={!currentAnswered}
+            disabled={!currentAnswered || responding}
             className={cn(
               'rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors',
               'hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50'
@@ -194,19 +235,22 @@ function OptionRow({
   label,
   description,
   selected,
-  onSelect
+  onSelect,
+  disabled = false
 }: {
   label: string
   description?: string
   selected: boolean
   onSelect: () => void
+  disabled?: boolean
 }): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
       className={cn(
-        'flex w-full items-start gap-2.5 rounded-md border bg-background px-3 py-2 text-left transition-colors',
+        'flex w-full items-start gap-2.5 rounded-md border bg-background px-3 py-2 text-left transition-colors disabled:pointer-events-none disabled:opacity-50',
         selected ? 'border-primary' : 'border-border hover:bg-accent/50'
       )}
     >

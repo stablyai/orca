@@ -11,7 +11,10 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
-import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+import {
+  NativeChatInteractiveCard,
+  type NativeChatInteractivePromptKind
+} from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
@@ -168,6 +171,8 @@ function NativeChatResolvedView({
   // stop (Stop sends ESC, the agent-TUI interrupt key).
   const interactiveSend = useNativeChatInteractiveSend(terminalTabId, targetPtyId, agent)
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
+  const [visiblePromptKind, setVisiblePromptKind] =
+    useState<NativeChatInteractivePromptKind | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
   const fileLinkContext = useAppStore(
@@ -365,6 +370,14 @@ function NativeChatResolvedView({
     [fileLinkContext]
   )
   const nativeChatFileLinkClick = fileLinkContext ? openNativeChatFileLink : undefined
+  const pendingPrompt = (
+    <NativeChatInteractiveCard
+      paneKey={paneKey}
+      send={interactiveSend}
+      canSend={canSend}
+      onVisibleKindChange={setVisiblePromptKind}
+    />
+  )
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
@@ -425,9 +438,6 @@ function NativeChatResolvedView({
           />
         )}
       </div>
-      {/* Live interactive cards (question / approval) render just above the
-          composer while the agent's interactivePrompt is present (mobile parity). */}
-      <NativeChatInteractiveCard paneKey={paneKey} send={interactiveSend} canSend={canSend} />
       {/* canSend reflects the mobile presence-lock: when a mobile client holds
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). */}
@@ -441,6 +451,8 @@ function NativeChatResolvedView({
         onStop={stopAgent}
         onOptimisticSend={onOptimisticSend}
         onSlashCommand={onSlashCommand}
+        pendingPrompt={pendingPrompt}
+        pendingPromptKind={visiblePromptKind}
       />
       {contextMenu.menu}
     </div>

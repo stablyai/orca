@@ -5,6 +5,9 @@ import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
+import type { NativeChatComposerPendingPromptKind } from './native-chat-composer-target'
+
+export type NativeChatInteractivePromptKind = NativeChatComposerPendingPromptKind
 
 /**
  * Render the live interactive card for the pane while the agent's
@@ -23,11 +26,13 @@ import type { NativeChatInteractiveSend } from './use-native-chat-interactive-se
 export function NativeChatInteractiveCard({
   paneKey,
   send,
-  canSend
+  canSend,
+  onVisibleKindChange
 }: {
   paneKey: string
   send: NativeChatInteractiveSend
   canSend: boolean
+  onVisibleKindChange?: (kind: NativeChatInteractivePromptKind | null) => void
 }): React.JSX.Element | null {
   const interactivePrompt = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.interactivePrompt ?? null
@@ -51,6 +56,11 @@ export function NativeChatInteractiveCard({
       setDismissedKey(null)
     }
   }, [present])
+
+  const visibleKind = !card || !canSend || cardKey === dismissedKey ? null : card.kind
+  useEffect(() => {
+    onVisibleKindChange?.(visibleKind)
+  }, [onVisibleKindChange, visibleKind])
 
   if (!card || !canSend || cardKey === dismissedKey) {
     return null

@@ -1,18 +1,17 @@
-import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
+import type { ClipboardEventHandler, KeyboardEventHandler, ReactNode, RefObject } from 'react'
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import type { ComposerAutocomplete, SlashCommandSuggestion } from './native-chat-composer-state'
-import {
-  NativeChatMentionHint,
-  NativeChatSkillMenu,
-  NativeChatSlashMenu
-} from './NativeChatAutocompleteMenus'
+import { NativeChatCommandMenu } from './NativeChatCommandMenu'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
-import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
+import { NativeChatComposerFrame } from './NativeChatComposerFrame'
+import {
+  nativeChatComposerPlaceholder,
+  type NativeChatComposerPendingPromptKind
+} from './native-chat-composer-target'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 
 export type NativeChatComposerFieldProps = {
@@ -24,6 +23,8 @@ export type NativeChatComposerFieldProps = {
   autocomplete: ComposerAutocomplete
   activeSuggestion: number
   notice: string | null
+  pendingPrompt?: ReactNode
+  pendingPromptKind?: NativeChatComposerPendingPromptKind | null
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   sendButtonDisabled: boolean
   isWorking: boolean
@@ -35,6 +36,7 @@ export type NativeChatComposerFieldProps = {
   onTextareaSelect: (element: HTMLTextAreaElement) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>
+  onActiveSuggestionChange: (index: number) => void
   onChooseSlash: (command: SlashCommandSuggestion) => void
   onAcceptMention: () => void
   onChooseSkill: (skill: DiscoveredSkill) => void
@@ -61,6 +63,8 @@ export function NativeChatComposerField({
   autocomplete,
   activeSuggestion,
   notice,
+  pendingPrompt = null,
+  pendingPromptKind = null,
   imageAttachments,
   sendButtonDisabled,
   isWorking,
@@ -72,6 +76,7 @@ export function NativeChatComposerField({
   onTextareaSelect,
   onKeyDown,
   onPaste,
+  onActiveSuggestionChange,
   onChooseSlash,
   onAcceptMention,
   onChooseSkill,
@@ -83,109 +88,92 @@ export function NativeChatComposerField({
   onSend,
   onStop
 }: NativeChatComposerFieldProps): React.JSX.Element {
-  return (
-    <div className="shrink-0 bg-background">
-      <div className="px-3 py-2 sm:px-4">
-        <div className="relative mx-auto w-full max-w-3xl">
-          {autocomplete.mode === 'slash' && autocomplete.suggestions.length > 0 ? (
-            <NativeChatSlashMenu
-              suggestions={autocomplete.suggestions}
-              activeIndex={activeSuggestion}
-              onChoose={onChooseSlash}
-            />
-          ) : null}
-          {autocomplete.mode === 'mention' ? (
-            <NativeChatMentionHint query={autocomplete.query} onAccept={onAcceptMention} />
-          ) : null}
-          {autocomplete.mode === 'skill' ? (
-            <NativeChatSkillMenu
-              suggestions={autocomplete.suggestions}
-              activeIndex={activeSuggestion}
-              onChoose={onChooseSkill}
-            />
-          ) : null}
-          {notice ? (
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ImageOff className="size-3.5 shrink-0" />
-              <span>{notice}</span>
-            </div>
-          ) : null}
-          <div
-            data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
-            className={cn(
-              'rounded-xl border border-input bg-card p-1.5 shadow-xs transition-colors',
-              'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30'
-            )}
-          >
-            {imageAttachments.length > 0 ? (
-              <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-                {imageAttachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
-                    title={attachment.path}
-                  >
-                    <ImageIcon className="size-3.5 shrink-0" />
-                    <span className="max-w-56 truncate">
-                      {isNativeChatPastedImagePath(attachment.path)
-                        ? translate(
-                            'components.native-chat.composer.pastedImageLabel',
-                            'Pasted image'
-                          )
-                        : basename(attachment.path)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveImageAttachment(attachment.id)}
-                      aria-label={translate(
-                        'components.native-chat.composer.removeAttachment',
-                        'Remove attachment'
-                      )}
-                      className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              disabled={disabled}
-              rows={2}
-              onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              onSelect={(e) => onTextareaSelect(e.currentTarget)}
-              placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
-              // Why: coarse-pointer min-height follows the app's touch target convention.
-              // scrollbar-sleek keeps the overflow gutter from showing the heavy
-              // native scrollbar once the draft exceeds max-height.
-              className={cn(
-                'scrollbar-sleek min-h-12 max-h-28 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
-                'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
-              )}
-            />
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              <NativeChatComposerActions
-                attachDisabled={attachDisabled}
-                dictationDisabled={dictationDisabled}
-                sendDisabled={sendButtonDisabled}
-                isWorking={isWorking}
-                isDictating={isDictating}
-                isDictationHoldMode={isDictationHoldMode}
-                onAttach={onAttach}
-                onDictationToggle={onDictationToggle}
-                onDictationHoldStart={onDictationHoldStart}
-                onDictationHoldEnd={onDictationHoldEnd}
-                onSend={onSend}
-                onStop={onStop}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+  const commandMenu = (
+    <NativeChatCommandMenu
+      autocomplete={autocomplete}
+      activeIndex={activeSuggestion}
+      onActiveIndexChange={onActiveSuggestionChange}
+      onChooseSlash={onChooseSlash}
+      onAcceptMention={onAcceptMention}
+      onChooseSkill={onChooseSkill}
+    />
+  )
+  const noticeRow = notice ? (
+    <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <ImageOff className="size-3.5 shrink-0" />
+      <span>{notice}</span>
     </div>
+  ) : null
+
+  return (
+    <NativeChatComposerFrame
+      commandMenu={commandMenu}
+      notice={noticeRow}
+      pendingPrompt={pendingPrompt}
+    >
+      {imageAttachments.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+          {imageAttachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
+              title={attachment.path}
+            >
+              <ImageIcon className="size-3.5 shrink-0" />
+              <span className="max-w-56 truncate">
+                {isNativeChatPastedImagePath(attachment.path)
+                  ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
+                  : basename(attachment.path)}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRemoveImageAttachment(attachment.id)}
+                aria-label={translate(
+                  'components.native-chat.composer.removeAttachment',
+                  'Remove attachment'
+                )}
+                className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <textarea
+        ref={textareaRef}
+        value={draft}
+        disabled={disabled}
+        rows={2}
+        onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        onSelect={(e) => onTextareaSelect(e.currentTarget)}
+        placeholder={nativeChatComposerPlaceholder(hasPty, canSend, pendingPromptKind)}
+        // Why: coarse-pointer min-height follows the app's touch target convention.
+        // scrollbar-sleek keeps the overflow gutter from showing the heavy
+        // native scrollbar once the draft exceeds max-height.
+        className={cn(
+          'scrollbar-sleek min-h-12 max-h-28 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+          'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
+        )}
+      />
+      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+        <NativeChatComposerActions
+          attachDisabled={attachDisabled}
+          dictationDisabled={dictationDisabled}
+          sendDisabled={sendButtonDisabled}
+          isWorking={isWorking}
+          isDictating={isDictating}
+          isDictationHoldMode={isDictationHoldMode}
+          onAttach={onAttach}
+          onDictationToggle={onDictationToggle}
+          onDictationHoldStart={onDictationHoldStart}
+          onDictationHoldEnd={onDictationHoldEnd}
+          onSend={onSend}
+          onStop={onStop}
+        />
+      </div>
+    </NativeChatComposerFrame>
   )
 }

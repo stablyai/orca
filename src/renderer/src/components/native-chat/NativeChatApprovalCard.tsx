@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { ShieldQuestion } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 import type { ChatApproval } from './native-chat-interactive-prompt'
 
 export type NativeChatApprovalCardProps = {
@@ -18,35 +20,43 @@ export function NativeChatApprovalCard({
   approval,
   onChoose
 }: NativeChatApprovalCardProps): React.JSX.Element {
+  const [responding, setResponding] = useState(false)
+
+  const choose = (send: string): void => {
+    if (responding) {
+      return
+    }
+    setResponding(true)
+    onChoose(send)
+  }
+
   return (
-    <div className="shrink-0 border-t border-border bg-muted/30">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-3 py-3 sm:px-4">
-        <div className="flex items-start gap-2">
-          <ShieldQuestion className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">{approval.title}</p>
-            {approval.detail ? (
-              <p className="mt-0.5 break-words font-mono text-xs text-muted-foreground">
-                {approval.detail}
-              </p>
-            ) : null}
-          </div>
+    <div className="border-b border-border bg-muted/30 px-3 py-3">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          <ShieldQuestion className="size-3.5 shrink-0" />
+          <span>{translate('components.native-chat.approval.pending', 'Pending approval')}</span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">{approval.title}</p>
+          {approval.detail ? (
+            <p className="mt-0.5 break-words font-mono text-xs text-muted-foreground">
+              {approval.detail}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           {approval.options.map((opt, i) => (
-            <button
+            <Button
               key={`${opt.label}-${i}`}
               type="button"
-              onClick={() => onChoose(opt.send)}
-              className={cn(
-                'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                i === 0
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'border border-border bg-background text-foreground hover:bg-accent'
-              )}
+              onClick={() => choose(opt.send)}
+              disabled={responding}
+              variant={i === 0 ? 'default' : 'outline'}
+              size="sm"
             >
               {opt.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

@@ -66,6 +66,25 @@ async function invokeReadSession(args: {
   return handler({}, args)
 }
 
+function installTestHome(root: string): () => void {
+  const previousHome = process.env.HOME
+  const previousUserProfile = process.env.USERPROFILE
+  process.env.HOME = root
+  process.env.USERPROFILE = root
+  return () => {
+    if (previousHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = previousHome
+    }
+    if (previousUserProfile === undefined) {
+      delete process.env.USERPROFILE
+    } else {
+      process.env.USERPROFILE = previousUserProfile
+    }
+  }
+}
+
 describe('nativeChat:readSession handler', () => {
   it('resolves a Claude transcript and returns the full conversation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-'))
@@ -93,8 +112,7 @@ describe('nativeChat:readSession handler', () => {
 
     // Point homedir-derived Claude root at our fixture via HOME so the resolver
     // (which reads homedir() internally) finds the transcript.
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = installTestHome(root)
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'sess-ipc' })) as {
         messages?: unknown[]
@@ -103,11 +121,7 @@ describe('nativeChat:readSession handler', () => {
       expect(result.error).toBeUndefined()
       expect(result.messages).toHaveLength(2)
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
@@ -126,8 +140,7 @@ describe('nativeChat:readSession handler', () => {
     }))
     await writeFile(join(projectDir, 'sess-limit.jsonl'), jsonLines(records))
 
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = installTestHome(root)
     try {
       const windowed = (await invokeReadSession({
         agent: 'claude',
@@ -143,11 +156,7 @@ describe('nativeChat:readSession handler', () => {
       })) as { messages: { id: string }[] }
       expect(wider.messages.map((m) => m.id)).toEqual(['u-2', 'u-3', 'u-4', 'u-5'])
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
@@ -187,8 +196,7 @@ describe('nativeChat:readSession handler', () => {
       send: (channel: string, payload: unknown) => sent.push({ channel, payload })
     }
 
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = installTestHome(root)
     try {
       subscribe!(
         { sender },
@@ -230,30 +238,21 @@ describe('nativeChat:readSession handler', () => {
       expect(destroyedCb).toBeDefined()
       destroyedCb!()
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
   it('returns an error for an unknown session without throwing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-missing-'))
     tempRoots.push(root)
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = installTestHome(root)
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'nope' })) as {
         error?: string
       }
       expect(result.error).toBeTruthy()
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 })
