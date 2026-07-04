@@ -35,16 +35,21 @@ export function collectRuntimeDiagnosticCounts(
   }
 }
 
-function countTerminalLeaves(node: { type: string; children?: unknown[] } | null): number {
+type DiagnosticTerminalLayoutNode = {
+  type: string
+  first?: DiagnosticTerminalLayoutNode | null
+  second?: DiagnosticTerminalLayoutNode | null
+}
+
+function countTerminalLeaves(node: DiagnosticTerminalLayoutNode | null): number {
   if (!node) {
     return 0
   }
   if (node.type === 'leaf') {
     return 1
   }
-  let count = 0
-  for (const child of node.children ?? []) {
-    count += countTerminalLeaves(child as Parameters<typeof countTerminalLeaves>[0])
+  if (node.type === 'split') {
+    return countTerminalLeaves(node.first ?? null) + countTerminalLeaves(node.second ?? null)
   }
-  return count
+  return 0
 }

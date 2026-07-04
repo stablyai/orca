@@ -12,7 +12,8 @@ import type { DiagnosticArchiveEntry } from './diagnostic-archive-writer'
 import {
   collectDiagnosticJsonCategory,
   makeDiagnosticJsonContent,
-  sanitizeDiagnosticCategoryError
+  sanitizeDiagnosticCategoryError,
+  sanitizeDiagnosticCategoryReason
 } from './diagnostic-bundle-json-category'
 import { collectSystemDiagnosticSummary } from './system-diagnostic-summary'
 import {
@@ -62,7 +63,7 @@ export async function collectDiagnosticBundleCategory(
   switch (category) {
     case 'app':
       await collectDiagnosticJsonCategory(context.record, addEntry, category, 'app/orca.json', () =>
-        collectAppDiagnosticSummary()
+        collectAppDiagnosticSummary(context.orcaChannel)
       )
       break
     case 'system':
@@ -198,27 +199,21 @@ async function collectSystemCategory(
     const summary = collectSystemDiagnosticSummary()
     const osPath = 'system/os.json'
     const resourcesPath = 'system/resources.json'
-    addEntry(
-      'system',
-      osPath,
-      makeDiagnosticJsonContent({
-        platform: summary.platform,
-        arch: summary.arch,
-        osRelease: summary.osRelease,
-        osVersion: summary.osVersion,
-        systemVersion: summary.systemVersion,
-        locale: summary.locale
-      })
-    )
-    addEntry(
-      'system',
-      resourcesPath,
-      makeDiagnosticJsonContent({
-        cpu: summary.cpu,
-        memory: summary.memory,
-        loadAverage1m: summary.loadAverage1m
-      })
-    )
+    const osContent = makeDiagnosticJsonContent({
+      platform: summary.platform,
+      arch: summary.arch,
+      osRelease: summary.osRelease,
+      osVersion: summary.osVersion,
+      systemVersion: summary.systemVersion,
+      locale: summary.locale
+    })
+    const resourcesContent = makeDiagnosticJsonContent({
+      cpu: summary.cpu,
+      memory: summary.memory,
+      loadAverage1m: summary.loadAverage1m
+    })
+    addEntry('system', osPath, osContent)
+    addEntry('system', resourcesPath, resourcesContent)
     record({ category: 'system', status: 'included', files: [osPath, resourcesPath] })
   } catch (error) {
     record({
@@ -244,7 +239,9 @@ async function collectObservabilityCategory(
       record({
         category,
         status: 'skipped',
-        reason: status.disabledReason ?? 'diagnostics_bundle_disabled',
+        reason: sanitizeDiagnosticCategoryReason(
+          status.disabledReason ?? 'diagnostics_bundle_disabled'
+        ),
         files: []
       })
       return

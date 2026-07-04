@@ -192,7 +192,7 @@ Common Commands:
   orca open [--json]
   orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
-  orca diagnostics bundle [--output <path>] [--lookback <duration>] [--include <category>] [--exclude <category>] [--open] [--json]
+  orca diagnostics bundle [--output <filename-or-subpath>] [--lookback <duration>] [--include <category>] [--exclude <category>] [--open] [--json]
   orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
@@ -498,7 +498,7 @@ export function formatFlagHelp(flag: string): string {
     'parent-worktree':
       '--parent-worktree <selector> Parent worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     path: '--path <path>          Path argument for the command',
-    output: '--output <path>        Diagnostics bundle ZIP output path',
+    output: '--output <filename-or-subpath>  ZIP filename/subpath under Orca logs/diagnostics',
     lookback: '--lookback <duration> Minutes to include, or use m/h/d suffix',
     open: '--open                 Reveal the exported diagnostics bundle',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',

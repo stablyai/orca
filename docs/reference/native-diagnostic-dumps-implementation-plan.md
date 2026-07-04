@@ -12,7 +12,7 @@ Orca supports a cross-platform diagnostics export that can be created from the
 packaged CLI and, later, from the app UI:
 
 ```text
-orca diagnostics bundle [--output <path>] [--lookback <duration>]
+orca diagnostics bundle [--output <filename-or-subpath>] [--lookback <duration>]
                         [--include <category>] [--exclude <category>]
                         [--json] [--open]
 ```
@@ -71,7 +71,8 @@ grounds.
 
 - `src/main/diagnostics/diagnostic-output-path.ts`
   - Computes default archive paths under Orca logs/diagnostics.
-  - Normalizes user-provided `--output` while preserving platform path rules.
+  - Resolves user-provided `--output` as a filename or subpath under that
+    diagnostics directory.
 
 - `src/main/diagnostics/diagnostic-archive-writer.ts`
   - Writes a ZIP or directory archive.
@@ -252,7 +253,8 @@ linux/shells.json
 
 - `orca diagnostics bundle --json` returns archive path, bundle ID, included
   categories, skipped categories, and byte size.
-- `orca diagnostics bundle --output <tmp.zip> --json` writes a ZIP containing
+- `orca diagnostics bundle --output <tmp.zip> --json` writes a ZIP under
+  Orca logs/diagnostics containing
   `manifest.json`, app summary, system summary, observability NDJSON, and memory
   snapshot.
 - Existing `orca diagnostics memory` CLI output and RPC behavior remain

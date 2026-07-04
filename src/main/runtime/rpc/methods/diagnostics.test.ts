@@ -51,7 +51,8 @@ describe('diagnostics RPC methods', () => {
   it('exports a diagnostics bundle through the runtime', async () => {
     const bundle = {
       bundleId: 'bundle-1',
-      outputPath: 'C:\\tmp\\orca-diagnostics.zip',
+      outputPath:
+        'C:\\Users\\example\\AppData\\Local\\Orca\\logs\\diagnostics\\orca-diagnostics.zip',
       bytes: 1234,
       includedCategories: ['app'],
       skippedCategories: [],
@@ -66,7 +67,7 @@ describe('diagnostics RPC methods', () => {
 
     const response = await dispatcher.dispatch(
       makeRequest('diagnostics.bundle', {
-        output: 'C:\\tmp\\orca-diagnostics.zip',
+        output: 'orca-diagnostics.zip',
         lookbackMinutes: 120,
         include: ['app'],
         exclude: ['native-minidumps'],
@@ -75,7 +76,7 @@ describe('diagnostics RPC methods', () => {
     )
 
     expect(runtime.createDiagnosticBundle).toHaveBeenCalledWith({
-      output: 'C:\\tmp\\orca-diagnostics.zip',
+      output: 'orca-diagnostics.zip',
       lookbackMinutes: 120,
       include: ['app'],
       exclude: ['native-minidumps'],
@@ -117,6 +118,28 @@ describe('diagnostics RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('diagnostics.bundle', {
         lookbackMinutes: MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES + 1
+      })
+    )
+
+    expect(runtime.createDiagnosticBundle).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument'
+      }
+    })
+  })
+
+  it('rejects diagnostics bundle output paths outside the diagnostics directory', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createDiagnosticBundle: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: DIAGNOSTICS_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('diagnostics.bundle', {
+        output: '../orca-diagnostics.zip'
       })
     )
 

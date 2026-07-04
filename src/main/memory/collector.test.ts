@@ -22,7 +22,13 @@ vi.mock('electron', () => ({
 
 vi.mock('child_process', () => ({
   exec: (cmd: string, opts: unknown, cb: (err: Error | null, out: { stdout: string }) => void) =>
-    execMock(cmd, opts, cb)
+    execMock(cmd, opts, cb),
+  execFile: (
+    cmd: string,
+    args: string[],
+    opts: unknown,
+    cb: (err: Error | null, stdout: string, stderr: string) => void
+  ) => execMock([cmd, ...args].join(' '), opts, cb)
 }))
 
 vi.mock('./pty-registry', () => ({

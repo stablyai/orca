@@ -9,7 +9,6 @@ export function startNativeCrashReporter(): string | null {
   if (started) {
     return null
   }
-  started = true
   const crashDumps = ensureNativeCrashDumpDirectory()
   app.setPath('crashDumps', crashDumps)
   crashReporter.start({
@@ -26,6 +25,7 @@ export function startNativeCrashReporter(): string | null {
       schema_version: '1'
     }
   })
+  started = true
   return crashDumps
 }
 

@@ -16,7 +16,7 @@ Orca should treat this as two related systems, not one "exe dump" feature:
 
 Electron Crashpad is the only practical cross-platform native crash-dump layer. Windows WER/ProcDump, macOS `.ips` reports/sysdiagnose, and Linux core dumps are useful adjuncts, but they are platform-specific and should not be the primary Orca-owned contract.
 
-The implemented CLI shape is `orca diagnostics bundle --output <path>`, with a default output directory under Orca's per-user logs/diagnostics directory rather than the installation directory. Installed app directories are often unwritable, code-signed, or replaced by updates.
+The implemented CLI shape is `orca diagnostics bundle --output <filename-or-subpath>`, resolved under Orca's per-user logs/diagnostics directory rather than the installation directory. Installed app directories are often unwritable, code-signed, or replaced by updates.
 
 ## Current Orca Evidence
 
@@ -135,7 +135,7 @@ Recommended crash dump directory:
 Add an archive-oriented collector that can be used from UI, crash reporting, and CLI:
 
 ```text
-orca diagnostics bundle [--output <path>] [--lookback <duration>]
+orca diagnostics bundle [--output <filename-or-subpath>] [--lookback <duration>]
                         [--include <category>] [--exclude <category>]
                         [--json] [--open]
 ```
@@ -238,9 +238,9 @@ Unit tests:
 
 IPC/RPC/CLI tests:
 
-- `orca diagnostics bundle --output <path> --json` routes through a new runtime RPC method.
+- `orca diagnostics bundle --output <filename-or-subpath> --json` routes through a new runtime RPC method.
 - Renderer cannot supply raw bundle bytes; main process collects and writes the archive.
-- Output path is explicit or main-computed; parent directories are created only for the chosen output path.
+- Output path is diagnostics-relative or main-computed; parent directories are created only under Orca logs/diagnostics.
 - Missing main runtime returns a clear partial/offline error or produces an explicitly partial bundle.
 - Existing `orca diagnostics memory` behavior remains unchanged.
 

@@ -52,7 +52,9 @@ describe('collectWindowsEventDiagnosticSummary', () => {
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'powershell.exe',
       expect.arrayContaining([
-        expect.stringContaining("if ($_.Exception.Message -match 'No events were found')")
+        expect.stringContaining(
+          "$_.FullyQualifiedErrorId -eq 'NoMatchingEventsFound,Microsoft.PowerShell.Commands.GetWinEventCommand'"
+        )
       ]),
       expect.objectContaining({ timeout: 5000, maxBuffer: 1024 * 1024 })
     )

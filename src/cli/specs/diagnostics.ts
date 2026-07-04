@@ -16,7 +16,7 @@ export const DIAGNOSTICS_COMMAND_SPECS: CommandSpec[] = [
     path: ['diagnostics', 'bundle'],
     summary: 'Export a local diagnostics ZIP with crash, memory, and system context',
     usage:
-      'orca diagnostics bundle [--output <path>] [--lookback <duration>] [--include <category>] [--exclude <category>] [--open] [--json]',
+      'orca diagnostics bundle [--output <filename-or-subpath>] [--lookback <duration>] [--include <category>] [--exclude <category>] [--open] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'output', 'lookback', 'include', 'exclude', 'open'],
     notes: [
       'Creates a local ZIP under Orca logs/diagnostics by default. Native minidumps are included only in this explicit local export when present.',
@@ -24,7 +24,7 @@ export const DIAGNOSTICS_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: [
       'orca diagnostics bundle --json',
-      'orca diagnostics bundle --output ./orca-diagnostics.zip --lookback 2h',
+      'orca diagnostics bundle --output orca-diagnostics.zip --lookback 2h',
       'orca diagnostics bundle --exclude native-minidumps'
     ]
   }

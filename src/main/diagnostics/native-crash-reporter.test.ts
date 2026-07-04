@@ -72,4 +72,23 @@ describe('startNativeCrashReporter', () => {
     expect(second).toBeNull()
     expect(startMock).toHaveBeenCalledTimes(1)
   })
+
+  it('can retry if the crash dump directory cannot be created', async () => {
+    const { startNativeCrashReporter } = await import('./native-crash-reporter')
+    ensureDirectoryMock.mockImplementationOnce(() => {
+      calls.push('ensure')
+      throw new Error('permission denied')
+    })
+
+    expect(() => startNativeCrashReporter()).toThrow('permission denied')
+    ensureDirectoryMock.mockImplementationOnce(() => {
+      calls.push('ensure')
+      return 'C:\\Users\\example\\AppData\\Local\\Orca\\logs\\diagnostics\\crashpad'
+    })
+
+    expect(startNativeCrashReporter()).toBe(
+      'C:\\Users\\example\\AppData\\Local\\Orca\\logs\\diagnostics\\crashpad'
+    )
+    expect(startMock).toHaveBeenCalledTimes(1)
+  })
 })

@@ -33,6 +33,8 @@ export function warnTerminalLifecycleAnomaly(
   }
   emittedDiagnostics.add(key)
   console.warn(`[terminal-lifecycle] ${event}`, details)
+  // Why: worktree and PTY ids can reveal local path/session details, so crash
+  // breadcrumbs keep only their presence while preserving stable pane ids.
   recordRendererCrashBreadcrumb('terminal_lifecycle_anomaly', {
     event,
     tabId: details.tabId ?? null,

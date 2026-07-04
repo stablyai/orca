@@ -42,15 +42,15 @@ export function sanitizeDiagnosticCategoryError(error: unknown): string {
   return sanitizeDiagnosticCategoryReason(error instanceof Error ? error.message : String(error))
 }
 
+export function sanitizeDiagnosticCategoryReason(reason: string | undefined): string {
+  const text = reason && reason.trim().length > 0 ? reason : 'unknown'
+  return redactString(text).slice(0, 500)
+}
+
 function isUnsupportedSummary(value: unknown): value is { supported: false; reason?: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
     (value as { supported?: unknown }).supported === false
   )
-}
-
-function sanitizeDiagnosticCategoryReason(reason: string | undefined): string {
-  const text = reason && reason.trim().length > 0 ? reason : 'unknown'
-  return redactString(text).slice(0, 500)
 }

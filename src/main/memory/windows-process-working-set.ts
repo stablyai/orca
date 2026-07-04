@@ -1,7 +1,7 @@
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 const WINDOWS_PROCESS_TIMEOUT_MS = 5_000
 const WINDOWS_PROCESS_MAX_BUFFER = 10 * 1024 * 1024
 
@@ -22,20 +22,21 @@ type CimProcessRow = {
 
 export async function enumerateWindowsProcessWorkingSet(): Promise<WindowsProcessWorkingSetRow[]> {
   try {
-    const { stdout } = await execAsync(
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
       [
-        'powershell.exe',
         '-NoProfile',
         '-Command',
-        '"Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize | ConvertTo-Json -Compress"'
-      ].join(' '),
+        'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize | ConvertTo-Json -Compress'
+      ],
       { maxBuffer: WINDOWS_PROCESS_MAX_BUFFER, timeout: WINDOWS_PROCESS_TIMEOUT_MS }
     )
     return parseWindowsProcessWorkingSetJson(stdout)
   } catch (cimError) {
     try {
-      const { stdout } = await execAsync(
-        'wmic process get ProcessId,ParentProcessId,WorkingSetSize /format:value',
+      const { stdout } = await execFileAsync(
+        'wmic',
+        ['process', 'get', 'ProcessId,ParentProcessId,WorkingSetSize', '/format:value'],
         { maxBuffer: WINDOWS_PROCESS_MAX_BUFFER, timeout: WINDOWS_PROCESS_TIMEOUT_MS }
       )
       return parseWmicOutput(stdout)

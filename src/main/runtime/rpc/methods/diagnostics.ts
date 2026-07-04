@@ -4,13 +4,21 @@ import {
   MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES,
   type DiagnosticBundleCategory
 } from '../../../../shared/diagnostic-bundle-export-types'
+import {
+  DIAGNOSTIC_OUTPUT_PATH_ERROR,
+  isSafeDiagnosticBundleOutputPath
+} from '../../../../shared/diagnostic-bundle-output-path-policy'
 import { defineMethod, type RpcMethod } from '../core'
 
 const DiagnosticBundleCategory = z.enum(DIAGNOSTIC_BUNDLE_CATEGORIES)
 
 const DiagnosticBundleParams = z
   .object({
-    output: z.string().min(1).optional(),
+    output: z
+      .string()
+      .min(1)
+      .refine(isSafeDiagnosticBundleOutputPath, DIAGNOSTIC_OUTPUT_PATH_ERROR)
+      .optional(),
     lookbackMinutes: z
       .number()
       .int()

@@ -3489,7 +3489,8 @@ describe('orca cli worktree awareness', () => {
     callMock.mockResolvedValueOnce(
       okFixture('req_diagnostics_bundle', {
         bundleId: 'bundle-1',
-        outputPath: 'C:\\tmp\\orca-diagnostics.zip',
+        outputPath:
+          'C:\\Users\\example\\AppData\\Local\\Orca\\logs\\diagnostics\\orca-diagnostics.zip',
         bytes: 2048,
         includedCategories: ['app', 'memory'],
         skippedCategories: [],
@@ -3504,7 +3505,7 @@ describe('orca cli worktree awareness', () => {
         'diagnostics',
         'bundle',
         '--output',
-        'C:\\tmp\\orca-diagnostics.zip',
+        'orca-diagnostics.zip',
         '--lookback',
         '2h',
         '--include',
@@ -3519,7 +3520,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenCalledWith('diagnostics.bundle', {
-      output: 'C:\\tmp\\orca-diagnostics.zip',
+      output: 'orca-diagnostics.zip',
       lookbackMinutes: 120,
       include: ['app', 'memory'],
       exclude: ['native-minidumps'],
@@ -3534,6 +3535,15 @@ describe('orca cli worktree awareness', () => {
     for (const lookback of ['soon', '0', '31d']) {
       callMock.mockClear()
       await main(['diagnostics', 'bundle', '--lookback', lookback], '/tmp/repo')
+
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  })
+
+  it('rejects unsafe diagnostics bundle output paths before RPC', async () => {
+    for (const output of ['../orca-diagnostics.zip', 'C:\\tmp\\orca-diagnostics.zip']) {
+      callMock.mockClear()
+      await main(['diagnostics', 'bundle', '--output', output], '/tmp/repo')
 
       expect(callMock).not.toHaveBeenCalled()
     }

@@ -102,11 +102,12 @@ describe('exportDiagnosticBundle', () => {
 
   afterEach(async () => {
     await rm(tempRoot, { recursive: true, force: true })
+    await rm(join(tmpdir(), 'orca-test'), { recursive: true, force: true })
   })
 
   it('writes a ZIP with manifest and selected diagnostics files', async () => {
     const { exportDiagnosticBundle } = await import('./diagnostic-bundle-export')
-    const output = join(tempRoot, 'bundle.zip')
+    const output = 'bundle.zip'
 
     const result = await exportDiagnosticBundle({
       output,
@@ -123,7 +124,7 @@ describe('exportDiagnosticBundle', () => {
       store: makeStore()
     })
 
-    const entries = readStoredZipEntries(await readFile(output))
+    const entries = readStoredZipEntries(await readFile(result.outputPath))
     expect([...entries.keys()].sort()).toEqual([
       'app/orca.json',
       'app/runtime-counts.json',
@@ -149,9 +150,11 @@ describe('exportDiagnosticBundle', () => {
         })
       ])
     )
-    expect(manifest.files.find((file) => file.path === 'manifest.json')?.sha256).toBeNull()
+    const manifestFile = manifest.files.find((file) => file.path === 'manifest.json')
+    expect(manifestFile?.sha256).toBeNull()
+    expect(manifestFile?.bytes).toBe(entries.get('manifest.json')!.byteLength)
     expect(result).toMatchObject({
-      outputPath: output,
+      outputPath: join(tmpdir(), 'orca-test', 'logs', 'diagnostics', output),
       includedCategories: expect.arrayContaining(['app', 'system', 'memory']),
       skippedCategories: [expect.objectContaining({ category: 'native-minidumps' })],
       fileCount: manifest.files.length
@@ -160,30 +163,30 @@ describe('exportDiagnosticBundle', () => {
 
   it('reveals the bundle when requested', async () => {
     const { exportDiagnosticBundle } = await import('./diagnostic-bundle-export')
-    const output = join(tempRoot, 'bundle-open.zip')
+    const output = 'bundle-open.zip'
 
-    await exportDiagnosticBundle({
+    const result = await exportDiagnosticBundle({
       output,
       include: ['app'],
       open: true,
       store: makeStore()
     })
 
-    expect(showItemInFolderMock).toHaveBeenCalledWith(output)
+    expect(showItemInFolderMock).toHaveBeenCalledWith(result.outputPath)
   })
 
   it('caps direct caller lookback windows before running collectors', async () => {
     const { exportDiagnosticBundle } = await import('./diagnostic-bundle-export')
-    const output = join(tempRoot, 'bundle-lookback-cap.zip')
+    const output = 'bundle-lookback-cap.zip'
 
-    await exportDiagnosticBundle({
+    const result = await exportDiagnosticBundle({
       output,
       include: ['app'],
       lookbackMinutes: Number.MAX_SAFE_INTEGER,
       store: makeStore()
     })
 
-    const entries = readStoredZipEntries(await readFile(output))
+    const entries = readStoredZipEntries(await readFile(result.outputPath))
     const manifest = JSON.parse(entries.get('manifest.json')!.toString('utf8')) as {
       lookbackMinutes: number
     }

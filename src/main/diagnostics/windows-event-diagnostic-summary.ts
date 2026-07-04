@@ -29,7 +29,7 @@ export async function collectWindowsEventDiagnosticSummary(
     `Select-Object -First ${MAX_EVENTS} TimeCreated,ProviderName,Id,LevelDisplayName,Message);`,
     `$events | ConvertTo-Json -Compress`,
     `} catch {`,
-    `if ($_.Exception.Message -match 'No events were found') { '[]' } else { throw }`,
+    `if ($_.FullyQualifiedErrorId -eq 'NoMatchingEventsFound,Microsoft.PowerShell.Commands.GetWinEventCommand') { '[]' } else { throw }`,
     `}`
   ].join(' ')
   const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', command], {

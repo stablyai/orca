@@ -3,6 +3,10 @@ import {
   MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES,
   type DiagnosticBundleExportResult
 } from '../../shared/diagnostic-bundle-export-types'
+import {
+  DIAGNOSTIC_OUTPUT_PATH_ERROR,
+  isSafeDiagnosticBundleOutputPath
+} from '../../shared/diagnostic-bundle-output-path-policy'
 import type { CommandHandler } from '../dispatch'
 import { formatDiagnosticBundleExportResult, formatMemorySnapshot, printResult } from '../format'
 import { getOptionalStringFlag, getRepeatedStringFlag } from '../flags'
@@ -15,7 +19,7 @@ export const DIAGNOSTICS_HANDLERS: Record<string, CommandHandler> = {
   },
   'diagnostics bundle': async ({ client, flags, json }) => {
     const params = {
-      output: getOptionalStringFlag(flags, 'output'),
+      output: parseOutputPath(getOptionalStringFlag(flags, 'output')),
       lookbackMinutes: parseLookbackMinutes(getOptionalStringFlag(flags, 'lookback')),
       include: optionalArray(getRepeatedStringFlag(flags, 'include')),
       exclude: optionalArray(getRepeatedStringFlag(flags, 'exclude')),
@@ -56,4 +60,14 @@ function parseLookbackMinutes(value: string | undefined): number | undefined {
     )
   }
   return minutes
+}
+
+function parseOutputPath(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined
+  }
+  if (!isSafeDiagnosticBundleOutputPath(value)) {
+    throw new RuntimeClientError('invalid_argument', DIAGNOSTIC_OUTPUT_PATH_ERROR)
+  }
+  return value
 }

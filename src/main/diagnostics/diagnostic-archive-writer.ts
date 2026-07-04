@@ -49,19 +49,17 @@ export async function writeDiagnosticArchive(args: {
       ...fileManifest
     ]
   }
-  const manifestContent = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
-  manifest.files[0] = {
-    path: 'manifest.json',
-    category: 'manifest',
-    bytes: manifestContent.byteLength,
-    sha256: null
-  }
-  const finalManifestContent = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
-  manifest.files[0] = {
-    path: 'manifest.json',
-    category: 'manifest',
-    bytes: finalManifestContent.byteLength,
-    sha256: null
+  let finalManifestContent = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  let previousManifestBytes = -1
+  while (finalManifestContent.byteLength !== previousManifestBytes) {
+    previousManifestBytes = finalManifestContent.byteLength
+    manifest.files[0] = {
+      path: 'manifest.json',
+      category: 'manifest',
+      bytes: previousManifestBytes,
+      sha256: null
+    }
+    finalManifestContent = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
   }
   const manifestEntry: PreparedEntry = {
     category: 'manifest',

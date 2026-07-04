@@ -1,11 +1,12 @@
 import { app } from 'electron'
-import { resolveDiagnosticOrcaChannel } from '../observability/diagnostic-upload-endpoint'
 
-export function collectAppDiagnosticSummary(): Record<string, unknown> {
+export function collectAppDiagnosticSummary(
+  orcaChannel: 'stable' | 'rc' | 'dev'
+): Record<string, unknown> {
   return {
     appVersion: app.getVersion(),
     appName: app.getName(),
-    orcaChannel: resolveDiagnosticOrcaChannel(),
+    orcaChannel,
     packaged: app.isPackaged,
     electronVersion: process.versions.electron ?? 'unknown',
     chromeVersion: process.versions.chrome ?? 'unknown',

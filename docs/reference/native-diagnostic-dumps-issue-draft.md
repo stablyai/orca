@@ -10,7 +10,7 @@ Add an Orca diagnostics export that support and users can create from the
 packaged CLI:
 
 ```text
-orca diagnostics bundle --output <path>
+orca diagnostics bundle --output <filename-or-subpath>
 ```
 
 The command creates a reviewable ZIP with native crash minidumps when
@@ -50,7 +50,7 @@ The branch implements a two-layer diagnostics system:
 
 2. Diagnostic bundle export
    - Add `orca diagnostics bundle`.
-   - Write a ZIP under an explicit `--output` path or default
+   - Write a ZIP under an explicit diagnostics-relative `--output` subpath or default
      `<app.getPath('logs')>/diagnostics/orca-diagnostics-<timestamp>.zip`.
    - Include low-risk categories by default.
    - Include local minidumps for explicit local exports when available.
@@ -94,7 +94,8 @@ reasons, and sanitized collector errors.
 
 - `orca diagnostics bundle --json` returns bundle ID, output path, byte size,
   included categories, skipped categories, and sanitized errors.
-- `orca diagnostics bundle --output <tmp.zip> --json` writes a ZIP containing
+- `orca diagnostics bundle --output <tmp.zip> --json` writes a ZIP under
+  Orca logs/diagnostics containing
   the required files.
 - Default output path is under Orca's per-user logs/diagnostics directory, not
   the install directory.
