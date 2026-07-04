@@ -349,14 +349,17 @@ describe('AutomationService', () => {
   })
 
   it('dispatches due scheduled automations headlessly', async () => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const beforeRunAt = new Date(2026, 4, 13, 8, 59).getTime()
+    const scheduledRunAt = new Date(2026, 4, 13, 9, 0).getTime()
+    const afterRunAt = new Date(2026, 4, 13, 9, 1).getTime()
+    const nextRunAt = new Date(2026, 4, 14, 9, 0).getTime()
+
+    vi.setSystemTime(beforeRunAt)
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
     store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
     const setup = store.getProjectHostSetups()[0]!
-    vi.useRealTimers()
-    const current = new Date()
-    const hour = current.getUTCHours()
-    const minute = current.getUTCMinutes()
     const automation = store.createAutomation({
       name: 'Morning check',
       prompt: 'Check the repo',
@@ -371,22 +374,10 @@ describe('AutomationService', () => {
         path: setup.path
       },
       workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: `FREQ=DAILY;BYHOUR=${hour};BYMINUTE=${minute}`,
-      dtstart: Date.UTC(
-        current.getUTCFullYear(),
-        current.getUTCMonth(),
-        current.getUTCDate() - 1
-      ),
-      missedRunGraceMinutes: 100_000
+      timezone,
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date(2026, 4, 12, 0, 0).getTime()
     })
-    const persistedAutomation = (
-      store as unknown as { state: { automations: Array<{ id: string; nextRunAt: number }> } }
-    ).state.automations.find((entry) => entry.id === automation.id)
-    if (!persistedAutomation) {
-      throw new Error('Automation not found in store.')
-    }
-    persistedAutomation.nextRunAt = 0
 
     const headlessDispatcher = vi.fn().mockResolvedValue({
       workspaceId: 'wt1',
@@ -395,23 +386,26 @@ describe('AutomationService', () => {
       terminalPaneKey: 'pane-1',
       terminalPtyId: 'pty-1'
     })
-    vi.useRealTimers()
     const service = new AutomationService(store, {
-      tickMs: 1,
+      tickMs: 60_000,
       allowRemoteHostScheduling: true,
       headlessDispatcher
     })
 
     try {
+      vi.setSystemTime(afterRunAt)
       service.start()
       await vi.waitFor(() => expect(headlessDispatcher).toHaveBeenCalledTimes(1))
       const run = store.listAutomationRuns(automation.id)[0]
       expect(run?.status).toBe('dispatched')
+      expect(run?.scheduledFor).toBe(scheduledRunAt)
       expect(headlessDispatcher).toHaveBeenCalledWith(
         expect.objectContaining({ automation: expect.objectContaining({ id: automation.id }) })
       )
-      expect(store.listAutomations().find((entry) => entry.id === automation.id)?.nextRunAt).toBeGreaterThan(
-        run?.scheduledFor ?? 0
+      await vi.waitFor(() =>
+        expect(store.listAutomations().find((entry) => entry.id === automation.id)?.nextRunAt).toBe(
+          nextRunAt
+        )
       )
     } finally {
       service.stop()

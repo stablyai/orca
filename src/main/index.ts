@@ -2046,7 +2046,7 @@ app.whenReady().then(async () => {
         )
       }
     }
-    // Headless serve never opens a renderer, so arm scheduled automation dispatch here.
+    // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
     automations.start()
     await printServeReady(serveOptions)
     return
