@@ -112,13 +112,21 @@ describe('spawnShellWithFallback on Windows', () => {
       cols: 80,
       rows: 24,
       cwd: 'C:\\repo',
-      env: {},
+      env: { ORCA_SHELL_READY_MARKER: '1' },
       ptySpawn,
       windowsFallbackAttempts: attempts
     })
 
     expect(result.shellPath).toBe(CMD)
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(ptySpawn).toHaveBeenNthCalledWith(
+      3,
+      CMD,
+      attempts[2].shellArgs,
+      expect.objectContaining({
+        env: expect.not.objectContaining({ ORCA_SHELL_READY_MARKER: '1' })
+      })
+    )
   })
 
   it('throws a descriptive error when every Windows fallback fails', () => {

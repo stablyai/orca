@@ -1308,6 +1308,7 @@ function Settings(): React.JSX.Element {
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
+                      pwshDiagnostic={windowsTerminalCapabilities.pwshDiagnostic}
                       gitBashAvailable={windowsTerminalCapabilities.gitBashAvailable}
                       isWindowsTerminalHost={isWindowsTerminalHost}
                     />

@@ -41,6 +41,16 @@ async function loadPty(): Promise<typeof NodePty | null> {
   }
 }
 
+function isWindowsPowerShellRelayShell(shellPath: string): boolean {
+  const shellName = shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase()
+  return (
+    shellName === 'powershell.exe' ||
+    shellName === 'powershell' ||
+    shellName === 'pwsh.exe' ||
+    shellName === 'pwsh'
+  )
+}
+
 type ManagedPty = {
   id: string
   pty: IPty
@@ -564,13 +574,18 @@ export class PtyHandler {
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
+    const isWindowsPowerShellStartup =
+      process.platform === 'win32' &&
+      launchCommandHint !== undefined &&
+      isWindowsPowerShellRelayShell(shell)
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
-      shouldUseShellReadyStartupDelivery({
-        command: launchCommandHint,
-        startupCommandDelivery:
-          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
-      })
+      (isWindowsPowerShellStartup ||
+        shouldUseShellReadyStartupDelivery({
+          command: launchCommandHint,
+          startupCommandDelivery:
+            params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+        }))
     // Why: renderer- and provider-delivered startup commands both use this
     // marker; the side responsible for delivery also strips it from output.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {

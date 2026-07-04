@@ -179,10 +179,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
       command: opts.command,
       startupCommandDelivery: opts.startupCommandDelivery
     })
-    const shellReadySupported =
-      supportsShellReadyBarrier && (process.platform !== 'win32' || shouldUseShellReadyDelivery)
+    const shellReadySupported = supportsShellReadyBarrier
     const shellReadyTimeoutMs =
-      shellReadySupported && isCodexStartupCommand && !shouldUseShellReadyDelivery
+      shellReadySupported &&
+      process.platform !== 'win32' &&
+      isCodexStartupCommand &&
+      !shouldUseShellReadyDelivery
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 

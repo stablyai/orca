@@ -4,13 +4,19 @@ const { execFileAsyncMock } = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn()
 }))
 
-const { isPwshAvailableMock, isWslAvailableMock, listWslDistrosMock, isGitBashAvailableMock } =
-  vi.hoisted(() => ({
-    isPwshAvailableMock: vi.fn(),
-    isWslAvailableMock: vi.fn(),
-    listWslDistrosMock: vi.fn(),
-    isGitBashAvailableMock: vi.fn()
-  }))
+const {
+  getPwshAvailabilityDiagnosticMock,
+  isPwshAvailableMock,
+  isWslAvailableMock,
+  listWslDistrosMock,
+  isGitBashAvailableMock
+} = vi.hoisted(() => ({
+  getPwshAvailabilityDiagnosticMock: vi.fn(),
+  isPwshAvailableMock: vi.fn(),
+  isWslAvailableMock: vi.fn(),
+  listWslDistrosMock: vi.fn(),
+  isGitBashAvailableMock: vi.fn()
+}))
 
 vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
@@ -19,7 +25,10 @@ vi.mock('child_process', () => {
   return { execFile: execFileWithPromisify }
 })
 
-vi.mock('../main/pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+vi.mock('../main/pwsh', () => ({
+  getPwshAvailabilityDiagnostic: getPwshAvailabilityDiagnosticMock,
+  isPwshAvailable: isPwshAvailableMock
+}))
 vi.mock('../main/wsl', () => ({
   isWslAvailable: isWslAvailableMock,
   listWslDistros: listWslDistrosMock
@@ -59,6 +68,7 @@ function fishLookupArgs(command: string): string[] {
 
 beforeEach(() => {
   execFileAsyncMock.mockReset()
+  getPwshAvailabilityDiagnosticMock.mockReset()
   isPwshAvailableMock.mockReset()
   isWslAvailableMock.mockReset()
   listWslDistrosMock.mockReset()
@@ -245,6 +255,14 @@ describe('PreflightHandler', () => {
     isWslAvailableMock.mockReturnValue(true)
     listWslDistrosMock.mockReturnValue(['Ubuntu'])
     isPwshAvailableMock.mockReturnValue(true)
+    getPwshAvailabilityDiagnosticMock.mockReturnValue({
+      family: 'pwsh.exe',
+      resolvedPath: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+      candidateCount: 1,
+      rejectedAliasCandidates: [],
+      searchedPath: true,
+      reason: 'resolved'
+    })
     isGitBashAvailableMock.mockReturnValue(true)
 
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
@@ -265,6 +283,14 @@ describe('PreflightHandler', () => {
         wslAvailable: true,
         wslDistros: ['Ubuntu'],
         pwshAvailable: true,
+        pwshDiagnostic: {
+          family: 'pwsh.exe',
+          resolvedPath: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+          candidateCount: 1,
+          rejectedAliasCandidates: [],
+          searchedPath: true,
+          reason: 'resolved'
+        },
         gitBashAvailable: true,
         hostPlatform: 'win32'
       })

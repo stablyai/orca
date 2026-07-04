@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getWindowsPowerShellResolutionDiagnostic,
   getWindowsCmdPath,
   resolveWindowsPowerShellExecutablePath,
   resolveWindowsPowerShellSpawnChain
@@ -88,6 +89,50 @@ describe('resolveWindowsPowerShellExecutablePath', () => {
         isRealExecutable: () => false
       })
     ).toBeNull()
+  })
+})
+
+describe('getWindowsPowerShellResolutionDiagnostic', () => {
+  it('reports alias_only when WindowsApps alias exists but no real pwsh resolves', () => {
+    const diagnostic = getWindowsPowerShellResolutionDiagnostic('pwsh.exe', {
+      platform: 'win32',
+      env: {
+        ...WIN_ENV,
+        Path: 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps'
+      },
+      isRealExecutable: (p) => p === PWSH_STORE_ALIAS
+    })
+
+    expect(diagnostic).toMatchObject({
+      family: 'pwsh.exe',
+      resolvedPath: null,
+      rejectedAliasCandidates: [PWSH_STORE_ALIAS],
+      searchedPath: true,
+      reason: 'alias_only'
+    })
+    expect(diagnostic.candidateCount).toBeGreaterThan(1)
+  })
+
+  it('reports resolved with rejected aliases preserved when a real pwsh is also found', () => {
+    expect(
+      getWindowsPowerShellResolutionDiagnostic('pwsh.exe', {
+        platform: 'win32',
+        env: {
+          ...WIN_ENV,
+          Path: [
+            'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps',
+            'D:\\Tools\\PowerShell\\7'
+          ].join(';')
+        },
+        isRealExecutable: (p) => p === PWSH_STORE_ALIAS || p === PATH_PWSH7
+      })
+    ).toMatchObject({
+      family: 'pwsh.exe',
+      resolvedPath: PATH_PWSH7,
+      rejectedAliasCandidates: [PWSH_STORE_ALIAS],
+      searchedPath: true,
+      reason: 'resolved'
+    })
   })
 })
 

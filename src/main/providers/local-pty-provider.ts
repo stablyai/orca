@@ -4,7 +4,10 @@ tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) 
 files without a cleaner ownership seam. */
 import { basename, delimiter } from 'node:path'
 import { win32 as pathWin32 } from 'node:path'
-import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import {
+  resolveWindowsShellLaunchArgs,
+  shouldLaunchWindowsPowerShellWithoutProfile
+} from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -373,10 +376,9 @@ export class LocalPtyProvider implements IPtyProvider {
     let validationCwd: string
     let startupCommandDeliveredInShellArgs = false
     let windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts> = []
-    const deferWindowsPowerShellStartupCommandToStdin = shouldUseShellReadyStartupDelivery({
-      command: args.command,
-      startupCommandDelivery: args.startupCommandDelivery
-    })
+    const windowsPowerShellLaunchOptions = {
+      powerShellNoProfile: shouldLaunchWindowsPowerShellWithoutProfile(args.env)
+    }
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
@@ -442,9 +444,7 @@ export class LocalPtyProvider implements IPtyProvider {
         defaultCwd,
         wslContext: worktreeWslContext ?? preferredWslContext,
         startupCommand: args.command,
-        launchOptions: {
-          deferPowerShellStartupCommandToStdin: deferWindowsPowerShellStartupCommandToStdin
-        }
+        launchOptions: windowsPowerShellLaunchOptions
       })
       const primaryAttempt = windowsFallbackAttempts[0]
       if (primaryAttempt) {
@@ -460,9 +460,7 @@ export class LocalPtyProvider implements IPtyProvider {
           defaultCwd,
           worktreeWslContext ?? preferredWslContext,
           args.command,
-          {
-            deferPowerShellStartupCommandToStdin: deferWindowsPowerShellStartupCommandToStdin
-          }
+          windowsPowerShellLaunchOptions
         )
         shellArgs = resolved.shellArgs
         effectiveCwd = resolved.effectiveCwd
@@ -602,11 +600,11 @@ export class LocalPtyProvider implements IPtyProvider {
     if (
       process.platform === 'win32' &&
       args.command &&
-      deferWindowsPowerShellStartupCommandToStdin &&
+      !startupCommandDeliveredInShellArgs &&
       isWindowsPowerShellPath(shellPath)
     ) {
-      // Why: Windows PowerShell startup commands delivered over stdin must wait
-      // until profiles and Orca's prompt/readline bootstrap have settled.
+      // Why: PowerShell startup payloads are delivered after the marker, not
+      // via -EncodedCommand's initialCommand path that can crash ConsoleHost.
       finalEnv.ORCA_SHELL_READY_MARKER = '1'
     }
     if (!wslInfo && process.platform !== 'win32') {

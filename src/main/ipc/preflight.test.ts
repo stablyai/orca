@@ -713,6 +713,14 @@ describe('preflight', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: {
+        family: 'pwsh.exe',
+        resolvedPath: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        candidateCount: 1,
+        rejectedAliasCandidates: [],
+        searchedPath: true,
+        reason: 'resolved'
+      },
       gitBashAvailable: true,
       hostPlatform: 'win32'
     })
@@ -731,6 +739,14 @@ describe('preflight', () => {
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: true,
+      pwshDiagnostic: {
+        family: 'pwsh.exe',
+        resolvedPath: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        candidateCount: 1,
+        rejectedAliasCandidates: [],
+        searchedPath: true,
+        reason: 'resolved'
+      },
       gitBashAvailable: true,
       hostPlatform: 'win32'
     })

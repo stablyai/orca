@@ -2,6 +2,10 @@ import { basename, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import {
+  formatWindowsPowerShellCrashCorrelationHint,
+  formatWindowsPowerShellSpawnDiagnostic
+} from '../../shared/windows-powershell-spawn-diagnostics'
 import { wslUncDirectoryExists } from '../wsl'
 import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
 
@@ -169,6 +173,23 @@ function windowsConptyDllOptions(): { useConptyDll: true } | Record<string, neve
   return process.platform === 'win32' ? { useConptyDll: true } : {}
 }
 
+function isWindowsPowerShellSpawnPath(shellPath: string): boolean {
+  const shellName = shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase()
+  return shellName === 'powershell.exe' || shellName === 'pwsh.exe'
+}
+
+function getWindowsFallbackSpawnEnv(
+  env: Record<string, string>,
+  shellPath: string
+): Record<string, string> {
+  if (isWindowsPowerShellSpawnPath(shellPath) || env.ORCA_SHELL_READY_MARKER !== '1') {
+    return env
+  }
+  const fallbackEnv = { ...env }
+  delete fallbackEnv.ORCA_SHELL_READY_MARKER
+  return fallbackEnv
+}
+
 function spawnWindowsFallbackChain(
   params: ShellSpawnParams,
   primaryError: string
@@ -178,16 +199,27 @@ function spawnWindowsFallbackChain(
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
     try {
+      const spawnEnv = getWindowsFallbackSpawnEnv(env, attempt.shellPath)
       const proc = ptySpawn(attempt.shellPath, attempt.shellArgs, {
         name: termName,
         cols,
         rows,
         cwd: attempt.effectiveCwd,
-        env,
+        env: spawnEnv,
         ...windowsConptyDllOptions()
       })
       console.warn(
-        `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`
+        [
+          `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`,
+          formatWindowsPowerShellSpawnDiagnostic({
+            fallbackFromShellPath: params.shellPath,
+            shellPath: attempt.shellPath,
+            cwd: attempt.effectiveCwd,
+            startupDelivery: attempt.startupCommandDeliveredInShellArgs ? 'shell-args' : 'stdin',
+            safeModeNoProfile: env.ORCA_WINDOWS_POWERSHELL_SAFE_MODE === '1'
+          }),
+          formatWindowsPowerShellCrashCorrelationHint({ shellPath: params.shellPath })
+        ].join('; ')
       )
       return {
         process: proc,

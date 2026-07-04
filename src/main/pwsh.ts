@@ -1,6 +1,10 @@
 import { execFile, execFileSync } from 'node:child_process'
 
-import { resolveWindowsPowerShellExecutablePath } from './providers/windows-powershell-executable'
+import {
+  getWindowsPowerShellResolutionDiagnostic,
+  resolveWindowsPowerShellExecutablePath,
+  type WindowsPowerShellResolutionDiagnostic
+} from '../shared/windows-powershell-executable'
 
 const PWSH_SYNC_PROBE_TIMEOUT_MS = 5000
 const PWSH_WARMUP_PROBE_TIMEOUT_MS = 30_000
@@ -48,6 +52,10 @@ function resolvePwshProbeExecutablePath(): string | null {
   }
   pwshAvailableCache = { available: false, cachedAt: Date.now(), retryable: true }
   return null
+}
+
+export function getPwshAvailabilityDiagnostic(): WindowsPowerShellResolutionDiagnostic {
+  return getWindowsPowerShellResolutionDiagnostic(PWSH_EXECUTABLE_NAME)
 }
 
 /**

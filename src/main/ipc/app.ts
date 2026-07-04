@@ -9,7 +9,7 @@ import type { AppIdentity } from '../../shared/app-identity'
 import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
-import { isPwshAvailable } from '../pwsh'
+import { getPwshAvailabilityDiagnostic, isPwshAvailable } from '../pwsh'
 import { isWslAvailable, listWslDistros } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
@@ -241,6 +241,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
   ipcMain.handle('wsl:listDistros', (): string[] => listWslDistros())
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
+  ipcMain.handle('pwsh:getDiagnostic', () => getPwshAvailabilityDiagnostic())
   ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 
   // Why: ABC, Polish Pro, US Extended, ABC Extended, and every CJK Roman

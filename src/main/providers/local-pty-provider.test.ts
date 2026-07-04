@@ -651,24 +651,45 @@ describe('LocalPtyProvider', () => {
       }
     })
 
-    it('keeps embedded Windows PowerShell startup commands off the ready marker path', async () => {
+    it('waits for the Windows PowerShell ready marker before ordinary startup commands', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const startupCommand = "& 'codex' '--no-alt-screen'"
+      const emitPtyData = async (data: string): Promise<void> => {
+        const callbacks = mockProc.onData.mock.calls.map(
+          ([callback]) => callback as (value: string) => void
+        )
+        for (const callback of callbacks) {
+          callback(data)
+        }
+        await Promise.resolve()
+      }
 
-      await provider.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: 'C:\\Users\\jin\\repo',
-        shellOverride: 'powershell.exe',
-        command: startupCommand
-      })
+      vi.useFakeTimers()
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\Users\\jin\\repo',
+          shellOverride: 'powershell.exe',
+          command: startupCommand
+        })
 
-      const spawnCall = spawnMock.mock.calls.at(-1)!
-      const encoded = String(spawnCall[1][3])
-      const command = Buffer.from(encoded, 'base64').toString('utf16le')
-      expect(command.trimEnd().endsWith(startupCommand)).toBe(true)
-      expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBeUndefined()
-      expect(mockProc.write).not.toHaveBeenCalled()
+        const spawnCall = spawnMock.mock.calls.at(-1)!
+        const encoded = String(spawnCall[1][3])
+        const command = Buffer.from(encoded, 'base64').toString('utf16le')
+        expect(command).toContain('function Global:prompt')
+        expect(command).not.toContain(startupCommand)
+        expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        await emitPtyData('\x1b]777;orca-shell-ready\x07')
+        await emitPtyData('\r\nPS C:\\Users\\jin\\repo> ')
+        vi.advanceTimersByTime(30)
+        await Promise.resolve()
+        expect(mockProc.write).toHaveBeenCalledWith(`${startupCommand}\r`)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('embeds deferred startup commands when Windows PowerShell falls back to cmd.exe', async () => {
@@ -695,6 +716,9 @@ describe('LocalPtyProvider', () => {
         '/K',
         `chcp 65001 > nul & ${startupCommand}`
       ])
+      expect(
+        spawnMock.mock.calls[initialSpawnCallCount + 1]?.[2].env.ORCA_SHELL_READY_MARKER
+      ).toBeUndefined()
       expect(mockProc.write).not.toHaveBeenCalled()
     })
 

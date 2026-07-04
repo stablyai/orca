@@ -1547,7 +1547,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('embeds short PowerShell startup commands in the Windows shell launch', () => {
+  it('defers short PowerShell startup commands to the shell-ready path', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1572,9 +1572,48 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     const encoded = String(lastCall[1][3])
     const command = Buffer.from(encoded, 'base64').toString('utf16le')
-    expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBeUndefined()
-    expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain("& 'codex' '--no-alt-screen'")
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+    expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
+  it('launches Windows PowerShell safe mode without embedding startup commands', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: "& 'codex' '--no-alt-screen'",
+        env: {
+          ORCA_WINDOWS_POWERSHELL_SAFE_MODE: '1'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual([
+      '-NoLogo',
+      '-NoProfile',
+      '-NoExit',
+      '-EncodedCommand',
+      expect.any(String)
+    ])
+    const command = Buffer.from(String(lastCall[1][4]), 'base64').toString('utf16le')
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain("& 'codex' '--no-alt-screen'")
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
   })
 
   it('defers delivery-hinted Windows PowerShell startup commands to PTY stdin', () => {
@@ -1670,6 +1709,7 @@ describe('createPtySubprocess', () => {
     expect(spawnMock.mock.calls[0]?.[0]).toBe(WINDOWS_POWERSHELL_ABS)
     expect(spawnMock.mock.calls[1]?.[0]).toBe(CMD_ABS)
     expect(spawnMock.mock.calls[1]?.[1]).toEqual(['/K', `chcp 65001 > nul & ${startupCommand}`])
+    expect(spawnMock.mock.calls[1]?.[2].env.ORCA_SHELL_READY_MARKER).toBeUndefined()
     expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
   })
 

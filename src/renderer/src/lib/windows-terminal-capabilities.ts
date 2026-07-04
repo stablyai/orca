@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { WindowsPowerShellResolutionDiagnostic } from '../../../shared/windows-powershell-executable'
 import {
   readWindowsTerminalCapabilities,
   type WindowsTerminalCapabilityLoadTarget
@@ -8,6 +9,7 @@ export type WindowsTerminalCapabilities = {
   wslAvailable: boolean
   wslDistros: string[]
   pwshAvailable: boolean
+  pwshDiagnostic: WindowsPowerShellResolutionDiagnostic | null
   gitBashAvailable: boolean
   hostPlatform: NodeJS.Platform | null
   isLoading: boolean
@@ -17,6 +19,7 @@ const UNAVAILABLE_CAPABILITIES: WindowsTerminalCapabilities = {
   wslAvailable: false,
   wslDistros: [],
   pwshAvailable: false,
+  pwshDiagnostic: null,
   gitBashAvailable: false,
   hostPlatform: null,
   isLoading: false

@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, execFileSyncMock, resolveWindowsPowerShellExecutablePathMock } = vi.hoisted(
-  () => ({
-    execFileMock: vi.fn(),
-    execFileSyncMock: vi.fn(),
-    resolveWindowsPowerShellExecutablePathMock: vi.fn()
-  })
-)
+const {
+  execFileMock,
+  execFileSyncMock,
+  getWindowsPowerShellResolutionDiagnosticMock,
+  resolveWindowsPowerShellExecutablePathMock
+} = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  execFileSyncMock: vi.fn(),
+  getWindowsPowerShellResolutionDiagnosticMock: vi.fn(),
+  resolveWindowsPowerShellExecutablePathMock: vi.fn()
+}))
 
 const PWSH_EXECUTABLE_PATH = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 
@@ -15,7 +19,8 @@ vi.mock('child_process', () => ({
   execFileSync: execFileSyncMock
 }))
 
-vi.mock('./providers/windows-powershell-executable', () => ({
+vi.mock('../shared/windows-powershell-executable', () => ({
+  getWindowsPowerShellResolutionDiagnostic: getWindowsPowerShellResolutionDiagnosticMock,
   resolveWindowsPowerShellExecutablePath: resolveWindowsPowerShellExecutablePathMock
 }))
 
@@ -40,7 +45,16 @@ describe('isPwshAvailable', () => {
     vi.useRealTimers()
     execFileMock.mockReset()
     execFileSyncMock.mockReset()
+    getWindowsPowerShellResolutionDiagnosticMock.mockReset()
     resolveWindowsPowerShellExecutablePathMock.mockReset()
+    getWindowsPowerShellResolutionDiagnosticMock.mockReturnValue({
+      family: 'pwsh.exe',
+      resolvedPath: PWSH_EXECUTABLE_PATH,
+      candidateCount: 1,
+      rejectedAliasCandidates: [],
+      searchedPath: true,
+      reason: 'resolved'
+    })
     resolveWindowsPowerShellExecutablePathMock.mockReturnValue(PWSH_EXECUTABLE_PATH)
   })
 
@@ -100,6 +114,20 @@ describe('isPwshAvailable', () => {
     } finally {
       restorePlatform()
     }
+  })
+
+  it('reports the pwsh resolver diagnostic', async () => {
+    const { getPwshAvailabilityDiagnostic } = await import('./pwsh')
+
+    expect(getPwshAvailabilityDiagnostic()).toEqual({
+      family: 'pwsh.exe',
+      resolvedPath: PWSH_EXECUTABLE_PATH,
+      candidateCount: 1,
+      rejectedAliasCandidates: [],
+      searchedPath: true,
+      reason: 'resolved'
+    })
+    expect(getWindowsPowerShellResolutionDiagnosticMock).toHaveBeenCalledWith('pwsh.exe')
   })
 
   it('reuses the cached result across repeated calls', async () => {

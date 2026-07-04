@@ -4,7 +4,7 @@ import { getProcessOutputFields } from '../shared/process-output-field-scanner'
 import { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 import type { DetectedPort } from './port-scan-handler'
 import { buildRelayCommandEnv } from './relay-command-env'
-import { resolveWindowsPowerShellExecutablePath } from '../main/providers/windows-powershell-executable'
+import { resolveWindowsPowerShellExecutablePath } from '../shared/windows-powershell-executable'
 
 const SYSTEM_PORTS_TO_EXCLUDE = new Set([22])
 const MAX_DETECTED_PORTS = 50

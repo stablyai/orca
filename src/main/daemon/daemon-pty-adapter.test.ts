@@ -185,7 +185,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('keeps Windows PowerShell fast startup off the daemon shell-ready barrier', async () => {
+    it('waits for the Windows PowerShell ready marker even for fast startup', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       try {
@@ -197,6 +197,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           shellOverride: 'powershell.exe'
         })
 
+        await new Promise((resolve) => setTimeout(resolve, 350))
+        expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+        lastSubprocess._simulateData('\x1b]777;orca-shell-ready\x07')
+        lastSubprocess._simulateData('\r\nPS C:\\repo> ')
+
+        await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
         expect(lastSubprocess.write).toHaveBeenCalledWith('codex\r')
       } finally {
         if (platform) {

@@ -10,6 +10,7 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { WindowsPowerShellResolutionDiagnostic } from '../../../shared/windows-powershell-executable'
 import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
@@ -654,7 +655,11 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
     },
     pwsh: {
-      isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
+      isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false),
+      getDiagnostic: () =>
+        callRuntimeResult<WindowsPowerShellResolutionDiagnostic>('host.pwsh.getDiagnostic').catch(
+          () => getFallbackPwshDiagnostic()
+        )
     },
     gitBash: {
       isAvailable: () => callRuntimeResult<boolean>('host.gitBash.isAvailable').catch(() => false)
@@ -2271,6 +2276,7 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     wslAvailable: boolean
     wslDistros: string[]
     pwshAvailable: boolean
+    pwshDiagnostic: WindowsPowerShellResolutionDiagnostic | null
     gitBashAvailable: boolean
     hostPlatform: NodeJS.Platform | null
   }
@@ -2278,6 +2284,7 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     wslAvailable: false,
     wslDistros: [],
     pwshAvailable: false,
+    pwshDiagnostic: null,
     gitBashAvailable: false,
     hostPlatform: null
   }
@@ -3248,6 +3255,17 @@ function getBrowserPlatform(): NodeJS.Platform {
     return 'linux'
   }
   return 'darwin'
+}
+
+function getFallbackPwshDiagnostic(): WindowsPowerShellResolutionDiagnostic {
+  return {
+    family: 'pwsh.exe',
+    resolvedPath: null,
+    candidateCount: 0,
+    rejectedAliasCandidates: [],
+    searchedPath: getBrowserPlatform() === 'win32',
+    reason: getBrowserPlatform() === 'win32' ? 'not_found' : 'not_win32'
+  }
 }
 
 function readJson<T>(key: string, fallback: T): T {

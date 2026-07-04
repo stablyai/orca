@@ -22,7 +22,7 @@ vi.mock('./relay-command-env', () => ({
   buildRelayCommandEnv: () => ({ PATH: 'C:\\Windows\\System32' })
 }))
 
-vi.mock('../main/providers/windows-powershell-executable', () => ({
+vi.mock('../shared/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: resolveWindowsPowerShellExecutablePathMock
 }))
 

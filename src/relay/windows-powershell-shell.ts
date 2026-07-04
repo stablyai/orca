@@ -1,5 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
-import { resolveWindowsPowerShellSpawnChain } from '../main/providers/windows-powershell-executable'
+import { resolveWindowsPowerShellSpawnChain } from '../shared/windows-powershell-executable'
 
 function readPathEnv(env: NodeJS.ProcessEnv): string {
   return env.PATH || env.Path || env.path || ''

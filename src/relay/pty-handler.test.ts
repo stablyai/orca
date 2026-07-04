@@ -32,7 +32,7 @@ vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
 }))
 
-vi.mock('../main/providers/windows-powershell-executable', () => ({
+vi.mock('../shared/windows-powershell-executable', () => ({
   resolveWindowsPowerShellSpawnChain: resolveWindowsPowerShellSpawnChainMock
 }))
 
@@ -251,6 +251,51 @@ describe('PtyHandler', () => {
     }
   })
 
+  it('waits for the shell-ready marker for Windows PowerShell provider startup commands', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    const term = {
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    }
+    mockPtySpawn.mockReturnValue(term)
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'pwsh.exe',
+        command: 'codex',
+        commandDelivery: 'provider'
+      })
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+      vi.advanceTimersByTime(1499)
+      expect(term.write).not.toHaveBeenCalled()
+
+      dataCallback?.('\x1b]777;orca-shell-ready\x07PS C:\\repo> ')
+      vi.advanceTimersByTime(49)
+      expect(term.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+
+      expect(term.write).toHaveBeenCalledWith('codex\r')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('ignores Windows shell overrides on non-Windows relay hosts', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {
@@ -372,20 +417,31 @@ describe('PtyHandler', () => {
   })
 
   it('submits provider-delivered spawn commands to the relay shell', async () => {
-    await dispatcher.callRequest('pty.spawn', {
-      command: 'echo provider-owned',
-      commandDelivery: 'provider'
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
     })
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        command: 'echo provider-owned',
+        commandDelivery: 'provider'
+      })
 
-    vi.advanceTimersByTime(49)
-    const term = mockPtySpawn.mock.results[0]?.value
-    expect(handler.retainedStartupCommandCount).toBe(1)
-    expect(term.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(49)
+      const term = mockPtySpawn.mock.results[0]?.value
+      expect(handler.retainedStartupCommandCount).toBe(1)
+      expect(term.write).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(1)
-    const submit = process.platform === 'win32' ? '\r' : '\n'
-    expect(term.write).toHaveBeenCalledWith(`echo provider-owned${submit}`)
-    expect(handler.retainedStartupCommandCount).toBe(0)
+      vi.advanceTimersByTime(1)
+      expect(term.write).toHaveBeenCalledWith('echo provider-owned\n')
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 
   it.skipIf(process.platform === 'win32')(

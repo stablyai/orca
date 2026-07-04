@@ -36,14 +36,14 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
-  it('continues embedding safe cmd.exe startup commands when PowerShell deferral is requested', () => {
+  it('continues embedding safe cmd.exe startup commands when PowerShell safe mode is requested', () => {
     const result = resolveWindowsShellLaunchArgs(
       'cmd.exe',
       'C:\\Users\\alice',
       'C:\\Users\\alice',
       undefined,
       'codex --no-alt-screen',
-      { deferPowerShellStartupCommandToStdin: true }
+      { powerShellNoProfile: true }
     )
     expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul & codex --no-alt-screen'])
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
@@ -113,29 +113,13 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
   })
 
-  it('embeds short PowerShell startup commands after the OSC 133 bootstrap', () => {
+  it('keeps short PowerShell startup commands out of EncodedCommand', () => {
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',
       'C:\\Users\\alice',
       'C:\\Users\\alice',
       undefined,
       "& 'codex' '--no-alt-screen'"
-    )
-    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
-
-    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
-    expect(command).toContain('function Global:prompt')
-    expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
-  })
-
-  it('defers PowerShell startup commands to stdin when requested', () => {
-    const result = resolveWindowsShellLaunchArgs(
-      'powershell.exe',
-      'C:\\Users\\alice',
-      'C:\\Users\\alice',
-      undefined,
-      "& 'codex' '--no-alt-screen'",
-      { deferPowerShellStartupCommandToStdin: true }
     )
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
 
@@ -144,7 +128,24 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).not.toContain("& 'codex' '--no-alt-screen'")
   })
 
-  it('preserves complex PowerShell startup command text through EncodedCommand', () => {
+  it('supports PowerShell safe mode without embedding startup commands', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      "& 'codex' '--no-alt-screen'",
+      { powerShellNoProfile: true }
+    )
+    expect(result.shellArgs[1]).toBe('-NoProfile')
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+
+    const command = Buffer.from(result.shellArgs[4] ?? '', 'base64').toString('utf16le')
+    expect(command).toContain('function Global:prompt')
+    expect(command).not.toContain("& 'codex' '--no-alt-screen'")
+  })
+
+  it('keeps complex PowerShell startup command text off EncodedCommand', () => {
     const startupCommand =
       '& "C:\\Program Files\\Orca CLI\\orca.exe" "--label" "quoted value"; $env:ORCA_VALUE = "nested"'
     const result = resolveWindowsShellLaunchArgs(
@@ -155,10 +156,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
       startupCommand
     )
 
-    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
-    expect(command).toContain(`\n${startupCommand}`)
-    expect(command.trimEnd().endsWith(startupCommand)).toBe(true)
+    expect(command).not.toContain(startupCommand)
   })
 
   it('keeps large PowerShell startup commands on stdin delivery', () => {

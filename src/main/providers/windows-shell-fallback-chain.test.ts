@@ -78,7 +78,7 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
     }
   })
 
-  it('defers startup command delivery only for PowerShell links when requested', () => {
+  it('keeps startup commands out of PowerShell links but embeds them in cmd.exe fallback', () => {
     restorePlatform = setPlatform('win32')
     const startupCommand = "& 'codex' '--prefill' 'linked issue context'"
     const attempts = buildWindowsPowerShellSpawnAttempts({
@@ -86,7 +86,6 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
       cwd: 'C:\\repo',
       defaultCwd: 'C:\\Users\\dev',
       startupCommand,
-      launchOptions: { deferPowerShellStartupCommandToStdin: true },
       resolveOptions: {
         platform: 'win32',
         env: WIN_ENV,
