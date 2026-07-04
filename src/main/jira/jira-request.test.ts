@@ -90,7 +90,7 @@ describe('Jira authenticated request transport', () => {
     expect(capturedSignal).toBeInstanceOf(AbortSignal)
     expect(capturedSignal?.aborted).toBe(false)
 
-    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(jira.JIRA_REQUEST_TIMEOUT_MS)
 
     await expect(request).resolves.toMatchObject({
       message: 'Jira request timed out.',
@@ -112,8 +112,10 @@ describe('Jira authenticated request transport', () => {
       )
       .catch((error: unknown) => error)
 
-    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(jira.JIRA_REQUEST_TIMEOUT_MS)
 
+    // Why: this guards the regression where proxy setup hangs before net.fetch
+    // runs; the assertion should fail immediately instead of waiting for Vitest.
     const outcome = await Promise.race([request, Promise.resolve('pending')])
     expect(outcome).toMatchObject({
       message: 'Jira request timed out.',

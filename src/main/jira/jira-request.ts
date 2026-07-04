@@ -9,7 +9,7 @@ import type { JiraSite } from '../../shared/types'
 // all 403'd while GET calls (connect, /myself) passed. A non-browser UA is the
 // reliable fix; X-Atlassian-Token: no-check is not honored for this case.
 const JIRA_API_USER_AGENT = 'Orca'
-const JIRA_REQUEST_TIMEOUT_MS = 30_000
+export const JIRA_REQUEST_TIMEOUT_MS = 30_000
 const JIRA_REQUEST_TIMEOUT_MESSAGE = 'Jira request timed out.'
 const JIRA_HTTPS_REQUIRED_MESSAGE = 'Jira sites must use HTTPS to send credentials.'
 
