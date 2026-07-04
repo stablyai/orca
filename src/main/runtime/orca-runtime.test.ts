@@ -4819,7 +4819,10 @@ describe('OrcaRuntimeService', () => {
         ['rev-parse', '--path-format=absolute', '--git-common-dir'],
         wslGitOptions
       )
-      expect(asyncGitSpy).toHaveBeenCalledWith(['fetch', 'origin'], wslGitOptions)
+      expect(asyncGitSpy).toHaveBeenCalledWith(['fetch', 'origin'], {
+        ...wslGitOptions,
+        timeout: 60_000
+      })
       expect(syncGitSpy).toHaveBeenCalledWith(
         ['rev-list', '--left-right', '--count', 'HEAD...origin/main'],
         { cwd: TEST_WORKTREE_PATH, wslDistro: 'Ubuntu' }
