@@ -4721,7 +4721,7 @@
           "be6df68384": "From File…",
           "e44c5d681e": "From",
           "67d9a53f47": "Manage profiles for separate logins",
-          "112f70adc4": "Last imported from",
+          "112f70adc4": "Last imported from {{value0}}",
           "72d4815523": "Bring your existing logins into Orca so agents can reach authenticated pages. Imports into the default profile.",
           "2eb906706c": "Import Browser Cookies",
           "af8c83ed61": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",

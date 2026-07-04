@@ -116,9 +116,9 @@ export function BrowserUseCookieImportStep({
             <p className="text-[11px] text-muted-foreground">
               {translate(
                 'auto.components.settings.BrowserUsePane.112f70adc4',
-                'Last imported from'
+                'Last imported from {{value0}}',
+                { value0: sourceLabel }
               )}
-              {sourceLabel}
             </p>
           ) : null}
           {onConfigureMoreBrowsers ? (
