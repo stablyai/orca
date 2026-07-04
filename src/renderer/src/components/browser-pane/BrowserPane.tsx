@@ -5295,7 +5295,7 @@ function BrowserPagePane({
                     <TooltipContent side="bottom" sideOffset={6}>
                       {translate(
                         'auto.components.browser.pane.BrowserPane.95af781091',
-                        'Send feedback to a new agent'
+                        'Send feedback to an agent'
                       )}
                     </TooltipContent>
                   </Tooltip>
@@ -5566,7 +5566,7 @@ function BrowserPagePane({
                         <TooltipContent side="bottom" sideOffset={6}>
                           {translate(
                             'auto.components.browser.pane.BrowserPane.95af781091',
-                            'Send feedback to a new agent'
+                            'Send feedback to an agent'
                           )}
                         </TooltipContent>
                       </Tooltip>

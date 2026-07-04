@@ -19,6 +19,8 @@ export function BrowserAnnotationSendMenuContent({
       worktreeId={worktreeId}
       groupId={groupId}
       prompt={prompt}
+      // Why: keep browser-annotation delivery and telemetry stable even if
+      // the shared review-notes menu defaults change later.
       promptDelivery="submit-after-ready"
       launchSource="notes_send"
       onPromptDelivered={onPromptDelivered}
