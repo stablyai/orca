@@ -2,7 +2,11 @@ import type { SshConnection } from './ssh-connection'
 import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, normalizeWindowsRemotePath } from './ssh-remote-platform'
-import { powerShellCommand } from './ssh-remote-powershell'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import {
+  buildPosixNodeInstallGuidance,
+  type RemoteNodeResolutionOptions
+} from './ssh-remote-node-install-guidance'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
@@ -15,11 +19,6 @@ const MIN_NODE_MAJOR = 18
 // the path probes don't cover. Interactive configs (conda prompts, etc.) can
 // hang a login shell, so keep this short.
 const LOGIN_SHELL_PROBE_TIMEOUT_MS = 8_000
-
-type RemoteNodeResolutionOptions = {
-  rethrowSessionLimitErrors?: boolean
-  signal?: AbortSignal
-}
 
 export async function resolveRemoteNodePath(
   conn: SshConnection,
@@ -47,7 +46,7 @@ export async function resolveRemoteNodePath(
     return loginShellPath
   }
 
-  throwNodeNotFound(options)
+  return throwNodeNotFound(conn, options)
 }
 
 // Probe the on-disk install directories of every common Node version manager
@@ -91,6 +90,7 @@ for candidate in \\
   "$HOME/.local/bin/node" \\
   "$HOME/.fnm/aliases/default/bin/node" \\
   "$HOME/.fnm/node-versions"/*/installation/bin/node \\
+  "$HOME/.local/share/fnm/node-versions"/*/installation/bin/node \\
   "$HOME/.local/share/mise/shims/node" \\
   "$HOME/.local/share/mise/installs/node"/*/bin/node \\
   "$HOME/.asdf/shims/node" \\
@@ -104,7 +104,7 @@ true
 `
 
   try {
-    const result = await execCommand(conn, script, { signal: options?.signal })
+    const result = await execCommandWithOptionalOptions(conn, script, signalOnlyOptions(options))
     const seen = new Set<string>()
     for (const line of result.split('\n')) {
       const candidate = line.trim()
@@ -138,20 +138,21 @@ async function tryResolveViaLoginShell(
     // Using it — rather than hardcoding bash — means zsh/fish users whose
     // custom PATH hooks live in profile files get coverage too. We fall back
     // to sh if $SHELL is unset (rare, e.g. restricted accounts).
-    const shellResult = await execCommand(conn, 'echo "${SHELL:-/bin/sh}"', {
-      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
-      signal: options?.signal
-    })
+    const shellResult = await execCommand(
+      conn,
+      'echo "${SHELL:-/bin/sh}"',
+      commandOptions({ timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
+    )
     const shell = shellResult.trim().split('\n')[0]
     if (!shell) {
       return null
     }
 
-    const nodePath = await execCommand(conn, buildCommandInShell(shell, 'command -v node'), {
-      wrapCommand: false,
-      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
-      signal: options?.signal
-    })
+    const nodePath = await execCommand(
+      conn,
+      buildCommandInShell(shell, 'command -v node'),
+      commandOptions({ wrapCommand: false, timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
+    )
     const candidate = nodePath.trim().split('\n')[0]
     if (!candidate) {
       return null
@@ -187,16 +188,12 @@ async function nodeMeetsVersionRequirement(
   options?: RemoteNodeResolutionOptions
 ): Promise<boolean> {
   try {
-    const versionOutput = await execCommand(conn, `${shellEscape(nodePath)} --version`, {
-      wrapCommand: false,
-      signal: options?.signal
-    })
-    const match = versionOutput.trim().match(/^v?(\d+)/)
-    if (!match) {
-      return false
-    }
-    const major = Number.parseInt(match[1]!, 10)
-    return major >= MIN_NODE_MAJOR
+    const versionOutput = await execCommand(
+      conn,
+      `${shellEscape(nodePath)} --version`,
+      commandOptions({ wrapCommand: false }, options)
+    )
+    return nodeVersionMeetsRequirement(versionOutput)
   } catch (err) {
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
@@ -217,26 +214,34 @@ async function resolveRemoteWindowsNodePath(
     'if ($env:ProgramFiles) { $paths += (Join-Path $env:ProgramFiles "nodejs/node.exe") }',
     'if (${env:ProgramFiles(x86)}) { $paths += (Join-Path ${env:ProgramFiles(x86)} "nodejs/node.exe") }',
     'if ($env:LOCALAPPDATA) { $paths += (Join-Path $env:LOCALAPPDATA "Programs/nodejs/node.exe") }',
+    '$found = $false',
     'foreach ($path in $paths) {',
     '  if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) {',
     '    Write-Output $path',
-    '    exit 0',
+    '    $found = $true',
     '  }',
     '}',
+    'if ($found) { exit 0 }',
     "Write-Error 'Node.js not found'",
     'exit 1'
   ].join('\n')
 
   try {
-    const result = await execCommand(conn, powerShellCommand(script), {
-      wrapCommand: false,
-      signal: options?.signal
-    })
-    const nodePath = result.trim().split('\n')[0]
-    if (nodePath) {
+    const result = await execCommand(
+      conn,
+      powerShellCommand(script),
+      commandOptions({ wrapCommand: false }, options)
+    )
+    for (const line of result.split('\n')) {
+      const nodePath = line.trim()
+      if (!nodePath) {
+        continue
+      }
       const normalized = normalizeWindowsRemotePath(nodePath)
-      console.log(`[ssh-relay] Found Windows node at: ${normalized}`)
-      return normalized
+      if (await windowsNodeMeetsVersionRequirement(conn, normalized, options)) {
+        console.log(`[ssh-relay] Found Windows node at: ${normalized}`)
+        return normalized
+      }
     }
   } catch (err) {
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
@@ -245,20 +250,98 @@ async function resolveRemoteWindowsNodePath(
     // Fall through to the shared error below.
   }
 
-  throwNodeNotFound(options)
+  throwWindowsNodeNotFound(options)
 }
 
-function throwNodeNotFound(options?: RemoteNodeResolutionOptions): never {
-  // Why: when a sibling bootstrap probe aborts this resolution via the shared
-  // signal, the strategy catch-blocks swallow the injected AbortError and fall
-  // through to here. Surfacing "Node.js not found" would launder a cancellation
-  // into a fatal non-session failure, defeating the concurrent-bootstrap
-  // sequential fallback. Re-raise the abort so callers classify it correctly.
+async function windowsNodeMeetsVersionRequirement(
+  conn: SshConnection,
+  nodePath: string,
+  options?: RemoteNodeResolutionOptions
+): Promise<boolean> {
+  try {
+    const versionOutput = await execCommand(
+      conn,
+      powerShellCommand(`& ${powerShellLiteral(nodePath)} --version`),
+      commandOptions({ wrapCommand: false }, options)
+    )
+    return nodeVersionMeetsRequirement(versionOutput)
+  } catch (err) {
+    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
+      throw err
+    }
+    return false
+  }
+}
+
+function nodeVersionMeetsRequirement(versionOutput: string): boolean {
+  const match = versionOutput.trim().match(/^v?(\d+)/)
+  if (!match) {
+    return false
+  }
+  const major = Number.parseInt(match[1]!, 10)
+  return major >= MIN_NODE_MAJOR
+}
+
+async function throwNodeNotFound(
+  conn: SshConnection,
+  options?: RemoteNodeResolutionOptions
+): Promise<never> {
+  throwIfAborted(options)
+  const guidance = await buildPosixNodeInstallGuidance(conn, options)
+  throwIfAborted(options)
+  throw new Error(guidance)
+}
+
+function throwWindowsNodeNotFound(options?: RemoteNodeResolutionOptions): never {
+  throwIfAborted(options)
+  throw new Error(
+    [
+      'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
+      '',
+      'Install Node.js 18+ on the remote host, then reconnect:',
+      '  winget install OpenJS.NodeJS.LTS',
+      '  choco install nodejs-lts',
+      '',
+      'Verify the remote runtime before reconnecting:',
+      '  node --version  # must be v18 or newer',
+      '  npm --version',
+      '',
+      'If those package managers are unavailable, install an LTS release from https://nodejs.org/.'
+    ].join('\n')
+  )
+}
+
+function throwIfAborted(options?: RemoteNodeResolutionOptions): void {
+  // Why: strategy fallbacks intentionally swallow probe failures, but a shared
+  // bootstrap abort must stay an AbortError so callers can continue fallback.
   if (options?.signal?.aborted) {
     throw createSshOperationAbortError()
   }
-  throw new Error(
-    'Node.js not found on remote host. Orca relay requires Node.js 18+. ' +
-      'Install Node.js on the remote and try again.'
-  )
+}
+
+function signalOnlyOptions(
+  options?: RemoteNodeResolutionOptions
+): { signal: AbortSignal } | undefined {
+  return options?.signal ? { signal: options.signal } : undefined
+}
+
+type RemoteExecOptions = {
+  wrapCommand?: boolean
+  timeoutMs?: number
+  signal?: AbortSignal
+}
+
+function commandOptions(
+  base: RemoteExecOptions,
+  options?: RemoteNodeResolutionOptions
+): RemoteExecOptions {
+  return options?.signal ? { ...base, signal: options.signal } : base
+}
+
+async function execCommandWithOptionalOptions(
+  conn: SshConnection,
+  command: string,
+  options?: { signal: AbortSignal }
+): Promise<string> {
+  return options ? execCommand(conn, command, options) : execCommand(conn, command)
 }

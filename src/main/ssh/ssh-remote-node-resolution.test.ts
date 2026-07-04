@@ -18,6 +18,14 @@ const { resolveRemoteNodePath } = await import('./ssh-remote-node-resolution')
 
 const conn = {} as SshConnection
 
+function decodePowerShellCommand(command: string): string {
+  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+  if (!match) {
+    throw new Error(`No encoded PowerShell command found in: ${command}`)
+  }
+  return Buffer.from(match[1]!, 'base64').toString('utf16le')
+}
+
 describe('resolveRemoteNodePath', () => {
   beforeEach(() => {
     execCommandMock.mockReset()
@@ -88,8 +96,21 @@ describe('resolveRemoteNodePath', () => {
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
     expect(callScript).toContain('"$HOME/.fnm/node-versions"/*/installation/bin/node')
+    expect(callScript).toContain('"$HOME/.local/share/fnm/node-versions"/*/installation/bin/node')
     expect(callScript).toContain('"$HOME/.local/share/mise/installs/node"/*/bin/node')
     expect(callScript).toContain('"$HOME/.asdf/installs/nodejs"/*/bin/node')
+  })
+
+  it('probes fnm XDG data directory installs', async () => {
+    execCommandMock
+      .mockResolvedValueOnce(
+        '/home/u/.local/share/fnm/node-versions/v24.18.0/installation/bin/node\n'
+      )
+      .mockResolvedValueOnce('v24.18.0\n')
+
+    await expect(resolveRemoteNodePath(conn)).resolves.toBe(
+      '/home/u/.local/share/fnm/node-versions/v24.18.0/installation/bin/node'
+    )
   })
 
   it('does not depend on GNU sort when probing version-manager directories', async () => {
@@ -258,8 +279,9 @@ describe('resolveRemoteNodePath', () => {
       .mockResolvedValueOnce('\n') // path probe: empty
       .mockResolvedValueOnce('/bin/bash') // $SHELL
       .mockResolvedValueOnce('\n') // command -v node: empty
+      .mockResolvedValueOnce('apt-get\n') // package manager hint probe
 
-    await expect(resolveRemoteNodePath(conn)).rejects.toThrow(/Node\.js not found/)
+    await expect(resolveRemoteNodePath(conn)).rejects.toThrow(/sudo apt-get install -y nodejs npm/)
   })
 
   it('throws when the path-probe exec fails and the login shell finds nothing', async () => {
@@ -267,8 +289,9 @@ describe('resolveRemoteNodePath', () => {
       .mockRejectedValueOnce(new Error('SSH exec channel failed')) // path probe errors
       .mockResolvedValueOnce('/bin/zsh') // $SHELL
       .mockResolvedValueOnce('\n') // command -v node: empty
+      .mockRejectedValueOnce(new Error('package manager probe failed'))
 
-    await expect(resolveRemoteNodePath(conn)).rejects.toThrow(/Node\.js not found/)
+    await expect(resolveRemoteNodePath(conn)).rejects.toThrow(/Debian\/Ubuntu:/)
   })
 
   it('keeps the default path-probe fallback for SSH session-limit-shaped errors', async () => {
@@ -318,11 +341,41 @@ describe('resolveRemoteNodePath', () => {
     ).rejects.toBe(sessionLimitError)
   })
 
+  it('rethrows SSH session-limit errors from package-manager hint probing in strict mode', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    execCommandMock
+      .mockResolvedValueOnce('\n')
+      .mockResolvedValueOnce('/bin/bash')
+      .mockResolvedValueOnce('\n')
+      .mockRejectedValueOnce(sessionLimitError)
+
+    await expect(
+      resolveRemoteNodePath(conn, undefined, { rethrowSessionLimitErrors: true })
+    ).rejects.toBe(sessionLimitError)
+  })
+
   it('rethrows SSH session-limit errors from Windows node resolution in strict mode', async () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
     execCommandMock.mockRejectedValueOnce(sessionLimitError)
+
+    await expect(
+      resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), {
+        rethrowSessionLimitErrors: true
+      })
+    ).rejects.toBe(sessionLimitError)
+  })
+
+  it('rethrows SSH session-limit errors from Windows version checks in strict mode', async () => {
+    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 4
+    })
+    execCommandMock
+      .mockResolvedValueOnce('C:\\Program Files\\nodejs\\node.exe\n')
+      .mockRejectedValueOnce(sessionLimitError)
 
     await expect(
       resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), {
@@ -357,7 +410,32 @@ describe('resolveRemoteNodePath', () => {
       .mockResolvedValueOnce('/bin/bash') // $SHELL
       .mockResolvedValueOnce('/old/node2\n') // login shell
       .mockResolvedValueOnce('v6.17.0\n') // too old
+      .mockResolvedValueOnce('dnf\n') // package manager hint probe
 
-    await expect(resolveRemoteNodePath(conn)).rejects.toThrow(/Node\.js not found/)
+    await expect(resolveRemoteNodePath(conn)).rejects.toThrow(/sudo dnf install -y nodejs npm/)
+  })
+
+  it('rejects a Windows node.exe below the minimum version', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('C:\\Program Files\\nodejs\\node.exe\n') // Get-Command / common paths
+      .mockResolvedValueOnce('v16.20.2\n') // version check: too old
+
+    await expect(resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'))).rejects.toThrow(
+      /winget install OpenJS\.NodeJS\.LTS/
+    )
+  })
+
+  it('does not stop Windows node discovery after the first existing candidate', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('C:\\old\\node.exe\nC:\\Program Files\\nodejs\\node.exe\n')
+      .mockResolvedValueOnce('v16.20.2\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await expect(resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'))).resolves.toBe(
+      'C:/Program Files/nodejs/node.exe'
+    )
+
+    const discoveryScript = decodePowerShellCommand(execCommandMock.mock.calls[0]![1] as string)
+    expect(discoveryScript).not.toMatch(/Write-Output \$path\s+exit 0/)
   })
 })
