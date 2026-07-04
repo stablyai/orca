@@ -4265,6 +4265,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     interrupted?: boolean
     terminalHandle?: string
     launchToken?: string
+    hookEventName?: string
+    hasExplicitPrompt?: boolean
     providerSession?: { key: 'session_id'; id: string }
     orchestration?: {
       taskId?: string
@@ -5106,6 +5108,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       prompt: 'auto-approved task',
       agentType: 'codex',
       launchToken: 'launch-yolo',
+      hookEventName: 'Stop',
+      hasExplicitPrompt: true,
       lastAssistantMessage: 'Done.',
       receivedAt: 1_700_000_000_500,
       stateStartedAt: 1_699_999_999_500
@@ -5117,7 +5121,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect.objectContaining({
         paneKey: FUTURE_PANE_KEY,
         worktreeId: 'wt-1',
-        payload: expect.objectContaining({ state: 'done', agentType: 'codex' })
+        payload: expect.objectContaining({
+          state: 'done',
+          agentType: 'codex',
+          hookEventName: 'Stop',
+          hasExplicitPrompt: true,
+          stateStartedAt: 1_699_999_999_500
+        })
       })
     )
   })

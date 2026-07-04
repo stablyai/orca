@@ -2990,10 +2990,16 @@ export function useIpcEvents(): void {
         // Why: local Codex/Claude hooks arrive through this main-process IPC
         // path, not the PTY OSC fallback, so task-complete notifications must
         // observe accepted hook state here as well.
-        const notificationPayload =
-          typeof data.stateStartedAt === 'number'
-            ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
-            : resolvedPayload
+        const notificationPayload = {
+          ...resolvedPayload,
+          ...(typeof data.stateStartedAt === 'number'
+            ? { stateStartedAt: data.stateStartedAt }
+            : {}),
+          // Why: carry the turn-boundary signals so the coordinator can ignore
+          // background plugin hook churn (Claude-Mem) after the turn finished.
+          ...(data.hookEventName ? { hookEventName: data.hookEventName } : {}),
+          ...(data.hasExplicitPrompt === true ? { hasExplicitPrompt: true } : {})
+        }
         observeAgentHookCompletionForNotification({
           paneKey: data.paneKey,
           worktreeId: statusWorktreeId,

@@ -5,6 +5,7 @@ import {
   resetAgentCompletionCoordinatorIdentitiesForTest
 } from './agent-completion-coordinator'
 import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
+import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
 async function flushAsyncTicks(count = 4): Promise<void> {
@@ -1566,6 +1567,189 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledWith('experimental-agent-observability')
+  })
+
+  describe('background plugin hook churn (Claude-Mem)', () => {
+    function createHookCoordinator(
+      dispatchCompletion: AgentCompletionCoordinatorOptions['dispatchCompletion']
+    ) {
+      return createAgentCompletionCoordinator({
+        paneKey: 'tab-1:leaf-1',
+        getPtyId: () => 'pty-1',
+        getSettings: () => null,
+        inspectProcess: vi.fn(),
+        dispatchCompletion,
+        isLive: () => true
+      })
+    }
+
+    it('notifies once for a UserPromptSubmit-driven turn', () => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createHookCoordinator(dispatchCompletion)
+
+      coordinator.observeHookStatus({
+        state: 'working',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        stateStartedAt: 1_700_000_000_000
+      })
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_010_000
+      })
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not re-notify when a background tool-progress turn runs after the user turn', () => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createHookCoordinator(dispatchCompletion)
+
+      coordinator.observeHookStatus({
+        state: 'working',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        stateStartedAt: 1_700_000_000_000
+      })
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_010_000
+      })
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      // Why: Claude-Mem writes memory on the same pane after the turn — its hooks
+      // arrive as tool-progress 'working' with no explicit user prompt, then Stop.
+      vi.advanceTimersByTime(8_000)
+      coordinator.observeHookStatus({
+        state: 'working',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'PostToolUse',
+        stateStartedAt: 1_700_000_020_000
+      })
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_030_000
+      })
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    })
+
+    it('still notifies for a genuinely new UserPromptSubmit turn after background churn', () => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createHookCoordinator(dispatchCompletion)
+
+      coordinator.observeHookStatus({
+        state: 'working',
+        prompt: 'first',
+        agentType: 'claude',
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        stateStartedAt: 1_700_000_000_000
+      })
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: 'first',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_010_000
+      })
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      coordinator.observeHookStatus({
+        state: 'working',
+        prompt: 'first',
+        agentType: 'claude',
+        hookEventName: 'PostToolUse',
+        stateStartedAt: 1_700_000_020_000
+      })
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: 'first',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_030_000
+      })
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      coordinator.observeHookStatus({
+        state: 'working',
+        prompt: 'second',
+        agentType: 'claude',
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        stateStartedAt: 1_700_000_040_000
+      })
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: 'second',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_050_000
+      })
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+      expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+    })
+
+    it('ignores title spinner flicker during a background memory write', () => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createHookCoordinator(dispatchCompletion)
+
+      coordinator.observeHookStatus({
+        state: 'working',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        stateStartedAt: 1_700_000_000_000
+      })
+      coordinator.observeHookStatus({
+        state: 'done',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_010_000
+      })
+      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      // Background tool-progress hook marks the turn as background churn.
+      vi.advanceTimersByTime(8_000)
+      coordinator.observeHookStatus({
+        state: 'working',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'PostToolUse',
+        stateStartedAt: 1_700_000_020_000
+      })
+
+      // Title flips to a working spinner then back to idle well past the 1s
+      // replay guard — this flicker must not arm a fresh completion.
+      vi.advanceTimersByTime(4_000)
+      coordinator.observeTitle('⠋ Claude')
+      coordinator.observeTitle('✳ Claude')
+
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('does not mutate completion state when hook completion is suppressed', () => {

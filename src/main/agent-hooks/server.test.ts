@@ -84,6 +84,34 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
+  it('includes hook turn-boundary metadata in status snapshots', () => {
+    const server = new AgentHookServer()
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hasExplicitPrompt: true,
+        hookEventName: 'UserPromptSubmit',
+        payload: { state: 'working', prompt: 'ship it', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        connectionId: 'conn-1',
+        state: 'working',
+        prompt: 'ship it',
+        agentType: 'claude',
+        hasExplicitPrompt: true,
+        hookEventName: 'UserPromptSubmit'
+      })
+    ])
+  })
+
   it('applies inferred interrupts through the cached status lifecycle', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

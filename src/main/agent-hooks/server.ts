@@ -19,6 +19,7 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../shared/telemetry-events'
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
+import { isToolProgressHookEvent } from '../../shared/agent-tool-progress-hooks'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -108,7 +109,6 @@ const LAST_STATUS_FILE_VERSION = 2
 // hook-server batching; quit-time uses flushStatusPersistSync() for the
 // guaranteed final flush.
 const STATUS_PERSIST_DEBOUNCE_MS = 250
-const TOOL_PROGRESS_HOOK_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure'])
 const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
 // Why: bound the on-disk file's growth across many sessions. PTY-teardown
@@ -241,6 +241,10 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     connectionId: entry.connectionId,
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
+    // Why: snapshots should carry the same turn-boundary metadata as the live
+    // listener IPC path so restored rows don't lose hook identity.
+    ...(entry.hookEventName ? { hookEventName: entry.hookEventName } : {}),
+    ...(entry.hasExplicitPrompt === true ? { hasExplicitPrompt: true } : {}),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...entry.payload
   }
@@ -282,7 +286,7 @@ function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload): boole
   }
   // Why: a same-prompt retry is another UserPromptSubmit, while late Claude
   // progress after Ctrl+C arrives as tool lifecycle work for the old turn.
-  return next.hookEventName !== undefined && TOOL_PROGRESS_HOOK_EVENTS.has(next.hookEventName)
+  return isToolProgressHookEvent(next.hookEventName)
 }
 
 function paneCacheKeyTabId(key: string): string | null {

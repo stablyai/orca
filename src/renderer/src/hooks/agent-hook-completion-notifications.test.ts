@@ -727,4 +727,65 @@ describe('agent hook completion notifications', () => {
       })
     )
   })
+
+  it('does not re-notify when Claude-Mem runs a background hook turn after the user turn', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    // Real user turn: UserPromptSubmit carries an explicit prompt, then Stop.
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        stateStartedAt: 1_700_000_000_000
+      }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'done',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_010_000
+      }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+
+    // Claude-Mem's background memory write: tool-progress working (no explicit
+    // prompt) then Stop, on the same pane. Must not fire a second notification.
+    vi.advanceTimersByTime(8_000)
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'PostToolUse',
+        stateStartedAt: 1_700_000_020_000
+      }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'done',
+        prompt: 'do the thing',
+        agentType: 'claude',
+        hookEventName: 'Stop',
+        stateStartedAt: 1_700_000_030_000
+      }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+  })
 })

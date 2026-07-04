@@ -4,6 +4,13 @@ import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-termina
 
 export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
   stateStartedAt?: number
+  /** Raw agent hook event name (e.g. UserPromptSubmit, PreToolUse, Stop), when
+   *  the hook IPC path forwards it. Absent on the OSC/title and remote-runtime
+   *  paths, which carry no hook event identity. */
+  hookEventName?: string
+  /** True when the originating hook event carried prompt text directly — the
+   *  new-turn boundary signal. Absent unless the hook IPC path forwarded it. */
+  hasExplicitPrompt?: boolean
 }
 
 export type AgentCompletionDispatchMeta = {

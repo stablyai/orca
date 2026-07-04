@@ -191,6 +191,14 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   receivedAt: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
+  /** Raw agent hook event name (e.g. UserPromptSubmit, PreToolUse, Stop).
+   *  Why: lets the renderer's completion coordinator tell a real user-initiated
+   *  turn from background plugin churn (e.g. Claude-Mem's post-turn memory
+   *  writes) so it doesn't re-arm a duplicate completion notification. */
+  hookEventName?: string
+  /** True when this hook event carried prompt text directly rather than reusing
+   *  the listener's cached prompt — the main-process new-turn signal. */
+  hasExplicitPrompt?: boolean
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
 }
