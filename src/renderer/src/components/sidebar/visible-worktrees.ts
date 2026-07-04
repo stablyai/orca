@@ -107,6 +107,10 @@ export function computeVisibleWorktreeIds(
   opts: {
     filterRepoIds: string[]
     showSleepingWorkspaces: boolean
+    // Why optional: omitting it keeps the safe default (archived hidden). Only
+    // the sidebar "Show archived" path opts in, so no caller can accidentally
+    // surface archived rows by forgetting to pass it.
+    showArchivedWorkspaces?: boolean
     tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
     ptyIdsByTabId: Record<string, string[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
@@ -125,8 +129,10 @@ export function computeVisibleWorktreeIds(
 ): string[] {
   let all: Worktree[] = getAllWorktreesFromState({ worktreesByRepo })
 
-  // Filter archived
-  all = all.filter((w) => !w.isArchived)
+  // Filter archived unless the "Show archived" view is on.
+  if (!opts.showArchivedWorkspaces) {
+    all = all.filter((w) => !w.isArchived)
+  }
 
   // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
   // every other valid ancestor can bypass filters so children never orphan.
@@ -272,7 +278,9 @@ export function getVisibleWorktreeIds(): string[] {
 
   // Fallback: live recomputation for the window before WorktreeList renders.
   const state = useAppStore.getState()
-  const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
+  const allWorktrees = state.showArchivedWorkspaces
+    ? getAllWorktreesFromState(state)
+    : getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
   // Hoist repoMap so it's built once and reused across all branches below.
   const repoMap = getRepoMapFromState(state)
@@ -302,6 +310,7 @@ export function getVisibleWorktreeIds(): string[] {
   return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
+    showArchivedWorkspaces: state.showArchivedWorkspaces,
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,

@@ -3813,7 +3813,8 @@
           "c3fa13dc2e": "기본 브랜치 숨기기",
           "ed1611b65b": "슬립 중인 항목 숨기기",
           "82594419ba": "필터",
-          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
+          "showArchived": "Show archived"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",
@@ -4036,7 +4037,9 @@
           "setParentWorkspace": "상위 워크트리 설정...",
           "workspaceSection": "워크스페이스",
           "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
-          "deleteWorktree": "작업 트리 삭제"
+          "deleteWorktree": "작업 트리 삭제",
+          "unarchiveWorkspace": "Unarchive",
+          "archiveWorkspace": "Archive"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",

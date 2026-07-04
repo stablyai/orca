@@ -5163,6 +5163,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const setSortBy = useAppStore((s) => s.setSortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const showArchivedWorkspaces = useAppStore((s) => s.showArchivedWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
@@ -5340,9 +5341,11 @@ const WorktreeList = React.memo(function WorktreeList({
 
   const sortedIds = useMemo(() => {
     const state = useAppStore.getState()
-    const nonArchivedWorktrees = getAllWorktreesFromState(state).filter(
-      (worktree) => !worktree.isArchived
-    )
+    // Why: when "Show archived" is on, archived rows must earn a sort position
+    // here so they render inline rather than piling unsorted at the bottom.
+    const nonArchivedWorktrees = showArchivedWorkspaces
+      ? getAllWorktreesFromState(state)
+      : getAllWorktreesFromState(state).filter((worktree) => !worktree.isArchived)
 
     // Why cold-start detection: smart-class resolution depends on the
     // agent-status snapshot (agentStatusByPaneKey) hydrating from the hook
@@ -5396,7 +5399,7 @@ const WorktreeList = React.memo(function WorktreeList({
     // memo, but its change signals that the sort order should be recomputed.
     // The debounce prevents jarring mid-interaction position shifts.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSortEpoch, repoMap, sortBy])
+  }, [debouncedSortEpoch, repoMap, sortBy, showArchivedWorkspaces])
 
   // Why a ref of prior class per worktree: smart_sort_class_1_promotion must
   // fire only on transitions INTO Class 1, not on every recompute that keeps
@@ -5520,6 +5523,7 @@ const WorktreeList = React.memo(function WorktreeList({
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
+      showArchivedWorkspaces,
       tabsByWorktree,
       ptyIdsByTabId,
       browserTabsByWorktree,
@@ -5546,6 +5550,7 @@ const WorktreeList = React.memo(function WorktreeList({
     agentSendTargetWorktreeId,
     filterRepoIds,
     showSleepingWorkspaces,
+    showArchivedWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
     workspaceHostScope,
@@ -5662,11 +5667,16 @@ const WorktreeList = React.memo(function WorktreeList({
     })
   }, [defaultHostId, projectGroups, visibleHostIdSet])
   const visibleFolderWorkspacesForRows = useMemo(() => {
+    // Why: archived folder workspaces have no other filter site, so hide them
+    // here unless the "Show archived" view is on.
+    const base = showArchivedWorkspaces
+      ? folderWorkspaces
+      : folderWorkspaces.filter((folderWorkspace) => !folderWorkspace.isArchived)
     if (!visibleHostIdSet) {
-      return folderWorkspaces
+      return base
     }
     const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
-    return folderWorkspaces.filter((folderWorkspace) => {
+    return base.filter((folderWorkspace) => {
       const hostId = getFolderWorkspaceExecutionHostIdForRows({
         folderWorkspace,
         projectGroup: projectGroupById.get(folderWorkspace.projectGroupId),
@@ -5674,7 +5684,7 @@ const WorktreeList = React.memo(function WorktreeList({
       })
       return visibleHostIdSet.has(hostId)
     })
-  }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet])
+  }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet, showArchivedWorkspaces])
   const repoOrder = useMemo(() => {
     const map = new Map<string, number>()
     repos.forEach((r, i) => map.set(r.id, i))

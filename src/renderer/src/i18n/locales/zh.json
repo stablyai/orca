@@ -3813,7 +3813,8 @@
           "c3fa13dc2e": "隐藏默认分支",
           "ed1611b65b": "隐藏休眠项",
           "82594419ba": "搜索器",
-          "automationCreated": "隐藏自动化创建的工作区"
+          "automationCreated": "隐藏自动化创建的工作区",
+          "showArchived": "Show archived"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "智能体活动布局",
@@ -4036,7 +4037,9 @@
           "setParentWorkspace": "设置父工作树...",
           "workspaceSection": "工作区",
           "primaryDeleteDisabled": "主要工作树无法删除，请改为删除项目。",
-          "deleteWorktree": "删除工作树"
+          "deleteWorktree": "删除工作树",
+          "unarchiveWorkspace": "Unarchive",
+          "archiveWorkspace": "Archive"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",

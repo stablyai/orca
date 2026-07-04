@@ -59,6 +59,7 @@ import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
+  DEFAULT_SHOW_ARCHIVED_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
@@ -792,6 +793,8 @@ export type UISlice = {
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
   setShowSleepingWorkspaces: (v: boolean) => void
+  showArchivedWorkspaces: boolean
+  setShowArchivedWorkspaces: (v: boolean) => void
   workspaceHostScope: WorkspaceHostScope
   setWorkspaceHostScope: (scope: WorkspaceHostScope) => void
   visibleWorkspaceHostIds: VisibleWorkspaceHostIds
@@ -1899,6 +1902,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
   setShowSleepingWorkspaces: (v) => set({ showSleepingWorkspaces: v }),
 
+  showArchivedWorkspaces: DEFAULT_SHOW_ARCHIVED_WORKSPACES,
+  setShowArchivedWorkspaces: (v) => set({ showArchivedWorkspaces: v }),
+
   workspaceHostScope: 'all',
   // Why (multi-host design): host scope is presentation/filtering only — it must
   // never trigger resource teardown (terminals, browser pages, etc.).
@@ -2269,6 +2275,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Older positive-form keys are intentionally ignored so old profiles
         // start from the new default: sleeping workspaces visible.
         showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
+        showArchivedWorkspaces: ui.showArchivedWorkspaces === true,
         workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),

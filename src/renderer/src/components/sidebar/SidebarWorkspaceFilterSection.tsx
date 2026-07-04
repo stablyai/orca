@@ -1,5 +1,5 @@
 import React from 'react'
-import { GitBranch, Moon, Workflow } from 'lucide-react'
+import { Archive, GitBranch, Moon, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -13,6 +13,8 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
   const setHideAutomationGeneratedWorkspaces = useAppStore(
     (s) => s.setHideAutomationGeneratedWorkspaces
   )
+  const showArchivedWorkspaces = useAppStore((s) => s.showArchivedWorkspaces)
+  const setShowArchivedWorkspaces = useAppStore((s) => s.setShowArchivedWorkspaces)
 
   return (
     <>
@@ -47,6 +49,15 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
         )}
         checked={hideAutomationGeneratedWorkspaces}
         onChange={setHideAutomationGeneratedWorkspaces}
+      />
+      <FilterToggleRow
+        icon={<Archive className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.showArchived',
+          'Show archived'
+        )}
+        checked={showArchivedWorkspaces}
+        onChange={setShowArchivedWorkspaces}
       />
     </>
   )

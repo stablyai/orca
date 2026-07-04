@@ -47,6 +47,9 @@ export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
+// Why: archived workspaces are hidden by default; the sidebar "Show archived"
+// filter opts back in so they can be reviewed and unarchived.
+export const DEFAULT_SHOW_ARCHIVED_WORKSPACES = false
 export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
@@ -463,6 +466,7 @@ export function getDefaultUIState(): PersistedUIState {
     visibleWorkspaceHostIds: null,
     workspaceHostOrder: [],
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
+    showArchivedWorkspaces: DEFAULT_SHOW_ARCHIVED_WORKSPACES,
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
     showDotfilesByWorktree: {},

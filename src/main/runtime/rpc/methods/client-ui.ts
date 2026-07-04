@@ -166,6 +166,7 @@ const UiUpdate = z
     showActiveOnly: z.boolean().optional(),
     hideSleepingWorkspaces: z.boolean().optional(),
     showSleepingWorkspaces: z.boolean().optional(),
+    showArchivedWorkspaces: z.boolean().optional(),
     showInactiveWorkspaces: z.boolean().optional(),
     workspaceHostScope: z.string().optional(),
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),

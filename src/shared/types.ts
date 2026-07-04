@@ -3169,6 +3169,8 @@ export type PersistedUIState = {
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
   hideSleepingWorkspaces?: boolean
+  /** Show archived workspaces in the sidebar so they can be unarchived. Off by default. */
+  showArchivedWorkspaces?: boolean
   /** Which execution hosts the workspace sidebar shows. `all` keeps the mixed
    *  command-center view; specific host IDs focus the sidebar without tearing
    *  down sessions owned by other hosts. */

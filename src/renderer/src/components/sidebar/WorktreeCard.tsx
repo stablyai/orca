@@ -1168,6 +1168,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
     showRepoIdentityInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
+  // Why: folder cards otherwise render no leading glyph (only pinned cards did),
+  // leaving the status dot as the row's only marker; show the folder icon inline.
+  const showInlineFolderIcon = isFolder && !hideRepoBadge && !showPinnedRepoIcon
   const showHostContextBadge = !compactCards && !!hostContextLabel
   const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
   const showBranch =
@@ -1470,6 +1473,23 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 />
               </RepoIdentityChip>
             )}
+
+            {showInlineFolderIcon &&
+              (repo ? (
+                <RepoIdentityChip repo={repo}>
+                  <RepoIconGlyph
+                    repoIcon={repo.repoIcon}
+                    color={resolveRepoHeaderColor(repo.badgeColor)}
+                    className="size-full"
+                    iconClassName="size-3"
+                  />
+                </RepoIdentityChip>
+              ) : (
+                // Folder workspaces carry no repo; fall back to the default glyph.
+                <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55">
+                  <RepoIconGlyph repoIcon={null} className="size-full" iconClassName="size-3" />
+                </span>
+              ))}
 
             {/* Why: unread alert lives in the left status lane; weight plus dimmed
                  read titles carry scan contrast in the title row. */}
@@ -1859,7 +1879,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
         ],
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
-        (isSshDisconnected || isRuntimeDisconnected) && !isDeleting && 'opacity-60'
+        (isSshDisconnected || isRuntimeDisconnected) && !isDeleting && 'opacity-60',
+        // Why: archived rows only appear under the "Show archived" filter; dim
+        // them so they read as put-away without hiding their content.
+        worktree.isArchived && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
       data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}
