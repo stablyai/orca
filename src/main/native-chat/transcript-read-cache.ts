@@ -4,13 +4,18 @@ import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
 
 // Why: both the desktop IPC handler and the runtime RPC handler read the same
-// host-filesystem transcript, so a single process-global cache keyed by
-// agent:sessionId maximizes the hit rate across desktop + every paired
-// web/mobile client. Keying by connection instead would defeat the multi-client
-// case this feature targets and multiply memory by the connection count.
-// The cache stores ONE canonical, unwindowed parse; windowing and per-surface
-// truncation stay in the callers so the same parse is reused across all `limit`
-// values and every client kind.
+// host-filesystem transcript, so a single process-global cache keyed by the
+// RESOLVED transcript file path maximizes the hit rate across desktop + every
+// paired web/mobile client (all clients of one session resolve the same path
+// against this runtime's home). Keying by connection instead would defeat the
+// multi-client case this feature targets and multiply memory by the connection
+// count. The key is the resolved file path, NOT `agent:sessionId`: two panes can
+// share one sessionId yet resolve to DIFFERENT files (the same session
+// resumed/forked into a second worktree, re-homed under the new cwd's slug), and
+// a sessionId-only key let one worktree's cached parse be served to another when
+// their file mtimes momentarily coincided (#7326). The cache stores ONE
+// canonical, unwindowed parse; windowing and per-surface truncation stay in the
+// callers so the same parse is reused across all `limit` values and every client kind.
 
 type CachedTranscript = {
   result: ReadTranscriptResult
@@ -40,8 +45,10 @@ function setCached(key: string, value: CachedTranscript): void {
   }
 }
 
-function cacheKey(agent: AgentType, sessionId: string): string {
-  return `${agent}:${sessionId}`
+// Why: key by the resolved file path so two different transcript files can never
+// share a cache entry, even when they resolve from the same (agent, sessionId).
+function cacheKey(agent: AgentType, filePath: string): string {
+  return `${agent}:${filePath}`
 }
 
 async function fileMtimeMs(filePath: string): Promise<number> {
@@ -68,7 +75,7 @@ export async function readNativeChatTranscriptCached(
     return { error: `No transcript found for ${agent} session ${sessionId}` }
   }
 
-  const key = cacheKey(agent, sessionId)
+  const key = cacheKey(agent, filePath)
   const mtimeMs = await fileMtimeMs(filePath)
   const cached = cache.get(key)
   if (cached && Number.isFinite(mtimeMs) && cached.mtimeMs === mtimeMs) {
