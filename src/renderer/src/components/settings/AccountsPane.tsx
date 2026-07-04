@@ -533,7 +533,7 @@ export function AccountsPane({
     )
     setClaudeAction(action)
     try {
-      const restartPlan = await getLiveClaudeSessionRestartPlan()
+      const restartPlan = await getLiveClaudeSessionRestartPlan({ target: accountRuntime })
       const next = await operation()
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
@@ -555,6 +555,8 @@ export function AccountsPane({
           ptyIds: restartPlan.livePtyIds,
           previousAccountLabel,
           nextAccountLabel,
+          previousAccountId: previousActiveAccountId,
+          nextAccountId: nextActiveAccountId,
           forceRestart: isActiveReauth
         })
         const stillStalePtyIds = restartPlan.livePtyIds.filter((ptyId) =>

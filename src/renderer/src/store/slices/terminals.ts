@@ -74,6 +74,8 @@ import {
 type AccountRestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
+  previousAccountId?: string | null
+  nextAccountId?: string | null
 }
 
 type AccountRestartNoticeInput = AccountRestartNotice & {
@@ -94,11 +96,19 @@ function applyAccountRestartNotices(
   for (const notice of notices) {
     const existing = next[notice.ptyId]
     const previousAccountLabel = existing?.previousAccountLabel ?? notice.previousAccountLabel
+    const previousAccountId =
+      existing?.previousAccountId !== undefined
+        ? existing.previousAccountId
+        : notice.previousAccountId
 
     // Why: a live pane keeps the account it originally launched with until it
     // restarts. Repeated switches must preserve that origin so A -> B -> A
     // clears the stale marker instead of asking for an unnecessary restart.
-    if (!notice.forceRestart && previousAccountLabel === notice.nextAccountLabel) {
+    const identityMatches =
+      previousAccountId !== undefined || notice.nextAccountId !== undefined
+        ? previousAccountId === notice.nextAccountId
+        : previousAccountLabel === notice.nextAccountLabel
+    if (!notice.forceRestart && identityMatches) {
       delete next[notice.ptyId]
       delete nextPendingPaneRestartIds[notice.ptyId]
       continue
@@ -106,7 +116,9 @@ function applyAccountRestartNotices(
 
     next[notice.ptyId] = {
       previousAccountLabel,
-      nextAccountLabel: notice.nextAccountLabel
+      nextAccountLabel: notice.nextAccountLabel,
+      ...(previousAccountId !== undefined ? { previousAccountId } : {}),
+      ...(notice.nextAccountId !== undefined ? { nextAccountId: notice.nextAccountId } : {})
     }
   }
   return {

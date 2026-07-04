@@ -2,6 +2,10 @@ import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { detectAgentStatusFromTitle, isClaudeAgent } from '@/lib/agent-status'
+import {
+  getTargetScopedClaudeRestartPtyIds,
+  type ClaudeSessionRestartTarget
+} from './claude-session-restart-target'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 export type LiveClaudeSessionRestartPlan = {
@@ -9,11 +13,37 @@ export type LiveClaudeSessionRestartPlan = {
   workInProgressPtyIds: string[]
 }
 
+type LiveClaudeSessionRestartPlanOptions = {
+  state?: AppState
+  target?: ClaudeSessionRestartTarget | null
+}
+
+const SHELL_FOREGROUND_PROCESSES = new Set([
+  'bash',
+  'cmd',
+  'csh',
+  'dash',
+  'fish',
+  'ksh',
+  'powershell',
+  'pwsh',
+  'sh',
+  'tcsh',
+  'wsl',
+  'zsh'
+])
+
 function normalizeProcessName(processName: string | null): string | null {
   if (!processName) {
     return null
   }
-  return processName.toLowerCase().replace(/\.exe$/, '')
+  return (
+    processName
+      .toLowerCase()
+      .replace(/\.exe$/, '')
+      .split(/[\\/]/)
+      .pop() ?? null
+  )
 }
 
 function isClaudeForegroundProcess(processName: string | null): boolean {
@@ -23,6 +53,11 @@ function isClaudeForegroundProcess(processName: string | null): boolean {
     normalized === 'claude-code' ||
     normalized?.startsWith('claude-') === true
   )
+}
+
+function isShellForegroundProcess(processName: string | null): boolean {
+  const normalized = normalizeProcessName(processName)
+  return normalized ? SHELL_FOREGROUND_PROCESSES.has(normalized) : false
 }
 
 type RestartCandidateTab = AppState['tabsByWorktree'][string][number]
@@ -80,12 +115,14 @@ function sortedUnique(values: string[]): string[] {
 }
 
 export async function getLiveClaudeSessionRestartPlan(
-  state: AppState = useAppStore.getState()
+  options: LiveClaudeSessionRestartPlanOptions = {}
 ): Promise<LiveClaudeSessionRestartPlan> {
+  const state = options.state ?? useAppStore.getState()
   const tabs = Object.values(state.tabsByWorktree).flat()
   const tabChecks = await Promise.all(
     tabs.map(async (tab) => {
-      const ptyIds = state.ptyIdsByTabId[tab.id] ?? []
+      const allPtyIds = state.ptyIdsByTabId[tab.id] ?? []
+      const ptyIds = getTargetScopedClaudeRestartPtyIds(state, tab, allPtyIds, options.target)
       if (ptyIds.length === 0) {
         return { livePtyIds: [], workInProgressPtyIds: [] }
       }
@@ -104,10 +141,12 @@ export async function getLiveClaudeSessionRestartPlan(
       for (const [index, ptyId] of ptyIds.entries()) {
         const paneKey = getPaneKeyForPtyId(state, tab.id, ptyId)
         const paneStatus = paneKey ? state.agentStatusByPaneKey[paneKey] : undefined
+        const foregroundProcess = foregroundProcesses[index] ?? null
+        const foregroundIsShell = isShellForegroundProcess(foregroundProcess)
         const isLiveClaudeSession =
-          isClaudeForegroundProcess(foregroundProcesses[index] ?? null) ||
-          isClaudeStatusEntry(paneStatus) ||
-          (ptyIds.length === 1 && titleHintsClaude)
+          isClaudeForegroundProcess(foregroundProcess) ||
+          (!foregroundIsShell &&
+            (isClaudeStatusEntry(paneStatus) || (allPtyIds.length === 1 && titleHintsClaude)))
         if (!isLiveClaudeSession) {
           continue
         }
@@ -130,6 +169,8 @@ export function markClaudeSessionsForRestart(args: {
   ptyIds: string[]
   previousAccountLabel: string
   nextAccountLabel: string
+  previousAccountId?: string | null
+  nextAccountId?: string | null
   forceRestart?: boolean
 }): void {
   if (args.ptyIds.length === 0) {
@@ -140,6 +181,10 @@ export function markClaudeSessionsForRestart(args: {
       ptyId,
       previousAccountLabel: args.previousAccountLabel,
       nextAccountLabel: args.nextAccountLabel,
+      ...(args.previousAccountId !== undefined
+        ? { previousAccountId: args.previousAccountId }
+        : {}),
+      ...(args.nextAccountId !== undefined ? { nextAccountId: args.nextAccountId } : {}),
       forceRestart: args.forceRestart
     }))
   )
