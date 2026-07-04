@@ -348,6 +348,76 @@ describe('AutomationService', () => {
     )
   })
 
+  it('dispatches due scheduled automations headlessly', async () => {
+    const store = await createStore()
+    const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
+    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const setup = store.getProjectHostSetups()[0]!
+    vi.useRealTimers()
+    const current = new Date()
+    const hour = current.getUTCHours()
+    const minute = current.getUTCMinutes()
+    const automation = store.createAutomation({
+      name: 'Morning check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: setup.projectId,
+        hostId: runtimeHostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: setup.path
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: `FREQ=DAILY;BYHOUR=${hour};BYMINUTE=${minute}`,
+      dtstart: Date.UTC(
+        current.getUTCFullYear(),
+        current.getUTCMonth(),
+        current.getUTCDate() - 1
+      ),
+      missedRunGraceMinutes: 100_000
+    })
+    const persistedAutomation = (
+      store as unknown as { state: { automations: Array<{ id: string; nextRunAt: number }> } }
+    ).state.automations.find((entry) => entry.id === automation.id)
+    if (!persistedAutomation) {
+      throw new Error('Automation not found in store.')
+    }
+    persistedAutomation.nextRunAt = 0
+
+    const headlessDispatcher = vi.fn().mockResolvedValue({
+      workspaceId: 'wt1',
+      workspaceDisplayName: 'Morning check',
+      terminalSessionId: 'tab-1',
+      terminalPaneKey: 'pane-1',
+      terminalPtyId: 'pty-1'
+    })
+    vi.useRealTimers()
+    const service = new AutomationService(store, {
+      tickMs: 1,
+      allowRemoteHostScheduling: true,
+      headlessDispatcher
+    })
+
+    try {
+      service.start()
+      await vi.waitFor(() => expect(headlessDispatcher).toHaveBeenCalledTimes(1))
+      const run = store.listAutomationRuns(automation.id)[0]
+      expect(run?.status).toBe('dispatched')
+      expect(headlessDispatcher).toHaveBeenCalledWith(
+        expect.objectContaining({ automation: expect.objectContaining({ id: automation.id }) })
+      )
+      expect(store.listAutomations().find((entry) => entry.id === automation.id)?.nextRunAt).toBeGreaterThan(
+        run?.scheduledFor ?? 0
+      )
+    } finally {
+      service.stop()
+    }
+  })
+
   it('attaches provider usage when a completed run can be attributed', async () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()
