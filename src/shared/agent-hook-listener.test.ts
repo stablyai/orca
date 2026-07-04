@@ -2,9 +2,9 @@
 import { EventEmitter } from 'node:events'
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   createHookListenerState,
   getEndpointFileName,
@@ -806,6 +806,51 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(event).toBeNull()
+  })
+
+  it('keeps the cached prompt when a harness-injected turn fires UserPromptSubmit', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
+      'production'
+    )
+    // Why: the harness injects background task notifications as user turns;
+    // they must not replace the user's real prompt in status labels.
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: '<task-notification> <task-id>bzthj2b8r</task-id> <tool-use-id>t1</tool-use-id>'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('working')
+    expect(event!.payload.prompt).toBe('fix login')
+    expect(event!.hasExplicitPrompt).toBe(false)
+  })
+
+  it('resolves an empty prompt for a harness-injected turn with nothing cached', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: '<system-reminder>background context</system-reminder>'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.prompt).toBe('')
+    expect(event!.hasExplicitPrompt).toBe(false)
   })
 
   it('isolates caches between listener instances', () => {

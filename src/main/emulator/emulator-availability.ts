@@ -1,4 +1,4 @@
-import { platform } from 'os'
+import { platform } from 'node:os'
 import type { EmulatorBridge } from './emulator-bridge'
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { BackendAvailability, EmulatorDevice } from './backends/emulator-backend'

@@ -339,6 +339,19 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).not.toContain('folderSourceRequiresConnection')
   })
 
+  it('clears branch reuse state when manually editing the branch name', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleBranchNameOverrideChange = useCallback',
+      'const addComposerAttachments = useCallback'
+    )
+
+    expect(section).toContain('resolveComposerManualBranchNameChange')
+    expect(section).toContain('setReuseEligibleBranch(null)')
+    expect(section).toContain('setReuseSelectedBranch(false)')
+    expect(section).toContain("branchAutoNameRef.current = ''")
+  })
+
   it('forces repo-scoped source reset when returning from folder target to a repo with the same id', () => {
     const handleRepoChange = sourceBetween(
       HOOK_SOURCE,
@@ -566,5 +579,32 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
     expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
+  })
+
+  it('gates per-workspace environment recipe discovery behind the experimental setting', () => {
+    const recipeLoadSection = sourceBetween(
+      HOOK_SOURCE,
+      'const ephemeralVmsEnabled',
+      'const selectedRepoConnectionId'
+    )
+    expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
+    expect(recipeLoadSection).toContain('!ephemeralVmsEnabled')
+    expect(recipeLoadSection).toContain('window.api.ephemeralVm')
+
+    const submitSection = sourceBetween(
+      HOOK_SOURCE,
+      'let ephemeralVmRecipe',
+      'const request: WorktreeCreationRequest'
+    )
+    expect(submitSection).toContain(
+      'const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null'
+    )
+    expect(submitSection).toContain('recipeId: activeEphemeralVmRecipeId')
+
+    const cardPropsSection = sourceBetween(HOOK_SOURCE, 'const cardProps', 'return {')
+    expect(cardPropsSection).toContain('ephemeralVmRecipes:')
+    expect(cardPropsSection).toContain('!ephemeralVmsEnabled')
+    expect(cardPropsSection).toContain('selectedEphemeralVmRecipeId:')
+    expect(cardPropsSection).toContain('ephemeralVmRecipeError:')
   })
 })

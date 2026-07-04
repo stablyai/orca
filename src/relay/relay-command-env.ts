@@ -1,5 +1,5 @@
-import { homedir } from 'os'
-import { posix, win32 } from 'path'
+import { homedir } from 'node:os'
+import { posix, win32 } from 'node:path'
 
 const POSIX_RELAY_PATH_FALLBACKS = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin']
 const WINDOWS_RELAY_PATH_FALLBACKS = [

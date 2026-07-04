@@ -1,4 +1,4 @@
-import { win32 as pathWin32 } from 'path'
+import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import type { WindowsShellWslContext } from './windows-shell-args'
 import {

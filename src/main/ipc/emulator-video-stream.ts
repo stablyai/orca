@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
 

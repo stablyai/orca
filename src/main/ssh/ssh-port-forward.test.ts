@@ -1,5 +1,5 @@
-import { EventEmitter } from 'events'
-import { createServer } from 'net'
+import { EventEmitter } from 'node:events'
+import { createServer } from 'node:net'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPortForwardManager } from './ssh-port-forward'
 
@@ -42,6 +42,7 @@ function createSystemSshConn() {
   return {
     getClient: vi.fn().mockReturnValue(null),
     usesSystemSshTransport: vi.fn().mockReturnValue(true),
+    getSystemSshResolvedConfig: vi.fn().mockReturnValue(null),
     getTarget: vi.fn().mockReturnValue({
       id: 'target-1',
       label: 'container',
@@ -162,6 +163,38 @@ describe('SshPortForwardManager', () => {
       remotePort: 8080
     })
     expect(manager.listForwards('conn-1')).toHaveLength(1)
+  })
+
+  it('passes resolved OpenSSH config to system SSH port forwards', async () => {
+    const forward = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
+    const conn = createSystemSshConn()
+    conn.getSystemSshResolvedConfig.mockReturnValue({
+      hostname: 'resolved.example.com',
+      port: 2222,
+      user: 'vscode',
+      identityFile: ['/home/user/.ssh/work'],
+      forwardAgent: false,
+      identitiesOnly: true,
+      proxyUseFdpass: true,
+      controlMaster: 'no',
+      controlPersist: 'no'
+    })
+
+    await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+
+    expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledWith(
+      conn.getTarget(),
+      3000,
+      '127.0.0.1',
+      8080,
+      {
+        resolvedConfig: expect.objectContaining({
+          hostname: 'resolved.example.com',
+          proxyUseFdpass: true
+        })
+      }
+    )
   })
 
   it('does not register a system SSH forward when startup fails', async () => {

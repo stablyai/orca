@@ -36,6 +36,7 @@ export type WindowShortcutAction =
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
+  | { type: 'toggleQuickCommandsMenu' }
   | { type: 'openNewWorkspace' }
   | { type: 'deleteCurrentWorkspace' }
   | { type: 'openWorkspaceBoard' }
@@ -130,6 +131,38 @@ function actionMatches(
   options: WindowShortcutResolveOptions
 ): boolean {
   return keybindingMatchesAction(actionId, input, platform, keybindings, options)
+}
+
+export function nativeZoomCommandMatchesKeybindings(
+  direction: 'in' | 'out',
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): boolean {
+  const primary =
+    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
+  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
+  const candidates =
+    direction === 'in'
+      ? [
+          { key: '=', code: 'Equal', shift: false },
+          { key: '+', code: 'Equal', shift: true },
+          { key: 'Add', code: 'NumpadAdd', shift: false }
+        ]
+      : [
+          { key: '-', code: 'Minus', shift: false },
+          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
+        ]
+
+  return candidates.some((candidate) =>
+    keybindingMatchesAction(
+      actionId,
+      { ...primary, alt: false, ...candidate },
+      platform,
+      keybindings,
+      options
+    )
+  )
 }
 
 export function resolveWindowShortcutAction(
@@ -248,6 +281,10 @@ export function resolveWindowShortcutAction(
     return { type: 'jumpToTabIndex', index: tabIndex }
   }
 
+  if (actionMatches('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
+    return { type: 'toggleQuickCommandsMenu' }
+  }
+
   // Why: this helper is the explicit allowlist for main-process interception.
   // Anything not listed here must keep flowing to the renderer/PTTY so readline
   // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen while
@@ -277,6 +314,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'sidebar.right.toggle'
     case 'openQuickOpen':
       return 'worktree.quickOpen'
+    case 'toggleQuickCommandsMenu':
+      return 'tab.openQuickCommandsMenu'
     case 'openNewWorkspace':
       return 'workspace.create'
     case 'deleteCurrentWorkspace':

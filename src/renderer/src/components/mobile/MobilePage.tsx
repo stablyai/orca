@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { type PairedDevice, type Platform, type StepIndex } from './MobileHero'
+import type { PairedDevice, Platform, StepIndex } from './MobileHero'
 import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import {
   selectRefreshedNetworkAddress,

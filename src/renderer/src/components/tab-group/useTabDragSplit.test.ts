@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import type { TabDragItemData } from './useTabDragSplit'
+import { shouldActivateTabDragFromDistanceSample } from './tab-drag-pointer-sensor'
 import {
   canDropTabForPaneColumnSplit,
   canDropTabIntoPaneBody,
@@ -192,6 +193,27 @@ describe('tab drag activation distance', () => {
   it('uses an impossible activation distance when tab dragging is disabled', () => {
     expect(getTabDragActivationDistance(false)).toBe(Number.MAX_SAFE_INTEGER)
   })
+
+  it('requires confirmation for an immediate over-threshold distance sample', () => {
+    expect(
+      shouldActivateTabDragFromDistanceSample({
+        elapsedMs: 10,
+        overThresholdSampleCount: 1
+      })
+    ).toBe(false)
+    expect(
+      shouldActivateTabDragFromDistanceSample({
+        elapsedMs: 10,
+        overThresholdSampleCount: 2
+      })
+    ).toBe(true)
+    expect(
+      shouldActivateTabDragFromDistanceSample({
+        elapsedMs: 60,
+        overThresholdSampleCount: 1
+      })
+    ).toBe(true)
+  })
 })
 
 describe('canDropTabIntoPaneBody', () => {
@@ -245,7 +267,7 @@ describe('canDropTabIntoPaneBody', () => {
 })
 
 describe('useTabDragSplit', () => {
-  it.each(['pointerup', 'pointercancel', 'blur'])(
+  it.each(['pointerup', 'pointercancel', 'blur', 'focus'])(
     'clears a stuck active drag when %s arrives without a dnd end event',
     async (eventName) => {
       const activeData = makeDragData('group-1')

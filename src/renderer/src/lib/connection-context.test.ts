@@ -8,6 +8,7 @@ import {
   getConnectionIdFromState,
   isWorktreeConnectionResolved
 } from './connection-context'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 const initialState = useAppStore.getInitialState()
@@ -340,6 +341,14 @@ describe('getConnectionId', () => {
     expect(isWorktreeConnectionResolved(null)).toBe(true)
     // Folder workspaces resolve per-file via getConnectionIdForFile.
     expect(isWorktreeConnectionResolved(folderWorkspaceKey('folder-workspace-1'))).toBe(true)
+  })
+
+  it('treats the floating workspace as a resolved local owner (#6831)', () => {
+    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+
+    expect(getConnectionId(FLOATING_TERMINAL_WORKTREE_ID)).toBeNull()
+    expect(getConnectionIdForFile(FLOATING_TERMINAL_WORKTREE_ID, '/tmp/orca/note.md')).toBeNull()
+    expect(isWorktreeConnectionResolved(FLOATING_TERMINAL_WORKTREE_ID)).toBe(true)
   })
 
   it('keeps normalized same-path folder repo ambiguity when resolving files', () => {

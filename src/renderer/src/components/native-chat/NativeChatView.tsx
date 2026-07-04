@@ -4,7 +4,6 @@ import { useAppStore } from '../../store'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import type { TuiAgent } from '../../../../shared/types'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
-import { resolveNativeChatSession } from './native-chat-pane-resolution'
 import { useNativeChatLiveSession } from './use-native-chat-live-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
@@ -13,6 +12,7 @@ import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
+import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
 import {
@@ -43,6 +43,12 @@ import {
 } from './native-chat-typing-redirect'
 import { useNativeChatContextMenu } from './use-native-chat-context-menu'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
+import {
+  resolveNativeChatFileLink,
+  resolveNativeChatFileLinkContext
+} from './native-chat-file-link'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
 
 const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
   onSplitRight: () => {},
@@ -69,6 +75,8 @@ export type NativeChatViewProps = {
   targetPtyId?: string | null
   /** Launch-time agent hint from the TerminalTab, when Orca started one. */
   launchAgent?: TuiAgent | null
+  /** Trusted title/foreground fallback for manually-started agents. */
+  resolvedAgent?: TuiAgent | null
   /** Return this pane to the hosted terminal surface. */
   onSwitchToTerminal?: () => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
@@ -87,6 +95,7 @@ export default function NativeChatView({
   paneKey: preferredPaneKey,
   targetPtyId = null,
   launchAgent,
+  resolvedAgent,
   onSwitchToTerminal,
   contextMenuActions
 }: NativeChatViewProps): React.JSX.Element {
@@ -100,33 +109,30 @@ export default function NativeChatView({
     )
   )
 
-  const resolution = useMemo(() => {
-    // paneKey: prefer the live entry's key; fall back to the tab id so the hook
-    // still has a stable key to select live status by before any pane reports.
-    const paneKey = preferredPaneKey ?? agentStatusEntry?.paneKey ?? `${terminalTabId}:`
-    return resolveNativeChatSession({
-      paneKey,
-      launchAgent,
-      ...(agentStatusEntry ? { agentStatusEntry } : {}),
-      ptyId: targetPtyId
-    })
-  }, [agentStatusEntry, terminalTabId, preferredPaneKey, targetPtyId, launchAgent])
-
-  if (!resolution) {
-    return <NativeChatEmptyState kind="not-agent" />
-  }
-
+  // paneKey: prefer the live entry's key; fall back to the tab id so the hook
+  // still has a stable key to select live status by before any pane reports.
+  const paneKey = preferredPaneKey ?? agentStatusEntry?.paneKey ?? `${terminalTabId}:`
   return (
-    <NativeChatResolvedView
-      paneKey={resolution.paneKey}
-      agent={resolution.agent}
-      sessionId={resolution.sessionId}
-      transcriptPath={resolution.transcriptPath}
-      targetPtyId={targetPtyId}
-      terminalTabId={terminalTabId}
-      onSwitchToTerminal={onSwitchToTerminal}
-      contextMenuActions={contextMenuActions}
-    />
+    <NativeChatSessionGate
+      paneKey={paneKey}
+      launchAgent={launchAgent}
+      resolvedAgent={resolvedAgent}
+      agentStatusEntry={agentStatusEntry}
+      ptyId={targetPtyId}
+    >
+      {(resolution) => (
+        <NativeChatResolvedView
+          paneKey={resolution.paneKey}
+          agent={resolution.agent}
+          sessionId={resolution.sessionId}
+          transcriptPath={resolution.transcriptPath}
+          targetPtyId={targetPtyId}
+          terminalTabId={terminalTabId}
+          onSwitchToTerminal={onSwitchToTerminal}
+          contextMenuActions={contextMenuActions}
+        />
+      )}
+    </NativeChatSessionGate>
   )
 }
 
@@ -164,6 +170,9 @@ function NativeChatResolvedView({
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+  const fileLinkContext = useAppStore(
+    useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
+  )
   // Delegate to the composer so a pane-level Cmd/Ctrl+V (or context-menu /
   // app-menu paste) attaches a clipboard image when present, falling back to
   // text — matching the textarea's own paste behavior and the hosted TUI.
@@ -338,6 +347,24 @@ function NativeChatResolvedView({
     setWorkingInterrupted(true)
     interactiveSend.cancel()
   }, [interactiveSend])
+  const openNativeChatFileLink = useCallback<CommentMarkdownLinkClickHandler>(
+    (event, href) => {
+      const target = resolveNativeChatFileLink(href, fileLinkContext)
+      if (!target || !fileLinkContext) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      openDetectedFilePath(target.absolutePath, target.line, target.column, {
+        worktreeId: fileLinkContext.worktreeId,
+        worktreePath: fileLinkContext.worktreePath,
+        runtimeEnvironmentId: fileLinkContext.runtimeEnvironmentId,
+        openWithSystemDefault: event.shiftKey
+      })
+    },
+    [fileLinkContext]
+  )
+  const nativeChatFileLinkClick = fileLinkContext ? openNativeChatFileLink : undefined
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
@@ -393,6 +420,8 @@ function NativeChatResolvedView({
             isWorking={isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
+            onLinkClick={nativeChatFileLinkClick}
+            allowFileUriLinks={fileLinkContext !== null}
           />
         )}
       </div>

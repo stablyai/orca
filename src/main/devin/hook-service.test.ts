@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -64,6 +64,11 @@ describe('DevinHookService', () => {
     }
     const script = readFileSync(getDevinManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/devin')
+    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+    // on the curl command line (EDR oversized-command-line false positive).
+    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
   })
 
   it('preserves unrelated keys in Devin config when installing hooks', () => {

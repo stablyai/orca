@@ -4,6 +4,7 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { basename } from '@/lib/path'
 import { IDLE, buildAttentionByWorktree, type WorktreeAttention } from './smart-attention'
 
 export type SortBy = 'name' | 'smart' | 'recent' | 'repo' | 'manual'
@@ -40,6 +41,27 @@ export function effectiveRecentActivity(worktree: Worktree, now: number): number
   return Math.max(lastActivityAt, createdAt + CREATE_GRACE_MS)
 }
 
+type WorktreeSortLabelInput = Pick<Worktree, 'displayName' | 'path' | 'id'>
+
+export function getWorktreeSortLabel(worktree: WorktreeSortLabelInput): string {
+  const displayName = typeof worktree.displayName === 'string' ? worktree.displayName.trim() : ''
+  if (displayName) {
+    return displayName
+  }
+
+  // Why: persisted or remote worktree state can briefly omit displayName after
+  // a custom workspace name is removed; sorting must stay render-safe.
+  const pathLabel = typeof worktree.path === 'string' ? basename(worktree.path).trim() : ''
+  return pathLabel || worktree.id
+}
+
+export function compareWorktreeSortLabel(
+  a: WorktreeSortLabelInput,
+  b: WorktreeSortLabelInput
+): number {
+  return getWorktreeSortLabel(a).localeCompare(getWorktreeSortLabel(b))
+}
+
 /**
  * Build a comparator for sorting worktrees based on the current sort mode.
  *
@@ -58,7 +80,7 @@ export function buildWorktreeComparator(
   return (a, b) => {
     switch (sortBy) {
       case 'name':
-        return a.displayName.localeCompare(b.displayName)
+        return compareWorktreeSortLabel(a, b)
       case 'smart': {
         const aw = attentionByWorktree.get(a.id) ?? IDLE
         const bw = attentionByWorktree.get(b.id) ?? IDLE
@@ -70,7 +92,7 @@ export function buildWorktreeComparator(
           // Why: idle worktrees fall through to recency (and the create-grace
           // floor for brand-new worktrees) before alphabetical.
           effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now) ||
-          a.displayName.localeCompare(b.displayName)
+          compareWorktreeSortLabel(a, b)
         )
       }
       case 'recent':
@@ -87,13 +109,13 @@ export function buildWorktreeComparator(
         // events) and by meaningful meta edits (comment, isUnread).
         return (
           effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now) ||
-          a.displayName.localeCompare(b.displayName)
+          compareWorktreeSortLabel(a, b)
         )
       case 'repo': {
         const ra = repoMap.get(a.repoId)?.displayName ?? ''
         const rb = repoMap.get(b.repoId)?.displayName ?? ''
         const cmp = ra.localeCompare(rb)
-        return cmp !== 0 ? cmp : a.displayName.localeCompare(b.displayName)
+        return cmp !== 0 ? cmp : compareWorktreeSortLabel(a, b)
       }
       case 'manual':
         // Why fallback to sortOrder: existing users have a persisted smart-sort
@@ -101,7 +123,7 @@ export function buildWorktreeComparator(
         // restored order instead of alphabetizing every legacy workspace.
         return (
           (b.manualOrder ?? b.sortOrder) - (a.manualOrder ?? a.sortOrder) ||
-          a.displayName.localeCompare(b.displayName)
+          compareWorktreeSortLabel(a, b)
         )
     }
   }
@@ -143,7 +165,7 @@ export function sortWorktreesSmart(
     // Cold start: use persisted sortOrder snapshot until the agent-status
     // snapshot lands and a warm sort runs.
     return [...worktrees].sort(
-      (a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
+      (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b)
     )
   }
 

@@ -8,9 +8,9 @@
 // cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
-import { posix, win32 } from 'path'
-import { existsSync } from 'fs'
-import { randomUUID } from 'crypto'
+import { posix, win32 } from 'node:path'
+import { existsSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import type {
   AutomationWorkspaceProvenance,
@@ -27,7 +27,8 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import { getGitUsername, getBranchConflictKind, resolveDefaultBaseRefViaExec } from '../git/repo'
+import { getBranchConflictKind, resolveDefaultBaseRefViaExec } from '../git/repo'
+import { resolveLocalGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
@@ -117,6 +118,9 @@ import {
 
 const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
 const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
+// Why: bound the create-path fallback `git fetch origin` so a Windows
+// credential-manager GUI hang (STA-1292) can't wedge worktree creation forever.
+const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
 const sshWorktreeCreateFetchInflight = new Map<string, Promise<void>>()
 const sshWorktreeCreateFetchCompletedAt = new Map<string, number>()
 const sshWorktreeCreateFetchQueueTail = new Map<string, Promise<void>>()
@@ -620,6 +624,26 @@ function hasRemoteCommitObject(
   ref: string
 ): Promise<boolean> {
   return hasCommitObjectViaGitExec((gitArgs) => provider.exec(gitArgs, repoPath), ref)
+}
+
+// Why: hasRemoteCommitObject only resolves full SHAs; a remote-tracking base is
+// a symbolic ref (refs/remotes/origin/main), so detect its presence directly so
+// SSH creates can fall back to an existing local base ref when the refresh
+// fetch fails. Require a resolved object id: a missing ref exits non-zero.
+async function hasRemoteTrackingRefSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  ref: string
+): Promise<boolean> {
+  try {
+    const { stdout } = await provider.exec(
+      ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`],
+      repoPath
+    )
+    return stdout.trim().length > 0
+  } catch {
+    return false
+  }
 }
 
 async function canCheckoutExistingLocalBranchSsh(
@@ -1272,10 +1296,7 @@ export async function prefetchRemoteWorktreeCreateBase(
 
   // Why: mirrors createRemoteWorktree's legacy local-base fallback so
   // prefetch and create share one process-local SSH fetch cache.
-  const fallbackRemote = basePlan.baseBranch.includes('/')
-    ? basePlan.baseBranch.split('/')[0]
-    : 'origin'
-  await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
+  await fetchRemoteForWorktreeCreate(provider, repo, 'origin')
 }
 
 async function refreshLocalBaseRefForRemoteWorktreeCreate(
@@ -1454,6 +1475,7 @@ export async function createRemoteWorktree(
   // commit author identity rather than hosted-account usernames.
   const username = await getSshGitUsername(provider, repo.path)
 
+  const branchConflictSubject = args.branchNameOverride ? 'branch name' : 'worktree name'
   // Determine base branch
   // Why: previously fell back to a hardcoded 'origin/main' when
   // symbolic-ref failed. That silently handed addWorktree a ref that may
@@ -1533,7 +1555,7 @@ export async function createRemoteWorktree(
   if (!remotePathResolved) {
     if (lastBranchConflictKind) {
       throw new Error(
-        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different worktree name.`
+        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
       )
     }
     throw new Error(
@@ -1572,33 +1594,14 @@ export async function createRemoteWorktree(
     }
   }
 
-  if (remoteTrackingBase) {
-    try {
-      await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, remoteTrackingBase)
-    } catch {
-      throw new Error(
-        `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
-      )
-    }
-  } else if (!(await hasRemoteCommitObject(provider, repo.path, baseBranch))) {
-    // Why: local or otherwise non-remote-tracking bases preserve legacy
-    // best-effort fetch behavior. Verified PR/MR SHA bases already have the
-    // commit object locally, so a broad remote fetch only updates unrelated refs.
-    const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-    try {
-      await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
-    } catch {
-      /* best-effort */
-    }
-  }
-
   const mux = getActiveMultiplexer(repo.connectionId!)
   if (!mux) {
     throw new Error('SSH connection is not available. Please reconnect and try again.')
   }
-  // Why: register before the local-base advisory probe as well as addWorktree.
-  // Fresh/older relays may gate generic git.exec calls on registered roots; if
-  // the probe runs first it degrades to "no suggestion" even though create works.
+  // Why: register before any generic git.exec probe (base-ref existence, the
+  // local-base advisory) as well as addWorktree. Fresh/older relays may gate
+  // generic git.exec on registered roots; probing first would falsely report a
+  // ref missing (and defeat the offline fallback below) even though create works.
   try {
     await Promise.all([
       mux.request('session.registerRoot', { rootPath: repo.path }),
@@ -1610,6 +1613,34 @@ export async function createRemoteWorktree(
       mux.notify('session.registerRoot', { rootPath: remotePath })
     } else {
       throw err
+    }
+  }
+
+  if (remoteTrackingBase) {
+    try {
+      await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, remoteTrackingBase)
+    } catch {
+      // Why: a failed refresh must not block creation when a usable local base
+      // ref already exists — `git worktree add` can still create from that
+      // (possibly stale but valid) ref, so a transient offline/auth failure does
+      // not make the workspace uncreatable. Probe AFTER registerRoot so relays
+      // that gate generic git.exec accept it; only hard-fail when there is no
+      // local ref to fall back on. Drift is reflected by the compare-to-base
+      // view once the remote is reachable again.
+      if (!(await hasRemoteTrackingRefSsh(provider, repo.path, remoteTrackingBase.ref))) {
+        throw new Error(
+          `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
+        )
+      }
+    }
+  } else if (!(await hasRemoteCommitObject(provider, repo.path, baseBranch))) {
+    // Why: local or otherwise non-remote-tracking bases preserve legacy
+    // best-effort fetch behavior. Verified PR/MR SHA bases already have the
+    // commit object locally, so a broad remote fetch only updates unrelated refs.
+    try {
+      await fetchRemoteForWorktreeCreate(provider, repo, 'origin')
+    } catch {
+      /* best-effort */
     }
   }
 
@@ -1876,7 +1907,7 @@ export async function createLocalWorktree(
     return { ...options, ...localWorktreeGitOptions }
   }
 
-  const username = getGitUsername(repo.path)
+  const username = await resolveLocalGitUsername(repo.path)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const requestedDisplayName = args.displayName
@@ -1938,17 +1969,18 @@ export async function createLocalWorktree(
       // (e.g. plain `main`, `master`, or any local branch), the legacy path
       // still ran a best-effort `git fetch origin`. Verified PR SHA bases
       // already have the needed commit object, so skip that broad fetch.
-      const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       legacyFetchPromise = runtime
-        .fetchRemoteWithCache(repo.path, fallbackRemote, ...localWorktreeGitOptionArgs)
+        .fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
     if (!(await hasLocalCommitObjectWithOptions(repo.path, baseBranch, localWorktreeGitOptions))) {
-      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-      legacyFetchPromise = gitExecFileAsync(['fetch', remote], localGitExecOptions)
+      legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], {
+        ...localGitExecOptions,
+        timeout: CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS
+      })
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
@@ -1994,6 +2026,7 @@ export async function createLocalWorktree(
   let branchName = ''
   let worktreePath = ''
 
+  const branchConflictSubject = args.branchNameOverride ? 'branch name' : 'worktree name'
   let resolved = false
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
@@ -2116,12 +2149,12 @@ export async function createLocalWorktree(
     // failed instead of a generic error or (worse) an infinite spinner.
     if (lastExistingReviewNumber !== null) {
       throw new Error(
-        `Branch "${branchName}" already has PR #${lastExistingReviewNumber}. Pick a different worktree name.`
+        `Branch "${branchName}" already has PR #${lastExistingReviewNumber}. Pick a different ${branchConflictSubject}.`
       )
     }
     if (lastBranchConflictKind) {
       throw new Error(
-        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different worktree name.`
+        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
       )
     }
     throw new Error(
@@ -2138,7 +2171,13 @@ export async function createLocalWorktree(
   if (remoteTrackingRefresh) {
     await timing.time('refresh_base_ref', async () => {
       const result = await remoteTrackingRefresh.promise
-      if (!result.ok) {
+      if (!result.ok && !remoteTrackingRefresh.hadLocalBaseRef) {
+        // Why: only block creation when the refresh failed AND there is no local
+        // base ref to fall back on. An existing local remote-tracking ref lets
+        // `git worktree add` proceed from a possibly stale but valid base, so a
+        // transient offline/auth failure must not make the workspace
+        // uncreatable. The compare-to-base view reflects any drift once the
+        // remote is reachable again.
         throw new Error(
           `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}". Check your network and try again.`
         )

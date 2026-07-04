@@ -1,6 +1,9 @@
+// @vitest-environment happy-dom
+
+import { act, type ReactNode } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
 
 const mocks = vi.hoisted(() => ({
@@ -20,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 let updateStatus = { state: 'idle' } as const
+const roots: Root[] = []
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -96,9 +100,48 @@ vi.mock('./SidebarFeedbackDialog', () => ({
   SidebarFeedbackDialog: () => <div data-testid="feedback-dialog" />
 }))
 
+function installWindowApi(): void {
+  Object.assign(window, {
+    api: {
+      app: {
+        restart: mocks.appRestart
+      },
+      shell: {
+        openUrl: mocks.shellOpenUrl
+      },
+      updater: {
+        check: mocks.updaterCheck
+      }
+    }
+  })
+}
+
+async function renderMenu(): Promise<HTMLDivElement> {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  roots.push(root)
+
+  await act(async () => {
+    root.render(<SidebarSettingsHelpMenu />)
+  })
+
+  return container
+}
+
+function findMenuItem(container: HTMLElement, label: string): HTMLButtonElement {
+  const button = Array.from(
+    container.querySelectorAll<HTMLButtonElement>('[data-testid="menu-item"]')
+  ).find((element) => element.textContent?.includes(label))
+  expect(button).toBeDefined()
+  return button as HTMLButtonElement
+}
+
 describe('SidebarSettingsHelpMenu', () => {
   beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.clearAllMocks()
+    installWindowApi()
     mocks.useShortcutKeyDetails.mockReturnValue({ keys: ['⌘', ','], doubleTap: false })
     updateStatus = { state: 'idle' }
     mocks.setupProgress = {
@@ -107,6 +150,13 @@ describe('SidebarSettingsHelpMenu', () => {
       coreTotal: 5,
       stepDone: {}
     }
+  })
+
+  afterEach(() => {
+    roots.splice(0).forEach((root) => {
+      act(() => root.unmount())
+    })
+    document.body.replaceChildren()
   })
 
   it('renders the help button with correct aria-label', () => {
@@ -177,6 +227,19 @@ describe('SidebarSettingsHelpMenu', () => {
   it('renders Discord link', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('Discord')
+    expect(html).toContain('viewBox="0 0 20 20"')
+    expect(html).toContain('M16.0742 4.45014C14.9244 3.92097 13.7106 3.54556 12.4638 3.3335')
+  })
+
+  it('opens Discord invite through the shell bridge', async () => {
+    const container = await renderMenu()
+    const discordButton = findMenuItem(container, 'Discord')
+
+    await act(async () => {
+      discordButton.click()
+    })
+
+    expect(mocks.shellOpenUrl).toHaveBeenCalledWith('https://discord.gg/fzjDKHxv8Q')
   })
 
   it('renders X link', () => {

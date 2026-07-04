@@ -1,8 +1,9 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join, resolve } from 'path'
+import type * as GitUsernameModule from '../git/git-username'
+import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { CreateWorktreeResult, GitWorktreeInfo, Worktree } from '../../shared/types'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -24,7 +25,7 @@ const {
   addSparseWorktreeMock,
   removeWorktreeMock,
   forceDeleteLocalBranchMock,
-  getGitUsernameMock,
+  resolveLocalGitUsernameMock,
   getDefaultBaseRefMock,
   resolveDefaultBaseRefViaExecMock,
   getDefaultRemoteMock,
@@ -73,7 +74,7 @@ const {
   addSparseWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
   forceDeleteLocalBranchMock: vi.fn(),
-  getGitUsernameMock: vi.fn(),
+  resolveLocalGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
   resolveDefaultBaseRefViaExecMock: vi.fn(),
   getDefaultRemoteMock: vi.fn(),
@@ -127,12 +128,16 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../git/repo', () => ({
-  getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getDefaultRemote: getDefaultRemoteMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
+
+vi.mock('../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+  return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
+})
 
 vi.mock('../github/client', () => ({
   getPRForBranch: getPRForBranchMock,
@@ -286,7 +291,7 @@ describe('registerWorktreeHandlers', () => {
       addSparseWorktreeMock,
       removeWorktreeMock,
       forceDeleteLocalBranchMock,
-      getGitUsernameMock,
+      resolveLocalGitUsernameMock,
       getDefaultBaseRefMock,
       resolveDefaultBaseRefViaExecMock,
       getDefaultRemoteMock,
@@ -386,7 +391,7 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
     store.getAllWorktreeLineage.mockReturnValue({})
-    getGitUsernameMock.mockReturnValue('')
+    resolveLocalGitUsernameMock.mockResolvedValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
     resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getDefaultRemoteMock.mockResolvedValue('origin')
@@ -521,6 +526,19 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
+  it('prefetches origin for local branch bases containing slashes', async () => {
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-1',
+      baseBranch: 'Jinwoo-H/vm-improve-2'
+    })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalledWith('/workspace/repo', 'Jinwoo-H')
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
   it('does not prefetch the whole remote for an existing commit SHA base', async () => {
     const sha = 'a'.repeat(40)
 
@@ -597,6 +615,30 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(addWorktreeMock).toHaveBeenCalled()
+  })
+
+  it('fetches origin when creating from a local branch base containing slashes', async () => {
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/slash-base',
+        head: 'created-sha',
+        branch: 'refs/heads/slash-base',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'slash-base',
+      baseBranch: 'Jinwoo-H/vm-improve-2',
+      branchNameOverride: 'slash-base'
+    })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalledWith('/workspace/repo', 'Jinwoo-H')
     expect(addWorktreeMock).toHaveBeenCalled()
   })
 
@@ -3626,7 +3668,7 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('does not create an SSH worktree when remote-tracking base refresh fails', async () => {
+  it('does not create an SSH worktree when the refresh fails and no local base ref exists', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -3637,6 +3679,7 @@ describe('registerWorktreeHandlers', () => {
       worktreeBaseRef: 'origin/main'
     }
     const provider = {
+      // Empty rev-parse stdout -> no local remote-tracking base ref to fall back on.
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
@@ -3675,6 +3718,70 @@ describe('registerWorktreeHandlers', () => {
       'main',
       'refs/remotes/origin/main'
     )
+  })
+
+  it('creates an SSH worktree from an existing local base ref when the refresh fails', async () => {
+    // Regression: a failed SSH refresh must fall back to an existing local
+    // remote-tracking base ref instead of blocking creation.
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        // Local remote-tracking base ref resolves -> usable fallback exists.
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
+          return { stdout: `${'a'.repeat(40)}\n`, stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockRejectedValue(new Error('network unavailable')),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/improve-dashboard',
+            head: 'abc123',
+            branch: 'refs/heads/improve-dashboard',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })
+
+    // The refresh must be ATTEMPTED (and fail) before falling back — guards
+    // against a regression that skips the refresh whenever a local ref exists.
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      '/remote/repo',
+      'origin',
+      'main',
+      'refs/remotes/origin/main'
+    )
+    expect(provider.addWorktree).toHaveBeenCalled()
   })
 
   it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
@@ -4163,7 +4270,9 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('does not create when the pre-create remote-tracking refresh fails', async () => {
+  it('creates from an existing local base ref when the pre-create refresh fails', async () => {
+    // Regression: a failed refresh must not block creation when a usable local
+    // remote-tracking base ref already exists.
     const remoteBase = {
       remote: 'origin',
       branch: 'main',
@@ -4172,6 +4281,39 @@ describe('registerWorktreeHandlers', () => {
     }
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
+    runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({
+      ok: false,
+      errorKind: 'git_error'
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'created-sha',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'created-sha\n', stderr: '' })
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })) as CreateWorktreeResult
+
+    expect(addWorktreeMock).toHaveBeenCalled()
+    expect(result.worktree.id).toBe('repo-1::/workspace/improve-dashboard')
+  })
+
+  it('does not create when the pre-create refresh fails and no local base ref exists', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(false)
     runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({
       ok: false,
       errorKind: 'git_error'

@@ -13,6 +13,10 @@ import {
   type MobileDiffReviewQueueItem
 } from './mobile-diff-review-queue'
 import {
+  findMobileDiffReviewInitialIndex,
+  type MobileDiffReviewInitialTarget
+} from './mobile-diff-review-positioning'
+import {
   loadMobileDiffReviewDiff,
   loadMobileDiffReviewSnapshot
 } from './mobile-diff-review-loaders'
@@ -34,15 +38,27 @@ type ControllerInput = {
   worktreeId: string
   name: string
   initialFilter: MobileDiffReviewQueueFilter
+  initialTarget: MobileDiffReviewInitialTarget | null
   onOpenSession: () => void
   onReconnect: (hostId: string) => void | Promise<void>
 }
 
 export function useMobileDiffReviewController(input: ControllerInput) {
-  const { client, connState, hostId, worktreeId, name, initialFilter, onOpenSession, onReconnect } =
-    input
+  const {
+    client,
+    connState,
+    hostId,
+    worktreeId,
+    name,
+    initialFilter,
+    initialTarget,
+    onOpenSession,
+    onReconnect
+  } = input
   const listRef = useRef<FlatList<ReviewDiffLine> | null>(null)
   const loadGenerationRef = useRef(0)
+  const seededInitialTargetRef = useRef(false)
+  const initialTargetKey = initialTarget ? `${initialTarget.area}\0${initialTarget.filePath}` : ''
   const [screenState, setScreenState] = useState<ReviewScreenState>({ kind: 'loading' })
   const [diffState, setDiffState] = useState<ReviewDiffState>({ kind: 'idle' })
   const [filter, setFilter] = useState<MobileDiffReviewQueueFilter>(initialFilter)
@@ -119,6 +135,20 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const reviewedUnstagedCount = queue.filter(
     (item) => item.scope === 'unstaged' && item.isReviewed && item.canStage
   ).length
+
+  useEffect(() => {
+    seededInitialTargetRef.current = false
+  }, [initialTargetKey])
+
+  useEffect(() => {
+    if (seededInitialTargetRef.current || filteredQueue.length === 0) {
+      return
+    }
+    seededInitialTargetRef.current = true
+    // Why: review data loads asynchronously; seed the tapped file only after the
+    // first real queue exists so the clamp effect cannot reset it back to zero.
+    setCurrentIndex(findMobileDiffReviewInitialIndex(filteredQueue, initialTarget))
+  }, [filteredQueue, initialTarget])
 
   useEffect(() => {
     if (filteredQueue.length === 0) {

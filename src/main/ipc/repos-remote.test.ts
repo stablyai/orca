@@ -4,11 +4,11 @@ fixture setup and mock plumbing can be shared. Splitting by line count would
 duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
 setup. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { EventEmitter } from 'events'
-import { existsSync } from 'fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { EventEmitter } from 'node:events'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
@@ -94,7 +94,6 @@ vi.mock('../git/repo', async () => {
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo: vi.fn().mockReturnValue(true),
     getGitRepoRoot: vi.fn((path: string) => path),
-    getGitUsername: vi.fn().mockReturnValue(''),
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
     getRemoteCount: vi.fn().mockResolvedValue(1),

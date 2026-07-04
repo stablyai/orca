@@ -1,12 +1,13 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
-import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
+import { resetAndRefreshAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import {
   flushTerminalOutput,
   requestTerminalBacklogRecovery
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
+import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -61,6 +62,7 @@ export function resumeTerminalVisibility({
       // overlay's delayed geometry fit. Still request hidden-output recovery:
       // agent TUIs can suppress hidden bytes until the pane is foregrounded.
       requestLightTabBacklogRecovery(manager)
+      scheduleTerminalWebglAtlasRecovery()
       if (isActive) {
         focusActivePane(manager)
       }
@@ -70,9 +72,13 @@ export function resumeTerminalVisibility({
     enforceTerminalViewportIntents(manager)
     if (!shouldUseLightTabResume) {
       // Why: this clear wipes the glyph atlas shared with other same-config
-      // terminals; the global reset rebuilds their render models too.
-      resetAllTerminalWebglAtlases()
+      // terminals; refresh after reset so rebuilt atlases repaint from xterm.
+      resetAndRefreshAllTerminalWebglAtlases()
     }
+    // Why: the synchronous recovery above can fire before the revealed pane is
+    // attached and laid out, where the WebGL renderer drops redraw requests
+    // without retry. Follow up with a settled-frame, pane-scoped repaint.
+    manager.scheduleRevealRepaint()
   })
 }
 
@@ -91,9 +97,8 @@ export function hideTerminalVisibility({
     captureViewportPositions(false)
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
-    // Suspend WebGL when going hidden. xterm.write() continues to land in
-    // the (now DOM-renderer-fallback or paused-canvas) terminal; the
-    // suspend is purely a GPU resource decision.
+    // Suspend WebGL when going hidden. xterm.write() continues to land in the
+    // DOM-renderer fallback terminal; the suspend is purely a GPU resource decision.
     manager.suspendRendering()
     return { hiddenReason: 'surface', renderingSuspended: true }
   }
@@ -130,8 +135,8 @@ export function recoverVisibleTerminalWindowWake({
     fitPanes(manager)
   }
   enforceTerminalViewportIntents(manager)
-  resetAllTerminalWebglAtlases()
-  manager.refreshAllPanes?.()
+  resetAndRefreshAllTerminalWebglAtlases()
+  manager.scheduleRevealRepaint()
 }
 
 function requestLightTabBacklogRecovery(manager: PaneManager): void {

@@ -15,6 +15,7 @@ import type {
   RemoveWorktreeResult,
   WorktreeLineage,
   WorkspaceLineage,
+  ProjectHostSetup,
   WorktreeMeta
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
@@ -26,10 +27,12 @@ import {
 } from './worktree-helpers'
 import { findRepoForHost } from './repo-host-identity'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
+  isRuntimeScopeForbiddenError,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
@@ -50,6 +53,7 @@ import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -68,7 +72,10 @@ const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
 const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
-const WORKTREE_REFRESH_CONCURRENCY = 5
+// Why: each repo's `git worktree list` is an independent main-process child, so
+// a higher ceiling cuts startup scan batches (#7225) while staying bounded so
+// one UI moment can't launch every git probe at once.
+export const WORKTREE_REFRESH_CONCURRENCY = 8
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
@@ -322,11 +329,25 @@ function toVisibleWorktree(worktree: DetectedWorktreeListResult['worktrees'][num
 // with the repo's execution host so per-worktree host resolution doesn't route
 // remote terminals to the local machine. Local-owned repos are left untouched,
 // so an explicit local worktree still overrides a runtime repo owner.
-function withRepoHostId<T extends { hostId?: ExecutionHostId }>(
-  worktree: T,
-  hostId: ExecutionHostId
-): T {
-  return hostId === LOCAL_EXECUTION_HOST_ID ? worktree : { ...worktree, hostId }
+function withRepoHostOwnership<
+  T extends { hostId?: ExecutionHostId; projectId?: string; projectHostSetupId?: string }
+>(worktree: T, hostId: ExecutionHostId, setup?: ProjectHostSetup): T {
+  const nextHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
+  const projectId = worktree.projectId ?? setup?.projectId
+  const projectHostSetupId = worktree.projectHostSetupId ?? setup?.id
+  if (
+    nextHostId === worktree.hostId &&
+    projectId === worktree.projectId &&
+    projectHostSetupId === worktree.projectHostSetupId
+  ) {
+    return worktree
+  }
+  return {
+    ...worktree,
+    ...(nextHostId ? { hostId: nextHostId } : {}),
+    ...(projectId ? { projectId } : {}),
+    ...(projectHostSetupId ? { projectHostSetupId } : {})
+  }
 }
 
 function repoHostId(
@@ -340,12 +361,23 @@ function repoHostId(
 
 function toVisibleWorktrees(
   result: DetectedWorktreeListResult,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  setup?: ProjectHostSetup
 ): Worktree[] {
   return result.worktrees
     .filter((worktree) => worktree.visible)
     .map(toVisibleWorktree)
-    .map((worktree) => withRepoHostId(worktree, hostId))
+    .map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
+}
+
+function getProjectHostSetupForRepoHost(
+  state: Partial<Pick<AppState, 'projectHostSetups'>>,
+  repoId: string,
+  hostId: ExecutionHostId
+): ProjectHostSetup | undefined {
+  return state.projectHostSetups?.find(
+    (setup) => setup.repoId === repoId && setup.hostId === hostId
+  )
 }
 
 function getHydratedSessionWorktreeIdsForRepo(state: AppState, repoId: string): string[] {
@@ -448,12 +480,13 @@ function mergeDetectedWorktreesForHost(
   current: DetectedWorktreeListResult | undefined,
   refreshed: DetectedWorktreeListResult,
   hostId: ExecutionHostId,
+  setup?: ProjectHostSetup,
   options?: WorktreeHostMatchOptions
 ): DetectedWorktreeListResult {
   const refreshedForHost = sanitizeHostedReviewLinksForBranchClears(
     refreshed.worktrees,
     current?.worktrees
-  ).map((worktree) => withRepoHostId(worktree, hostId))
+  ).map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
   return {
     ...refreshed,
     worktrees: mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
@@ -523,6 +556,32 @@ function toLegacyDetectedWorktreeResult(
 
 function isRuntimeMethodNotFoundError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+}
+
+// Why: a mobile-scope web pairing is denied worktree/repo RPCs, which would
+// otherwise be swallowed into empty workspaces on every repo. Surface one
+// deduped, actionable toast (stable id) instead of spamming per-repo, steering
+// the user to re-pair via the full-access browser link.
+const RUNTIME_SCOPE_FORBIDDEN_TOAST_ID = 'runtime-scope-forbidden'
+
+function notifyRuntimeScopeForbiddenIfNeeded(error: unknown): boolean {
+  if (!isRuntimeScopeForbiddenError(error)) {
+    return false
+  }
+  toast.error(
+    translate(
+      'auto.store.slices.worktrees.runtimeScopeForbiddenTitle',
+      'This connection has limited (mobile) access'
+    ),
+    {
+      id: RUNTIME_SCOPE_FORBIDDEN_TOAST_ID,
+      description: translate(
+        'auto.store.slices.worktrees.runtimeScopeForbiddenDescription',
+        'Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.'
+      )
+    }
+  )
+  return true
 }
 
 function applyDetectedWorktreeUpdates(
@@ -989,7 +1048,7 @@ function applyWorktreeLineageUpdate(
           ? s.worktreesByRepo
           : replaceWorktreeInRepoLists(
               s.worktreesByRepo,
-              withRepoHostId(
+              withRepoHostOwnership(
                 result.updatedRemoteWorktree,
                 repoHostId(s, getRepoIdFromWorktreeId(result.updatedRemoteWorktree.id))
               )
@@ -1120,6 +1179,50 @@ async function persistWorktreeMeta(
     },
     { timeoutMs: 15_000 }
   )
+}
+
+// Why: an SSH-mode per-workspace-env registers a project whose host is the runtime-owned SSH
+// target. Once that runtime is destroyed the project points at a host that no longer exists, so it
+// must be removed — otherwise it lingers as a dead, never-connectable project in the composer.
+async function purgeOrphanedRuntimeSshProjects(
+  get: () => AppState,
+  destroyedSshTargetIds: string[]
+): Promise<void> {
+  if (destroyedSshTargetIds.length === 0) {
+    return
+  }
+  const destroyedTargetIds = new Set(destroyedSshTargetIds)
+  const destroyedHostIds = new Set<ExecutionHostId>(
+    destroyedSshTargetIds.map((id) => toSshExecutionHostId(id))
+  )
+  const orphanedSetupIds = get()
+    .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
+    .map((setup) => setup.id)
+  const purgedRepoIds = new Set<string>()
+  for (const setupId of orphanedSetupIds) {
+    try {
+      const result = await get().deleteProjectHostSetup({ setupId })
+      if (result?.repo) {
+        purgedRepoIds.add(result.repo.id)
+      }
+    } catch (error) {
+      console.error('Failed to purge orphaned per-workspace-env project:', error)
+    }
+  }
+  // A repo whose only host was the destroyed runtime can outlive its setup (the setup may be pruned
+  // by a projection refresh first). Remove it directly so no dead, never-connectable project lingers.
+  const orphanedRepoIds = get()
+    .repos.filter(
+      (repo) => destroyedTargetIds.has(repo.connectionId ?? '') && !purgedRepoIds.has(repo.id)
+    )
+    .map((repo) => repo.id)
+  for (const repoId of orphanedRepoIds) {
+    try {
+      await get().removeProject(repoId)
+    } catch (error) {
+      console.error('Failed to purge orphaned per-workspace-env repo:', error)
+    }
+  }
 }
 
 async function resolveGitHubReviewPushTarget(
@@ -1868,6 +1971,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
     ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
+    automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
     // Delete state
     deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
@@ -1985,6 +2089,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const hostId = repoHostId(ownerState, repoId)
+      const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const result = await listDetectedWorktreesForRepoCoalesced(
         settingsForRepoOwner(ownerState, repoId, hostId),
         repoId,
@@ -1997,6 +2102,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           s.detectedWorktreesByRepo[repoId],
           result,
           hostId,
+          setup,
           worktreeHostMatchOptions(s, repoId, hostId)
         )
         return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[repoId], mergedDetected)
@@ -2005,6 +2111,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       })
       return result
     } catch (err) {
+      if (notifyRuntimeScopeForbiddenIfNeeded(err)) {
+        return null
+      }
       console.error(`Failed to fetch detected worktrees for repo ${repoId}:`, err)
       return null
     }
@@ -2014,6 +2123,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const hostId = repoHostId(ownerState, repoId)
+      const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const settings = settingsForRepoOwner(ownerState, repoId, hostId)
       const detected = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
         executionHostId: hostId,
@@ -2024,7 +2134,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       const current = get().worktreesByRepo[repoId]
       const worktrees = sanitizeHostedReviewLinksForBranchClears(
-        toVisibleWorktrees(detected, hostId),
+        toVisibleWorktrees(detected, hostId, setup),
         current
       )
       const currentMatchOptions = worktreeHostMatchOptions(get(), repoId, hostId)
@@ -2044,6 +2154,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             s.detectedWorktreesByRepo[repoId],
             detected,
             hostId,
+            setup,
             matchOptions
           )
           const mergedWorktrees = mergeWorktreesForHost(
@@ -2092,6 +2203,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               s.detectedWorktreesByRepo[repoId],
               detected,
               hostId,
+              setup,
               worktreeHostMatchOptions(s, repoId, hostId)
             )
           }
@@ -2115,6 +2227,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           s.detectedWorktreesByRepo[repoId],
           detected,
           hostId,
+          setup,
           matchOptions
         )
 
@@ -2131,6 +2244,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       await refreshRemoteWorktreeLineageBestEffort(settings, set)
       return detected.authoritative
     } catch (err) {
+      if (notifyRuntimeScopeForbiddenIfNeeded(err)) {
+        return false
+      }
       console.error(`Failed to fetch worktrees for repo ${repoId}:`, err)
       return false
     }
@@ -2145,12 +2261,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (get().hasHydratedWorktreePurge) {
       await mapReposForWorktreeRefresh(repos, async (r) => {
         const hostId = getRepoExecutionHostId(r)
+        const setup = getProjectHostSetupForRepoHost(get(), r.id, hostId)
         const settings = settingsForKnownRepoOwner(get().settings, r)
         const detected = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
           executionHostId: hostId
         })
         const worktrees = sanitizeHostedReviewLinksForBranchClears(
-          toVisibleWorktrees(detected, hostId),
+          toVisibleWorktrees(detected, hostId, setup),
           get().worktreesByRepo[r.id]
         )
         set((s) => {
@@ -2166,6 +2283,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             s.detectedWorktreesByRepo[r.id],
             detected,
             hostId,
+            setup,
             matchOptions
           )
           if (
@@ -2207,6 +2325,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       > => {
         try {
           const hostId = getRepoExecutionHostId(r)
+          const setup = getProjectHostSetupForRepoHost(get(), r.id, hostId)
           const detected = await listDetectedWorktreesForRepoCoalesced(
             settingsForKnownRepoOwner(get().settings, r),
             r.id,
@@ -2214,7 +2333,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           )
           const current = get().worktreesByRepo[r.id]
           const list = sanitizeHostedReviewLinksForBranchClears(
-            toVisibleWorktrees(detected, hostId),
+            toVisibleWorktrees(detected, hostId, setup),
             current
           )
           const currentMatchOptions = worktreeHostMatchOptions(get(), r.id, hostId)
@@ -2238,6 +2357,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     s.detectedWorktreesByRepo[r.id],
                     detected,
                     hostId,
+                    setup,
                     matchOptions
                   )
                 },
@@ -2252,6 +2372,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                   s.detectedWorktreesByRepo[r.id],
                   detected,
                   hostId,
+                  setup,
                   worktreeHostMatchOptions(s, r.id, hostId)
                 )
               }
@@ -2702,7 +2823,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // then produces a duplicate entry in worktreesByRepo, which gives
           // React duplicate keys and can corrupt terminal DOM containers.
           set((s) => {
-            const createdWorktree = withRepoHostId(result.worktree, repoHostId(s, repoId))
+            const hostId = repoHostId(s, repoId)
+            const createdWorktree = withRepoHostOwnership(
+              result.worktree,
+              hostId,
+              getProjectHostSetupForRepoHost(s, repoId, hostId)
+            )
             const current = s.worktreesByRepo[repoId] ?? []
             const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
             const nextWorktrees = alreadyPresent
@@ -2792,10 +2918,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
-  removePendingWorktreeCreation: (creationId) => {
+  removePendingWorktreeCreation: (creationId, options) => {
     set((s) => {
-      if (!s.pendingWorktreeCreations[creationId]) {
+      const entry = s.pendingWorktreeCreations[creationId]
+      if (!entry) {
         return {}
+      }
+      const cleanupVm = options?.cleanupVm ?? true
+      if (
+        cleanupVm &&
+        entry.phase === 'provisioning-vm' &&
+        typeof window !== 'undefined' &&
+        window.api?.ephemeralVm?.cancelProvision
+      ) {
+        void window.api.ephemeralVm.cancelProvision({ provisionId: creationId }).catch(() => {
+          // Best effort: dismissing the pending surface should not be blocked by
+          // an already-finished or unreachable provisioning process.
+        })
+      }
+      if (
+        cleanupVm &&
+        entry.request.ephemeralVmRuntimeId &&
+        typeof window !== 'undefined' &&
+        window.api?.ephemeralVm?.cleanup
+      ) {
+        void window.api.ephemeralVm
+          .cleanup({ runtimeId: entry.request.ephemeralVmRuntimeId })
+          .catch(() => {
+            // Best effort: cancellation should not block on provider cleanup,
+            // and the Settings runtime list still exposes retry/manual cleanup.
+          })
       }
       const { [creationId]: _removed, ...rest } = s.pendingWorktreeCreations
       return {
@@ -2874,6 +3026,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // can intercept them.
       await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
+      // Why: dispose the runtime-owned SSH relay AFTER tearing down this workspace's terminals,
+      // so a still-mounted SSH terminal pane can't connect to an already-gone relay and surface a
+      // spurious "SSH connection is not active" toast during delete.
+      const destroyedRuntimeSshTargetIds = await cleanupEphemeralVmRuntimesForDeleted({
+        workspaceIds: [worktreeId]
+      })
+      // Remove the now-orphaned project that pointed at the destroyed runtime-owned SSH target so it
+      // can't surface as a dead, never-connectable project in the composer.
+      await purgeOrphanedRuntimeSshProjects(get, destroyedRuntimeSshTargetIds)
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 
@@ -2894,10 +3055,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextLayouts = { ...s.terminalLayoutsByTabId }
         const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
         const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
+        const nextAutomaticAgentResumeClaimsByTabId = {
+          ...s.automaticAgentResumeClaimsByTabId
+        }
         for (const tabId of tabIds) {
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
           delete nextRuntimePaneTitlesByTabId[tabId]
+          delete nextAutomaticAgentResumeClaimsByTabId[tabId]
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
@@ -3042,6 +3207,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           tabsByWorktree: nextTabs,
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+          automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
           baseStatusByWorktreeId: (() => {

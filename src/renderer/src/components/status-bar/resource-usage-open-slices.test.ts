@@ -71,22 +71,20 @@ describe('resource usage open slices', () => {
     )
   })
 
-  it('gates repo and worktree slices while closed or runtime-backed', () => {
+  it('gates repo and worktree slices only while closed', () => {
     const repos = [{ id: 'repo-1', path: '/repo', kind: 'git' }] as AppState['repos']
     const row = worktree()
     const worktreesByRepo = {
       'repo-1': [row]
     }
 
-    expect(getResourceUsageRepos({ repos }, false, false)).toBe(
-      getResourceUsageRepos({ repos: [] }, false, false)
+    expect(getResourceUsageRepos({ repos }, false)).toBe(
+      getResourceUsageRepos({ repos: [] }, false)
     )
-    expect(getResourceUsageAllWorktrees({ worktreesByRepo }, false, false)).toBe(
-      getResourceUsageAllWorktrees({ worktreesByRepo: {} }, false, false)
+    expect(getResourceUsageAllWorktrees({ worktreesByRepo }, false)).toBe(
+      getResourceUsageAllWorktrees({ worktreesByRepo: {} }, false)
     )
-    expect(getResourceUsageRepos({ repos }, true, true)).toEqual([])
-    expect(getResourceUsageAllWorktrees({ worktreesByRepo }, true, true)).toEqual([])
-    expect(getResourceUsageRepos({ repos }, true, false)).toBe(repos)
-    expect(getResourceUsageAllWorktrees({ worktreesByRepo }, true, false)).toEqual([row])
+    expect(getResourceUsageRepos({ repos }, true)).toBe(repos)
+    expect(getResourceUsageAllWorktrees({ worktreesByRepo }, true)).toEqual([row])
   })
 })

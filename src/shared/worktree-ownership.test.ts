@@ -108,7 +108,7 @@ describe('worktree ownership classification', () => {
     ).toBe('orca-managed')
   })
 
-  it('requires the nested repo-specific path shape for path-only ownership', () => {
+  it('treats nested Orca workspace paths without metadata as external', () => {
     const repo = makeRepo()
     const settings = makeSettings()
     const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
@@ -119,7 +119,7 @@ describe('worktree ownership classification', () => {
         worktree: makeWorktree({ path: '/orca/workspaces/app/feature' }),
         knownOrcaLayouts: layouts
       })
-    ).toBe('orca-managed')
+    ).toBe('external')
     expect(
       classifyWorktreeOwnership({
         repo,
@@ -128,6 +128,94 @@ describe('worktree ownership classification', () => {
         knownOrcaLayouts: layouts
       })
     ).toBe('external')
+  })
+
+  it('treats explicit Orca creation layout metadata as managed', () => {
+    const repo = makeRepo()
+    const settings = makeSettings()
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree({ path: '/orca/workspaces/app/feature' }),
+        meta: makeMeta({
+          orcaCreationWorkspaceLayout: { path: '/orca/workspaces', nestWorkspaces: true }
+        }),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      })
+    ).toBe('orca-managed')
+  })
+
+  it('does not treat metadata-free nested workspace paths as Orca-managed for new repos', () => {
+    const repo = makeRepo({ externalWorktreeVisibility: 'hide' })
+    const settings = makeSettings()
+    const detected = toDetectedWorktree({
+      repo,
+      settings,
+      worktree: makeWorktree({
+        path: '/orca/workspaces/app/manual-git-worktree',
+        isMainWorktree: false
+      }),
+      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+    })
+
+    expect(detected.ownership).toBe('external')
+    expect(detected.visible).toBe(false)
+  })
+
+  it('does not treat generic discovery metadata on nested workspace paths as Orca-managed', () => {
+    const repo = makeRepo({ externalWorktreeVisibility: 'hide' })
+    const settings = makeSettings()
+    const detected = toDetectedWorktree({
+      repo,
+      settings,
+      worktree: makeWorktree({
+        path: '/orca/workspaces/app/manual-git-worktree',
+        isMainWorktree: false
+      }),
+      meta: makeMeta({ displayName: 'manual-git-worktree' }),
+      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+    })
+
+    expect(detected.ownership).toBe('external')
+    expect(detected.visible).toBe(false)
+  })
+
+  it('keeps nested workspace paths visible for legacy repos without explicit visibility', () => {
+    const repo = makeRepo()
+    const settings = makeSettings()
+    const detected = toDetectedWorktree({
+      repo,
+      settings,
+      worktree: makeWorktree({
+        path: '/orca/workspaces/app/manual-git-worktree',
+        isMainWorktree: false
+      }),
+      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+    })
+
+    expect(detected.ownership).toBe('external')
+    expect(detected.visible).toBe(true)
+  })
+
+  it('hides metadata-free nested workspace paths for legacy repos that hide external worktrees', () => {
+    const repo = makeRepo({
+      externalWorktreeVisibility: 'hide',
+      externalWorktreeVisibilityLegacy: true
+    })
+    const settings = makeSettings()
+    const detected = toDetectedWorktree({
+      repo,
+      settings,
+      worktree: makeWorktree({
+        path: '/orca/workspaces/app/manual-git-worktree',
+        isMainWorktree: false
+      }),
+      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+    })
+
+    expect(detected.ownership).toBe('external')
+    expect(detected.visible).toBe(false)
   })
 
   it('treats flat workspace-root descendants as unknown legacy without strong metadata', () => {
@@ -172,7 +260,7 @@ describe('worktree ownership classification', () => {
         worktree: makeWorktree({ path: '/old/workspaces/app/feature' }),
         knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
       })
-    ).toBe('orca-managed')
+    ).toBe('external')
   })
 
   it('builds known layouts from large workspace history lists', () => {
@@ -214,7 +302,7 @@ describe('worktree ownership classification', () => {
         }),
         knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
       })
-    ).toBe('orca-managed')
+    ).toBe('external')
   })
 
   it('keeps selected linked checkouts visible without trusting Git main-worktree', () => {

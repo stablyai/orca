@@ -1,6 +1,6 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
-import { parentPort, workerData } from 'worker_threads'
-import { readdirSync } from 'fs'
+import { parentPort, workerData } from 'node:worker_threads'
+import { readdirSync } from 'node:fs'
 import { resampleToRate } from './stt-audio-resample'
 
 type WorkerMessage =

@@ -2,11 +2,13 @@
 driving, parser, timers, and teardown in one state machine; splitting it would
 make the lifecycle harder to audit. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
+import { extractClaudePtyResetMetadata } from './claude-pty-reset-parser'
 
 const PTY_TIMEOUT_MS = 25_000
 const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
@@ -17,11 +19,18 @@ const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
 
 // Why: these patterns match the Claude CLI's /usage TUI panel output.
 // "Current session" shows a percent like "62% used" or "62% left".
-// "Current week" section is similar.
+// Weekly labels have varied between "Current week" and "Weekly limits".
 const SESSION_RE = /current\s*session/i
-const WEEKLY_RE = /current\s*week/i
-const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|left|remaining|available)/i
-const RESET_LINE_RE = /resets?\s+(?:at\s+|in\s+)?(.+)/i
+const WEEKLY_RE = /(?:current\s*week|weekly\s*(?:limits?|usage|rate\s*limits?)|7\s*[- ]?\s*day)/i
+const FABLE_WORD_RE = /\bfable\b/i
+const FABLE_LABEL_RE = /^\s*fable\s*$/i
+// Why: derive from WEEKLY_RE so a future weekly-wording change stays in one place
+// instead of silently reopening the Fable-weekly parsing gap this fix closed.
+const FABLE_WEEKLY_LABEL_RE = new RegExp(
+  `${WEEKLY_RE.source}\\s*(?:\\([^)]*\\bfable\\b[^)]*\\)|[-:]?\\s*\\bfable\\b)`,
+  'i'
+)
+const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|consumed|left|remaining|available)/i
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
 const OSC_SEQUENCE_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, 'g')
@@ -35,34 +44,43 @@ function stripTerminalControlSequences(output: string): string {
  * Extract percent-left from lines following a label match.
  * Scans up to 12 lines after the label to find the associated percent.
  */
-function extractPercentAfterLabel(lines: string[], labelRe: RegExp): number | null {
+function matchesWeeklyLabel(line: string): boolean {
+  return WEEKLY_RE.test(line) && !FABLE_WORD_RE.test(line)
+}
+
+function matchesFableBoundary(line: string): boolean {
+  return FABLE_LABEL_RE.test(line) || (FABLE_WORD_RE.test(line) && WEEKLY_RE.test(line))
+}
+
+function matchesFableUsageLabel(line: string): boolean {
+  // Why: broad Fable-weekly copy should stop nearby scans, but only a real
+  // Fable usage heading should produce the distinct Fable meter.
+  return FABLE_LABEL_RE.test(line) || FABLE_WEEKLY_LABEL_RE.test(line)
+}
+
+function isSectionLabel(line: string): boolean {
+  return SESSION_RE.test(line) || matchesWeeklyLabel(line) || matchesFableBoundary(line)
+}
+
+function extractPercentAfterLabel(
+  lines: string[],
+  matchesLabel: (line: string) => boolean
+): number | null {
   for (let i = 0; i < lines.length; i++) {
-    if (!labelRe.test(lines[i])) {
+    if (!matchesLabel(lines[i])) {
       continue
     }
     // Scan next 12 lines for a percent
     for (let j = i; j < Math.min(i + 12, lines.length); j++) {
+      if (j > i && isSectionLabel(lines[j])) {
+        break
+      }
       const m = PERCENT_RE.exec(lines[j])
       if (m) {
         const pct = parseFloat(m[1])
         const word = m[2].toLowerCase()
-        const isUsed = word === 'used'
+        const isUsed = word === 'used' || word === 'consumed'
         return isUsed ? pct : 100 - pct
-      }
-    }
-  }
-  return null
-}
-
-function extractResetAfterLabel(lines: string[], labelRe: RegExp): string | null {
-  for (let i = 0; i < lines.length; i++) {
-    if (!labelRe.test(lines[i])) {
-      continue
-    }
-    for (let j = i; j < Math.min(i + 14, lines.length); j++) {
-      const m = RESET_LINE_RE.exec(lines[j])
-      if (m) {
-        return m[1].trim().replace(/[)]+$/, '')
       }
     }
   }
@@ -72,19 +90,32 @@ function extractResetAfterLabel(lines: string[], labelRe: RegExp): string | null
 function parsePtyUsage(output: string): {
   session: RateLimitWindow | null
   weekly: RateLimitWindow | null
+  fableWeekly: RateLimitWindow | null
 } {
   const lines = output.split(/\r\n|\n|\r/)
 
-  const sessionPct = extractPercentAfterLabel(lines, SESSION_RE)
-  const weeklyPct = extractPercentAfterLabel(lines, WEEKLY_RE)
+  const sessionPct = extractPercentAfterLabel(lines, (line) => SESSION_RE.test(line))
+  const weeklyPct = extractPercentAfterLabel(lines, matchesWeeklyLabel)
+  const fableWeeklyPct = extractPercentAfterLabel(lines, matchesFableUsageLabel)
+  const sessionReset = extractClaudePtyResetMetadata(
+    lines,
+    (line) => SESSION_RE.test(line),
+    isSectionLabel
+  )
+  const weeklyReset = extractClaudePtyResetMetadata(lines, matchesWeeklyLabel, isSectionLabel)
+  const fableWeeklyReset = extractClaudePtyResetMetadata(
+    lines,
+    matchesFableUsageLabel,
+    isSectionLabel
+  )
 
   const session: RateLimitWindow | null =
     sessionPct !== null
       ? {
           usedPercent: Math.min(100, Math.max(0, sessionPct)),
           windowMinutes: 300,
-          resetsAt: null,
-          resetDescription: extractResetAfterLabel(lines, SESSION_RE)
+          resetsAt: sessionReset.resetsAt,
+          resetDescription: sessionReset.resetDescription
         }
       : null
 
@@ -93,12 +124,22 @@ function parsePtyUsage(output: string): {
       ? {
           usedPercent: Math.min(100, Math.max(0, weeklyPct)),
           windowMinutes: 10080,
-          resetsAt: null,
-          resetDescription: extractResetAfterLabel(lines, WEEKLY_RE)
+          resetsAt: weeklyReset.resetsAt,
+          resetDescription: weeklyReset.resetDescription
         }
       : null
 
-  return { session, weekly }
+  const fableWeekly: RateLimitWindow | null =
+    fableWeeklyPct !== null
+      ? {
+          usedPercent: Math.min(100, Math.max(0, fableWeeklyPct)),
+          windowMinutes: 10080,
+          resetsAt: fableWeeklyReset.resetsAt,
+          resetDescription: fableWeeklyReset.resetDescription
+        }
+      : null
+
+  return { session, weekly, fableWeekly }
 }
 
 // Why: these substrings indicate the /usage TUI panel has finished
@@ -109,6 +150,10 @@ const STOP_SUBSTRINGS = [
   'Current week (Opus)',
   'Current week (Sonnet only)',
   'Current week (Sonnet)',
+  'Weekly limits',
+  'Weekly limit',
+  'Weekly usage',
+  '7-day',
   'Current session',
   'Failed to load usage data',
   'failed to load usage data'
@@ -154,6 +199,7 @@ function describeClaudeUsageFailure(output: string): string {
 
 export async function fetchViaPty(options?: {
   authPreparation?: ClaudeRuntimeAuthPreparation
+  networkProxySettings?: NetworkProxySettings
 }): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
 
@@ -178,6 +224,12 @@ export async function fetchViaPty(options?: {
       options?.authPreparation?.envPatch ?? {},
       { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
     )
+    // Why: this hidden usage PTY spawns `claude` directly, not the user's shell
+    // wrapper, so without the configured proxy it would reach api.anthropic.com
+    // from the app's own IP — bypassing the proxy the user set for Claude and
+    // risking rate-limit/geo signals on the account. Falls back to {} when unset.
+    const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
+    Object.assign(spawnEnv, proxyEnv)
     const authPreparation = options?.authPreparation
     const wslConfig =
       authPreparation?.runtime === 'wsl' &&
@@ -196,7 +248,13 @@ export async function fetchViaPty(options?: {
           '--',
           'bash',
           '-lc',
-          `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}; exec claude`
+          // Why: Windows-side env does not cross into the distro without WSLENV,
+          // so export the configured proxy inside the command for the inner claude.
+          [
+            `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}`,
+            ...Object.entries(proxyEnv).map(([key, value]) => `export ${key}=${shellQuote(value)}`),
+            'exec claude'
+          ].join('; ')
         ]
       : isWin32
         ? ['/c', `"${claudeCommand}"`]
@@ -237,12 +295,13 @@ export async function fetchViaPty(options?: {
         cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         // Even on timeout, try to parse whatever we collected
         const clean = stripTerminalControlSequences(output)
-        const { session, weekly } = parsePtyUsage(clean)
-        if (session || weekly) {
+        const { session, weekly, fableWeekly } = parsePtyUsage(clean)
+        if (session || weekly || fableWeekly) {
           resolve({
             provider: 'claude',
             session,
             weekly,
+            fableWeekly,
             updatedAt: Date.now(),
             error: null,
             status: 'ok'
@@ -288,9 +347,9 @@ export async function fetchViaPty(options?: {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
       const clean = stripTerminalControlSequences(output)
-      const { session, weekly } = parsePtyUsage(clean)
+      const { session, weekly, fableWeekly } = parsePtyUsage(clean)
 
-      if (!session && !weekly) {
+      if (!session && !weekly && !fableWeekly) {
         resolve({
           provider: 'claude',
           session: null,
@@ -304,6 +363,7 @@ export async function fetchViaPty(options?: {
           provider: 'claude',
           session,
           weekly,
+          fableWeekly,
           updatedAt: Date.now(),
           error: null,
           status: 'ok'
@@ -385,17 +445,18 @@ export async function fetchViaPty(options?: {
         resolved = true
         clearTimeout(timeout)
         const clean = stripTerminalControlSequences(output)
-        const { session, weekly } = parsePtyUsage(clean)
+        const { session, weekly, fableWeekly } = parsePtyUsage(clean)
         resolve({
           provider: 'claude',
           session,
           weekly,
+          fableWeekly,
           updatedAt: Date.now(),
           error:
-            session || weekly
+            session || weekly || fableWeekly
               ? null
               : withMacTailscaleDnsHint('CLI exited before /usage rendered', clean),
-          status: session || weekly ? 'ok' : 'error'
+          status: session || weekly || fableWeekly ? 'ok' : 'error'
         })
       }
     })

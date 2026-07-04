@@ -1,7 +1,7 @@
 import type { Repo, Worktree } from '../../../../shared/types'
 import {
-  getAiVaultResumeWorkspaceTargetStatus,
-  isSupportedAiVaultResumeTargetStatus
+  canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
@@ -33,6 +33,7 @@ export type AiVaultSessionResumeActions = {
 }
 
 export function resolveAiVaultSessionResumeState(args: {
+  sessionFilePath: string | null
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   activeWorktreeId: string | null
   worktrees: readonly Worktree[]
@@ -54,6 +55,7 @@ export function resolveAiVaultSessionResumeState(args: {
 
   for (const worktreeId of candidateWorktreeIds) {
     const targetId = resolveSupportedResumeWorktreeId({
+      sessionFilePath: args.sessionFilePath,
       worktreeId,
       targetState
     })
@@ -75,6 +77,7 @@ export function resolveAiVaultSessionResumeState(args: {
 }
 
 export function resolveAiVaultSessionResumeActions(args: {
+  sessionFilePath: string | null
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   activeWorktreeId: string | null
   worktrees: readonly Worktree[]
@@ -88,10 +91,12 @@ export function resolveAiVaultSessionResumeActions(args: {
   const targetState = resolveAiVaultResumeTargetState(args)
 
   const sessionTargetId = resolveSupportedResumeWorktreeId({
+    sessionFilePath: args.sessionFilePath,
     worktreeId: sessionWorktreeId,
     targetState
   })
   const activeTargetId = resolveSupportedResumeWorktreeId({
+    sessionFilePath: args.sessionFilePath,
     worktreeId:
       args.activeWorktreeId && args.activeWorktreeId !== sessionWorktreeId
         ? args.activeWorktreeId
@@ -136,6 +141,7 @@ export function isKnownAiVaultResumeWorkspaceTarget(
 }
 
 function resolveSupportedResumeWorktreeId(args: {
+  sessionFilePath: string | null
   worktreeId: string | null
   targetState: AiVaultSessionResumeTargetState
 }): string | null {
@@ -148,7 +154,7 @@ function resolveSupportedResumeWorktreeId(args: {
   }
 
   const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, args.worktreeId)
-  if (!isSupportedAiVaultResumeTargetStatus(targetStatus)) {
+  if (!canResumeAiVaultSessionOnTarget({ sessionFilePath: args.sessionFilePath, targetStatus })) {
     return null
   }
 

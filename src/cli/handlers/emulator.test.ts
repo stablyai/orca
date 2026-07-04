@@ -1,4 +1,4 @@
-import path from 'path'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { callMock, remoteMock } = vi.hoisted(() => ({
@@ -71,6 +71,24 @@ describe('orca emulator CLI handlers', () => {
       emulator: undefined,
       worktree: undefined
     })
+  })
+
+  it('uses a wider client timeout for emulator attach recovery', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_attach', {
+        attached: true,
+        info: { deviceUdid: 'device-1', streamUrl: 'http://127.0.0.1:3102/stream.mjpeg' }
+      })
+    )
+
+    await main(['emulator', 'attach', 'device-1', '--worktree', 'all'], '/repo/project')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'emulator.attach',
+      { device: 'device-1', worktree: undefined, focus: false },
+      { timeoutMs: 180_000 }
+    )
   })
 
   it('rejects relative APK paths for remote runtimes', async () => {

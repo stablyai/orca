@@ -15,11 +15,9 @@ import {
   decryptBytes
 } from './e2ee'
 import {
-  TerminalStreamOpcode,
-  decodeTerminalStreamFrame,
-  decodeTerminalStreamJson,
-  decodeTerminalStreamText
-} from './terminal-stream-protocol'
+  handleTerminalBinaryFrame,
+  type TerminalSnapshotState
+} from './rpc-client-terminal-binary-frame'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
@@ -61,12 +59,6 @@ type StreamRequest = {
   subscriptionId?: string
   cancelled?: boolean
   sent?: boolean
-}
-
-type TerminalSnapshotState = {
-  streamId: number
-  meta: Record<string, unknown>
-  chunks: string[]
 }
 
 export type RpcClient = {
@@ -490,6 +482,7 @@ export function connect(
                 pendingBrowserScreencastRequestId = id
                 activeBrowserScreencastRequestId = null
               }
+              resetTerminalStreamRoutingForRequest(id)
               if (
                 sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
               ) {
@@ -708,7 +701,7 @@ export function connect(
     sharedKey = null
     activeBrowserScreencastRequestId = null
     pendingBrowserScreencastRequestId = null
-    streamListeners.forEach((stream) => (stream.sent = false))
+    markStreamsForReplay()
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null
@@ -759,7 +752,7 @@ export function connect(
       ws = null
       sharedKey = null
       // Why: close cleanup stale-bails here, so mark active streams for replay.
-      streamListeners.forEach((stream) => (stream.sent = false))
+      markStreamsForReplay()
       rejectAllPending(reason)
       if (closing) {
         closing.close()
@@ -900,6 +893,25 @@ export function connect(
     }
   }
 
+  function markStreamsForReplay(): void {
+    for (const [id, stream] of streamListeners) {
+      stream.sent = false
+      resetTerminalStreamRoutingForRequest(id)
+    }
+  }
+
+  function resetTerminalStreamRoutingForRequest(id: string): void {
+    const terminalStreamIds = terminalStreamIdsByRequest.get(id)
+    if (!terminalStreamIds) {
+      return
+    }
+    for (const streamId of terminalStreamIds) {
+      terminalStreamListeners.delete(streamId)
+      terminalSnapshots.delete(streamId)
+    }
+    terminalStreamIdsByRequest.delete(id)
+  }
+
   function emitStreamError(stream: StreamRequest, message: string, error?: unknown): void {
     if (stream.cancelled) {
       return
@@ -942,7 +954,11 @@ export function connect(
       handleBrowserBinaryFrame(browserFrame)
       return
     }
-    handleTerminalBinaryFrame(bytes)
+    handleTerminalBinaryFrame(bytes, {
+      terminalSnapshots,
+      getListener: (streamId) => terminalStreamListeners.get(streamId),
+      recordValidatedInboundTraffic
+    })
   }
 
   function handleBrowserBinaryFrame(frame: BrowserScreencastFrame) {
@@ -954,82 +970,6 @@ export function connect(
       return
     }
     stream.onBinaryFrame?.(frame)
-  }
-
-  function handleTerminalBinaryFrame(bytes: Uint8Array): void {
-    const frame = decodeTerminalStreamFrame(bytes)
-    if (!frame) {
-      return
-    }
-    const listener = terminalStreamListeners.get(frame.streamId)
-    if (!listener) {
-      recordValidatedInboundTraffic()
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Output) {
-      recordValidatedInboundTraffic()
-      listener({
-        type: 'data',
-        streamId: frame.streamId,
-        chunk: decodeTerminalStreamText(frame.payload)
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
-      const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
-      if (!meta) {
-        return
-      }
-      recordValidatedInboundTraffic()
-      terminalSnapshots.set(frame.streamId, { streamId: frame.streamId, meta, chunks: [] })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
-      recordValidatedInboundTraffic()
-      const snapshot = terminalSnapshots.get(frame.streamId)
-      if (!snapshot) {
-        return
-      }
-      snapshot.chunks.push(decodeTerminalStreamText(frame.payload))
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
-      recordValidatedInboundTraffic()
-      const snapshot = terminalSnapshots.get(frame.streamId)
-      if (!snapshot) {
-        return
-      }
-      terminalSnapshots.delete(frame.streamId)
-      const kind = snapshot.meta.kind === 'resized' ? 'resized' : 'scrollback'
-      listener({
-        ...snapshot.meta,
-        type: kind,
-        streamId: frame.streamId,
-        serialized: snapshot.chunks.join('')
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Resized) {
-      const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
-      if (!meta) {
-        return
-      }
-      recordValidatedInboundTraffic()
-      listener({
-        ...meta,
-        type: 'resized',
-        streamId: frame.streamId
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Error) {
-      recordValidatedInboundTraffic()
-      listener({
-        type: 'error',
-        streamId: frame.streamId,
-        message: decodeTerminalStreamText(frame.payload)
-      })
-    }
   }
 
   function sendEncrypted(request: unknown): boolean {

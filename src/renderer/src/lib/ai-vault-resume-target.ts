@@ -8,6 +8,7 @@ import {
 import type { Repo } from '../../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
 
@@ -34,6 +35,27 @@ export function isSupportedAiVaultResumeRepo(
 
 export function isSupportedAiVaultResumeTargetStatus(status: AiVaultResumeTargetStatus): boolean {
   return status === 'local' || status === 'ssh'
+}
+
+export function isWslStoredAiVaultSessionFile(sessionFilePath: string | null | undefined): boolean {
+  return Boolean(sessionFilePath && isWslUncPath(sessionFilePath))
+}
+
+export function canResumeAiVaultSessionOnTarget(args: {
+  sessionFilePath: string | null | undefined
+  targetStatus: AiVaultResumeTargetStatus
+}): boolean {
+  if (!isSupportedAiVaultResumeTargetStatus(args.targetStatus)) {
+    return false
+  }
+  // Why: vault sessions are scanned from this machine's disk (host home dirs
+  // plus local WSL homes). An SSH shell can only reach the WSL-stored ones
+  // (SSH-to-local-WSL setups, #6270); host-stored session files do not exist
+  // on a remote filesystem, so queuing a resume there is guaranteed to fail.
+  if (args.targetStatus === 'ssh') {
+    return isWslStoredAiVaultSessionFile(args.sessionFilePath)
+  }
+  return true
 }
 
 export function isUnsupportedAiVaultResumeRepo(

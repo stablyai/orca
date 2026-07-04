@@ -66,6 +66,9 @@ jobs:
       - name: Check styled scrollbars
         run: pnpm check:styled-scrollbars
 
+      - name: Check reliability gate manifest
+        run: pnpm run check:reliability-gates
+
       # Why: project-owned type declarations must live in .ts so tsc
       # actually checks them. TypeScript's skipLibCheck: true (inherited
       # from @electron-toolkit/tsconfig) silently widens unresolved names

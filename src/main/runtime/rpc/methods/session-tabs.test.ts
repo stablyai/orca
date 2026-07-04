@@ -140,6 +140,7 @@ describe('session tab RPC methods', () => {
         worktree: 'id:wt-1',
         targetGroupId: 'group-left',
         command: 'zsh',
+        cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
         launchToken: 'launch-token-123',
         launchConfig: {
@@ -156,6 +157,7 @@ describe('session tab RPC methods', () => {
       afterTabId: undefined,
       targetGroupId: 'group-left',
       command: 'zsh',
+      cwd: '/repo/packages/app',
       env: { CODEX_PROFILE: 'captured' },
       startupCommandDelivery: undefined,
       agent: undefined,

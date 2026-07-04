@@ -1,5 +1,5 @@
-import { spawn, spawnSync, type ChildProcess } from 'child_process'
-import { existsSync, readFileSync, rmSync } from 'fs'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { app } from 'electron'
 
 // Why: headless `orca serve` backs browser panes with offscreen BrowserWindows.
@@ -14,6 +14,13 @@ const VIRTUAL_DISPLAY_NUMBER = 99
 const VIRTUAL_DISPLAY = `:${VIRTUAL_DISPLAY_NUMBER}`
 
 let xvfbProcess: ChildProcess | null = null
+
+function configureHeadlessServeChromiumFlags(): void {
+  // Why: cloud sandboxes often expose a tiny /dev/shm; Chromium treats an
+  // exhausted shared-memory mount as ENOSPC and can fatal in utility services
+  // such as font_data. Keep browser panes on disk-backed temp storage instead.
+  app.commandLine.appendSwitch('disable-dev-shm-usage')
+}
 
 function xvfbSocketPath(displayNumber: number): string {
   return `/tmp/.X11-unix/X${displayNumber}`
@@ -94,6 +101,8 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
   if (!options.isServeMode || process.platform !== 'linux') {
     return process.platform !== 'linux'
   }
+
+  configureHeadlessServeChromiumFlags()
 
   // Why: respect an externally provided display (a real X server, or the image
   // already running its own Xvfb). Don't start a competing one.

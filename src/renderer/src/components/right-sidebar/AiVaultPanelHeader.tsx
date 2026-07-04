@@ -1,11 +1,11 @@
 import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import {
-  type AiVaultAgent,
-  type AiVaultGroup,
-  type AiVaultScope,
-  type AiVaultSort
+import type {
+  AiVaultAgent,
+  AiVaultGroup,
+  AiVaultScope,
+  AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import { VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
 

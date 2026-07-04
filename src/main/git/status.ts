@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
-import { existsSync } from 'fs'
-import { readFile, stat } from 'fs/promises'
-import * as path from 'path'
+import { existsSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
+import * as path from 'node:path'
 import type {
   GitBranchChangeEntry,
   GitBranchChangeStatus,

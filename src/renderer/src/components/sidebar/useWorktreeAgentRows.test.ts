@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this suite covers one row-building seam
-   shared by retention, stale decay, and orchestration lineage regressions. */
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -9,6 +7,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/typ
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { comparePaneKeysOrdinal } from './worktree-agent-row-order'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
@@ -291,6 +290,111 @@ describe('buildWorktreeAgentRows', () => {
         worktreeId: 'wt-1'
       }
     })
+  })
+
+  it('keeps simultaneous worktree-attributed agents in a deterministic order', () => {
+    const first = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      prompt: 'omp worker'
+    })
+    const second = makeEntry(PANE_KEY_2, 1000, {
+      state: 'working',
+      worktreeId: 'wt-1',
+      tabId: 'tab-2',
+      prompt: 'omp worker'
+    })
+    const third = makeEntry(PANE_KEY_3, 1000, {
+      state: 'working',
+      worktreeId: 'wt-1',
+      tabId: 'tab-3',
+      prompt: 'omp worker'
+    })
+
+    const build = (entries: AgentStatusEntry[]) =>
+      buildWorktreeAgentRows({
+        tabs: [],
+        entries,
+        retained: [],
+        now: 2000
+      }).map((row) => row.paneKey)
+
+    // Why: OMP can send frequent same-state updates for several panes. When
+    // those workers are worktree-attributed before their tabs arrive, row order
+    // must not inherit a noisy status-map iteration order.
+    expect(build([third, first, second])).toEqual([PANE_KEY_1, PANE_KEY_2, PANE_KEY_3])
+    expect(build([{ ...second, updatedAt: 1500 }, third, first])).toEqual([
+      PANE_KEY_1,
+      PANE_KEY_2,
+      PANE_KEY_3
+    ])
+  })
+
+  it('keeps missing-tab row order stable after real state transitions', () => {
+    const first = makeEntry(PANE_KEY_1, 2000, {
+      state: 'done',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      stateHistory: [{ state: 'working', prompt: 'omp worker', startedAt: 1000 }]
+    })
+    const second = makeEntry(PANE_KEY_2, 1500, {
+      state: 'blocked',
+      worktreeId: 'wt-1',
+      tabId: 'tab-2',
+      stateHistory: [{ state: 'working', prompt: 'omp worker', startedAt: 1000 }]
+    })
+
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [second, first],
+      retained: [],
+      now: 2500
+    })
+
+    // Why: both rows originally started together. A later working -> terminal
+    // transition must not make fallback tab createdAt outrank paneKey order.
+    expect(rows.map((row) => [row.paneKey, row.startedAt, row.tab.createdAt])).toEqual([
+      [PANE_KEY_1, 1000, 1000],
+      [PANE_KEY_2, 1000, 1000]
+    ])
+  })
+
+  it('anchors missing-tab row order to the oldest state history entry', () => {
+    const first = makeEntry(PANE_KEY_1, 2400, {
+      state: 'done',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      stateHistory: [
+        { state: 'working', prompt: 'omp worker', startedAt: 1000 },
+        { state: 'blocked', prompt: 'omp worker', startedAt: 1800 }
+      ]
+    })
+    const second = makeEntry(PANE_KEY_2, 1600, {
+      state: 'waiting',
+      worktreeId: 'wt-1',
+      tabId: 'tab-2',
+      stateHistory: [
+        { state: 'working', prompt: 'omp worker', startedAt: 1000 },
+        { state: 'blocked', prompt: 'omp worker', startedAt: 1200 }
+      ]
+    })
+
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [second, first],
+      retained: [],
+      now: 2500
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.startedAt, row.tab.createdAt])).toEqual([
+      [PANE_KEY_1, 1000, 1000],
+      [PANE_KEY_2, 1000, 1000]
+    ])
+  })
+
+  it('uses ordinal pane-key comparison for final row ordering ties', () => {
+    expect(comparePaneKeysOrdinal('tab-\u00e4', 'tab-z')).toBeGreaterThan(0)
   })
 
   it('uses runtime orchestration metadata for hook-reported live rows', () => {

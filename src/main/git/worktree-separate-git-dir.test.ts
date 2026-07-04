@@ -1,7 +1,7 @@
-import { execFileSync } from 'child_process'
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import * as path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import * as path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from './runner'
 

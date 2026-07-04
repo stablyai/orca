@@ -1,6 +1,7 @@
 import type { IBufferLine, IBufferRange, IDisposable, Terminal } from '@xterm/xterm'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { buildCandidateLogicalLinesForBufferPosition } from './terminal-file-link-hit-testing'
+import { isTerminalLinkActivation } from './terminal-link-activation'
 import { rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 
 type UrlLinkHitTestDeps = {
@@ -48,13 +49,14 @@ export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLi
   return links
 }
 
-function isPrimaryHttpLinkFallbackActivation(event: MouseEvent): boolean {
+function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || event.button !== 0) {
     return false
   }
-  // Why: URL links now open on ordinary clicks, but macOS Ctrl-click must stay
-  // available for context menus even when Chromium reports it as button 0.
-  return !(navigator.userAgent.includes('Mac') && event.ctrlKey && !event.metaKey)
+  // Why: desktop terminal links require an intentional Cmd/Ctrl gesture so
+  // plain clicks remain available for cursor placement and selection. Mobile
+  // tap routing is handled separately under mobile/src/terminal.
+  return isTerminalLinkActivation(event)
 }
 
 function* iterateTerminalHttpUrlCandidates(
@@ -189,7 +191,7 @@ function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
 
 function getBufferPositionForTerminalMouseEvent(
   terminal: Terminal,
-  event: MouseEvent
+  event: Pick<MouseEvent, 'clientX' | 'clientY'>
 ): { x: number; y: number } | null {
   const screenElement = getTerminalScreenElement(terminal)
   if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
@@ -220,7 +222,7 @@ export function installHttpLinkClickFallback(
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
   const handleMouseUp = (event: MouseEvent): void => {
-    if (!isPrimaryHttpLinkFallbackActivation(event)) {
+    if (!isDesktopHttpLinkFallbackActivation(event)) {
       return
     }
 
@@ -230,8 +232,8 @@ export function installHttpLinkClickFallback(
     }
 
     // Why: xterm's WebLinksAddon only activates after hover state exists. This
-    // direct mouseup fallback preserves ordinary link clicks when the hover link
-    // was never established, while defaultPrevented avoids duplicate opens.
+    // direct mouseup fallback preserves modifier-clicks when the hover link was
+    // never established, while defaultPrevented avoids duplicate opens.
     const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, {
       worktreeId: deps.worktreeId,
       forceSystemBrowser: event.shiftKey,
@@ -258,9 +260,34 @@ export function openHttpLinkAtBufferPosition(
   terminalColumns: number,
   deps: UrlLinkHitTestDeps
 ): boolean {
+  const url = getTerminalHttpLinkAtBufferPosition(buffer, position, terminalColumns)
+  if (!url) {
+    return false
+  }
+
+  openTerminalHttpLink(url, deps)
+  return true
+}
+
+export function getTerminalHttpLinkForMouseEvent(
+  terminal: Terminal,
+  event: Pick<MouseEvent, 'clientX' | 'clientY'>
+): string | null {
+  const position = getBufferPositionForTerminalMouseEvent(terminal, event)
+  if (!position) {
+    return null
+  }
+  return getTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+}
+
+export function getTerminalHttpLinkAtBufferPosition(
+  buffer: { getLine(y: number): IBufferLine | undefined },
+  position: { x: number; y: number },
+  terminalColumns: number
+): string | null {
   const logicalLines = buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
   if (logicalLines.length === 0) {
-    return false
+    return null
   }
 
   for (const logicalLine of logicalLines) {
@@ -269,12 +296,11 @@ export function openHttpLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
-      openTerminalHttpLink(parsed.url, deps)
-      return true
+      return parsed.url
     }
   }
 
-  return false
+  return null
 }
 
 export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {

@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
@@ -13,6 +13,8 @@ import {
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
+import type { Store } from '../persistence'
+import { clearActiveRuntimeEnvironmentFocusIfMatches } from '../runtime-environment-focus-self-heal'
 import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
 import {
   callRuntimeEnvironment,
@@ -57,7 +59,13 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
   }
 }
 
-export function registerRuntimeEnvironmentHandlers(): void {
+function listPublicRuntimeEnvironments(): PublicKnownRuntimeEnvironment[] {
+  // Why: `source` is persisted on the env record, so read it directly instead of
+  // joining the VM store — a corrupt VM store must not break listing all envs.
+  return listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
+}
+
+export function registerRuntimeEnvironmentHandlers(store: Store): void {
   // Why: keep direct re-registration safe even though register-core-handlers
   // normally guards this path; otherwise the binary send listener can stack.
   resetSharedControlSupport()
@@ -67,7 +75,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
 
   ipcMain.handle('runtimeEnvironments:list', (): PublicKnownRuntimeEnvironment[] =>
-    listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
+    listPublicRuntimeEnvironments()
   )
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
@@ -93,6 +101,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
         closeRemoteRuntimeRequestConnection(args.selector)
         clearSharedControlSupport(args.selector)
       }
+      clearActiveRuntimeEnvironmentFocusIfMatches(store, removed.id)
       closeSubscriptionsForEnvironment(removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }

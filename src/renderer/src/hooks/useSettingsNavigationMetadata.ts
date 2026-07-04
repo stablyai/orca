@@ -430,20 +430,6 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getStatsPaneSearchEntries(),
       group: 'interface'
     },
-    {
-      id: 'servers',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
-        'Remote Orca Servers'
-      ),
-      description: isWebClient
-        ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
-      icon: Server,
-      searchEntries: [runtimeEnvironmentsSearchEntry],
-      group: 'remote',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
-    },
     ...(showDesktopOnlySettings
       ? [
           {
@@ -459,6 +445,20 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
+    {
+      id: 'servers',
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
+        'Remote Orca Servers'
+      ),
+      description: isWebClient
+        ? 'Connect this browser to a saved Orca server.'
+        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
+      icon: Server,
+      searchEntries: [runtimeEnvironmentsSearchEntry],
+      group: 'remote',
+      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+    },
     ...(showDesktopOnlySettings && isMac
       ? [
           {
@@ -551,9 +551,12 @@ export function buildSettingsNavigationMetadata({
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
-  // Why: subscribe metadata consumers to language changes; translated memo
-  // contents refresh on rerender without depending on i18n.language directly.
-  useTranslation()
+  // Why: useTranslation subscribes to language changes, but the active locale
+  // must also be a memo dependency below — a rerender alone returns the cached
+  // previous-language sections, leaving the Settings sidebar and Cmd+J palette
+  // stuck in the old language until Settings is remounted.
+  const { i18n } = useTranslation()
+  const activeLocale = i18n.language
   const repos = useAppStore((state) => state.repos)
   const settings = useAppStore((state) => state.settings)
   const isMac = isMacUserAgent()
@@ -584,6 +587,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isDev: import.meta.env.DEV,
         repos
       }),
-    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
+    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos, activeLocale]
   )
 }

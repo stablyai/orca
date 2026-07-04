@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: local status/install/remove and SSH remote
    install must share the same Copilot event list, script body, and
    managed-command matching so local and remote hook behavior cannot drift. */
-import { existsSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -166,7 +166,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
-    'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\',
+    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
+    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
+    // command line (EDR command-line false positives). Wire body is identical.
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -177,7 +180,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "hookEventName=${ORCA_COPILOT_HOOK_EVENT}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload=${payload}" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
   ].join('\n')

@@ -135,6 +135,8 @@ function renderCard(
         canReuseSelectedBranch={false}
         reuseSelectedBranch={false}
         onReuseSelectedBranchChange={() => {}}
+        branchNameOverride=""
+        onBranchNameOverrideChange={() => {}}
         forkPushWarning={null}
         detectedAgentIds={null}
         onOpenAgentSettings={() => {}}
@@ -172,6 +174,25 @@ function renderCard(
     )
   })
   return { container, root }
+}
+
+function findInputByLabel(container: HTMLElement, labelText: string): HTMLInputElement | null {
+  const label = [...container.querySelectorAll('label')].find(
+    (candidate) => candidate.textContent?.trim() === labelText
+  )
+  const labelledId = label?.getAttribute('for')
+  if (labelledId) {
+    return document.getElementById(labelledId) as HTMLInputElement | null
+  }
+  return label?.parentElement?.querySelector<HTMLInputElement>('input') ?? null
+}
+
+function changeInputValue(input: HTMLInputElement, value: string): void {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  act(() => {
+    valueSetter?.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
 }
 
 let current: { container: HTMLDivElement; root: Root } | null = null
@@ -320,6 +341,64 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(changes).toEqual(['wait-for-setup'])
   })
 
+  it('shows a git-only branch name field in Advanced and emits manual edits', () => {
+    const changes: (string | undefined)[] = []
+    current = renderCard({
+      advancedOpen: false,
+      branchesEnabled: true,
+      branchNameOverride: 'feature/initial',
+      onBranchNameOverrideChange: (next) => changes.push(next)
+    })
+
+    const branchInput = findInputByLabel(current.container, 'Branch name')
+    expect(branchInput).toBeTruthy()
+    expect(branchInput?.value).toBe('feature/initial')
+
+    changeInputValue(branchInput as HTMLInputElement, 'feature/manual')
+
+    expect(changes).toEqual(['feature/manual'])
+  })
+
+  it('omits the branch name field for non-git projects', () => {
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      selectedRepoIsGit: false,
+      branchNameOverride: 'feature/manual',
+      onBranchNameOverrideChange: vi.fn()
+    })
+
+    expect(findInputByLabel(current.container, 'Branch name')).toBeNull()
+  })
+
+  it('omits the branch name field when a tracked work item is the source', () => {
+    // Why: a PR/issue/MR/Linear source derives the branch itself (and a linked
+    // GitHub PR re-resolves it at submit), so a manual override would be a
+    // silently ignored control — the field is only for typed-name/base-branch.
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      branchNameOverride: 'feature/manual',
+      smartNameSelection: { kind: 'github-pr', label: '#42 Fix', url: 'https://example.com/pr/42' },
+      onBranchNameOverrideChange: vi.fn()
+    })
+
+    expect(findInputByLabel(current.container, 'Branch name')).toBeNull()
+  })
+
+  it('keeps the branch name field when creating from a base branch', () => {
+    // Why: choosing a base branch still lets the user name their new branch.
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      branchNameOverride: 'feature/manual',
+      smartNameSelection: { kind: 'branch', label: 'main' },
+      onBranchNameOverrideChange: vi.fn()
+    })
+
+    expect(findInputByLabel(current.container, 'Branch name')).toBeTruthy()
+  })
+
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {
     current = renderCard({
       eligibleRepos: [
@@ -339,5 +418,109 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
         .querySelector('[aria-label="workspace name"]')
         ?.getAttribute('data-repo-backed-sources-disabled')
     ).toBe('false')
+  })
+
+  it('shows VM recipes inside the run target picker', () => {
+    const hostChanges: string[] = []
+    const recipeChanges: (string | null)[] = []
+    current = renderCard({
+      projectHostSetupOptions: [
+        {
+          kind: 'ready',
+          id: 'setup-local',
+          label: 'Local Mac',
+          path: '/Users/alice/orca'
+        },
+        {
+          kind: 'ready',
+          id: 'setup-builder',
+          label: 'Builder',
+          path: '/workspace/orca'
+        }
+      ] as never,
+      selectedProjectHostSetupId: 'setup-local',
+      onProjectHostSetupChange: (setupId) => hostChanges.push(setupId),
+      ephemeralVmRecipes: [
+        {
+          id: 'vercel',
+          name: 'Vercel Sandbox',
+          create: './scripts/orca-vm/vercel.start.sh',
+          destroy: './scripts/orca-vm/vercel.cleanup.sh',
+          destroyDisabled: false
+        }
+      ] as never,
+      onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
+    })
+
+    expect(current.container.textContent).toContain('Run on')
+    expect(current.container.textContent).not.toContain('VM recipe')
+
+    const runTargetButton =
+      current.container.querySelector<HTMLButtonElement>('button[role="combobox"]')
+    expect(runTargetButton).toBeTruthy()
+    act(() => runTargetButton?.click())
+
+    expect(document.body.textContent).toContain('Per-Workspace Environment')
+    const ephemeralVmItem = [
+      ...document.body.querySelectorAll<HTMLElement>('[role="option"]')
+    ].find((item) => item.textContent?.includes('Per-Workspace Environment'))
+    expect(ephemeralVmItem).toBeTruthy()
+    act(() => ephemeralVmItem?.click())
+
+    const recipeItem = [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+      (item) => item.textContent?.includes('Vercel Sandbox')
+    )
+    expect(recipeItem).toBeTruthy()
+    act(() => recipeItem?.click())
+
+    expect(recipeChanges).toEqual(['vercel'])
+    expect(hostChanges).toEqual([])
+  })
+
+  it('clears the selected VM recipe when an existing host is selected', () => {
+    const hostChanges: string[] = []
+    const recipeChanges: (string | null)[] = []
+    current = renderCard({
+      projectHostSetupOptions: [
+        {
+          kind: 'ready',
+          id: 'setup-local',
+          label: 'Local Mac',
+          path: '/Users/alice/orca'
+        },
+        {
+          kind: 'ready',
+          id: 'setup-builder',
+          label: 'Builder',
+          path: '/workspace/orca'
+        }
+      ] as never,
+      selectedProjectHostSetupId: 'setup-local',
+      onProjectHostSetupChange: (setupId) => hostChanges.push(setupId),
+      ephemeralVmRecipes: [
+        {
+          id: 'vercel',
+          name: 'Vercel Sandbox',
+          create: './scripts/orca-vm/vercel.start.sh',
+          destroyDisabled: true
+        }
+      ] as never,
+      selectedEphemeralVmRecipeId: 'vercel',
+      onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
+    })
+
+    const runTargetButton =
+      current.container.querySelector<HTMLButtonElement>('button[role="combobox"]')
+    expect(runTargetButton?.textContent).toContain('Per-Workspace Environment')
+    act(() => runTargetButton?.click())
+
+    const builderItem = [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+      (item) => item.textContent?.includes('Builder')
+    )
+    expect(builderItem).toBeTruthy()
+    act(() => builderItem?.click())
+
+    expect(hostChanges).toEqual(['setup-builder'])
+    expect(recipeChanges).toEqual([null])
   })
 })

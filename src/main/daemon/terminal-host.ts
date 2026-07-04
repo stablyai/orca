@@ -136,6 +136,7 @@ export class TerminalHost {
       sessionId: opts.sessionId,
       cols: size.cols,
       rows: size.rows,
+      terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
       subprocess,
       shellReadySupported: opts.shellReadySupported ?? false,
       // Why: reap the dead session (dispose emulator + drop from the map) the
@@ -295,16 +296,17 @@ export class TerminalHost {
       if (!session.isAlive) {
         continue
       }
-      const snapshot = session.getSnapshot()
+      const size = session.getAppliedSize()
       result.push({
         sessionId: session.sessionId,
         state: session.state,
         shellState: session.shellState,
         isAlive: true,
+        ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
         pid: session.pid,
         cwd: session.getCwd(),
-        cols: snapshot?.cols ?? 0,
-        rows: snapshot?.rows ?? 0,
+        cols: size?.cols ?? 0,
+        rows: size?.rows ?? 0,
         createdAt: 0
       })
     }

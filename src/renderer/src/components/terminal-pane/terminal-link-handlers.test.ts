@@ -7,6 +7,7 @@ import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
   getTerminalHtmlFileOpenHint,
+  getTerminalUrlOpenHint,
   installFilePathLinkClickFallback,
   isTerminalLinkActivation,
   openFilePathLinkAtBufferPosition,
@@ -156,12 +157,28 @@ describe('isTerminalLinkActivation', () => {
 })
 
 describe('handleOscLink', () => {
-  it('routes http links on ordinary click', () => {
+  it('ignores http links without the platform modifier on desktop', () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: true }
     const preventDefault = vi.fn()
 
-    handleOscLink('https://example.com', { metaKey: false, ctrlKey: false, preventDefault }, deps)
+    expect(
+      handleOscLink('https://example.com', { metaKey: false, ctrlKey: false, preventDefault }, deps)
+    ).toBe(false)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('routes http links with the platform modifier on desktop', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
+
+    expect(
+      handleOscLink('https://example.com', { metaKey: true, ctrlKey: false, preventDefault }, deps)
+    ).toBe(true)
 
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
@@ -438,18 +455,38 @@ describe('handleOscLink', () => {
     setPlatform('Macintosh')
     expect(getTerminalFileOpenHint()).toBe('⌘+click to open or ⇧⌘+click for default app')
     expect(getTerminalHtmlFileOpenHint()).toBe('⌘+click to open or ⇧⌘+click for default browser')
+    expect(getTerminalUrlOpenHint()).toBe('⌘+click to open or ⇧⌘+click for system browser')
 
     setPlatform('Windows')
     expect(getTerminalFileOpenHint()).toBe('Ctrl+click to open or Shift+Ctrl+click for default app')
     expect(getTerminalHtmlFileOpenHint()).toBe(
       'Ctrl+click to open or Shift+Ctrl+click for default browser'
     )
+    expect(getTerminalUrlOpenHint()).toBe(
+      'Ctrl+click to open or Shift+Ctrl+click for system browser'
+    )
   })
 
-  it('opens local file URL links in Orca on ordinary click', async () => {
+  it('ignores local file URL links without the platform modifier on desktop', async () => {
     setPlatform('Windows')
 
-    handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: false }, deps)
+    expect(handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: false }, deps)).toBe(
+      false
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('opens local file URL links in Orca with the platform modifier on desktop', async () => {
+    setPlatform('Windows')
+
+    expect(handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: true }, deps)).toBe(
+      true
+    )
 
     // openDetectedFilePath is async (fire-and-forget), so flush the microtask queue
     // before asserting on positive behavior.
@@ -1708,7 +1745,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     disposable.dispose()
   })
 
-  it('opens regular URLs from a direct ordinary-click fallback when xterm did not handle them', async () => {
+  it('ignores regular URLs from a direct ordinary-click fallback on desktop', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false }
     const rows = [
@@ -1723,6 +1760,39 @@ describe('createFilePathLinkProvider range bounds', () => {
     mouseUp({
       button: 0,
       metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 230,
+      clientY: 25,
+      preventDefault,
+      stopPropagation
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
+    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
+  it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [
+      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
+    ]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: true,
       ctrlKey: false,
       shiftKey: false,
       defaultPrevented: false,

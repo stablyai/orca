@@ -948,6 +948,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -1167,6 +1168,7 @@ describe('useIpcEvents updater integration', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -1409,6 +1411,7 @@ describe('useIpcEvents updater integration', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -1698,7 +1701,8 @@ describe('useIpcEvents updater integration', () => {
       settings: {
         terminalFontSize: 13,
         experimentalNativeChat: false,
-        openAgentTabsInChatByDefault: false
+        openAgentTabsInChatByDefault: false,
+        activeRuntimeEnvironmentId: undefined as string | undefined
       }
     }
     const createTerminalListenerRef: {
@@ -1734,11 +1738,13 @@ describe('useIpcEvents updater integration', () => {
             afterTabId?: string
             targetGroupId?: string
             command?: string
+            cwd?: string
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
             title?: string
             activate?: boolean
             presentation?: 'background' | 'focused'
+            source?: 'runtime-session'
           }) => void)
         | null
     } = { current: null }
@@ -1838,6 +1844,7 @@ describe('useIpcEvents updater integration', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -1877,6 +1884,7 @@ describe('useIpcEvents updater integration', () => {
               afterTabId?: string
               targetGroupId?: string
               command?: string
+              cwd?: string
               launchConfig?: SleepingAgentLaunchConfig
               launchAgent?: TuiAgent
               title?: string
@@ -2138,6 +2146,7 @@ describe('useIpcEvents updater integration', () => {
       targetGroupId: 'group-left',
       title: 'Codex',
       command: 'codex',
+      cwd: '/repo/packages/app',
       launchConfig: {
         agentArgs: '--model gpt-5',
         agentEnv: { CODEX_PROFILE: 'request' }
@@ -2150,7 +2159,8 @@ describe('useIpcEvents updater integration', () => {
       activate: false,
       recordInteraction: false,
       launchAgent: 'codex',
-      viewMode: 'chat'
+      viewMode: 'chat',
+      startupCwd: '/repo/packages/app'
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
@@ -2183,6 +2193,42 @@ describe('useIpcEvents updater integration', () => {
       tabId: 'tab-new',
       title: 'Codex'
     })
+
+    createTab.mockClear()
+    replyTerminalCreate.mockClear()
+    storeState.settings.activeRuntimeEnvironmentId = 'focused-runtime'
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-runtime-session',
+      worktreeId: 'wt-2',
+      targetGroupId: 'group-left',
+      title: 'Runtime Terminal',
+      command: 'codex',
+      activate: true,
+      source: 'runtime-session'
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, undefined)
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-runtime-session',
+      tabId: 'tab-new',
+      title: 'Runtime Terminal'
+    })
+
+    createTab.mockClear()
+    replyTerminalCreate.mockClear()
+    storeState.settings.activeRuntimeEnvironmentId = 'focused-runtime'
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-runtime-blocked',
+      worktreeId: 'wt-2',
+      title: 'Blocked Local Terminal'
+    })
+
+    expect(createTab).not.toHaveBeenCalled()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-runtime-blocked',
+      error: 'Local terminal creation is unavailable while a remote runtime is active'
+    })
+    storeState.settings.activeRuntimeEnvironmentId = undefined
 
     if (typeof focusTerminalListenerRef.current !== 'function') {
       throw new Error('Expected focus-terminal listener to be registered')
@@ -2693,6 +2739,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -3180,6 +3227,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -3395,6 +3443,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -3605,6 +3654,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -3833,6 +3883,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -4087,6 +4138,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
@@ -4318,6 +4370,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onToggleWorktreePalette: () => () => {},
           onToggleFloatingTerminal: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onToggleQuickCommandsMenu: () => () => {},
           onOpenNewWorkspace: () => () => {},
           onOpenTasks: () => () => {},
           onJumpToWorktreeIndex: () => () => {},

@@ -224,6 +224,58 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().pendingReconnectWorktreeIds).toEqual([FLOATING_TERMINAL_WORKTREE_ID])
   })
 
+  it('batches restored terminal reconnect wake hints into one store update', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-1' }),
+          makeTab({ id: 'tab-2', worktreeId, ptyId: 'pty-2' }),
+          makeTab({ id: 'tab-3', worktreeId, ptyId: 'pty-3' })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout(),
+        'tab-2': makeLayout(),
+        'tab-3': makeLayout()
+      },
+      activeWorktreeIdsOnShutdown: [worktreeId]
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    let updateCount = 0
+    const unsubscribe = store.subscribe(() => {
+      updateCount += 1
+    })
+    await store.getState().reconnectPersistedTerminals()
+    unsubscribe()
+
+    // Why: startup restores every daemon wake hint, but subscribers should see
+    // one ready-state transition instead of one update per restored tab.
+    expect(updateCount).toBe(1)
+    expect(store.getState().workspaceSessionReady).toBe(true)
+    expect(store.getState().ptyIdsByTabId).toMatchObject({
+      'tab-1': ['pty-1'],
+      'tab-2': ['pty-2'],
+      'tab-3': ['pty-3']
+    })
+    expect(store.getState().tabsByWorktree[worktreeId]).toEqual([
+      expect.objectContaining({ id: 'tab-1', ptyId: 'pty-1' }),
+      expect.objectContaining({ id: 'tab-2', ptyId: 'pty-2' }),
+      expect.objectContaining({ id: 'tab-3', ptyId: 'pty-3' })
+    ])
+  })
+
   it('resets persisted agent titles to the fallback label on hydration', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/wt-1'
