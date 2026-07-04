@@ -1,6 +1,7 @@
+import { isMacPlatform } from './terminal-link-open-hints'
+
 export function isTerminalLinkActivation(
   event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
 ): boolean {
-  const isMac = navigator.userAgent.includes('Mac')
-  return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
+  return isMacPlatform() ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
 }

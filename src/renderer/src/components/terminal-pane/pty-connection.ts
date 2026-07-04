@@ -1247,14 +1247,9 @@ export function connectPanePty(
     )
     return tab?.defaultTitle?.trim() || 'Terminal'
   }
-  /**
-   * Resolves the authoritative owner agent type for this pane, checking tab launch,
-   * pane startup, typed command ownership, and store state configuration.
-   *
-   * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
-   * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
-   * in generic terminals where launch metadata does not exist.
-   */
+  // Why: infer pane ownership from a manually typed agent command (e.g. `omp`) by
+  // shadowing the shell's current command line, for generic terminals where no
+  // launch metadata exists. Consumed by getAuthoritativePaneAgent below.
   let commandInferredPaneAgent: TuiAgent | null = null
   let pendingShellCommandLine = ''
   let pendingShellCommandCursor = 0
@@ -1355,9 +1350,13 @@ export function connectPanePty(
       return null
     }
     const params = data.slice(index + 2, cursor)
-    if (final === 'D') {
+    // Why: only emulate a bare one-column move. Parameterized/modified cursor keys
+    // (e.g. Ctrl+Left `\x1b[1;5D` = word-jump) move the real cursor by more than
+    // one, so tracking them as ±1 would desync the shadow line — fall through to
+    // reset instead of silently corrupting the sampled command.
+    if (final === 'D' && params === '') {
       movePendingShellCommandCursor(-1)
-    } else if (final === 'C') {
+    } else if (final === 'C' && params === '') {
       movePendingShellCommandCursor(1)
     } else if (final === 'H' || (final === '~' && params === '1')) {
       pendingShellCommandCursor = 0
@@ -1462,6 +1461,14 @@ export function connectPanePty(
       }
     }
   }
+  /**
+   * Resolves the authoritative owner agent type for this pane, checking tab launch,
+   * pane startup, typed command ownership, and store state configuration.
+   *
+   * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
+   * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
+   * in generic terminals where launch metadata does not exist.
+   */
   const getAuthoritativePaneAgent = (): AgentType | undefined => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(

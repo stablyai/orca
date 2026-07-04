@@ -166,7 +166,7 @@ type CloseManagedPaneArgs = {
   setActivePaneId: (paneId: number | null) => void
 }
 
-export function closeManagedPane(args: CloseManagedPaneArgs): void {
+function teardownManagedPane(args: CloseManagedPaneArgs, reason: 'close' | 'detach'): void {
   const pane = args.panes.get(args.paneId)
   if (!pane) {
     return
@@ -183,33 +183,24 @@ export function closeManagedPane(args: CloseManagedPaneArgs): void {
   args.managerOptions.onPaneClosed?.(args.paneId, {
     paneId: args.paneId,
     leafId: closedLeafId,
-    reason: 'close'
+    reason
   })
   args.managerOptions.onLayoutChanged?.()
 }
 
+export function closeManagedPane(args: CloseManagedPaneArgs): void {
+  teardownManagedPane(args, 'close')
+}
+
 export function detachManagedPaneForExternalMove(args: CloseManagedPaneArgs): boolean {
-  const pane = args.panes.get(args.paneId)
-  if (!pane || args.panes.size <= 1) {
+  // Why: refuse to detach the last pane — there is no other pane to fall back to.
+  if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
     return false
   }
-  const closedLeafId = pane.leafId
-  args.releasePaneIdentity(args.paneId)
-  removePaneContainer(args, pane)
-  const nextActivePaneId = activateReplacementPane(args)
-  applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
-  for (const p of args.panes.values()) {
-    safeFit(p)
-  }
-  updateMultiPaneState(args.getDragCallbacks())
   // Why: pane-to-tab detach tears down only this renderer pane; the PTY is
-  // adopted by the new tab, so TerminalPane must skip process-close cleanup.
-  args.managerOptions.onPaneClosed?.(args.paneId, {
-    paneId: args.paneId,
-    leafId: closedLeafId,
-    reason: 'detach'
-  })
-  args.managerOptions.onLayoutChanged?.()
+  // adopted by the new tab, so the 'detach' reason tells TerminalPane to skip
+  // process-close cleanup.
+  teardownManagedPane(args, 'detach')
   return true
 }
 
