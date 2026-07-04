@@ -254,7 +254,10 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const handleImport = async (): Promise<void> => {
     try {
-      const synced = (await window.api.ssh.importConfig()) as SshTarget[]
+      // Why: the explicit Import action re-adopts every ~/.ssh/config host,
+      // including ones the user previously deleted — clear tombstones so a
+      // deliberate re-import can bring them back.
+      const synced = (await window.api.ssh.importConfig({ reAdopt: true })) as SshTarget[]
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
         if (synced.length === 0) {

@@ -3339,6 +3339,11 @@ export class Store {
             defaults.workspaceSession
           ),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          deletedSshConfigAliases: Array.isArray(parsed.deletedSshConfigAliases)
+            ? parsed.deletedSshConfigAliases.filter(
+                (alias): alias is string => typeof alias === 'string'
+              )
+            : [],
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
@@ -5971,6 +5976,34 @@ export class Store {
     }
     this.state.claudeLivePtySessionIds = ids.filter((id) => id !== sessionId)
     this.scheduleSave()
+  }
+
+  getDeletedSshConfigAliases(): string[] {
+    return [...(this.state.deletedSshConfigAliases ?? [])]
+  }
+
+  addDeletedSshConfigAlias(alias: string): void {
+    this.state.deletedSshConfigAliases ??= []
+    if (!this.state.deletedSshConfigAliases.includes(alias)) {
+      this.state.deletedSshConfigAliases.push(alias)
+      this.scheduleSave()
+    }
+  }
+
+  removeDeletedSshConfigAlias(alias: string): void {
+    const current = this.state.deletedSshConfigAliases
+    if (!current || !current.includes(alias)) {
+      return
+    }
+    this.state.deletedSshConfigAliases = current.filter((entry) => entry !== alias)
+    this.scheduleSave()
+  }
+
+  clearDeletedSshConfigAliases(): void {
+    if (this.state.deletedSshConfigAliases && this.state.deletedSshConfigAliases.length > 0) {
+      this.state.deletedSshConfigAliases = []
+      this.scheduleSave()
+    }
   }
 
   // ── SSH Remote PTY Leases ──────────────────────────────────────────

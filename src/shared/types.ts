@@ -3498,6 +3498,10 @@ export type PersistedState = {
    *  pre-partition builds keep working. Optional/absent on legacy files. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
   sshTargets: SshTarget[]
+  /** SSH config aliases the user explicitly deleted. Suppresses re-import of the
+   *  matching ~/.ssh/config host on the next sync so a deleted host does not
+   *  reappear. Cleared for an alias when the user re-adds it or re-adopts config. */
+  deletedSshConfigAliases: string[]
   sshRemotePtyLeases: SshRemotePtyLease[]
   /** Daemon session ids of live local Claude launches. Seeds the Claude
    *  live-PTY gate on startup so an early OAuth refresh cannot rotate the
