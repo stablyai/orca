@@ -9606,7 +9606,9 @@
             "globalScope": "グローバル",
             "projectScope": "プロジェクト",
             "currentProjectLower": "現在のプロジェクト",
-            "project": "プロジェクト"
+            "project": "プロジェクト",
+            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "host": "Host"
           },
           "AiVaultSessionDetails": {
             "updated": "更新日時",

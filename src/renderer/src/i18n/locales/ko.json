@@ -9606,7 +9606,9 @@
             "globalScope": "전역",
             "projectScope": "프로젝트",
             "currentProjectLower": "현재 프로젝트",
-            "project": "프로젝트"
+            "project": "프로젝트",
+            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "host": "Host"
           },
           "AiVaultSessionDetails": {
             "updated": "업데이트됨",

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 
 const SESSION_LIMIT = 500
@@ -26,7 +27,10 @@ export function resetAiVaultForcedRescanThrottleForTest(): void {
 
 type AiVaultRefreshArgs = { force?: boolean; background?: boolean }
 
-export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
+export function useAiVaultSessionRefresh(
+  scopePaths: readonly string[],
+  executionHostScope: ExecutionHostScope
+): {
   error: string | null
   loading: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
@@ -45,8 +49,11 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
   const lastAppliedScanRef = useRef<{ scopeKey: string; scannedAt: string } | null>(null)
   const mountedRef = useRef(true)
   const scopePathsKey = useMemo(() => scopePaths.join('\n'), [scopePaths])
+  const scanScopeKey = `${executionHostScope}\n${scopePathsKey}`
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
+  const executionHostScopeRef = useRef<ExecutionHostScope>(executionHostScope)
+  executionHostScopeRef.current = executionHostScope
 
   const refresh = useCallback(async (args: AiVaultRefreshArgs = {}): Promise<void> => {
     // A scope change during an in-flight scan must not be dropped; queue one more
@@ -74,10 +81,13 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
     }
     setError(null)
     const scopeKey = scopePathsRef.current.join('\n')
+    const hostScope = executionHostScopeRef.current
+    const scanKey = `${hostScope}\n${scopeKey}`
     try {
       const result = await window.api.aiVault.listSessions({
         limit: SESSION_LIMIT,
         scopePaths: scopePathsRef.current,
+        executionHostScope: hostScope,
         force: args.force
       })
       if (!mountedRef.current || refreshIdRef.current !== refreshId) {
@@ -86,12 +96,12 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
       // A cache hit returns the snapshot already on screen; skip the state
       // updates so refocus flips don't force pointless re-renders.
       if (
-        lastAppliedScanRef.current?.scopeKey === scopeKey &&
+        lastAppliedScanRef.current?.scopeKey === scanKey &&
         lastAppliedScanRef.current.scannedAt === result.scannedAt
       ) {
         return
       }
-      lastAppliedScanRef.current = { scopeKey, scannedAt: result.scannedAt }
+      lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: result.scannedAt }
       setScanResult(result)
       setSessions(result.sessions)
     } catch (err) {
@@ -162,7 +172,7 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
     if (!force) {
       requestForcedRescan()
     }
-  }, [refresh, requestForcedRescan, scopePathsKey])
+  }, [refresh, requestForcedRescan, scanScopeKey])
 
   // Sessions started while the app was backgrounded should appear when the
   // user returns, so refocus also bypasses the scan cache (throttled). OS

@@ -102,6 +102,7 @@ export function VaultSessionRow({
         title: session.title,
         command: resumeStartup.command,
         sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
         ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {})
       })

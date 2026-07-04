@@ -13,6 +13,7 @@ import {
 import { useAppStore } from '@/store'
 import {
   canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -79,6 +80,7 @@ export function useAiVaultSessionLaunchActions({
     (session: AiVaultSession, targetWorktreeId?: string): void => {
       const targetId = resolveAiVaultSessionLaunchTarget({
         sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         targetWorktreeId,
         targetState
@@ -130,6 +132,7 @@ export type AiVaultSessionLaunchTarget =
 
 export function resolveAiVaultSessionLaunchTarget(args: {
   sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   activeWorktreeId: string | null
   targetWorktreeId?: string
   targetState: AiVaultSessionResumeTargetState
@@ -143,7 +146,18 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   }
 
   const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, targetWorktreeId)
-  if (!canResumeAiVaultSessionOnTarget({ sessionFilePath: args.sessionFilePath, targetStatus })) {
+  const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
+    args.targetState,
+    targetWorktreeId
+  )
+  if (
+    !canResumeAiVaultSessionOnTarget({
+      sessionFilePath: args.sessionFilePath,
+      sessionExecutionHostId: args.sessionExecutionHostId,
+      targetStatus,
+      targetExecutionHostId
+    })
+  ) {
     return { status: 'unsupported', targetStatus }
   }
 

@@ -9606,7 +9606,9 @@
             "globalScope": "Global",
             "projectScope": "Project",
             "currentProjectLower": "current project",
-            "project": "Project"
+            "project": "Project",
+            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "host": "Host"
           },
           "AiVaultSessionDetails": {
             "originalAsk": "Original ask",

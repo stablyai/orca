@@ -42,18 +42,24 @@ const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
 let latest: ReturnType<typeof useAiVaultSessionRefresh> | null = null
 
-function HookProbe(props: { scopePaths: readonly string[] }): null {
-  latest = useAiVaultSessionRefresh(props.scopePaths)
+function HookProbe(props: {
+  scopePaths: readonly string[]
+  executionHostScope?: 'local' | 'all' | `ssh:${string}`
+}): null {
+  latest = useAiVaultSessionRefresh(props.scopePaths, props.executionHostScope ?? 'local')
   return null
 }
 
-async function renderHook(scopePaths: readonly string[] = []): Promise<void> {
+async function renderHook(
+  scopePaths: readonly string[] = [],
+  executionHostScope: 'local' | 'all' | `ssh:${string}` = 'local'
+): Promise<void> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(createElement(HookProbe, { scopePaths }))
+    root.render(createElement(HookProbe, { scopePaths, executionHostScope }))
   })
 }
 
@@ -126,7 +132,21 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     await flushMicrotasks()
 
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
-    expect(listSessionsMock.mock.calls[0]?.[0]).toMatchObject({ force: true })
+    expect(listSessionsMock.mock.calls[0]?.[0]).toMatchObject({
+      executionHostScope: 'local',
+      force: true
+    })
+  })
+
+  it('passes the requested execution host scope to the scanner', async () => {
+    await renderHook(['/repo'], 'ssh:dev-box')
+    await flushMicrotasks()
+
+    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+    expect(lastCallArgs()).toMatchObject({
+      executionHostScope: 'ssh:dev-box',
+      scopePaths: ['/repo']
+    })
   })
 
   it('force re-scans on refocus once the throttle allows it', async () => {

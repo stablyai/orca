@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { toast } from 'sonner'
 import {
   canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import {
@@ -169,7 +170,9 @@ export default function AiVaultSessionDropLayer({
         return true
       }
 
-      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(useAppStore.getState(), worktreeId)
+      const state = useAppStore.getState()
+      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
+      const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId)
       if (targetStatus === 'runtime') {
         toast.error(
           translate(
@@ -191,7 +194,9 @@ export default function AiVaultSessionDropLayer({
       if (
         !canResumeAiVaultSessionOnTarget({
           sessionFilePath: payload.sessionFilePath ?? null,
-          targetStatus
+          sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
+          targetStatus,
+          targetExecutionHostId
         })
       ) {
         toast.error(
