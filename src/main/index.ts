@@ -209,10 +209,11 @@ let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
-let expectedRendererReload: { webContentsId: number; until: number } | null = null
-// Why: the crash/freeze-recovery reload re-fires did-finish-load; flag it so the
-// local-PTY orphan sweep spares live sessions across that one reload (#5787).
-let recoveryReloadInFlight: { webContentsId: number; until: number } | null = null
+// Why: a reload/teardown intent set for one renderer must not leak to a later load.
+// The recovery reload re-fires did-finish-load, so its flag lets the local-PTY orphan
+// sweep spare live sessions across that one reload (#5787).
+const expectedRendererReload = createWebContentsTimedFlag()
+const recoveryReloadInFlight = createWebContentsTimedFlag()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 // Why: GPU child crashes clustered right after launch indicate a broken driver;
 // track them so Orca can move this build onto software rendering.
@@ -435,51 +436,66 @@ function focusExistingWindow(): void {
   })
 }
 
+// Why: a webContents-scoped flag that auto-expires so an intent set for one renderer
+// can't leak to a later load. `consume` clears on a positive match for one-shot
+// signals (the recovery reload fires exactly one did-finish-load).
+function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
+  mark: (webContentsId: number, durationMs?: number) => void
+  clear: (webContentsId?: number) => void
+  matches: (webContentsId: number, options?: { consume?: boolean }) => boolean
+} {
+  let state: { webContentsId: number; until: number } | null = null
+  return {
+    mark(webContentsId, durationMs = defaultDurationMs) {
+      state = { webContentsId, until: Date.now() + durationMs }
+    },
+    clear(webContentsId) {
+      if (webContentsId === undefined || state?.webContentsId === webContentsId) {
+        state = null
+      }
+    },
+    matches(webContentsId, options) {
+      if (!state || Date.now() > state.until) {
+        state = null
+        return false
+      }
+      if (state.webContentsId !== webContentsId) {
+        return false
+      }
+      if (options?.consume) {
+        state = null
+      }
+      return true
+    }
+  }
+}
+
 function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
-  expectedRendererReload = { webContentsId, until: Date.now() + durationMs }
+  expectedRendererReload.mark(webContentsId, durationMs)
 }
 
 function clearExpectedRendererReload(webContentsId?: number): void {
-  if (webContentsId === undefined || expectedRendererReload?.webContentsId === webContentsId) {
-    expectedRendererReload = null
-  }
+  expectedRendererReload.clear(webContentsId)
 }
 
 function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope {
   if (isQuitting || isQuittingForUpdate()) {
     return 'app-shutdown'
   }
-  if (!expectedRendererReload) {
+  if (webContentsId === undefined) {
     return 'none'
   }
-  if (Date.now() > expectedRendererReload.until) {
-    expectedRendererReload = null
-    return 'none'
-  }
-  return webContentsId !== undefined && expectedRendererReload.webContentsId === webContentsId
-    ? 'renderer-reload'
-    : 'none'
+  return expectedRendererReload.matches(webContentsId) ? 'renderer-reload' : 'none'
 }
 
 function markRecoveryReloadInFlight(webContentsId: number, durationMs = 10_000): void {
-  recoveryReloadInFlight = { webContentsId, until: Date.now() + durationMs }
+  recoveryReloadInFlight.mark(webContentsId, durationMs)
 }
 
 function isRecoveryReloadInFlight(webContentsId: number): boolean {
-  if (!recoveryReloadInFlight) {
-    return false
-  }
-  if (Date.now() > recoveryReloadInFlight.until) {
-    recoveryReloadInFlight = null
-    return false
-  }
-  if (recoveryReloadInFlight.webContentsId !== webContentsId) {
-    return false
-  }
   // Why: consume on read — the recovery reload fires exactly one did-finish-load,
-  // so clearing here keeps a later genuine reload sweeping orphaned local PTYs.
-  recoveryReloadInFlight = null
-  return true
+  // so a later genuine reload still sweeps orphaned local PTYs.
+  return recoveryReloadInFlight.matches(webContentsId, { consume: true })
 }
 
 function recordAgentStateCrashBreadcrumb(agentType: string, state: string): void {

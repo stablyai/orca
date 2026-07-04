@@ -24,8 +24,12 @@ const SESSION_RE = /current\s*session/i
 const WEEKLY_RE = /(?:current\s*week|weekly\s*(?:limits?|usage|rate\s*limits?)|7\s*[- ]?\s*day)/i
 const FABLE_WORD_RE = /\bfable\b/i
 const FABLE_LABEL_RE = /^\s*fable\s*$/i
-const FABLE_WEEKLY_LABEL_RE =
-  /(?:current\s*week|weekly\s*(?:limits?|usage|rate\s*limits?)|7\s*[- ]?\s*day)\s*(?:\([^)]*\bfable\b[^)]*\)|[-:]?\s*\bfable\b)/i
+// Why: derive from WEEKLY_RE so a future weekly-wording change stays in one place
+// instead of silently reopening the Fable-weekly parsing gap this fix closed.
+const FABLE_WEEKLY_LABEL_RE = new RegExp(
+  `${WEEKLY_RE.source}\\s*(?:\\([^)]*\\bfable\\b[^)]*\\)|[-:]?\\s*\\bfable\\b)`,
+  'i'
+)
 const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|consumed|left|remaining|available)/i
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)

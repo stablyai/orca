@@ -153,7 +153,7 @@ function validateProtection(gate, failures) {
     if (gate.flakeHistory?.status !== 'stable') {
       failures.push(`${gate.id}: protection active gates must have stable flakeHistory`)
     }
-    if (!['complete', 'not-required'].includes(gate.redGreenEvidence?.status)) {
+    if (!hasCompleteRedGreenEvidence(gate)) {
       failures.push(`${gate.id}: protection active gates must have complete red/green evidence`)
     }
   }
@@ -164,6 +164,17 @@ function validateProtection(gate, failures) {
 
 function isIsoDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+// Why: cross-field validators run even after an earlier type check flagged a
+// malformed field, so coerce to an array before `.includes` to report the error
+// instead of throwing on hand-edited manifests.
+function asArray(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function hasCompleteRedGreenEvidence(gate) {
+  return ['complete', 'not-required'].includes(gate.redGreenEvidence?.status)
 }
 
 function validateEvidenceRun(gate, run, index, failures) {
@@ -186,7 +197,7 @@ function validateEvidenceRun(gate, run, index, failures) {
   }
   if (!isNonEmptyString(run.command)) {
     failures.push(`${owner}.command must be a non-empty string`)
-  } else if (!gate.commands.includes(run.command)) {
+  } else if (!asArray(gate.commands).includes(run.command)) {
     failures.push(`${owner}.command must match one of the gate commands`)
   }
   if (!Number.isFinite(run.durationSeconds) || run.durationSeconds < 0) {
@@ -222,7 +233,7 @@ function validateAssertionRef(gate, ref, index, failures) {
   }
   if (!isNonEmptyString(ref.file)) {
     failures.push(`${owner}.file must be a non-empty string`)
-  } else if (!gate.testFiles.includes(ref.file)) {
+  } else if (!asArray(gate.testFiles).includes(ref.file)) {
     failures.push(`${owner}.file must be one of the gate testFiles`)
   }
   if (!hasNonEmptyStringArray(ref.assertions)) {
@@ -253,12 +264,12 @@ function validateCoveredScope(gate, failures) {
     return
   }
   for (const platform of gate.coveredPlatforms) {
-    if (!gate.platforms.includes(platform)) {
+    if (!asArray(gate.platforms).includes(platform)) {
       failures.push(`${gate.id}: covered platform is outside risk scope: ${platform}`)
     }
   }
   for (const provider of gate.coveredProviders) {
-    if (!gate.providers.includes(provider)) {
+    if (!asArray(gate.providers).includes(provider)) {
       failures.push(`${gate.id}: covered provider is outside risk scope: ${provider}`)
     }
   }
@@ -343,7 +354,7 @@ async function validateGate(gate, maturities, root) {
     if (!['soaking', 'stable'].includes(gate.flakeHistory?.status)) {
       failures.push(`${gate.id}: ${gate.maturity} gates must have soaking or stable flakeHistory`)
     }
-    if (!['complete', 'not-required'].includes(gate.redGreenEvidence?.status)) {
+    if (!hasCompleteRedGreenEvidence(gate)) {
       failures.push(`${gate.id}: ${gate.maturity} gates must have complete red/green evidence`)
     }
   }
