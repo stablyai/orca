@@ -31,6 +31,12 @@ export function selectChecksPanelReview({
   if (gitLabHostedReview) {
     return gitLabHostedReview
   }
+  // Gitea PRs surface as hosted reviews too; route them like GitLab so the
+  // checks panel can drive the Gitea checks/comments path.
+  const giteaHostedReview = hostedReview?.provider === 'gitea' ? hostedReview : null
+  if (giteaHostedReview) {
+    return giteaHostedReview
+  }
   const hasNonGitHubLinkedReview =
     linkedGitLabMR !== null ||
     linkedBitbucketPR !== null ||

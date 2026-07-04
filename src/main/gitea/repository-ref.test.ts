@@ -16,6 +16,7 @@ import {
   getGiteaRepoRefForRemote,
   parseGiteaRepoRef
 } from './repository-ref'
+import { giteaServerHost } from './server-store'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 describe('Gitea repository ref parsing', () => {
@@ -71,7 +72,9 @@ describe('Gitea repository ref parsing', () => {
       owner: 'team',
       repo: 'project',
       apiBaseUrl: 'https://gitea.example.test/api/v1',
-      webBaseUrl: 'https://gitea.example.test'
+      webBaseUrl: 'https://gitea.example.test',
+      // No subpath in an SSH remote → base is host-inferred (may omit a subpath).
+      apiBaseFromHost: true
     })
   })
 
@@ -91,8 +94,45 @@ describe('Gitea repository ref parsing', () => {
       owner: 'team',
       repo: 'project',
       apiBaseUrl: 'https://gitea.example.test/api/v1',
-      webBaseUrl: 'https://gitea.example.test'
+      webBaseUrl: 'https://gitea.example.test',
+      apiBaseFromHost: true
     })
+  })
+
+  it('keeps a non-default web port in the host so it matches its stored server', () => {
+    expect(parseGiteaRepoRef('https://git.example.com:3000/team/project.git')).toEqual({
+      host: 'git.example.com:3000',
+      owner: 'team',
+      repo: 'project',
+      apiBaseUrl: 'https://git.example.com:3000/api/v1',
+      webBaseUrl: 'https://git.example.com:3000'
+    })
+  })
+
+  // Regression for #5493: the repo-ref host (store side) must equal the server
+  // host derived from apiBaseUrl (the compare side getServerForHost/sameHost
+  // use), or a Gitea on a non-default port drops its token.
+  it('derives a host that matches its stored server across port variants', () => {
+    const cases = [
+      // [remote URL, stored apiBaseUrl]
+      ['https://git.example.com:3000/team/project.git', 'https://git.example.com:3000/api/v1'],
+      ['http://localhost:3000/team/project.git', 'http://localhost:3000/api/v1'],
+      // Default ports collapse identically on both sides (reverse-proxy case).
+      ['https://git.example.com/team/project.git', 'https://git.example.com/api/v1'],
+      ['https://git.example.com:443/team/project.git', 'https://git.example.com/api/v1']
+    ]
+    for (const [remote, apiBaseUrl] of cases) {
+      const ref = parseGiteaRepoRef(remote)
+      expect(ref?.host).toBe(giteaServerHost({ apiBaseUrl }))
+    }
+  })
+
+  it('does not match a server on a different port on the same host', () => {
+    const ref = parseGiteaRepoRef('https://git.example.com:3000/team/project.git')
+    expect(ref?.host).not.toBe(
+      giteaServerHost({ apiBaseUrl: 'https://git.example.com:3001/api/v1' })
+    )
+    expect(ref?.host).not.toBe(giteaServerHost({ apiBaseUrl: 'https://git.example.com/api/v1' }))
   })
 
   it('does not claim public hosts handled by more specific providers', () => {

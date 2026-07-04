@@ -1,0 +1,63 @@
+import { describe, expect, it } from 'vitest'
+import {
+  deriveGiteaWebBaseUrl,
+  getGiteaServerId,
+  giteaServerHost,
+  giteaServerKey,
+  normalizeGiteaApiBaseUrl
+} from './server-store'
+
+describe('gitea server-store helpers', () => {
+  it('normalizes API base URLs to the /api/v1 suffix', () => {
+    expect(normalizeGiteaApiBaseUrl('https://git.example.com')).toBe(
+      'https://git.example.com/api/v1'
+    )
+    expect(normalizeGiteaApiBaseUrl('https://git.example.com/')).toBe(
+      'https://git.example.com/api/v1'
+    )
+    expect(normalizeGiteaApiBaseUrl('https://git.example.com/api/v1/')).toBe(
+      'https://git.example.com/api/v1'
+    )
+  })
+
+  it('derives the web base URL by stripping the API suffix', () => {
+    expect(deriveGiteaWebBaseUrl('https://git.example.com/api/v1')).toBe('https://git.example.com')
+    expect(deriveGiteaWebBaseUrl('https://git.example.com/code/api/v1')).toBe(
+      'https://git.example.com/code'
+    )
+  })
+
+  it('extracts a lowercase host from a server API base URL', () => {
+    expect(giteaServerHost({ apiBaseUrl: 'https://Git.Example.com/api/v1' })).toBe(
+      'git.example.com'
+    )
+    expect(giteaServerHost({ apiBaseUrl: 'not a url' })).toBeNull()
+  })
+
+  it('keeps a non-default port and collapses default ports in the host key (#5493)', () => {
+    expect(giteaServerHost({ apiBaseUrl: 'http://localhost:3000/api/v1' })).toBe('localhost:3000')
+    expect(giteaServerHost({ apiBaseUrl: 'https://git.example.com:443/api/v1' })).toBe(
+      'git.example.com'
+    )
+  })
+
+  it('builds a host+path key that disambiguates subpath instances on one host', () => {
+    expect(giteaServerKey('https://git.example.com/code/api/v1')).toBe(
+      'git.example.com/code/api/v1'
+    )
+    expect(giteaServerKey('https://git.example.com/ops/api/v1')).toBe('git.example.com/ops/api/v1')
+    expect(giteaServerKey('https://git.example.com/api/v1')).toBe('git.example.com/api/v1')
+  })
+
+  it('keeps a non-default port and trims trailing slashes in the host+path key', () => {
+    expect(giteaServerKey('http://localhost:3000/api/v1/')).toBe('localhost:3000/api/v1')
+    expect(giteaServerKey('not a url')).toBeNull()
+  })
+
+  it('derives a stable, collision-resistant id per API base URL', () => {
+    const id = getGiteaServerId('https://git.example.com/api/v1')
+    expect(id).toHaveLength(24)
+    expect(getGiteaServerId('https://git.example.com/api/v1')).toBe(id)
+    expect(getGiteaServerId('https://other.example.com/api/v1')).not.toBe(id)
+  })
+})

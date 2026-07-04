@@ -83,6 +83,8 @@ import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { type ChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
+import { giteaPRChecksToPRChecks, giteaIssueCommentsToPRComments } from './checks-panel-gitea'
+import type { GiteaComment, GiteaPRCheck } from '../../../../shared/gitea-types'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
@@ -669,7 +671,9 @@ export default function ChecksPanel(): React.JSX.Element {
     linkedGiteaPR
   })
   const activeGitLabReview = isGitLabChecksPanelReview(activeReview) ? activeReview : null
+  const activeGiteaReview = activeReview?.provider === 'gitea' ? activeReview : null
   const isGitLabReviewContext = Boolean(activeGitLabReview || linkedGitLabMR !== null)
+  const isGiteaReviewContext = Boolean(activeGiteaReview || linkedGiteaPR !== null)
   const activeConflictReview = activeReview?.mergeable === 'CONFLICTING' ? activeReview : null
   const prRefreshState = useAppStore((s) =>
     prCacheKey ? s.getEffectiveGitHubPRRefreshState(prCacheKey, prRefreshStateNow) : undefined
@@ -1180,7 +1184,15 @@ export default function ChecksPanel(): React.JSX.Element {
             activeGitLabReview.number,
             activeGitLabReview.headSha
           )
-        : checksPanelAsyncResultKey(prCacheKey, branch, prNumber, pr?.prRepo, pr?.headSha)
+        : activeGiteaReview
+          ? checksPanelHostedReviewAsyncResultKey(
+              hostedReviewCacheKey,
+              branch,
+              activeGiteaReview.provider,
+              activeGiteaReview.number,
+              activeGiteaReview.headSha
+            )
+          : checksPanelAsyncResultKey(prCacheKey, branch, prNumber, pr?.prRepo, pr?.headSha)
       : ''
   asyncResultKeyRef.current = stateRequestKey
 
@@ -1211,7 +1223,9 @@ export default function ChecksPanel(): React.JSX.Element {
         linkedGiteaPR,
         staleWhileRevalidate: true
       })
-      if (activeWorktreeId && !isGitLabReviewContext) {
+      // Why: a Gitea (or GitLab) review doesn't have a GitHub PR to refresh, so
+      // skip scheduling that flow to avoid wasted work and GitHub-side noise.
+      if (activeWorktreeId && !isGitLabReviewContext && !isGiteaReviewContext) {
         enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
       }
     }
@@ -1223,6 +1237,7 @@ export default function ChecksPanel(): React.JSX.Element {
     fetchHostedReviewForBranch,
     isFolder,
     isGitLabReviewContext,
+    isGiteaReviewContext,
     isPanelVisible,
     activeWorktree?.head,
     linkedAzureDevOpsPR,
@@ -1681,9 +1696,87 @@ export default function ChecksPanel(): React.JSX.Element {
     ]
   )
 
+  const fetchGiteaDetails = useCallback(
+    async ({
+      prNumberOverride,
+      headShaOverride,
+      commitAsCurrent = false
+    }: {
+      prNumberOverride?: number | null
+      headShaOverride?: string | null
+      commitAsCurrent?: boolean
+    } = {}) => {
+      const targetPRNumber = prNumberOverride ?? activeGiteaReview?.number ?? null
+      const targetHeadSha = headShaOverride ?? activeGiteaReview?.headSha ?? null
+      if (!repo || !targetPRNumber) {
+        return
+      }
+      const requestKey = checksPanelHostedReviewAsyncResultKey(
+        hostedReviewCacheKey,
+        branch,
+        'gitea',
+        targetPRNumber,
+        targetHeadSha
+      )
+      if (commitAsCurrent) {
+        asyncResultKeyRef.current = requestKey
+      }
+      setChecksLoading(true)
+      setCommentsLoading(true)
+      try {
+        const [checkRuns, conversationComments] = await Promise.all([
+          targetHeadSha
+            ? (window.api.gitea.prChecks({
+                repoPath: repo.path,
+                repoId: repo.id,
+                headSha: targetHeadSha
+              }) as Promise<GiteaPRCheck[]>)
+            : Promise.resolve<GiteaPRCheck[]>([]),
+          window.api.gitea.issueComments({
+            repoPath: repo.path,
+            repoId: repo.id,
+            number: targetPRNumber
+          }) as Promise<GiteaComment[]>
+        ])
+        if (!isCurrentAsyncResult(requestKey)) {
+          return
+        }
+        const result = giteaPRChecksToPRChecks(checkRuns)
+        setChecks(result)
+        setComments(giteaIssueCommentsToPRComments(conversationComments))
+        const signature = JSON.stringify(result.map((c) => `${c.name}:${c.status}:${c.conclusion}`))
+        pollIntervalRef.current =
+          signature === prevChecksRef.current
+            ? Math.min(pollIntervalRef.current * 2, 120_000)
+            : 30_000
+        prevChecksRef.current = signature
+      } catch (err) {
+        if (!isCurrentAsyncResult(requestKey)) {
+          return
+        }
+        console.warn('Failed to fetch Gitea PR checks:', err)
+        setChecks([])
+        setComments([])
+      } finally {
+        if (isCurrentAsyncResult(requestKey)) {
+          setChecksLoading(false)
+          setCommentsLoading(false)
+        }
+      }
+    },
+    [
+      activeGiteaReview?.headSha,
+      activeGiteaReview?.number,
+      branch,
+      hostedReviewCacheKey,
+      isCurrentAsyncResult,
+      repo
+    ]
+  )
+
   // Fetch checks on mount + poll with exponential backoff
   useEffect(() => {
-    if (activeGitLabReview) {
+    if (activeGitLabReview || activeGiteaReview) {
       return
     }
     if (!prNumber || !isPanelVisible) {
@@ -1700,7 +1793,7 @@ export default function ChecksPanel(): React.JSX.Element {
       run: () => fetchChecks(),
       getDelayMs: () => pollIntervalRef.current
     })
-  }, [activeGitLabReview, fetchChecks, isPanelVisible, prNumber])
+  }, [activeGitLabReview, activeGiteaReview, fetchChecks, isPanelVisible, prNumber])
 
   useEffect(() => {
     if (!activeGitLabReview || !isPanelVisible) {
@@ -1714,6 +1807,19 @@ export default function ChecksPanel(): React.JSX.Element {
       getDelayMs: () => pollIntervalRef.current
     })
   }, [activeGitLabReview, fetchGitLabDetails, isPanelVisible])
+
+  useEffect(() => {
+    if (!activeGiteaReview || !isPanelVisible) {
+      return
+    }
+
+    pollIntervalRef.current = 30_000
+    prevChecksRef.current = ''
+    return installWindowVisibilityTimeoutPoller({
+      run: () => fetchGiteaDetails(),
+      getDelayMs: () => pollIntervalRef.current
+    })
+  }, [activeGiteaReview, fetchGiteaDetails, isPanelVisible])
 
   // Fetch comments once when PR changes (no polling — comments change infrequently).
   // The manual refresh path calls this directly; the auto-fetch effect below uses
@@ -1804,7 +1910,7 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (activeGitLabReview) {
+    if (activeGitLabReview || activeGiteaReview) {
       return
     }
     if (!repo || !prNumber || !isPanelVisible) {
@@ -1839,6 +1945,7 @@ export default function ChecksPanel(): React.JSX.Element {
     }
   }, [
     activeGitLabReview,
+    activeGiteaReview,
     repo,
     prNumber,
     pr?.headSha,
@@ -1976,7 +2083,7 @@ export default function ChecksPanel(): React.JSX.Element {
           console.warn('[ChecksPanel] pre-refresh git identity refresh failed', error)
         }
       }
-      if (isGitLabReviewContext) {
+      if (isGitLabReviewContext || isGiteaReviewContext) {
         const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
           repoPath: repo.path,
           repoId: repo.id,
@@ -1993,10 +2100,19 @@ export default function ChecksPanel(): React.JSX.Element {
         }
         const refreshedGitLabReview =
           refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
+        const refreshedGiteaReview =
+          refreshedReview?.provider === 'gitea' ? refreshedReview : activeGiteaReview
         if (refreshedGitLabReview) {
           await fetchGitLabDetails({
             mrNumberOverride: refreshedGitLabReview.number,
             headShaOverride: refreshedGitLabReview.headSha,
+            commitAsCurrent: true
+          })
+          refreshOutcome = 'review'
+        } else if (refreshedGiteaReview) {
+          await fetchGiteaDetails({
+            prNumberOverride: refreshedGiteaReview.number,
+            headShaOverride: refreshedGiteaReview.headSha,
             commitAsCurrent: true
           })
           refreshOutcome = 'review'
@@ -2178,6 +2294,9 @@ export default function ChecksPanel(): React.JSX.Element {
     linkedGitLabMR,
     isFolder,
     isGitLabReviewContext,
+    isGiteaReviewContext,
+    activeGiteaReview,
+    fetchGiteaDetails,
     gitStatusSnapshot,
     panelContextKey,
     fetchPRForBranch,
@@ -2199,7 +2318,7 @@ export default function ChecksPanel(): React.JSX.Element {
       // user refresh. Route PR refresh through the coordinator so rate-limit
       // guards still apply; only force detail panes that the entry freshness rule
       // already proved stale, so tab entry stays fresh without broad fan-out.
-      if (isGitLabReviewContext) {
+      if (isGitLabReviewContext || isGiteaReviewContext) {
         void fetchHostedReviewForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
@@ -2213,6 +2332,8 @@ export default function ChecksPanel(): React.JSX.Element {
         })
         if (activeGitLabReview) {
           void fetchGitLabDetails()
+        } else if (activeGiteaReview) {
+          void fetchGiteaDetails()
         }
         return
       }
@@ -2231,11 +2352,14 @@ export default function ChecksPanel(): React.JSX.Element {
       branch,
       enqueueGitHubPRRefresh,
       fallbackGitHubPRNumber,
+      activeGiteaReview,
       fetchChecks,
       fetchComments,
       fetchGitLabDetails,
+      fetchGiteaDetails,
       fetchHostedReviewForBranch,
       isGitLabReviewContext,
+      isGiteaReviewContext,
       linkedAzureDevOpsPR,
       linkedBitbucketPR,
       linkedGiteaPR,
@@ -2320,6 +2444,31 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       return
     }
+    if (activeReview?.provider === 'gitea') {
+      // Why: don't fall through to the GitHub PR force-refresh for a Gitea review —
+      // that path would fail/stale the panel. Refresh hosted-review then Gitea data.
+      const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+        repoPath: repo.path,
+        repoId: repo.id,
+        branch,
+        linkedGitHubPR: linkedPR,
+        fallbackGitHubPR: fallbackGitHubPRNumber,
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR
+      })
+      const refreshedGiteaReview =
+        refreshedReview?.provider === 'gitea' ? refreshedReview : activeGiteaReview
+      if (refreshedGiteaReview) {
+        await fetchGiteaDetails({
+          prNumberOverride: refreshedGiteaReview.number,
+          headShaOverride: refreshedGiteaReview.headSha,
+          commitAsCurrent: true
+        })
+      }
+      return
+    }
     const refreshedPR = await fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
@@ -2340,11 +2489,13 @@ export default function ChecksPanel(): React.JSX.Element {
     })
   }, [
     activeGitLabReview,
+    activeGiteaReview,
     activeReview?.provider,
     activeWorktreeId,
     branch,
     fallbackGitHubPRNumber,
     fetchGitLabDetails,
+    fetchGiteaDetails,
     fetchHostedReviewForBranch,
     fetchPRForBranch,
     linkedAzureDevOpsPR,
@@ -2388,6 +2539,19 @@ export default function ChecksPanel(): React.JSX.Element {
           repoPath: repo.path,
           repoId: repo.id,
           iid: activeReview.number,
+          updates: { title: nextTitle }
+        })
+        if (!result.ok) {
+          toast.error(result.error)
+          return
+        }
+        await refreshHostedReviewAfterMutation()
+      } else if (activeReview.provider === 'gitea') {
+        // Gitea PRs are issues under the hood; updateIssue patches the title.
+        const result = await window.api.gitea.updateIssue({
+          repoPath: repo.path,
+          repoId: repo.id,
+          number: activeReview.number,
           updates: { title: nextTitle }
         })
         if (!result.ok) {
@@ -2522,9 +2686,11 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
-  const commentsDisabledReason = canTargetPRComments
-    ? undefined
-    : 'Commenting requires a GitHub PR repository target.'
+  const canTargetGiteaComments = Boolean(repo && activeGiteaReview)
+  const commentsDisabledReason =
+    canTargetPRComments || canTargetGiteaComments
+      ? undefined
+      : 'Commenting requires a GitHub PR repository target.'
   const detectedAgentsForAI =
     typeof activeConnectionId === 'string' ? remoteDetectedAgentIds : detectedAgentIds
   const noEnabledAgentKnown =
@@ -2594,6 +2760,28 @@ export default function ChecksPanel(): React.JSX.Element {
       prNumber,
       repo
     ]
+  )
+
+  const handleAddGiteaReviewComment = useCallback(
+    async (body: string) => {
+      if (!repo || !activeGiteaReview) {
+        return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
+      }
+      const result = await window.api.gitea.addIssueComment({
+        repoPath: repo.path,
+        repoId: repo.id,
+        number: activeGiteaReview.number,
+        body
+      })
+      if (!result.ok) {
+        toast.error(result.error)
+        return result
+      }
+      // Gitea's add returns no comment; refresh to pull the persisted thread.
+      await fetchGiteaDetails({ commitAsCurrent: true })
+      return { ok: true as const }
+    },
+    [activeGiteaReview, commentsDisabledReason, fetchGiteaDetails, repo]
   )
 
   const handleEditComment = useCallback(
@@ -2795,9 +2983,13 @@ export default function ChecksPanel(): React.JSX.Element {
         await fetchGitLabDetails({ commitAsCurrent: true })
         return
       }
+      if (provider === 'gitea') {
+        await fetchGiteaDetails({ commitAsCurrent: true })
+        return
+      }
       await fetchComments({ force: true })
     },
-    [fetchComments, fetchGitLabDetails]
+    [fetchComments, fetchGitLabDetails, fetchGiteaDetails]
   )
 
   const resolveSelectedThreadsAfterLaunch = useCallback(
@@ -3777,12 +3969,14 @@ export default function ChecksPanel(): React.JSX.Element {
         comments={comments}
         commentsLoading={commentsLoading}
         reviewKind={reviewShortLabel}
-        commentsDisabled={!canTargetPRComments}
+        commentsDisabled={!canTargetPRComments && !canTargetGiteaComments}
         commentsDisabledReason={commentsDisabledReason}
         selectionContextKey={stateRequestKey}
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
-        onAddComment={pr ? handleAddPRComment : undefined}
+        onAddComment={
+          pr ? handleAddPRComment : activeGiteaReview ? handleAddGiteaReviewComment : undefined
+        }
         onResolveSelectedCommentsWithAI={
           sourceControlAiActionsVisible ? handleResolveCommentsWithAI : undefined
         }

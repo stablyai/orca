@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { i18n } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword } from './settings-search-keywords'
+import { getTasksPaneSearchEntries } from './tasks-search'
 
 describe('settings-search-keywords', () => {
   beforeEach(async () => {
@@ -35,6 +36,13 @@ describe('settings-search-keywords', () => {
     expect(searchKeywords(['terminal', 'terminal', { key: 'k', fallback: 'terminal' }])).toEqual([
       'terminal'
     ])
+  })
+
+  it('indexes Gitea as a Tasks-pane provider search keyword', () => {
+    const keywords = getTasksPaneSearchEntries()[0]?.keywords ?? []
+    expect(keywords).toContain('gitea')
+    // Sanity: the other providers are still indexed alongside it.
+    expect(keywords).toEqual(expect.arrayContaining(['github', 'gitlab']))
   })
 
   it('indexes localized agent search synonyms in Korean UI', async () => {

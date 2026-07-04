@@ -6,9 +6,10 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
+import type { TaskProvider } from './task-providers'
 import type { GlobalSettings, ProjectProviderIdentity, Repo } from './types'
 
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type { TaskProvider }
 
 export type GitHubTaskProviderIdentity = ProjectProviderIdentity & {
   provider: 'github'
@@ -37,11 +38,20 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type GiteaTaskProviderIdentity = {
+  provider: 'gitea'
+  serverId?: string | null
+  baseUrl?: string | null
+  owner?: string | null
+  repo?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | GiteaTaskProviderIdentity
 
 export type TaskSourceContext = {
   kind: 'task-source'
@@ -182,6 +192,7 @@ function normalizeTaskProvider(value: string): TaskProvider | null {
     case 'gitlab':
     case 'linear':
     case 'jira':
+    case 'gitea':
       return value
     default:
       return null
@@ -216,6 +227,10 @@ function providerIdentityCachePart(identity: TaskProviderIdentity | null | undef
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'gitea':
+      return [identity.serverId ?? identity.baseUrl, identity.owner, identity.repo]
+        .filter(Boolean)
+        .join('/')
   }
 }
 

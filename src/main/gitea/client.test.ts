@@ -57,6 +57,10 @@ describe('Gitea client', () => {
   })
 
   it('fetches a branch pull request and commit status', async () => {
+    // The env token is only honored for its explicitly configured (host-matching)
+    // base URL, so set it to the repo's host rather than relying on the removed
+    // behavior of applying the token to any repo-derived host.
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com'
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const parsed = new URL(url)
       if (!init) {
@@ -94,6 +98,12 @@ describe('Gitea client', () => {
 
   it('uses an API base URL override for subpath or non-standard deployments', async () => {
     process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com/code'
+    // The env base is scoped to its exact host+subpath, so the repo remote must
+    // resolve to the same /code subpath for the override (and token) to apply.
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://git.example.com/code/team/repo.git\n',
+      stderr: ''
+    })
     const fetchMock = vi.fn(async (url: string | URL) => {
       if (String(url).includes('/commits/abc123/status')) {
         return Response.json({ state: 'pending' })
@@ -105,6 +115,56 @@ describe('Gitea client', () => {
     await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
       number: 7,
       status: 'pending'
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      'https://git.example.com/code/api/v1/repos/team/repo/pulls'
+    )
+  })
+
+  it('does not apply the env token when its API base subpath differs from the repo', async () => {
+    // ORCA_GITEA_API_BASE_URL points at a /code subpath instance, but the repo
+    // remote is the host root: the token must NOT leak to the root instance.
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com/code'
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://git.example.com/team/repo.git\n',
+      stderr: ''
+    })
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (String(url).includes('/commits/abc123/status')) {
+        return Response.json({ state: 'success' })
+      }
+      expect(new Headers(init?.headers).get('Authorization')).toBeNull()
+      return Response.json([giteaPr()])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 7
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      'https://git.example.com/api/v1/repos/team/repo/pulls'
+    )
+  })
+
+  it('applies the env subpath base to an SSH remote that cannot carry the subpath', async () => {
+    // SSH remotes derive a bare-host API base (no subpath), so the env override's
+    // subpath + token must still apply on the same host rather than being dropped.
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com/code'
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'git@git.example.com:team/repo.git\n',
+      stderr: ''
+    })
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (String(url).includes('/commits/abc123/status')) {
+        return Response.json({ state: 'success' })
+      }
+      expect(new Headers(init?.headers).get('Authorization')).toBe('token gitea-token')
+      return Response.json([giteaPr()])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 7
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
       'https://git.example.com/code/api/v1/repos/team/repo/pulls'
@@ -155,5 +215,45 @@ describe('Gitea client', () => {
       tokenConfigured: true
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://git.example.com/api/v1/user')
+  })
+
+  it('treats an env token lacking read:user (403) as authenticated without an account', async () => {
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              message: 'token does not have at least one of required scope(s): [read:user]'
+            }),
+            { status: 403 }
+          )
+      )
+    )
+
+    await expect(getGiteaAuthStatus()).resolves.toEqual({
+      configured: true,
+      authenticated: true,
+      account: null,
+      baseUrl: 'https://git.example.com/api/v1',
+      tokenConfigured: true
+    })
+  })
+
+  it('reports a non-scope 403 as unauthenticated', async () => {
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 }))
+    )
+
+    await expect(getGiteaAuthStatus()).resolves.toEqual({
+      configured: true,
+      authenticated: false,
+      account: null,
+      baseUrl: 'https://git.example.com/api/v1',
+      tokenConfigured: true
+    })
   })
 })

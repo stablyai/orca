@@ -11,8 +11,10 @@ export function useIntegrationProviderStatusRefresh(): void {
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const giteaStatusLoaded = useAppStore((s) => s.giteaStatusLoaded)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const refreshGiteaStatus = useAppStore((s) => s.refreshGiteaStatus)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -32,9 +34,16 @@ export function useIntegrationProviderStatusRefresh(): void {
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
+    // Gitea credentials are local, so status is not gated by the runtime
+    // provider-context key — just load it once for the integration card.
+    if (!giteaStatusLoaded) {
+      void refreshGiteaStatus()
+    }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    giteaStatusLoaded,
+    refreshGiteaStatus,
     jiraStatusChecked,
     jiraStatusCurrent,
     jiraStatusContextKey,
