@@ -207,6 +207,23 @@ describe('resolveNativeChatSession', () => {
     ).toBeNull()
   })
 
+  it('does not fall back to a supported launch agent when live status is unsupported', () => {
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    expect(
+      resolveNativeChatSession({
+        paneKey,
+        launchAgent: 'codex',
+        agentStatusEntry: entry({
+          paneKey,
+          agentType: 'gemini',
+          providerSession: { key: 'session_id', id: 'g-1' }
+        }),
+        resolvedAgent: 'claude',
+        ptyId: 'pty-1'
+      })
+    ).toBeNull()
+  })
+
   it('does not resolve an unsupported launch agent', () => {
     expect(
       resolveNativeChatSession({
@@ -245,7 +262,7 @@ describe('resolveNativeChatSession', () => {
     expect(
       resolveNativeChatSession({
         paneKey,
-        launchAgent: null,
+        launchAgent: 'claude',
         agentStatusEntry: entry({
           paneKey,
           agentType: 'codex',

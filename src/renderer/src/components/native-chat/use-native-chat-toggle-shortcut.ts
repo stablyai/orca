@@ -1,8 +1,35 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
+
+export function isNativeChatShortcutTitleFallbackSafe(
+  root: TerminalPaneLayoutNode | null | undefined
+): boolean {
+  return !root || root.type === 'leaf'
+}
+
+export function resolveNativeChatToggleShortcutDetectedAgent({
+  terminalTabId,
+  activeLeafId,
+  agentStatusByPaneKey
+}: {
+  terminalTabId: string
+  activeLeafId: string | null
+  agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
+}): AgentType | null {
+  if (activeLeafId) {
+    return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null
+  }
+  return (
+    Object.entries(agentStatusByPaneKey).find(([paneKey]) =>
+      paneKey.startsWith(`${terminalTabId}:`)
+    )?.[1].agentType ?? null
+  )
+}
 
 /** Toggles the active worktree's focused agent-terminal tab between the terminal
  *  and native chat views via the keyboard. Gated to the active worktree so only
@@ -37,19 +64,24 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       // inert on unsupported agents like Grok, matching the menu/header gate.
       // Pane keys are `${entityId}:${leafId}` — the backing terminal tab id, not
       // the unified tab id.
-      const detectedAgent =
-        Object.entries(state.agentStatusByPaneKey).find(([paneKey]) =>
-          paneKey.startsWith(`${tab.entityId}:`)
-        )?.[1].agentType ?? null
+      const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]
+      const activeLeafId = terminalLayout?.activeLeafId ?? null
+      const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
+        terminalTabId: tab.entityId,
+        activeLeafId,
+        agentStatusByPaneKey: state.agentStatusByPaneKey
+      })
+      const titleFallbackAgent = isNativeChatShortcutTitleFallbackSafe(terminalLayout?.root)
+        ? (resolveTabAgentFromTitle(tab.label ?? '') ??
+          (terminalTab ? resolveTabAgentFromTitle(terminalTab.title) : null))
+        : null
       if (
         !canToggleNativeChat({
           experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
-          launchAgent: terminalTab?.launchAgent,
+          launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
           detectedAgent,
-          resolvedAgent:
-            resolveTabAgentFromTitle(tab.label ?? '') ??
-            (terminalTab ? resolveTabAgentFromTitle(terminalTab.title) : null),
+          resolvedAgent: detectedAgent ? null : titleFallbackAgent,
           isChatViewMode: tab.viewMode === 'chat'
         })
       ) {

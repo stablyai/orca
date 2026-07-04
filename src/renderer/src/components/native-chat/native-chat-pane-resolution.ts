@@ -38,15 +38,15 @@ export type NativeChatPaneResolution = {
 }
 
 /** Resolve the active pane to `{ agent, sessionId, ptyId, paneKey }`, or null
- *  when the pane runs no agent. A pane qualifies when a launch-time hint, a
- *  live agent-status entry, or the same title-derived fallback used by the
- *  toggle is present. sessionId comes from the entry's `providerSession.id`
- *  (the captured agent session id) — null until the agent reports one, so a
- *  just-launched pane resolves without throwing. */
+ *  when the pane runs no agent. A pane qualifies when a live agent-status entry,
+ *  launch-time hint, or the same title-derived fallback used by the toggle is
+ *  present. sessionId comes from the entry's `providerSession.id` (the captured
+ *  agent session id) — null until the agent reports one, so a just-launched
+ *  pane resolves without throwing. */
 export function resolveNativeChatSession(
   input: NativeChatPaneResolutionInput
 ): NativeChatPaneResolution | null {
-  const agent = input.launchAgent ?? input.agentStatusEntry?.agentType ?? input.resolvedAgent
+  const agent = input.agentStatusEntry?.agentType ?? input.launchAgent ?? input.resolvedAgent
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
