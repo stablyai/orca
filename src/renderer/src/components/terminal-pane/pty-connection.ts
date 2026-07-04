@@ -2601,6 +2601,7 @@ export function connectPanePty(
     : undefined
   const transportOptions = {
     cwd: deps.cwd,
+    ...(runtimeEnvironmentId === null && !connectionId ? { cwdFallback: 'worktree' as const } : {}),
     env: paneEnv,
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
     startupCommandDelivery: shouldDeliverStartupViaTerminalPaste

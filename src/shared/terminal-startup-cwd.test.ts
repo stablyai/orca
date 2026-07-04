@@ -28,6 +28,26 @@ describe('resolveTerminalStartupCwd', () => {
     )
   })
 
+  it('returns undefined for blank cwd input', () => {
+    expect(resolveTerminalStartupCwd('/repo/app', '   ')).toBeUndefined()
+  })
+
+  it('falls back to the worktree root for an outside cwd when requested', () => {
+    expect(
+      resolveTerminalStartupCwd('/repo/app', '/var/tmp/orca-stale', {
+        outsideWorktreeCwd: 'fallback-to-worktree'
+      })
+    ).toBe('/repo/app')
+  })
+
+  it('keeps nested cwd resolution unchanged with fallback enabled', () => {
+    expect(
+      resolveTerminalStartupCwd('/repo/app', '/repo/app/packages/web', {
+        outsideWorktreeCwd: 'fallback-to-worktree'
+      })
+    ).toBe('/repo/app/packages/web')
+  })
+
   it('handles Windows path containment without case drift', () => {
     expect(resolveTerminalStartupCwd('C:\\Repo\\App', 'packages\\web')).toBe(
       'C:/Repo/App/packages/web'
@@ -52,6 +72,16 @@ describe('resolveTerminalStartupCwd', () => {
     ).toThrow('Terminal cwd must be inside the selected worktree.')
   })
 
+  it('falls back to the raw worktree root for stale renderer cwd values', () => {
+    expect(
+      resolveTerminalStartupCwdForWorkspace({
+        workspaceId: 'repo-1::/repo/app',
+        requestedCwd: '/var/tmp/orca-stale',
+        outsideWorktreeCwd: 'fallback-to-worktree'
+      })
+    ).toBe('/repo/app')
+  })
+
   it('validates renderer PTY cwd values against folder workspace keys', () => {
     expect(
       resolveTerminalStartupCwdForWorkspace({
@@ -67,5 +97,16 @@ describe('resolveTerminalStartupCwd', () => {
         resolveFolderWorkspacePath: (id) => (id === 'folder-1' ? '/repo/app' : null)
       })
     ).toThrow('Terminal cwd must be inside the selected worktree.')
+  })
+
+  it('falls back to a resolved folder workspace root for stale cwd values', () => {
+    expect(
+      resolveTerminalStartupCwdForWorkspace({
+        workspaceId: folderWorkspaceKey('folder-1'),
+        requestedCwd: '../other',
+        resolveFolderWorkspacePath: (id) => (id === 'folder-1' ? '/repo/app' : null),
+        outsideWorktreeCwd: 'fallback-to-worktree'
+      })
+    ).toBe('/repo/app')
   })
 })

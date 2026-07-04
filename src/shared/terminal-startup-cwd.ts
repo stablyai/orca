@@ -2,15 +2,21 @@ import { isPathInsideOrEqual, resolveRuntimePath } from './cross-platform-path'
 import { parseWorkspaceKey } from './workspace-scope'
 import { splitWorktreeIdForFilesystem } from './worktree-id'
 
+type OutsideWorktreeCwdPolicy = 'throw' | 'fallback-to-worktree'
+
 export function resolveTerminalStartupCwd(
   worktreePath: string,
-  requestedCwd?: string | null
+  requestedCwd?: string | null,
+  options?: { outsideWorktreeCwd?: OutsideWorktreeCwdPolicy }
 ): string | undefined {
   if (!requestedCwd || requestedCwd.trim().length === 0) {
     return undefined
   }
   const resolvedCwd = resolveRuntimePath(worktreePath, requestedCwd)
   if (!isPathInsideOrEqual(worktreePath, resolvedCwd)) {
+    if (options?.outsideWorktreeCwd === 'fallback-to-worktree') {
+      return worktreePath
+    }
     // Why: remote/session clients can request terminal cwd; never let that
     // become a shell outside the selected workspace.
     throw new Error('Terminal cwd must be inside the selected worktree.')
@@ -22,6 +28,7 @@ export function resolveTerminalStartupCwdForWorkspace(args: {
   workspaceId?: string
   requestedCwd?: string | null
   resolveFolderWorkspacePath?: (folderWorkspaceId: string) => string | null | undefined
+  outsideWorktreeCwd?: OutsideWorktreeCwdPolicy
 }): string | undefined {
   if (!args.requestedCwd || args.requestedCwd.trim().length === 0) {
     return undefined
@@ -33,7 +40,9 @@ export function resolveTerminalStartupCwdForWorkspace(args: {
   if (!workspacePath) {
     return args.requestedCwd
   }
-  return resolveTerminalStartupCwd(workspacePath, args.requestedCwd)
+  return resolveTerminalStartupCwd(workspacePath, args.requestedCwd, {
+    outsideWorktreeCwd: args.outsideWorktreeCwd
+  })
 }
 
 function resolveTerminalWorkspacePath(

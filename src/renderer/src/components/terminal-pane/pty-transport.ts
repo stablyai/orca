@@ -433,6 +433,7 @@ export function createPtyOutputProcessor({
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
     cwd,
+    cwdFallback,
     env,
     command,
     launchConfig,
@@ -600,10 +601,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
 
       try {
+        const shouldSendLocalCwdFallback =
+          cwdFallback === 'worktree' && !connectionId && !options.sessionId
         const result = await window.api.pty.spawn({
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
           cwd,
+          ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
           env: options.env ?? env,
           command: options.command ?? command,
           ...((options.launchConfig ?? launchConfig)

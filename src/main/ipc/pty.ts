@@ -1963,11 +1963,13 @@ export function registerPtyHandlers(
 
   const resolveGuardedPtySpawnCwd = (
     worktreeId: string | undefined,
-    cwd: string | undefined
+    cwd: string | undefined,
+    outsideWorktreeCwd?: 'throw' | 'fallback-to-worktree'
   ): string | undefined =>
     resolveTerminalStartupCwdForWorkspace({
       workspaceId: worktreeId,
       requestedCwd: cwd,
+      outsideWorktreeCwd,
       resolveFolderWorkspacePath: (folderWorkspaceId) =>
         store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
     })
@@ -2535,6 +2537,7 @@ export function registerPtyHandlers(
           foreground?: unknown
           background?: unknown
         }
+        cwdFallback?: 'worktree'
         // Why: closes the SIGKILL race documented in INVESTIGATION.md by
         // letting main patch + sync-flush the (worktreeId, tabId, leafId →
         // ptyId) binding before pty:spawn returns. Only the renderer's
@@ -2562,7 +2565,13 @@ export function registerPtyHandlers(
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
-      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd)
+      const cwd = resolveGuardedPtySpawnCwd(
+        args.worktreeId,
+        args.cwd,
+        !args.connectionId && !args.sessionId && args.cwdFallback === 'worktree'
+          ? 'fallback-to-worktree'
+          : undefined
+      )
       spawnTiming.mark('preflight')
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)

@@ -163,6 +163,51 @@ describe('createIpcPtyTransport', () => {
     expect(sshTransport.getLocalSessionMetadata?.()).toBeNull()
   })
 
+  it('sends the local startup cwd fallback flag only for local IPC spawns', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+
+    const transport = createIpcPtyTransport({ cwdFallback: 'worktree' })
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwdFallback: 'worktree'
+      })
+    )
+    transport.disconnect()
+  })
+
+  it('omits the local startup cwd fallback flag when the IPC transport is SSH-tagged', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+
+    const transport = createIpcPtyTransport({ connectionId: 'ssh-1', cwdFallback: 'worktree' })
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        cwdFallback: 'worktree'
+      })
+    )
+    transport.disconnect()
+  })
+
+  it('omits the local startup cwd fallback flag for session reattach spawns', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+
+    const transport = createIpcPtyTransport({ cwdFallback: 'worktree' })
+    await transport.connect({ url: '', callbacks: {}, sessionId: 'session-1' })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        cwdFallback: 'worktree'
+      })
+    )
+    transport.disconnect()
+  })
+
   it('defers title side effects until after terminal data is delivered', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()

@@ -11073,6 +11073,7 @@ describe('connectPanePty', () => {
       'owner-runtime',
       expect.any(Object)
     )
+    expect(createdTransportOptions[0]?.cwdFallback).toBeUndefined()
     expect(transport.connect).toHaveBeenCalled()
   })
 
@@ -11110,6 +11111,7 @@ describe('connectPanePty', () => {
 
     expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
     expect(createIpcPtyTransport).toHaveBeenCalled()
+    expect(createdTransportOptions[0]?.cwdFallback).toBe('worktree')
     expect(transport.connect).toHaveBeenCalled()
   })
 
