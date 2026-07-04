@@ -87,7 +87,11 @@ async function parseClaudeSessionLines(args: {
     }
 
     if (record.type === 'ai-title') {
-      generatedTitle ??= normalizeTitleText(extractString(record.aiTitle) ?? '')
+      const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
+      if (title) {
+        // Claude can revise generated names; AI Vault should mirror the current one.
+        generatedTitle = title
+      }
       continue
     }
 

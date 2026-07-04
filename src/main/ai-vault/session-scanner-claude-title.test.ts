@@ -13,7 +13,7 @@ afterEach(async () => {
 })
 
 describe('scanAiVaultSessions Claude title selection', () => {
-  it('prefers the generated ai-title over the first user prompt, but a custom-title wins over both', async () => {
+  it('prefers the latest generated ai-title over the first user prompt, but a custom-title wins over both', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-ai-title-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
@@ -32,6 +32,12 @@ describe('scanAiVaultSessions Claude title selection', () => {
         sessionId: 'generated',
         timestamp: '2026-05-01T10:01:00.000Z',
         aiTitle: 'Understanding karma and moral accountability'
+      },
+      {
+        type: 'ai-title',
+        sessionId: 'generated',
+        timestamp: '2026-05-01T10:02:00.000Z',
+        aiTitle: 'Updated karma discussion title'
       }
     ])
     await writeJsonlFile(join(projectDir, 'custom.jsonl'), [
@@ -60,7 +66,7 @@ describe('scanAiVaultSessions Claude title selection', () => {
 
     expect(result.issues).toEqual([])
     expect(result.sessions.map((session) => session.title).sort()).toEqual([
-      'Understanding karma and moral accountability',
+      'Updated karma discussion title',
       'User set title'
     ])
   })
