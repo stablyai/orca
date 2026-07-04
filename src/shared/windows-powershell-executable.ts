@@ -106,8 +106,8 @@ function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
     if (!root) {
       continue
     }
-    // PowerShell 7 MSI installs land in `PowerShell\7\pwsh.exe`. Glob the major
-    // version conservatively (6/7/8) so future majors keep resolving.
+    // PowerShell MSI installs land in `PowerShell\<major>\pwsh.exe`. Check the
+    // supported recent majors before falling back to PATH-discovered installs.
     for (const major of ['7', '8', '6']) {
       pushUniqueCandidate(candidates, seen, pathWin32.join(root, 'PowerShell', major, 'pwsh.exe'))
     }

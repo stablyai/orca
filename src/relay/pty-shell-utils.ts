@@ -29,11 +29,19 @@ type ProcessRow = {
 
 export function resolveWindowsDefaultShell(
   env: NodeJS.ProcessEnv = process.env,
-  existsPath: (path: string) => boolean = existsSync
+  existsPath: (path: string) => boolean = existsSync,
+  isRealPowerShellExecutable?: (path: string) => boolean
 ): string {
+  const powerShellResolveOptions = isRealPowerShellExecutable
+    ? { isRealExecutable: isRealPowerShellExecutable }
+    : undefined
   const envShell = env.SHELL
   if (envShell) {
-    const resolvedPowerShell = resolveWindowsPowerShellShellPath(envShell, env, existsPath)
+    const resolvedPowerShell = resolveWindowsPowerShellShellPath(
+      envShell,
+      env,
+      powerShellResolveOptions
+    )
     if (resolvedPowerShell) {
       return resolvedPowerShell
     }
@@ -53,7 +61,7 @@ export function resolveWindowsDefaultShell(
   const resolvedWindowsPowerShell = resolveWindowsPowerShellShellPath(
     windowsPowerShell,
     env,
-    existsPath
+    powerShellResolveOptions
   )
   if (
     resolvedWindowsPowerShell &&

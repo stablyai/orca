@@ -129,6 +129,19 @@ describe('getRelayShellLaunchConfig', () => {
     })
   })
 
+  it('honors Windows PowerShell safe mode on Windows relay launches', () => {
+    expect(
+      getRelayShellLaunchConfig(
+        'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        { HOME: homeDir, ORCA_WINDOWS_POWERSHELL_SAFE_MODE: '1' },
+        'win32'
+      )
+    ).toEqual({
+      args: ['-NoLogo', '-NoProfile', '-NoExit', '-EncodedCommand', expect.any(String)],
+      env: {}
+    })
+  })
+
   it('keeps PowerShell Core on POSIX remotes as a login shell', () => {
     expect(getRelayShellLaunchConfig('/usr/bin/pwsh', { HOME: homeDir }, 'linux')).toEqual({
       args: ['-l'],

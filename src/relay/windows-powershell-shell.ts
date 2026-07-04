@@ -1,6 +1,10 @@
 import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsPowerShellSpawnChain } from '../shared/windows-powershell-executable'
 
+type WindowsPowerShellShellPathOptions = {
+  isRealExecutable?: (path: string) => boolean
+}
+
 function readPathEnv(env: NodeJS.ProcessEnv): string {
   return env.PATH || env.Path || env.path || ''
 }
@@ -31,7 +35,7 @@ function getEnvWithShellDirectory(env: NodeJS.ProcessEnv, shellPath: string): No
 export function resolveWindowsPowerShellShellPath(
   shellPath: string,
   env: NodeJS.ProcessEnv = process.env,
-  existsPath?: (path: string) => boolean
+  options: WindowsPowerShellShellPathOptions = {}
 ): string | null {
   const family = getPowerShellFamily(shellPath)
   if (!family) {
@@ -41,7 +45,7 @@ export function resolveWindowsPowerShellShellPath(
   const chain = resolveWindowsPowerShellSpawnChain(family, {
     env: resolveEnv,
     platform: 'win32',
-    ...(existsPath ? { isRealExecutable: existsPath } : {})
+    ...(options.isRealExecutable ? { isRealExecutable: options.isRealExecutable } : {})
   })
   return chain[0] ?? null
 }

@@ -61,6 +61,7 @@ describe('resolveWindowsDefaultShell', () => {
           PATH: '',
           ComSpec: 'C:\\Windows\\System32\\cmd.exe'
         },
+        (path) => path === 'C:\\Tools\\pwsh.exe',
         (path) => path === 'C:\\Tools\\pwsh.exe'
       )
     ).toBe('C:\\Tools\\pwsh.exe')
@@ -78,6 +79,8 @@ describe('resolveWindowsDefaultShell', () => {
           SystemRoot: 'C:\\Windows',
           ComSpec: 'C:\\Windows\\System32\\cmd.exe'
         },
+        (path) =>
+          path === alias || path === powershell || path === 'C:\\Windows\\System32\\cmd.exe',
         (path) => path === alias || path === powershell || path === 'C:\\Windows\\System32\\cmd.exe'
       )
     ).toBe(powershell)
@@ -92,6 +95,7 @@ describe('resolveWindowsDefaultShell', () => {
           SystemRoot: 'C:\\Windows',
           ComSpec: 'C:\\Windows\\System32\\cmd.exe'
         },
+        (path) => path === powershell || path === 'C:\\Windows\\System32\\cmd.exe',
         (path) => path === powershell || path === 'C:\\Windows\\System32\\cmd.exe'
       )
     ).toBe(powershell)
@@ -104,7 +108,8 @@ describe('resolveWindowsDefaultShell', () => {
           SystemRoot: 'C:\\Windows',
           ComSpec: 'C:\\Windows\\System32\\cmd.exe'
         },
-        (path) => path === 'C:\\Windows\\System32\\cmd.exe'
+        (path) => path === 'C:\\Windows\\System32\\cmd.exe',
+        () => false
       )
     ).toBe('C:\\Windows\\System32\\cmd.exe')
   })

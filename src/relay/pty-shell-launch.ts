@@ -7,10 +7,7 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../main/shell-templates'
-import {
-  encodePowerShellCommand,
-  getPowerShellOsc133Bootstrap
-} from '../main/powershell-osc133-bootstrap'
+import { getWindowsRelayShellArgs } from './windows-relay-shell-args'
 
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
@@ -27,33 +24,6 @@ function quotePosixSingle(value: string): string {
 
 function shellBasename(shellPath: string): string {
   return shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
-}
-
-function windowsShellArgs(
-  shellName: string,
-  options: { terminalWindowsWslDistro?: string | null } = {}
-): string[] | null {
-  if (
-    shellName === 'powershell.exe' ||
-    shellName === 'powershell' ||
-    shellName === 'pwsh.exe' ||
-    shellName === 'pwsh'
-  ) {
-    return [
-      '-NoLogo',
-      '-NoExit',
-      '-EncodedCommand',
-      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
-    ]
-  }
-  if (shellName === 'cmd.exe' || shellName === 'cmd') {
-    return []
-  }
-  if (shellName === 'wsl.exe' || shellName === 'wsl') {
-    const distro = options.terminalWindowsWslDistro?.trim()
-    return distro ? ['-d', distro] : []
-  }
-  return null
 }
 
 function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
@@ -279,7 +249,7 @@ export function getRelayShellLaunchConfig(
     // only apply when the relay itself is running on native Windows.
     return {
       args:
-        windowsShellArgs(shellName, {
+        getWindowsRelayShellArgs(shellName, env, {
           terminalWindowsWslDistro: options.terminalWindowsWslDistro
         }) ?? [],
       env:
