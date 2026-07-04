@@ -998,10 +998,18 @@ export class SshRelaySession {
   }
 
   private async reattachKnownPtys(shouldContinue: () => boolean): Promise<void> {
-    const leasedPtyIds = this.store
+    const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
-      .map((lease) => lease.ptyId)
+    const leasedPtyIds = activeLeases.map((lease) => lease.ptyId)
+    // Why: carry each lease's tab identity into the attach so the relay can
+    // reject a cross-generation id collision (a reset relay's `pty-N` naming a
+    // different pane) instead of reattaching this tab to the wrong shell.
+    const expectedTabIdByPtyId = new Map(
+      activeLeases
+        .filter((lease) => typeof lease.tabId === 'string')
+        .map((lease) => [lease.ptyId, lease.tabId as string])
+    )
     // Why: after app restart, ptyOwnership is empty but durable SSH leases
     // still describe remote PTYs that survived in the relay grace window.
     const ptyIds = Array.from(
@@ -1021,7 +1029,11 @@ export class SshRelaySession {
         return
       }
       try {
-        const attachResult = (await ptyProvider.attachForReconnect(ptyId)) ?? {}
+        const expectedTabId = expectedTabIdByPtyId.get(ptyId)
+        const attachResult =
+          (expectedTabId
+            ? await ptyProvider.attachForReconnect(ptyId, { tabId: expectedTabId })
+            : await ptyProvider.attachForReconnect(ptyId)) ?? {}
         if (!shouldContinue()) {
           return
         }

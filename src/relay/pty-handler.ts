@@ -168,6 +168,22 @@ type SerializedPtyEntry = {
 }
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
+
+type PtyIdentity = { paneKey?: string; tabId?: string }
+
+/**
+ * True when a reattach's expected pane identity contradicts the target PTY's
+ * own. Used to reject cross-relay-generation id collisions: a reset relay mints
+ * `pty-N` from 1 again, so an old lease's `pty-N` can name a different pane's
+ * fresh PTY. Only compares fields present on *both* sides — absent identity on
+ * either side is permissive so legacy PTYs and identity-less callers still attach.
+ */
+export function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
+  return Boolean(
+    (expected.paneKey && managed.paneKey && expected.paneKey !== managed.paneKey) ||
+    (expected.tabId && managed.tabId && expected.tabId !== managed.tabId)
+  )
+}
 /** Returns env to merge into the PTY's spawn env. Receives spawn context so
  *  augmenters that need a per-PTY identity (e.g. OPENCODE_CONFIG_DIR overlay
  *  paths derived from the renderer's paneKey) can compute it without pulling
@@ -643,6 +659,25 @@ export class PtyHandler {
     // would hit a neutralized no-op on POSIX. The explicit check converts a
     // silent failure into the existing error callers already handle.
     if (!managed || managed.disposed) {
+      throw new Error(`PTY "${id}" not found`)
+    }
+
+    // Why: PTY ids are a per-relay-process counter (pty-1, pty-2, …). When the
+    // relay changes generation — an app update deploys a new content-hashed
+    // relay dir, or a grace-expired relay restarts — the counter resets, so an
+    // old lease's `pty-N` can name a freshly spawned `pty-N` that belongs to a
+    // *different* pane. Attaching by id alone then wires a tab to the wrong
+    // shell. Reject when the caller's expected identity disagrees with this
+    // PTY's own so the client falls back to a fresh spawn. Absent identity on
+    // either side stays permissive for backward compatibility.
+    const mismatch = attachIdentityMismatches(
+      {
+        paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
+        tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
+      },
+      { paneKey: managed.paneKey, tabId: managed.tabId }
+    )
+    if (mismatch) {
       throw new Error(`PTY "${id}" not found`)
     }
 

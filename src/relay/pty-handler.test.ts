@@ -28,7 +28,7 @@ vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
 }))
 
-import { PtyHandler } from './pty-handler'
+import { PtyHandler, attachIdentityMismatches } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
 function createMockDispatcher() {
@@ -1351,5 +1351,41 @@ describe('PtyHandler', () => {
       { id: 'pty-2', paneKey: 'tab-dispose:1' }
     ])
     expect(handler.activePtyCount).toBe(0)
+  })
+})
+
+describe('attachIdentityMismatches', () => {
+  it('rejects a paneKey collision across relay generations', () => {
+    // Old lease expects tab-a's pane; the reset relay's pty-1 belongs to tab-b.
+    expect(
+      attachIdentityMismatches({ paneKey: 'tab-a:0' }, { paneKey: 'tab-b:0', tabId: 'tab-b' })
+    ).toBe(true)
+  })
+
+  it('rejects a tabId collision when only tab identity is known', () => {
+    expect(attachIdentityMismatches({ tabId: 'tab-a' }, { tabId: 'tab-b' })).toBe(true)
+  })
+
+  it('accepts a matching identity', () => {
+    expect(
+      attachIdentityMismatches(
+        { paneKey: 'tab-a:0', tabId: 'tab-a' },
+        { paneKey: 'tab-a:0', tabId: 'tab-a' }
+      )
+    ).toBe(false)
+  })
+
+  it('stays permissive when the caller supplies no identity', () => {
+    expect(attachIdentityMismatches({}, { paneKey: 'tab-a:0', tabId: 'tab-a' })).toBe(false)
+  })
+
+  it('stays permissive when the managed PTY predates identity capture', () => {
+    expect(attachIdentityMismatches({ paneKey: 'tab-a:0', tabId: 'tab-a' }, {})).toBe(false)
+  })
+
+  it('does not reject on tabId when paneKey matches (split panes share a tab)', () => {
+    expect(
+      attachIdentityMismatches({ paneKey: 'tab-a:1' }, { paneKey: 'tab-a:1', tabId: 'tab-a' })
+    ).toBe(false)
   })
 })

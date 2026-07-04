@@ -101,11 +101,19 @@ export class SshPtyProvider implements IPtyProvider {
         `[ssh-pty] spawn() called with sessionId=${opts.sessionId}, attempting pty.attach`
       )
       try {
+        // Why: pass the pane's expected identity so the relay can reject a
+        // cross-generation id collision (see pty-handler attach) instead of
+        // replaying the wrong shell into this pane. ORCA_PANE_KEY is the
+        // renderer's per-pane identity; ORCA_TAB_ID is the coarser fallback.
+        const expectedPaneKey = opts.env?.ORCA_PANE_KEY
+        const expectedTabId = opts.env?.ORCA_TAB_ID
         const attachResult = (await this.mux.request('pty.attach', {
           id: relaySessionId,
           cols: opts.cols,
           rows: opts.rows,
-          suppressReplayNotification: true
+          suppressReplayNotification: true,
+          ...(expectedPaneKey ? { expectedPaneKey } : {}),
+          ...(expectedTabId ? { expectedTabId } : {})
         })) as { replay?: string }
         console.warn(
           `[ssh-pty] pty.attach succeeded for ${opts.sessionId}, replay=${!!attachResult.replay}`
@@ -185,12 +193,19 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
   }
 
-  async attachForReconnect(id: string): Promise<{ replay?: string }> {
+  async attachForReconnect(
+    id: string,
+    expected?: { paneKey?: string; tabId?: string }
+  ): Promise<{ replay?: string }> {
     // Why: reconnect owns replay delivery so stale/duplicate attach results can
-    // be filtered before they reach the renderer.
+    // be filtered before they reach the renderer. The expected identity lets the
+    // relay reject a cross-generation id collision instead of reattaching this
+    // lease to a different pane's freshly spawned PTY.
     const result = (await this.mux.request('pty.attach', {
       id: this.toRelayPtyId(id),
-      suppressReplayNotification: true
+      suppressReplayNotification: true,
+      ...(expected?.paneKey ? { expectedPaneKey: expected.paneKey } : {}),
+      ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
     })) as { replay?: string } | undefined
     return result ?? {}
   }
