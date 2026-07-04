@@ -25,6 +25,7 @@ import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
   getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
+  nativeZoomCommandMatchesKeybindings,
   resolveWindowShortcutAction,
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
@@ -34,7 +35,6 @@ import {
   toModifierDoubleTapEvent
 } from '../../shared/modifier-double-tap-detector'
 import {
-  keybindingMatchesAction,
   normalizeTerminalShortcutPolicy,
   type KeybindingMatchOptions,
   type KeybindingOverrides
@@ -58,38 +58,6 @@ function forceRepaint(window: BrowserWindow): void {
       window.setSize(width, height)
     }
   }, 32)
-}
-
-function nativeZoomCommandMatchesKeybindings(
-  direction: 'in' | 'out',
-  platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides,
-  options: KeybindingMatchOptions = {}
-): boolean {
-  const primary =
-    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
-  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
-  const candidates =
-    direction === 'in'
-      ? [
-          { key: '=', code: 'Equal', shift: false },
-          { key: '+', code: 'Equal', shift: true },
-          { key: 'Add', code: 'NumpadAdd', shift: false }
-        ]
-      : [
-          { key: '-', code: 'Minus', shift: false },
-          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
-        ]
-
-  return candidates.some((candidate) =>
-    keybindingMatchesAction(
-      actionId,
-      { ...primary, alt: false, ...candidate },
-      platform,
-      keybindings,
-      options
-    )
-  )
 }
 
 function isMacAppPasteInput(input: Electron.Input): boolean {
