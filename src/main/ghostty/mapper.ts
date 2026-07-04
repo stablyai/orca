@@ -183,10 +183,12 @@ export function mapGhosttyToOrca(
       if (!match) {
         return null
       }
-      const lineHeight = Math.round((1 + Number(match[1]) / 100) * 100) / 100
-      if (lineHeight > 3) {
+      const percent = Number(match[1])
+      const rawLineHeight = 1 + percent / 100
+      if (rawLineHeight > 3) {
         return null
       }
+      const lineHeight = Math.round(100 + percent) / 100
       return { key: 'terminalLineHeight', value: lineHeight }
     },
 

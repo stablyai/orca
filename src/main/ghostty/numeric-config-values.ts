@@ -26,5 +26,5 @@ export const parsePaddingValue = (v: string): number | null => {
     }
     nums.push(num)
   }
-  return Math.round(nums.reduce((sum, num) => sum + num, 0) / nums.length)
+  return nums.reduce((sum, num) => sum + num, 0) / nums.length
 }
