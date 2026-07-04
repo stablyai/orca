@@ -264,6 +264,11 @@ export function AccountsPane({
     wslDistros,
     wslCapabilitiesLoading
   )
+  // Why: host runtime labels are standalone UI labels; interpolated prose needs sentence casing.
+  const accountRuntimeSentenceLabel =
+    accountRuntime.runtime === 'host' && !navigator.userAgent.includes('Windows')
+      ? `${accountRuntime.label.charAt(0).toLocaleLowerCase()}${accountRuntime.label.slice(1)}`
+      : accountRuntime.label
 
   const [codexAccounts, setCodexAccounts] = useState<CodexRateLimitAccountsState>({
     accounts: [],
@@ -611,7 +616,7 @@ export function AccountsPane({
                 {translate(
                   'auto.components.settings.AccountsPane.c0a52abfc5',
                   'Showing accounts for {{value0}}. New accounts are added there.',
-                  { value0: accountRuntime.label }
+                  { value0: accountRuntimeSentenceLabel }
                 )}
               </p>
             </div>
@@ -693,7 +698,7 @@ export function AccountsPane({
                   {translate(
                     'auto.components.settings.AccountsPane.e05d0ff737',
                     'Use your current {{value0}} Claude login.',
-                    { value0: accountRuntime.label }
+                    { value0: accountRuntimeSentenceLabel }
                   )}
                 </span>
               </div>
@@ -703,7 +708,7 @@ export function AccountsPane({
                 {translate(
                   'auto.components.settings.AccountsPane.3fe7862418',
                   "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
-                  { value0: accountRuntime.label }
+                  { value0: accountRuntimeSentenceLabel }
                 )}
               </div>
             ) : (
@@ -863,7 +868,7 @@ export function AccountsPane({
                   : translate(
                       'auto.components.settings.AccountsPane.e4a28e8894',
                       'Codex reported that the {{value0}} login needs a fresh sign-in. Sign in again before starting new Codex sessions.',
-                      { value0: accountRuntime.label }
+                      { value0: accountRuntimeSentenceLabel }
                     )}
               </span>
             </div>
@@ -877,7 +882,7 @@ export function AccountsPane({
                 {translate(
                   'auto.components.settings.AccountsPane.c0a52abfc5',
                   'Showing accounts for {{value0}}. New accounts are added there.',
-                  { value0: accountRuntime.label }
+                  { value0: accountRuntimeSentenceLabel }
                 )}
               </p>
             </div>
@@ -964,12 +969,12 @@ export function AccountsPane({
                     ? translate(
                         'auto.components.settings.AccountsPane.fd62f37c24',
                         'Codex reported this {{value0}} login is out of date.',
-                        { value0: accountRuntime.label }
+                        { value0: accountRuntimeSentenceLabel }
                       )
                     : translate(
                         'auto.components.settings.AccountsPane.fcc4093fc1',
                         'Use your current {{value0}} Codex login.',
-                        { value0: accountRuntime.label }
+                        { value0: accountRuntimeSentenceLabel }
                       )}
                 </span>
               </div>
@@ -979,7 +984,7 @@ export function AccountsPane({
                 {translate(
                   'auto.components.settings.AccountsPane.b4c9450319',
                   "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
-                  { value0: accountRuntime.label }
+                  { value0: accountRuntimeSentenceLabel }
                 )}
               </div>
             ) : (
@@ -1177,7 +1182,7 @@ export function AccountsPane({
               {translate(
                 'auto.components.settings.AccountsPane.c2aee76420',
                 'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
-                { value0: accountRuntime.label }
+                { value0: accountRuntimeSentenceLabel }
               )}
             </p>
           </div>

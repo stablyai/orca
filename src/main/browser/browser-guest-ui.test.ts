@@ -433,6 +433,26 @@ describe('setupGuestShortcutForwarding', () => {
     return preventDefault
   }
 
+  function triggerZoomChanged(direction: 'in' | 'out' | 'reset'): ReturnType<typeof vi.fn> {
+    const handler = guestOnMock.mock.calls.find((call) => call[0] === 'zoom-changed')?.[1] as
+      | ((event: Electron.Event, direction: 'in' | 'out' | 'reset') => void)
+      | undefined
+    expect(handler).toBeTypeOf('function')
+    const preventDefault = vi.fn()
+    handler!({ preventDefault } as unknown as Electron.Event, direction)
+    return preventDefault
+  }
+
+  function triggerBeforeMouse(mouse: Electron.MouseInputEvent): ReturnType<typeof vi.fn> {
+    const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-mouse-event')?.[1] as
+      | ((event: Electron.Event, mouse: Electron.MouseInputEvent) => void)
+      | undefined
+    expect(handler).toBeTypeOf('function')
+    const preventDefault = vi.fn()
+    handler!({ preventDefault } as unknown as Electron.Event, mouse)
+    return preventDefault
+  }
+
   function triggerGuestBlur(): void {
     const handler = guestOnMock.mock.calls.find((call) => call[0] === 'blur')?.[1] as
       | (() => void)
@@ -488,7 +508,7 @@ describe('setupGuestShortcutForwarding', () => {
     }
   })
 
-  it('forwards app zoom shortcuts from focused guest pages', () => {
+  it('forwards browser page zoom shortcuts from focused guest pages', () => {
     setupGuestShortcutForwarding({
       browserTabId,
       guest: makeGuest(),
@@ -516,12 +536,12 @@ describe('setupGuestShortcutForwarding', () => {
     expect(numpadSubtractPreventDefault).toHaveBeenCalledTimes(1)
     expect(resetPreventDefault).toHaveBeenCalledTimes(1)
     expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'terminal:zoom', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'terminal:zoom', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'terminal:zoom', 'reset')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'terminal:zoom', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:zoomBrowserPage', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:zoomBrowserPage', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:zoomBrowserPage', 'reset')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', 'in')
   })
 
   it('forwards browser history shortcuts from focused guest pages', () => {
@@ -600,7 +620,73 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(defaultPreventDefault).not.toHaveBeenCalled()
     expect(customPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('terminal:zoom', 'in')
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
+  })
+
+  it('forwards native guest zoom commands to browser page zoom when default zoom keys are bound', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const zoomOutPreventDefault = triggerZoomChanged('out')
+    const zoomInPreventDefault = triggerZoomChanged('in')
+    const resetPreventDefault = triggerZoomChanged('reset')
+
+    expect(zoomOutPreventDefault).toHaveBeenCalledTimes(1)
+    expect(zoomInPreventDefault).toHaveBeenCalledTimes(1)
+    expect(resetPreventDefault).not.toHaveBeenCalled()
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'in')
+  })
+
+  it('does not double-forward ctrl wheel when Electron also emits a native zoom command', () => {
+    const guest = makeGuest()
+
+    setupGuestMouseWheelZoomForwarding({
+      browserTabId,
+      guest,
+      resolveRenderer: () => makeRenderer()
+    })
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest,
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const wheelPreventDefault = triggerBeforeMouse({
+      type: 'mouseWheel',
+      x: 0,
+      y: 0,
+      deltaY: -120,
+      modifiers: ['ctrl']
+    } as Electron.MouseWheelInputEvent)
+    const zoomCommandPreventDefault = triggerZoomChanged('in')
+
+    expect(wheelPreventDefault).toHaveBeenCalledTimes(1)
+    expect(zoomCommandPreventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
+  })
+
+  it('ignores native guest zoom commands when matching default zoom keys are unbound', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'zoom.in': ['Mod+Alt+Z'],
+        'zoom.out': []
+      })
+    })
+
+    const zoomOutPreventDefault = triggerZoomChanged('out')
+    const zoomInPreventDefault = triggerZoomChanged('in')
+
+    expect(zoomOutPreventDefault).not.toHaveBeenCalled()
+    expect(zoomInPreventDefault).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalled()
   })
 
   it('forwards double-tap window shortcuts from focused guest pages', () => {

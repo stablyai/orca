@@ -331,6 +331,25 @@ describe('resolveRemoteNodePath', () => {
     ).rejects.toBe(sessionLimitError)
   })
 
+  it('surfaces an AbortError instead of not-found when the shared signal is aborted', async () => {
+    // Why: in concurrent bootstrap a sibling probe aborts this resolution via
+    // the shared signal. Each strategy catch swallows the injected AbortError,
+    // so without re-raising it here the resolver would launder cancellation
+    // into a fatal "Node.js not found" and defeat the sequential fallback.
+    const controller = new AbortController()
+    const abortError = Object.assign(new Error('SSH operation was cancelled'), {
+      name: 'AbortError'
+    })
+    execCommandMock.mockImplementation(() => {
+      controller.abort()
+      return Promise.reject(abortError)
+    })
+
+    await expect(
+      resolveRemoteNodePath(conn, undefined, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('throws when every candidate across both strategies is below the minimum', async () => {
     execCommandMock
       .mockResolvedValueOnce('/old/node\n') // path probe

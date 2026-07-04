@@ -78,6 +78,7 @@ import {
   parsePaneKey
 } from '../../shared/stable-pane-id'
 import { resolveTerminalStartupCwdForWorkspace } from '../../shared/terminal-startup-cwd'
+import { localTerminalCwdCanonicalizer } from '../pty/terminal-cwd-realpath'
 import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
@@ -1975,13 +1976,17 @@ export function registerPtyHandlers(
 
   const resolveGuardedPtySpawnCwd = (
     worktreeId: string | undefined,
-    cwd: string | undefined
+    cwd: string | undefined,
+    connectionId?: string | null
   ): string | undefined =>
     resolveTerminalStartupCwdForWorkspace({
       workspaceId: worktreeId,
       requestedCwd: cwd,
       resolveFolderWorkspacePath: (folderWorkspaceId) =>
-        store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
+        store?.getFolderWorkspace(folderWorkspaceId)?.folderPath,
+      // Why: realpath only makes sense on the local filesystem; SSH worktree
+      // paths live on the remote host.
+      canonicalizePath: localTerminalCwdCanonicalizer(connectionId)
     })
 
   // Why: the runtime controller must route through getProviderForPty() so that
@@ -1994,7 +1999,7 @@ export function registerPtyHandlers(
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
-      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd)
+      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd, args.connectionId)
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -2574,7 +2579,7 @@ export function registerPtyHandlers(
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
-      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd)
+      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd, args.connectionId)
       spawnTiming.mark('preflight')
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)

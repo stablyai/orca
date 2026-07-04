@@ -878,19 +878,28 @@ function App(): React.JSX.Element {
         // active one) so a cold start that restored a remote workspace doesn't
         // hide local repos. The sidebar "All hosts" scope then shows them all.
         await timeRendererStartupStep('fetch-repos', () => actions.fetchReposForAllHosts())
-        await timeRendererStartupStep('fetch-project-groups', () =>
-          actions.fetchProjectGroupsForAllHosts()
-        )
-        await timeRendererStartupStep('fetch-folder-workspaces', () =>
-          actions.fetchFolderWorkspacesForAllHosts()
-        )
-        // Why: both of these fan out `git worktree list` per repo on the main
-        // process. Running them concurrently lets the main process share one
+        // Why: project-groups/folder-workspaces read neither the repos store nor
+        // worktrees, so once repos land they can overlap the per-repo
+        // `git worktree list` fan-out (#7225) instead of queuing ahead of it — a
+        // slow remote host's 15s scope RPCs no longer block the scan. folders
+        // still follow project-groups (they read projectGroups); all settle
+        // before the hydrate steps below.
+        const projectScopeChain = (async () => {
+          await timeRendererStartupStep('fetch-project-groups', () =>
+            actions.fetchProjectGroupsForAllHosts()
+          )
+          await timeRendererStartupStep('fetch-folder-workspaces', () =>
+            actions.fetchFolderWorkspacesForAllHosts()
+          )
+        })()
+        // Why: worktrees + lineage both fan out `git worktree list` per repo on
+        // the main process. Running them concurrently lets it share one
         // in-flight scan per repo instead of paying the process-spawn fan-out
         // twice back-to-back — the dominant renderer-chain cost on Windows
         // (issue #7225). Lineage only reads settings + its own slice, so it
         // does not depend on the worktrees fetch having landed.
         await Promise.all([
+          projectScopeChain,
           timeRendererStartupStep('fetch-worktrees', () => actions.fetchAllWorktrees()),
           timeRendererStartupStep('fetch-worktree-lineage', () => actions.fetchWorktreeLineage())
         ])

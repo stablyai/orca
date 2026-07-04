@@ -286,8 +286,22 @@ describe('execCommand', () => {
     await Promise.resolve()
     controller.abort()
 
-    await expect(commandPromise).rejects.toMatchObject({ name: 'AbortError' })
+    // Why: sshd frees the MaxSessions slot only when the channel finishes
+    // closing, so abort must request close and settle from the 'close' event —
+    // settling immediately lets the sequential fallback race the closing
+    // channel and get refused.
     expect(channel.close).toHaveBeenCalledOnce()
+    const settledEarly = await Promise.race([
+      commandPromise.then(
+        () => 'settled',
+        () => 'settled'
+      ),
+      Promise.resolve('pending')
+    ])
+    expect(settledEarly).toBe('pending')
+    channel.emit('close', 0)
+
+    await expect(commandPromise).rejects.toMatchObject({ name: 'AbortError' })
     expect(channel.listenerCount('error')).toBe(0)
     expect(channel.listenerCount('data')).toBe(0)
     expect(channel.listenerCount('close')).toBe(0)
@@ -313,8 +327,13 @@ describe('execCommand', () => {
     controller.abort()
     resolveExec(channel)
 
-    await expect(commandPromise).rejects.toMatchObject({ name: 'AbortError' })
+    await Promise.resolve()
+    await Promise.resolve()
     expect(channel.close).toHaveBeenCalledOnce()
+    // Nonzero exit from the killed command must still surface as AbortError.
+    channel.emit('close', 1)
+
+    await expect(commandPromise).rejects.toMatchObject({ name: 'AbortError' })
     expect(channel.listenerCount('error')).toBe(0)
     expect(channel.listenerCount('data')).toBe(0)
     expect(channel.listenerCount('close')).toBe(0)

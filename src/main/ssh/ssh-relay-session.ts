@@ -531,7 +531,19 @@ export class SshRelaySession {
       return false
     }
 
-    await this.installRemoteOrcaCliShim()
+    try {
+      await this.installRemoteOrcaCliShim()
+    } catch (error) {
+      // Why: the remote `orca` CLI shim is a convenience bridge. On session-
+      // limited remotes (MaxSessions=1) the relay bridge holds the only slot,
+      // so this raw-connection install can fail — that must not fail the
+      // whole connection, matching the managed-hook install above.
+      console.warn(
+        `[ssh-relay-session] remote orca CLI shim install failed for ${this.targetId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
     if (shouldContinue && !shouldContinue()) {
       return false
     }

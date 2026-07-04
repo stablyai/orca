@@ -176,6 +176,9 @@ const {
   listGitHubAssignableUsersMock,
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
+  markCodexProjectTrustedMock,
+  markCopilotFolderTrustedMock,
+  markCursorWorkspaceTrustedMock,
   listGitLabMergeRequestsMock,
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
@@ -267,6 +270,9 @@ const {
     listGitHubAssignableUsersMock: vi.fn(),
     detectInstalledAgentsWithShellPathHydrationMock: vi.fn(),
     detectRemoteAgentsMock: vi.fn(),
+    markCodexProjectTrustedMock: vi.fn(),
+    markCopilotFolderTrustedMock: vi.fn(),
+    markCursorWorkspaceTrustedMock: vi.fn(),
     listGitLabMergeRequestsMock: vi.fn(),
     listGitLabWorkItemsMock: vi.fn(),
     listGitLabIssuesMock: vi.fn(),
@@ -331,6 +337,12 @@ vi.mock('../ipc/ssh', () => ({
 vi.mock('../ipc/preflight', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgents: detectRemoteAgentsMock
+}))
+
+vi.mock('../agent-trust-presets', () => ({
+  markCodexProjectTrusted: markCodexProjectTrustedMock,
+  markCopilotFolderTrusted: markCopilotFolderTrustedMock,
+  markCursorWorkspaceTrusted: markCursorWorkspaceTrustedMock
 }))
 
 vi.mock('../hooks', () => ({
@@ -641,6 +653,9 @@ function resetRuntimeTestMocks(): void {
   detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue([])
   detectRemoteAgentsMock.mockReset()
   detectRemoteAgentsMock.mockResolvedValue([])
+  markCodexProjectTrustedMock.mockReset()
+  markCopilotFolderTrustedMock.mockReset()
+  markCursorWorkspaceTrustedMock.mockReset()
   listGitLabMergeRequestsMock.mockReset()
   listGitLabMergeRequestsMock.mockResolvedValue({ items: [] })
   listGitLabWorkItemsMock.mockReset()
@@ -2355,10 +2370,21 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('does not create runtime local worktrees when remote-tracking base refresh fails', async () => {
+  it('creates a runtime local worktree from an existing local base ref when the refresh fails', async () => {
+    // Regression: an offline/auth failure while refreshing the remote-tracking
+    // base must not block creation when a usable local base ref already exists.
     const runtime = new OrcaRuntimeService(store)
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-refresh-fails')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/cli-refresh-fails')
+    const createdWorktree = {
+      path: '/tmp/workspaces/cli-refresh-fails',
+      head: 'base-sha',
+      branch: 'cli-refresh-fails',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(addWorktree).mockResolvedValueOnce({})
+    vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
@@ -2366,6 +2392,7 @@ describe('OrcaRuntimeService', () => {
       if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
         return { stdout: '/tmp/repo/.git\n', stderr: '' }
       }
+      // Local remote-tracking base ref resolves -> usable fallback exists.
       if (args[0] === 'rev-parse' && args[1] === '--verify') {
         return { stdout: 'base-sha\n', stderr: '' }
       }
@@ -2379,6 +2406,40 @@ describe('OrcaRuntimeService', () => {
         runtime.createManagedWorktree({
           repoSelector: 'id:repo-1',
           name: 'cli-refresh-fails'
+        })
+      ).resolves.toBeDefined()
+
+      expect(addWorktree).toHaveBeenCalled()
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('does not create a runtime local worktree when the refresh fails and no local base ref exists', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-refresh-no-local')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/cli-refresh-no-local')
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
+        return { stdout: '/tmp/repo/.git\n', stderr: '' }
+      }
+      // No local remote-tracking base ref -> nothing to fall back on.
+      if (args[0] === 'rev-parse' && args[1] === '--verify') {
+        throw new Error('missing ref')
+      }
+      if (args[0] === 'fetch') {
+        throw new Error('network unavailable')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'cli-refresh-no-local'
         })
       ).rejects.toThrow(
         'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
@@ -4819,7 +4880,10 @@ describe('OrcaRuntimeService', () => {
         ['rev-parse', '--path-format=absolute', '--git-common-dir'],
         wslGitOptions
       )
-      expect(asyncGitSpy).toHaveBeenCalledWith(['fetch', 'origin'], wslGitOptions)
+      expect(asyncGitSpy).toHaveBeenCalledWith(['fetch', 'origin'], {
+        ...wslGitOptions,
+        timeout: 60_000
+      })
       expect(syncGitSpy).toHaveBeenCalledWith(
         ['rev-list', '--left-right', '--count', 'HEAD...origin/main'],
         { cwd: TEST_WORKTREE_PATH, wslDistro: 'Ubuntu' }
@@ -6982,6 +7046,204 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('applies Settings agent defaults to bare agent command terminal creates', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: { codex: { CODEX_PROFILE: 'captured' } }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
+    expect(spawnCall?.env).toMatchObject({
+      CODEX_PROFILE: 'captured',
+      ORCA_WORKTREE_ID: TEST_WORKTREE_ID
+    })
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+    expect(markCodexProjectTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+    expect(markCodexProjectTrustedMock.mock.invocationCallOrder[0]).toBeLessThan(
+      spawn.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it('matches canonical bare agent commands when a command override is configured', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: { codex: 'codex --profile work' },
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+    expect(spawnCall?.command).toBe(
+      "codex --profile work '--dangerously-bypass-approvals-and-sandbox'"
+    )
+  })
+
+  it('keeps non-bare agent command terminal creates unchanged', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex exec summarize'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toBe('codex exec summarize')
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+  })
+
+  it('keeps disabled bare agent command terminal creates unchanged', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: ['codex' as const],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toBe('codex')
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+  })
+
+  it('sends Settings agent defaults through renderer-backed bare agent terminal creates', async () => {
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: { codex: { CODEX_PROFILE: 'captured' } }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+
+    const webContents = { send: vi.fn() }
+    webContents.send.mockImplementation((_channel: string, payload: { requestId: string }) => {
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer',
+            paneTitle: null
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: webContents },
+        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Codex' }
+      )
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      rendererBacked: true
+    })
+
+    expect(webContents.send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.objectContaining({
+        worktreeId: TEST_WORKTREE_ID,
+        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+        env: { CODEX_PROFILE: 'captured' },
+        launchAgent: 'codex',
+        launchConfig: {
+          agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
+          agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        }
+      })
+    )
+    expect(markCodexProjectTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+    expect(markCodexProjectTrustedMock.mock.invocationCallOrder[0]).toBeLessThan(
+      webContents.send.mock.invocationCallOrder[0]!
+    )
+  })
+
   it('injects runtime hook receiver env into terminal sessions', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-hooked' })
     const runtime = new OrcaRuntimeService(store, undefined, {
@@ -7197,7 +7459,7 @@ describe('OrcaRuntimeService', () => {
     expect(compoundClaude.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(compoundClaude.env?.TMUX).toBeUndefined()
 
-    expect(normalAgent.command).toBe('codex')
+    expect(normalAgent.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
     expect(normalAgent.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(normalAgent.env?.TMUX).toBeUndefined()
   })
@@ -7556,7 +7818,7 @@ describe('OrcaRuntimeService', () => {
     })
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: 'codex',
+        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
         cwd: TEST_WORKTREE_PATH,
         worktreeId: TEST_WORKTREE_ID
       })
@@ -7625,7 +7887,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({
         requestId: expect.any(String),
         worktreeId: TEST_WORKTREE_ID,
-        command: 'codex',
+        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
         title: 'Renderer Terminal'
       })
     )

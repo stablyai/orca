@@ -116,12 +116,8 @@ describe('resource manager row presentation', () => {
     expect(container.textContent).toContain('· remote')
     const killButtons = container.querySelectorAll('button[aria-label^="Kill session"]')
     expect(killButtons).toHaveLength(2)
-    expect(
-      container.querySelector('button[aria-label="Kill session ssh-a"]')
-    ).not.toBeNull()
-    expect(
-      container.querySelector('button[aria-label="Kill session ssh-b"]')
-    ).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Kill session ssh-a"]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Kill session ssh-b"]')).not.toBeNull()
   })
 
   it('keeps kill affordances on the orphan bucket rows', () => {
@@ -133,8 +129,6 @@ describe('resource manager row presentation', () => {
       })
     )
 
-    expect(
-      container.querySelector('button[aria-label="Kill session orphan-a"]')
-    ).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Kill session orphan-a"]')).not.toBeNull()
   })
 })

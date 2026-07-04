@@ -1688,6 +1688,7 @@ export default function TerminalPane({
 
   useTerminalKeyboardShortcuts({
     tabId,
+    worktreeId,
     isActive,
     keyboardScopeRef: containerRef,
     managerRef,
