@@ -1,4 +1,4 @@
-export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper' | 'openai'
+export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper' | 'senseVoice' | 'openai'
 export type SpeechModelProvider = 'local' | 'openai'
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
