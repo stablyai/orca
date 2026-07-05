@@ -320,6 +320,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
+    minimaxGroupId: '',
+    minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },

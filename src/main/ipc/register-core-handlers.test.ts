@@ -34,6 +34,7 @@ const {
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
+  registerMiniMaxCredentialsHandlersMock,
   registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
@@ -89,6 +90,7 @@ const {
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
+  registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
@@ -279,6 +281,10 @@ vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))
 
+vi.mock('./minimax-credentials', () => ({
+  registerMiniMaxCredentialsHandlers: registerMiniMaxCredentialsHandlersMock
+}))
+
 vi.mock('../window/attach-main-window-services', () => ({
   registerUpdaterHandlers: registerUpdaterHandlersMock
 }))
@@ -353,6 +359,7 @@ describe('registerCoreHandlers', () => {
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
+    registerMiniMaxCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     setTrustedClipboardRendererWebContentsIdMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
@@ -418,6 +425,7 @@ describe('registerCoreHandlers', () => {
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
+    expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()

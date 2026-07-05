@@ -99,6 +99,7 @@ import {
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { RateLimitService } from './rate-limits/service'
+import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import {
@@ -1683,6 +1684,14 @@ app.whenReady().then(async () => {
     return {
       sessionCookie: settings.opencodeSessionCookie,
       workspaceIdOverride: settings.opencodeWorkspaceId
+    }
+  })
+  rateLimits.setMiniMaxConfigResolver(() => {
+    const settings = store!.getSettings()
+    return {
+      sessionCookie: readMiniMaxSessionCookie() ?? '',
+      groupId: settings.minimaxGroupId,
+      models: settings.minimaxUsageModels
     }
   })
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)

@@ -7,7 +7,13 @@ export type UsageProviderSettings = Pick<
   | 'claudeManagedAccounts'
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
->
+> & {
+  // Why: the MiniMax cookie lives in the file system, not GlobalSettings, so
+  // we can't derive durability from settings alone. The renderer threads the
+  // flag from RateLimitState (pushed by the main process) so the bar stays
+  // visible across reloads and between snapshot refreshes.
+  minimaxCookieConfigured: boolean
+}
 
 type UsageProviderSnapshots = {
   claude: ProviderRateLimits | null
@@ -15,6 +21,7 @@ type UsageProviderSnapshots = {
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  minimax: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -58,7 +65,8 @@ export function hasUsageProviderSettings(
     (settings?.codexManagedAccounts?.length ?? 0) > 0 ||
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     settings?.geminiCliOAuthEnabled === true ||
-    Boolean(settings?.opencodeSessionCookie?.trim())
+    Boolean(settings?.opencodeSessionCookie?.trim()) ||
+    settings?.minimaxCookieConfigured === true
   )
 }
 
@@ -80,6 +88,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'opencode-go') {
     return Boolean(settings.opencodeSessionCookie?.trim())
+  }
+  if (providerId === 'minimax') {
+    return settings.minimaxCookieConfigured === true
   }
   return false
 }
@@ -128,7 +139,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.codex) ||
     isProviderSnapshotPending(providers.gemini) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
-    isProviderSnapshotPending(providers.kimi)
+    isProviderSnapshotPending(providers.kimi) ||
+    isProviderSnapshotPending(providers.minimax)
   ) {
     return false
   }
@@ -138,6 +150,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.codex) &&
     !isProviderConfigured(providers.gemini) &&
     !isProviderConfigured(providers.opencodeGo) &&
-    !isProviderConfigured(providers.kimi)
+    !isProviderConfigured(providers.kimi) &&
+    !isProviderConfigured(providers.minimax)
   )
 }
