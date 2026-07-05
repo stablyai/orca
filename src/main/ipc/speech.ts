@@ -178,7 +178,8 @@ export function registerSpeechHandlers(store: Store): void {
             }
           },
           resolvedHotwordsPath,
-          owner
+          owner,
+          store.getSettings().voice?.language
         )
         if (resolvedHotwordsPath) {
           unlink(resolvedHotwordsPath).catch(() => {})

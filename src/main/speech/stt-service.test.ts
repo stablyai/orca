@@ -173,6 +173,22 @@ describe('SttService', () => {
     expect(getCreatedWorkerCount()).toBe(1)
   })
 
+  it('passes the dictation language to the worker and replaces the warm worker when it changes', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop', 'tr')
+    expect(getLastWorker()!.messages[0]).toMatchObject({ type: 'init', language: 'tr' })
+
+    await service.stopDictation('desktop')
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop', 'en')
+
+    expect(getCreatedWorkerCount()).toBe(2)
+    expect(getLastWorker()!.messages[0]).toMatchObject({ type: 'init', language: 'en' })
+  })
+
   it('keeps an idle worker warm for an hour', async () => {
     vi.useFakeTimers()
     try {

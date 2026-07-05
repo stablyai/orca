@@ -1,8 +1,27 @@
 import type { VoiceSettings } from '../../../../shared/speech-types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+
+// Why: whisper needs an ISO 639-1 code to skip auto-detection; 'auto' keeps
+// model-side detection. Labels are native names, so they are not translated.
+const DICTATION_LANGUAGES: { code: string; label: string }[] = [
+  { code: 'auto', label: 'Auto-detect' },
+  { code: 'en', label: 'English' },
+  { code: 'tr', label: 'Türkçe' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' },
+  { code: 'it', label: 'Italiano' },
+  { code: 'pt', label: 'Português' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'zh', label: '中文' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
+  { code: 'ar', label: 'العربية' }
+]
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
@@ -91,6 +110,41 @@ export function VoiceDictationSettingsSection({
             </button>
           ))}
         </div>
+      </div>
+
+      <Separator />
+
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="space-y-0.5">
+          <Label>
+            {translate(
+              'auto.components.settings.VoicePane.dictationLanguage',
+              'Dictation Language'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.VoicePane.dictationLanguageHint',
+              'Spoken language for transcription. Applies to Whisper and OpenAI models.'
+            )}
+          </p>
+        </div>
+        <Select
+          value={voiceSettings.language || 'auto'}
+          onValueChange={(value) => onUpdateVoiceSettings({ language: value })}
+          disabled={!voiceSettings.enabled}
+        >
+          <SelectTrigger className="w-40 shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DICTATION_LANGUAGES.map((lang) => (
+              <SelectItem key={lang.code} value={lang.code}>
+                {lang.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Separator />

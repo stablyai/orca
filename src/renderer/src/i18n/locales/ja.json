@@ -6742,7 +6742,9 @@
           "f9a9cf6928": "音声ディクテーションを有効にする前に、マイクの許可が必要です。",
           "1eac933202": "macOS のプライバシーとセキュリティを開きました。アクセスを許可した後、ディクテーションを再度有効にします。",
           "cd9fe37556": "マイクの許可が与えられました",
-          "6fa734ed95": "{{value0}} を削除"
+          "6fa734ed95": "{{value0}} を削除",
+          "dictationLanguage": "Dictation Language",
+          "dictationLanguageHint": "Spoken language for transcription. Applies to Whisper and OpenAI models."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",

@@ -28,6 +28,7 @@ export class SttService {
   private modelManager: ModelManager
   private activeModelId: string | null = null
   private activeHotwordsFilePath: string | undefined
+  private activeLanguage: string | undefined
   private activeOwner: string | null = null
   private startingOwner: string | null = null
   private startingModelId: string | null = null
@@ -47,7 +48,8 @@ export class SttService {
     modelId: string,
     sink: SttEventSink,
     hotwordsFilePath?: string,
-    owner = 'desktop'
+    owner = 'desktop',
+    language?: string
   ): Promise<void> {
     if (this.starting) {
       if (this.startingOwner !== owner) {
@@ -64,7 +66,7 @@ export class SttService {
     this.clearIdleTeardownTimer()
 
     try {
-      await this._startDictation(modelId, sink, hotwordsFilePath, owner)
+      await this._startDictation(modelId, sink, hotwordsFilePath, owner, language)
       if (this.canceledOwners.delete(owner)) {
         await this.stopDictation(owner, { cancelStarting: false })
         throw new Error('dictation_canceled')
@@ -82,7 +84,8 @@ export class SttService {
     modelId: string,
     sink: SttEventSink,
     hotwordsFilePath?: string,
-    owner = 'desktop'
+    owner = 'desktop',
+    language?: string
   ): Promise<void> {
     const manifest = getCatalogModel(modelId)
     if (!manifest) {
@@ -100,7 +103,7 @@ export class SttService {
         throw new Error(`Model not ready: ${modelState.status}`)
       }
 
-      this.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+      this.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey, language)
       this.activeModelId = modelId
       this.activeHotwordsFilePath = undefined
       this.eventSink = sink
@@ -115,7 +118,8 @@ export class SttService {
     if (
       this.worker &&
       this.activeModelId === modelId &&
-      this.activeHotwordsFilePath === hotwordsFilePath
+      this.activeHotwordsFilePath === hotwordsFilePath &&
+      this.activeLanguage === language
     ) {
       this.eventSink = sink
       sink({ type: 'ready' })
@@ -142,6 +146,7 @@ export class SttService {
 
     this.activeModelId = modelId
     this.activeHotwordsFilePath = hotwordsFilePath
+    this.activeLanguage = language
     this.eventSink = sink
 
     const readyPromise = new Promise<void>((resolve, reject) => {
@@ -204,6 +209,7 @@ export class SttService {
         this.worker = null
         this.activeModelId = null
         this.activeHotwordsFilePath = undefined
+        this.activeLanguage = undefined
         this.activeOwner = null
         this.eventSink = null
       }
@@ -215,6 +221,7 @@ export class SttService {
         this.worker = null
         this.activeModelId = null
         this.activeHotwordsFilePath = undefined
+        this.activeLanguage = undefined
         this.activeOwner = null
         this.eventSink = null
       }
@@ -238,7 +245,8 @@ export class SttService {
       sampleRate: manifest.sampleRate,
       files: manifest.files ?? [],
       hotwordsFilePath,
-      modelingUnit: manifest.modelingUnit
+      modelingUnit: manifest.modelingUnit,
+      language
     })
 
     try {
@@ -251,6 +259,7 @@ export class SttService {
         this.worker = null
         this.activeModelId = null
         this.activeHotwordsFilePath = undefined
+        this.activeLanguage = undefined
         this.activeOwner = null
         this.eventSink = null
       }
@@ -305,6 +314,7 @@ export class SttService {
         this.eventSink?.({ type: 'stopped' })
         this.activeModelId = null
         this.activeHotwordsFilePath = undefined
+        this.activeLanguage = undefined
         this.activeOwner = null
         this.eventSink = null
       }
@@ -367,6 +377,7 @@ export class SttService {
         this.worker = null
         this.activeModelId = null
         this.activeHotwordsFilePath = undefined
+        this.activeLanguage = undefined
         this.activeOwner = null
         this.eventSink = null
       } else {
@@ -444,6 +455,7 @@ export class SttService {
       this.worker = null
       this.activeModelId = null
       this.activeHotwordsFilePath = undefined
+      this.activeLanguage = undefined
       this.eventSink = null
     }
   }

@@ -13,6 +13,7 @@ type WorkerMessage =
       files: string[]
       hotwordsFilePath?: string
       modelingUnit?: string
+      language?: string
     }
   | { type: 'feed'; samples: Float32Array; sampleRate: number }
   | { type: 'stop' }
@@ -161,12 +162,18 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
       recognizer = sherpa.createOnlineRecognizer(config)
       stream = sherpa.createOnlineStream(recognizer)
     } else if (modelType === 'whisper') {
+      // Why: whisper auto-detects language from the first 30s window, which
+      // often misidentifies short dictations. An explicit language from
+      // settings ('auto' or empty keeps detection) fixes e.g. Turkish input.
+      const whisperLanguage = msg.language && msg.language !== 'auto' ? msg.language : ''
       const config = {
         featConfig: { sampleRate, featureDim: 80 },
         modelConfig: {
           whisper: {
             encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir)
+            decoder: resolveFile(files, 'decoder', modelDir),
+            language: whisperLanguage,
+            task: 'transcribe'
           },
           tokens,
           numThreads: 2,
