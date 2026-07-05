@@ -30,6 +30,8 @@ import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import { getBranchConflictKind, resolveDefaultBaseRefViaExec } from '../git/repo'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
+import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -608,6 +610,35 @@ function hasLocalCommitObjectWithOptions(
   )
 }
 
+async function hasLocalWorktreeBaseRefWithOptions(
+  repoPath: string,
+  baseRef: string,
+  gitOptions: { wslDistro?: string }
+): Promise<boolean> {
+  const refExists = async (qualifiedRef: string) => {
+    try {
+      const { stdout } = await gitExecFileAsync(
+        ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
+        {
+          cwd: repoPath,
+          ...gitOptions
+        }
+      )
+      return stdout.trim().length > 0
+    } catch {
+      return false
+    }
+  }
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
+  if (resolvedBaseRef !== baseRef) {
+    return true
+  }
+  if (baseRef.startsWith('refs/')) {
+    return refExists(baseRef)
+  }
+  return hasLocalCommitObjectWithOptions(repoPath, baseRef, gitOptions)
+}
+
 function getLocalGitHubPrForBranch(
   repoPath: string,
   branchName: string,
@@ -624,6 +655,23 @@ function hasRemoteCommitObject(
   ref: string
 ): Promise<boolean> {
   return hasCommitObjectViaGitExec((gitArgs) => provider.exec(gitArgs, repoPath), ref)
+}
+
+async function hasRemoteWorktreeBaseRef(
+  provider: SshGitProvider,
+  repoPath: string,
+  baseRef: string
+): Promise<boolean> {
+  const refExists = (qualifiedRef: string) =>
+    hasRemoteTrackingRefSsh(provider, repoPath, qualifiedRef)
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
+  if (resolvedBaseRef !== baseRef) {
+    return true
+  }
+  if (baseRef.startsWith('refs/')) {
+    return refExists(baseRef)
+  }
+  return hasRemoteCommitObject(provider, repoPath, baseRef)
 }
 
 // Why: hasRemoteCommitObject only resolves full SHAs; a remote-tracking base is
@@ -1218,33 +1266,28 @@ async function resolveRemoteTrackingBaseSsh(
   }
 }
 
-async function resolveRemoteWorktreeCreateBase(
-  provider: SshGitProvider,
-  repo: Repo,
-  requestedBaseBranch: string | undefined
-): Promise<string | null> {
-  let baseBranch = requestedBaseBranch || repo.worktreeBaseRef
-  if (baseBranch) {
-    return baseBranch
-  }
-  try {
-    const { stdout } = await provider.exec(
-      ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'],
-      repo.path
-    )
-    baseBranch = stdout.trim()
-  } catch {
-    return null
-  }
-  return baseBranch || null
-}
-
 async function resolveRemoteWorktreeCreateBasePlan(
   provider: SshGitProvider,
   repo: Repo,
   requestedBaseBranch: string | undefined
 ): Promise<RemoteWorktreeCreateBasePlan | null> {
-  const baseBranch = await resolveRemoteWorktreeCreateBase(provider, repo, requestedBaseBranch)
+  const baseBranch = await resolveWorktreeCreateBase({
+    requestedBaseBranch,
+    repoWorktreeBaseRef: repo.worktreeBaseRef,
+    resolveDefaultBaseRef: () =>
+      resolveDefaultBaseRefViaExec((argv) => provider.exec(argv, repo.path)),
+    isBaseUsable: async (baseBranchCandidate) => {
+      const remoteTrackingBase = await resolveRemoteTrackingBaseSsh(
+        provider,
+        repo.path,
+        baseBranchCandidate
+      )
+      if (remoteTrackingBase) {
+        return hasRemoteTrackingRefSsh(provider, repo.path, remoteTrackingBase.ref)
+      }
+      return hasRemoteWorktreeBaseRef(provider, repo.path, baseBranchCandidate)
+    }
+  })
   if (!baseBranch) {
     return null
   }
@@ -1288,7 +1331,7 @@ export async function prefetchRemoteWorktreeCreateBase(
     await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, basePlan.remoteTrackingBase)
     return
   }
-  if (await hasRemoteCommitObject(provider, repo.path, basePlan.baseBranch)) {
+  if (await hasRemoteWorktreeBaseRef(provider, repo.path, basePlan.baseBranch)) {
     // Why: PR/MR resolvers already fetched verified SHA start points. A broad
     // remote fetch only updates unrelated refs when the commit object exists.
     return
@@ -1633,7 +1676,7 @@ export async function createRemoteWorktree(
         )
       }
     }
-  } else if (!(await hasRemoteCommitObject(provider, repo.path, baseBranch))) {
+  } else if (!(await hasRemoteWorktreeBaseRef(provider, repo.path, baseBranch))) {
     // Why: local or otherwise non-remote-tracking bases preserve legacy
     // best-effort fetch behavior. Verified PR/MR SHA bases already have the
     // commit object locally, so a broad remote fetch only updates unrelated refs.
@@ -1914,15 +1957,35 @@ export async function createLocalWorktree(
     ? sanitizeWorktreeDisplayName(args.displayName)
     : undefined
 
-  // Why: resolve the base before branch/path selection so remote-tracking bases
-  // can be refreshed before `git worktree add`. Creating first and repairing
-  // later races setup scripts, agents, and user edits.
-  const baseBranch =
-    args.baseBranch ||
-    repo.worktreeBaseRef ||
-    (await resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions)))
+  const baseBranch = await resolveWorktreeCreateBase({
+    requestedBaseBranch: args.baseBranch,
+    repoWorktreeBaseRef: repo.worktreeBaseRef,
+    resolveDefaultBaseRef: () =>
+      resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions)),
+    isBaseUsable: async (baseBranchCandidate) => {
+      if (runtime) {
+        const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(
+          repo.path,
+          baseBranchCandidate,
+          ...localWorktreeGitOptionArgs
+        )
+        if (remoteTrackingBase) {
+          return runtime.hasRemoteTrackingRef(
+            repo.path,
+            remoteTrackingBase,
+            ...localWorktreeGitOptionArgs
+          )
+        }
+      }
+      return hasLocalWorktreeBaseRefWithOptions(
+        repo.path,
+        baseBranchCandidate,
+        localGitExecOptions
+      )
+    }
+  })
   if (!baseBranch) {
-    // Why: getDefaultBaseRef may return null when none of origin/HEAD,
+    // Why: resolveDefaultBaseRefViaExec may return null when none of origin/HEAD,
     // origin/main, origin/master, local main, or local master exist. Don't
     // fall back to a hardcoded 'origin/main' — passing a non-existent ref to
     // `git worktree add` produces an opaque error. Fail here with a clear
@@ -1963,7 +2026,7 @@ export async function createLocalWorktree(
         )
       }
     } else if (
-      !(await hasLocalCommitObjectWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
+      !(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
     ) {
       // Why: when the base branch does not match a configured remote prefix
       // (e.g. plain `main`, `master`, or any local branch), the legacy path
@@ -1976,7 +2039,7 @@ export async function createLocalWorktree(
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
-    if (!(await hasLocalCommitObjectWithOptions(repo.path, baseBranch, localWorktreeGitOptions))) {
+    if (!(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))) {
       legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], {
         ...localGitExecOptions,
         timeout: CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS

@@ -29,7 +29,6 @@ import {
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
 import {
   buildTaskSourceContextFromRepo,
@@ -3971,11 +3970,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         })
         const submitBaseBranch = selectedRepoIsGit
           ? await resolveWorktreeCreateBaseBranch({
-              explicitBaseBranch: smartSubmitBaseBranch,
-              repoWorktreeBaseRef: selectedRepo.worktreeBaseRef,
-              loadDefaultBaseRef: async () =>
-                (await getRuntimeRepoBaseRefDefault(selectedRepoSettings, repoId).catch(() => null))
-                  ?.defaultBaseRef
+              explicitBaseBranch: smartSubmitBaseBranch
             })
           : undefined
         const createDisplayName =

@@ -512,8 +512,8 @@ describe('useComposerState host-context boundaries', () => {
 
     expect(section).toContain('resolveWorktreeCreateBaseBranch')
     expect(section).toContain('explicitBaseBranch: smartSubmitBaseBranch')
-    expect(section).toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
-    expect(section).toContain('getRuntimeRepoBaseRefDefault')
+    expect(section).not.toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
+    expect(section).not.toContain('getRuntimeRepoBaseRefDefault')
   })
 
   it('plans new workspace agent startup from the selected repo runtime', () => {

@@ -46,6 +46,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
@@ -581,7 +583,8 @@ import {
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
-import { hasLocalCommitObject } from '../git/commit-object-ref'
+import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
+import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
 import {
   listWorktrees,
@@ -1961,6 +1964,26 @@ type LayoutQueueEntry = {
     target: PtyLayoutTarget
     waiters: ((r: ApplyLayoutResult) => void)[]
   }[]
+}
+
+async function hasLocalWorktreeBaseRef(
+  repoPath: string,
+  baseRef: string,
+  options: { wslDistro?: string } = {}
+): Promise<boolean> {
+  const refExists = (qualifiedRef: string) =>
+    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
+  if (resolvedBaseRef !== baseRef) {
+    return true
+  }
+  if (baseRef.startsWith('refs/')) {
+    return refExists(baseRef)
+  }
+  return hasCommitObjectViaGitExec(
+    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
+    baseRef
+  )
 }
 
 export class OrcaRuntimeService {
@@ -12992,12 +13015,33 @@ export class OrcaRuntimeService {
     let effectiveSanitizedName = sanitizedName
     const username = await resolveLocalGitUsername(repo.path)
 
-    const baseBranch =
-      args.baseBranch ||
-      repo.worktreeBaseRef ||
-      (hasLocalWorktreeGitOptions
-        ? await resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions))
-        : getDefaultBaseRef(repo.path))
+    const baseBranch = await resolveWorktreeCreateBase({
+      requestedBaseBranch: args.baseBranch,
+      repoWorktreeBaseRef: repo.worktreeBaseRef,
+      resolveDefaultBaseRef: () =>
+        hasLocalWorktreeGitOptions
+          ? resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions))
+          : Promise.resolve(getDefaultBaseRef(repo.path)),
+      isBaseUsable: async (baseBranchCandidate) => {
+        const remoteTrackingBase = await this.resolveRemoteTrackingBase(
+          repo.path,
+          baseBranchCandidate,
+          ...localWorktreeGitOptionArgs
+        )
+        if (remoteTrackingBase) {
+          return this.hasRemoteTrackingRef(
+            repo.path,
+            remoteTrackingBase,
+            ...localWorktreeGitOptionArgs
+          )
+        }
+        return hasLocalWorktreeBaseRef(
+          repo.path,
+          baseBranchCandidate,
+          hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
+        )
+      }
+    })
     if (!baseBranch) {
       // Why: getDefaultBaseRef returns null when no suitable ref exists.
       // Don't fabricate 'origin/main' — passing it to addWorktree would
@@ -13165,7 +13209,13 @@ export class OrcaRuntimeService {
       ) {
         throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
       }
-    } else if (!(await hasLocalCommitObject(repo.path, baseBranch))) {
+    } else if (
+      !(await hasLocalWorktreeBaseRef(
+        repo.path,
+        baseBranch,
+        hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
+      ))
+    ) {
       // Why: local bases keep legacy best-effort fetch behavior. Verified PR
       // SHA bases already have the commit object needed by `git worktree add`.
       try {
