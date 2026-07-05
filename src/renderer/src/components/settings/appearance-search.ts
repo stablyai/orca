@@ -1,6 +1,10 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
-import { getLeftSidebarAppearanceEntry, getSidebarEntries } from './appearance-sidebar-search'
+import {
+  getAutoColorNewProjectsEntry,
+  getLeftSidebarAppearanceEntry,
+  getSidebarEntries
+} from './appearance-sidebar-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -156,7 +160,7 @@ export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntr
   }))
 )
 
-export { getLeftSidebarAppearanceEntry, getSidebarEntries }
+export { getAutoColorNewProjectsEntry, getLeftSidebarAppearanceEntry, getSidebarEntries }
 
 export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {

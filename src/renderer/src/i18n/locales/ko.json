@@ -7010,6 +7010,10 @@
               "cardLayout": "카드 레이아웃",
               "workspaceOptions": "워크스페이스 옵션",
               "detailed": "상세"
+            },
+            "autoColorNewProjects": {
+              "title": "Auto-Color New Projects",
+              "description": "Give each newly added project a different color so the sidebar is easier to scan. Existing projects keep their current color."
             }
           }
         },

@@ -7025,7 +7025,11 @@
               "detailed": "detallado"
             },
             "9a115966d3": "Minimizar a la bandeja al cerrar",
-            "4d5b9427b5": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir."
+            "4d5b9427b5": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
+            "autoColorNewProjects": {
+              "title": "Auto-Color New Projects",
+              "description": "Give each newly added project a different color so the sidebar is easier to scan. Existing projects keep their current color."
+            }
           }
         },
         "auto": {

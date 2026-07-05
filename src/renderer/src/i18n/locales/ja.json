@@ -7047,7 +7047,11 @@
               "detailed": "詳細"
             },
             "9a115966d3": "閉じるときにトレイへ最小化",
-            "4d5b9427b5": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。"
+            "4d5b9427b5": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。",
+            "autoColorNewProjects": {
+              "title": "Auto-Color New Projects",
+              "description": "Give each newly added project a different color so the sidebar is easier to scan. Existing projects keep their current color."
+            }
           }
         },
         "auto": {

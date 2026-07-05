@@ -27,3 +27,12 @@ export function normalizeRepoBadgeColor(value: unknown): string | null {
 export function resolveRepoBadgeColor(value: unknown): string {
   return normalizeRepoBadgeColor(value) ?? DEFAULT_REPO_BADGE_COLOR
 }
+
+// Round-robin over the non-default palette colors so each new project gets a
+// visually distinct badge. Index 0 is the neutral "uncolored" gray default, so
+// it is excluded; cycling is by how many projects already exist.
+export function pickRoundRobinRepoBadgeColor(existingProjectCount: number): string {
+  const palette = REPO_COLORS.slice(1) // exclude neutral gray default
+  const index = ((existingProjectCount % palette.length) + palette.length) % palette.length
+  return palette[index]
+}

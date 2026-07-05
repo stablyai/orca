@@ -15,6 +15,7 @@ import { useAvailableStatusBarToggles } from '../status-bar/use-available-status
 import { getLayoutEntries, getSidebarEntries, getStatusBarToggles } from './appearance-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
+  getAutoColorNewProjectsEntry,
   getLeftSidebarAppearanceEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
@@ -64,6 +65,7 @@ export function AppearanceWindowSidebarSection({
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
+  const autoColorEntry = getAutoColorNewProjectsEntry()
   const layoutEntries = getLayoutEntries()
   const statusBarTitle = translate(
     'auto.components.settings.AppearancePane.3e4175e5c6',
@@ -257,6 +259,21 @@ export function AppearanceWindowSidebarSection({
                       checked={settings.showMobileButton !== false}
                       onChange={() =>
                         updateSettings({ showMobileButton: !(settings.showMobileButton !== false) })
+                      }
+                    />
+                  </SearchableSetting>
+
+                  <SearchableSetting
+                    title={autoColorEntry.title}
+                    description={autoColorEntry.description}
+                    keywords={autoColorEntry.keywords}
+                  >
+                    <SettingsSwitchRow
+                      label={autoColorEntry.title}
+                      description={autoColorEntry.description}
+                      checked={settings.autoColorNewProjects === true}
+                      onChange={() =>
+                        updateSettings({ autoColorNewProjects: !settings.autoColorNewProjects })
                       }
                     />
                   </SearchableSetting>

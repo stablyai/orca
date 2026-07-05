@@ -7062,6 +7062,10 @@
               "cardLayout": "card layout",
               "workspaceOptions": "workspace options",
               "detailed": "detailed"
+            },
+            "autoColorNewProjects": {
+              "title": "Auto-Color New Projects",
+              "description": "Give each newly added project a different color so the sidebar is easier to scan. Existing projects keep their current color."
             }
           }
         },

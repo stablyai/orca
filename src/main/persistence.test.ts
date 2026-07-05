@@ -31,6 +31,8 @@ import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 import {
+  DEFAULT_REPO_BADGE_COLOR,
+  REPO_COLORS,
   getDefaultPersistedState,
   getDefaultWorkspaceSession,
   ONBOARDING_FINAL_STEP,
@@ -493,6 +495,7 @@ describe('Store', () => {
     expect(settings.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
     expect(settings.terminalUseSeparateLightTheme).toBe(true)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
+    expect(settings.autoColorNewProjects).toBe(false)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.showAutomationsButton).toBe(true)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
@@ -1893,6 +1896,7 @@ describe('Store', () => {
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     expect(store.getSettings().sourceControlViewMode).toBe('list')
     expect(store.getSettings().showGitIgnoredFiles).toBe(true)
+    expect(store.getSettings().autoColorNewProjects).toBe(false)
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().showAutomationsButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
@@ -3056,6 +3060,59 @@ describe('Store', () => {
     expect(store.getWorktreeLineage('r1::/path/child')).toBeUndefined()
     expect(store.getWorktreeLineage('r2::/other-child')).toBeUndefined()
     expect(store.getWorktreeLineage('r2::/other')).toBeDefined()
+  })
+
+  describe('addRepo auto-color', () => {
+    it('assigns a non-gray palette color when enabled and the incoming color is default gray', async () => {
+      const store = await createStore()
+      store.updateSettings({ autoColorNewProjects: true })
+
+      store.addRepo(makeRepo({ badgeColor: DEFAULT_REPO_BADGE_COLOR }))
+
+      expect(store.getRepo('r1')!.badgeColor).toBe(REPO_COLORS[1])
+      expect(store.getRepo('r1')!.badgeColor).not.toBe(DEFAULT_REPO_BADGE_COLOR)
+    })
+
+    it('uses different palette colors for consecutive adds when enabled', async () => {
+      const store = await createStore()
+      store.updateSettings({ autoColorNewProjects: true })
+
+      store.addRepo(makeRepo({ id: 'r1', path: '/repo1', badgeColor: DEFAULT_REPO_BADGE_COLOR }))
+      store.addRepo(makeRepo({ id: 'r2', path: '/repo2', badgeColor: DEFAULT_REPO_BADGE_COLOR }))
+
+      expect(store.getRepo('r1')!.badgeColor).toBe(REPO_COLORS[1])
+      expect(store.getRepo('r2')!.badgeColor).toBe(REPO_COLORS[2])
+      expect(store.getRepo('r1')!.badgeColor).not.toBe(store.getRepo('r2')!.badgeColor)
+    })
+
+    it('leaves the default gray color unchanged when disabled by default', async () => {
+      const store = await createStore()
+
+      store.addRepo(makeRepo({ badgeColor: DEFAULT_REPO_BADGE_COLOR }))
+
+      expect(store.getRepo('r1')!.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+    })
+
+    it('preserves an explicit non-default incoming color when enabled', async () => {
+      const store = await createStore()
+      store.updateSettings({ autoColorNewProjects: true })
+
+      store.addRepo(makeRepo({ badgeColor: '#22c55e' }))
+
+      expect(store.getRepo('r1')!.badgeColor).toBe('#22c55e')
+    })
+
+    it('keeps the next auto color based on total repo count after manual recoloring', async () => {
+      const store = await createStore()
+      store.updateSettings({ autoColorNewProjects: true })
+
+      store.addRepo(makeRepo({ id: 'r1', path: '/repo1', badgeColor: DEFAULT_REPO_BADGE_COLOR }))
+      store.updateRepo('r1', { badgeColor: DEFAULT_REPO_BADGE_COLOR })
+      store.addRepo(makeRepo({ id: 'r2', path: '/repo2', badgeColor: DEFAULT_REPO_BADGE_COLOR }))
+
+      expect(store.getRepo('r1')!.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+      expect(store.getRepo('r2')!.badgeColor).toBe(REPO_COLORS[2])
+    })
   })
 
   // ── 7. updateRepo ──────────────────────────────────────────────────

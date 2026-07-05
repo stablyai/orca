@@ -79,6 +79,49 @@ export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
   })
 )
 
+export const getAutoColorNewProjectsEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.autoColorNewProjects.title',
+      'Auto-Color New Projects'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.autoColorNewProjects.description',
+      'Give each newly added project a different color so the sidebar is easier to scan. Existing projects keep their current color.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.autoColorNewProjects.color',
+        'color'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.autoColorNewProjects.colour',
+        'colour'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.autoColorNewProjects.project',
+        'project'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.autoColorNewProjects.folder',
+        'folder'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.autoColorNewProjects.sidebar',
+        'sidebar'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.autoColorNewProjects.auto',
+        'auto'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.autoColorNewProjects.rainbow',
+        'rainbow'
+      )
+    ]
+  })
+)
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -144,5 +187,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
     ]
   },
   getWorkspaceCardLayoutEntry(),
-  getLeftSidebarAppearanceEntry()
+  getLeftSidebarAppearanceEntry(),
+  getAutoColorNewProjectsEntry()
 ])

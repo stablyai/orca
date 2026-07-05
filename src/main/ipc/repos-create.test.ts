@@ -276,6 +276,19 @@ describe('repos:create', () => {
     expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
   })
 
+  it('returns the auto-assigned color so it reaches the renderer', async () => {
+    // Regression: with autoColorNewProjects on, Store.addRepo recolors the repo
+    // in place before persisting. The handler returns that same object, so the
+    // color must be visible on the returned repo (not the pre-color default).
+    mockStore.addRepo.mockImplementationOnce((repo: { badgeColor?: string }) => {
+      repo.badgeColor = '#ef4444'
+    })
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'auto-color', kind: 'folder' })
+
+    expect(result).toHaveProperty('repo.badgeColor', '#ef4444')
+  })
+
   // ── git repo happy path ───────────────────────────────────────────
 
   it('creates a git repo with an empty initial commit (in order)', async () => {

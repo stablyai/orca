@@ -280,6 +280,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
+    autoColorNewProjects: false,
     showTasksButton: true,
     showAutomationsButton: true,
     showMobileButton: true,

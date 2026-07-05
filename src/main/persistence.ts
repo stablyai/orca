@@ -99,6 +99,7 @@ import {
   isDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
+  DEFAULT_REPO_BADGE_COLOR,
   ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
@@ -167,7 +168,7 @@ import {
 import { clampMarkdownTocPanelWidth } from '../shared/markdown-toc-panel-width'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
-import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
+import { normalizeRepoBadgeColor, pickRoundRobinRepoBadgeColor } from '../shared/repo-badge-color'
 import {
   clearMissingProjectGroupMemberships,
   createProjectGroup,
@@ -4095,9 +4096,26 @@ export class Store {
   }
 
   addRepo(repo: Repo): void {
+    this.maybeAutoColorNewProject(repo)
     this.state.repos.push(repo)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
+  }
+
+  // Why: when the user opts in, give each genuinely-new project a distinct
+  // round-robin color so the sidebar is easier to scan. Only recolor when the
+  // caller left the default gray — never override an explicitly chosen color —
+  // and read count before the push so the first add gets palette[0]. Mutates the
+  // freshly-built repo in place so callers that return it (e.g. repos:add)
+  // hand the colored object to the renderer without a store read-back.
+  private maybeAutoColorNewProject(repo: Repo): void {
+    if (this.state.settings?.autoColorNewProjects !== true) {
+      return
+    }
+    if (repo.badgeColor && repo.badgeColor !== DEFAULT_REPO_BADGE_COLOR) {
+      return
+    }
+    repo.badgeColor = pickRoundRobinRepoBadgeColor(this.state.repos.length)
   }
 
   // Why: returns false on a stale permutation (concurrent add/remove races

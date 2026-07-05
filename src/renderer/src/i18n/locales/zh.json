@@ -7010,7 +7010,11 @@
               "detailed": "详细"
             },
             "9a115966d3": "关闭时最小化到托盘",
-            "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。"
+            "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
+            "autoColorNewProjects": {
+              "title": "Auto-Color New Projects",
+              "description": "Give each newly added project a different color so the sidebar is easier to scan. Existing projects keep their current color."
+            }
           }
         },
         "auto": {

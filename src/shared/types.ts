@@ -2644,6 +2644,9 @@ export type GlobalSettings = {
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
+  /** Why: opt-in, default-off project coloring only affects new adds at add
+   *  time so existing projects keep their current color. */
+  autoColorNewProjects: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the
    *  left sidebar free of its button entirely. Hiding the button here also
    *  removes it from keyboard navigation. */

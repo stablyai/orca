@@ -331,6 +331,35 @@ describe('AppearancePane', () => {
     ).not.toBeNull()
   })
 
+  it('reveals the Auto-Color New Projects toggle when searched and toggles it on', async () => {
+    // Like the other sidebar toggles, this lives behind the Advanced disclosure
+    // and is hidden by default; a matching search must surface it.
+    mocks.state.settingsSearchQuery = ''
+    const collapsedContainer = await renderAppearancePane(getDefaultSettings('/tmp'))
+    expect(
+      collapsedContainer.querySelector(
+        'button[role="switch"][aria-label="Auto-Color New Projects"]'
+      )
+    ).toBeNull()
+
+    mocks.state.settingsSearchQuery = 'color'
+    const updateSettings = vi.fn()
+    const settings = { ...getDefaultSettings('/tmp'), autoColorNewProjects: false }
+    const container = await renderAppearancePane(settings, updateSettings)
+    const switchControl = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Auto-Color New Projects"]'
+    )
+
+    expect(switchControl).not.toBeNull()
+    expect(switchControl?.getAttribute('aria-checked')).toBe('false')
+
+    await act(async () => {
+      switchControl?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ autoColorNewProjects: true })
+  })
+
   it('keeps description-only search matches visible after helper text is hidden', async () => {
     mocks.state.settingsSearchQuery = 'app window'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
