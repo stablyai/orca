@@ -5,6 +5,7 @@ import {
   createPrIntentCurrentTargetConflictsWithToken,
   createPrIntentGitStatusMatchesToken,
   createPrIntentRunTokenMatches,
+  getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep
@@ -240,5 +241,24 @@ describe('source-control Create PR intent flow helpers', () => {
         }
       })
     ).toBe('blocked')
+  })
+
+  it('surfaces the commit failure summary in the Create PR intent notice', () => {
+    expect(
+      getCreatePrIntentCommitFailureNoticeMessage(
+        'husky - pre-commit hook\neslint found 2 errors\nfull output'
+      )
+    ).toBe('Commit blocked: Lint failed during commit. Fix the issue, then retry Create PR.')
+
+    expect(getCreatePrIntentCommitFailureNoticeMessage(null)).toBe(
+      'Could not commit changes. Fix the issue, then retry Create PR.'
+    )
+
+    expect(
+      getCreatePrIntentCommitFailureNoticeMessage('pre-commit hook failed', {
+        fallback: 'fallback',
+        withSummary: (summary) => `localized ${summary}`
+      })
+    ).toBe('localized Pre-commit hook failed.')
   })
 })

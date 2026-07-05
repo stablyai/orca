@@ -1,6 +1,23 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { PRInfo, Worktree } from '../../../../shared/types'
 
 type LinkedReviewMetadataProvider = Exclude<HostedReviewInfo['provider'], 'unsupported'>
+
+export function isCachedMergedBranchPRCurrentForWorktree(
+  cachedPR: PRInfo | null | undefined,
+  worktree: Pick<Worktree, 'head'>
+): boolean {
+  return (
+    cachedPR?.state === 'merged' &&
+    typeof cachedPR.headSha === 'string' &&
+    cachedPR.headSha.length > 0 &&
+    typeof worktree.head === 'string' &&
+    worktree.head.length > 0 &&
+    // Why: a worktree behind its own merged PR (update-branch/web commits) is
+    // still that PR's line of work; match the main-process visibility rule.
+    (cachedPR.headSha === worktree.head || cachedPR.confirmedContainedHeadOid === worktree.head)
+  )
+}
 
 type LinkedReviewNumbers = {
   linkedPR: number | null

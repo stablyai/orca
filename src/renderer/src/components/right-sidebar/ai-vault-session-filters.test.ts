@@ -15,6 +15,7 @@ import {
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',
+  executionHostId: 'local',
   agent: 'claude',
   sessionId: 'session-1',
   title: 'Implement vault filters',

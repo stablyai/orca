@@ -35,7 +35,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery ?? '')
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
   const [permissionPending, setPermissionPending] = useState(false)
-  const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
   const mountedRef = useRef(true)
 
   const handlePaneRef = useCallback((node: HTMLDivElement | null): void => {
@@ -157,9 +156,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     refreshModelStates,
     mountedRef,
     currentSttModel: voiceSettings.sttModel,
-    selectedProvider: selectedModel?.provider,
-    pendingCloudModelId,
-    setPendingCloudModelId
+    selectedProvider: selectedModel?.provider
   }
 
   const openAiKey = useCloudApiKeyActions(

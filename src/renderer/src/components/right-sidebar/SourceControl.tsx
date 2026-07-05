@@ -254,6 +254,7 @@ import {
   createPrIntentCurrentTargetConflictsWithToken,
   createPrIntentGitStatusMatchesToken,
   createPrIntentRunTokenMatches,
+  getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
@@ -536,8 +537,9 @@ const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
-const SUBMODULE_WORKTREE_ONLY_LABEL = 'Submodule changes - stage inside submodule'
-const SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP = 'Stage these changes inside the submodule'
+const SUBMODULE_WORKTREE_ONLY_LABEL = 'Stage inside submodule'
+const SUBMODULE_WORKTREE_ONLY_TOOLTIP =
+  'The parent repo (including Stage All) cannot stage file changes inside a submodule'
 const SUBMODULE_LOADING_LABEL = 'Loading submodule changes…'
 const SUBMODULE_EMPTY_LABEL = 'No changes in submodule'
 const SUBMODULE_ERROR_LABEL = 'Failed to load submodule changes'
@@ -1026,6 +1028,7 @@ function SourceControlInner(): React.JSX.Element {
     loadSessionCommitDrafts()
   )
   const commitDraftsRef = useRef<CommitDraftsByWorktree>(commitDrafts)
+  const commitErrorsRef = useRef<Record<string, string | null>>({})
   const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
   const [remoteActionErrors, setRemoteActionErrors] = useState<
     Record<string, SourceControlActionError | null>
@@ -1151,6 +1154,13 @@ function SourceControlInner(): React.JSX.Element {
       // user edits made before React's passive state sync effect runs.
       commitDraftsRef.current = next
       setCommitDrafts(next)
+    },
+    []
+  )
+  const setCommitErrorForWorktree = useCallback(
+    (worktreeId: string, message: string | null): void => {
+      commitErrorsRef.current = { ...commitErrorsRef.current, [worktreeId]: message }
+      setCommitErrors((prev) => ({ ...prev, [worktreeId]: message }))
     },
     []
   )
@@ -1916,6 +1926,7 @@ function SourceControlInner(): React.JSX.Element {
       return changed ? next : prev
     }
     updateCommitDrafts((prev) => pruneRecord(prev))
+    commitErrorsRef.current = pruneRecord(commitErrorsRef.current)
     setCommitErrors((prev) => pruneRecord(prev))
     setRemoteActionErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
@@ -2036,7 +2047,7 @@ function SourceControlInner(): React.JSX.Element {
       commitInFlightRef.current[target.worktreeId] = true
 
       setCommitInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: true }))
-      setCommitErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+      setCommitErrorForWorktree(target.worktreeId, null)
       try {
         const commitResult = await commitRuntimeGit(
           {
@@ -2049,10 +2060,7 @@ function SourceControlInner(): React.JSX.Element {
           message
         )
         if (!commitResult.success) {
-          setCommitErrors((prev) => ({
-            ...prev,
-            [target.worktreeId]: commitResult.error ?? 'Commit failed'
-          }))
+          setCommitErrorForWorktree(target.worktreeId, commitResult.error ?? 'Commit failed')
           return false
         }
 
@@ -2070,7 +2078,7 @@ function SourceControlInner(): React.JSX.Element {
           }
           return writeCommitDraftForWorktree(prev, target.worktreeId, '')
         })
-        setCommitErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+        setCommitErrorForWorktree(target.worktreeId, null)
         if (!options?.target) {
           void refreshActiveGitStatusAfterMutation()
         }
@@ -2102,10 +2110,10 @@ function SourceControlInner(): React.JSX.Element {
         }
         return true
       } catch (error) {
-        setCommitErrors((prev) => ({
-          ...prev,
-          [target.worktreeId]: error instanceof Error ? error.message : 'Commit failed'
-        }))
+        setCommitErrorForWorktree(
+          target.worktreeId,
+          error instanceof Error ? error.message : 'Commit failed'
+        )
         return false
       } finally {
         setCommitInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: false }))
@@ -2121,6 +2129,7 @@ function SourceControlInner(): React.JSX.Element {
       compareBaseRef,
       grouped.staged.length,
       refreshActiveGitStatusAfterMutation,
+      setCommitErrorForWorktree,
       updateCommitDrafts,
       unresolvedConflicts.length,
       worktreePath
@@ -3821,12 +3830,21 @@ function SourceControlInner(): React.JSX.Element {
           if (abortIfStale()) {
             return
           }
+          const commitFailure = commitErrorsRef.current[token.worktreeId] ?? null
           setCreatePrIntentNoticeForWorktree(token.worktreeId, {
             tone: 'destructive',
-            message: translate(
-              'auto.components.right.sidebar.SourceControl.createPrIntentCommitFailed',
-              'Could not commit changes. Fix the issue, then retry Create PR.'
-            )
+            message: getCreatePrIntentCommitFailureNoticeMessage(commitFailure, {
+              fallback: translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentCommitFailed',
+                'Could not commit changes. Fix the issue, then retry Create PR.'
+              ),
+              withSummary: (summary) =>
+                translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentCommitBlockedSummary',
+                  'Commit blocked: {{value0}} Fix the issue, then retry Create PR.',
+                  { value0: summary }
+                )
+            })
           })
           return
         }
@@ -3995,7 +4013,12 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
-  const hasStageableChanges = hasUnstagedChanges
+  const hasStageableChanges = useMemo(
+    () =>
+      grouped.unstaged.some(isStageableStatusEntry) ||
+      grouped.untracked.some(isStageableStatusEntry),
+    [grouped.unstaged, grouped.untracked]
+  )
   const hasPartiallyStagedChanges = useMemo(() => {
     if (grouped.staged.length === 0 || grouped.unstaged.length === 0) {
       return false
@@ -8115,9 +8138,17 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
             )}
           </span>
-          {(conflictLabel || isSubmoduleWorktreeOnly) && (
-            <div className="truncate text-[11px] text-muted-foreground">
-              {conflictLabel ?? SUBMODULE_WORKTREE_ONLY_LABEL}
+          {conflictLabel && (
+            <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
+          )}
+          {isSubmoduleWorktreeOnly && (
+            // Why: parent git can stage a changed gitlink, but not nested
+            // worktree dirtiness. Keep that boundary visible in the row.
+            <div
+              className="truncate text-[11px] text-muted-foreground"
+              title={SUBMODULE_WORKTREE_ONLY_TOOLTIP}
+            >
+              {SUBMODULE_WORKTREE_ONLY_LABEL}
             </div>
           )}
         </div>
@@ -8176,19 +8207,14 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               }}
             />
           )}
-          {(canStage || isSubmoduleWorktreeOnly) && (
+          {canStage && (
             <ActionButton
               icon={Plus}
-              title={
-                isSubmoduleWorktreeOnly
-                  ? SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP
-                  : translate('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')
-              }
+              title={translate('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')}
               onClick={(event) => {
                 event.stopPropagation()
                 void onStage(entry.path)
               }}
-              disabled={isSubmoduleWorktreeOnly}
             />
           )}
           {canUnstage && (

@@ -2,7 +2,11 @@
 import { useEffect, useRef } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { PaneManager } from '@/lib/pane-manager/pane-manager'
+import {
+  PaneManager,
+  type PaneExternalDropHandler,
+  type PaneExternalDropResolver
+} from '@/lib/pane-manager/pane-manager'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import {
   normalizeTerminalFastScrollSensitivity,
@@ -78,8 +82,11 @@ import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
-import { reconcileDeadSessions, type ReconcilableBinding } from './terminal-dead-session-reconcile'
 import type { PtyTransport } from './pty-transport'
+import {
+  reconcileMissingSessions,
+  type ReconcilableBinding
+} from './terminal-dead-session-reconcile'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -270,6 +277,8 @@ type UseTerminalPaneLifecycleDeps = {
   // Why: same pane count does not imply same geometry; drag-reorder can move
   // panes without resizing them, so overlay rects need a layout-change tick.
   setPaneLayoutRevision: React.Dispatch<React.SetStateAction<number>>
+  resolveExternalPaneDropTarget?: PaneExternalDropResolver
+  onExternalPaneDrop?: PaneExternalDropHandler
 }
 
 export function suppressIntentionalPaneCloseExit(
@@ -473,21 +482,6 @@ export function getPreviousVisibleForTerminalPane(args: {
   return args.previous.isVisible
 }
 
-export function scheduleVisibilityReconcilePass(args: {
-  previousIsVisible: boolean | null
-  isVisible: boolean
-  bindings: Iterable<ReconcilableBinding>
-  listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
-}): boolean {
-  if (!isTerminalPaneVisibilityResume(args)) {
-    return false
-  }
-  // Why: fire-and-forget so the async listSessions IPC never blocks the
-  // synchronous WebGL/fit resume work the user sees first.
-  void reconcileDeadSessions({ bindings: args.bindings, listSessions: args.listSessions })
-  return true
-}
-
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
@@ -544,7 +538,9 @@ export function useTerminalPaneLifecycle({
   paneTitlesRef,
   setRenamingPaneId,
   setPaneCount,
-  setPaneLayoutRevision
+  setPaneLayoutRevision,
+  resolveExternalPaneDropTarget,
+  onExternalPaneDrop
 }: UseTerminalPaneLifecycleDeps): void {
   const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
     settings?.terminalScrollbackRows
@@ -567,6 +563,7 @@ export function useTerminalPaneLifecycle({
   const imeCompositionDisposablesRef = useRef(new Map<number, IDisposable>())
   const imeNativeTextForwarderDisposablesRef = useRef(new Map<number, IDisposable>())
   const queuedInitialCwdRef = useRef<string | null | undefined>(undefined)
+  const restoredViewportBlankingPanesRef = useRef(new Set<number>())
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -730,6 +727,7 @@ export function useTerminalPaneLifecycle({
       paneMode2031Ref,
       paneLastThemeModeRef,
       replayingPanesRef,
+      restoredViewportBlankingPanesRef,
       isActiveRef,
       isVisibleRef,
       onPtyExitRef,
@@ -1029,7 +1027,7 @@ export function useTerminalPaneLifecycle({
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
           activate: (event, text) => {
-            handleOscLink(text, event as MouseEvent | undefined, {
+            const handled = handleOscLink(text, event as MouseEvent | undefined, {
               ...linkDeps,
               startupCwd: getPaneLinkCwd(pane.id),
               runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
@@ -1043,7 +1041,9 @@ export function useTerminalPaneLifecycle({
             // moving the mouse extends a selection until the next click/Esc.
             // clearSelection() explicitly detaches those listeners (see
             // SelectionService._removeMouseDownListeners).
-            pane.terminal.clearSelection()
+            if (handled) {
+              pane.terminal.clearSelection()
+            }
           },
           // Show bottom-left tooltip on hover for OSC 8 hyperlinks (e.g.
           // GitHub owner/repo#issue references emitted by CLI tools) — same
@@ -1104,6 +1104,7 @@ export function useTerminalPaneLifecycle({
         queueResizeAll(true)
       },
       onPaneClosed: (paneId, closedPane) => {
+        const isDetachedToTab = closedPane?.reason === 'detach'
         const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
         if (linkProviderDisposable) {
           linkProviderDisposable.dispose()
@@ -1179,36 +1180,44 @@ export function useTerminalPaneLifecycle({
           panePtyBinding.dispose()
           panePtyBindings.delete(paneId)
         }
-        // Why: closing a pane is user-initiated teardown of this row — drop
-        // (not remove) so any retained `done` snapshot for this pane is also
-        // cleared and a same-frame live→gone transition cannot re-snapshot
-        // it via the retention sync. This is pane-keyed state, so it must
-        // clear even if the PTY transport was already removed.
         const leafId = closedPane?.leafId
-        if (leafId) {
+        if (leafId && !isDetachedToTab) {
+          // Why: closing a pane is user-initiated teardown of this row — drop
+          // (not remove) so any retained `done` snapshot for this pane is also
+          // cleared and a same-frame live→gone transition cannot re-snapshot
+          // it via the retention sync. This is pane-keyed state, so it must
+          // clear even if the PTY transport was already removed.
           const paneKey = makePaneKey(tabId, leafId)
           useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
           clearTerminalPaneUnread(paneKey)
           useAppStore.getState().dropAgentStatus(paneKey)
+          useAppStore.getState().clearPaneForegroundAgent(paneKey)
         }
         if (transport) {
-          const ptyId = suppressIntentionalPaneCloseExit(
-            transport,
-            useAppStore.getState().suppressPtyExit
-          )
-          if (ptyId) {
-            // Why: user/CLI pane closes intentionally tear down this PTY after
-            // PaneManager has already promoted the sibling. Suppress that exit
-            // so the last-surviving pane is not mistaken for an exited tab.
-            syncPanePtyLayoutBinding(paneId, null)
-            clearTabPtyId(tabId, ptyId)
+          if (isDetachedToTab) {
+            // Why: pane-to-tab detach hands the PTY to a newly-created tab;
+            // detach renderer listeners without sending a process teardown.
+            transport.detach?.()
+          } else {
+            const ptyId = suppressIntentionalPaneCloseExit(
+              transport,
+              useAppStore.getState().suppressPtyExit
+            )
+            if (ptyId) {
+              // Why: user/CLI pane closes intentionally tear down this PTY after
+              // PaneManager has already promoted the sibling. Suppress that exit
+              // so the last-surviving pane is not mistaken for an exited tab.
+              syncPanePtyLayoutBinding(paneId, null)
+              clearTabPtyId(tabId, ptyId)
+            }
+            transport.destroy?.()
           }
-          transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }
         clearRuntimePaneTitle(tabId, paneId)
         paneFontSizesRef.current.delete(paneId)
         replayingPanesRef.current.delete(paneId)
+        restoredViewportBlankingPanesRef.current.delete(paneId)
         // Clean up pane title state so closed panes don't leave stale entries.
         setPaneTitles((prev) => {
           if (!(paneId in prev)) {
@@ -1302,6 +1311,8 @@ export function useTerminalPaneLifecycle({
         releaseWebviewDragPassthrough?.()
         releaseWebviewDragPassthrough = null
       },
+      resolveExternalPaneDropTarget,
+      onExternalPaneDrop,
       terminalOptions: () => {
         const currentSettings = settingsRef.current
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
@@ -1356,7 +1367,7 @@ export function useTerminalPaneLifecycle({
           return
         }
         const activePane = managerRef.current?.getActivePane()
-        void handleOscLink(url, event, {
+        const handled = handleOscLink(url, event, {
           ...linkDeps,
           startupCwd: activePane ? getPaneLinkCwd(activePane.id) : startupCwd,
           runtimeEnvironmentId: activePane
@@ -1371,7 +1382,9 @@ export function useTerminalPaneLifecycle({
         // phantom selection until the next click/Esc. Explicitly clearing the
         // selection also detaches those listeners (see
         // SelectionService._removeMouseDownListeners).
-        managerRef.current?.getActivePane()?.terminal.clearSelection()
+        if (handled) {
+          managerRef.current?.getActivePane()?.terminal.clearSelection()
+        }
       },
       formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
       // Why: TerminalPane instances stay mounted for hidden visited worktrees
@@ -1396,7 +1409,13 @@ export function useTerminalPaneLifecycle({
     const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
 
     const restoredBuffers = initialLayoutRef.current.buffersByLeafId
-    restoreScrollbackBuffers(manager, restoredBuffers, restoredPaneByLeafId, replayingPanesRef)
+    restoreScrollbackBuffers(
+      manager,
+      restoredBuffers,
+      restoredPaneByLeafId,
+      replayingPanesRef,
+      restoredViewportBlankingPanesRef
+    )
     if (restoredBuffers && initialLayoutRef.current.scrollbackRefsByLeafId) {
       const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
       delete layoutWithoutRestoredBuffers.buffersByLeafId
@@ -1694,23 +1713,20 @@ export function useTerminalPaneLifecycle({
         noteVisibilityResume?: () => void
       }
       bindingWithVisibility.syncProcessTracking?.()
-      // Why: re-arm the once-per-resume input liveness re-check so the typing
-      // hot path stays off the listSessions IPC between resumes (the re-check
-      // is only useful right after a hidden→visible flip).
+      // Why: visible-resume repairs dropped hidden resizes, but it must not fit
+      // against xterm's transient hidden DOM fallback.
       if (resumedFromHidden) {
         bindingWithVisibility.noteVisibilityResume?.()
       }
     }
-    // Why: the reconcile pass self-gates on becoming visible (resume) — the
-    // effect also fires on hide and initial mount. Initial visible mounts are
-    // fresh PTY startup, so an early listSessions snapshot must not close the
-    // newborn tab before the daemon lists it.
-    scheduleVisibilityReconcilePass({
-      previousIsVisible,
-      isVisible,
-      bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
-      listSessions: () => window.api.pty.listSessions()
-    })
+    if (resumedFromHidden && typeof window.api.pty.hasPty === 'function') {
+      // Why: preserve missed-exit recovery without daemon-wide listSessions;
+      // providers can answer a single-PTY liveness check from in-memory state.
+      reconcileMissingSessions({
+        bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
+        hasPty: window.api.pty.hasPty
+      })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility and terminal identity changes must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [cwd, isVisible, isVisibleRef, panePtyBindingsRef, tabId])
 

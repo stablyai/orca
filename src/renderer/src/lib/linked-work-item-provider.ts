@@ -1,11 +1,15 @@
 import type { LinkedWorkItemSummary } from './new-workspace'
 
+// Why: self-hosted GitLab issue URLs may not contain "gitlab", and modern
+// GitLab emits issue URLs as `/-/work_items/<iid>` as well as the legacy
+// `/-/issues/<iid>`. Recognize both forms.
+const GL_ISSUE_PATH_RE = /\/-\/(?:issues|work_items)\//i
+
 export function isGitLabIssueUrl(url: string): boolean {
-  // Why: self-hosted GitLab issue URLs may not contain "gitlab".
   try {
-    return new URL(url).pathname.includes('/-/issues/')
+    return GL_ISSUE_PATH_RE.test(new URL(url).pathname)
   } catch {
-    return /\/-\/issues\//i.test(url)
+    return GL_ISSUE_PATH_RE.test(url)
   }
 }
 

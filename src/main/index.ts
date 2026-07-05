@@ -20,6 +20,7 @@ import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
 import { killAllPty } from './ipc/pty'
+import { installRelocatedNodePtyNativeRuntime } from './pty/node-pty-runtime-relocation'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
@@ -91,13 +92,21 @@ import {
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
-import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import {
+  isStartupDiagnosticsEnabled,
+  logStartupDiagnostic,
+  logStartupMilestone
+} from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { RateLimitService } from './rate-limits/service'
+import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
-import { attachMainWindowServices } from './window/attach-main-window-services'
+import {
+  attachMainWindowServices,
+  ensureAutoUpdaterConfigured
+} from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { createSystemTray, destroySystemTray } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
@@ -169,6 +178,9 @@ import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
+import { CliInstaller } from './cli/cli-installer'
+import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
+import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -199,7 +211,11 @@ let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
-let expectedRendererReload: { webContentsId: number; until: number } | null = null
+// Why: a reload/teardown intent set for one renderer must not leak to a later load.
+// The recovery reload re-fires did-finish-load, so its flag lets the local-PTY orphan
+// sweep spare live sessions across that one reload (#5787).
+const expectedRendererReload = createWebContentsTimedFlag()
+const recoveryReloadInFlight = createWebContentsTimedFlag()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 // Why: GPU child crashes clustered right after launch indicate a broken driver;
 // track them so Orca can move this build onto software rendering.
@@ -395,6 +411,11 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
+
+// Why: just past createMainWindow's win32 10s ready-to-show reveal fallback,
+// so a window revealed on that path still gets its tray icon.
+const TRAY_CREATE_FALLBACK_MS = 12_000
+
 const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('before-single-instance-lock', {
@@ -408,14 +429,6 @@ if (startupDiagnosticsEnabled) {
   startEventLoopStallProbe()
 }
 
-// Why: startup benchmarking needs in-process timestamps — harness-side stderr
-// arrival times include pipe buffering jitter. `t` is ms since process start.
-function logStartupMilestone(event: string, details: Record<string, unknown> = {}): void {
-  if (startupDiagnosticsEnabled) {
-    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
-  }
-}
-
 function focusExistingWindow(): void {
   focusExistingMainWindow({
     app,
@@ -425,30 +438,66 @@ function focusExistingWindow(): void {
   })
 }
 
+// Why: a webContents-scoped flag that auto-expires so an intent set for one renderer
+// can't leak to a later load. `consume` clears on a positive match for one-shot
+// signals (the recovery reload fires exactly one did-finish-load).
+function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
+  mark: (webContentsId: number, durationMs?: number) => void
+  clear: (webContentsId?: number) => void
+  matches: (webContentsId: number, options?: { consume?: boolean }) => boolean
+} {
+  let state: { webContentsId: number; until: number } | null = null
+  return {
+    mark(webContentsId, durationMs = defaultDurationMs) {
+      state = { webContentsId, until: Date.now() + durationMs }
+    },
+    clear(webContentsId) {
+      if (webContentsId === undefined || state?.webContentsId === webContentsId) {
+        state = null
+      }
+    },
+    matches(webContentsId, options) {
+      if (!state || Date.now() > state.until) {
+        state = null
+        return false
+      }
+      if (state.webContentsId !== webContentsId) {
+        return false
+      }
+      if (options?.consume) {
+        state = null
+      }
+      return true
+    }
+  }
+}
+
 function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
-  expectedRendererReload = { webContentsId, until: Date.now() + durationMs }
+  expectedRendererReload.mark(webContentsId, durationMs)
 }
 
 function clearExpectedRendererReload(webContentsId?: number): void {
-  if (webContentsId === undefined || expectedRendererReload?.webContentsId === webContentsId) {
-    expectedRendererReload = null
-  }
+  expectedRendererReload.clear(webContentsId)
 }
 
 function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope {
   if (isQuitting || isQuittingForUpdate()) {
     return 'app-shutdown'
   }
-  if (!expectedRendererReload) {
+  if (webContentsId === undefined) {
     return 'none'
   }
-  if (Date.now() > expectedRendererReload.until) {
-    expectedRendererReload = null
-    return 'none'
-  }
-  return webContentsId !== undefined && expectedRendererReload.webContentsId === webContentsId
-    ? 'renderer-reload'
-    : 'none'
+  return expectedRendererReload.matches(webContentsId) ? 'renderer-reload' : 'none'
+}
+
+function markRecoveryReloadInFlight(webContentsId: number, durationMs = 10_000): void {
+  recoveryReloadInFlight.mark(webContentsId, durationMs)
+}
+
+function isRecoveryReloadInFlight(webContentsId: number): boolean {
+  // Why: consume on read — the recovery reload fires exactly one did-finish-load,
+  // so a later genuine reload still sweeps orphaned local PTYs.
+  return recoveryReloadInFlight.matches(webContentsId, { consume: true })
 }
 
 function recordAgentStateCrashBreadcrumb(agentType: string, state: string): void {
@@ -527,6 +576,9 @@ if (hasSingleInstanceLock) {
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+  // Why: must run before anything loads node-pty (first PTY spawn) so main
+  // and the daemon it forks both pick up ORCA_NODE_PTY_NATIVE_DIR.
+  installRelocatedNodePtyNativeRuntime()
   crashReports = CrashReportStore.fromUserData()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
@@ -775,13 +827,55 @@ function openMainWindow(): BrowserWindow {
         markExpectedRendererReload(webContentsId)
       }
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
+    },
+    // Why: the in-place recovery reload re-fires did-finish-load; flag it so the
+    // local-PTY orphan sweep is skipped for that one reload (#5787).
+    onBeforeRecoveryReload: (webContentsId) => {
+      markRecoveryReloadInFlight(webContentsId)
+      recordCrashBreadcrumb('renderer_recovery_reload')
     }
   })
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
+  // Why: new Tray() is a synchronous Shell_NotifyIcon call that can block for
+  // seconds while explorer.exe's notification area is busy (part of issue
+  // #7225's pre-paint stall), so create it after first paint. The timer
+  // fallback covers windows revealed without ready-to-show ever firing
+  // (createMainWindow's win32 10s reveal fallback) — those can still be
+  // hidden to the tray on close, so the icon must exist by then.
+  let trayCreated = false
+  const createSystemTrayDeferred = (): void => {
+    if (trayCreated || window.isDestroyed() || isQuitting || !store) {
+      return
+    }
+    trayCreated = true
+    // Why: Windows-only system tray. createSystemTray is idempotent and a
+    // no-op off win32, so calling it on each window open keeps exactly one
+    // live icon.
+    createSystemTray({
+      appIcon: store.getSettings().appIcon,
+      onOpen: showMainWindowFromTray,
+      onQuit: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          // Why: a real quit can still surface renderer save/discard prompts;
+          // the window must be visible if a hidden-to-tray session vetoes
+          // shutdown.
+          showMainWindowFromTray()
+        }
+        // Why: set the quit latch before app.quit() so the window 'close'
+        // handler proceeds to teardown instead of re-hiding to the tray.
+        isQuitting = true
+        app.quit()
+      }
+    })
+    logStartupMilestone('tray-created')
+  }
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
+    setImmediate(createSystemTrayDeferred)
   })
+  const trayCreateFallback = setTimeout(createSystemTrayDeferred, TRAY_CREATE_FALLBACK_MS)
+  trayCreateFallback.unref?.()
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
   // `app_opened` to the first main-window load. Existing users in the
@@ -847,6 +941,9 @@ function openMainWindow(): BrowserWindow {
         }
         recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
       },
+      // Why: let the PTY layer skip its orphan sweep on the one recovery reload
+      // that re-fires did-finish-load, so live local sessions survive it (#5787).
+      isRecoveryReloadInFlight,
       onBeforeUpdateQuit: () =>
         preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
     }
@@ -877,23 +974,6 @@ function openMainWindow(): BrowserWindow {
     stopAllSyntheticTitleSpinners()
   })
   mainWindow = window
-  // Why: Windows-only system tray. createSystemTray is idempotent and a no-op
-  // off win32, so calling it on each window open keeps exactly one live icon.
-  createSystemTray({
-    appIcon: store.getSettings().appIcon,
-    onOpen: showMainWindowFromTray,
-    onQuit: () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        // Why: a real quit can still surface renderer save/discard prompts; the
-        // window must be visible if a hidden-to-tray session vetoes shutdown.
-        showMainWindowFromTray()
-      }
-      // Why: set the quit latch before app.quit() so the window 'close' handler
-      // proceeds to teardown instead of re-hiding the window to the tray.
-      isQuitting = true
-      app.quit()
-    }
-  })
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
@@ -1540,6 +1620,7 @@ app.whenReady().then(async () => {
 
   store = new Store()
   logStartupMilestone('store-loaded')
+  selfHealRuntimeEnvironmentFocus({ store, userDataPath: app.getPath('userData') })
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
@@ -1609,7 +1690,16 @@ app.whenReady().then(async () => {
       workspaceIdOverride: settings.opencodeWorkspaceId
     }
   })
+  rateLimits.setMiniMaxConfigResolver(() => {
+    const settings = store!.getSettings()
+    return {
+      sessionCookie: readMiniMaxSessionCookie() ?? '',
+      groupId: settings.minimaxGroupId,
+      models: settings.minimaxUsageModels
+    }
+  })
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)
+  rateLimits.setNetworkProxySettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store!.getSettings().keybindings
@@ -1819,7 +1909,12 @@ app.whenReady().then(async () => {
   logStartupMilestone('i18n-ready')
 
   registerAppMenu({
-    onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
+    onCheckForUpdates: (options) => {
+      // Why: the menu is clickable before first paint; a manual check must
+      // run against a configured updater (see attach-main-window-services).
+      ensureAutoUpdaterConfigured()
+      return checkForUpdatesFromMenu(options)
+    },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {
         markExpectedRendererReload(webContentsId)
@@ -1963,6 +2058,58 @@ app.whenReady().then(async () => {
       throw error
     })
     installServeSignalHandlers()
+    // Why: the orca CLI command is normally installed by the renderer onboarding /
+    // Settings "Install CLI" flow via the cli:install IPC. Headless serve has no
+    // renderer, so the command is never created and an in-terminal `orca …` fails
+    // with command-not-found. Run the idempotent installer here for the platforms
+    // where it puts a resolvable command on the managed-terminal PATH: macOS (bare
+    // `orca` in /usr/local/bin or ~/.local/bin) and Linux (`orca-ide`; bare `orca`
+    // is added by the dispatcher below). Windows is excluded — there install() would
+    // only mutate the persistent user-registry PATH without helping the current
+    // serve's child terminals. Best-effort: a failure must not block serve start.
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      try {
+        // Why: serve is headless — never let a missing-write-permission fallback
+        // pop an osascript admin prompt (it would hang serve on a GUI host). Skip
+        // instead; the user-writable ~/.local/bin path needs no elevation anyway.
+        const cliStatus = await new CliInstaller({
+          privilegedRunner: async () => {
+            throw new Error('serve CLI auto-install must not request administrator privileges')
+          }
+        }).install()
+        console.log(
+          `[serve] orca CLI install: ${cliStatus.state}${cliStatus.commandPath ? ` (${cliStatus.commandPath})` : ''}`
+        )
+      } catch (error) {
+        console.warn(
+          '[serve] orca CLI install skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+    // Why: on Linux the CLI installs as `orca-ide`, NOT bare `orca` (above), but the
+    // Claude Team launcher typed into the initial managed terminal invokes bare `orca`.
+    // Drop a bare-`orca` dispatcher on ~/.local/bin (ahead of /usr/bin on the managed
+    // terminal PATH) so `orca claude-teams` resolves. Best-effort: a failure must not
+    // block serve startup. See installLinuxBareOrcaDispatcher for the full rationale.
+    if (process.platform === 'linux' && app.isPackaged && process.resourcesPath) {
+      try {
+        const dispatcher = await installLinuxBareOrcaDispatcher({
+          resourcesPath: process.resourcesPath
+        })
+        console.log(
+          `[serve] bare orca dispatcher ${dispatcher.state}: ${dispatcher.dispatcherPath}` +
+            `${dispatcher.target ? ` -> ${dispatcher.target}` : ''}`
+        )
+      } catch (error) {
+        console.warn(
+          '[serve] bare orca dispatcher install skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+    // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
+    automations.start()
     await printServeReady(serveOptions)
     return
   }

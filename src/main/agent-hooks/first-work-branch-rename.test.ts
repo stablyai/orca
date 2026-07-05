@@ -4,7 +4,7 @@ import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
 
 const {
   gitExecFileAsyncMock,
-  getGitUsernameMock,
+  resolveLocalGitUsernameMock,
   getSshGitUsernameMock,
   getSshGitProviderMock,
   generateBranchNameMock,
@@ -14,7 +14,7 @@ const {
   getConfiguredBranchPrefixMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
-  getGitUsernameMock: vi.fn(() => 'you'),
+  resolveLocalGitUsernameMock: vi.fn(async () => 'you'),
   getSshGitUsernameMock: vi.fn(async () => 'you'),
   getSshGitProviderMock: vi.fn(() => undefined),
   generateBranchNameMock: vi.fn(),
@@ -26,8 +26,10 @@ const {
 }))
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
-vi.mock('../git/repo', () => ({ getGitUsername: getGitUsernameMock }))
-vi.mock('../git/git-username', () => ({ getSshGitUsername: getSshGitUsernameMock }))
+vi.mock('../git/git-username', () => ({
+  getSshGitUsername: getSshGitUsernameMock,
+  resolveLocalGitUsername: resolveLocalGitUsernameMock
+}))
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,
@@ -65,7 +67,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   beforeEach(() => {
     resetFirstWorkBranchRenameState()
     vi.clearAllMocks()
-    getGitUsernameMock.mockReturnValue('you')
+    resolveLocalGitUsernameMock.mockResolvedValue('you')
     getSshGitUsernameMock.mockResolvedValue('you')
     getSshGitProviderMock.mockReturnValue(undefined)
     computeBranchNameMock.mockImplementation((leaf: string) => `you/${leaf}`)

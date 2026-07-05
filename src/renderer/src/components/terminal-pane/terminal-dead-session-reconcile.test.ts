@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   reconcileDeadSessions,
+  reconcileMissingSessions,
+  shouldReconcileMissingSession,
   shouldReconcileDeadSession
 } from './terminal-dead-session-reconcile'
 
@@ -125,6 +127,80 @@ describe('shouldReconcileDeadSession', () => {
         snapshotRequestedAt: 1000
       })
     ).toBe(true)
+  })
+})
+
+describe('shouldReconcileMissingSession', () => {
+  it('reconciles only an authoritative missing local PTY', () => {
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@dead',
+        connectionId: null,
+        isLive: false
+      })
+    ).toBe(true)
+
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@alive',
+        connectionId: null,
+        isLive: true
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@unknown',
+        connectionId: null,
+        isLive: null
+      })
+    ).toBe(false)
+  })
+
+  it('keeps the remote, SSH, and newborn guards from the broad reconcile path', () => {
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'remote:env-1:abc',
+        connectionId: null,
+        isLive: false
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@ssh-dead',
+        connectionId: 'ssh-target-1',
+        isLive: false
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@newborn',
+        connectionId: null,
+        isLive: false,
+        ptyBoundAt: 1000,
+        livenessRequestedAt: 900
+      })
+    ).toBe(false)
+  })
+})
+
+describe('reconcileMissingSessions', () => {
+  it('invokes each binding with the targeted liveness probe and request timestamp', () => {
+    const hasPty = vi.fn(async () => true)
+    const bindingA = { reconcileIfSessionMissing: vi.fn() }
+    const bindingB = { reconcileIfSessionMissing: vi.fn() }
+    const before = performance.now()
+
+    reconcileMissingSessions({ bindings: [bindingA, bindingB], hasPty })
+
+    const after = performance.now()
+    expect(bindingA.reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
+    expect(bindingB.reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
+    const [, requestedAt] = bindingA.reconcileIfSessionMissing.mock.calls[0]!
+    expect(requestedAt).toBeGreaterThanOrEqual(before)
+    expect(requestedAt).toBeLessThanOrEqual(after)
   })
 })
 

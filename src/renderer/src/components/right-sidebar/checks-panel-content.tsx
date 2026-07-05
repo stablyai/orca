@@ -94,7 +94,10 @@ import {
   RightPanelCommentComposer,
   type RightPanelCommentSubmitResult
 } from './right-panel-comment-composer'
-import { usePRCommentsListSelection } from './pr-comments-list-selection'
+import {
+  usePRCommentsListSelection,
+  type PRCommentsListSelectionClearRequest
+} from './pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
 import { useActiveWorktree } from '@/store/selectors'
 import { useAppStore } from '@/store'
@@ -1609,13 +1612,6 @@ function PRCommentActionBadge({
       </span>
     )
   }
-  if (actionState === 'open') {
-    return (
-      <span className={presentation.statusBadgeOpen}>
-        {translate('auto.components.right.sidebar.checks.panel.content.7c1f0a2b11', 'Open')}
-      </span>
-    )
-  }
   if (actionState === 'resolved') {
     return (
       <span className={presentation.statusBadgeResolved}>
@@ -2178,6 +2174,7 @@ export function PRCommentsList({
   commentsDisabled,
   commentsDisabledReason,
   selectionContextKey,
+  selectionClearRequest,
   resolveCommentsWithAIDisabled,
   resolveCommentsWithAIDisabledReason,
   onAddComment,
@@ -2193,6 +2190,7 @@ export function PRCommentsList({
   commentsDisabled?: boolean
   commentsDisabledReason?: string
   selectionContextKey?: string
+  selectionClearRequest?: PRCommentsListSelectionClearRequest | null
   resolveCommentsWithAIDisabled?: boolean
   resolveCommentsWithAIDisabledReason?: string
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
@@ -2219,7 +2217,7 @@ export function PRCommentsList({
     addGroupToSelection,
     clearSelection,
     toggleGroupSelection
-  } = usePRCommentsListSelection(comments, selectionContextKey)
+  } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
   const visibleComments = React.useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
     [commentFilter, comments]

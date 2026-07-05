@@ -37,7 +37,14 @@ function recordStatusBarToggleInteraction(
     recordFeatureInteraction('ports')
   } else if (id === 'ssh') {
     recordFeatureInteraction('ssh')
-  } else if (id === 'claude' || id === 'codex' || id === 'gemini' || id === 'opencode-go') {
+  } else if (
+    id === 'claude' ||
+    id === 'codex' ||
+    id === 'gemini' ||
+    id === 'opencode-go' ||
+    id === 'kimi' ||
+    id === 'minimax'
+  ) {
     recordFeatureInteraction('usage-tracking')
   }
 }

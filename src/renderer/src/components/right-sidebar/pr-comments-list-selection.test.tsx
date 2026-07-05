@@ -45,7 +45,10 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 import type { PRComment } from '../../../../shared/types'
 import type { PRCommentGroup } from '@/lib/pr-comment-groups'
-import { clearPRCommentsListSelection } from './pr-comments-list-selection'
+import {
+  clearPRCommentsListSelection,
+  type PRCommentsListSelectionClearRequest
+} from './pr-comments-list-selection'
 import { PRCommentsList } from './checks-panel-content'
 
 let container: HTMLDivElement
@@ -79,7 +82,9 @@ function comment(overrides: Partial<PRComment>): PRComment {
 
 function renderList(props: {
   comments: PRComment[]
+  contextKey?: string
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
+  clearRequest?: PRCommentsListSelectionClearRequest | null
 }): void {
   act(() => {
     root.render(
@@ -87,7 +92,8 @@ function renderList(props: {
         <PRCommentsList
           comments={props.comments}
           commentsLoading={false}
-          selectionContextKey="review:42"
+          selectionContextKey={props.contextKey ?? 'review:42'}
+          selectionClearRequest={props.clearRequest}
           onResolveSelectedCommentsWithAI={props.onResolveSelectedCommentsWithAI ?? vi.fn()}
         />
       </TooltipProvider>
@@ -292,6 +298,58 @@ describe('PRCommentsList comment resolution selection', () => {
 
     expect(hasButton('Send 1 queued comments to AI')).toBe(true)
     clickButton('Clear queued comments')
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+    expect(container.querySelector('button[role="checkbox"]')).toBeNull()
+  })
+
+  it('clears sent standalone bot comments from the queue when the parent confirms launch', () => {
+    const comments = [
+      comment({
+        id: 1,
+        author: 'coderabbitai',
+        body: 'Review Change Stack. No actionable comments were generated.',
+        isBot: true
+      })
+    ]
+    renderList({ comments })
+    clickButton('Queue for agent')
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+
+    renderList({
+      comments,
+      clearRequest: { contextKey: 'review:42', token: 1 }
+    })
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+    expect(container.querySelector('button[role="checkbox"]')).toBeNull()
+  })
+
+  it('keeps a clear request pending until its review context is mounted', () => {
+    const queuedComments = [
+      comment({
+        id: 1,
+        author: 'coderabbitai',
+        body: 'Review Change Stack. No actionable comments were generated.',
+        isBot: true
+      })
+    ]
+    renderList({ comments: queuedComments, contextKey: 'review:42' })
+    clickButton('Queue for agent')
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+
+    renderList({
+      comments: [comment({ id: 2, body: 'Other review comment.' })],
+      contextKey: 'review:99',
+      clearRequest: { contextKey: 'review:42', token: 1 }
+    })
+    renderList({
+      comments: queuedComments,
+      contextKey: 'review:42',
+      clearRequest: { contextKey: 'review:42', token: 1 }
+    })
 
     expect(hasButton('Send 1 queued comments to AI')).toBe(false)
     expect(container.querySelector('button[role="checkbox"]')).toBeNull()

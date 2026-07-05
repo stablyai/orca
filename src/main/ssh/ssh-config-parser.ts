@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs'
-import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { SshTarget } from '../../shared/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+export { parseSshGOutput, resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 
 export type SshConfigHost = {
   host: string
@@ -255,105 +255,4 @@ export function sshConfigHostsToTargets(
   }
 
   return targets
-}
-// ── ssh -G config resolution ──────────────────────────────────────────
-
-export type SshResolvedConfig = {
-  hostname: string
-  user?: string
-  port: number
-  identityFile: string[]
-  identityAgent?: string
-  identitiesOnly: boolean
-  forwardAgent: boolean
-  proxyCommand?: string
-  proxyUseFdpass: boolean
-  proxyJump?: string
-}
-
-const SSH_G_TIMEOUT_MS = 5000
-
-// Why: `ssh -G <host>` asks OpenSSH to resolve the full effective config
-// for a host, including Include directives, Match blocks, wildcard
-// inheritance, and ProxyCommand expansion. This gives us correct config
-// resolution without reimplementing OpenSSH's complex matching logic.
-export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
-  return new Promise((resolve) => {
-    let settled = false
-    let child: ReturnType<typeof execFile> | undefined
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      child?.kill()
-      resolve(null)
-    }, SSH_G_TIMEOUT_MS)
-
-    const settle = (callback: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      callback()
-    }
-
-    // Why: '--' prevents a host label starting with '-' from being interpreted
-    // as an SSH flag (classic argument injection vector).
-    // Why: execFile's timeout only signals ssh; a stuck callback must still
-    // release SSH import/connection resolution with the existing null fallback.
-    try {
-      child = execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
-        if (err) {
-          settle(() => resolve(null))
-          return
-        }
-        settle(() => resolve(parseSshGOutput(stdout)))
-      })
-    } catch {
-      settle(() => resolve(null))
-    }
-  })
-}
-
-export function parseSshGOutput(stdout: string): SshResolvedConfig {
-  const map = new Map<string, string>()
-  const identityFiles: string[] = []
-
-  for (const line of stdout.split('\n')) {
-    const spaceIdx = line.indexOf(' ')
-    if (spaceIdx === -1) {
-      continue
-    }
-    const key = line.substring(0, spaceIdx).toLowerCase()
-    const value = line.substring(spaceIdx + 1).trim()
-    if (key === 'identityfile') {
-      identityFiles.push(resolveSshConfigHomePath(value))
-    } else {
-      map.set(key, value)
-    }
-  }
-
-  // Why: `ssh -G` outputs `proxycommand none` / `proxyjump none` when no
-  // proxy is configured. Treating "none" as real would spawn bad commands.
-  const rawProxy = map.get('proxycommand')
-  const proxyCommand = rawProxy && rawProxy !== 'none' ? rawProxy : undefined
-  const rawJump = map.get('proxyjump')
-  const proxyJump = rawJump && rawJump !== 'none' ? rawJump : undefined
-  const rawIdentityAgent = map.get('identityagent')
-  const identityAgent = rawIdentityAgent ? resolveSshConfigHomePath(rawIdentityAgent) : undefined
-
-  return {
-    hostname: map.get('hostname') ?? '',
-    user: map.get('user') || undefined,
-    port: parseInt(map.get('port') ?? '22', 10),
-    identityFile: identityFiles,
-    identityAgent,
-    identitiesOnly: map.get('identitiesonly') === 'yes',
-    forwardAgent: map.get('forwardagent') === 'yes',
-    proxyCommand,
-    proxyUseFdpass: map.get('proxyusefdpass') === 'yes',
-    proxyJump
-  }
 }

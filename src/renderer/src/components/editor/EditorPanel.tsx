@@ -45,6 +45,8 @@ function EditorPanelInner({
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const markdownFrontmatterVisible = useAppStore((s) => s.markdownFrontmatterVisible)
   const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
+  const markdownTableOfContentsVisible = useAppStore((s) => s.markdownTableOfContentsVisible)
+  const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
   const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
   const editorDrafts = useAppStore((s) => s.editorDrafts)
@@ -75,7 +77,6 @@ function EditorPanelInner({
     },
     [clearCopiedPathToastResetTimer]
   )
-  const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
 
@@ -310,14 +311,14 @@ function EditorPanelInner({
     )?.activeRuntimeEnvironmentId?.trim() ||
     (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
-  const markdownFrontmatterSourceFileId =
+  const markdownDocumentStateFileId =
     activeFile.mode === 'markdown-preview'
       ? (activeFile.markdownPreviewSourceFileId ?? activeFile.filePath)
       : activeFile.id
   let activeMarkdownContent: string | null = null
   if (activeFile.mode === 'markdown-preview') {
     activeMarkdownContent =
-      editorDrafts[markdownFrontmatterSourceFileId] ?? fileContents[activeFile.id]?.content ?? null
+      editorDrafts[markdownDocumentStateFileId] ?? fileContents[activeFile.id]?.content ?? null
   } else if (activeFile.mode === 'edit') {
     activeMarkdownContent =
       editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null
@@ -329,7 +330,9 @@ function EditorPanelInner({
     extractFrontMatter(activeMarkdownContent)
   )
   const isMarkdownFrontmatterVisible =
-    markdownFrontmatterVisible[markdownFrontmatterSourceFileId] ?? false
+    markdownFrontmatterVisible[markdownDocumentStateFileId] ?? false
+  const isMarkdownTableOfContentsVisible =
+    markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
 
   return (
     <EditorPanelShell
@@ -338,7 +341,7 @@ function EditorPanelInner({
       activeViewStateId={activeViewStateId}
       model={model}
       copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
-      showMarkdownTableOfContents={showMarkdownTableOfContents}
+      showMarkdownTableOfContents={isMarkdownTableOfContentsVisible}
       canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
       markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
       sideBySide={sideBySide}
@@ -357,12 +360,14 @@ function EditorPanelInner({
       onOpenContainingFolder={handleOpenContainingFolder}
       onToggleSideBySide={() => setSideBySide((prev) => !prev)}
       onEditorToggleChange={handleEditorToggleChange}
-      onToggleMarkdownTableOfContents={() => setShowMarkdownTableOfContents((shown) => !shown)}
-      onToggleMarkdownFrontmatter={() =>
-        setMarkdownFrontmatterVisible(
-          markdownFrontmatterSourceFileId,
-          !isMarkdownFrontmatterVisible
+      onToggleMarkdownTableOfContents={() =>
+        setMarkdownTableOfContentsVisible(
+          markdownDocumentStateFileId,
+          !isMarkdownTableOfContentsVisible
         )
+      }
+      onToggleMarkdownFrontmatter={() =>
+        setMarkdownFrontmatterVisible(markdownDocumentStateFileId, !isMarkdownFrontmatterVisible)
       }
       onExportMarkdownToPdf={() =>
         void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
@@ -373,7 +378,9 @@ function EditorPanelInner({
       onSave={handleSave}
       onSaveForFile={handleSaveForFile}
       onReloadFileContent={reloadFileContent}
-      onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
+      onCloseMarkdownTableOfContents={() =>
+        setMarkdownTableOfContentsVisible(markdownDocumentStateFileId, false)
+      }
       onCloseRenameDialog={closeRenameDialog}
       onRenameConfirm={handleRenameConfirm}
       markdownAnnotationsEnabled={markdownAnnotationsEnabled}

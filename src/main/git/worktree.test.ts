@@ -2,7 +2,7 @@
    owner reset safety, dirty worktree, diverged branch, custom remote) that each
    need dedicated test coverage. Splitting into separate files would scatter related tests
    without a meaningful boundary. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
   () => ({
@@ -22,10 +22,80 @@ import {
   addSparseWorktree,
   addWorktree,
   listWorktreeGraph,
+  listWorktrees,
   moveWorktree,
   parseWorktreeList,
-  removeWorktree
+  removeWorktree,
+  WORKTREE_ADD_TIMEOUT_MS
 } from './worktree'
+
+describe('listWorktrees in-flight sharing', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  // Later describes in this file assume a pristine mock (no global reset).
+  afterEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('shares one scan across concurrent calls for the same repo', async () => {
+    let resolveScan!: () => void
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = () => resolve({ stdout: scanOutput })
+        })
+    )
+
+    const first = listWorktrees('/repo')
+    const second = listWorktrees('/repo')
+    resolveScan()
+    const [a, b] = await Promise.all([first, second])
+
+    expect(a).toEqual(b)
+    expect(a[0]?.path).toBe('/repo')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs a fresh scan once the shared one has settled', async () => {
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: scanOutput })
+
+    await listWorktrees('/repo')
+    await listWorktrees('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not share scans across different repos', async () => {
+    gitExecFileAsyncMock.mockImplementation((_args: string[], options: { cwd: string }) =>
+      Promise.resolve({
+        stdout: `worktree ${options.cwd}\nHEAD abc123\nbranch refs/heads/main\n`
+      })
+    )
+
+    await Promise.all([listWorktrees('/repo-one'), listWorktrees('/repo-two')])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not share scans for callers with an AbortSignal', async () => {
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: scanOutput })
+    const controller = new AbortController()
+
+    // Why: an aborted shared scan would reject for every caller, so signal
+    // callers must keep a private scan.
+    await Promise.all([
+      listWorktrees('/repo'),
+      listWorktrees('/repo', { signal: controller.signal })
+    ])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('parseWorktreeList', () => {
   it('parses regular and bare worktree blocks from porcelain output', () => {
@@ -237,6 +307,12 @@ bare
 })
 
 describe('listWorktreeGraph', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileSyncMock.mockReset()
+    translateWslOutputPathsMock.mockClear()
+  })
+
   it('returns the worktree graph without sparse-checkout annotation probes', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout: `worktree /repo
@@ -270,6 +346,98 @@ branch refs/heads/feature/test
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
       cwd: '/repo'
     })
+  })
+
+  it('falls back when older Git rejects worktree list -z with usage exit code', async () => {
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('git usage error'), {
+          code: 129,
+          stderr: 'usage: git worktree list [<options>]\n'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-main-2
+HEAD def456
+branch refs/heads/main-2
+`
+      })
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/repo-main-2',
+        head: 'def456',
+        branch: 'refs/heads/main-2',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo' }],
+      [['worktree', 'list', '--porcelain'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('falls back on a localized (non-English) older-Git usage error via exit code 129', async () => {
+    // Git under a non-English locale translates the usage text, so stderr
+    // matching alone misses it; the 129 exit code must still trigger fallback.
+    gitExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('git worktree list --porcelain -z'), {
+          code: 129,
+          stderr: 'Fehler: Unbekannter Schalter »z«\nAufruf: git worktree list [<Optionen>]\n'
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+`
+      })
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo' }],
+      [['worktree', 'list', '--porcelain'], { cwd: '/repo' }]
+    ])
+  })
+
+  it('does not retry without -z for non-usage Git failures', async () => {
+    // A fatal error (exit 128) is not an unsupported-flag signal, so the -z
+    // command must not be silently re-run without it.
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('git worktree list --porcelain -z'), {
+        code: 128,
+        stderr: 'fatal: unable to read tree\n'
+      })
+    )
+
+    await expect(listWorktreeGraph('/repo')).resolves.toEqual([])
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['worktree', 'list', '--porcelain', '-z'], { cwd: '/repo' }]
+    ])
   })
 
   it('returns an empty graph for paths Git reports as non-repositories', async () => {
@@ -315,7 +483,7 @@ describe('addWorktree', () => {
           '/repo-feature',
           'refs/remotes/origin/main'
         ],
-        { cwd: '/repo' }
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [
         [
@@ -340,8 +508,28 @@ describe('addWorktree', () => {
     })
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['worktree', 'add', '/repo-feature', 'feature/test'], { cwd: '/repo' }]
+      [
+        ['worktree', 'add', '/repo-feature', 'feature/test'],
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
+      ]
     ])
+  })
+
+  it('bounds the worktree add call with a positive timeout (STA-1292 OneDrive stall guard)', async () => {
+    // Why: without a timeout, a OneDrive cloud-placeholder checkout can stall
+    // `git worktree add` for minutes. Assert the runner receives a non-zero
+    // timeout so a stuck create fails fast instead of hanging forever.
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+
+    await addWorktree('/repo', '/repo-feature', 'feature/test', 'feature/test', false, false, {
+      checkoutExistingBranch: true
+    })
+
+    const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
+      ([argv]) => Array.isArray(argv) && argv[0] === 'worktree' && argv[1] === 'add'
+    )
+    expect(worktreeAddCall?.[1]).toMatchObject({ timeout: WORKTREE_ADD_TIMEOUT_MS })
+    expect(WORKTREE_ADD_TIMEOUT_MS).toBeGreaterThan(0)
   })
 
   it('does not write branch base config when no base branch is provided', async () => {
@@ -353,7 +541,7 @@ describe('addWorktree', () => {
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [
         ['worktree', 'add', '--no-track', '-b', 'feature/no-base', '/repo-feature'],
-        { cwd: '/repo' }
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }]
     ])
@@ -435,7 +623,7 @@ describe('addWorktree', () => {
           '/repo-feature',
           'refs/remotes/origin/main'
         ],
-        { cwd: '/repo' }
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [
         [
@@ -473,7 +661,7 @@ describe('addWorktree', () => {
           '/repo-feature',
           'refs/remotes/origin/main'
         ],
-        { cwd: '/repo' }
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [
         [
@@ -512,7 +700,7 @@ describe('addWorktree', () => {
           '/repo-feature',
           'refs/remotes/origin/main'
         ],
-        { cwd: '/repo' }
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [
         [
@@ -552,7 +740,7 @@ describe('addWorktree', () => {
           '/repo-feature',
           'refs/remotes/origin/main'
         ],
-        { cwd: '/repo' }
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ]
     ])
   })
@@ -602,7 +790,7 @@ describe('addWorktree', () => {
           '/repo-feature',
           'refs/remotes/origin/main'
         ],
-        { cwd: '/repo' }
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [
         [
@@ -1116,7 +1304,7 @@ describe('addWorktree', () => {
         '/repo-feature',
         'refs/heads/main'
       ],
-      { cwd: '/repo' }
+      { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
     ])
   })
 

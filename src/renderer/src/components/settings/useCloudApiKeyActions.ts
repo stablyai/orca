@@ -1,4 +1,4 @@
-import { useState, type MutableRefObject } from 'react'
+import { useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import type { SpeechModelProvider, VoiceSettings } from '../../../../shared/speech-types'
 
@@ -21,13 +21,11 @@ type CloudApiKeyProviderConfig = {
 type CloudApiKeyActionsDeps = {
   updateVoiceSettings: (updates: Partial<VoiceSettings>) => void
   refreshModelStates: () => Promise<void> | void
-  mountedRef: MutableRefObject<boolean>
+  mountedRef: RefObject<boolean>
   currentSttModel: string
   // Provider of the currently selected model, used to decide whether clearing a
   // key must also deselect the active model.
   selectedProvider: SpeechModelProvider | undefined
-  pendingCloudModelId: string | null
-  setPendingCloudModelId: (modelId: string | null) => void
 }
 
 export type CloudApiKeyActions = {
@@ -51,9 +49,13 @@ export function useCloudApiKeyActions(
   const [dialogOpen, setDialogOpen] = useState(false)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [pending, setPending] = useState(false)
+  // Scoped to this hook instance so each provider's dialog tracks its own
+  // pending model; sharing it across providers risks a save picking up the
+  // wrong provider's selection.
+  const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
 
   const openDialog = (modelId: string | null = null): void => {
-    deps.setPendingCloudModelId(modelId)
+    setPendingCloudModelId(modelId)
     setApiKeyDraft('')
     setDialogOpen(true)
   }
@@ -61,7 +63,7 @@ export function useCloudApiKeyActions(
   const resetAfterMutation = (): void => {
     setDialogOpen(false)
     setApiKeyDraft('')
-    deps.setPendingCloudModelId(null)
+    setPendingCloudModelId(null)
   }
 
   const save = async (): Promise<void> => {
@@ -69,7 +71,7 @@ export function useCloudApiKeyActions(
     try {
       await config.saveKey(apiKeyDraft)
       const updates: Partial<VoiceSettings> = {
-        sttModel: deps.pendingCloudModelId ?? deps.currentSttModel
+        sttModel: pendingCloudModelId ?? deps.currentSttModel
       }
       updates[config.configuredField] = true
       deps.updateVoiceSettings(updates)

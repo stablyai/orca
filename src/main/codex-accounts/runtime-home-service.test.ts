@@ -62,7 +62,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
-    terminalTuiScrollSensitivity: 3,
+    terminalTuiScrollSensitivity: 1,
     terminalGpuAcceleration: 'auto',
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
@@ -127,6 +127,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
+    minimaxGroupId: '',
+    minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
@@ -1322,6 +1324,86 @@ describe('CodexRuntimeHomeService', () => {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
     }
+  })
+
+  it('seeds the WSL runtime config with rewritten paths and no system hook trust', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
+    const systemCodexHomePath = join(wslHome, '.codex')
+    mkdirSync(systemCodexHomePath, { recursive: true })
+    writeFileSync(
+      join(systemCodexHomePath, 'config.toml'),
+      [
+        'model_instructions_file = "instructions.md"',
+        '',
+        '[hooks.state."system-hooks:stop:0:0"]',
+        'enabled = true',
+        '',
+        '[projects."/home/alice/repo"]',
+        'trust_level = "trusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    const store = createStore(createSettings())
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const wslRuntimeHomePath = join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home'
+      )
+
+      expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
+        wslRuntimeHomePath
+      )
+      const runtimeConfigPath = join(wslRuntimeHomePath, 'config.toml')
+      const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
+      expect(runtimeConfig).toContain(
+        `model_instructions_file = '${join(systemCodexHomePath, 'instructions.md')}'`
+      )
+      expect(runtimeConfig).toContain('[projects."/home/alice/repo"]')
+      expect(runtimeConfig).not.toContain('[hooks.state.')
+
+      // Why: WSL runtime configs are seeded once; Codex writes trust into them
+      // afterwards, so a relaunch must not clobber the seeded file.
+      writeFileSync(runtimeConfigPath, `${runtimeConfig}\n[projects."/tmp/x"]\n`, 'utf-8')
+      service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      expect(readFileSync(runtimeConfigPath, 'utf-8')).toContain('[projects."/tmp/x"]')
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('anchors WSL seed rewrites to the Linux-side home parsed from the UNC source', async () => {
+    const { prepareWslRuntimeSeedConfig } = await import('./runtime-home-service')
+
+    // Why: real UNC sources cannot back live fs operations in tests, so pin
+    // the UNC -> Linux-side anchor translation on the extracted seed function.
+    expect(
+      prepareWslRuntimeSeedConfig(
+        'model_instructions_file = "instructions.md"\n',
+        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+      )
+    ).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
+    expect(
+      prepareWslRuntimeSeedConfig(
+        'model_instructions_file = "instructions.md"\n',
+        '\\\\wsl$\\Ubuntu\\home\\alice\\.codex'
+      )
+    ).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
   })
 
   it('switches WSL accounts by rewriting one stable WSL runtime home', async () => {

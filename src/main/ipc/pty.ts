@@ -39,6 +39,7 @@ import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { SSH_SESSION_EXPIRED_ERROR, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
+import { createPtySpawnTiming } from './pty-spawn-timing'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -76,6 +77,8 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../shared/stable-pane-id'
+import { resolveTerminalStartupCwdForWorkspace } from '../../shared/terminal-startup-cwd'
+import { localTerminalCwdCanonicalizer } from '../pty/terminal-cwd-realpath'
 import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
@@ -111,6 +114,7 @@ type FreshLocalFallbackProvider = IPtyProvider & {
   routesFreshSpawnsToLocalProvider?: true
 }
 const sshProviders = new Map<string, IPtyProvider>()
+const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
 // Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
 // write/resize/kill calls only carry the PTY ID. This map lets us route
 // post-spawn operations to the correct provider without the renderer needing
@@ -1244,6 +1248,9 @@ export function registerPtyHandlers(
   store?: Store,
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
+    // Why: returns true (once, consuming the flag) for the crash-recovery reload
+    // so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
+    isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   }
 ): void {
   registerRendererLifecycleResetHandlers(mainWindow.webContents)
@@ -1263,6 +1270,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:listSessions')
+  ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
@@ -1655,6 +1663,82 @@ export function registerPtyHandlers(
     flushTimer = null
   }
 
+  const syntheticKillExitPtyIds = new Map<string, NodeJS.Timeout>()
+
+  function rememberSyntheticKillExit(id: string): void {
+    const existing = syntheticKillExitPtyIds.get(id)
+    if (existing) {
+      clearTimeout(existing)
+    }
+    // Why: some providers can report the real exit after kill has already
+    // completed; skip only that late duplicate, not a future reused id forever.
+    const cleanupTimer = setTimeout(() => {
+      syntheticKillExitPtyIds.delete(id)
+    }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
+    cleanupTimer.unref?.()
+    syntheticKillExitPtyIds.set(id, cleanupTimer)
+  }
+
+  function consumeSyntheticKillExit(id: string): boolean {
+    const cleanupTimer = syntheticKillExitPtyIds.get(id)
+    if (!cleanupTimer) {
+      return false
+    }
+    clearTimeout(cleanupTimer)
+    syntheticKillExitPtyIds.delete(id)
+    return true
+  }
+
+  function sendPtyExitToRenderer(payload: { id: string; code: number }): void {
+    if (mainWindow.isDestroyed()) {
+      return
+    }
+    // Why: flush any batched data for this PTY before sending the exit event,
+    // otherwise the last <=8ms of output is silently lost because the renderer
+    // tears down the terminal on pty:exit before the batch timer fires.
+    const remaining = pendingData.get(payload.id)
+    if (remaining) {
+      sendPtyDataToRenderer(
+        payload.id,
+        makePtyDataPayload(
+          payload.id,
+          remaining.data,
+          remaining.startSeq,
+          remaining.containsBackgroundOutput
+        )
+      )
+      pendingData.delete(payload.id)
+    }
+    lastInputAtByPty.delete(payload.id)
+    interactiveOutputCharsByPty.delete(payload.id)
+    rendererInFlightTotalChars = Math.max(
+      0,
+      rendererInFlightTotalChars - (rendererInFlightCharsByPty.get(payload.id) ?? 0)
+    )
+    rendererInFlightCharsByPty.delete(payload.id)
+    recordPtyRendererDeliveryPressure()
+    mainWindow.webContents.send('pty:exit', payload)
+  }
+
+  async function shutdownProviderAndDetectExit(
+    provider: IPtyProvider,
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean }
+  ): Promise<boolean> {
+    let providerExitObserved = false
+    const unsubscribe = provider.onExit((payload) => {
+      if (payload.id === id) {
+        providerExitObserved = true
+      }
+    })
+    try {
+      await provider.shutdown(id, opts)
+    } finally {
+      unsubscribe()
+    }
+    return providerExitObserved
+  }
+
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
   // adapter after replaceDaemonProvider runs. Both the startup registration
   // and the post-restart rebind go through the same code path — no risk of
@@ -1744,39 +1828,16 @@ export function registerPtyHandlers(
       }
     })
     localExitUnsub = localProvider.onExit((payload) => {
+      if (consumeSyntheticKillExit(payload.id)) {
+        return
+      }
       if (!isLocalProvider) {
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
         markClaudePtyExited(payload.id)
         runtime?.onPtyExit(payload.id, payload.code)
       }
-      if (!mainWindow.isDestroyed()) {
-        // Why: flush any batched data for this PTY before sending the exit event,
-        // otherwise the last ≤8ms of output is silently lost because the renderer
-        // tears down the terminal on pty:exit before the batch timer fires.
-        const remaining = pendingData.get(payload.id)
-        if (remaining) {
-          sendPtyDataToRenderer(
-            payload.id,
-            makePtyDataPayload(
-              payload.id,
-              remaining.data,
-              remaining.startSeq,
-              remaining.containsBackgroundOutput
-            )
-          )
-          pendingData.delete(payload.id)
-        }
-        lastInputAtByPty.delete(payload.id)
-        interactiveOutputCharsByPty.delete(payload.id)
-        rendererInFlightTotalChars = Math.max(
-          0,
-          rendererInFlightTotalChars - (rendererInFlightCharsByPty.get(payload.id) ?? 0)
-        )
-        rendererInFlightCharsByPty.delete(payload.id)
-        recordPtyRendererDeliveryPressure()
-        mainWindow.webContents.send('pty:exit', payload)
-      }
+      sendPtyExitToRenderer(payload)
     })
   }
 
@@ -1877,7 +1938,16 @@ export function registerPtyHandlers(
   if (localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
     didFinishLoadHandler = () => {
-      const killed = lp.killOrphanedPtys(lp.advanceGeneration() - 1)
+      // Why: always advance so the load generation stays monotonic, but skip the
+      // sweep (and its per-PTY cleanup) on the crash/freeze-recovery reload — it
+      // would kill live LOCAL PTYs across the single window before session
+      // restore re-attaches them (#5787). The getter consumes the flag, so the
+      // next genuine reload still reclaims genuinely-orphaned PTYs.
+      const generation = lp.advanceGeneration()
+      if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
+        return
+      }
+      const killed = lp.killOrphanedPtys(generation - 1)
       for (const { id } of killed) {
         clearProviderPtyState(id)
         ptyOwnership.delete(id)
@@ -1904,6 +1974,21 @@ export function registerPtyHandlers(
     assertFolderWorkspacePathUsable(status)
   }
 
+  const resolveGuardedPtySpawnCwd = (
+    worktreeId: string | undefined,
+    cwd: string | undefined,
+    connectionId?: string | null
+  ): string | undefined =>
+    resolveTerminalStartupCwdForWorkspace({
+      workspaceId: worktreeId,
+      requestedCwd: cwd,
+      resolveFolderWorkspacePath: (folderWorkspaceId) =>
+        store?.getFolderWorkspace(folderWorkspaceId)?.folderPath,
+      // Why: realpath only makes sense on the local filesystem; SSH worktree
+      // paths live on the remote host.
+      canonicalizePath: localTerminalCwdCanonicalizer(connectionId)
+    })
+
   // Why: the runtime controller must route through getProviderForPty() so that
   // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
@@ -1914,6 +1999,7 @@ export function registerPtyHandlers(
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd, args.connectionId)
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -1933,7 +2019,7 @@ export function registerPtyHandlers(
       const daemonShellOverride = terminalRuntimeOptions.shellOverride
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         daemonShellOverride,
-        args.cwd,
+        cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const claudeAuth =
@@ -2001,7 +2087,7 @@ export function registerPtyHandlers(
         : null
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
-        shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd) &&
+        shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd) &&
         !selectedCodexHomePath
       if (isDaemonHostSpawn && sessionId) {
         if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
@@ -2015,7 +2101,7 @@ export function registerPtyHandlers(
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
-          isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd),
+          isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.()
         })
@@ -2028,7 +2114,7 @@ export function registerPtyHandlers(
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
-        cwd: args.cwd,
+        cwd,
         env,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
@@ -2148,7 +2234,8 @@ export function registerPtyHandlers(
               worktreeId: hostSessionBinding.worktreeId,
               tabId: hostSessionBinding.tabId,
               leafId: hostSessionBinding.leafId,
-              ptyId: result.id
+              ptyId: result.id,
+              ...(cwd ? { startupCwd: cwd } : {})
             })
           } catch (err) {
             console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
@@ -2239,6 +2326,8 @@ export function registerPtyHandlers(
           // not revive a terminal the user explicitly closed.
           finishPtyShutdown(ptyId, connectionId, store)
           runtime?.onPtyExit(ptyId, -1)
+          rememberSyntheticKillExit(ptyId)
+          sendPtyExitToRenderer({ id: ptyId, code: -1 })
           return true
         }
         return false
@@ -2246,16 +2335,25 @@ export function registerPtyHandlers(
       // Why: shutdown() is async but the PtyController interface is sync. Defer
       // cleanup until shutdown resolves so transient SSH/daemon failures don't
       // hide a still-running remote process or local daemon session.
-      void provider
-        .shutdown(ptyId, { immediate: false })
-        .then(() => {
+      //
+      // Same synthetic-exit contract as the renderer pty:kill handler: when the
+      // provider emitted its own exit during shutdown, the exit listener already
+      // delivered runtime + renderer exits — synthesizing again would double-fire.
+      void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
+        .then((providerExitObserved) => {
           finishPtyShutdown(ptyId, connectionId, store)
-          runtime?.onPtyExit(ptyId, -1)
+          if (!providerExitObserved) {
+            runtime?.onPtyExit(ptyId, -1)
+            rememberSyntheticKillExit(ptyId)
+            sendPtyExitToRenderer({ id: ptyId, code: -1 })
+          }
         })
         .catch((err) => {
           if (isPtyAlreadyGoneError(err)) {
             finishPtyShutdown(ptyId, connectionId, store)
             runtime?.onPtyExit(ptyId, -1)
+            rememberSyntheticKillExit(ptyId)
+            sendPtyExitToRenderer({ id: ptyId, code: -1 })
             return
           }
           console.warn(
@@ -2282,12 +2380,15 @@ export function registerPtyHandlers(
           // await, but the relay lease must still be tombstoned.
           finishPtyShutdown(ptyId, connectionId, store)
           runtime?.onPtyExit(ptyId, -1)
+          rememberSyntheticKillExit(ptyId)
+          sendPtyExitToRenderer({ id: ptyId, code: -1 })
           return true
         }
         return false
       }
+      let providerExitObserved = false
       try {
-        await provider.shutdown(ptyId, {
+        providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
           immediate: true,
           keepHistory: opts?.keepHistory ?? false
         })
@@ -2312,12 +2413,24 @@ export function registerPtyHandlers(
         return false
       }
       finishPtyShutdown(ptyId, connectionId, store)
-      runtime?.onPtyExit(ptyId, -1)
+      if (!providerExitObserved) {
+        runtime?.onPtyExit(ptyId, -1)
+        rememberSyntheticKillExit(ptyId)
+        sendPtyExitToRenderer({ id: ptyId, code: -1 })
+      }
       return true
     },
     getForegroundProcess: async (ptyId) => {
       try {
         return await getProviderForPty(ptyId).getForegroundProcess(ptyId)
+      } catch {
+        return null
+      }
+    },
+    getCwd: async (ptyId) => {
+      try {
+        const cwd = await getProviderForPty(ptyId).getCwd(ptyId)
+        return cwd || null
       } catch {
         return null
       }
@@ -2460,11 +2573,14 @@ export function registerPtyHandlers(
         }
       }
     ) => {
+      const spawnTiming = createPtySpawnTiming()
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd, args.connectionId)
+      spawnTiming.mark('preflight')
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -2482,11 +2598,12 @@ export function registerPtyHandlers(
       const initialShellOverride = terminalRuntimeOptions.shellOverride
       const initialSelectionTarget = getCodexSelectionTargetForPty(
         initialShellOverride,
-        args.cwd,
+        cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const claudeAuth =
         isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(initialSelectionTarget) : null
+      spawnTiming.mark('auth')
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -2652,7 +2769,7 @@ export function registerPtyHandlers(
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         effectiveShellOverride,
-        args.cwd,
+        cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const selectedCodexHomePath = isDaemonHostSpawn
@@ -2663,7 +2780,7 @@ export function registerPtyHandlers(
         : null
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
-        shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd) &&
+        shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd) &&
         !selectedCodexHomePath
       if (isDaemonHostSpawn) {
         if (effectiveSessionId === undefined) {
@@ -2692,7 +2809,7 @@ export function registerPtyHandlers(
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
-            isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd),
+            isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
             networkProxySettings: getSettings?.()
           })
@@ -2712,6 +2829,7 @@ export function registerPtyHandlers(
           throw err
         }
       }
+      spawnTiming.mark('host_env')
       const spawnEnv = preAllocatedHandle
         ? { ...env, ORCA_TERMINAL_HANDLE: preAllocatedHandle }
         : env
@@ -2733,7 +2851,7 @@ export function registerPtyHandlers(
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
-        cwd: args.cwd,
+        cwd,
         env: spawnEnv,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
@@ -2806,7 +2924,9 @@ export function registerPtyHandlers(
               startupTerminalColorQueryReplyColors
             )
           }
+          spawnTiming.mark('options')
           result = await provider.spawn(spawnOptions)
+          spawnTiming.mark('provider_spawn')
         } catch (err) {
           const rawMessage = err instanceof Error ? err.message : String(err)
           const spawnError = normalizeNodePtySpawnError(err)
@@ -2867,6 +2987,10 @@ export function registerPtyHandlers(
             trustedTerminalHandleEnv.delete(preAllocatedHandle)
           }
         }
+        spawnTiming.log(result.id, {
+          daemon: isDaemonHostSpawn,
+          reattach: result.isReattach ?? false
+        })
         ptyOwnership.set(result.id, args.connectionId ?? null)
         if (startupTerminalColorQueryReplyColors) {
           if (result.isReattach) {
@@ -2919,7 +3043,8 @@ export function registerPtyHandlers(
               worktreeId: args.worktreeId,
               tabId: args.tabId,
               leafId: validatedLeafId,
-              ptyId: result.id
+              ptyId: result.id,
+              ...(cwd ? { startupCwd: cwd } : {})
             })
           } catch (err) {
             console.error('[pty] failed to persist PTY binding after spawn:', err)
@@ -3384,6 +3509,17 @@ export function registerPtyHandlers(
       .catch(() => {})
   })
 
+  ipcMain.removeAllListeners('pty:clearBuffer')
+  ipcMain.on('pty:clearBuffer', (_event, args: { id: string }) => {
+    // Why: the renderer already cleared its own xterm buffer. This clears the
+    // PTY-side state (ConPTY screen buffer, daemon emulator, SSH host buffer)
+    // so the next prompt repaint doesn't land at a stale cursor row.
+    tryGetProviderForPty(args.id)
+      ?.clearBuffer(args.id)
+      .catch(() => {})
+    runtime?.clearHeadlessTerminalBuffer(args.id).catch(() => {})
+  })
+
   ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
@@ -3395,10 +3531,14 @@ export function registerPtyHandlers(
       // before ownership is rebuilt. Tombstone instead of falling back local.
       finishPtyShutdown(args.id, connectionId, store)
       runtime?.onPtyExit(args.id, -1)
+      rememberSyntheticKillExit(args.id)
+      sendPtyExitToRenderer({ id: args.id, code: -1 })
       return
     }
+    const shutdownProvider = provider ?? getProviderForPty(args.id)
+    let providerExitObserved = false
     try {
-      await (provider ?? getProviderForPty(args.id)).shutdown(args.id, {
+      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
         immediate: true,
         keepHistory: args.keepHistory ?? false
       })
@@ -3411,11 +3551,14 @@ export function registerPtyHandlers(
       }
       /* session already dead — cleanup below handles the rest */
     }
-    // Why: onExit clears provider state for LocalPtyProvider, but remote SSH
-    // and daemon shutdown paths do not emit onExit through the local provider's
-    // listener. Explicit cleanup is idempotent and covers already-dead PTYs.
+    // Why: some shutdown paths do not emit onExit through the provider listener.
+    // Explicit cleanup is idempotent and covers already-dead PTYs.
     finishPtyShutdown(args.id, connectionId, store)
-    runtime?.onPtyExit(args.id, -1)
+    if (!providerExitObserved) {
+      runtime?.onPtyExit(args.id, -1)
+      rememberSyntheticKillExit(args.id)
+      sendPtyExitToRenderer({ id: args.id, code: -1 })
+    }
   })
 
   ipcMain.handle(
@@ -3444,6 +3587,23 @@ export function registerPtyHandlers(
       return Array.from(deduped.values())
     }
   )
+
+  ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
+    const ownedConnectionId = ptyOwnership.get(args.id)
+    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+    const provider = parsedSshId
+      ? sshProviders.get(parsedSshId.connectionId)
+      : tryGetProviderForPty(args.id)
+    if (!provider?.hasPty) {
+      return null
+    }
+    try {
+      return provider.hasPty(args.id)
+    } catch {
+      // Why: liveness is only allowed to close panes on an authoritative false.
+      return null
+    }
+  })
 
   ipcMain.handle(
     'pty:hasChildProcesses',

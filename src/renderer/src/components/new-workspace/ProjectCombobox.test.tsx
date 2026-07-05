@@ -138,4 +138,34 @@ describe('ProjectCombobox', () => {
 
     expect(onValueChange).toHaveBeenCalledWith('project-group:folder-group')
   })
+
+  it('renders directory details for duplicate project names', () => {
+    const duplicateProjects: NewWorkspaceProjectOption[] = [
+      {
+        kind: 'project',
+        id: 'project:merchant-a',
+        projectId: 'project:merchant-a',
+        displayName: 'merchant',
+        badgeColor: '#111111',
+        detail: '/workspace/storefront/merchant'
+      },
+      {
+        kind: 'project',
+        id: 'project:merchant-b',
+        projectId: 'project:merchant-b',
+        displayName: 'merchant',
+        badgeColor: '#222222',
+        detail: '/workspace/admin/merchant'
+      }
+    ]
+
+    act(() => {
+      root.render(
+        <ProjectCombobox options={duplicateProjects} value={null} onValueChange={vi.fn()} />
+      )
+    })
+
+    expect(container.textContent).toContain('/workspace/storefront/merchant')
+    expect(container.textContent).toContain('/workspace/admin/merchant')
+  })
 })

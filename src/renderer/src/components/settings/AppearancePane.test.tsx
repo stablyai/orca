@@ -6,13 +6,13 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
   state: {
     availableStatusBarToggles: [] as {
       description: string
-      id: 'ports'
+      id: StatusBarItem
       keywords: string[]
       title: string
       toggleDescription: string
@@ -362,6 +362,31 @@ describe('AppearancePane', () => {
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
     expect(container.querySelector('button[role="switch"][aria-label="Ports"]')).not.toBeNull()
+  })
+
+  it('records MiniMax status bar toggles as usage tracking interactions', async () => {
+    mocks.state.availableStatusBarToggles = [
+      {
+        id: 'minimax',
+        title: 'MiniMax Usage',
+        description: 'Show MiniMax subscription usage in the status bar.',
+        toggleDescription: 'Show MiniMax subscription usage for the active workspace.',
+        keywords: ['status bar', 'minimax', 'usage']
+      }
+    ]
+    mocks.state.settingsSearchQuery = 'minimax'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+    const miniMaxSwitch = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="MiniMax Usage"]'
+    )
+
+    expect(miniMaxSwitch).not.toBeNull()
+    await act(async () => {
+      miniMaxSwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.state.recordFeatureInteraction).toHaveBeenCalledWith('usage-tracking')
+    expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('minimax')
   })
 
   it('collapses sibling sections so only the Interface section is expanded by default', async () => {

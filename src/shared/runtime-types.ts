@@ -135,6 +135,7 @@ export type RuntimeMobileSessionTerminalTab = {
   terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
   launchAgent?: TuiAgent
+  startupCwd?: string
   parentLayout?: TerminalLayoutSnapshot
   /** Tab-level color/pin (per parentTabId), host-persisted for remote servers. */
   color?: string | null
@@ -319,6 +320,24 @@ export type RuntimeFileReadResult = {
   byteLength: number
 }
 
+export type RuntimeTerminalPathOpenTarget =
+  | {
+      kind: 'worktree-file'
+      provider: 'local' | 'ssh'
+      relativePath: string
+      absolutePath: string
+    }
+  | {
+      kind: 'absolute-file'
+      provider: 'local' | 'ssh'
+      absolutePath: string
+      grantId: string
+    }
+  | {
+      kind: 'unsupported'
+      reason: string
+    }
+
 /** Result of resolving a file path tapped in the mobile terminal against the
  *  worktree root (+ optional cwd). relativePath is null when the path resolves
  *  outside the worktree (not openable via the worktree-scoped file RPCs). */
@@ -330,6 +349,7 @@ export type RuntimeTerminalPathResolution = {
   absolutePath: string | null
   exists: boolean
   isDirectory: boolean
+  openTarget?: RuntimeTerminalPathOpenTarget
 }
 
 export type RuntimeFilePreviewResult = {
@@ -463,6 +483,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  cwd?: string
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string

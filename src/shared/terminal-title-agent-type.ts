@@ -52,7 +52,7 @@ function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null):
   )
 }
 
-function resolveTerminalTitleAgentType(title: string): TuiAgent | null {
+export function resolveTerminalTitleAgentType(title: string): TuiAgent | null {
   const label = getAgentLabel(title)
   return label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
 }

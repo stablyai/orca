@@ -4,6 +4,64 @@ Goal: (1) significantly improve Windows startup time (~1 min cold start reported
 (2) fix OpenCode-driven UI freezes, (3) improve overall Windows performance.
 All changes must be proven with before/after benchmark numbers.
 
+## Phase 2 (2026-07-02, branch Jinwoo-H/windows-performance-improvement) — terminal interaction latency
+
+Complaints: slow workspace switching, slow tab create/switch (terminal-related), occasional crashes.
+Harness: `tools/benchmarks/terminal-perf-bench.mjs` (CDP-driven dev app, renderer-clock phase
+timings; scenarios tab-create / tab-switch / workspace-switch; local git fixture).
+Main-process spawn attribution: `ORCA_PTY_SPAWN_TIMING=1` → `[pty-spawn-timing]` lines
+(pty.ts handler phases: preflight/auth/host_env/options/provider_spawn).
+
+Findings (baseline, this machine):
+- Workspace switch: every hide disposed each pane's WebGL context; resume recreated it —
+  ~5ms macOS, 100-500ms/pane Windows ANGLE (the comment in terminal-visibility-resume.ts
+  admitted this). Premise (16-context budget) stale since #7064 raised budget to 128.
+- Tab create: ~550ms steady state; main handler only ~115ms (host_env≈50ms, daemon
+  provider_spawn≈68ms). Remainder is renderer-side (xterm open + WebGL context for the new
+  pane + React mount). First-ever spawn paid +2.7s inside provider_spawn = daemon's first
+  ConPTY (native module + conpty.dll + OpenConsole + Defender), lazily on the user's first terminal.
+- Tab switch: paint settle median 80-99ms; longtasks 64-151ms — every light tab resume runs
+  scheduleTerminalWebglAtlasRecovery: 3× (frame/120ms/500ms) global shared-atlas clear +
+  refresh of EVERY pane in EVERY manager. Parse-time recovery (pty-connection.ts
+  recoverWebglAtlasAfterParse / hiddenOutputNeedsAtlasRecoveryAfterParse) already covers
+  risky output including hidden. CAUTION: #7058 changed this area and was reverted (#7073) —
+  left as follow-up.
+- LocalPtyProvider spawned without useConptyDll while the daemon path used it (legacy system
+  ConPTY corruption + perf differences on degraded-mode/fresh-local spawns).
+
+Fixes on this branch (PR #7080 merged in — WebGL release on dispose + stale pty:exit synthesis):
+- A/D: WebGL context retention across hide/show and the suspended-pane atlas recovery scoping
+  were reverted/parked for more terminal lifecycle testing. Hidden workspaces return to the
+  previous dispose-on-hide behavior.
+- B: useConptyDll for LocalPtyProvider spawns (local-pty-utils.ts) — parity with daemon.
+- F: daemon boots a throwaway `cmd.exe /c exit` ConPTY (windows-conpty-warmup.ts) so the
+  first user terminal doesn't pay the ~2.7s first-ConPTY cost.
+
+Follow-ups (documented, not in this branch):
+- Gate/scope the light-tab-switch atlas burst (see #7058/#7073 history first). Residual
+  tab-switch cost besides the burst: debounced ResizeObserver re-fit can reflow scrollback
+  when column count changed while hidden.
+- Renderer-side tab-create cost (~400ms): mount chain runs new Terminal() + 5 eager addons
+  + synchronous attachWebgl (pane-lifecycle.ts:108) before the spawn IPC (deferred one rAF,
+  pty-connection.ts:5158). Candidate: defer WebGL attach for brand-new panes.
+- Cold-restore respawn fan-out: reconnectPersistedTerminals does NOT spawn; the fan-out is
+  Terminal.tsx mounting a TerminalPane per restored tab at once — each fires connectPanePty
+  → rAF-deferred spawn IPC (pty-connection.ts:5158) with no concurrency cap. Cap belongs at
+  that renderer connect layer, not in reconnectPersistedTerminals.
+- First terminal opened immediately after launch also waits on the one-time daemon-init
+  barrier (pty:spawn awaits getLocalPtyStartupPromise, ipc/pty.ts:2518; measured
+  preflight=0 in the bench because hydration had finished first, but an early Ctrl+T pays
+  it). In-daemon Windows shell resolution (pwsh -Version probe, PowerShell exe-chain
+  existsSync/statSync scan) is uncached per spawn; the conpty warm-up spawns cmd.exe so it
+  does not warm PowerShell resolution. Note the warm-up and an early first spawn serialize
+  on the daemon's single thread — the 1255ms post-fix first-spawn number is mostly queueing
+  behind the in-flight warm-up, not unwarmed cost.
+- node-pty ≥1.2.0-beta defers conpty connect (spawn returns pid=0 fast) — would stop spawn
+  storms serializing the daemon loop.
+
+Pre-existing Windows-only test failures (also on main, CI is ubuntu-only): 5 attribution-shim
+PATH assertions in src/main/ipc/pty.test.ts (path-separator artifacts).
+
 ## Status
 
 - [x] Benchmark harness for startup time (`tools/benchmarks/startup-time-bench.mjs`)

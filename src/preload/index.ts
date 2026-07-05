@@ -812,6 +812,13 @@ const api = {
       ipcRenderer.send('pty:signal', { id, signal })
     },
 
+    /** Why: Cmd/Ctrl+K clears the renderer xterm, but the PTY host (ConPTY,
+     * daemon emulator, SSH host buffer) keeps its own screen state and would
+     * repaint the next prompt at the stale cursor row. */
+    clearBuffer: (id: string): void => {
+      ipcRenderer.send('pty:clearBuffer', { id })
+    },
+
     ackColdRestore: (id: string): void => {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
@@ -830,6 +837,7 @@ const api = {
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
+    hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
 
     getMainBufferSnapshot: (
       id: string,
@@ -1025,6 +1033,7 @@ const api = {
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
       acceptMergedFallbackPR?: boolean
+      currentHeadOid?: string | null
     }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
@@ -2166,6 +2175,7 @@ const api = {
         screenY: number
         pageUrl: string
         linkUrl: string | null
+        selectionText: string
         canGoBack: boolean
         canGoForward: boolean
       }) => void
@@ -2180,6 +2190,7 @@ const api = {
           screenY: number
           pageUrl: string
           linkUrl: string | null
+          selectionText: string
           canGoBack: boolean
           canGoForward: boolean
         }
@@ -3029,7 +3040,8 @@ const api = {
         requestId: string
         url: string
         worktreeId?: string
-        sessionProfileId?: string
+        sessionProfileId?: string | null
+        sessionPartition?: string
         activate?: boolean
       }) => void
     ): (() => void) => {
@@ -3039,7 +3051,8 @@ const api = {
           requestId: string
           url: string
           worktreeId?: string
-          sessionProfileId?: string
+          sessionProfileId?: string | null
+          sessionPartition?: string
           activate?: boolean
         }
       ) => callback(data)
@@ -3054,11 +3067,21 @@ const api = {
       ipcRenderer.send('browser:tabCreateReply', reply)
     },
     onRequestTabSetProfile: (
-      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+      callback: (data: {
+        requestId: string
+        browserPageId: string
+        profileId: string
+        sessionPartition?: string
+      }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { requestId: string; browserPageId: string; profileId: string }
+        data: {
+          requestId: string
+          browserPageId: string
+          profileId: string
+          sessionPartition?: string
+        }
       ) => callback(data)
       ipcRenderer.on('browser:requestTabSetProfile', listener)
       return () => ipcRenderer.removeListener('browser:requestTabSetProfile', listener)
@@ -3209,6 +3232,7 @@ const api = {
         requestId?: string
         worktreeId: string
         command?: string
+        cwd?: string
         env?: Record<string, string>
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string
@@ -3230,6 +3254,7 @@ const api = {
           requestId?: string
           worktreeId: string
           command?: string
+          cwd?: string
           env?: Record<string, string>
           launchConfig?: SleepingAgentLaunchConfig
           launchToken?: string
@@ -3611,7 +3636,12 @@ const api = {
 
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:listSessions', args)
+      ipcRenderer.invoke('aiVault:listSessions', args),
+    onWindowFocused: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('aiVault:windowFocused', listener)
+      return () => ipcRenderer.removeListener('aiVault:windowFocused', listener)
+    }
   },
 
   nativeChat: {
@@ -3776,11 +3806,21 @@ const api = {
       ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
     fetchInactiveCodexAccounts: (): Promise<void> =>
       ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
+    refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)
       return () => ipcRenderer.removeListener('rateLimits:update', listener)
     }
+  },
+
+  minimaxCredentials: {
+    getStatus: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('minimaxCredentials:getStatus'),
+    saveCookie: (cookie: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
+    clearCookie: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('minimaxCredentials:clearCookie')
   },
 
   ssh: {

@@ -21,7 +21,7 @@ import {
   updateHistFileForFallback,
   logHistoryInjection
 } from '../terminal-history'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
+import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
   ensureNodePtySpawnHelperExecutable,
   validateWorkingDirectory,
@@ -38,6 +38,7 @@ import {
 } from './local-pty-shell-ready'
 import type { ShellReadySignal } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
 import {
@@ -54,6 +55,7 @@ import { resolveAgentForegroundProcess } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -66,6 +68,7 @@ let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
+const ptyTerminalHandle = new Map<string, string>()
 // Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
 // callbacks. If the PTY is killed without disposing these listeners, the
 // stale callbacks survive into node::FreeEnvironment() where NAPI attempts
@@ -86,20 +89,7 @@ const exitListeners = new Set<ExitCallback>()
  * Returns a stable default cwd for locally spawned PTYs.
  */
 function getDefaultCwd(): string {
-  if (process.platform !== 'win32') {
-    return process.env.HOME || '/'
-  }
-
-  // Why: USERPROFILE is not guaranteed in all Windows launch contexts.
-  // Falling back to bare HOMEPATH yields a drive-relative path, so combine
-  // HOMEDRIVE + HOMEPATH to keep spawned PTYs anchored to the intended home.
-  if (process.env.USERPROFILE) {
-    return process.env.USERPROFILE
-  }
-  if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
-    return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
-  }
-  return 'C:\\'
+  return resolveSafePtyDefaultCwd()
 }
 
 /**
@@ -186,6 +176,7 @@ function clearPtyState(id: string): void {
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
+  ptyTerminalHandle.delete(id)
   ptyLoadGeneration.delete(id)
 }
 
@@ -349,8 +340,18 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     const id = allocatePtyId(reattachId ?? undefined)
 
+    const startupAgentRecognition = args.command
+      ? recognizeAgentProcessFromCommandLine(args.command)
+      : null
+
     const defaultCwd = getDefaultCwd()
     const cwd = args.cwd || defaultCwd
+    // Why: gate on the effective cwd (post default-cwd fallback), not the raw
+    // args.cwd — an omitted cwd resolves to a safe default and must not be
+    // rejected as if it were a root-like path.
+    if (args.command && startupAgentRecognition) {
+      assertSafeAgentStartupCwd(cwd, args.command)
+    }
     const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
     const worktreeWslContext =
       process.platform === 'win32' ? getWslContextFromWorktreeId(args.worktreeId) : undefined
@@ -484,6 +485,7 @@ export class LocalPtyProvider implements IPtyProvider {
     // Why: Orca can be launched from an Orca terminal while developing. Pane
     // identity belongs to the child PTY, not the parent shell that spawned app.
     removeUnspecifiedPaneIdentityEnv(spawnEnv, args.env)
+    removeAppImageRuntimeEnv(spawnEnv)
     removeInheritedNoColor(spawnEnv)
     for (const key of args.envToDelete ?? []) {
       delete spawnEnv[key]
@@ -590,8 +592,7 @@ export class LocalPtyProvider implements IPtyProvider {
         finalEnv.ORCA_OMP_STATUS_EXTENSION ||
         finalEnv.ORCA_CODEX_HOME ||
         finalEnv.ORCA_AGENT_TEAMS_SHIM_DIR
-      const isCodexStartupCommand =
-        recognizeAgentProcessFromCommandLine(args.command)?.agent === 'codex'
+      const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
       let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
       if (args.command && isCodexStartupCommand) {
         const shouldWaitForShellReady = shouldUseShellReadyStartupDelivery({
@@ -678,6 +679,9 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
     ptyShellName.set(id, getSpawnedShellName(shellPath))
+    if (finalEnv.ORCA_TERMINAL_HANDLE) {
+      ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
+    }
     ptyAgentForegroundContextPaths.set(
       id,
       getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
@@ -894,8 +898,19 @@ export class LocalPtyProvider implements IPtyProvider {
   async getInitialCwd(_id: string): Promise<string> {
     return ''
   }
-  async clearBuffer(_id: string): Promise<void> {
-    /* handled client-side in xterm.js */
+  async clearBuffer(id: string): Promise<void> {
+    // Why: xterm.js clear() only resets the renderer. ConPTY keeps its own
+    // screen buffer, so without this its stale cursor row makes the next
+    // prompt repaint land below a blank gap. No-op on POSIX.
+    //
+    // Unlike the daemon session, no PSReadLine form-feed nudge here: it is
+    // only safe at an empty prompt, and without a headless emulator this
+    // provider cannot tell whether input is pending.
+    try {
+      ptyProcesses.get(id)?.clear()
+    } catch {
+      /* PTY may have just exited */
+    }
   }
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */
@@ -943,11 +958,12 @@ export class LocalPtyProvider implements IPtyProvider {
     /* re-spawning handles local revival */
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
       id,
       cwd: '',
-      title: proc.process || ptyShellName.get(id) || 'shell'
+      title: proc.process || ptyShellName.get(id) || 'shell',
+      ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
     }))
   }
 

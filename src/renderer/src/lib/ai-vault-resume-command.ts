@@ -19,10 +19,14 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
-type AiVaultResumeCommandSession = Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'>
+type AiVaultResumeCommandSession = Pick<
+  AiVaultSession,
+  'agent' | 'sessionId' | 'cwd' | 'codexHome'
+> &
+  Partial<Pick<AiVaultSession, 'executionHostId' | 'executionHostPlatform' | 'resumeCommand'>>
 
 export type AiVaultResumeStartup = {
   command: string
@@ -65,7 +69,20 @@ export function buildAiVaultResumeStartupForWorktree(args: {
   session: AiVaultResumeCommandSession
   commandOverride?: string | null
 }): AiVaultResumeStartup {
-  const platform = getAiVaultResumePlatform(args.state, args.worktreeId)
+  if (
+    args.session.executionHostId &&
+    args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
+    args.session.resumeCommand &&
+    !args.commandOverride?.trim()
+  ) {
+    return { command: args.session.resumeCommand }
+  }
+  const platform =
+    args.session.executionHostId &&
+    args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
+    args.session.executionHostPlatform
+      ? args.session.executionHostPlatform
+      : getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
   // Why: the queued command is typed verbatim into the freshly spawned tab whose
   // live shell is the configured Windows shell (default PowerShell). Hardcoding

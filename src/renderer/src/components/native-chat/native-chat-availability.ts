@@ -47,10 +47,9 @@ export type NativeChatAvailabilityInput = {
 /** Native chat is a rendering of a coding-agent conversation, so the toggle is
  *  only meaningful on terminals that actually run an agent we can parse. Plain
  *  shells, non-terminal surfaces (editor, browser, …), and unsupported agents
- *  (Grok, Gemini, …) never qualify. Eligibility is the union of the launch-time
- *  hint, live detection, and title resolution — but only when that signal names
- *  a supported agent — so the control appears for both Orca-launched and
- *  user-started Claude/Codex sessions. */
+ *  (Grok, Gemini, …) never qualify. Live identity is authoritative when present;
+ *  launch metadata is next, and title resolution only fills the pre-hook gap for
+ *  manually-started Claude/Codex sessions. */
 export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean {
   if (input.experimentalNativeChatEnabled !== true) {
     return false
@@ -58,10 +57,9 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
   if (input.contentType !== 'terminal') {
     return false
   }
-  return (
-    input.isChatViewMode === true ||
-    isNativeChatSupportedAgent(input.launchAgent) ||
-    isNativeChatSupportedAgent(input.detectedAgent) ||
-    isNativeChatSupportedAgent(input.resolvedAgent)
-  )
+  if (input.isChatViewMode === true) {
+    return true
+  }
+  const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
+  return isNativeChatSupportedAgent(agent)
 }

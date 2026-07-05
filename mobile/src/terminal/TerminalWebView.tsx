@@ -1,76 +1,30 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { View, type StyleProp, type ViewStyle } from 'react-native'
 import { WebView } from 'react-native-webview'
 import type { WebViewMessageEvent } from 'react-native-webview'
-import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
-import { colors } from '../theme/mobile-theme'
 import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
-import { XTERM_HTML } from './terminal-webview-html'
+import type {
+  MobileTerminalTheme,
+  TerminalSelectionEvents,
+  TerminalWebViewHandle
+} from './terminal-webview-contract'
+import {
+  TerminalWebViewEngineErrorOverlay,
+  useTerminalWebViewEngineErrorState
+} from './terminal-webview-engine-error-state'
+import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
+import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
+import { XTERM_WEBVIEW_SOURCE } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
 
-type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
-type TerminalOscLinks = TerminalOscLinkRange[]
-
-export type TerminalModes = {
-  bracketedPasteMode: boolean
-  altScreen: boolean
-  mouseTrackingMode: TerminalMouseTrackingMode
-  sgrMouseMode: boolean
-  sgrMousePixelsMode: boolean
-}
-
-export type TerminalKeyboardAvoidanceMetrics = {
-  cursorY: number
-  rows: number
-  altScreen: boolean
-}
-
-export type MobileTerminalTheme = RuntimeMobileTerminalTheme
-
-export type TerminalSelectionEvents = {
-  onSelectionMode?: (active: boolean) => void
-  onSelectionCopy?: (text: string) => void
-  onSelectionEvicted?: () => void
-  onModesChanged?: (modes: TerminalModes) => void
-  onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
-  onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  onTerminalInput?: (bytes: string) => void
-  onTerminalTap?: () => void
-  // Tap landed on a detected file path; RN resolves + opens it.
-  onFileTap?: (pathText: string, line: number | null, column: number | null) => void
-  // WebView-detected URL tap; RN chooses the mobile routing destination.
-  onOpenUrl?: (url: string) => void
-  // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
-  // here so the app persists it and keeps Settings + other panes in sync.
-  onTextScaleChange?: (scale: number) => void
-}
-
-export type TerminalWebViewHandle = {
-  write: (data: string) => void
-  init: (
-    cols: number,
-    rows: number,
-    initialData?: string,
-    preserveScroll?: boolean,
-    oscLinks?: TerminalOscLinks
-  ) => void
-  resize: (cols: number, rows: number) => void
-  // Why: reflow the local xterm buffer (scrollback included) to a new width
-  // after a server-side PTY reflow, so older wrapped lines rewrap to match the
-  // latest output. No-op on the alternate screen.
-  reflow: (cols: number, rows: number) => void
-  clear: () => void
-  measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
-  resetZoom: () => void
-  cancelSelect: () => void
-  doSelectAll: () => void
-  // Why: lets callers await the WebView-side `init` rAF chain (term.open
-  // → renderService population → first paint) so a follow-up measure
-  // doesn't race ahead and find term=null or cellWidth=0. Resolves on
-  // the next 'ready' notify after the most recent init.
-  awaitReady: () => Promise<void>
-}
+export type {
+  MobileTerminalTheme,
+  TerminalKeyboardAvoidanceMetrics,
+  TerminalModes,
+  TerminalSelectionEvents,
+  TerminalWebViewHandle
+} from './terminal-webview-contract'
 
 type Props = {
   style?: StyleProp<ViewStyle>
@@ -79,11 +33,8 @@ type Props = {
   // scale; raw xterm fontSize can't drive apparent size because the fit cancels it.
   textScale?: number
   onWebReady?: () => void
+  onEngineError?: (message: string) => void
 } & TerminalSelectionEvents
-
-// Why: WebView treats source identity as page identity on some platforms; keep
-// parent/session re-renders from reloading xterm and forcing fresh snapshots.
-const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }
 
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
   {
@@ -91,6 +42,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     terminalTheme,
     textScale = 1,
     onWebReady,
+    onEngineError,
     onSelectionMode,
     onSelectionCopy,
     onSelectionEvicted,
@@ -119,6 +71,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   // race ahead of term.open() / renderService population.
   const readyPromiseRef = useRef<Promise<void> | null>(null)
   const readyResolveRef = useRef<(() => void) | null>(null)
+  const { clearEngineError, engineError, reportEngineError, reportNativeEngineError } =
+    useTerminalWebViewEngineErrorState(onEngineError)
+  const { armWebReadyWatchdog, clearWebReadyWatchdog } = useTerminalWebReadyWatchdog(
+    isWebReadyRef,
+    reportEngineError
+  )
 
   const sendToWebView = useCallback((msg: TerminalWebViewCommand) => {
     messageIdRef.current += 1
@@ -151,6 +109,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 
       if (msg.type === 'web-ready') {
         isWebReadyRef.current = true
+        clearWebReadyWatchdog()
+        clearEngineError()
         onWebReady?.()
         flushPendingMessages()
       } else if (msg.type === 'ready') {
@@ -175,6 +135,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         const tag = typeof msg.tag === 'string' ? msg.tag : '[fit]'
         // eslint-disable-next-line no-console
         console.log(tag, msg.payload)
+      } else if (msg.type === 'error') {
+        const message = typeof msg.message === 'string' ? msg.message : 'Unknown terminal error'
+        reportEngineError(message, msg.fatal !== false)
       } else if (msg.type === 'set-select-mode') {
         onSelectionMode?.(!!msg.enabled)
       } else if (msg.type === 'selection') {
@@ -246,6 +209,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     },
     [
       flushPendingMessages,
+      clearEngineError,
+      clearWebReadyWatchdog,
+      reportEngineError,
       onWebReady,
       onSelectionMode,
       onSelectionCopy,
@@ -263,10 +229,16 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 
   const handleLoadStart = useCallback(() => {
     isWebReadyRef.current = false
+    armWebReadyWatchdog()
     // Why: messages queued for a previous WebView generation are stale after a reload;
     // dropping them avoids replaying terminal chunks before the next init snapshot.
     pendingMessages.clear()
-  }, [pendingMessages])
+  }, [armWebReadyWatchdog, pendingMessages])
+
+  const handleReload = useCallback(() => {
+    clearEngineError()
+    webViewRef.current?.reload()
+  }, [clearEngineError])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -289,7 +261,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         rows: number,
         initialData?: string,
         preserveScroll?: boolean,
-        oscLinks?: TerminalOscLinks
+        oscLinks?: TerminalOscLinkRange[]
       ) {
         // Why: arm a fresh ready promise BEFORE posting init. The WebView
         // resolves it via the 'ready' notify at the end of its rAF chain.
@@ -395,29 +367,35 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   )
 
   return (
-    <WebView
-      ref={webViewRef}
-      source={XTERM_WEBVIEW_SOURCE}
-      style={[styles.webview, style]}
-      originWhitelist={['*']}
-      javaScriptEnabled
-      scrollEnabled={false}
-      // Why: Android parent gesture containers can intercept vertical drags
-      // before the injected xterm scroll router sees them.
-      nestedScrollEnabled
-      scalesPageToFit={false}
-      // Why: Android WebView defaults textZoom to the system font scale, inflating
-      // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
-      textZoom={100}
-      onLoadStart={handleLoadStart}
-      onMessage={handleMessage}
-    />
+    <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, style]}>
+      <WebView
+        ref={webViewRef}
+        source={XTERM_WEBVIEW_SOURCE}
+        style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        scrollEnabled={false}
+        // Why: Android parent gesture containers can intercept vertical drags
+        // before the injected xterm scroll router sees them.
+        nestedScrollEnabled
+        scalesPageToFit={false}
+        // Why: Android WebView defaults textZoom to the system font scale, inflating
+        // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
+        textZoom={100}
+        onLoadStart={handleLoadStart}
+        onMessage={handleMessage}
+        onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
+        onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}
+        onRenderProcessGone={(event) =>
+          reportNativeEngineError('Terminal WebView render process ended', event)
+        }
+        onContentProcessDidTerminate={(event) =>
+          reportNativeEngineError('Terminal WebView content process ended', event)
+        }
+      />
+      {engineError ? (
+        <TerminalWebViewEngineErrorOverlay message={engineError} onReload={handleReload} />
+      ) : null}
+    </View>
   )
-})
-
-const styles = StyleSheet.create({
-  webview: {
-    flex: 1,
-    backgroundColor: colors.terminalBg
-  }
 })
