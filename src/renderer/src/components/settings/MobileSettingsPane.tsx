@@ -12,7 +12,7 @@ export { getMobileSettingsPaneSearchEntries }
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
 const ORCA_ANDROID_APK_URL =
-  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.21/app-release.apk'
+  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.22/app-release.apk'
 
 export function MobileSettingsPane(): React.JSX.Element {
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
