@@ -6706,8 +6706,8 @@
           "1eac933202": "macOS 개인 정보 보호 및 보안을 열었습니다. 액세스 권한을 부여한 후 받아쓰기를 다시 활성화하세요.",
           "cd9fe37556": "마이크 권한이 부여되었습니다.",
           "6fa734ed95": "{{value0}} 삭제",
-          "dictationLanguage": "Dictation Language",
-          "dictationLanguageHint": "Spoken language for transcription. Applies to Whisper and OpenAI models."
+          "00ab56a6c0": "Dictation Language",
+          "90c0cbd280": "Spoken language for transcription. Applies to Whisper and OpenAI models."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",

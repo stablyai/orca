@@ -6758,8 +6758,8 @@
           "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
           "cd9fe37556": "Microphone permission granted",
-          "dictationLanguage": "Dictation Language",
-          "dictationLanguageHint": "Spoken language for transcription. Applies to Whisper and OpenAI models."
+          "00ab56a6c0": "Dictation Language",
+          "90c0cbd280": "Spoken language for transcription. Applies to Whisper and OpenAI models."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",

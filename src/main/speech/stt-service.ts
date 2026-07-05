@@ -106,6 +106,7 @@ export class SttService {
       this.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey, language)
       this.activeModelId = modelId
       this.activeHotwordsFilePath = undefined
+      this.activeLanguage = language
       this.eventSink = sink
       sink({ type: 'ready' })
       return

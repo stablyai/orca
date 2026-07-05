@@ -117,14 +117,11 @@ export function VoiceDictationSettingsSection({
       <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <Label>
-            {translate(
-              'auto.components.settings.VoicePane.dictationLanguage',
-              'Dictation Language'
-            )}
+            {translate('auto.components.settings.VoicePane.00ab56a6c0', 'Dictation Language')}
           </Label>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.VoicePane.dictationLanguageHint',
+              'auto.components.settings.VoicePane.90c0cbd280',
               'Spoken language for transcription. Applies to Whisper and OpenAI models.'
             )}
           </p>
