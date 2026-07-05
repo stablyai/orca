@@ -713,9 +713,10 @@ export default function MonacoEditor({
     }
     editorRef.current.updateOptions({
       fontSize: editorFontSize,
-      fontFamily: settings.terminalFontFamily || 'monospace'
+      fontFamily: settings.terminalFontFamily || 'monospace',
+      readOnly
     })
-  }, [editorFontSize, settings])
+  }, [editorFontSize, readOnly, settings])
 
   useEffect(() => {
     markdownDocLinkDecorationsRef.current?.refresh()
