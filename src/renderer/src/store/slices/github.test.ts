@@ -2264,6 +2264,55 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(mockApi.cache.setGitHub).not.toHaveBeenCalled()
   })
 
+  it('preserves cached merged PR data when the worktree head is a confirmed PR commit', async () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/merged-pr-behind-head'
+    const worktreeId = 'wt-merged-behind-head'
+    const cachedPR = makePR({
+      number: 13,
+      title: 'Merged PR with unpulled final head',
+      state: 'merged',
+      headSha: 'merged-final-head',
+      confirmedContainedHeadOid: 'behind-head'
+    })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'behind-head'
+          })
+        ]
+      },
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId
+      })
+    ).resolves.toEqual(cachedPR)
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
+      data: cachedPR,
+      fetchedAt: 1
+    })
+  })
+
   it.each([
     {
       name: 'worktree id is missing',
@@ -3482,6 +3531,58 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
   })
 
+  it('keeps a confirmed behind-head merged PR as the refresh fallback number', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/merged-pr-behind-head'
+    const worktreeId = 'wt-merged-behind-fallback'
+    mockApi.gh.enqueuePRRefresh.mockResolvedValueOnce({ kind: 'queued' })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'behind-head'
+          })
+        ]
+      },
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: makePR({
+            number: 13,
+            title: 'Merged PR with unpulled final head',
+            state: 'merged',
+            headSha: 'merged-final-head',
+            confirmedContainedHeadOid: 'behind-head'
+          }),
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().enqueueGitHubPRRefresh(worktreeId, 'active', 80)
+    await Promise.resolve()
+
+    // Why 13: a merged PR confirmed to contain this worktree head is still the
+    // branch's PR; losing the fallback number would blank the panel whenever
+    // GitHub stops reporting the deleted head by branch name.
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidate: expect.objectContaining({
+          fallbackPRNumber: 13,
+          // Why: main can only head-gate fallback preservation when the
+          // candidate carries the worktree head it was built for.
+          currentHeadOid: 'behind-head'
+        })
+      })
+    )
+  })
+
   it('direct-fetches when enqueue returns an explicit fallback result', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -3864,7 +3965,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: 12 },
+      params: { repo: 'repo-1', branch, linkedPRNumber: 12, currentHeadOid: null },
       timeoutMs: 30_000
     })
     expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
@@ -3914,7 +4015,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null },
+      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: null },
       timeoutMs: 30_000
     })
     expect(store.getState().prCache[`runtime:env-1::repo-runtime::${branch}`]?.data).toMatchObject({
@@ -4151,7 +4252,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: null },
+      params: { repo: 'repo-1', branch, linkedPRNumber: null, currentHeadOid: null },
       timeoutMs: 30_000
     })
   })
@@ -4281,7 +4382,7 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: null },
+      params: { repo: 'repo-1', branch, linkedPRNumber: null, currentHeadOid: null },
       timeoutMs: 30_000
     })
   })

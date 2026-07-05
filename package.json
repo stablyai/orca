@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.121-rc.3",
+  "version": "1.4.123-rc.0",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -11,13 +11,14 @@
   "main": "./out/main/index.js",
   "scripts": {
     "format": "oxfmt --write .",
-    "lint": "oxlint && pnpm run lint:switch-exhaustiveness && node config/scripts/check-styled-scrollbars.mjs && pnpm run verify:localization-catalog && pnpm run verify:localization-coverage",
+    "lint": "oxlint && pnpm run lint:switch-exhaustiveness && node config/scripts/check-styled-scrollbars.mjs && pnpm run check:reliability-gates && pnpm run verify:localization-catalog && pnpm run verify:localization-coverage",
     "lint:react-doctor": "oxlint --config config/oxlint-react-doctor.json",
     "lint:react-doctor:changed": "node config/scripts/lint-react-doctor-changed.mjs",
     "lint:switch-exhaustiveness": "oxlint --type-aware --config config/oxlint-switch-exhaustiveness.json src/main src/preload src/shared src/relay src/cli src/renderer/src config tests --quiet",
     "prepare": "husky",
     "test": "node config/scripts/ensure-native-runtime.mjs --runtime=node && vitest run --config config/vitest.config.ts",
     "check:styled-scrollbars": "node config/scripts/check-styled-scrollbars.mjs",
+    "check:reliability-gates": "node config/scripts/check-reliability-gates.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
     "verify:macos-entitlements": "node config/scripts/verify-macos-entitlements.mjs",
     "vendor:feature-wall-assets": "node config/scripts/vendor-feature-wall-assets.mjs",

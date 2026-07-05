@@ -68,6 +68,12 @@ type LocalBaseRefRefreshability =
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
+// Why: bound `git worktree add` so a OneDrive cloud-placeholder base path can't
+// stall its checkout writes for minutes (STA-1292) — a stuck create then fails
+// fast instead of spinning forever. Generous enough not to kill a legit large
+// checkout (mirrors the SYNC runner's cloud-placeholder floor, #7225).
+export const WORKTREE_ADD_TIMEOUT_MS = 180_000
+
 function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
@@ -609,10 +615,51 @@ export async function listWorktreeGraph(
   }
 }
 
+// Why: a cold start lists every repo's worktrees from several independent
+// paths (renderer worktrees fetch, lineage resolution, boot pty-registry
+// hydration), and each `git worktree list` is a full process spawn —
+// expensive on Windows (issue #7225). Sharing the in-flight promise collapses
+// concurrent duplicate scans; nothing is served after a scan settles.
+const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
+
+// Why: a caller listing AFTER a mutation completed must observe it, so it may
+// not join a scan that started before the mutation. Bumping the generation on
+// mutation completion retires older in-flight scans from sharing (they still
+// settle for their original callers).
+const worktreeScanGenerations = new Map<string, number>()
+
+function bumpWorktreeScanGeneration(repoPath: string): void {
+  worktreeScanGenerations.set(repoPath, (worktreeScanGenerations.get(repoPath) ?? 0) + 1)
+}
+
 /**
- * List all worktrees for a git repo at the given path.
+ * List all worktrees for a git repo at the given path. Concurrent calls for
+ * the same repo share one scan (unless the caller passes an AbortSignal,
+ * which must only cancel its own scan).
  */
-export async function listWorktrees(
+export function listWorktrees(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  if (options.signal) {
+    return listWorktreesUnshared(repoPath, options)
+  }
+  const generation = worktreeScanGenerations.get(repoPath) ?? 0
+  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${generation}`
+  const inFlight = inFlightWorktreeScans.get(key)
+  if (inFlight) {
+    return inFlight
+  }
+  const scan = listWorktreesUnshared(repoPath, options).finally(() => {
+    if (inFlightWorktreeScans.get(key) === scan) {
+      inFlightWorktreeScans.delete(key)
+    }
+  })
+  inFlightWorktreeScans.set(key, scan)
+  return scan
+}
+
+async function listWorktreesUnshared(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
@@ -768,6 +815,30 @@ export async function addWorktree(
   noCheckout = false,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
+  try {
+    return await performAddWorktree(
+      repoPath,
+      worktreePath,
+      branch,
+      baseBranch,
+      refreshLocalBaseRef,
+      noCheckout,
+      options
+    )
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
+}
+
+async function performAddWorktree(
+  repoPath: string,
+  worktreePath: string,
+  branch: string,
+  baseBranch?: string,
+  refreshLocalBaseRef = false,
+  noCheckout = false,
+  options: AddWorktreeOptions = {}
+): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   const args = ['worktree', 'add']
@@ -813,7 +884,12 @@ export async function addWorktree(
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, gitExecOptions(repoPath, options))
+  await gitExecFileAsync(args, {
+    ...gitExecOptions(repoPath, options),
+    // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292)
+    // fails fast rather than hanging worktree creation indefinitely.
+    timeout: WORKTREE_ADD_TIMEOUT_MS
+  })
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}
@@ -957,7 +1033,11 @@ export async function moveWorktree(
   oldPath: string,
   newPath: string
 ): Promise<void> {
-  await gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+  try {
+    await gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
 }
 
 /**
@@ -971,6 +1051,19 @@ export async function removeWorktree(
   // (e.g. rollback of a failed creation) where the fresh branch has no user work
   // and must be removed outright. User-initiated deletes leave it false so unmerged
   // commits are preserved.
+  options: RemoveWorktreeOptions = {}
+): Promise<RemoveWorktreeResult> {
+  try {
+    return await performRemoveWorktree(repoPath, worktreePath, force, options)
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
+}
+
+async function performRemoveWorktree(
+  repoPath: string,
+  worktreePath: string,
+  force = false,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   const removedWorktree =

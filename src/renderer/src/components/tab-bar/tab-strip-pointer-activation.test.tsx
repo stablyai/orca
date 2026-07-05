@@ -41,22 +41,22 @@ describe('useTabStripPointerActivation', () => {
     const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
-    firePointer('pointermove', 10 + TAB_DRAG_ACTIVATION_DISTANCE_PX + 5, 10)
-    firePointer('pointerup', 300, 40)
+    firePointer('pointerup', 10 + TAB_DRAG_ACTIVATION_DISTANCE_PX + 5, 10)
 
     expect(onActivate).not.toHaveBeenCalled()
   })
 
-  it('stays a drag even if the pointer returns near the start before release', () => {
+  it('activates a stationary click after a single stale over-threshold move', () => {
     const onActivate = vi.fn()
     const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
-    // Cross the threshold, then come back over the origin and release.
+    // Why: packaged Chromium can deliver one stale/coalesced move immediately
+    // after pointerdown; the release position is the click/drag authority.
     firePointer('pointermove', 200, 200)
     firePointer('pointerup', 11, 11)
 
-    expect(onActivate).not.toHaveBeenCalled()
+    expect(onActivate).toHaveBeenCalledTimes(1)
   })
 
   it('does not activate when the press is cancelled', () => {
@@ -107,5 +107,16 @@ describe('useTabStripPointerActivation', () => {
     act(() => result.current.onPointerDown(pointerDownEvent(400, 10)))
     firePointer('pointerup', 400, 10)
     expect(onActivate).toHaveBeenCalledTimes(1)
+  })
+
+  it('flushes a pending press on window focus', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    act(() => window.dispatchEvent(new Event('focus')))
+    firePointer('pointerup', 10, 10)
+
+    expect(onActivate).not.toHaveBeenCalled()
   })
 })

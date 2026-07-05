@@ -34,6 +34,11 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard, { type ActiveSurfaceVariant } from './WorktreeCard'
+import { WorktreeSidebarDropIndicator } from './WorktreeSidebarDropIndicator'
+import {
+  getProjectGroupHeaderSectionEndByGroupId,
+  getRepoHeaderSectionEndByRepoId
+} from './worktree-header-section-boundaries'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import { PendingWorktreeRow } from './PendingWorktreeRow'
 import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from './WorktreeCardAgents'
@@ -263,7 +268,7 @@ import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import { translate } from '@/i18n/i18n'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isConfirmedStaleFolderPathStatus,
@@ -398,6 +403,22 @@ function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>):
 
 function getWorktreeOptionId(rowKey: string): string {
   return `worktree-list-option-${encodeURIComponent(rowKey)}`
+}
+
+// Why: folder workspaces are tracked by the scoped active key, while older
+// worktree-only paths still read activeWorktreeId.
+function getActiveSidebarWorkspaceId(
+  activeWorkspaceKey: string | null,
+  activeWorktreeId: string | null
+): string | null {
+  const scope = activeWorkspaceKey ? parseWorkspaceKey(activeWorkspaceKey) : null
+  if (scope?.type === 'folder') {
+    return folderWorkspaceKey(scope.folderWorkspaceId)
+  }
+  if (scope?.type === 'worktree') {
+    return scope.worktreeId
+  }
+  return activeWorktreeId
 }
 
 function getMountedWorktreeOptions(worktreeId: string, root?: ParentNode | null): HTMLElement[] {
@@ -1710,6 +1731,31 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const firstHeaderIndex = useMemo(
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
+  )
+  const repoHeaderSectionEndByRepoId = useMemo(
+    () =>
+      getRepoHeaderSectionEndByRepoId({
+        rows: renderRows,
+        firstHeaderIndex,
+        sidebarRepoHeaderIdsByBucket,
+        repoHeaderBucketByRepoId
+      }),
+    [firstHeaderIndex, renderRows, repoHeaderBucketByRepoId, sidebarRepoHeaderIdsByBucket]
+  )
+  const projectGroupHeaderSectionEndByGroupId = useMemo(
+    () =>
+      getProjectGroupHeaderSectionEndByGroupId({
+        rows: renderRows,
+        firstHeaderIndex,
+        sidebarProjectGroupHeaderIdsByBucket,
+        projectGroupHeaderBucketByGroupId
+      }),
+    [
+      firstHeaderIndex,
+      projectGroupHeaderBucketByGroupId,
+      renderRows,
+      sidebarProjectGroupHeaderIdsByBucket
+    ]
   )
   const firstHeaderIndexRef = useRef(firstHeaderIndex)
   firstHeaderIndexRef.current = firstHeaderIndex
@@ -3953,46 +3999,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           {canReorderRepoHeaders &&
           repoDrag.state.draggingRepoId !== null &&
           repoDrag.state.dropIndicatorY !== null ? (
-            <div
-              role="presentation"
-              // Why z-30 (not z-10): the sticky pinned header is z-20, so a
-              // lower indicator renders behind it whenever the drop slot is at
-              // the top while scrolled. Match the worktree indicator's tier.
-              className="pointer-events-none absolute left-2 right-2 z-30 border-t border-dashed border-muted-foreground/70"
-              style={{ top: `${repoDrag.state.dropIndicatorY}px` }}
-            />
+            <WorktreeSidebarDropIndicator y={repoDrag.state.dropIndicatorY} />
           ) : null}
           {canReorderProjectGroupHeaders &&
           projectGroupDrag.state.draggingGroupId !== null &&
           projectGroupDrag.state.dropIndicatorY !== null ? (
-            <div
-              role="presentation"
-              className="pointer-events-none absolute left-2 right-2 z-30 border-t border-dashed border-muted-foreground/70"
-              style={{ top: `${projectGroupDrag.state.dropIndicatorY}px` }}
-            />
+            <WorktreeSidebarDropIndicator y={projectGroupDrag.state.dropIndicatorY} />
           ) : null}
           {hostDrag.state.draggingHostId !== null && hostDrag.state.dropIndicatorY !== null ? (
-            <div
-              role="presentation"
-              className="pointer-events-none absolute left-3 right-2 z-40 flex h-3 -translate-y-1/2 items-center"
-              style={{ top: `${hostDrag.state.dropIndicatorY}px` }}
-            >
-              <span className="size-1.5 shrink-0 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
-              <span className="h-0.5 flex-1 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
-              <span className="size-1.5 shrink-0 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
-            </div>
+            <WorktreeSidebarDropIndicator y={hostDrag.state.dropIndicatorY} className="z-40" />
           ) : null}
           {worktreeDragState.draggingWorktreeId !== null &&
           worktreeDragState.dropIndicatorY !== null ? (
-            <div
-              role="presentation"
-              className="pointer-events-none absolute left-3 right-2 z-30 flex h-3 -translate-y-1/2 items-center"
-              style={{ top: `${worktreeDragState.dropIndicatorY}px` }}
-            >
-              <span className="size-1.5 shrink-0 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
-              <span className="h-0.5 flex-1 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
-              <span className="size-1.5 shrink-0 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
-            </div>
+            <WorktreeSidebarDropIndicator y={worktreeDragState.dropIndicatorY} />
           ) : null}
           {virtualItems.map((vItem) => {
             const row = renderRows[vItem.index]
@@ -4185,15 +4204,31 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-repo-header-id={projectIdForHeader}
                     data-repo-header-index={repoHeaderIndex}
                     data-repo-header-bucket={repoHeaderBucketKey}
+                    data-repo-header-section-end={
+                      projectIdForHeader
+                        ? repoHeaderSectionEndByRepoId.get(projectIdForHeader)
+                        : undefined
+                    }
+                    data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
                     data-project-group-header-id={projectGroupIdForHeader}
                     data-project-group-header-index={projectGroupHeaderIndex}
                     data-project-group-header-bucket={projectGroupHeaderBucketKey}
+                    data-project-group-header-section-end={
+                      projectGroupIdForHeader
+                        ? projectGroupHeaderSectionEndByGroupId.get(projectGroupIdForHeader)
+                        : undefined
+                    }
+                    data-project-group-header-drag-handle={
+                      isDraggableProjectGroupHeader ? '' : undefined
+                    }
                     data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
                     data-workspace-status={headerWorkspaceStatus ?? undefined}
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
                     className={cn(
                       'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
-                      'cursor-pointer',
+                      isDraggableRepoHeader || isDraggableProjectGroupHeader
+                        ? 'cursor-grab active:cursor-grabbing'
+                        : 'cursor-pointer',
                       highlightedRevealRowKey === row.key &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
                       (isDraggingThis || isDraggingThisProjectGroup) &&
@@ -4226,6 +4261,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? (event) => handleWorkspaceStatusDrop(event, headerWorkspaceStatus)
                         : undefined
                     }
+                    onPointerDown={
+                      isDraggableRepoHeader && projectIdForHeader
+                        ? (event) => repoDrag.onHandlePointerDown(event, projectIdForHeader)
+                        : isDraggableProjectGroupHeader && projectGroupIdForHeader
+                          ? (event) =>
+                              projectGroupDrag.onHandlePointerDown(event, projectGroupIdForHeader)
+                          : undefined
+                    }
                     onClick={(event) => {
                       if (shouldIgnoreRepoHeaderToggle(event)) {
                         return
@@ -4254,17 +4297,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           (isDraggableRepoHeader || isDraggableProjectGroupHeader) &&
                             'hover:cursor-grab active:cursor-grabbing'
                         )}
-                        onPointerDown={
-                          isDraggableRepoHeader && projectIdForHeader
-                            ? (event) => repoDrag.onHandlePointerDown(event, projectIdForHeader)
-                            : isDraggableProjectGroupHeader && projectGroupIdForHeader
-                              ? (event) =>
-                                  projectGroupDrag.onHandlePointerDown(
-                                    event,
-                                    projectGroupIdForHeader
-                                  )
-                              : undefined
-                        }
                       >
                         {row.repo ? (
                           <RepoIconGlyph
@@ -5135,7 +5167,11 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const currentSidebarWorktreeId = activeWorktreeId
+  const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+  const currentSidebarWorktreeId = useMemo(
+    () => getActiveSidebarWorkspaceId(activeWorkspaceKey, activeWorktreeId),
+    [activeWorkspaceKey, activeWorktreeId]
+  )
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
@@ -6626,31 +6662,31 @@ const WorktreeList = React.memo(function WorktreeList({
         })
         return
       }
-      if (!activeWorktreeId) {
+      if (!currentSidebarWorktreeId) {
         return
       }
       const activeWorktree = getKnownSidebarWorktreeById(
-        activeWorktreeId,
+        currentSidebarWorktreeId,
         worktreeMap,
         folderWorkspaces
       )
       if (!activeWorktree || activeWorktree.isArchived) {
         return
       }
-      if (!renderedWorktreeIds.includes(activeWorktreeId)) {
+      if (!renderedWorktreeIds.includes(currentSidebarWorktreeId)) {
         // Why: the toolbar action promises to reveal the current workspace; when
         // sidebar filters hide it, relax those filters before queuing the reveal.
         clearFilters()
       }
-      revealWorktreeInSidebar(activeWorktreeId, {
+      revealWorktreeInSidebar(currentSidebarWorktreeId, {
         behavior: 'smooth',
         highlight: true,
         beginRename: (detail as { beginRename?: boolean } | undefined)?.beginRename === true
       })
     },
     [
-      activeWorktreeId,
       clearFilters,
+      currentSidebarWorktreeId,
       folderWorkspaces,
       revealSidebarRow,
       renderedWorktreeIds,

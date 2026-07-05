@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeProjectGroupHeaderDropPreview,
   getProjectGroupHeaderDragBucketKey,
-  getProjectGroupTabOrderForSidebarDrop,
+  getProjectGroupTabOrderUpdatesForSidebarDrop,
   getSidebarOrderedProjectGroupHeaderIdsByBucket,
   mapSidebarProjectGroupDropIndexToSiblingInsertIndex
 } from './project-group-header-drop'
@@ -136,34 +136,80 @@ describe('computeProjectGroupHeaderDropPreview', () => {
 
     expect(preview).toEqual({ dropIndex: 1, dropIndicatorY: 96 })
   })
-})
 
-describe('getProjectGroupTabOrderForSidebarDrop', () => {
-  it('uses a midpoint between sibling tab orders when there is room', () => {
-    expect(
-      getProjectGroupTabOrderForSidebarDrop({
-        siblings: [group('a', { tabOrder: 0 }), group('b', { tabOrder: 10 })],
-        dropIndex: 1
-      })
-    ).toBe(5)
-  })
-
-  it('assigns an order before the first sibling', () => {
-    expect(
-      getProjectGroupTabOrderForSidebarDrop({
-        siblings: [group('a', { tabOrder: 10 }), group('b', { tabOrder: 20 })],
-        dropIndex: 0
-      })
-    ).toBe(9)
-  })
-
-  it('keeps a deterministic finite anchor when sibling orders collide', () => {
-    const tabOrder = getProjectGroupTabOrderForSidebarDrop({
-      siblings: [group('a', { tabOrder: 10 }), group('b', { tabOrder: 10 })],
-      dropIndex: 1
+  it('does not create a drop slot inside an expanded Project Group section', () => {
+    const preview = computeProjectGroupHeaderDropPreview({
+      pointerY: 350,
+      containerTop: 0,
+      scrollTop: 0,
+      sidebarProjectGroupHeaderIds: ['a', 'b', 'c'],
+      rects: [
+        {
+          groupId: 'c',
+          bucketKey: 'root',
+          headerIndex: 2,
+          top: 300,
+          bottom: 328,
+          sectionBottom: 380
+        }
+      ]
     })
 
-    expect(tabOrder).toBe(11)
-    expect(Number.isFinite(tabOrder)).toBe(true)
+    expect(preview).toBeNull()
+  })
+
+  it('uses the whole Project Group section for the final boundary slot', () => {
+    const preview = computeProjectGroupHeaderDropPreview({
+      pointerY: 400,
+      containerTop: 0,
+      scrollTop: 0,
+      sidebarProjectGroupHeaderIds: ['a', 'b', 'c'],
+      rects: [
+        {
+          groupId: 'c',
+          bucketKey: 'root',
+          headerIndex: 2,
+          top: 300,
+          bottom: 328,
+          sectionBottom: 380
+        }
+      ]
+    })
+
+    expect(preview).toEqual({ dropIndex: 3, dropIndicatorY: 383 })
+  })
+})
+
+describe('getProjectGroupTabOrderUpdatesForSidebarDrop', () => {
+  it('reindexes sibling groups so duplicate legacy tabOrder values can move between siblings', () => {
+    const groups = [group('a'), group('b'), group('c'), group('d')]
+    const projectGroupById = new Map(groups.map((entry) => [entry.id, entry]))
+
+    expect(
+      getProjectGroupTabOrderUpdatesForSidebarDrop({
+        sidebarProjectGroupHeaderIds: ['a', 'b', 'c', 'd'],
+        draggedGroupId: 'd',
+        sidebarDropIndex: 2,
+        projectGroupById
+      })
+    ).toEqual([
+      { groupId: 'b', tabOrder: 1 },
+      { groupId: 'd', tabOrder: 2 },
+      { groupId: 'c', tabOrder: 3 }
+    ])
+  })
+
+  it('returns no updates when the drop keeps the group in the same slot', () => {
+    const groups = [group('a', { tabOrder: 0 }), group('b', { tabOrder: 1 })]
+    const projectGroupById = new Map(groups.map((entry) => [entry.id, entry]))
+
+    expect(
+      getProjectGroupTabOrderUpdatesForSidebarDrop({
+        sidebarProjectGroupHeaderIds: ['a', 'b'],
+        draggedGroupId: 'a',
+        sidebarDropIndex: 1,
+        projectGroupById
+      })
+    ).toEqual([])
   })
 })

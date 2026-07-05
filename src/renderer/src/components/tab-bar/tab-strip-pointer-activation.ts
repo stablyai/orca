@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
+import { beginTabStripPointerGesture } from './tab-strip-pointer-gesture'
 
 /**
  * Defer tab activation to pointer-up and suppress it when the press turns into a
@@ -11,10 +12,10 @@ import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
  * We gate on measured pointer DISPLACEMENT, not the drag-active context ref the
  * old hook used — that ref clears asynchronously relative to the drop's
  * pointerup, which is what made #6395's click-after-reorder misfire. Displacement
- * mirrors dnd-kit's own activation threshold exactly: once the pointer travels
- * past it the gesture is a drag (activation suppressed); a release within it is a
- * click (activate). Because each press measures its own gesture, a click after a
- * reorder always activates.
+ * mirrors dnd-kit's own activation threshold, but the authority is the release
+ * position. A release within it is a click (activate); a release outside it is a
+ * drag (activation suppressed). Because each press measures its own gesture, a
+ * click after a reorder always activates.
  */
 export function useTabStripPointerActivation({
   onActivate,
@@ -49,28 +50,23 @@ export function useTabStripPointerActivation({
       cleanupRef.current?.()
       const startX = event.clientX
       const startY = event.clientY
-      let draggedPastThreshold = false
+      const releaseTabStripPointerGesture = beginTabStripPointerGesture()
 
       const cleanup = (): void => {
-        window.removeEventListener('pointermove', onPointerMove)
         window.removeEventListener('pointerup', onPointerUp)
         window.removeEventListener('pointercancel', onPointerCancel)
+        window.removeEventListener('blur', onPointerCancel)
+        window.removeEventListener('focus', onPointerCancel)
+        releaseTabStripPointerGesture()
         cleanupRef.current = null
       }
-      const onPointerMove = (moveEvent: PointerEvent): void => {
-        if (
-          Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) >=
+      const onPointerUp = (upEvent: PointerEvent): void => {
+        const wasDrag =
+          Math.hypot(upEvent.clientX - startX, upEvent.clientY - startY) >=
           TAB_DRAG_ACTIVATION_DISTANCE_PX
-        ) {
-          draggedPastThreshold = true
-        }
-      }
-      const onPointerUp = (): void => {
-        const wasDrag = draggedPastThreshold
         cleanup()
-        // Why: only a release that never crossed the drag threshold is a click.
-        // Activating after a real drag would yank the just-dropped tab's pane
-        // back to the source selection.
+        // Why: packaged Chromium can deliver a stale first pointermove after
+        // focus; the final release position is the click/drag authority.
         if (!wasDrag) {
           onActivateRef.current()
         }
@@ -79,9 +75,10 @@ export function useTabStripPointerActivation({
         cleanup()
       }
 
-      window.addEventListener('pointermove', onPointerMove)
       window.addEventListener('pointerup', onPointerUp)
       window.addEventListener('pointercancel', onPointerCancel)
+      window.addEventListener('blur', onPointerCancel)
+      window.addEventListener('focus', onPointerCancel)
       cleanupRef.current = cleanup
     },
     [disabled]

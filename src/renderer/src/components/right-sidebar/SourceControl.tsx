@@ -536,8 +536,9 @@ const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
-const SUBMODULE_WORKTREE_ONLY_LABEL = 'Submodule changes - stage inside submodule'
-const SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP = 'Stage these changes inside the submodule'
+const SUBMODULE_WORKTREE_ONLY_LABEL = 'Stage inside submodule'
+const SUBMODULE_WORKTREE_ONLY_TOOLTIP =
+  'The parent repo (including Stage All) cannot stage file changes inside a submodule'
 const SUBMODULE_LOADING_LABEL = 'Loading submodule changes…'
 const SUBMODULE_EMPTY_LABEL = 'No changes in submodule'
 const SUBMODULE_ERROR_LABEL = 'Failed to load submodule changes'
@@ -3995,7 +3996,12 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
-  const hasStageableChanges = hasUnstagedChanges
+  const hasStageableChanges = useMemo(
+    () =>
+      grouped.unstaged.some(isStageableStatusEntry) ||
+      grouped.untracked.some(isStageableStatusEntry),
+    [grouped.unstaged, grouped.untracked]
+  )
   const hasPartiallyStagedChanges = useMemo(() => {
     if (grouped.staged.length === 0 || grouped.unstaged.length === 0) {
       return false
@@ -8115,9 +8121,17 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
             )}
           </span>
-          {(conflictLabel || isSubmoduleWorktreeOnly) && (
-            <div className="truncate text-[11px] text-muted-foreground">
-              {conflictLabel ?? SUBMODULE_WORKTREE_ONLY_LABEL}
+          {conflictLabel && (
+            <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
+          )}
+          {isSubmoduleWorktreeOnly && (
+            // Why: parent git can stage a changed gitlink, but not nested
+            // worktree dirtiness. Keep that boundary visible in the row.
+            <div
+              className="truncate text-[11px] text-muted-foreground"
+              title={SUBMODULE_WORKTREE_ONLY_TOOLTIP}
+            >
+              {SUBMODULE_WORKTREE_ONLY_LABEL}
             </div>
           )}
         </div>
@@ -8176,19 +8190,14 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               }}
             />
           )}
-          {(canStage || isSubmoduleWorktreeOnly) && (
+          {canStage && (
             <ActionButton
               icon={Plus}
-              title={
-                isSubmoduleWorktreeOnly
-                  ? SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP
-                  : translate('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')
-              }
+              title={translate('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')}
               onClick={(event) => {
                 event.stopPropagation()
                 void onStage(entry.path)
               }}
-              disabled={isSubmoduleWorktreeOnly}
             />
           )}
           {canUnstage && (

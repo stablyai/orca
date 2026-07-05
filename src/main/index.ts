@@ -91,13 +91,20 @@ import {
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
-import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import {
+  isStartupDiagnosticsEnabled,
+  logStartupDiagnostic,
+  logStartupMilestone
+} from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
-import { attachMainWindowServices } from './window/attach-main-window-services'
+import {
+  attachMainWindowServices,
+  ensureAutoUpdaterConfigured
+} from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { createSystemTray, destroySystemTray } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
@@ -171,6 +178,7 @@ import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
+import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -201,7 +209,11 @@ let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
-let expectedRendererReload: { webContentsId: number; until: number } | null = null
+// Why: a reload/teardown intent set for one renderer must not leak to a later load.
+// The recovery reload re-fires did-finish-load, so its flag lets the local-PTY orphan
+// sweep spare live sessions across that one reload (#5787).
+const expectedRendererReload = createWebContentsTimedFlag()
+const recoveryReloadInFlight = createWebContentsTimedFlag()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 // Why: GPU child crashes clustered right after launch indicate a broken driver;
 // track them so Orca can move this build onto software rendering.
@@ -397,6 +409,11 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
+
+// Why: just past createMainWindow's win32 10s ready-to-show reveal fallback,
+// so a window revealed on that path still gets its tray icon.
+const TRAY_CREATE_FALLBACK_MS = 12_000
+
 const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('before-single-instance-lock', {
@@ -410,14 +427,6 @@ if (startupDiagnosticsEnabled) {
   startEventLoopStallProbe()
 }
 
-// Why: startup benchmarking needs in-process timestamps — harness-side stderr
-// arrival times include pipe buffering jitter. `t` is ms since process start.
-function logStartupMilestone(event: string, details: Record<string, unknown> = {}): void {
-  if (startupDiagnosticsEnabled) {
-    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
-  }
-}
-
 function focusExistingWindow(): void {
   focusExistingMainWindow({
     app,
@@ -427,30 +436,66 @@ function focusExistingWindow(): void {
   })
 }
 
+// Why: a webContents-scoped flag that auto-expires so an intent set for one renderer
+// can't leak to a later load. `consume` clears on a positive match for one-shot
+// signals (the recovery reload fires exactly one did-finish-load).
+function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
+  mark: (webContentsId: number, durationMs?: number) => void
+  clear: (webContentsId?: number) => void
+  matches: (webContentsId: number, options?: { consume?: boolean }) => boolean
+} {
+  let state: { webContentsId: number; until: number } | null = null
+  return {
+    mark(webContentsId, durationMs = defaultDurationMs) {
+      state = { webContentsId, until: Date.now() + durationMs }
+    },
+    clear(webContentsId) {
+      if (webContentsId === undefined || state?.webContentsId === webContentsId) {
+        state = null
+      }
+    },
+    matches(webContentsId, options) {
+      if (!state || Date.now() > state.until) {
+        state = null
+        return false
+      }
+      if (state.webContentsId !== webContentsId) {
+        return false
+      }
+      if (options?.consume) {
+        state = null
+      }
+      return true
+    }
+  }
+}
+
 function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
-  expectedRendererReload = { webContentsId, until: Date.now() + durationMs }
+  expectedRendererReload.mark(webContentsId, durationMs)
 }
 
 function clearExpectedRendererReload(webContentsId?: number): void {
-  if (webContentsId === undefined || expectedRendererReload?.webContentsId === webContentsId) {
-    expectedRendererReload = null
-  }
+  expectedRendererReload.clear(webContentsId)
 }
 
 function getExpectedTeardownScope(webContentsId?: number): ExpectedTeardownScope {
   if (isQuitting || isQuittingForUpdate()) {
     return 'app-shutdown'
   }
-  if (!expectedRendererReload) {
+  if (webContentsId === undefined) {
     return 'none'
   }
-  if (Date.now() > expectedRendererReload.until) {
-    expectedRendererReload = null
-    return 'none'
-  }
-  return webContentsId !== undefined && expectedRendererReload.webContentsId === webContentsId
-    ? 'renderer-reload'
-    : 'none'
+  return expectedRendererReload.matches(webContentsId) ? 'renderer-reload' : 'none'
+}
+
+function markRecoveryReloadInFlight(webContentsId: number, durationMs = 10_000): void {
+  recoveryReloadInFlight.mark(webContentsId, durationMs)
+}
+
+function isRecoveryReloadInFlight(webContentsId: number): boolean {
+  // Why: consume on read — the recovery reload fires exactly one did-finish-load,
+  // so a later genuine reload still sweeps orphaned local PTYs.
+  return recoveryReloadInFlight.matches(webContentsId, { consume: true })
 }
 
 function recordAgentStateCrashBreadcrumb(agentType: string, state: string): void {
@@ -777,13 +822,55 @@ function openMainWindow(): BrowserWindow {
         markExpectedRendererReload(webContentsId)
       }
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
+    },
+    // Why: the in-place recovery reload re-fires did-finish-load; flag it so the
+    // local-PTY orphan sweep is skipped for that one reload (#5787).
+    onBeforeRecoveryReload: (webContentsId) => {
+      markRecoveryReloadInFlight(webContentsId)
+      recordCrashBreadcrumb('renderer_recovery_reload')
     }
   })
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
+  // Why: new Tray() is a synchronous Shell_NotifyIcon call that can block for
+  // seconds while explorer.exe's notification area is busy (part of issue
+  // #7225's pre-paint stall), so create it after first paint. The timer
+  // fallback covers windows revealed without ready-to-show ever firing
+  // (createMainWindow's win32 10s reveal fallback) — those can still be
+  // hidden to the tray on close, so the icon must exist by then.
+  let trayCreated = false
+  const createSystemTrayDeferred = (): void => {
+    if (trayCreated || window.isDestroyed() || isQuitting || !store) {
+      return
+    }
+    trayCreated = true
+    // Why: Windows-only system tray. createSystemTray is idempotent and a
+    // no-op off win32, so calling it on each window open keeps exactly one
+    // live icon.
+    createSystemTray({
+      appIcon: store.getSettings().appIcon,
+      onOpen: showMainWindowFromTray,
+      onQuit: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          // Why: a real quit can still surface renderer save/discard prompts;
+          // the window must be visible if a hidden-to-tray session vetoes
+          // shutdown.
+          showMainWindowFromTray()
+        }
+        // Why: set the quit latch before app.quit() so the window 'close'
+        // handler proceeds to teardown instead of re-hiding to the tray.
+        isQuitting = true
+        app.quit()
+      }
+    })
+    logStartupMilestone('tray-created')
+  }
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
+    setImmediate(createSystemTrayDeferred)
   })
+  const trayCreateFallback = setTimeout(createSystemTrayDeferred, TRAY_CREATE_FALLBACK_MS)
+  trayCreateFallback.unref?.()
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
   // `app_opened` to the first main-window load. Existing users in the
@@ -849,6 +936,9 @@ function openMainWindow(): BrowserWindow {
         }
         recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
       },
+      // Why: let the PTY layer skip its orphan sweep on the one recovery reload
+      // that re-fires did-finish-load, so live local sessions survive it (#5787).
+      isRecoveryReloadInFlight,
       onBeforeUpdateQuit: () =>
         preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
     }
@@ -879,23 +969,6 @@ function openMainWindow(): BrowserWindow {
     stopAllSyntheticTitleSpinners()
   })
   mainWindow = window
-  // Why: Windows-only system tray. createSystemTray is idempotent and a no-op
-  // off win32, so calling it on each window open keeps exactly one live icon.
-  createSystemTray({
-    appIcon: store.getSettings().appIcon,
-    onOpen: showMainWindowFromTray,
-    onQuit: () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        // Why: a real quit can still surface renderer save/discard prompts; the
-        // window must be visible if a hidden-to-tray session vetoes shutdown.
-        showMainWindowFromTray()
-      }
-      // Why: set the quit latch before app.quit() so the window 'close' handler
-      // proceeds to teardown instead of re-hiding the window to the tray.
-      isQuitting = true
-      app.quit()
-    }
-  })
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
@@ -1542,6 +1615,7 @@ app.whenReady().then(async () => {
 
   store = new Store()
   logStartupMilestone('store-loaded')
+  selfHealRuntimeEnvironmentFocus({ store, userDataPath: app.getPath('userData') })
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
@@ -1612,6 +1686,7 @@ app.whenReady().then(async () => {
     }
   })
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)
+  rateLimits.setNetworkProxySettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store!.getSettings().keybindings
@@ -1821,7 +1896,12 @@ app.whenReady().then(async () => {
   logStartupMilestone('i18n-ready')
 
   registerAppMenu({
-    onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
+    onCheckForUpdates: (options) => {
+      // Why: the menu is clickable before first paint; a manual check must
+      // run against a configured updater (see attach-main-window-services).
+      ensureAutoUpdaterConfigured()
+      return checkForUpdatesFromMenu(options)
+    },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {
         markExpectedRendererReload(webContentsId)
@@ -2015,6 +2095,8 @@ app.whenReady().then(async () => {
         )
       }
     }
+    // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
+    automations.start()
     await printServeReady(serveOptions)
     return
   }

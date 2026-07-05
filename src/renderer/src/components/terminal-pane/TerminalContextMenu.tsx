@@ -4,7 +4,6 @@ import {
   ClipboardCopy,
   Copy,
   Eraser,
-  ExternalLink,
   GitFork,
   Maximize2,
   MessageSquare,
@@ -32,11 +31,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/types'
+import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { AgentIcon } from '@/lib/agent-catalog'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
-import { TerminalQuickCommandMenuItem } from './TerminalQuickCommandMenuItem'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -46,8 +46,6 @@ type TerminalContextMenuProps = {
   canClosePane: boolean
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
-  linkUrl: string | null
-  onOpenLinkInDefaultBrowser: () => void
   onCopy: () => void
   onPaste: () => void
   onSplitRight: () => void
@@ -83,8 +81,6 @@ export default function TerminalContextMenu({
   canClosePane,
   canExpandPane,
   menuPaneIsExpanded,
-  linkUrl,
-  onOpenLinkInDefaultBrowser,
   onCopy,
   onPaste,
   onSplitRight,
@@ -132,6 +128,27 @@ export default function TerminalContextMenu({
   const showEqualizeShortcut = shortcuts.equalize !== 'Unassigned'
   const showSetTitleShortcut = shortcuts.setTitle !== 'Unassigned'
   const showClearPaneTitleShortcut = shortcuts.clearPaneTitle !== 'Unassigned'
+  const renderQuickCommandItem = (command: TerminalQuickCommand): React.JSX.Element => (
+    <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+      {isTerminalAgentQuickCommand(command) ? (
+        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
+          <AgentIcon agent={command.agent} size={14} />
+        </span>
+      ) : (
+        <Play
+          className="size-3.5 shrink-0 text-muted-foreground"
+          fill="currentColor"
+          strokeWidth={0}
+        />
+      )}
+      <span className="min-w-0 flex-1 truncate">{command.label}</span>
+      {!isTerminalAgentQuickCommand(command) && !command.appendEnter ? (
+        <DropdownMenuShortcut className="shrink-0">
+          {translate('auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d', 'Insert')}
+        </DropdownMenuShortcut>
+      ) : null}
+    </DropdownMenuItem>
+  )
 
   return (
     <DropdownMenu
@@ -177,18 +194,6 @@ export default function TerminalContextMenu({
           }
         }}
       >
-        {linkUrl ? (
-          <>
-            <DropdownMenuItem onSelect={onOpenLinkInDefaultBrowser}>
-              <ExternalLink />
-              {translate(
-                'auto.components.terminal.pane.TerminalContextMenu.openLinkDefaultBrowser',
-                'Open in Default Browser'
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
           {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
@@ -215,13 +220,7 @@ export default function TerminalContextMenu({
                     <DropdownMenuLabel className="truncate">
                       {quickCommandRepoLabel}
                     </DropdownMenuLabel>
-                    {repoQuickCommands.map((command) => (
-                      <TerminalQuickCommandMenuItem
-                        key={command.id}
-                        command={command}
-                        onSelect={onQuickCommand}
-                      />
-                    ))}
+                    {repoQuickCommands.map(renderQuickCommandItem)}
                   </>
                 ) : null}
                 {globalQuickCommands.length > 0 ? (
@@ -235,13 +234,7 @@ export default function TerminalContextMenu({
                         )}
                       </DropdownMenuLabel>
                     ) : null}
-                    {globalQuickCommands.map((command) => (
-                      <TerminalQuickCommandMenuItem
-                        key={command.id}
-                        command={command}
-                        onSelect={onQuickCommand}
-                      />
-                    ))}
+                    {globalQuickCommands.map(renderQuickCommandItem)}
                   </>
                 ) : null}
               </>

@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import {
-  queueTerminalLivePendingFlush,
+  buildTerminalLiveMirrorPayload,
+  computeTerminalLiveMirrorStep,
+  TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS
+} from './terminal-live-hangul-mirror'
+import {
+  queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
 
@@ -16,15 +21,12 @@ type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
 }
 
 type TerminalLivePendingInputFlush = {
+  readonly applyLiveInputMirror: (handle: string, fieldText: string) => void
   readonly clearPendingLiveInputCommit: () => void
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
+  readonly heldLiveInputTextRef: RefObject<string>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
-  readonly pendingLiveInputTextRef: RefObject<string>
-  readonly schedulePendingLiveInputCommit: (
-    handle: string,
-    text: string,
-    delayMs: number | null
-  ) => void
+  readonly sentLiveInputTextRef: RefObject<string>
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
 
@@ -36,104 +38,143 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   sendLiveTerminalInputRef,
   setLiveInputCapture
 }: TerminalLivePendingInputFlushOptions<TTabType>): TerminalLivePendingInputFlush {
-  const liveInputCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const heldCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingLiveInputFlushRef = useRef<Promise<boolean> | null>(null)
-  const pendingLiveInputTextRef = useRef('')
+  const heldLiveInputTextRef = useRef('')
+  const sentLiveInputTextRef = useRef('')
   const pendingLiveInputHandleRef = useRef<string | null>(null)
+  const runMirrorStepRef = useRef<
+    (handle: string, fieldText: string, commitHeld: boolean) => Promise<boolean>
+  >(async () => false)
+
+  const clearHeldCommitTimer = useCallback(() => {
+    if (heldCommitTimerRef.current) {
+      clearTimeout(heldCommitTimerRef.current)
+      heldCommitTimerRef.current = null
+    }
+  }, [])
+
+  const resetMirrorState = useCallback(() => {
+    clearHeldCommitTimer()
+    heldLiveInputTextRef.current = ''
+    sentLiveInputTextRef.current = ''
+    pendingLiveInputHandleRef.current = null
+  }, [clearHeldCommitTimer])
 
   const clearPendingLiveInputCommit = useCallback(() => {
-    if (liveInputCommitTimerRef.current) {
-      clearTimeout(liveInputCommitTimerRef.current)
-      liveInputCommitTimerRef.current = null
-    }
-    pendingLiveInputTextRef.current = ''
-    pendingLiveInputHandleRef.current = null
+    resetMirrorState()
     setLiveInputCapture('')
     liveInputRef.current?.setNativeProps({ text: '' })
-  }, [liveInputRef, setLiveInputCapture])
+  }, [liveInputRef, resetMirrorState, setLiveInputCapture])
 
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {
     return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef)
   }, [])
 
-  const flushPendingLiveInputText = useCallback(
-    async (expectedHandle: string | null): Promise<boolean> => {
-      const existingFlush = pendingLiveInputFlushRef.current
-      if (liveInputCommitTimerRef.current) {
-        clearTimeout(liveInputCommitTimerRef.current)
-        liveInputCommitTimerRef.current = null
-      }
-
-      const handle = pendingLiveInputHandleRef.current
-      const text = pendingLiveInputTextRef.current
-      pendingLiveInputHandleRef.current = null
-      pendingLiveInputTextRef.current = ''
-      setLiveInputCapture('')
-      liveInputRef.current?.setNativeProps({ text: '' })
-
-      if (!handle || text.length === 0) {
-        return existingFlush ?? false
-      }
+  const runMirrorStep = useCallback(
+    async (handle: string, fieldText: string, commitHeld: boolean): Promise<boolean> => {
       if (
-        (expectedHandle !== null && handle !== expectedHandle) ||
         handle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal' ||
+        (activeSessionTabTypeRef.current != null &&
+          activeSessionTabTypeRef.current !== 'terminal') ||
         !liveInputTerminalHandlesRef.current.has(handle)
       ) {
+        // Why: a stale handle must not keep local mirror state alive — the next
+        // active terminal would inherit wrong erase counts. A null tab type is
+        // "unknown" during tab-list lag, not "left the terminal", so it must not trip.
+        resetMirrorState()
         return false
       }
 
-      return queueTerminalLivePendingFlush(pendingLiveInputFlushRef, () =>
-        sendLiveTerminalInputRef.current(handle, text)
+      const step = computeTerminalLiveMirrorStep(sentLiveInputTextRef.current, fieldText, {
+        commitHeld
+      })
+      sentLiveInputTextRef.current = step.nextSentText
+      heldLiveInputTextRef.current = step.heldText
+      pendingLiveInputHandleRef.current =
+        step.heldText.length > 0 || step.nextSentText.length > 0 ? handle : null
+
+      clearHeldCommitTimer()
+      if (step.heldText.length > 0) {
+        heldCommitTimerRef.current = setTimeout(() => {
+          heldCommitTimerRef.current = null
+          const heldField = sentLiveInputTextRef.current + heldLiveInputTextRef.current
+          void runMirrorStepRef.current(handle, heldField, true)
+        }, TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+      }
+
+      const payload = buildTerminalLiveMirrorPayload(step)
+      if (payload.length === 0) {
+        return waitForPendingLiveInputFlush()
+      }
+      return queueTerminalLiveMirrorSend(pendingLiveInputFlushRef, () =>
+        sendLiveTerminalInputRef.current(handle, payload)
       )
     },
     [
       activeHandleRef,
       activeSessionTabTypeRef,
-      liveInputRef,
+      clearHeldCommitTimer,
       liveInputTerminalHandlesRef,
+      resetMirrorState,
       sendLiveTerminalInputRef,
-      setLiveInputCapture
+      waitForPendingLiveInputFlush
     ]
   )
+  runMirrorStepRef.current = runMirrorStep
 
-  const schedulePendingLiveInputCommit = useCallback(
-    (handle: string, text: string, delayMs: number | null) => {
-      if (liveInputCommitTimerRef.current) {
-        clearTimeout(liveInputCommitTimerRef.current)
-      }
-      pendingLiveInputHandleRef.current = handle
-      pendingLiveInputTextRef.current = text
-      if (delayMs === null) {
-        liveInputCommitTimerRef.current = null
-        return
-      }
-      liveInputCommitTimerRef.current = setTimeout(() => {
-        liveInputCommitTimerRef.current = null
-        void flushPendingLiveInputText(handle)
-      }, delayMs)
+  const applyLiveInputMirror = useCallback(
+    (handle: string, fieldText: string): void => {
+      void runMirrorStep(handle, fieldText, false)
     },
-    [flushPendingLiveInputText]
+    [runMirrorStep]
+  )
+
+  const flushPendingLiveInputText = useCallback(
+    async (expectedHandle: string | null): Promise<boolean> => {
+      const handle = pendingLiveInputHandleRef.current
+      if (!handle) {
+        return waitForPendingLiveInputFlush()
+      }
+      if (expectedHandle !== null && handle !== expectedHandle) {
+        clearPendingLiveInputCommit()
+        return waitForPendingLiveInputFlush()
+      }
+
+      const heldText = heldLiveInputTextRef.current
+      const result =
+        heldText.length > 0
+          ? await runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
+          : await waitForPendingLiveInputFlush()
+
+      // Why: an explicit flush ends the field's editing session; the echoed PTY
+      // text stays, so local mirror state must restart from empty.
+      clearPendingLiveInputCommit()
+      return result
+    },
+    [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
   )
 
   useEffect(() => {
     return () => {
-      if (liveInputCommitTimerRef.current) {
-        clearTimeout(liveInputCommitTimerRef.current)
-        liveInputCommitTimerRef.current = null
+      if (heldCommitTimerRef.current) {
+        clearTimeout(heldCommitTimerRef.current)
+        heldCommitTimerRef.current = null
       }
+      heldLiveInputTextRef.current = ''
+      sentLiveInputTextRef.current = ''
       pendingLiveInputHandleRef.current = null
-      pendingLiveInputTextRef.current = ''
       pendingLiveInputFlushRef.current = null
     }
   }, [])
 
   return {
+    applyLiveInputMirror,
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
+    heldLiveInputTextRef,
     pendingLiveInputHandleRef,
-    pendingLiveInputTextRef,
-    schedulePendingLiveInputCommit,
+    sentLiveInputTextRef,
     waitForPendingLiveInputFlush
   }
 }

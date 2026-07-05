@@ -62,6 +62,7 @@ import {
   type LocalGitExecOptions,
   type OwnerRepo
 } from './gh-utils'
+import { isCommitPartOfMergedPR } from './merged-pr-commit-membership'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   hasHostedReviewLocalGitOptions,
@@ -2808,7 +2809,30 @@ export async function getPRForBranchOutcome(
       typeof options.currentHeadOid === 'string' && options.currentHeadOid.trim().length > 0
         ? options.currentHeadOid.trim()
         : null
-    const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
+    let confirmedContainedHeadOid: string | null = null
+    const mergedPRContainsHead = async (
+      candidate: PullRequestLookupData,
+      candidateRepo: OwnerRepo | null,
+      headOid: string | null
+    ): Promise<boolean> => {
+      if (!candidateRepo || !headOid) {
+        return false
+      }
+      const contained = await isCommitPartOfMergedPR({
+        ownerRepo: candidateRepo,
+        prNumber: candidate.number,
+        commitOid: headOid,
+        ghOptions
+      })
+      if (contained) {
+        confirmedContainedHeadOid = headOid
+      }
+      return contained
+    }
+    const hideMergedImplicitPR = async (
+      candidate: PullRequestLookupData | null,
+      candidateRepo: OwnerRepo | null
+    ) => {
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
@@ -2819,7 +2843,18 @@ export async function getPRForBranchOutcome(
         explicitCurrentHeadOid !== null
           ? explicitCurrentHeadOid
           : await getCurrentHeadOid(repoPath, connectionId, localGitOptions)
-      return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
+      if (!shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)) {
+        return false
+      }
+      // Why: a worktree can sit behind its own PR's final head (update-branch
+      // merges, web-committed suggestions). A head that is one of the PR's own
+      // commits is the same line of work, not a reused branch name — keep the
+      // merged PR visible instead of offering "create a pull request".
+      return !(await mergedPRContainsHead(
+        candidate,
+        candidateRepo,
+        currentHeadOidForMergedImplicit
+      ))
     }
 
     if (typeof linkedPRNumber === 'number') {
@@ -2886,7 +2921,7 @@ export async function getPRForBranchOutcome(
       }
     }
     let mergedBranchLookupNumber: number | null = null
-    if (await hideMergedImplicitPR(data)) {
+    if (await hideMergedImplicitPR(data, dataRepo)) {
       mergedBranchLookupNumber = data?.number ?? null
       data = null
       dataRepo = null
@@ -2913,14 +2948,19 @@ export async function getPRForBranchOutcome(
       data.number === fallbackPRNumber
     const explicitHeadHidesMergedImplicitPR =
       explicitCurrentHeadOid !== null &&
-      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid)
+      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid) &&
+      !(await mergedPRContainsHead(data, dataRepo, explicitCurrentHeadOid))
+    // Why no lazy-HEAD re-check on preservation: fallback numbers come from
+    // callers that already gated them on head equality or confirmed
+    // containment; re-hiding against the main-repo HEAD would blank
+    // deleted-head merged PRs that are deliberately kept visible.
     const shouldPreserveMergedFallback =
       !explicitHeadHidesMergedImplicitPR &&
       (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
     // Why: a currently visible PR can be merged outside Orca; when the caller
     // marks the fallback as visible review state, keep its lifecycle fresh even
     // if GitHub no longer reports it by branch (for example deleted heads).
-    if ((await hideMergedImplicitPR(data)) && !shouldPreserveMergedFallback) {
+    if ((await hideMergedImplicitPR(data, dataRepo)) && !shouldPreserveMergedFallback) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
@@ -2962,6 +3002,7 @@ export async function getPRForBranchOutcome(
           : {}),
         ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
         headSha: data.headRefOid,
+        ...(confirmedContainedHeadOid ? { confirmedContainedHeadOid } : {}),
         ...(data.baseRefName ? { baseRefName: data.baseRefName } : {}),
         prRepo: dataRepo ?? undefined,
         headRepo: dataHeadRepo ?? undefined,

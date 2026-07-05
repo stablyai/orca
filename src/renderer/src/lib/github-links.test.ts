@@ -133,7 +133,36 @@ describe('normalizeGitHubLinkQuery', () => {
   it('accepts full GitHub URLs whose slug differs from the selected repo slug', () => {
     expect(normalizeGitHubLinkQuery('https://github.com/stablyai/orca/issues/923')).toEqual({
       query: 'https://github.com/stablyai/orca/issues/923',
-      directNumber: 923
+      directNumber: 923,
+      directLink: {
+        slug: { owner: 'stablyai', repo: 'orca' },
+        number: 923,
+        type: 'issue'
+      }
+    })
+  })
+
+  it('preserves PR route intent for full GitHub URLs', () => {
+    expect(normalizeGitHubLinkQuery('https://github.com/stablyai/orca/pull/6934')).toEqual({
+      query: 'https://github.com/stablyai/orca/pull/6934',
+      directNumber: 6934,
+      directLink: {
+        slug: { owner: 'stablyai', repo: 'orca' },
+        number: 6934,
+        type: 'pr'
+      }
+    })
+  })
+
+  it('preserves route intent for URLs with uppercase schemes', () => {
+    expect(normalizeGitHubLinkQuery('HTTPS://github.com/stablyai/orca/pull/6934')).toEqual({
+      query: 'HTTPS://github.com/stablyai/orca/pull/6934',
+      directNumber: 6934,
+      directLink: {
+        slug: { owner: 'stablyai', repo: 'orca' },
+        number: 6934,
+        type: 'pr'
+      }
     })
   })
 

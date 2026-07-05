@@ -1,5 +1,5 @@
 import type { SshConnection } from './ssh-connection'
-import { shellEscape } from './ssh-connection-utils'
+import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, normalizeWindowsRemotePath } from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'
@@ -47,7 +47,7 @@ export async function resolveRemoteNodePath(
     return loginShellPath
   }
 
-  throwNodeNotFound()
+  throwNodeNotFound(options)
 }
 
 // Probe the on-disk install directories of every common Node version manager
@@ -245,10 +245,18 @@ async function resolveRemoteWindowsNodePath(
     // Fall through to the shared error below.
   }
 
-  throwNodeNotFound()
+  throwNodeNotFound(options)
 }
 
-function throwNodeNotFound(): never {
+function throwNodeNotFound(options?: RemoteNodeResolutionOptions): never {
+  // Why: when a sibling bootstrap probe aborts this resolution via the shared
+  // signal, the strategy catch-blocks swallow the injected AbortError and fall
+  // through to here. Surfacing "Node.js not found" would launder a cancellation
+  // into a fatal non-session failure, defeating the concurrent-bootstrap
+  // sequential fallback. Re-raise the abort so callers classify it correctly.
+  if (options?.signal?.aborted) {
+    throw createSshOperationAbortError()
+  }
   throw new Error(
     'Node.js not found on remote host. Orca relay requires Node.js 18+. ' +
       'Install Node.js on the remote and try again.'

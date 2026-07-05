@@ -314,23 +314,38 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       await window.api.repos.add({ path: repoPath })
     }, repoPath)
 
-    // Fetch repos in the renderer store so it picks up the new repo
-    await page.evaluate(async (repoPath) => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-
-      await store.getState().fetchRepos()
-      const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
-      if (!repo) {
-        throw new Error(`Expected e2e repo to be loaded: ${repoPath}`)
-      }
-      // Why: the fixture deliberately creates external Git worktrees. New
-      // repos hide those by default after the visibility rollout, so opt this
-      // disposable repo into showing them before specs assert on worktree state.
-      await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-    }, repoPath)
+    // Fetch repos in the renderer store so it picks up the new repo, then opt
+    // this disposable repo into showing external worktrees.
+    // Why: repos.add() fires a repos:changed echo that triggers a *concurrent*
+    // fetchRepos() in the renderer; the store's generation guard can then drop
+    // this awaited fetch's result, leaving `repos` briefly stale. Poll the
+    // public fetch path until the repo lands instead of asserting on the first
+    // tick (mirrors the seeded-worktree poll below). updateRepo is idempotent,
+    // so running it once the repo appears is safe across poll ticks.
+    await playwrightExpect
+      .poll(
+        () =>
+          page.evaluate(async (repoPath) => {
+            const store = window.__store
+            if (!store) {
+              return false
+            }
+            await store.getState().fetchRepos()
+            const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+            if (!repo) {
+              return false
+            }
+            // Why: the fixture deliberately creates external Git worktrees. New
+            // repos hide those by default after the visibility rollout.
+            await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+            return true
+          }, repoPath),
+        {
+          timeout: 30_000,
+          message: `Expected e2e repo to be loaded: ${repoPath}`
+        }
+      )
+      .toBe(true)
 
     // Wait for the repo to appear and fetch its worktrees
     await page.evaluate(async () => {

@@ -100,10 +100,37 @@ function canonicalize(value: unknown): unknown {
   return value
 }
 
+// Why: reproduces matcher_pattern_for_event (codex-rs
+// hooks/src/events/common.rs). Codex ignores matchers on
+// UserPromptSubmit/Stop and drops them from the hook identity BEFORE
+// hashing, so a hooks.json entry carrying `"matcher": ""` on those
+// events must hash the same as one without it. Including it computes a
+// hash Codex never writes: system trust then looks stale, and
+// removeStaleRuntimeHookTrustEntries deletes the entry Codex wrote on
+// every launch — an endless re-trust prompt for those two events.
+function matcherPatternForEvent(
+  eventLabel: CodexEventLabel,
+  matcher: string | undefined
+): string | undefined {
+  switch (eventLabel) {
+    case 'user_prompt_submit':
+    case 'stop':
+      return undefined
+    case 'pre_tool_use':
+    case 'permission_request':
+    case 'post_tool_use':
+    case 'pre_compact':
+    case 'post_compact':
+    case 'session_start':
+      return matcher
+  }
+}
+
 // Why: reproduces command_hook_hash. NormalizedHookIdentity has `group:
 // MatcherGroup` flattened in, so the wire shape is { event_name, matcher?,
 // hooks: [<normalized handler>] }. `matcher` is omitted (not null) when
-// absent — Rust's Option<String>=None drops through the TOML→JSON path.
+// absent — Rust's Option<String>=None drops through the TOML→JSON path —
+// and normalized per event first (see matcherPatternForEvent).
 // Handler is normalized to timeout=600 (or explicit, min 1) and async=false.
 export function computeTrustedHash(entry: CodexTrustEntry): string {
   const handler: Record<string, unknown> = {
@@ -119,8 +146,9 @@ export function computeTrustedHash(entry: CodexTrustEntry): string {
     event_name: entry.eventLabel,
     hooks: [handler]
   }
-  if (entry.matcher !== undefined) {
-    identity.matcher = entry.matcher
+  const matcher = matcherPatternForEvent(entry.eventLabel, entry.matcher)
+  if (matcher !== undefined) {
+    identity.matcher = matcher
   }
   const serialized = JSON.stringify(canonicalize(identity))
   return `sha256:${createHash('sha256').update(serialized).digest('hex')}`

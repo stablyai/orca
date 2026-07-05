@@ -10,6 +10,7 @@ import {
   getBranchConflictKind,
   getRemoteCount,
   parseAndFilterSearchRefDetails,
+  resolveDefaultBaseRefViaExec,
   searchBaseRefDetails,
   searchBaseRefs
 } from './repo'
@@ -493,6 +494,26 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
     expect(result).toBe('origin/main')
   })
 
+  it('falls through from a stale origin/HEAD target to an existing primary ref', () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/main', sha)
+    git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/master'])
+
+    const result = getDefaultBaseRef(tmpDir)
+
+    expect(result).toBe('origin/main')
+  })
+
+  it('falls through from a stale origin/HEAD primary target to another existing default ref', () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/master', sha)
+    git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
+
+    const result = getDefaultBaseRef(tmpDir)
+
+    expect(result).toBe('origin/master')
+  })
+
   it('does NOT fall through to upstream/main when origin/* is absent', () => {
     // Why: this is the explicit design decision — the default probe order
     // is origin-only. upstream-aware defaulting is deferred work.
@@ -505,6 +526,53 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
     // we expect the local `main` — NOT `upstream/main`.
     expect(result).toBe('main')
     expect(result).not.toBe('upstream/main')
+  })
+})
+
+describe('resolveDefaultBaseRefViaExec', () => {
+  it('falls through from a stale origin/HEAD target to the probe list', async () => {
+    const calls: string[][] = []
+    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
+      calls.push(argv)
+      if (argv[0] === 'symbolic-ref') {
+        return { stdout: 'refs/remotes/origin/master\n' }
+      }
+      if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/remotes/origin/main') {
+        return { stdout: 'main-sha\n' }
+      }
+      throw new Error('missing ref')
+    }
+
+    await expect(resolveDefaultBaseRefViaExec(exec)).resolves.toBe('origin/main')
+
+    expect(calls).toEqual([
+      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/master'],
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']
+    ])
+  })
+
+  it('verifies origin/HEAD even when it points at origin/main', async () => {
+    const calls: string[][] = []
+    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
+      calls.push(argv)
+      if (argv[0] === 'symbolic-ref') {
+        return { stdout: 'refs/remotes/origin/main\n' }
+      }
+      if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/remotes/origin/master') {
+        return { stdout: 'master-sha\n' }
+      }
+      throw new Error('missing ref')
+    }
+
+    await expect(resolveDefaultBaseRefViaExec(exec)).resolves.toBe('origin/master')
+
+    expect(calls).toEqual([
+      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/master']
+    ])
   })
 })
 

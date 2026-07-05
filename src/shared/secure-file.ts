@@ -18,6 +18,7 @@ type HardenedPathCacheEntry = {
   dev: number
   ino: number
   size: number
+  mode: number
   ctimeMs: number
   mtimeMs: number
   birthtimeMs: number
@@ -130,6 +131,7 @@ export function hardenExistingSecureFile(targetPath: string): void {
   }
 }
 
+/** Applies the platform-appropriate permission restriction to a path once, bypassing the cache. */
 export function hardenSecurePath(
   targetPath: string,
   options: {
@@ -146,6 +148,7 @@ export function hardenSecurePath(
   )
 }
 
+/** Applies hardening; async Windows calls only report that best-effort ACL work was accepted. */
 function applySecurePathRestriction(
   targetPath: string,
   isDirectory: boolean,
@@ -170,6 +173,7 @@ function applySecurePathRestriction(
   return true
 }
 
+/** Caches the current metadata snapshot for a just-hardened path, or clears it if the path is gone. */
 function rememberHardenedPath(targetPath: string, isDirectory: boolean): void {
   const entry = getHardenedPathCacheEntry(targetPath, isDirectory)
   if (entry) {
@@ -179,6 +183,10 @@ function rememberHardenedPath(targetPath: string, isDirectory: boolean): void {
   }
 }
 
+/**
+ * Snapshots a path's identity, mode, and timestamps so later drift is detectable.
+ * Mode is tracked directly so a chmod is caught even where coarse ctime granularity hides it.
+ */
 function getHardenedPathCacheEntry(
   targetPath: string,
   isDirectory: boolean
@@ -193,6 +201,7 @@ function getHardenedPathCacheEntry(
       dev: stats.dev,
       ino: stats.ino,
       size: stats.size,
+      mode: stats.mode & 0o777,
       ctimeMs: stats.ctimeMs,
       mtimeMs: stats.mtimeMs,
       birthtimeMs: stats.birthtimeMs
@@ -202,6 +211,7 @@ function getHardenedPathCacheEntry(
   }
 }
 
+/** True when two snapshots describe the same unchanged path (identity, mode, timestamps). */
 function hardenedPathCacheEntriesMatch(
   a: HardenedPathCacheEntry,
   b: HardenedPathCacheEntry
@@ -211,6 +221,7 @@ function hardenedPathCacheEntriesMatch(
     a.dev === b.dev &&
     a.ino === b.ino &&
     a.size === b.size &&
+    a.mode === b.mode &&
     a.ctimeMs === b.ctimeMs &&
     a.mtimeMs === b.mtimeMs &&
     a.birthtimeMs === b.birthtimeMs

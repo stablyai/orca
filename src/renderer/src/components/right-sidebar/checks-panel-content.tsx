@@ -1609,13 +1609,6 @@ function PRCommentActionBadge({
       </span>
     )
   }
-  if (actionState === 'open') {
-    return (
-      <span className={presentation.statusBadgeOpen}>
-        {translate('auto.components.right.sidebar.checks.panel.content.7c1f0a2b11', 'Open')}
-      </span>
-    )
-  }
   if (actionState === 'resolved') {
     return (
       <span className={presentation.statusBadgeResolved}>

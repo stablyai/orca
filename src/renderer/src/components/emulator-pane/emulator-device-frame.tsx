@@ -39,6 +39,9 @@ type EmulatorDeviceFrameProps = {
   deviceName?: string
   loading: boolean
   isLive: boolean
+  /** False when the pane is backgrounded (hidden tab/worktree). Gates the frame
+   *  stream so a parked emulator stops decoding, matching the pane's visibility. */
+  isActive: boolean
   onTap: (x: number, y: number) => void
   onGesture: (points: EmulatorGesturePoint[]) => void
 }
@@ -65,6 +68,7 @@ export function EmulatorDeviceFrame({
   deviceName,
   loading,
   isLive,
+  isActive,
   onTap,
   onGesture
 }: EmulatorDeviceFrameProps) {
@@ -327,7 +331,13 @@ export function EmulatorDeviceFrame({
     setStreamError(true)
   }, [])
 
-  const showStream = isLive && Boolean(previewUrl)
+  // Why: only decode frames while the pane is visible. A backgrounded but still
+  // attached emulator otherwise keeps running the WebCodecs H.264 decode / MJPEG
+  // blob churn against a hidden canvas, with frames still flowing over IPC (and
+  // the network for paired SSH/remote clients). The session stays attached, so
+  // the stream re-fires within a frame on re-show. Mirrors the browser pane's
+  // park-when-hidden behavior.
+  const showStream = isActive && isLive && Boolean(previewUrl)
   const screenAspectRatio = streamSize ? streamSize.width / streamSize.height : 9 / 19
   const screenAspectRatioStyle = streamSize
     ? `${streamSize.width} / ${streamSize.height}`

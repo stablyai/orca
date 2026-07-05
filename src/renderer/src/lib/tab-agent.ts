@@ -4,27 +4,13 @@ import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/sta
 import { agentTypeToIconAgent } from './agent-status'
 
 /**
- * Resolve a terminal tab's agent from hook-reported status. This is the
- * FALLBACK signal for the tab-bar icon — the live foreground process
- * (see useTabAgent) is the primary, dev-friendly source. Hook status is what
- * drives the icon for SSH/remote panes (where foreground polling is too
- * costly) and during the brief window before the first foreground poll lands.
- *
- * Prefers the focused pane's agent so a split tab's icon tracks the pane in
- * view; falls back to any agent pane in the tab. Returns null when no pane
- * reports an iconable agent.
+ * Resolve a terminal tab's agent from hook-reported status — the PRIMARY
+ * identity signal for the tab-bar icon (composed by useTabAgent): the same
+ * already-computed state that drives the sidebar agent rows, kept live by the
+ * OSC 133 command-finished machinery that drops entries when a process exits.
+ * Focused-pane resolvers track the pane in view; sibling resolvers cover the
+ * rest of a split tab.
  */
-export function resolveTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
-  layout: TerminalLayoutSnapshot | undefined,
-  tabId: string
-): TuiAgent | null {
-  return (
-    resolveFocusedTabAgent(agentStatusByPaneKey, layout, tabId) ??
-    resolveSiblingTabAgent(agentStatusByPaneKey, layout, tabId)
-  )
-}
-
 export function resolveFocusedTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   layout: TerminalLayoutSnapshot | undefined,
@@ -74,24 +60,6 @@ function agentFromStatusEntry(entry: AgentStatusEntry | undefined): TuiAgent | n
     return null
   }
   return agentTypeToIconAgent(entry.agentType)
-}
-
-export function hasCompletedTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
-  tabId: string
-): boolean {
-  return resolveCompletedTabAgent(agentStatusByPaneKey, tabId) !== null
-}
-
-export function resolveCompletedTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
-  tabId: string,
-  layout?: TerminalLayoutSnapshot
-): TuiAgent | null {
-  return (
-    resolveFocusedCompletedTabAgent(agentStatusByPaneKey, layout, tabId) ??
-    resolveSiblingCompletedTabAgent(agentStatusByPaneKey, layout, tabId)
-  )
 }
 
 export function resolveFocusedCompletedTabAgent(

@@ -563,6 +563,7 @@ export function useTerminalPaneLifecycle({
   const imeCompositionDisposablesRef = useRef(new Map<number, IDisposable>())
   const imeNativeTextForwarderDisposablesRef = useRef(new Map<number, IDisposable>())
   const queuedInitialCwdRef = useRef<string | null | undefined>(undefined)
+  const restoredViewportBlankingPanesRef = useRef(new Set<number>())
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -726,6 +727,7 @@ export function useTerminalPaneLifecycle({
       paneMode2031Ref,
       paneLastThemeModeRef,
       replayingPanesRef,
+      restoredViewportBlankingPanesRef,
       isActiveRef,
       isVisibleRef,
       onPtyExitRef,
@@ -1189,6 +1191,7 @@ export function useTerminalPaneLifecycle({
           useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
           clearTerminalPaneUnread(paneKey)
           useAppStore.getState().dropAgentStatus(paneKey)
+          useAppStore.getState().clearPaneForegroundAgent(paneKey)
         }
         if (transport) {
           if (isDetachedToTab) {
@@ -1214,6 +1217,7 @@ export function useTerminalPaneLifecycle({
         clearRuntimePaneTitle(tabId, paneId)
         paneFontSizesRef.current.delete(paneId)
         replayingPanesRef.current.delete(paneId)
+        restoredViewportBlankingPanesRef.current.delete(paneId)
         // Clean up pane title state so closed panes don't leave stale entries.
         setPaneTitles((prev) => {
           if (!(paneId in prev)) {
@@ -1405,7 +1409,13 @@ export function useTerminalPaneLifecycle({
     const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
 
     const restoredBuffers = initialLayoutRef.current.buffersByLeafId
-    restoreScrollbackBuffers(manager, restoredBuffers, restoredPaneByLeafId, replayingPanesRef)
+    restoreScrollbackBuffers(
+      manager,
+      restoredBuffers,
+      restoredPaneByLeafId,
+      replayingPanesRef,
+      restoredViewportBlankingPanesRef
+    )
     if (restoredBuffers && initialLayoutRef.current.scrollbackRefsByLeafId) {
       const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
       delete layoutWithoutRestoredBuffers.buffersByLeafId

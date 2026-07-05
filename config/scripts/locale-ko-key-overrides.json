@@ -1559,12 +1559,6 @@
   "auto.components.onboarding.ThemeStep.94b9dc561d": {
     "ko": "설정 -> Terminal"
   },
-  "auto.components.pet.PetOverlay.4712d196c6": {
-    "ko": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
-  },
-  "auto.components.pet.PetOverlay.de932b0e8f": {
-    "ko": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }"
-  },
   "auto.components.repo.NestedRepoChecklist.ea54c7bf8f": {
     "ko": "/"
   },

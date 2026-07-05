@@ -1170,7 +1170,9 @@
         "ephemeralVm": "Per-Workspace Environment",
         "chooseRunTarget": "Choose target",
         "noRunTargets": "No run targets are ready for this project.",
-        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe"
+        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe",
+        "branchName": "Branch name",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -2450,7 +2452,6 @@
             "0a917b591a": "Paste",
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
-            "openLinkDefaultBrowser": "Open in Default Browser",
             "925f49f210": "Expand Pane",
             "df766809e0": "Collapse Pane",
             "cff67afad1": "Copy Context"
@@ -2694,7 +2695,7 @@
             "39676a184c": "Open any file, URL, agent, ..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "Add Quick Command…",
+            "a2c7a33831": "Command",
             "20bbd75896": "No commands",
             "b82e237a4b": "More quick commands",
             "85482c57bc": "Run quick command",
@@ -2844,10 +2845,7 @@
             "41ae4fa725": "Killing…",
             "138b99bd80": "this session",
             "888dad8c55": "Loading…",
-            "56b6888304": "Local resource usage hidden for runtime servers.",
-            "14ff448686": "Unavailable for runtime servers",
             "6d9793d4bc": "Resource Manager - Terminals",
-            "6a822b06a7": "Resource Manager",
             "ca95d077db": "Daemon unreachable",
             "a82253b458": "Delete workspace.",
             "946724a70a": "The main workspace cannot be deleted.",
@@ -4884,7 +4882,8 @@
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}.",
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
-          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}."
+          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
+          "c5a273a809": "From {{value0}}"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -4908,7 +4907,7 @@
           "be6df68384": "From File…",
           "e44c5d681e": "From",
           "67d9a53f47": "Manage profiles for separate logins",
-          "112f70adc4": "Last imported from",
+          "112f70adc4": "Last imported from {{value0}}",
           "72d4815523": "Bring your existing logins into Orca so agents can reach authenticated pages. Imports into the default profile.",
           "2eb906706c": "Import Browser Cookies",
           "af8c83ed61": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",
@@ -4930,7 +4929,8 @@
           "ad8cb0ee22": "Fix PATH",
           "0289434ed6": "Enabled",
           "8b3054dac7": "Registering...",
-          "8f2675c2f3": "Imported {{value0}} cookies from file."
+          "8f2675c2f3": "Imported {{value0}} cookies from file.",
+          "5301857d88": "From {{value0}}"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -8711,6 +8711,18 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
           "toggleLabel": "Toggle per-workspace environments"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -9208,7 +9220,8 @@
             "c7ff8cef11": "Detecting agents...",
             "b0da3a4d3e": "Launch recipe already saved",
             "bff4795a6d": "Change the agent, arguments, or prompt template to update the saved recipe.",
-            "5c75b24735": "Customize what the agent receives before Orca starts it."
+            "5c75b24735": "Customize what the agent receives before Orca starts it.",
+            "repoAgentOverrideNote": "This repository overrides your global default ({{global}}) and currently runs {{effective}}. Save to this repository to change what runs here."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Save as global default",
@@ -9798,10 +9811,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {
@@ -11717,7 +11726,8 @@
             "4bb7424d6b": "Canceled",
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "Open",
-            "09a9489aa5": "Show"
+            "09a9489aa5": "Show",
+            "2a4c4b8e1f": "Copy"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",

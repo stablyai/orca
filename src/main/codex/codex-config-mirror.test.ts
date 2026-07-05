@@ -23,7 +23,10 @@ vi.mock('node:os', async () => {
   }
 })
 
-import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import {
+  prepareSystemConfigForFreshRuntimeMirror,
+  syncSystemConfigIntoManagedCodexHome
+} from './codex-config-mirror'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -395,5 +398,34 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(existsSync(getRuntimeConfigPath())).toBe(false)
+  })
+})
+
+describe('prepareSystemConfigForFreshRuntimeMirror', () => {
+  it('rewrites relative paths against a Linux-side home and strips hook trust', () => {
+    const prepared = prepareSystemConfigForFreshRuntimeMirror(
+      [
+        'model_instructions_file = "instructions.md"',
+        '',
+        '[features]',
+        'codex_hooks = true',
+        '',
+        '[hooks.state."system-hooks:stop:0:0"]',
+        'enabled = true',
+        '',
+        '[projects."/home/alice/repo"]',
+        'trust_level = "trusted"',
+        ''
+      ].join('\r\n'),
+      '/home/alice/.codex'
+    )
+
+    // Why: WSL configs are consumed inside the distro, so rewrites must use
+    // posix join semantics regardless of the host platform.
+    expect(prepared).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
+    expect(prepared).toContain('hooks = true')
+    expect(prepared).not.toContain('codex_hooks')
+    expect(prepared).toContain('[projects."/home/alice/repo"]')
+    expect(prepared).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
   })
 })

@@ -82,6 +82,7 @@ vi.mock('../wsl', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { isRootLikePath } from './pty-path-safety'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 
 describe('LocalPtyProvider', () => {
@@ -98,6 +99,7 @@ describe('LocalPtyProvider', () => {
   let exitCb: ((info: { exitCode: number }) => void) | undefined
   let origShell: string | undefined
   let origPowerlevelWizardDisable: string | undefined
+  let origHistFile: string | undefined
   let origPlatform: PropertyDescriptor | undefined
 
   beforeEach(() => {
@@ -105,8 +107,11 @@ describe('LocalPtyProvider', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     origShell = process.env.SHELL
     origPowerlevelWizardDisable = process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
+    origHistFile = process.env.HISTFILE
     process.env.SHELL = '/bin/zsh'
     delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
+    // injectHistoryEnv preserves an inherited HISTFILE, so clear it for hermetic history assertions.
+    delete process.env.HISTFILE
 
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
@@ -158,6 +163,11 @@ describe('LocalPtyProvider', () => {
     } else {
       process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD = origPowerlevelWizardDisable
     }
+    if (origHistFile === undefined) {
+      delete process.env.HISTFILE
+    } else {
+      process.env.HISTFILE = origHistFile
+    }
   })
 
   describe('spawn', () => {
@@ -207,6 +217,52 @@ describe('LocalPtyProvider', () => {
       await expect(provider.spawn({ cols: 80, rows: 24, cwd: '/nonexistent' })).rejects.toThrow(
         'does not exist'
       )
+    })
+
+    it('allows an explicitly requested plain shell at POSIX root', async () => {
+      await provider.spawn({ cols: 80, rows: 24, cwd: '/' })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ cwd: '/' })
+      )
+    })
+
+    it('falls back to the safe default cwd for automatic agent startup without an explicit cwd', async () => {
+      spawnMock.mockClear()
+      const origHome = process.env.HOME
+      // Pin HOME so we assert the exact resolved candidate, not just non-root-ness —
+      // catches regressions where resolveSafePtyDefaultCwd picks an unintended home.
+      process.env.HOME = '/home/testuser'
+
+      try {
+        // Why: an omitted cwd resolves to a guaranteed-safe default home (the
+        // guard only rejects root-like paths), so the agent must still launch.
+        await expect(
+          provider.spawn({ cols: 80, rows: 24, command: 'codex' })
+        ).resolves.toBeDefined()
+
+        const spawnCall = spawnMock.mock.calls.at(-1)!
+        expect(spawnCall[2].cwd).toBe('/home/testuser')
+        expect(isRootLikePath(spawnCall[2].cwd)).toBe(false)
+      } finally {
+        if (origHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = origHome
+        }
+      }
+    })
+
+    it('rejects automatic agent startup at POSIX root', async () => {
+      spawnMock.mockClear()
+
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, cwd: '/', command: 'claude' })
+      ).rejects.toThrow(/requires a non-root workspace/)
+
+      expect(spawnMock).not.toHaveBeenCalled()
     })
 
     it('invokes onSpawned callback', async () => {

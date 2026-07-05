@@ -84,6 +84,23 @@ export function useRepoHeaderDrag({
     []
   )
 
+  const applyDrop = useCallback(
+    (repoId: string, drop: { dropIndex: number; dropIndicatorY: number } | null) => {
+      latestDropIndexRef.current = drop?.dropIndex ?? null
+      const nextState: RepoDragState = drop
+        ? { draggingRepoId: repoId, ...drop }
+        : { draggingRepoId: repoId, dropIndex: null, dropIndicatorY: null }
+      setState((prev) =>
+        prev.draggingRepoId === nextState.draggingRepoId &&
+        prev.dropIndex === nextState.dropIndex &&
+        prev.dropIndicatorY === nextState.dropIndicatorY
+          ? prev
+          : nextState
+      )
+    },
+    []
+  )
+
   const cancelAutoscroll = useCallback(() => {
     if (autoscrollFrameIdRef.current !== null) {
       window.cancelAnimationFrame(autoscrollFrameIdRef.current)
@@ -171,18 +188,11 @@ export function useRepoHeaderDrag({
         refreshHeaderRects()
       }
 
-      const drop = computeDrop(session.latestPointerY)
-      if (drop) {
-        setState((prev) =>
-          prev.dropIndex === drop.dropIndex && prev.dropIndicatorY === drop.dropIndicatorY
-            ? prev
-            : { draggingRepoId: session.repoId, ...drop }
-        )
-      }
+      applyDrop(session.repoId, computeDrop(session.latestPointerY))
 
       autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
     },
-    [cancelAutoscroll, computeDrop, refreshHeaderRects]
+    [applyDrop, cancelAutoscroll, computeDrop, refreshHeaderRects]
   )
 
   const ensureAutoscroll = useCallback(() => {
@@ -227,14 +237,7 @@ export function useRepoHeaderDrag({
         setState({ draggingRepoId: session.repoId, dropIndex: null, dropIndicatorY: null })
       }
       refreshHeaderRects()
-      const drop = computeDrop(e.clientY)
-      if (drop) {
-        setState((prev) =>
-          prev.dropIndex === drop.dropIndex && prev.dropIndicatorY === drop.dropIndicatorY
-            ? prev
-            : { draggingRepoId: session.repoId, ...drop }
-        )
-      }
+      applyDrop(session.repoId, computeDrop(e.clientY))
       ensureAutoscroll()
     }
     const onPointerUp = (e: PointerEvent): void => {
@@ -275,7 +278,15 @@ export function useRepoHeaderDrag({
         clickSwallowTimeoutRef.current = null
       }
     }
-  }, [cancelAutoscroll, computeDrop, endDrag, ensureAutoscroll, refreshHeaderRects, sessionArmed])
+  }, [
+    applyDrop,
+    cancelAutoscroll,
+    computeDrop,
+    endDrag,
+    ensureAutoscroll,
+    refreshHeaderRects,
+    sessionArmed
+  ])
 
   useEffect(() => {
     if (state.draggingRepoId === null) {

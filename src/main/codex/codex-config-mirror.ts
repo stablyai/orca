@@ -35,17 +35,19 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
     return
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(
-    systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : '',
-    dirname(systemConfigPath)
-  )
+  const rawSystemConfig = systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
   if (!runtimeConfigExists) {
-    // Why: trust blocks reference a hooks.json path, so system-home hook trust
-    // entries are not valid in Orca's runtime CODEX_HOME until install remaps them.
-    writeFileAtomically(runtimeConfigPath, stripRuntimeOwnedTomlSections(systemConfig))
+    writeFileAtomically(
+      runtimeConfigPath,
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, dirname(systemConfigPath))
+    )
     return
   }
 
+  const systemConfig = prepareSystemConfigForRuntimeMirror(
+    rawSystemConfig,
+    dirname(systemConfigPath)
+  )
   const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
   const mergedConfig = mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig)
   if (mergedConfig !== runtimeConfig) {
@@ -60,6 +62,17 @@ function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: st
   )
 }
 
+// Why: trust blocks reference a hooks.json path, so system-home hook trust
+// entries are not valid in a fresh runtime CODEX_HOME until install remaps
+// them. Also seeds WSL runtime homes, where systemConfigDir must be the
+// Linux-side ~/.codex the config resolves against inside the distro.
+export function prepareSystemConfigForFreshRuntimeMirror(
+  config: string,
+  systemConfigDir: string
+): string {
+  return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
+}
+
 function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
   if (!config.includes('codex_hooks')) {
     return config
@@ -71,7 +84,9 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
 
   for (let index = 0; index <= lines.length; index += 1) {
     const line = lines[index]
-    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?$/.test(line)
+    // Why: CRLF configs keep a trailing \r after the split, so header anchors
+    // must tolerate it or Windows-shaped configs skip normalization entirely.
+    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?\r?$/.test(line)
     if (!isHeader) {
       continue
     }
@@ -80,7 +95,7 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
       featureSections.push({ start: featureStart, end: index })
       featureStart = null
     }
-    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?$/.test(line)) {
+    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?\r?$/.test(line)) {
       featureStart = index
     }
   }

@@ -1,3 +1,5 @@
+import type { GitPushTarget } from './types'
+
 export type ComposerBranchSelection = {
   baseBranch: string
   branchNameOverride: string | undefined
@@ -97,17 +99,54 @@ export function resolveComposerReuseOverride(args: {
   return args.branchNameOverride
 }
 
+/**
+ * The branch-name override to apply when creating a worktree from the composer.
+ *
+ * With no resolver-provided override, branch mode (#6721) keeps a
+ * slash-containing typed name as the git branch — validated downstream by
+ * `git check-ref-format` — while the worktree folder name is sanitized
+ * separately; every other mode leaves the branch to be derived from the
+ * sanitized name. With an override, keep it verbatim when the workspace name is
+ * user-edited (`preserveWorkspaceNameEdits`) or still matches the auto-name.
+ */
 export function resolveComposerBranchNameOverrideForCreate(args: {
   branchNameOverride: string | undefined
   branchAutoName: string
   workspaceName: string
   preserveWorkspaceNameEdits: boolean
+  createBranchFromWorkspaceName?: boolean
 }): string | undefined {
   if (!args.branchNameOverride) {
-    return undefined
+    return args.createBranchFromWorkspaceName && args.workspaceName.includes('/')
+      ? args.workspaceName
+      : undefined
   }
   if (args.preserveWorkspaceNameEdits) {
     return args.branchNameOverride
   }
   return args.workspaceName === args.branchAutoName ? args.branchNameOverride : undefined
+}
+
+export function resolveComposerManualBranchNameChange(args: {
+  value: string | undefined
+  pushTarget: GitPushTarget | undefined
+  forkPushWarning: string | null
+}): {
+  branchNameOverride: string | undefined
+  pushTarget: GitPushTarget | undefined
+  forkPushWarning: string | null
+} {
+  const branchNameOverride = args.value?.trim() || undefined
+  if (args.pushTarget && args.pushTarget.branchName !== branchNameOverride) {
+    return {
+      branchNameOverride,
+      pushTarget: undefined,
+      forkPushWarning: null
+    }
+  }
+  return {
+    branchNameOverride,
+    pushTarget: args.pushTarget,
+    forkPushWarning: args.forkPushWarning
+  }
 }

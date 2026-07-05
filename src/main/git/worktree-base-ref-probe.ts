@@ -10,11 +10,14 @@ export async function hasWorktreeBaseCommitRef(
   options: GitExecOptions = {}
 ): Promise<boolean> {
   try {
-    await gitExecFileAsync(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], {
-      cwd: repoPath,
-      ...options
-    })
-    return true
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
+      {
+        cwd: repoPath,
+        ...options
+      }
+    )
+    return stdout.trim().length > 0
   } catch {
     return false
   }

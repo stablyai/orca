@@ -60,4 +60,6 @@ export type MergeContext = {
   repoDisplayNameById: Map<string, string>
   /** Repo connectionId by repo id (null/missing == local). */
   repoConnectionIdById: Map<string, string | null>
+  /** Repo runtime-host scope by repo id (missing == keep row). */
+  repoRuntimeScopedById: Map<string, boolean>
 }

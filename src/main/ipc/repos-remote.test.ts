@@ -94,7 +94,6 @@ vi.mock('../git/repo', async () => {
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo: vi.fn().mockReturnValue(true),
     getGitRepoRoot: vi.fn((path: string) => path),
-    getGitUsername: vi.fn().mockReturnValue(''),
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
     getRemoteCount: vi.fn().mockResolvedValue(1),
@@ -2442,6 +2441,12 @@ describe('repos:getBaseRefDefault envelope', () => {
           match: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
+        // The origin/HEAD target is verified before it is trusted, so the
+        // symbolic-ref result must also resolve via rev-parse.
+        {
+          match: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+        },
         {
           match: isRemoteList,
           respond: () => Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
@@ -2471,6 +2476,12 @@ describe('repos:getBaseRefDefault envelope', () => {
         {
           match: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
+        },
+        // The origin/HEAD target is verified before it is trusted, so the
+        // symbolic-ref result must also resolve via rev-parse.
+        {
+          match: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
         },
         {
           match: isRemoteList,

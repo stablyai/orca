@@ -57,6 +57,7 @@ import {
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
+import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
 import { shouldUseShellReadyStartupDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
@@ -67,6 +68,7 @@ import {
   scanMode2031Sequences
 } from '../../../../shared/terminal-color-scheme-protocol'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
+import { subscribeToTerminalUserInput } from './terminal-user-input-signal'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
@@ -87,6 +89,8 @@ import {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
+import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -359,6 +363,10 @@ type E2eTerminalPtyOutputDebugWindow = Window & {
 type PendingStartupCommand = {
   command: string
   env?: Record<string, string>
+}
+
+type FreshSpawnOptions = {
+  forceBlankRestoredViewport?: boolean
 }
 
 type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
@@ -1244,14 +1252,9 @@ export function connectPanePty(
     )
     return tab?.defaultTitle?.trim() || 'Terminal'
   }
-  /**
-   * Resolves the authoritative owner agent type for this pane, checking tab launch,
-   * pane startup, typed command ownership, and store state configuration.
-   *
-   * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
-   * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
-   * in generic terminals where launch metadata does not exist.
-   */
+  // Why: infer pane ownership from a manually typed agent command (e.g. `omp`) by
+  // shadowing the shell's current command line, for generic terminals where no
+  // launch metadata exists. Consumed by getAuthoritativePaneAgent below.
   let commandInferredPaneAgent: TuiAgent | null = null
   let pendingShellCommandLine = ''
   let pendingShellCommandCursor = 0
@@ -1352,9 +1355,13 @@ export function connectPanePty(
       return null
     }
     const params = data.slice(index + 2, cursor)
-    if (final === 'D') {
+    // Why: only emulate a bare one-column move. Parameterized/modified cursor keys
+    // (e.g. Ctrl+Left `\x1b[1;5D` = word-jump) move the real cursor by more than
+    // one, so tracking them as ±1 would desync the shadow line — fall through to
+    // reset instead of silently corrupting the sampled command.
+    if (final === 'D' && params === '') {
       movePendingShellCommandCursor(-1)
-    } else if (final === 'C') {
+    } else if (final === 'C' && params === '') {
       movePendingShellCommandCursor(1)
     } else if (final === 'H' || (final === '~' && params === '1')) {
       pendingShellCommandCursor = 0
@@ -1459,6 +1466,14 @@ export function connectPanePty(
       }
     }
   }
+  /**
+   * Resolves the authoritative owner agent type for this pane, checking tab launch,
+   * pane startup, typed command ownership, and store state configuration.
+   *
+   * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
+   * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
+   * in generic terminals where launch metadata does not exist.
+   */
   const getAuthoritativePaneAgent = (): AgentType | undefined => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
@@ -1736,9 +1751,17 @@ export function connectPanePty(
     }
     return pendingWrite.then(() => interruptInference.flushPending())
   }
+  const paneForegroundAgentTracker = createPaneForegroundAgentTracker({
+    getPtyId: () => transport.getPtyId(),
+    isTrackablePtyId: (id) => !isRemoteRuntimePtyId(id) && parseAppSshPtyId(id) === null,
+    readForegroundProcess: (id) => window.api.pty.getForegroundProcess(id),
+    publish: (entry) => useAppStore.getState().setPaneForegroundAgent(cacheKey, entry)
+  })
   const commandLifecycle = createTerminalCommandLifecycle({
+    onCommandStarted: () => paneForegroundAgentTracker.onCommandStarted(),
     onCommandFinished: () => {
       clearCommandInferredPaneAgentAfterPtySideEffects()
+      paneForegroundAgentTracker.onCommandFinished()
       // Why: the finished command may have moved HEAD or the index (e.g.
       // `git checkout`); nudge git UI now instead of waiting for a poll.
       dispatchTerminalCommandFinishedEvent(deps.worktreeId)
@@ -1824,6 +1847,11 @@ export function connectPanePty(
   const setPanePtyFitBinding = (ptyId: string): void => {
     bindPanePtyId(pane.id, ptyId, deps.tabId)
     pane.container.dataset.ptyId = ptyId
+    // Why: override hydration can arrive before this pane knows its PTY. Once
+    // data-pty-id is bound, safeFit can park xterm at the held phone grid.
+    if (getFitOverrideForPty(ptyId)) {
+      safeFit(pane)
+    }
   }
   let activePanePtyBinding: string | null = null
   // Why: bind time lets async liveness reconcile ignore a request started
@@ -1977,6 +2005,7 @@ export function connectPanePty(
     // Why: a dead terminal has no running agent — remove its explicit status
     // entry so the hover UI only shows what is running *now*.
     useAppStore.getState().removeAgentStatus(cacheKey)
+    useAppStore.getState().clearPaneForegroundAgent(cacheKey)
     // The runtime graph is the CLI's source for live terminal bindings, so
     // we must republish when a pane loses its PTY instead of waiting for a
     // broader layout change that may never happen.
@@ -2561,12 +2590,27 @@ export function connectPanePty(
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
   }
-  const recordAcceptedTerminalInputForHibernation = (): void => {
+  const recordTerminalInputForHibernation = (): void => {
     useAppStore.getState().recordTerminalInput(cacheKey)
+  }
+  // Why: onData mixes real user input with xterm's parser auto-replies (focus
+  // reports, DA/DSR/CPR responses). Recording those replies as activity makes
+  // the hibernation planner treat a pane hidden after its agent finished as
+  // "input after done" forever. The core user-input signal fires only for real
+  // input, so hibernation activity records from it; onData recording remains
+  // solely as the fallback when the internal API is unavailable.
+  const userInputActivityDisposable = subscribeToTerminalUserInput(
+    pane.terminal,
+    recordTerminalInputForHibernation
+  )
+  const recordTerminalInputForHibernationFallback = (): void => {
+    if (userInputActivityDisposable === null) {
+      recordTerminalInputForHibernation()
+    }
   }
   const markAcceptedTerminalInputSent = (): void => {
     markTerminalInputSent()
-    recordAcceptedTerminalInputForHibernation()
+    recordTerminalInputForHibernationFallback()
   }
   const terminalTheme = pane.terminal.options.theme
   const terminalColorQueryReplies = terminalTheme
@@ -2737,7 +2781,7 @@ export function connectPanePty(
         .sendInputAccepted(data)
         .then((accepted) => {
           if (accepted) {
-            recordAcceptedTerminalInputForHibernation()
+            recordTerminalInputForHibernationFallback()
             observeAcceptedShellCommandInput(data)
             observeAcceptedTerminalInput(data, acknowledgedIntent)
             interruptInference.observeInputIntent(acknowledgedIntent)
@@ -3449,10 +3493,11 @@ export function connectPanePty(
           }
         : undefined
     const startFreshColdRestoreAgentResume = (
-      startup: ColdRestoreAgentResumeStartup | null = buildColdRestoreAgentResumeStartup()
+      startup: ColdRestoreAgentResumeStartup | null = buildColdRestoreAgentResumeStartup(),
+      options: FreshSpawnOptions = {}
     ): void => {
       applyColdRestoreAgentResumeStartup(startup)
-      startFreshSpawn(startup)
+      startFreshSpawn(startup, options)
     }
     // Why: the hibernation wake fires from noteVisibilityResume in the outer
     // connection scope, long after this deferred-connect closure has run.
@@ -3529,9 +3574,13 @@ export function connectPanePty(
       }, 50)
     }
 
-    const startFreshSpawn = (startupOverride?: PendingStartupCommand | null): void => {
+    const startFreshSpawn = (
+      startupOverride?: PendingStartupCommand | null,
+      options: FreshSpawnOptions = {}
+    ): void => {
       clearPaneMode2031State()
       clearHiddenOutputRestoreState()
+      prepareFreshShellViewportForSpawn(options)
       if (connectionId && startupOverride?.command) {
         // Why: SSH providers use `command` only as spawn metadata; the renderer
         // must still submit the resume command to the fresh remote shell.
@@ -3796,6 +3845,24 @@ export function connectPanePty(
       return shouldPreserveAgentReattachModes()
         ? POST_REPLAY_LIVE_AGENT_REATTACH_RESET
         : POST_REPLAY_REATTACH_RESET
+    }
+
+    const consumeRestoredViewportBlankingMarker = (): boolean => {
+      return deps.restoredViewportBlankingPanesRef?.current.delete(pane.id) ?? false
+    }
+
+    const writeFreshShellViewportBlanking = (): void => {
+      writeReplayData(buildFreshShellViewportBlankingSequence(pane.terminal.rows))
+    }
+
+    const prepareFreshShellViewportForSpawn = (options: FreshSpawnOptions): void => {
+      const hadRestoredViewport = consumeRestoredViewportBlankingMarker()
+      if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
+        return
+      }
+      // Why: fresh Windows ConPTY output paints at screen coordinates, so
+      // restored rows must leave the viewport before the first prompt redraw.
+      writeFreshShellViewportBlanking()
     }
 
     const sendFocusedReattachFocusInAfterReplay = (): void => {
@@ -5125,7 +5192,9 @@ export function connectPanePty(
         if (staleSessionId) {
           deps.clearTabPtyId(deps.tabId, staleSessionId)
         }
-        startFreshColdRestoreAgentResume(coldRestoreStartup)
+        startFreshColdRestoreAgentResume(coldRestoreStartup, {
+          forceBlankRestoredViewport: true
+        })
         return
       }
       registerEffectiveLaunchConfig(connectResult?.launchConfig, {
@@ -5144,7 +5213,9 @@ export function connectPanePty(
         // Why: SSH sleep/reconnect can invalidate the relay-held PTY while
         // leaving the tab mounted. Replace the dead lease in-place instead of
         // stranding the pane behind a stale expired-session overlay.
-        startFreshColdRestoreAgentResume(coldRestoreStartup)
+        startFreshColdRestoreAgentResume(coldRestoreStartup, {
+          forceBlankRestoredViewport: true
+        })
         return
       }
       setPanePtyFitBinding(ptyId)
@@ -5201,14 +5272,10 @@ export function connectPanePty(
           }
         }
       } else if (connectResult?.coldRestore) {
-        // restoreScrollbackBuffers() already wrote the saved xterm buffer
-        // before this rAF ran. The cold-restore scrollback overlaps with
-        // that content; clear first.
         // replayIntoTerminal: the recorded scrollback is raw PTY output that
         // may contain query sequences the previous agent CLI emitted;
         // writing them through xterm.write would trigger auto-replies that
         // land in the new shell's stdin. See replay-guard.ts.
-        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.coldRestore.scrollback)
         const preparedStartup = coldRestoreStartup ?? buildColdRestoreAgentResumeStartup()
         const didPrepareResume = applyColdRestoreAgentResumeStartup(preparedStartup)
@@ -5223,6 +5290,8 @@ export function connectPanePty(
         // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
         // reset them to match the fresh shell's expectations.
         writeReplayData(POST_REPLAY_MODE_RESET)
+        consumeRestoredViewportBlankingMarker()
+        writeFreshShellViewportBlanking()
         if (!isRemoteRuntimePtyId(ptyId)) {
           window.api.pty.ackColdRestore(ptyId)
         }
@@ -5468,7 +5537,9 @@ export function connectPanePty(
                   }
                   deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  startFreshColdRestoreAgentResume(coldRestoreStartup)
+                  startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                    forceBlankRestoredViewport: true
+                  })
                   return
                 }
                 handleReattachResult(result, pendingSessionId, coldRestoreStartup)
@@ -5491,10 +5562,14 @@ export function connectPanePty(
                 if (isSshSessionExpiredError(err)) {
                   deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  startFreshColdRestoreAgentResume(coldRestoreStartup)
+                  startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                    forceBlankRestoredViewport: true
+                  })
                   return
                 }
-                startFreshColdRestoreAgentResume(coldRestoreStartup)
+                startFreshColdRestoreAgentResume(coldRestoreStartup, {
+                  forceBlankRestoredViewport: true
+                })
               })
           } else {
             startFreshColdRestoreAgentResume()
@@ -5637,7 +5712,9 @@ export function connectPanePty(
             }
             deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
             deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
-            startFreshColdRestoreAgentResume(coldRestoreStartup)
+            startFreshColdRestoreAgentResume(coldRestoreStartup, {
+              forceBlankRestoredViewport: true
+            })
             return
           }
           handleReattachResult(result, deferredReattachSessionId, coldRestoreStartup)
@@ -5665,11 +5742,15 @@ export function connectPanePty(
           deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
           deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
           if (connectionId && isSshSessionExpiredError(err)) {
-            startFreshColdRestoreAgentResume(coldRestoreStartup)
+            startFreshColdRestoreAgentResume(coldRestoreStartup, {
+              forceBlankRestoredViewport: true
+            })
             return
           }
           reportError(message)
-          startFreshColdRestoreAgentResume(coldRestoreStartup)
+          startFreshColdRestoreAgentResume(coldRestoreStartup, {
+            forceBlankRestoredViewport: true
+          })
         })
     } else if (detachedRemoteLeafPtyId || detachedLivePtyId || eagerLivePtyId) {
       // Why: mirrored web terminal layouts mount one pane per host leaf.
@@ -5946,6 +6027,7 @@ export function connectPanePty(
         connectFallbackTimer = null
       }
       onDataDisposable.dispose()
+      userInputActivityDisposable?.dispose()
       terminalCapabilityRepliesDisposable.dispose()
       onResizeDisposable.dispose()
       onBufferChangeDisposable?.dispose()
@@ -5956,6 +6038,7 @@ export function connectPanePty(
         pendingGeometryReportRaf = null
       }
       commandLifecycle.dispose()
+      paneForegroundAgentTracker.dispose()
       agentCompletionCoordinator.dispose()
     }
   }

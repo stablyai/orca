@@ -10,6 +10,7 @@ import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
+import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
 import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
@@ -331,18 +332,11 @@ export default function RichMarkdownEditor({
 
   const navigateToTableOfContentsItem = useCallback(
     (id: string): void => {
-      const target = flatTableOfContentsItems.find((item) => item.id === id)
       const container = scrollContainerRef.current
-      if (!target || !container) {
+      if (!container) {
         return
       }
-      const sameTitleIndex = flatTableOfContentsItems
-        .filter((item) => item.title === target.title)
-        .findIndex((item) => item.id === target.id)
-      const matchingHeadings = Array.from(
-        container.querySelectorAll<HTMLElement>('h1, h2, h3')
-      ).filter((candidate) => candidate.textContent?.trim() === target.title)
-      const heading = matchingHeadings.at(Math.max(0, sameTitleIndex))
+      const heading = findRichMarkdownTocHeadingTarget(container, flatTableOfContentsItems, id)
       heading?.scrollIntoView({ block: 'center' })
     },
     [flatTableOfContentsItems]

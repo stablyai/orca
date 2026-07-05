@@ -1,10 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createDraftRelease,
-  latestPreviousDesktopReleaseTag,
+  latestPreviousPublishedDesktopReleaseTag,
   parseDesktopReleaseTag,
   truncateReleaseBody
 } from './create-draft-release.mjs'
+
+function release(tag, options = {}) {
+  return {
+    draft: false,
+    tag_name: tag,
+    ...options
+  }
+}
 
 function jsonResponse(body, init = {}) {
   return {
@@ -49,32 +57,74 @@ describe('parseDesktopReleaseTag', () => {
   })
 })
 
-describe('latestPreviousDesktopReleaseTag', () => {
-  it('bounds stable notes to the previous rc when one exists', () => {
-    expect(latestPreviousDesktopReleaseTag(['v1.4.35', 'v1.4.36-rc.0', 'v1.4.36'], 'v1.4.36')).toBe(
-      'v1.4.36-rc.0'
-    )
+describe('latestPreviousPublishedDesktopReleaseTag', () => {
+  it('bounds stable notes to the previous stable release when rcs exist', () => {
+    expect(
+      latestPreviousPublishedDesktopReleaseTag(
+        [release('v1.4.35'), release('v1.4.36-rc.0'), release('v1.4.36')],
+        'v1.4.36'
+      )
+    ).toBe('v1.4.35')
+  })
+
+  it('does not collapse a stable changelog to its rc-to-stable version bump', () => {
+    expect(
+      latestPreviousPublishedDesktopReleaseTag(
+        [
+          release('v1.4.120'),
+          release('v1.4.121-rc.0'),
+          release('v1.4.121-rc.6'),
+          release('v1.4.121')
+        ],
+        'v1.4.121'
+      )
+    ).toBe('v1.4.120')
   })
 
   it('bounds the first rc notes to the previous stable release', () => {
     expect(
-      latestPreviousDesktopReleaseTag(['v1.4.35', 'v1.4.36-rc.0', 'mobile-v0.0.12'], 'v1.4.36-rc.0')
+      latestPreviousPublishedDesktopReleaseTag(
+        [release('v1.4.35'), release('v1.4.36-rc.0'), release('mobile-v0.0.12')],
+        'v1.4.36-rc.0'
+      )
     ).toBe('v1.4.35')
   })
 
   it('bounds later rc notes to the prior rc', () => {
-    expect(latestPreviousDesktopReleaseTag(['v1.4.36-rc.0', 'v1.4.36-rc.1'], 'v1.4.36-rc.1')).toBe(
-      'v1.4.36-rc.0'
-    )
+    expect(
+      latestPreviousPublishedDesktopReleaseTag(
+        [release('v1.4.36-rc.0'), release('v1.4.36-rc.1')],
+        'v1.4.36-rc.1'
+      )
+    ).toBe('v1.4.36-rc.0')
+  })
+
+  it('ignores draft releases as public changelog boundaries', () => {
+    expect(
+      latestPreviousPublishedDesktopReleaseTag(
+        [release('v1.4.35'), release('v1.4.36-rc.0', { draft: true }), release('v1.4.36-rc.1')],
+        'v1.4.36-rc.1'
+      )
+    ).toBe('v1.4.35')
   })
 
   it('returns empty string for the first desktop release when no earlier tag exists', () => {
-    expect(latestPreviousDesktopReleaseTag(['v1.4.36', 'mobile-v0.0.12'], 'v1.4.36')).toBe('')
-    expect(latestPreviousDesktopReleaseTag([], 'v1.4.36')).toBe('')
+    expect(
+      latestPreviousPublishedDesktopReleaseTag(
+        [release('v1.4.36'), release('mobile-v0.0.12')],
+        'v1.4.36'
+      )
+    ).toBe('')
+    expect(latestPreviousPublishedDesktopReleaseTag([], 'v1.4.36')).toBe('')
   })
 
   it('returns empty string when the current tag is not a desktop release tag', () => {
-    expect(latestPreviousDesktopReleaseTag(['v1.4.35', 'v1.4.36'], 'mobile-v0.0.12')).toBe('')
+    expect(
+      latestPreviousPublishedDesktopReleaseTag(
+        [release('v1.4.35'), release('v1.4.36')],
+        'mobile-v0.0.12'
+      )
+    ).toBe('')
   })
 })
 
@@ -82,7 +132,7 @@ describe('createDraftRelease', () => {
   it('creates a draft release with bounded generated notes', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse([{ name: 'v1.4.35' }, { name: 'v1.4.36' }]))
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.35'), release('v1.4.36')]))
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'a'.repeat(130_000) }))
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
 
@@ -96,7 +146,7 @@ describe('createDraftRelease', () => {
 
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
-      'https://api.github.com/repos/stablyai/orca/tags?per_page=100&page=1',
+      'https://api.github.com/repos/stablyai/orca/releases?per_page=100&page=1',
       expect.any(Object)
     )
     expect(fetchImpl).toHaveBeenNthCalledWith(
@@ -134,7 +184,7 @@ describe('createDraftRelease', () => {
   it('marks rc tags as prereleases', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse([{ name: 'v1.4.36' }, { name: 'v1.4.36-rc.1' }]))
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.36'), release('v1.4.36-rc.1')]))
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36-rc.1', body: 'notes' }))
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36-rc.1', draft: true }))
 
@@ -153,7 +203,7 @@ describe('createDraftRelease', () => {
   it('omits previous_tag_name for the first desktop release so notes fall back to the GitHub default', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse([{ name: 'v1.4.36' }, { name: 'mobile-v0.0.12' }]))
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.36'), release('mobile-v0.0.12')]))
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
 
@@ -170,12 +220,12 @@ describe('createDraftRelease', () => {
     expect(generateNotesBody).not.toHaveProperty('previous_tag_name')
   })
 
-  it('paginates through every tag page before choosing the previous tag', async () => {
-    const firstPage = Array.from({ length: 100 }, (_, index) => ({ name: `mobile-v0.0.${index}` }))
+  it('paginates through every release page before choosing the previous release', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => release(`mobile-v0.0.${index}`))
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(firstPage))
-      .mockResolvedValueOnce(jsonResponse([{ name: 'v1.4.35' }]))
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.35')]))
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
 
@@ -189,12 +239,12 @@ describe('createDraftRelease', () => {
 
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
-      'https://api.github.com/repos/stablyai/orca/tags?per_page=100&page=1',
+      'https://api.github.com/repos/stablyai/orca/releases?per_page=100&page=1',
       expect.any(Object)
     )
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
-      'https://api.github.com/repos/stablyai/orca/tags?per_page=100&page=2',
+      'https://api.github.com/repos/stablyai/orca/releases?per_page=100&page=2',
       expect.any(Object)
     )
     const generateNotesBody = JSON.parse(fetchImpl.mock.calls[2][1].body)

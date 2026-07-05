@@ -187,31 +187,35 @@ describe('gitlab issue operations', () => {
     expect(result.error?.type).toBe('permission_denied')
   })
 
-  it('falls back to glab issue list with updated ordering for unresolved self-hosted repos', async () => {
+  it('returns an isolated not_found error (never a cwd-inferred glab call) when the project is unresolved', async () => {
+    // Why: a cwd-inferred `glab issue list` would hit `git: exit status 128`
+    // on an SSH connection and, in an "All projects" aggregate, sink the
+    // whole panel. The unresolvable project must isolate to a structured
+    // error instead, and must not spawn any glab subprocess.
     getIssueProjectRefMock.mockResolvedValueOnce(null)
+
+    const result = await listIssues('/repo-root', 5, undefined, 'opened', '@me')
+
+    expect(result.items).toEqual([])
+    expect(result.error?.type).toBe('not_found')
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(acquireMock).not.toHaveBeenCalled()
+  })
+
+  it('returns null for getIssue (and spawns no glab call) when the project is unresolved', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce(null)
+
+    await expect(getIssue('/repo-root', 7)).resolves.toBeNull()
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('threads connectionId into getGlabKnownHosts for listIssues', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
     glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
-    await expect(listIssues('/repo-root', 5, undefined, 'opened', '@me')).resolves.toEqual({
-      items: []
-    })
+    await listIssues('/repo-root', 5, undefined, 'opened', undefined, 'conn-7')
 
-    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'issue',
-        'list',
-        '--output',
-        'json',
-        '--per-page',
-        '5',
-        '--order',
-        'updated_at',
-        '--sort',
-        'desc',
-        '--assignee',
-        '@me'
-      ],
-      { cwd: '/repo-root' }
-    )
+    expect(getGlabKnownHostsMock).toHaveBeenCalledWith('conn-7')
   })
 
   it('creates an issue and returns its iid + web_url', async () => {

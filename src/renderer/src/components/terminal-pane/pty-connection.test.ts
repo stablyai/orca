@@ -9,6 +9,7 @@ import {
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
+import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
@@ -61,6 +62,31 @@ async function renderHeadlessBuffer(writes: string[], cols = 80, rows = 8): Prom
       lines.push(term.buffer.active.getLine(lineIndex)?.translateToString(true) ?? '')
     }
     return lines
+  } finally {
+    term.dispose()
+  }
+}
+
+async function renderHeadlessTerminalState(
+  writes: string[],
+  cols = 80,
+  rows = 8
+): Promise<{ allLines: string[]; visibleLines: string[]; baseY: number }> {
+  const term = new Terminal({ cols, rows, allowProposedApi: true })
+  try {
+    for (const write of writes) {
+      await writeHeadlessTerminal(term, write)
+    }
+    const allLines: string[] = []
+    const buffer = term.buffer.active
+    for (let lineIndex = 0; lineIndex < buffer.length; lineIndex++) {
+      allLines.push(buffer.getLine(lineIndex)?.translateToString(true) ?? '')
+    }
+    const visibleLines: string[] = []
+    for (let row = 0; row < term.rows; row++) {
+      visibleLines.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '')
+    }
+    return { allLines, visibleLines, baseY: buffer.baseY }
   } finally {
     term.dispose()
   }
@@ -156,6 +182,8 @@ type StoreState = {
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
+  setPaneForegroundAgent: ReturnType<typeof vi.fn>
+  clearPaneForegroundAgent: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
   markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>
@@ -743,6 +771,8 @@ describe('connectPanePty', () => {
       ),
       removeAgentStatus: vi.fn(),
       dropAgentStatus: vi.fn(),
+      setPaneForegroundAgent: vi.fn(),
+      clearPaneForegroundAgent: vi.fn(),
       markTerminalTabUnread: vi.fn(),
       markTerminalPaneUnread: vi.fn(),
       markAgentCompletionPaneUnread: vi.fn()
@@ -1701,6 +1731,67 @@ describe('connectPanePty', () => {
     binding.noteVisibilityResume()
     await flushAsyncTicks()
     expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
+  })
+
+  it('records hibernation activity from the core user-input signal, not synthetic onData replies', async () => {
+    // Regression: xterm auto-replies (focus in/out reports, DA/DSR responses)
+    // arrive through the same onData stream as typing. Recording them as pane
+    // input made the hibernation planner treat a pane hidden after its agent
+    // finished as "input after done" and never hibernate it.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps()
+    const pane = createPane(2)
+    let userInputListener: (() => void) | null = null
+    const userInputDispose = vi.fn()
+    ;(pane.terminal as unknown as { _core: unknown })._core = {
+      coreService: {
+        onUserInput: vi.fn((listener: () => void) => {
+          userInputListener = listener
+          return { dispose: userInputDispose }
+        })
+      }
+    }
+
+    const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
+      dispose: () => void
+    }
+    await flushAsyncTicks()
+    expect(userInputListener).toBeTypeOf('function')
+    ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
+
+    // A focus-out report forwarded to the PTY must not count as activity.
+    sendTerminalInputThroughPane(pane, '\x1b[O')
+    expect(mockStoreState.recordTerminalInput).not.toHaveBeenCalled()
+    // The reply still reaches the shell; only the activity recording is gated.
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O')
+
+    // Real user input fires the core signal and records activity.
+    ;(userInputListener as unknown as () => void)()
+    expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
+
+    binding.dispose()
+    expect(userInputDispose).toHaveBeenCalled()
+  })
+
+  it('falls back to onData hibernation recording when the core user-input signal is unavailable', async () => {
+    // If an xterm upgrade removes the internal signal, activity recording must
+    // degrade to the historical onData behavior — never to no tracking at all.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps()
+    const pane = createPane(2)
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
+
+    sendTerminalInputThroughPane(pane, 'x')
+    expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {
@@ -3027,6 +3118,45 @@ describe('connectPanePty', () => {
 
     expect(getFitOverrideForPane(1, 'tab-1')).toBeNull()
     expect(pane.container.dataset.ptyId).toBeUndefined()
+  })
+
+  it('refits immediately when binding to a PTY with an active mobile-fit override', async () => {
+    const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    Object.defineProperty(pane.container, 'getBoundingClientRect', {
+      configurable: true,
+      value: () =>
+        ({
+          width: 800,
+          height: 400,
+          top: 0,
+          left: 0,
+          right: 800,
+          bottom: 400
+        }) as DOMRect
+    })
+    ;(
+      pane.fitAddon as unknown as { proposeDimensions: () => { cols: number; rows: number } }
+    ).proposeDimensions = vi.fn(() => ({ cols: 120, rows: 40 }))
+    pane.terminal.resize.mockImplementation((cols: number, rows: number) => {
+      pane.terminal.cols = cols
+      pane.terminal.rows = rows
+    })
+    setFitOverride('pty-fit', 'mobile-fit', 49, 20)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onPtySpawn).toBeTypeOf('function')
+    onPtySpawn?.('pty-fit')
+
+    expect(pane.terminal.resize).toHaveBeenCalledWith(49, 20)
+    expect(pane.terminal.cols).toBe(49)
+    expect(pane.terminal.rows).toBe(20)
   })
 
   it('continues post-spawn size reconcile after a transient mobile presence lock', async () => {
@@ -5140,6 +5270,114 @@ describe('connectPanePty', () => {
     // the daemon does not redeliver the cold-restore payload on the next
     // reattach.
     expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith('tab-pty')
+  })
+
+  it('blanks restored scrollback before fresh shell output', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    const written: string[] = []
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      callbacks.onData?.('PS >')
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    pane.terminal.rows = 4
+    pane.terminal.cols = 20
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      written.push(data)
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredViewportBlankingPanesRef: { current: new Set([1]) }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const blankViewport = buildFreshShellViewportBlankingSequence(4)
+    expect(written).toContain(blankViewport)
+    expect(written.indexOf(blankViewport)).toBeLessThan(written.indexOf('PS >'))
+
+    const rendered = await renderHeadlessTerminalState(
+      ['old TUI row with a long tail\r\nold TUI row two', blankViewport, 'PS >'],
+      20,
+      4
+    )
+    expect(rendered.baseY).toBeGreaterThan(0)
+    expect(rendered.allLines.some((line) => line.includes('old TUI row'))).toBe(true)
+    expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
+  })
+
+  it('cold-restores scrollback then blanks the viewport without erasing scrollback', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    const written: string[] = []
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: 'fresh-pty',
+          coldRestore: { scrollback: 'cold TUI row one\r\ncold TUI row two', cwd: '/tmp/wt-1' }
+        }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    pane.terminal.rows = 4
+    pane.terminal.cols = 20
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      written.push(data)
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const blankViewport = buildFreshShellViewportBlankingSequence(4)
+    expect(written).not.toContain('\x1b[2J\x1b[3J\x1b[H')
+    expect(written).toEqual(
+      expect.arrayContaining([
+        'cold TUI row one\r\ncold TUI row two',
+        POST_REPLAY_MODE_RESET,
+        blankViewport
+      ])
+    )
+    expect(written.indexOf('cold TUI row one\r\ncold TUI row two')).toBeLessThan(
+      written.indexOf(blankViewport)
+    )
+
+    const rendered = await renderHeadlessTerminalState([...written, 'PS >'], 20, 4)
+    expect(rendered.baseY).toBeGreaterThan(0)
+    expect(rendered.allLines.some((line) => line.includes('cold TUI row'))).toBe(true)
+    expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
   })
 
   it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {

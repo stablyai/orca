@@ -1673,6 +1673,54 @@ describe('createMainWindow', () => {
     })
   })
 
+  // Why (#5787): a hung-but-ALIVE renderer (never gone, never crashed) must NOT
+  // silently bypass the close guard — force-killing it that way is what destroyed
+  // other sessions. It must route through window:close-requested so the
+  // save/running-process confirmation runs.
+  it('requests confirmation for a hung-but-alive renderer instead of bypassing', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => false)
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    // No render-process-gone and isCrashed() === false: the renderer is alive.
+    const preventDefault = vi.fn()
+    windowHandlers.close({ preventDefault } as never)
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
+      isQuitting: false
+    })
+  })
+
   it('ignores traffic light sync IPC on non-macOS', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
