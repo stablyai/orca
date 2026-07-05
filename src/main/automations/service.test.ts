@@ -196,6 +196,164 @@ describe('AutomationService', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('dispatches when only the saved project identity drifted after repo normalization', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        gitRemoteIdentity: {
+          canonicalKey: 'github.com/stablyai/orca',
+          remoteName: 'origin',
+          remoteUrl: 'https://github.com/stablyai/orca.git'
+        }
+      })
+    )
+    const setup = store.getProjectHostSetups()[0]!
+    const automation = store.createAutomation({
+      name: 'Manual check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'git:github.com/stablyai/orca',
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: setup.path
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+    service.setRendererReady()
+
+    const run = await service.runNow(automation.id)
+
+    expect(setup.projectId).toBe('github:stablyai/orca')
+    expect(run.status).toBe('dispatching')
+    expect(send).toHaveBeenCalledWith(
+      'automations:dispatchRequested',
+      expect.objectContaining({
+        automation: expect.objectContaining({ id: automation.id }),
+        run: expect.objectContaining({ id: run.id, status: 'dispatching' })
+      })
+    )
+  })
+
+  it('skips dispatch when the saved project identity differs from the current repo identity', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        gitRemoteIdentity: {
+          canonicalKey: 'github.com/new-org/orca',
+          remoteName: 'origin',
+          remoteUrl: 'https://github.com/new-org/orca.git'
+        }
+      })
+    )
+    const setup = store.getProjectHostSetups()[0]!
+    const automation = store.createAutomation({
+      name: 'Manual check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'git:github.com/stablyai/orca',
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: setup.path
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+    service.setRendererReady()
+
+    const run = await service.runNow(automation.id)
+
+    expect(setup.projectId).toBe('github:new-org/orca')
+    expect(run.status).toBe('skipped_unavailable')
+    expect(run.error).toBe(
+      'Automation run target no longer matches the selected project host setup.'
+    )
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('dispatches scheduled runs when only the saved project identity drifted', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:59:00'))
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        gitRemoteIdentity: {
+          canonicalKey: 'github.com/stablyai/orca',
+          remoteName: 'origin',
+          remoteUrl: 'https://github.com/stablyai/orca.git'
+        }
+      })
+    )
+    const setup = store.getProjectHostSetups()[0]!
+    const automation = store.createAutomation({
+      name: 'Morning check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'git:github.com/stablyai/orca',
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: setup.path
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00').getTime()
+    })
+
+    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+
+    service.start()
+    service.setRendererReady()
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.any(Object))
+    )
+    service.stop()
+
+    const [, payload] = send.mock.calls[0]
+    expect(setup.projectId).toBe('github:stablyai/orca')
+    expect(payload.automation.id).toBe(automation.id)
+    expect(payload.run).toMatchObject({
+      scheduledFor: new Date('2026-05-13T09:00:00').getTime(),
+      status: 'dispatching'
+    })
+    expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatching')
+  })
+
   it('skips runtime-owned automations before desktop renderer dispatch', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()

@@ -59,6 +59,40 @@ function getProjectGitRemoteIdentity(
   return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null
 }
 
+function getGitHubProjectIdFromCanonicalGitKey(canonicalKey: string): string | null {
+  const [host, owner, repo, ...rest] = canonicalKey.trim().split('/')
+  if (host?.toLowerCase() !== 'github.com' || !owner?.trim() || !repo?.trim() || rest.length > 0) {
+    return null
+  }
+  return `github:${normalizeIdentityPart(owner)}/${normalizeIdentityPart(repo)}`
+}
+
+export function projectIdentityMatchesRunContext(
+  savedProjectId: string,
+  currentProjectId: string,
+  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+): boolean {
+  if (savedProjectId === currentProjectId) {
+    return true
+  }
+
+  const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
+  if (!gitRemoteIdentity) {
+    return false
+  }
+  const normalizedGitHubProjectId = getGitHubProjectIdFromCanonicalGitKey(
+    gitRemoteIdentity.canonicalKey
+  )
+  // Why: only the repo-normalization upgrade from git:<github canonical key>
+  // to github:<owner>/<repo> is tolerated; real remote changes still block.
+  return (
+    normalizedGitHubProjectId !== null &&
+    savedProjectId === `git:${gitRemoteIdentity.canonicalKey}` &&
+    currentProjectId === normalizedGitHubProjectId &&
+    getProjectIdentityKey(repo) === normalizedGitHubProjectId
+  )
+}
+
 /** True when the repo resolves to a GitHub provider identity (via explicit
  *  upstream or a GitHub-sourced avatar icon). Used to scope GitHub-CLI setup
  *  prompts to users who actually have GitHub-backed projects. */

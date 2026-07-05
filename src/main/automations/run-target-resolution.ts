@@ -2,6 +2,7 @@ import type { Store } from '../persistence'
 import type { Automation } from '../../shared/automations-types'
 import { getAutomationLegacyRepoId } from '../../shared/automation-run-identity'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import { projectIdentityMatchesRunContext } from '../../shared/project-host-setup-projection'
 import type { ProjectHostSetup, Repo } from '../../shared/types'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 
@@ -64,11 +65,7 @@ export function resolveAutomationRunTarget(
       error: `Project setup on the selected automation host is ${setup.setupState}.`
     }
   }
-  if (
-    setup.projectId !== context.projectId ||
-    setup.hostId !== context.hostId ||
-    setup.repoId !== context.repoId
-  ) {
+  if (setup.hostId !== context.hostId || setup.repoId !== context.repoId) {
     return {
       ok: false,
       error: 'Automation run target no longer matches the selected project host setup.'
@@ -80,6 +77,12 @@ export function resolveAutomationRunTarget(
     return {
       ok: false,
       error: 'Repository for the selected automation host is no longer available.'
+    }
+  }
+  if (!projectIdentityMatchesRunContext(context.projectId, setup.projectId, repo)) {
+    return {
+      ok: false,
+      error: 'Automation run target no longer matches the selected project host setup.'
     }
   }
   if (getRepoExecutionHostId(repo) !== context.hostId) {

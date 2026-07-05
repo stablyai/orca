@@ -4,6 +4,7 @@ import {
   describeRuntimeCompatBlock,
   evaluateRuntimeCompat
 } from '../../../../shared/protocol-compat'
+import { projectIdentityMatchesRunContext } from '../../../../shared/project-host-setup-projection'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -97,7 +98,7 @@ export function getAutomationTargetAvailability({
       )
     }
     const setupMatchesContext =
-      setup.projectId === automation.runContext.projectId &&
+      projectIdentityMatchesRunContext(automation.runContext.projectId, setup.projectId, repo) &&
       setup.repoId === automation.runContext.repoId &&
       setup.path === automation.runContext.path &&
       setupHostMatchesRunContext(setup.hostId, automation.runContext.hostId, automationHostTarget)

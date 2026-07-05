@@ -140,6 +140,118 @@ describe('automation target availability', () => {
     ).toBe('host-mismatch')
   })
 
+  it('allows saved run contexts when only the project identity drifted', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'git:github.com/stablyai/orca',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo({
+          gitRemoteIdentity: {
+            canonicalKey: 'github.com/stablyai/orca',
+            remoteName: 'origin',
+            remoteUrl: 'https://github.com/stablyai/orca.git'
+          }
+        }),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ projectId: 'github:stablyai/orca' })],
+        sshConnectionStates: new Map()
+      })
+    ).toEqual({ canRunNow: true, reason: 'available', message: null })
+  })
+
+  it('blocks saved run contexts when project identity changed beyond GitHub normalization', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'git:github.com/stablyai/orca',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo({
+          gitRemoteIdentity: {
+            canonicalKey: 'github.com/new-org/orca',
+            remoteName: 'origin',
+            remoteUrl: 'https://github.com/new-org/orca.git'
+          }
+        }),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ projectId: 'github:new-org/orca' })],
+        sshConnectionStates: new Map()
+      }).reason
+    ).toBe('host-mismatch')
+  })
+
+  it('blocks saved run contexts with real setup, repo, host, or path mismatches', () => {
+    const automation = makeAutomation({
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'project-1',
+        hostId: 'local',
+        projectHostSetupId: 'setup-1',
+        repoId: 'repo-1',
+        path: '/repo'
+      }
+    })
+    const baseline = {
+      automation,
+      workspace: makeWorkspace(),
+      sshConnectionStates: new Map()
+    }
+
+    expect(
+      getAutomationTargetAvailability({
+        ...baseline,
+        repo: makeRepo(),
+        projectHostSetups: [makeProjectHostSetup({ repoId: 'repo-2' })]
+      }).reason
+    ).toBe('host-mismatch')
+
+    expect(
+      getAutomationTargetAvailability({
+        ...baseline,
+        repo: makeRepo(),
+        projectHostSetups: [makeProjectHostSetup({ path: '/other' })]
+      }).reason
+    ).toBe('host-mismatch')
+
+    expect(
+      getAutomationTargetAvailability({
+        ...baseline,
+        repo: makeRepo({ id: 'repo-2' }),
+        projectHostSetups: [makeProjectHostSetup()]
+      }).reason
+    ).toBe('host-mismatch')
+
+    expect(
+      getAutomationTargetAvailability({
+        ...baseline,
+        repo: makeRepo({ executionHostId: 'ssh:devbox' }),
+        projectHostSetups: [makeProjectHostSetup()]
+      }).reason
+    ).toBe('host-mismatch')
+
+    expect(
+      getAutomationTargetAvailability({
+        ...baseline,
+        repo: makeRepo({ path: '/other' }),
+        projectHostSetups: [makeProjectHostSetup()]
+      }).reason
+    ).toBe('host-mismatch')
+  })
+
   it('allows remote-listed SSH automations whose repo is projected through a runtime server', () => {
     expect(
       getAutomationTargetAvailability({
