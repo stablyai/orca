@@ -48,6 +48,7 @@ export function getFolderWorkspaceCardPrDisplay({
     settings: settings ?? null,
     hostedReviewCache: hostedReviewCache ?? {},
     prCache: prCache ?? {},
+    // Folder cards only need the compact status icon; avoid check-detail cache fanout.
     checksCache: {}
   })
     .map(parentPrChecksRowToCardDisplay)
