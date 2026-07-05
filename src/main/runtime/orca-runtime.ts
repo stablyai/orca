@@ -19936,6 +19936,12 @@ export class OrcaRuntimeService {
       return
     }
 
+    // The active coordinator prompt is user-owned input, so push-on-idle must not synthesize Enter.
+    if (this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle === handle) {
+      this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
+      return
+    }
+
     const tabTitle = this.tabs.get(leaf.tabId)?.title
     if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
       // Why: Cursor Agent treats injected PTY text as editable prompt input.
