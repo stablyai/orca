@@ -4272,6 +4272,7 @@ export class Store {
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
+        | 'executionHostId'
         | 'symlinkPaths'
         | 'issueSourcePreference'
         | 'forkSyncMode'

@@ -2988,6 +2988,16 @@ describe('Store', () => {
     expect(updated?.projectGroupOrder).toBe(1)
   })
 
+  it('updates repo execution host identity', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+
+    const updated = store.updateRepo('r1', { executionHostId: 'runtime:env-1' })
+
+    expect(updated?.executionHostId).toBe('runtime:env-1')
+    expect(store.getRepo('r1')?.executionHostId).toBe('runtime:env-1')
+  })
+
   it('getRepo returns undefined for nonexistent id', async () => {
     const store = await createStore()
     expect(store.getRepo('nonexistent')).toBeUndefined()

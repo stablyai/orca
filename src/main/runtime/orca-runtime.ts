@@ -126,6 +126,7 @@ import type {
   WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
@@ -1412,6 +1413,16 @@ function getRuntimeWorktreeRemovalOptionsKey(force: boolean, runHooks: boolean):
 
 function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
   return `${repo.id}::${repo.path}`
+}
+
+// Null means host-unaware: path-only callers match any repo, and the first runtime host can adopt a legacy repo.
+function runtimeRepoMatchesExecutionHost(
+  repo: Pick<Repo, 'executionHostId'>,
+  executionHostId?: ExecutionHostId | null
+): boolean {
+  return (
+    executionHostId == null || repo.executionHostId == null || repo.executionHostId === executionHostId
+  )
 }
 
 function getRuntimeFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
@@ -9873,7 +9884,11 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    let repo = await this.addRepo(args.path, args.kind === 'folder' ? 'folder' : 'git')
+    let repo = await this.addRepo(
+      args.path,
+      args.kind === 'folder' ? 'folder' : 'git',
+      args.hostId
+    )
     let setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
     if (setup.projectId !== args.projectId) {
       const existingProject = this.listProjects().find((project) => project.id === args.projectId)
@@ -9912,7 +9927,7 @@ export class OrcaRuntimeService {
   }
 
   async setupProjectClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
-    const repo = await this.cloneRepo(args.url, args.destination)
+    const repo = await this.cloneRepo(args.url, args.destination, args.hostId)
     return await this.setupProjectExistingFolder({
       projectId: args.projectId,
       hostId: args.hostId,
@@ -10313,7 +10328,11 @@ export class OrcaRuntimeService {
     })
   }
 
-  async addRepo(path: string, kind: 'git' | 'folder' = 'git'): Promise<Repo> {
+  async addRepo(
+    path: string,
+    kind: 'git' | 'folder' = 'git',
+    executionHostId?: ExecutionHostId | null
+  ): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -10326,8 +10345,21 @@ export class OrcaRuntimeService {
       throw new Error(`Not a valid git repository: ${path}`)
     }
 
-    const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, path))
+    const existing = this.store.getRepos().find((repo) => {
+      if (!runtimePathsEqual(repo.path, path)) {
+        return false
+      }
+      return runtimeRepoMatchesExecutionHost(repo, executionHostId)
+    })
     if (existing) {
+      if (executionHostId != null && existing.executionHostId == null) {
+        const adopted =
+          this.store.updateRepo(existing.id, { executionHostId }) ??
+          ({ ...existing, executionHostId } as Repo)
+        this.invalidateResolvedWorktreeCache()
+        this.notifyReposChanged()
+        return adopted
+      }
       return existing
     }
 
@@ -10337,6 +10369,7 @@ export class OrcaRuntimeService {
       path,
       displayName: getRepoName(path),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      ...(executionHostId != null ? { executionHostId } : {}),
       ...detected,
       addedAt: Date.now(),
       kind,
@@ -10475,7 +10508,11 @@ export class OrcaRuntimeService {
     return { repo: this.store.getRepo(repo.id) ?? repo }
   }
 
-  async cloneRepo(url: string, destination: string): Promise<Repo> {
+  async cloneRepo(
+    url: string,
+    destination: string,
+    executionHostId?: ExecutionHostId | null
+  ): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -10503,7 +10540,8 @@ export class OrcaRuntimeService {
         trimmedUrl,
         trimmedDestination,
         clonePath,
-        clonePathKey
+        clonePathKey,
+        executionHostId
       )
     } finally {
       release()
@@ -10517,14 +10555,19 @@ export class OrcaRuntimeService {
     trimmedUrl: string,
     trimmedDestination: string,
     clonePath: string,
-    clonePathKey: string
+    clonePathKey: string,
+    executionHostId?: ExecutionHostId | null
   ): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const existingBeforeClone = this.store
       .getRepos()
-      .find((repo) => getClonePathComparisonKey(repo.path) === clonePathKey)
+      .find(
+        (repo) =>
+          getClonePathComparisonKey(repo.path) === clonePathKey &&
+          runtimeRepoMatchesExecutionHost(repo, executionHostId)
+      )
     if (existingBeforeClone && !isFolderRepo(existingBeforeClone)) {
       return existingBeforeClone
     }
@@ -10584,7 +10627,11 @@ export class OrcaRuntimeService {
 
     const existing = this.store
       .getRepos()
-      .find((repo) => getClonePathComparisonKey(repo.path) === clonePathKey)
+      .find(
+        (repo) =>
+          getClonePathComparisonKey(repo.path) === clonePathKey &&
+          runtimeRepoMatchesExecutionHost(repo, executionHostId)
+      )
     if (existing) {
       if (isFolderRepo(existing)) {
         const updated = this.store.updateRepo(existing.id, { kind: 'git' })
@@ -10605,6 +10652,7 @@ export class OrcaRuntimeService {
       path: clonePath,
       displayName: getRepoName(clonePath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
+      ...(executionHostId != null ? { executionHostId } : {}),
       ...detected,
       addedAt: Date.now(),
       kind: 'git',
