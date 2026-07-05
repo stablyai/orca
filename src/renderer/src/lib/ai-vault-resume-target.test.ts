@@ -94,6 +94,24 @@ describe('ai vault session storage compatibility', () => {
         targetExecutionHostId: 'local'
       })
     ).toBe(false)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'ssh:dev-box',
+        targetStatus: 'local'
+      })
+    ).toBe(false)
+  })
+
+  it('allows WSL-stored local sessions on any SSH target even with explicit host ids', () => {
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: wslSessionFile,
+        sessionExecutionHostId: 'local',
+        targetStatus: 'ssh',
+        targetExecutionHostId: 'ssh:dev-box'
+      })
+    ).toBe(true)
   })
 
   it('never allows runtime or unknown targets', () => {

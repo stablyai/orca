@@ -130,6 +130,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   )
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
+    repos,
     worktrees: allWorktrees,
     activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null
   })

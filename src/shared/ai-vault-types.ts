@@ -55,6 +55,7 @@ export type AiVaultSessionPreviewMessage = {
 export type AiVaultSession = {
   id: string
   executionHostId: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
   agent: AiVaultAgent
   sessionId: string
   title: string

@@ -2588,7 +2588,8 @@
             "sessionQueued": "Sesión en cola",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
-            "localSessionSshWorkspaceUnsupported": "El historial de esta sesión está almacenado en este equipo, por lo que no se puede reanudar en un espacio de trabajo SSH. En su lugar, suéltala en un espacio de trabajo local."
+            "localSessionSshWorkspaceUnsupported": "El historial de esta sesión está almacenado en este equipo, por lo que no se puede reanudar en un espacio de trabajo SSH. En su lugar, suéltala en un espacio de trabajo local.",
+            "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Suéltala en un espacio de trabajo del mismo host."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "Nueva división"
@@ -9577,7 +9578,8 @@
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
-            "localSessionSshWorkspaceUnsupported": "El historial de esta sesión está almacenado en este equipo, por lo que no se puede reanudar en un espacio de trabajo SSH. En su lugar, abre un espacio de trabajo local."
+            "localSessionSshWorkspaceUnsupported": "El historial de esta sesión está almacenado en este equipo, por lo que no se puede reanudar en un espacio de trabajo SSH. En su lugar, abre un espacio de trabajo local.",
+            "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Abre un espacio de trabajo en el mismo host para reanudarla."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",

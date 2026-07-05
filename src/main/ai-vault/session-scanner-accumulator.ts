@@ -44,7 +44,11 @@ export function createAccumulator(args: {
 export function finalizeSession(
   accumulator: SessionAccumulator,
   platform: NodeJS.Platform,
-  options: { codexHome?: string | null; executionHostId?: ExecutionHostId } = {}
+  options: {
+    codexHome?: string | null
+    executionHostId?: ExecutionHostId
+    executionHostPlatform?: NodeJS.Platform | null
+  } = {}
 ): AiVaultSession | null {
   const sessionId = accumulator.sessionId.trim()
   if (!sessionId) {
@@ -60,6 +64,9 @@ export function finalizeSession(
   return {
     id: `${executionHostId}:${accumulator.agent}:${sessionId}:${accumulator.filePath}`,
     executionHostId,
+    ...(options.executionHostPlatform
+      ? { executionHostPlatform: options.executionHostPlatform }
+      : {}),
     agent: accumulator.agent,
     sessionId,
     title,

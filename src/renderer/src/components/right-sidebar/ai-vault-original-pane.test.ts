@@ -10,6 +10,7 @@ const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 const baseSession: AiVaultSession = {
   id: 'codex:session-1',
+  executionHostId: 'local',
   agent: 'codex',
   sessionId: 'session-1',
   title: 'Fix the pane focus',

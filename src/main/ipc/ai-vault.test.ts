@@ -5,7 +5,7 @@ import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 
 const mocks = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn(),
-  scanRemoteCodexSessions: vi.fn(),
+  scanRemoteAiVaultSessions: vi.fn(),
   getAiVaultWslHomeDirs: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
   getActiveSshAiVaultHostInfo: vi.fn(),
@@ -21,8 +21,8 @@ vi.mock('../ai-vault/session-scanner', () => ({
   scanAiVaultSessions: mocks.scanAiVaultSessions
 }))
 
-vi.mock('../ai-vault/remote-codex-session-scanner', () => ({
-  scanRemoteCodexSessions: mocks.scanRemoteCodexSessions
+vi.mock('../ai-vault/remote-session-scanner', () => ({
+  scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
 }))
 
 vi.mock('../wsl', () => ({
@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   _internals.resetAiVaultCacheForTests()
   mocks.scanAiVaultSessions.mockResolvedValue(result([session('local', 'local-session')]))
-  mocks.scanRemoteCodexSessions.mockResolvedValue(
+  mocks.scanRemoteAiVaultSessions.mockResolvedValue(
     result([session('ssh:dev-box', 'remote-session')])
   )
   mocks.getSshFilesystemProvider.mockReturnValue(provider)
@@ -67,19 +67,23 @@ describe('listAiVaultSessions host routing', () => {
         executionHostId: 'local'
       })
     )
-    expect(mocks.scanRemoteCodexSessions).not.toHaveBeenCalled()
+    expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
   })
 
   it('routes SSH scope to only that SSH target', async () => {
-    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
+    await _internals.listAiVaultSessions({
+      executionHostScope: 'ssh:dev-box',
+      scopePaths: ['/home/ada/repo']
+    })
 
     expect(mocks.scanAiVaultSessions).not.toHaveBeenCalled()
     expect(mocks.getActiveSshAiVaultHostInfo).toHaveBeenCalledWith('dev-box')
-    expect(mocks.scanRemoteCodexSessions).toHaveBeenCalledWith(
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledWith(
       expect.objectContaining({
         provider,
         executionHostId: 'ssh:dev-box',
-        remoteHome: '/home/ada'
+        remoteHome: '/home/ada',
+        scopePaths: ['/home/ada/repo']
       })
     )
   })
@@ -88,7 +92,7 @@ describe('listAiVaultSessions host routing', () => {
     const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
 
     expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
-    expect(mocks.scanRemoteCodexSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
     expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
   })
 
@@ -115,7 +119,7 @@ describe('listAiVaultSessions host routing', () => {
     await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box' })
 
     expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
-    expect(mocks.scanRemoteCodexSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
   })
 })
 

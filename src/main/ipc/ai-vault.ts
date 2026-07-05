@@ -1,7 +1,7 @@
 import { app, ipcMain } from 'electron'
 import { join } from 'node:path'
+import { scanRemoteAiVaultSessions } from '../ai-vault/remote-session-scanner'
 import { scanAiVaultSessions } from '../ai-vault/session-scanner'
-import { scanRemoteCodexSessions } from '../ai-vault/remote-codex-session-scanner'
 import { sessionSortTime } from '../ai-vault/session-scanner-accumulator'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import type {
@@ -70,8 +70,12 @@ async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListR
       return result
     })
     .finally(() => {
-      inflightKey = null
-      inflightList = null
+      // Only clear tracking if it still refers to this request: a concurrent
+      // different-scope scan may have replaced it and must stay dedupable.
+      if (inflightKey === key) {
+        inflightKey = null
+        inflightList = null
+      }
     })
   return inflightList
 }
@@ -142,12 +146,13 @@ async function scanSshAiVaultSessions(
       message: SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
     })
   }
-  return scanRemoteCodexSessions({
+  return scanRemoteAiVaultSessions({
     provider,
     executionHostId: hostInfo.executionHostId,
     remoteHome: hostInfo.remoteHome,
     hostPlatform: hostInfo.hostPlatform,
-    limit: args?.limit
+    limit: args?.limit,
+    scopePaths: args?.scopePaths
   })
 }
 

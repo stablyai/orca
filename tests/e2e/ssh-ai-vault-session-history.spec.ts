@@ -16,7 +16,7 @@ test.describe('SSH Agent Session History', () => {
   test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
   test.skip(process.platform === 'win32', 'Docker SSH tests use POSIX ssh tooling.')
 
-  test('shows remote Codex history only for the SSH host and resumes on that worktree', async ({
+  test('shows remote session history only for the SSH host and resumes Codex on that worktree', async ({
     orcaPage
   }, testInfo: TestInfo) => {
     test.slow()
@@ -24,16 +24,20 @@ test.describe('SSH Agent Session History', () => {
     const stamp = Date.now()
     const defaultSessionId = `remote-ai-vault-${stamp}`
     const runtimeSessionId = `remote-ai-vault-runtime-${stamp}`
+    const claudeSessionId = `remote-ai-vault-claude-${stamp}`
     const defaultTitle = `Remote AI Vault ${stamp}`
     const runtimeTitle = `Remote Runtime AI Vault ${stamp}`
+    const claudeTitle = `Remote Claude AI Vault ${stamp}`
 
     try {
       target = startDockerSshRelayTarget(testInfo)
-      seedRemoteCodexHistory(target, {
+      seedRemoteAiVaultHistory(target, {
         defaultSessionId,
         runtimeSessionId,
+        claudeSessionId,
         defaultTitle,
-        runtimeTitle
+        runtimeTitle,
+        claudeTitle
       })
 
       await waitForSessionReady(orcaPage)
@@ -42,7 +46,7 @@ test.describe('SSH Agent Session History', () => {
       const sshScope = `ssh:${encodeURIComponent(remote.targetId)}`
 
       const scan = await orcaPage.evaluate(
-        async ({ sshScope, defaultTitle, runtimeTitle }) => {
+        async ({ sshScope, defaultTitle, runtimeTitle, claudeTitle }) => {
           const local = await window.api.aiVault.listSessions({
             executionHostScope: 'local',
             force: true
@@ -59,19 +63,25 @@ test.describe('SSH Agent Session History', () => {
             localHasRemote: local.sessions.some((session) => session.title === defaultTitle),
             sshTitles: ssh.sessions.map((session) => session.title),
             allHasRuntime: all.sessions.some((session) => session.title === runtimeTitle),
+            allHasClaude: all.sessions.some((session) => session.title === claudeTitle),
             remoteHostIds: ssh.sessions
-              .filter((session) => session.title === defaultTitle || session.title === runtimeTitle)
+              .filter((session) =>
+                [defaultTitle, runtimeTitle, claudeTitle].includes(session.title)
+              )
               .map((session) => session.executionHostId),
             remoteCommands: ssh.sessions
               .filter((session) => session.title === defaultTitle || session.title === runtimeTitle)
               .map((session) => session.resumeCommand)
           }
         },
-        { sshScope, defaultTitle, runtimeTitle }
+        { sshScope, defaultTitle, runtimeTitle, claudeTitle }
       )
       expect(scan.localHasRemote).toBe(false)
-      expect(scan.sshTitles).toEqual(expect.arrayContaining([defaultTitle, runtimeTitle]))
+      expect(scan.sshTitles).toEqual(
+        expect.arrayContaining([defaultTitle, runtimeTitle, claudeTitle])
+      )
       expect(scan.allHasRuntime).toBe(true)
+      expect(scan.allHasClaude).toBe(true)
       expect(new Set(scan.remoteHostIds)).toEqual(new Set([sshScope]))
       expect(scan.remoteCommands.join('\n')).toContain("CODEX_HOME='/root/.codex'")
       expect(scan.remoteCommands.join('\n')).toContain(
@@ -94,7 +104,10 @@ test.describe('SSH Agent Session History', () => {
       await expect(runtimeSessionTitle.first()).toBeVisible({ timeout: 30_000 })
 
       await hostButton.click()
-      await orcaPage.getByRole('menuitemradio').nth(1).click()
+      await orcaPage
+        .getByRole('menuitemradio')
+        .filter({ hasNotText: /Local|All hosts/ })
+        .click()
       await expect(defaultSessionTitle.first()).toBeVisible({ timeout: 30_000 })
 
       await installStartupQueueProbe(orcaPage)
@@ -112,20 +125,23 @@ test.describe('SSH Agent Session History', () => {
   })
 })
 
-function seedRemoteCodexHistory(
+function seedRemoteAiVaultHistory(
   target: DockerSshRelayTarget,
   args: {
     defaultSessionId: string
     runtimeSessionId: string
+    claudeSessionId: string
     defaultTitle: string
     runtimeTitle: string
+    claudeTitle: string
   }
 ): void {
   dockerExec(
     target,
     [
       'mkdir -p /root/.codex/sessions/2026/07/04',
-      'mkdir -p /root/.local/share/orca/codex-runtime-home/home/sessions/2026/07/04'
+      'mkdir -p /root/.local/share/orca/codex-runtime-home/home/sessions/2026/07/04',
+      'mkdir -p /root/.claude/projects/orca'
     ].join(' && ')
   )
   dockerWriteFile(
@@ -153,6 +169,16 @@ function seedRemoteCodexHistory(
       title: args.runtimeTitle,
       cwd: DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
       timestamp: '2026-07-04T02:00:00.000Z'
+    }),
+    '600'
+  )
+  dockerWriteFile(
+    target,
+    `/root/.claude/projects/orca/${args.claudeSessionId}.jsonl`,
+    claudeTranscript({
+      sessionId: args.claudeSessionId,
+      title: args.claudeTitle,
+      timestamp: '2026-07-04T03:00:00.000Z'
     }),
     '600'
   )
@@ -184,6 +210,23 @@ function codexTranscript(args: {
 
 function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
+}
+
+function claudeTranscript(args: { sessionId: string; title: string; timestamp: string }): string {
+  return jsonLines([
+    {
+      sessionId: args.sessionId,
+      timestamp: args.timestamp,
+      type: 'user',
+      message: { content: [{ type: 'text', text: args.title }] }
+    },
+    {
+      sessionId: args.sessionId,
+      timestamp: args.timestamp.replace(':00.000Z', ':01.000Z'),
+      type: 'assistant',
+      message: { model: 'claude-opus-4', content: 'Remote session acknowledged.' }
+    }
+  ])
 }
 
 async function openAiVaultSidebar(page: Page): Promise<void> {

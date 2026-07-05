@@ -2,13 +2,19 @@ import { useMemo } from 'react'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import {
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
 } from '../../../../shared/cross-platform-path'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { Worktree } from '../../../../shared/types'
+import type { Repo, Worktree } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 export type AiVaultSessionWorktreeStatus = 'current' | 'active' | 'archived' | 'unavailable'
@@ -23,16 +29,19 @@ export type AiVaultSessionWorktreeInfo = {
 type WorktreeCandidate = {
   worktree: Worktree
   path: string
+  hostId: ExecutionHostId
   status: Exclude<AiVaultSessionWorktreeStatus, 'current'>
   source: 'current-path' | 'prior-path'
 }
 
 export function resolveAiVaultSessionWorktreeInfo({
   session,
+  repos = [],
   worktrees,
   activeWorktreeId
 }: {
   session: AiVaultSession
+  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
 }): AiVaultSessionWorktreeInfo | null {
@@ -40,8 +49,10 @@ export function resolveAiVaultSessionWorktreeInfo({
     return null
   }
 
-  const candidates = buildWorktreeCandidates(worktrees)
+  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
+  const candidates = buildWorktreeCandidates(worktrees, repos)
     .filter((candidate) => isSessionInWorktreePath(candidate.path, session.cwd!))
+    .filter((candidate) => !sessionHostId || candidate.hostId === sessionHostId)
     .sort(compareWorktreeCandidates)
 
   const best = candidates[0]
@@ -85,6 +96,7 @@ export function extractWorktreePathFromSessionTitle(title: string): string | nul
 
 export function resolveAiVaultSessionWorktreeDisplay(args: {
   session: AiVaultSession
+  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
 }): AiVaultSessionWorktreeInfo | null {
@@ -117,10 +129,12 @@ export function resolveAiVaultSessionWorktreeDisplay(args: {
 
 export function useAiVaultSessionWorktreeMap({
   sessions,
+  repos = [],
   worktrees,
   activeWorktreeId
 }: {
   sessions: readonly AiVaultSession[]
+  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   worktrees: readonly Worktree[]
   activeWorktreeId: string | null
 }): ReadonlyMap<string, AiVaultSessionWorktreeInfo> {
@@ -130,13 +144,14 @@ export function useAiVaultSessionWorktreeMap({
         sessions.flatMap((session) => {
           const worktreeInfo = resolveAiVaultSessionWorktreeDisplay({
             session,
+            repos,
             worktrees,
             activeWorktreeId
           })
           return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
         })
       ),
-    [activeWorktreeId, sessions, worktrees]
+    [activeWorktreeId, repos, sessions, worktrees]
   )
 }
 
@@ -192,13 +207,22 @@ export function aiVaultWorktreeJumpTooltip(
   )
 }
 
-function buildWorktreeCandidates(worktrees: readonly Worktree[]): WorktreeCandidate[] {
+function buildWorktreeCandidates(
+  worktrees: readonly Worktree[],
+  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
+): WorktreeCandidate[] {
   const candidates: WorktreeCandidate[] = []
+  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   for (const worktree of worktrees) {
+    const repo = repoById.get(worktree.repoId)
+    const hostId =
+      normalizeExecutionHostId(worktree.hostId) ??
+      (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
     if (hasUsablePath(worktree.path)) {
       candidates.push({
         worktree,
         path: worktree.path,
+        hostId,
         status: worktree.isArchived ? 'archived' : 'active',
         source: 'current-path'
       })
@@ -211,6 +235,7 @@ function buildWorktreeCandidates(worktrees: readonly Worktree[]): WorktreeCandid
       candidates.push({
         worktree,
         path: parsed.worktreePath,
+        hostId,
         status: worktree.isArchived ? 'archived' : 'active',
         source: 'prior-path'
       })

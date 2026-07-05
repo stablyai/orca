@@ -30,6 +30,9 @@ export function useAiVaultExecutionHostScope(args: {
     useState<ExecutionHostScope>(defaultExecutionHostScope)
 
   useEffect(() => {
+    // Why: preserve an explicit user choice (e.g. "All") across incidental
+    // rerenders, but reset to the new default once that choice no longer
+    // applies to the active worktree's host.
     const allowedScopes = new Set<ExecutionHostScope>([
       LOCAL_EXECUTION_HOST_ID,
       ALL_EXECUTION_HOSTS_SCOPE,

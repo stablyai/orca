@@ -124,11 +124,17 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
 const activeSessions = new Map<string, SshRelaySession>()
 
 export function getActiveSshAiVaultHostInfo(targetId: string): SshRelayAiVaultHostInfo | null {
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    return null
+  }
   return activeSessions.get(targetId)?.getAiVaultHostInfo() ?? null
 }
 
 export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
   return [...activeSessions.values()].flatMap((session) => {
+    if (isRuntimeOwnedSshTargetId(session.targetId)) {
+      return []
+    }
     const info = session.getAiVaultHostInfo()
     return info ? [info] : []
   })

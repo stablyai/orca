@@ -63,6 +63,19 @@ async function renderHook(
   })
 }
 
+async function rerenderHook(
+  scopePaths: readonly string[] = [],
+  executionHostScope: 'local' | 'all' | `ssh:${string}` = 'local'
+): Promise<void> {
+  const root = roots.at(-1)
+  if (!root) {
+    throw new Error('renderHook must be called before rerenderHook')
+  }
+  await act(async () => {
+    root.render(createElement(HookProbe, { scopePaths, executionHostScope }))
+  })
+}
+
 async function flushMicrotasks(): Promise<void> {
   await act(async () => {
     await Promise.resolve()
@@ -147,6 +160,43 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
       executionHostScope: 'ssh:dev-box',
       scopePaths: ['/repo']
     })
+  })
+
+  it('does not apply stale results after the host scope changes mid-scan', async () => {
+    let resolveLocal: ((result: AiVaultListResult) => void) | null = null
+    let resolveSsh: ((result: AiVaultListResult) => void) | null = null
+    listSessionsMock
+      .mockImplementationOnce(
+        () => new Promise<AiVaultListResult>((resolve) => (resolveLocal = resolve))
+      )
+      .mockImplementationOnce(
+        () => new Promise<AiVaultListResult>((resolve) => (resolveSsh = resolve))
+      )
+
+    await renderHook([], 'local')
+    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+
+    await rerenderHook(['/remote/repo'], 'ssh:dev-box')
+    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveLocal?.({ ...EMPTY_RESULT, scannedAt: '2026-07-01T00:00:01.000Z' })
+    })
+    await flushMicrotasks()
+
+    expect(latest?.scanResult).toBeNull()
+    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(lastCallArgs()).toMatchObject({
+      executionHostScope: 'ssh:dev-box',
+      scopePaths: ['/remote/repo']
+    })
+
+    await act(async () => {
+      resolveSsh?.({ ...EMPTY_RESULT, scannedAt: '2026-07-01T00:00:02.000Z' })
+    })
+    await flushMicrotasks()
+
+    expect(latest?.scanResult?.scannedAt).toBe('2026-07-01T00:00:02.000Z')
   })
 
   it('force re-scans on refocus once the throttle allows it', async () => {

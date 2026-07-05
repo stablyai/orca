@@ -173,12 +173,12 @@ function aiVaultResumeUnsupportedMessage(
       'Resume from history is not available in runtime-hosted workspaces.'
     )
   }
-  // Why: 'ssh' only reaches the unsupported branch when the session file lives
-  // on this machine, so the message explains the host mismatch, not SSH itself.
-  if (targetStatus === 'ssh') {
+  // Why: local and SSH targets can both be valid generally; this branch means
+  // the session's recorded host does not match the selected workspace.
+  if (targetStatus === 'ssh' || targetStatus === 'local') {
     return translate(
-      'auto.components.right.sidebar.AiVaultPanel.localSessionSshWorkspaceUnsupported',
-      "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
+      'auto.components.right.sidebar.AiVaultPanel.sessionHostMismatchUnsupported',
+      'This session belongs to a different host. Open a workspace on the same host to resume it.'
     )
   }
   return translate(

@@ -24,8 +24,9 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
 type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
-  'agent' | 'sessionId' | 'cwd' | 'codexHome' | 'executionHostId' | 'resumeCommand'
->
+  'agent' | 'sessionId' | 'cwd' | 'codexHome'
+> &
+  Partial<Pick<AiVaultSession, 'executionHostId' | 'executionHostPlatform' | 'resumeCommand'>>
 
 export type AiVaultResumeStartup = {
   command: string
@@ -76,7 +77,12 @@ export function buildAiVaultResumeStartupForWorktree(args: {
   ) {
     return { command: args.session.resumeCommand }
   }
-  const platform = getAiVaultResumePlatform(args.state, args.worktreeId)
+  const platform =
+    args.session.executionHostId &&
+    args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
+    args.session.executionHostPlatform
+      ? args.session.executionHostPlatform
+      : getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
   // Why: the queued command is typed verbatim into the freshly spawned tab whose
   // live shell is the configured Windows shell (default PowerShell). Hardcoding

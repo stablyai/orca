@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {
   addPreviewContent,
@@ -23,24 +24,51 @@ import {
   tokenTotal
 } from './session-scanner-values'
 
+type ParserSessionOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
+
 export async function parseClaudeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'claude',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
-  let metaTitle: string | null = null
-  let generatedTitle: string | null = null
-
   const lines = createInterface({
     input: createReadStream(file.path, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
+  return parseClaudeSessionLines({ file, lines, platform })
+}
 
-  for await (const line of lines) {
+export async function parseClaudeSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {}
+): Promise<AiVaultSession | null> {
+  return parseClaudeSessionLines({
+    file,
+    lines: content.split(/\r?\n/),
+    platform,
+    options
+  })
+}
+
+async function parseClaudeSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  options?: ParserSessionOptions
+}): Promise<AiVaultSession | null> {
+  const accumulator = createAccumulator({
+    agent: 'claude',
+    file: args.file,
+    sessionId: sessionIdFromFileName(args.file.path)
+  })
+  let metaTitle: string | null = null
+  let generatedTitle: string | null = null
+
+  for await (const line of args.lines) {
     const record = parseJsonObject(line)
     if (!record) {
       continue
@@ -92,7 +120,7 @@ export async function parseClaudeSessionFile(
   }
 
   accumulator.fallbackTitle = generatedTitle ?? metaTitle
-  return finalizeSession(accumulator, platform)
+  return finalizeSession(accumulator, args.platform, args.options)
 }
 
 export async function parseGeminiSessionFile(
@@ -103,7 +131,33 @@ export async function parseGeminiSessionFile(
     return parseGeminiJsonlSessionFile(file, platform)
   }
 
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  return parseGeminiJsonSessionContent(file, await readFile(file.path, 'utf-8'), platform)
+}
+
+export async function parseGeminiSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {}
+): Promise<AiVaultSession | null> {
+  if (file.path.endsWith('.jsonl')) {
+    return parseGeminiJsonlSessionLines({
+      file,
+      lines: content.split(/\r?\n/),
+      platform,
+      options
+    })
+  }
+  return parseGeminiJsonSessionContent(file, content, platform, options)
+}
+
+function parseGeminiJsonSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: ParserSessionOptions = {}
+): AiVaultSession | null {
+  const record = asRecord(JSON.parse(content) as unknown)
   if (!record) {
     return null
   }
@@ -117,24 +171,33 @@ export async function parseGeminiSessionFile(
   for (const message of arrayValue(record.messages)) {
     consumeGeminiMessage(accumulator, asRecord(message))
   }
-  return finalizeSession(accumulator, platform)
+  return finalizeSession(accumulator, platform, options)
 }
 
 export async function parseGeminiJsonlSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform
 ): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'gemini',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
   const lines = createInterface({
     input: createReadStream(file.path, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
+  return parseGeminiJsonlSessionLines({ file, lines, platform })
+}
 
-  for await (const line of lines) {
+async function parseGeminiJsonlSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  options?: ParserSessionOptions
+}): Promise<AiVaultSession | null> {
+  const accumulator = createAccumulator({
+    agent: 'gemini',
+    file: args.file,
+    sessionId: sessionIdFromFileName(args.file.path)
+  })
+
+  for await (const line of args.lines) {
     const record = parseJsonObject(line)
     if (!record) {
       continue
@@ -153,7 +216,7 @@ export async function parseGeminiJsonlSessionFile(
     consumeGeminiMessage(accumulator, record)
   }
 
-  return finalizeSession(accumulator, platform)
+  return finalizeSession(accumulator, args.platform, args.options)
 }
 
 export function consumeGeminiMessage(

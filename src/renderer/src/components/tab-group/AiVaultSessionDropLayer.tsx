@@ -201,8 +201,8 @@ export default function AiVaultSessionDropLayer({
       ) {
         toast.error(
           translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.localSessionSshWorkspaceUnsupported',
-            "This session's history is stored on this machine, so it can't resume in an SSH workspace. Drop it onto a local workspace instead."
+            'auto.components.tab.group.AiVaultSessionDropLayer.sessionHostMismatchUnsupported',
+            'This session belongs to a different host. Drop it onto a workspace on the same host.'
           )
         )
         return true
