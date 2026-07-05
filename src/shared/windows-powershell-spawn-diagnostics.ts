@@ -31,6 +31,9 @@ export function getWindowsPowerShellFallbackStartupDelivery(args: {
   shellReadyMarker?: string
   startupCommandDeliveredInShellArgs?: boolean
 }): WindowsPowerShellStartupDeliveryKind {
+  // Why: shell-args delivery wins over the stdin marker because a cmd.exe
+  // fallback embeds the startup command in argv and cannot use the PowerShell
+  // ready-marker mechanism; flipping this order would double-deliver or drop it.
   if (args.startupCommandDeliveredInShellArgs === true) {
     return 'shell-args'
   }
@@ -41,6 +44,9 @@ export function formatWindowsPowerShellCrashCorrelationHint(args: {
   shellPath: string
   sessionId?: string
 }): string {
+  // Why: these literals match the exact pwsh ConsoleHost FailFast Event Log
+  // signature this crash targets; they must stay verbatim so operators can
+  // correlate a spawn failure against the Windows Application event log entry.
   return [
     'windows-powershell-crash-correlation',
     ...formatOptionalField('sessionId', args.sessionId),

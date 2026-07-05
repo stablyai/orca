@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
-import * as gitBash from '../main/git-bash'
+import * as gitBash from '../shared/windows-git-bash'
 import * as ptyShellUtils from './pty-shell-utils'
 import {
   resolveSetupAgentSequenceLaunchCommand,
@@ -251,6 +251,78 @@ describe('PtyHandler', () => {
     }
   })
 
+  it('falls back to cmd.exe when Windows relay PowerShell spawn attempts fail', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    mockPtySpawn
+      .mockImplementationOnce(() => {
+        throw new Error('Access is denied')
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('Access is denied')
+      })
+      .mockReturnValue({ ...mockPtyInstance })
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'pwsh.exe',
+        command: 'codex',
+        commandDelivery: 'provider'
+      })
+
+      expect(mockPtySpawn.mock.calls[0]?.[0]).toBe(pwsh7)
+      expect(mockPtySpawn.mock.calls[0]?.[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(mockPtySpawn.mock.calls[1]?.[0]).toBe(windowsPowerShell)
+      expect(mockPtySpawn.mock.calls[1]?.[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(mockPtySpawn.mock.calls[2]?.[0]).toBe(cmd)
+      expect(mockPtySpawn.mock.calls[2]?.[1]).toEqual(['/K', 'chcp 65001 > nul & codex'])
+      expect(mockPtySpawn.mock.calls[2]?.[2].env.ORCA_SHELL_READY_MARKER).toBeUndefined()
+      expect(handler.retainedStartupCommandCount).toBe(0)
+      vi.advanceTimersByTime(51)
+      expect(mockPtyInstance.write).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('applies the PowerShell implementation setting to the Windows relay default shell', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveDefaultShellSpy = vi
+      .spyOn(ptyShellUtils, 'resolveDefaultShell')
+      .mockReturnValue(windowsPowerShell)
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        terminalWindowsPowerShellImplementation: 'auto'
+      })
+
+      expect(resolveWindowsPowerShellSpawnChainMock).toHaveBeenCalledWith(
+        'pwsh.exe',
+        expect.objectContaining({ platform: 'win32' })
+      )
+      expect(mockPtySpawn).toHaveBeenCalledWith(pwsh7, expect.any(Array), expect.any(Object))
+    } finally {
+      resolveDefaultShellSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('waits for the shell-ready marker for Windows PowerShell provider startup commands', async () => {
     let dataCallback: ((data: string) => void) | undefined
     const term = {
@@ -365,12 +437,78 @@ describe('PtyHandler', () => {
         shellOverride: 'git-bash'
       })
 
-      expect(resolveGitBashSpy).toHaveBeenCalledWith('git-bash')
+      expect(resolveGitBashSpy).toHaveBeenCalledWith(
+        'git-bash',
+        expect.objectContaining({ platform: 'win32' })
+      )
       expect(mockPtySpawn).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
         expect.any(Array),
         expect.any(Object)
       )
+    } finally {
+      resolveGitBashSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('falls back from a missing Git Bash sentinel to resolved PowerShell on Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveGitBashSpy = vi
+      .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+      .mockReturnValue(null)
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'git-bash'
+      })
+
+      expect(resolveGitBashSpy).toHaveBeenCalledWith(
+        'git-bash',
+        expect.objectContaining({ platform: 'win32' })
+      )
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        windowsPowerShell,
+        expect.any(Array),
+        expect.any(Object)
+      )
+      expect(mockPtySpawn.mock.calls[0]?.[0]).not.toBe('git-bash')
+    } finally {
+      resolveGitBashSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('applies the PowerShell implementation after Git Bash relay fallback', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveGitBashSpy = vi
+      .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+      .mockReturnValue(null)
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'git-bash',
+        terminalWindowsPowerShellImplementation: 'pwsh.exe'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(pwsh7, expect.any(Array), expect.any(Object))
+      expect(mockPtySpawn.mock.calls[0]?.[0]).not.toBe('git-bash')
     } finally {
       resolveGitBashSpy.mockRestore()
       Object.defineProperty(process, 'platform', {
@@ -1387,6 +1525,55 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_WORKTREE_ID).toBe('wt-5')
     expect(callArgs.env.ORCA_AGENT_HOOK_PORT).toBe('12345')
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
+  })
+
+  it('revive falls back when Windows relay PowerShell spawn attempts fail', async () => {
+    const originalPlatform = process.platform
+    const oldShell = process.env.SHELL
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    process.env.SHELL = 'pwsh.exe'
+    mockPtySpawn
+      .mockImplementationOnce(() => {
+        throw new Error('Access is denied')
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('Access is denied')
+      })
+      .mockReturnValue({ ...mockPtyInstance })
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', {
+        state: JSON.stringify([
+          {
+            id: 'pty-7',
+            pid: 700,
+            cols: 80,
+            rows: 24,
+            cwd: 'C:\\repo'
+          }
+        ])
+      })
+
+      expect(mockPtySpawn.mock.calls[0]?.[0]).toBe(pwsh7)
+      expect(mockPtySpawn.mock.calls[1]?.[0]).toBe(windowsPowerShell)
+      expect(mockPtySpawn.mock.calls[2]?.[0]).toBe(cmd)
+      expect(mockPtySpawn.mock.calls[2]?.[1]).toEqual(['/K', 'chcp 65001 > nul'])
+      expect(mockPtySpawn.mock.calls[2]?.[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    } finally {
+      killSpy.mockRestore()
+      if (oldShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = oldShell
+      }
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 
   it('invokes the exit listener with the spawn-time paneKey', async () => {

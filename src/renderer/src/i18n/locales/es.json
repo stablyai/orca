@@ -6539,7 +6539,8 @@
             "fastDescription": "Multiplicador adicional al desplazarse con una tecla modificadora.",
             "tui": "TUI",
             "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
-          }
+          },
+          "09762e5861": "PowerShell 7+ was found only as a WindowsApps alias. Orca will use Windows PowerShell until a real PowerShell 7+ install is available."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",

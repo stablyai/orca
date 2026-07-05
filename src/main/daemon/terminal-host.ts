@@ -138,7 +138,7 @@ export class TerminalHost {
       rows: size.rows,
       terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
       subprocess,
-      shellReadySupported: opts.shellReadySupported ?? false,
+      shellReadySupported: subprocess.shellReadySupported ?? opts.shellReadySupported ?? false,
       // Why: reap the dead session (dispose emulator + drop from the map) the
       // moment its subprocess exits, instead of retaining it for the daemon's
       // lifetime. Nothing reads a dead session's emulator (getSnapshot/

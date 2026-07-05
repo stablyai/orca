@@ -140,6 +140,11 @@ export class SshPtyProvider implements IPtyProvider {
       ...(opts.terminalWindowsWslDistro !== undefined
         ? { terminalWindowsWslDistro: opts.terminalWindowsWslDistro }
         : {}),
+      ...(opts.terminalWindowsPowerShellImplementation !== undefined
+        ? {
+            terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
+          }
+        : {}),
       ...(opts.commandDelivery ? { commandDelivery: opts.commandDelivery } : {}),
       ...(opts.startupCommandDelivery
         ? { startupCommandDelivery: opts.startupCommandDelivery }

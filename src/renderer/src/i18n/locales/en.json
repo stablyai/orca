@@ -6576,7 +6576,8 @@
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
-          }
+          },
+          "09762e5861": "PowerShell 7+ was found only as a WindowsApps alias. Orca will use Windows PowerShell until a real PowerShell 7+ install is available."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",

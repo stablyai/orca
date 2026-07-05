@@ -6561,7 +6561,8 @@
             "fastDescription": "修飾キーを押しながらスクロールするときの追加倍率。",
             "tui": "TUI",
             "tuiDescription": "全画面ターミナルアプリ向けの離散的なホイール通知。"
-          }
+          },
+          "09762e5861": "PowerShell 7+ was found only as a WindowsApps alias. Orca will use Windows PowerShell until a real PowerShell 7+ install is available."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",

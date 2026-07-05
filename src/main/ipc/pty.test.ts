@@ -2139,6 +2139,65 @@ describe('registerPtyHandlers', () => {
         expect(store.persistPtyBinding).not.toHaveBeenCalled()
       })
 
+      it('forwards the PowerShell implementation setting on SSH spawns', async () => {
+        const sshSpawn = vi.fn(
+          async (_opts: {
+            env?: Record<string, string>
+            terminalWindowsPowerShellImplementation?: string
+          }) => ({
+            id: 'ssh-pty'
+          })
+        )
+        const store = {
+          upsertSshRemotePtyLease: vi.fn(),
+          persistPtyBinding: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          (() => ({
+            terminalWindowsPowerShellImplementation: 'pwsh.exe'
+          })) as never,
+          undefined,
+          store as never
+        )
+
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: {},
+          connectionId: 'ssh-1'
+        })
+
+        expect(sshSpawn.mock.calls.at(-1)?.[0].terminalWindowsPowerShellImplementation).toBe(
+          'pwsh.exe'
+        )
+      })
+
       it('marks a caller-supplied SSH session expired when remote reattach is gone', async () => {
         const sshSpawn = vi.fn(async () => {
           throw new Error('SSH_SESSION_EXPIRED: remote-pty')

@@ -67,14 +67,15 @@ describe('SshPtyProvider', () => {
       })
     })
 
-    it('forwards explicit shellOverride and terminalWindowsWslDistro to the relay mux', async () => {
+    it('forwards explicit Windows shell options to the relay mux', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 
       await provider.spawn({
         cols: 120,
         rows: 40,
         shellOverride: 'powershell.exe',
-        terminalWindowsWslDistro: 'Ubuntu'
+        terminalWindowsWslDistro: 'Ubuntu',
+        terminalWindowsPowerShellImplementation: 'pwsh.exe'
       })
 
       expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
@@ -83,7 +84,8 @@ describe('SshPtyProvider', () => {
         cwd: undefined,
         env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
         shellOverride: 'powershell.exe',
-        terminalWindowsWslDistro: 'Ubuntu'
+        terminalWindowsWslDistro: 'Ubuntu',
+        terminalWindowsPowerShellImplementation: 'pwsh.exe'
       })
     })
 

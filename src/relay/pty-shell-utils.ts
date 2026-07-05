@@ -16,7 +16,7 @@ import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground
 } from '../main/providers/windows-agent-foreground-process'
-import { resolveWindowsPowerShellShellPath } from './windows-powershell-shell'
+import { resolveWindowsPowerShellShellPath } from '../shared/windows-terminal-launch-plan'
 
 const execFile = promisify(execFileCb)
 
@@ -63,6 +63,9 @@ export function resolveWindowsDefaultShell(
     env,
     powerShellResolveOptions
   )
+  // Why: the resolver's spawn-chain terminates in cmd.exe as a last resort;
+  // reject that here so a fully-unresolvable PowerShell falls through to the
+  // explicit ComSpec logic below instead of masquerading as "resolved".
   if (
     resolvedWindowsPowerShell &&
     pathWin32.basename(resolvedWindowsPowerShell).toLowerCase() !== 'cmd.exe'

@@ -6524,7 +6524,8 @@
             "fastDescription": "수정 키로 스크롤할 때 적용되는 추가 배율.",
             "tui": "TUI",
             "tuiDescription": "전체 화면 터미널 앱을 위한 개별 휠 보고."
-          }
+          },
+          "09762e5861": "PowerShell 7+ was found only as a WindowsApps alias. Orca will use Windows PowerShell until a real PowerShell 7+ install is available."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",

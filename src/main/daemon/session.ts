@@ -39,6 +39,9 @@ export type SubprocessHandle = {
   /** True when shell launch args already delivered the startup command, so the
    *  terminal host must skip its stdin fallback write. */
   startupCommandDeliveredInShellArgs?: boolean
+  /** Final spawned shell supports the startup shell-ready marker. Windows
+   *  fallback can change this after the daemon request was planned. */
+  shellReadySupported?: boolean
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void

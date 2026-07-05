@@ -37,7 +37,7 @@ vi.mock('../pwsh', () => ({
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
-vi.mock('../providers/windows-powershell-executable', () => ({
+vi.mock('../../shared/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
   resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
@@ -1616,6 +1616,37 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
   })
 
+  it('scrubs an ambient shell-ready marker from Windows PowerShell launches', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousMarker = process.env.ORCA_SHELL_READY_MARKER
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    process.env.ORCA_SHELL_READY_MARKER = '1'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+    } finally {
+      if (previousMarker === undefined) {
+        delete process.env.ORCA_SHELL_READY_MARKER
+      } else {
+        process.env.ORCA_SHELL_READY_MARKER = previousMarker
+      }
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
   it('defers delivery-hinted Windows PowerShell startup commands to PTY stdin', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -1714,6 +1745,42 @@ describe('createPtySubprocess', () => {
     expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
     expect(String(warnMock.mock.calls.at(-1)?.[0])).toContain('startupDelivery=shell-args')
     expect(String(warnMock.mock.calls.at(-1)?.[0])).not.toContain('cwd=')
+    warnMock.mockRestore()
+  })
+
+  it('disables shell-ready when Windows PowerShell falls back to cmd.exe without argv delivery', () => {
+    const proc = mockPtyProcess()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const startupCommand = `codex ${'x'.repeat(7000)}`
+    const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('ConPTY rejected PowerShell')
+    })
+    spawnMock.mockReturnValue(proc)
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: startupCommand,
+        startupCommandDelivery: 'shell-ready'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls[1]?.[0]).toBe(CMD_ABS)
+    expect(spawnMock.mock.calls[1]?.[1]).toEqual(['/K', 'chcp 65001 > nul'])
+    expect(spawnMock.mock.calls[1]?.[2].env.ORCA_SHELL_READY_MARKER).toBeUndefined()
+    expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
+    expect(handle!.shellReadySupported).toBe(false)
     warnMock.mockRestore()
   })
 

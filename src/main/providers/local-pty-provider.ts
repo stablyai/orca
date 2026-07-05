@@ -5,15 +5,12 @@ files without a cleaner ownership seam. */
 import { basename, delimiter } from 'node:path'
 import { win32 as pathWin32 } from 'node:path'
 import {
-  resolveWindowsShellLaunchArgs,
+  isWindowsPowerShellShellPath,
+  resolveWindowsTerminalLaunchPlan,
+  resolveWindowsTerminalShellPath,
   shouldLaunchWindowsPowerShellWithoutProfile
-} from './windows-shell-args'
-import {
-  resolveEffectiveWindowsPowerShell,
-  shouldProbeWindowsPowerShellAvailability,
-  type WindowsPowerShellShellFamily
-} from './windows-powershell'
-import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
+} from '../../shared/windows-terminal-launch-plan'
+import type { WindowsTerminalLaunchPlan } from '../../shared/windows-terminal-launch-plan'
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
@@ -48,17 +45,11 @@ import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
 } from '../pty/powerlevel10k-wizard-env'
-import {
-  isWindowsGitBashShellPath,
-  resolveGitBashPath,
-  resolveWindowsGitBashShellPath
-} from '../git-bash'
-import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { isWindowsGitBashShellPath, resolveGitBashPath } from '../git-bash'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
-import { isPowerShellExecutableName } from '../powershell-osc133-bootstrap'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -257,10 +248,6 @@ function getSpawnedShellName(shellPath: string): string {
   return process.platform === 'win32' ? pathWin32.basename(shellPath) : basename(shellPath)
 }
 
-function isWindowsPowerShellPath(shellPath: string): boolean {
-  return isPowerShellExecutableName(pathWin32.basename(shellPath))
-}
-
 /**
  * Disposes the native PTY handle while avoiding recycled-pid signals on POSIX.
  */
@@ -371,13 +358,23 @@ export class LocalPtyProvider implements IPtyProvider {
         : undefined
 
     let shellPath: string
-    let shellArgs: string[]
-    let effectiveCwd: string
-    let validationCwd: string
+    let shellArgs: string[] = []
+    let effectiveCwd = cwd
+    let validationCwd = cwd
     let startupCommandDeliveredInShellArgs = false
-    let windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts> = []
+    let windowsFallbackAttempts: WindowsTerminalLaunchPlan['windowsFallbackAttempts'] = []
+    const activeWindowsLaunch = { plan: null as WindowsTerminalLaunchPlan | null }
     const windowsPowerShellLaunchOptions = {
       powerShellNoProfile: shouldLaunchWindowsPowerShellWithoutProfile(args.env)
+    }
+    const applyWindowsLaunchPlan = (plan: WindowsTerminalLaunchPlan): void => {
+      activeWindowsLaunch.plan = plan
+      shellPath = plan.shellPath
+      shellArgs = plan.shellArgs
+      effectiveCwd = plan.effectiveCwd
+      validationCwd = plan.validationCwd
+      startupCommandDeliveredInShellArgs = plan.startupCommandDeliveredInShellArgs
+      windowsFallbackAttempts = plan.windowsFallbackAttempts
     }
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
@@ -385,10 +382,15 @@ export class LocalPtyProvider implements IPtyProvider {
       | undefined
     if (wslInfo) {
       shellPath = 'wsl.exe'
-      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
-      shellArgs = resolved.shellArgs
-      effectiveCwd = resolved.effectiveCwd
-      validationCwd = resolved.validationCwd
+      applyWindowsLaunchPlan(
+        resolveWindowsTerminalLaunchPlan({
+          shellPath,
+          cwd,
+          defaultCwd,
+          startupCommand: args.command,
+          launchOptions: windowsPowerShellLaunchOptions
+        })
+      )
     } else if (process.platform === 'win32') {
       // Why: shellOverride lets a single tab open in a different shell than the
       // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
@@ -398,75 +400,24 @@ export class LocalPtyProvider implements IPtyProvider {
         this.opts.getWindowsShell?.() ||
         process.env.COMSPEC ||
         'powershell.exe'
-      const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
-      const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
-      const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
-      // Why: shell selection can arrive either as a canonical setting value
-      // ('powershell.exe') or as a concrete PowerShell executable path from a
-      // one-off override. Normalize both forms back to the PowerShell family so
-      // the shared resolver can still fall back to inbox powershell.exe when
-      // pwsh.exe was requested but is unavailable.
       const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
-      const resolvedShellFamily: WindowsPowerShellShellFamily =
-        normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-          ? normalizedShellFamily
-          : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-            ? normalizedShellFamily
-            : undefined
-      const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
-        shellFamily: resolvedShellFamily,
-        implementation: powerShellImplementation
-      })
-      const shouldResolvePowerShellFamily =
-        powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
-      if (resolvedGitBashPath) {
-        shellPath = resolvedGitBashPath
-      } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
-        shellPath = 'powershell.exe'
-      } else {
-        shellPath = shouldResolvePowerShellFamily
-          ? (resolveEffectiveWindowsPowerShell({
-              shellFamily: resolvedShellFamily,
-              implementation: powerShellImplementation,
-              pwshAvailable: shouldProbePwsh ? (this.opts.pwshAvailable?.() ?? false) : false
-            }) ?? shellFamily)
-          : shellFamily
-      }
-      // Why: when the selected shell is a PowerShell family, resolve it to a
-      // real absolute executable and build a PowerShell -> cmd.exe fallback
-      // chain. Handing ConPTY a bare `pwsh.exe` lets Windows resolve it to the
-      // Store App Execution Alias stub, whose spawn fails with error code 5.
-      // The shared launch-args helper inside keeps both this path and the
-      // daemon path producing identical args (chcp 65001 / $PROFILE / wsl cwd).
-      windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
-        shellPath,
-        cwd,
-        defaultCwd,
-        wslContext: worktreeWslContext ?? preferredWslContext,
-        startupCommand: args.command,
-        launchOptions: windowsPowerShellLaunchOptions
-      })
-      const primaryAttempt = windowsFallbackAttempts[0]
-      if (primaryAttempt) {
-        shellPath = primaryAttempt.shellPath
-        shellArgs = primaryAttempt.shellArgs
-        effectiveCwd = primaryAttempt.effectiveCwd
-        validationCwd = primaryAttempt.validationCwd
-        startupCommandDeliveredInShellArgs = primaryAttempt.startupCommandDeliveredInShellArgs
-      } else {
-        const resolved = resolveWindowsShellLaunchArgs(
+      shellPath = worktreeWslContext
+        ? 'wsl.exe'
+        : resolveWindowsTerminalShellPath({
+            shellPath: requestedShellFamily,
+            powerShellImplementation,
+            pwshAvailable: () => this.opts.pwshAvailable?.() ?? false
+          })
+      applyWindowsLaunchPlan(
+        resolveWindowsTerminalLaunchPlan({
           shellPath,
           cwd,
           defaultCwd,
-          worktreeWslContext ?? preferredWslContext,
-          args.command,
-          windowsPowerShellLaunchOptions
-        )
-        shellArgs = resolved.shellArgs
-        effectiveCwd = resolved.effectiveCwd
-        validationCwd = resolved.validationCwd
-        startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
-      }
+          wslContext: worktreeWslContext ?? preferredWslContext,
+          startupCommand: args.command,
+          launchOptions: windowsPowerShellLaunchOptions
+        })
+      )
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']
@@ -558,14 +509,16 @@ export class LocalPtyProvider implements IPtyProvider {
             // Why: wsl.exe only imports non-default env vars named in WSLENV.
             addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
             if (!launchWslDistro) {
-              const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd, {
-                distro: codexHomeWslInfo.distro
-              })
-              shellArgs = resolved.shellArgs
-              effectiveCwd = resolved.effectiveCwd
-              validationCwd = resolved.validationCwd
-              startupCommandDeliveredInShellArgs =
-                resolved.startupCommandDeliveredInShellArgs === true
+              applyWindowsLaunchPlan(
+                resolveWindowsTerminalLaunchPlan({
+                  shellPath,
+                  cwd,
+                  defaultCwd,
+                  wslContext: { distro: codexHomeWslInfo.distro },
+                  startupCommand: args.command,
+                  launchOptions: windowsPowerShellLaunchOptions
+                })
+              )
             }
           }
         } else if (isHostCodexHomeForWsl(finalEnv.CODEX_HOME)) {
@@ -588,6 +541,9 @@ export class LocalPtyProvider implements IPtyProvider {
         delete finalEnv.CODEX_HOME
         delete finalEnv.ORCA_CODEX_HOME
       }
+      // Why: Orca terminals can spawn Orca during development. Do not let an
+      // inherited marker make an unrelated Windows shell emit OSC 777 bytes.
+      finalEnv.ORCA_SHELL_READY_MARKER = '0'
     }
     seedPowerlevel10kWizardEnv(finalEnv, { envToDelete: args.envToDelete })
     if (
@@ -597,12 +553,7 @@ export class LocalPtyProvider implements IPtyProvider {
     ) {
       addWslEnvKeys(finalEnv, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
     }
-    if (
-      process.platform === 'win32' &&
-      args.command &&
-      !startupCommandDeliveredInShellArgs &&
-      isWindowsPowerShellPath(shellPath)
-    ) {
+    if (process.platform === 'win32' && activeWindowsLaunch.plan?.requiresShellReadyMarker) {
       // Why: PowerShell startup payloads are delivered after the marker, not
       // via -EncodedCommand's initialCommand path that can crash ConsoleHost.
       finalEnv.ORCA_SHELL_READY_MARKER = '1'
@@ -697,11 +648,14 @@ export class LocalPtyProvider implements IPtyProvider {
     if (args.command && getFallbackShellReadyConfig) {
       shellReadyLaunch = getFallbackShellReadyConfig(shellPath)
     }
+    // Why: re-derive on the *post-fallback* shellPath. If ConPTY rejected the
+    // resolved PowerShell and we fell back (e.g. cmd.exe), we must only wait for
+    // the ready-marker OSC when PowerShell actually ended up running.
     if (
       process.platform === 'win32' &&
       args.command &&
       !startupCommandDeliveredInShellArgs &&
-      isWindowsPowerShellPath(shellPath)
+      isWindowsPowerShellShellPath(shellPath)
     ) {
       shellReadyLaunch = { args: null, env: {}, supportsReadyMarker: true }
     }

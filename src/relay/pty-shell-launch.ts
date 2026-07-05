@@ -1,13 +1,13 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
+import { getPosixOmpShellWrapper } from '../shared/omp-shell-wrapper'
 import {
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../main/shell-templates'
-import { getWindowsRelayShellArgs } from './windows-relay-shell-args'
+import { getWindowsRelayShellLaunchPlan } from '../shared/windows-relay-shell-launch-plan'
 
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
@@ -247,19 +247,13 @@ export function getRelayShellLaunchConfig(
   if (platform === 'win32') {
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
+    const shellLaunch = getWindowsRelayShellLaunchPlan(shellName, env, {
+      terminalWindowsWslDistro: options.terminalWindowsWslDistro,
+      emitReadyMarker
+    })
     return {
-      args:
-        getWindowsRelayShellArgs(shellName, env, {
-          terminalWindowsWslDistro: options.terminalWindowsWslDistro
-        }) ?? [],
-      env:
-        emitReadyMarker &&
-        (shellName === 'powershell.exe' ||
-          shellName === 'powershell' ||
-          shellName === 'pwsh.exe' ||
-          shellName === 'pwsh')
-          ? { ORCA_SHELL_READY_MARKER: '1' }
-          : {}
+      args: shellLaunch?.args ?? [],
+      env: shellLaunch?.env ?? {}
     }
   }
 

@@ -47,7 +47,7 @@ vi.mock('node-pty', () => ({
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
-vi.mock('./windows-powershell-executable', () => ({
+vi.mock('../../shared/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
   resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
@@ -599,6 +599,30 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[0]).toBe(PWSH7_ABS)
       expect(spawnCall[1]).toContain('-EncodedCommand')
       expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
+    it('scrubs an ambient shell-ready marker from Windows PowerShell launches', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const previousMarker = process.env.ORCA_SHELL_READY_MARKER
+      process.env.ORCA_SHELL_READY_MARKER = '1'
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\Users\\jin\\repo',
+          shellOverride: 'powershell.exe'
+        })
+      } finally {
+        if (previousMarker === undefined) {
+          delete process.env.ORCA_SHELL_READY_MARKER
+        } else {
+          process.env.ORCA_SHELL_READY_MARKER = previousMarker
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
     })
 
     it('defers delivery-hinted Windows PowerShell startup commands to PTY stdin', async () => {

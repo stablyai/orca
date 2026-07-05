@@ -7,8 +7,11 @@ import {
   formatWindowsPowerShellSpawnDiagnostic,
   getWindowsPowerShellFallbackStartupDelivery
 } from '../../shared/windows-powershell-spawn-diagnostics'
+import type { WindowsShellSpawnAttempt } from '../../shared/windows-terminal-launch-plan'
 import { wslUncDirectoryExists } from '../wsl'
 import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
+
+export type { WindowsShellSpawnAttempt } from '../../shared/windows-terminal-launch-plan'
 
 let didEnsureSpawnHelperExecutable = false
 
@@ -116,17 +119,6 @@ export function validateWorkingDirectory(cwd: string): void {
   }
 }
 
-/** A pre-resolved Windows shell attempt: an absolute executable plus the launch
- *  args + cwd computed for it. Used to walk the PowerShell -> Windows PowerShell
- *  -> cmd.exe fallback chain when ConPTY rejects the primary shell. */
-export type WindowsShellSpawnAttempt = {
-  shellPath: string
-  shellArgs: string[]
-  effectiveCwd: string
-  validationCwd: string
-  startupCommandDeliveredInShellArgs: boolean
-}
-
 export type ShellSpawnParams = {
   shellPath: string
   shellArgs: string[]
@@ -183,6 +175,9 @@ function getWindowsFallbackSpawnEnv(
   env: Record<string, string>,
   shellPath: string
 ): Record<string, string> {
+  // Why: a non-PowerShell fallback (e.g. cmd.exe) delivers its startup command
+  // via argv and never emits the ready marker; strip ORCA_SHELL_READY_MARKER so
+  // the caller does not wait for an OSC that will never arrive.
   if (isWindowsPowerShellSpawnPath(shellPath) || env.ORCA_SHELL_READY_MARKER !== '1') {
     return env
   }

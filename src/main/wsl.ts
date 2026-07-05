@@ -1,5 +1,9 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { parseWslUncPath } from '../shared/wsl-paths'
+import {
+  parseWslUncPath,
+  toLinuxPath as toLinuxPathShared,
+  toWindowsWslPath as toWindowsWslPathShared
+} from '../shared/wsl-paths'
 
 export type WslPathInfo = {
   distro: string
@@ -74,19 +78,10 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
  * breaks scripts that read ORCA_ROOT_PATH or similar env vars inside WSL.
  */
 export function toLinuxPath(windowsPath: string): string {
-  const info = parseWslPath(windowsPath)
-  if (info) {
-    return info.linuxPath
-  }
-
-  const driveMatch = windowsPath.match(/^([A-Za-z]):[/\\](.*)$/)
-  if (!driveMatch) {
+  if (process.platform !== 'win32' && parseWslUncPath(windowsPath)) {
     return windowsPath
   }
-
-  const driveLetter = driveMatch[1].toLowerCase()
-  const rest = driveMatch[2].replace(/\\/g, '/')
-  return `/mnt/${driveLetter}/${rest}`
+  return toLinuxPathShared(windowsPath)
 }
 
 /**
@@ -98,15 +93,7 @@ export function toLinuxPath(windowsPath: string): string {
  * WSL virtual filesystem and use the UNC form (\\wsl.localhost\Distro\...).
  */
 export function toWindowsWslPath(linuxPath: string, distro: string): string {
-  // /mnt/c/Users/... → C:\Users\...
-  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
-  if (mntMatch) {
-    const driveLetter = mntMatch[1].toUpperCase()
-    const rest = (mntMatch[2] || '').replace(/\//g, '\\')
-    return `${driveLetter}:${rest || '\\'}`
-  }
-
-  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
+  return toWindowsWslPathShared(linuxPath, distro)
 }
 
 // ─── WSL home directory resolution ──────────────────────────────────

@@ -2153,6 +2153,9 @@ export function registerPtyHandlers(
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
+      } else if (args.connectionId && getSettings) {
+        spawnOptions.terminalWindowsPowerShellImplementation =
+          getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto'
       }
 
       const materializedPaneKey = hostSessionBinding
@@ -2902,6 +2905,11 @@ export function registerPtyHandlers(
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
+      } else if (args.connectionId && getSettings) {
+        // Why: SSH Windows relays resolve PowerShell on the remote host, but
+        // the user's family-level implementation choice is owned by Orca.
+        spawnOptions.terminalWindowsPowerShellImplementation =
+          getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto'
       }
       const existingPaneSpawn = reservationPaneKey
         ? paneSpawnReservationsByPaneKey.get(reservationPaneKey)

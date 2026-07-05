@@ -6524,7 +6524,8 @@
             "fastDescription": "按住修饰键滚动时的额外倍数。",
             "tui": "TUI",
             "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
-          }
+          },
+          "09762e5861": "PowerShell 7+ was found only as a WindowsApps alias. Orca will use Windows PowerShell until a real PowerShell 7+ install is available."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "预览 {{value0}} 主题",

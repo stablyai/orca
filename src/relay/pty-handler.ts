@@ -1,8 +1,6 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
-import { resolveWindowsGitBashShellPath } from '../main/git-bash'
-import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
@@ -12,11 +10,18 @@ import {
   getForegroundProcessName,
   listShellProfiles
 } from './pty-shell-utils'
-import { resolveWindowsPowerShellShellPath } from './windows-powershell-shell'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
+import {
+  getWindowsRelayFallbackAttempts,
+  isWindowsPowerShellRelayShell,
+  readWindowsPowerShellImplementation,
+  resolvePtyShellOverride,
+  resolveWindowsPowerShellConfiguredShell,
+  spawnRelayPtyWithWindowsFallback
+} from './windows-relay-pty-spawn'
 import {
   createShellReadyScanState,
   drainShellReadyHeldBytes,
@@ -39,16 +44,6 @@ async function loadPty(): Promise<typeof NodePty | null> {
   } catch {
     return null
   }
-}
-
-function isWindowsPowerShellRelayShell(shellPath: string): boolean {
-  const shellName = shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase()
-  return (
-    shellName === 'powershell.exe' ||
-    shellName === 'powershell' ||
-    shellName === 'pwsh.exe' ||
-    shellName === 'pwsh'
-  )
 }
 
 type ManagedPty = {
@@ -141,36 +136,6 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR1',
   'SIGUSR2'
 ])
-
-const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
-  'powershell.exe',
-  'powershell',
-  'pwsh.exe',
-  'pwsh',
-  'cmd.exe',
-  'cmd',
-  'wsl.exe',
-  'wsl',
-  WINDOWS_GIT_BASH_SHELL
-])
-
-function resolvePtyShellOverride(shellOverride: string): string {
-  if (!shellOverride) {
-    return ''
-  }
-  if (process.platform !== 'win32') {
-    return ''
-  }
-  const normalized = shellOverride.toLowerCase()
-  if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
-    throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
-  }
-  return (
-    resolveWindowsGitBashShellPath(shellOverride) ??
-    resolveWindowsPowerShellShellPath(shellOverride) ??
-    shellOverride
-  )
-}
 
 type PtyProcessSummary = {
   id: string
@@ -551,8 +516,22 @@ export class PtyHandler {
     const env = params.env as Record<string, string> | undefined
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
-    const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
-    const shell = resolvedShellOverride || resolveDefaultShell()
+    const terminalWindowsPowerShellImplementation = readWindowsPowerShellImplementation(
+      params.terminalWindowsPowerShellImplementation
+    )
+    const resolvedShellOverride = resolvePtyShellOverride(
+      shellOverride,
+      terminalWindowsPowerShellImplementation
+    )
+    const defaultShell = resolveDefaultShell()
+    const shell =
+      resolvedShellOverride ||
+      (process.platform === 'win32'
+        ? resolveWindowsPowerShellConfiguredShell(
+            defaultShell,
+            terminalWindowsPowerShellImplementation
+          )
+        : defaultShell)
     const id = `pty-${this.nextId++}`
 
     // Why: server-side augmenter values (ORCA_AGENT_HOOK_* and plugin overlay
@@ -574,6 +553,10 @@ export class PtyHandler {
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
+    // Why: Windows PowerShell startup payloads must never be embedded in
+    // -EncodedCommand launch args (ConsoleHost FailFast crash risk), so any
+    // PowerShell startup forces the shell-ready marker path regardless of the
+    // caller's shouldUseShellReadyStartupDelivery decision.
     const isWindowsPowerShellStartup =
       process.platform === 'win32' &&
       launchCommandHint !== undefined &&
@@ -593,20 +576,31 @@ export class PtyHandler {
       emitReadyMarker: shouldEmitShellReadyMarker
     })
 
+    const windowsFallbackAttempts = getWindowsRelayFallbackAttempts({
+      command,
+      cwd,
+      shell,
+      shouldProviderDeliverCommand,
+      spawnEnv
+    })
     // Why: SSH exec channels give the relay a minimal environment without
     // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
     // includes Homebrew, nvm, and user-installed CLIs (claude, codex, gh).
     // When overlays are injected, the launch wrapper keeps those paths after
-    // user startup files re-export their defaults.
-    const term = pty.spawn(shell, shellLaunch.args, {
-      name: 'xterm-256color',
+    // user startup files re-export their defaults. On Windows, use the same
+    // PowerShell fallback chain as local/daemon so relay terminals still open
+    // when ConPTY rejects the resolved PowerShell executable.
+    const spawned = spawnRelayPtyWithWindowsFallback({
       cols,
-      rows,
       cwd,
-      // Why: relay shells inherit process.env; never let an ambient Orca marker
-      // enable shell-ready behavior unless this spawn explicitly requested it.
-      env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+      pty,
+      rows,
+      shell,
+      shellLaunch,
+      spawnEnv,
+      windowsFallbackAttempts
     })
+    const term = spawned.term
 
     // Why: capture the renderer-supplied paneKey on the managed entry so the
     // exit listener can evict per-pane caches without the relay needing a
@@ -623,14 +617,14 @@ export class PtyHandler {
       tabId,
       worktreeId,
       ...(terminalHandle ? { terminalHandle } : {}),
-      ...(shouldProviderDeliverCommand
+      ...(shouldProviderDeliverCommand && !spawned.startupCommandDeliveredInShellArgs
         ? {
             startupCommand: {
               command,
               delivered: false,
-              waitForShellReady: shellLaunch.env.ORCA_SHELL_READY_MARKER === '1',
+              waitForShellReady: spawned.shellLaunch.env.ORCA_SHELL_READY_MARKER === '1',
               scanState:
-                shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
+                spawned.shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
                   ? createShellReadyScanState()
                   : null,
               timer: null
@@ -927,7 +921,11 @@ export class PtyHandler {
       if (entry.terminalHandle) {
         revivedEnv.ORCA_TERMINAL_HANDLE = entry.terminalHandle
       }
-      const shell = resolveDefaultShell()
+      const defaultShell = resolveDefaultShell()
+      const shell =
+        process.platform === 'win32'
+          ? resolveWindowsPowerShellConfiguredShell(defaultShell)
+          : defaultShell
       // Why: `command` is intentionally absent from this revive path because
       // SerializedPtyEntry (see line 99) does not persist it — ManagedPty
       // never stored the renderer-chosen launch command. The Pi/OMP extension
@@ -941,15 +939,25 @@ export class PtyHandler {
         shell
       })
       const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
-      const term = ptyMod.spawn(shell, shellLaunch.args, {
-        name: 'xterm-256color',
-        cols: entry.cols,
-        rows: entry.rows,
+      const windowsFallbackAttempts = getWindowsRelayFallbackAttempts({
         cwd: entry.cwd,
-        // Why: revived shells should not inherit an ambient shell-ready marker
-        // because no provider-delivered startup command is waiting on it.
-        env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+        shell,
+        shouldProviderDeliverCommand: false,
+        spawnEnv
       })
+      // Why: revive still performs a fresh shell spawn after relay restart; it
+      // must inherit the same Windows PowerShell fallback behavior as spawn().
+      const spawned = spawnRelayPtyWithWindowsFallback({
+        cols: entry.cols,
+        cwd: entry.cwd,
+        pty: ptyMod,
+        rows: entry.rows,
+        shell,
+        shellLaunch,
+        spawnEnv,
+        windowsFallbackAttempts
+      })
+      const term = spawned.term
       this.wireAndStore({
         id: entry.id,
         pty: term,
