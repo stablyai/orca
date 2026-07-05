@@ -30,7 +30,9 @@ const baseSession: AiVaultSession = {
   messageCount: 4,
   totalTokens: 1200,
   previewMessages: [],
-  resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'"
+  resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'",
+  subagent: null,
+  subagentCount: 0
 }
 
 describe('filterAiVaultSessions', () => {

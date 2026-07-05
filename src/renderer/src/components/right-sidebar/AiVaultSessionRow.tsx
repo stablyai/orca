@@ -25,9 +25,11 @@ import {
   SessionMetadata,
   SessionWorktreeLine
 } from './ai-vault-session-row-display'
+import type { AgentStatusState } from '../../../../shared/agent-status-types'
 
 export function VaultSessionRow({
   session,
+  liveState,
   resumeStartup,
   worktreeInfo,
   vaultScope,
@@ -50,6 +52,7 @@ export function VaultSessionRow({
   onOpenCwd
 }: {
   session: AiVaultSession
+  liveState: AgentStatusState | null
   resumeStartup: AiVaultResumeStartup
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   vaultScope: AiVaultScope
@@ -178,6 +181,7 @@ export function VaultSessionRow({
               </div>
               <SessionMetadata
                 session={session}
+                liveState={liveState}
                 updatedAt={updatedAt}
                 worktreeInfo={worktreeInfo}
                 vaultScope={vaultScope}

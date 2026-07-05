@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { IFilesystemProvider } from '../providers/types'
@@ -6,6 +8,7 @@ import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 const mocks = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn(),
   scanRemoteAiVaultSessions: vi.fn(),
+  listClaudeSubagentSessions: vi.fn(),
   getAiVaultWslHomeDirs: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
   getActiveSshAiVaultHostInfo: vi.fn(),
@@ -23,6 +26,10 @@ vi.mock('../ai-vault/session-scanner', () => ({
 
 vi.mock('../ai-vault/remote-session-scanner', () => ({
   scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
+}))
+
+vi.mock('../ai-vault/session-scanner-claude-subagents', () => ({
+  listClaudeSubagentSessions: mocks.listClaudeSubagentSessions
 }))
 
 vi.mock('../wsl', () => ({
@@ -52,6 +59,7 @@ beforeEach(() => {
   mocks.scanRemoteAiVaultSessions.mockResolvedValue(
     result([session('ssh:dev-box', 'remote-session')])
   )
+  mocks.listClaudeSubagentSessions.mockResolvedValue({ sessions: [], issues: [] })
   mocks.getSshFilesystemProvider.mockReturnValue(provider)
   mocks.getActiveSshAiVaultHostInfo.mockReturnValue(hostInfo('dev-box'))
   mocks.getActiveSshAiVaultHostInfos.mockReturnValue([hostInfo('dev-box')])
@@ -123,6 +131,69 @@ describe('listAiVaultSessions host routing', () => {
   })
 })
 
+describe('listAiVaultSubagentSessions gating', () => {
+  const claudeRoot = join(homedir(), '.claude', 'projects')
+
+  it('lists subagents for a local Claude session inside the projects root', async () => {
+    const parentFilePath = join(claudeRoot, 'proj', 'sess.jsonl')
+
+    await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath,
+      executionHostId: 'local'
+    })
+
+    expect(mocks.listClaudeSubagentSessions).toHaveBeenCalledWith({ parentFilePath })
+  })
+
+  it('returns empty for a remote Claude session without reading the filesystem', async () => {
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath: join(claudeRoot, 'proj', 'sess.jsonl'),
+      executionHostId: 'ssh:dev-box'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('rejects a path outside the Claude projects root', async () => {
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath: '/etc/secrets/subagents',
+      executionHostId: 'local'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('rejects a dot-segment traversal out of the Claude projects root', async () => {
+    // Built with sep (not join) so the `..` segments survive into the arg.
+    const traversal = [claudeRoot, '..', '..', '..', 'etc', 'passwd.jsonl'].join(sep)
+
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath: traversal,
+      executionHostId: 'local'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
+  it('returns empty for a non-Claude agent', async () => {
+    const result = await _internals.listAiVaultSubagentSessions({
+      agent: 'codex',
+      parentFilePath: join(claudeRoot, 'proj', 'sess.jsonl'),
+      executionHostId: 'local'
+    })
+
+    expect(result).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+})
+
 function hostInfo(targetId: string) {
   return {
     targetId,
@@ -158,6 +229,8 @@ function session(
     messageCount: 1,
     totalTokens: 0,
     previewMessages: [],
-    resumeCommand: `codex resume ${sessionId}`
+    resumeCommand: `codex resume ${sessionId}`,
+    subagent: null,
+    subagentCount: 0
   }
 }

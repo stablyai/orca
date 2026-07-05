@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { sessionDetailConversationTurns } from './ai-vault-session-display'
+import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import {
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
@@ -80,6 +81,8 @@ export function SessionInlineDetails({
             />
           )}
         </SessionReceiptSection>
+
+        <SessionSubagentsSection session={session} />
 
         {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, { vaultScope }) ? (
           <SessionReceiptSection

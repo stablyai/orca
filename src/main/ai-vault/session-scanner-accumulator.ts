@@ -87,7 +87,9 @@ export function finalizeSession(
       cwd: accumulator.cwd,
       platform,
       codexHome: options.codexHome
-    })
+    }),
+    subagent: null,
+    subagentCount: 0
   }
 }
 

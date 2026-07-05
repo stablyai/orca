@@ -201,6 +201,50 @@ describe('scanRemoteAiVaultSessions', () => {
     })
   })
 
+  it('excludes Claude subagent transcripts from remote scans', async () => {
+    const provider = new MemoryRemoteProvider()
+    provider.addFile(
+      '/home/ada/.claude/projects/repo/claude-session.jsonl',
+      jsonLines([
+        {
+          sessionId: 'claude-session',
+          timestamp: '2026-07-04T04:00:00.000Z',
+          type: 'user',
+          message: { content: [{ type: 'text', text: 'Spawn a Task' }] }
+        }
+      ]),
+      40
+    )
+    provider.addFile(
+      '/home/ada/.claude/projects/repo/claude-session/subagents/agent-abc123.jsonl',
+      jsonLines([
+        {
+          sessionId: 'claude-session',
+          isSidechain: true,
+          agentId: 'abc123',
+          timestamp: '2026-07-04T04:01:00.000Z',
+          type: 'user',
+          message: { content: [{ type: 'text', text: 'Subagent task prompt' }] }
+        }
+      ]),
+      41
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    // Only the parent session surfaces; the subagent transcript would carry
+    // the parent's sessionId and list as a phantom top-level row.
+    expect(result.sessions.map((session) => session.filePath)).toEqual([
+      '/home/ada/.claude/projects/repo/claude-session.jsonl'
+    ])
+  })
+
   it('builds resume commands with the remote host platform', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(

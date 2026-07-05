@@ -39,6 +39,7 @@ import {
 } from './right-sidebar-width'
 import { translate } from '@/i18n/i18n'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
+import { useRightSidebarEdgePeekDismiss } from './right-sidebar-edge-peek'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
@@ -62,6 +63,8 @@ function RightSidebarInner(): React.JSX.Element {
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarPeek = useAppStore((s) => s.rightSidebarPeek)
+  const setRightSidebarPeek = useAppStore((s) => s.setRightSidebarPeek)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -69,11 +72,17 @@ function RightSidebarInner(): React.JSX.Element {
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
-  const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
+  // An edge-hover peek shows the same content as a pinned-open sidebar; only
+  // the positioning differs (floating overlay vs in-flow panel).
+  const isPeeking = rightSidebarPeek && !rightSidebarOpen
+  const sidebarVisible = rightSidebarOpen || isPeeking
+  const checksStatus = useAppStore((s) =>
+    s.rightSidebarOpen || s.rightSidebarPeek ? getActiveChecksStatus(s) : null
+  )
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
-  const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
+  const activeWorktreeId = useAppStore((s) => (sidebarVisible ? s.activeWorktreeId : null))
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
   const activeWorktree = useAppStore((s) =>
@@ -204,8 +213,8 @@ function RightSidebarInner(): React.JSX.Element {
     windowWidth,
     activityBarSideWidth
   )
-  const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
-    isOpen: rightSidebarOpen,
+  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
+    isOpen: sidebarVisible,
     width: renderedRightSidebarWidth,
     minWidth: RIGHT_SIDEBAR_MIN_WIDTH,
     maxWidth,
@@ -213,9 +222,15 @@ function RightSidebarInner(): React.JSX.Element {
     renderedExtraWidth: activityBarSideWidth,
     setWidth: setRightSidebarWidth
   })
+  useRightSidebarEdgePeekDismiss({
+    isPeeking,
+    isResizing,
+    setPeek: setRightSidebarPeek,
+    overlayRef: containerRef
+  })
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
 
-  const panelContent = rightSidebarOpen ? (
+  const panelContent = sidebarVisible ? (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
       {/* Why: sidebar panels no longer use key={activeWorktreeId} because
           the full unmount/remount cycle on every worktree switch triggered
@@ -228,7 +243,7 @@ function RightSidebarInner(): React.JSX.Element {
           property) rather than in a bottom-docked dashboard panel that
           competed with file Explorer/Search for vertical space. The right
           sidebar is back to tab-only content. */}
-      <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
+      <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={sidebarVisible} />
     </div>
   ) : null
 
@@ -248,7 +263,9 @@ function RightSidebarInner(): React.JSX.Element {
     />
   ))
 
-  const closeButton = rightSidebarOpen ? (
+  // During a peek the same button pins the sidebar open (toggle clears the
+  // peek flag alongside flipping open).
+  const closeButton = sidebarVisible ? (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
@@ -277,20 +294,25 @@ function RightSidebarInner(): React.JSX.Element {
     <div
       ref={containerRef}
       className={cn(
-        'relative flex-shrink-0 flex flex-row',
+        'flex-shrink-0 flex flex-row',
         // Why: overflow-visible is needed when open so the resize handle
         // on the left edge remains interactive.  When closed (width 0),
         // switch to overflow-hidden so the activity bar icons and panel
         // content don't leak past the 0-width boundary (the component
         // stays mounted for performance — see App.tsx).
-        rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
+        sidebarVisible ? 'overflow-visible' : 'overflow-hidden',
+        // A peek floats over the content row (no reflow) with the
+        // styleguide's floating-surface shadow; pinned-open stays in flow.
+        isPeeking
+          ? 'absolute inset-y-0 right-0 z-30 shadow-[0_10px_24px_rgba(0,0,0,0.18)] animate-in slide-in-from-right duration-200 motion-reduce:animate-none'
+          : 'relative'
       )}
     >
       {/* Panel content area */}
       <div
         className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
         style={{
-          borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
+          borderLeft: sidebarVisible ? '1px solid var(--sidebar-border)' : 'none'
         }}
       >
         {activityBarPosition === 'top' ? (

@@ -9753,7 +9753,8 @@
             "systemRole": "系统",
             "sessionRole": "会话",
             "jumpToOriginalPane": "跳转到原始窗格",
-            "jumpToWorktree": "跳转到工作树"
+            "jumpToWorktree": "跳转到工作树",
+            "subagentCount": "{{value0}} subagents"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",
@@ -9808,6 +9809,11 @@
             "archivedJumpUnavailable": "此会话位于已归档的工作树中。",
             "noActiveWorktreeMatch": "没有与此会话匹配的活动工作树。",
             "noActiveWorktreeTarget": "没有可用的活动工作树。"
+          },
+          "AiVaultSessionSubagents": {
+            "subagentsCount": "Subagents ({{value0}})",
+            "messageCount": "{{value0}} msgs",
+            "viewLog": "View Log"
           }
         }
       },

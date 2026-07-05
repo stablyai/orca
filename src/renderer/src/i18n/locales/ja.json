@@ -9753,7 +9753,8 @@
             "systemRole": "システム",
             "sessionRole": "セッション",
             "jumpToOriginalPane": "元のペインにジャンプ",
-            "jumpToWorktree": "ワークツリーにジャンプ"
+            "jumpToWorktree": "ワークツリーにジャンプ",
+            "subagentCount": "{{value0}} subagents"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "ファイルを検索",
@@ -9808,6 +9809,11 @@
             "archivedJumpUnavailable": "このセッションはアーカイブされたワークツリーにあります。",
             "noActiveWorktreeMatch": "このセッションに一致するアクティブなワークツリーはありません。",
             "noActiveWorktreeTarget": "利用可能なアクティブなワークツリーはありません。"
+          },
+          "AiVaultSessionSubagents": {
+            "subagentsCount": "Subagents ({{value0}})",
+            "messageCount": "{{value0}} msgs",
+            "viewLog": "View Log"
           }
         }
       },

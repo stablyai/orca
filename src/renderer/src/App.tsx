@@ -55,6 +55,7 @@ import {
   useSystemPrefersDark
 } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
+import { RightSidebarEdgePeekZone } from './components/right-sidebar/right-sidebar-edge-peek'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
@@ -2151,7 +2152,10 @@ function App(): React.JSX.Element {
                 'The app is still running. Retry the shell or use the menu to report the crash details.'
               )}
             >
-              <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+              {/* Why: relative anchors the right-sidebar edge-peek overlay to
+              this row, so a peek spans the same height as the docked sidebar
+              and ends above the status bar. */}
+              <div className="relative flex flex-row flex-1 min-h-0 overflow-hidden">
                 {/* Why: the non-workspace titlebar lives inside this left+center
               wrapper so it does not span over the right-sidebar column —
               when the right sidebar is open, its own header anchors at the
@@ -2367,6 +2371,7 @@ function App(): React.JSX.Element {
               Its heavy panels disconnect while closed so workspace wake stays
               responsive. Unmount on the tasks view since that surface is
               intentionally distraction-free. */}
+                {showRightSidebarControls ? <RightSidebarEdgePeekZone /> : null}
                 {showRightSidebarControls ? (
                   <RecoverableRenderErrorBoundary
                     boundaryId="right-sidebar"

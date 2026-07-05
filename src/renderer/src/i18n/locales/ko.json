@@ -9753,7 +9753,8 @@
             "systemRole": "시스템",
             "sessionRole": "세션",
             "jumpToOriginalPane": "원래 창으로 이동",
-            "jumpToWorktree": "작업 트리로 이동"
+            "jumpToWorktree": "작업 트리로 이동",
+            "subagentCount": "{{value0}} subagents"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "파일 찾기",
@@ -9808,6 +9809,11 @@
             "archivedJumpUnavailable": "이 세션은 보관된 작업 트리에 있습니다.",
             "noActiveWorktreeMatch": "이 세션과 일치하는 활성 작업 트리가 없습니다.",
             "noActiveWorktreeTarget": "사용 가능한 활성 작업 트리가 없습니다."
+          },
+          "AiVaultSessionSubagents": {
+            "subagentsCount": "Subagents ({{value0}})",
+            "messageCount": "{{value0}} msgs",
+            "viewLog": "View Log"
           }
         }
       },

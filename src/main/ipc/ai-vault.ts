@@ -1,13 +1,18 @@
 import { app, ipcMain } from 'electron'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { scanRemoteAiVaultSessions } from '../ai-vault/remote-session-scanner'
+import { listClaudeSubagentSessions } from '../ai-vault/session-scanner-claude-subagents'
+import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-source-discovery'
 import { scanAiVaultSessions } from '../ai-vault/session-scanner'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { sessionSortTime } from '../ai-vault/session-scanner-accumulator'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import type {
   AiVaultListArgs,
   AiVaultListResult,
-  AiVaultScanIssue
+  AiVaultScanIssue,
+  AiVaultSubagentListArgs,
+  AiVaultSubagentListResult
 } from '../../shared/ai-vault-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -202,6 +207,11 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   ipcMain.handle('aiVault:listSessions', (_event, args?: AiVaultListArgs) =>
     listAiVaultSessions(args)
   )
+  ipcMain.handle(
+    'aiVault:listSubagentSessions',
+    (_event, args: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
+      listAiVaultSubagentSessions(args)
+  )
   // DOM focus/visibility events don't fire in the renderer on macOS app
   // activation, so refresh-on-refocus needs this main-process signal.
   app.on('browser-window-focus', (_event, window) => {
@@ -209,6 +219,33 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       window.webContents.send('aiVault:windowFocused')
     }
   })
+}
+
+// Provider-gated: only Claude materializes Task subagent transcripts as
+// sibling files today; other agents resolve to an empty list.
+async function listAiVaultSubagentSessions(
+  args: AiVaultSubagentListArgs
+): Promise<AiVaultSubagentListResult> {
+  if (args.agent !== 'claude' || !args.parentFilePath.trim()) {
+    return { sessions: [], issues: [] }
+  }
+  // Why: subagent transcripts are read from the local filesystem. Remote
+  // Claude sessions already report subagentCount 0 (finalizeSession), so the
+  // UI never asks; return empty defensively rather than reading local paths.
+  const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+  if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+    return { sessions: [], issues: [] }
+  }
+  // Why: the path is renderer-supplied; only list files under a known Claude
+  // projects root so a crafted path can't readdir/preview arbitrary dirs.
+  // resolve() collapses `..` segments first — isPathInsideOrEqual compares
+  // textually and would otherwise pass `<root>/../../etc/x.jsonl`.
+  const parentFilePath = resolve(args.parentFilePath)
+  const roots = claudeProjectsRootDirs({ wslHomeDirs: await getAiVaultWslHomeDirs() })
+  if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
+    return { sessions: [], issues: [] }
+  }
+  return listClaudeSubagentSessions({ parentFilePath })
 }
 
 function resetAiVaultCacheForTests(): void {
@@ -220,6 +257,7 @@ function resetAiVaultCacheForTests(): void {
 
 export const _internals = {
   listAiVaultSessions,
+  listAiVaultSubagentSessions,
   resetAiVaultCacheForTests
 }
 

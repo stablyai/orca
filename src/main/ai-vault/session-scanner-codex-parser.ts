@@ -128,6 +128,7 @@ async function parseCodexSessionLines(args: {
       if (cwd) {
         accumulator.cwd = cwd
       }
+      // The model can change mid-session (/model), so the latest turn wins.
       const model = extractModel(payload)
       if (model) {
         accumulator.model = model

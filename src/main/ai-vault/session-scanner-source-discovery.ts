@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import { SUBAGENT_DIR_NAME } from './session-scanner-claude-subagents'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
 import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-sources'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
@@ -33,6 +34,18 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
   'transcripts'
 )
+
+// The local host and each WSL distro's `~/.claude/projects`. Callers reading
+// Claude session files by path use these roots to reject arbitrary paths.
+export function claudeProjectsRootDirs(args: {
+  claudeProjectsDir?: string
+  wslHomeDirs?: readonly string[]
+}): string[] {
+  return [
+    args.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
+    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
+  ]
+}
 
 export async function discoverAiVaultSessionSources(args: {
   options: AiVaultScanOptions
@@ -72,11 +85,21 @@ function claudeDiscoveries(
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  return [
-    options.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
-    ...wslHomeDirs.map((homeDir) => join(homeDir, '.claude', 'projects'))
-  ].map((rootDir) =>
-    discoverFiles({ rootDir, limit, agent: 'claude', issues, extensions: ['.jsonl'] })
+  return claudeProjectsRootDirs({
+    claudeProjectsDir: options.claudeProjectsDir,
+    wslHomeDirs
+  }).map((rootDir) =>
+    discoverFiles({
+      rootDir,
+      limit,
+      agent: 'claude',
+      issues,
+      extensions: ['.jsonl'],
+      // Why: Task subagent transcripts live in `<session>/subagents/`. Pruning
+      // that subtree keeps them from being parsed and listed as phantom
+      // top-level sessions; they are read on demand under their parent instead.
+      dirPredicate: (name) => name !== SUBAGENT_DIR_NAME
+    })
   )
 }
 

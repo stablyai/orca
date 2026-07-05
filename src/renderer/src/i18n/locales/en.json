@@ -9753,7 +9753,8 @@
             "systemRole": "System",
             "sessionRole": "Session",
             "jumpToOriginalPane": "Jump to Original Pane",
-            "jumpToWorktree": "Jump to Worktree"
+            "jumpToWorktree": "Jump to Worktree",
+            "subagentCount": "{{value0}} subagents"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Find files",
@@ -9808,6 +9809,11 @@
             "archivedJumpUnavailable": "This session is in an archived worktree.",
             "noActiveWorktreeMatch": "No active worktree matches this session.",
             "noActiveWorktreeTarget": "No active worktree is available."
+          },
+          "AiVaultSessionSubagents": {
+            "subagentsCount": "Subagents ({{value0}})",
+            "messageCount": "{{value0}} msgs",
+            "viewLog": "View Log"
           }
         }
       },

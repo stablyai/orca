@@ -4,14 +4,19 @@ import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
+import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
+import {
+  findAiVaultSessionLiveState,
+  findOriginalAiVaultSessionPane
+} from './ai-vault-original-pane'
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
     session: AiVaultSession
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
+  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   jumpToOriginalPane: (session: AiVaultSession) => void
   jumpToWorktree: (worktreeId: string) => void
 } {
@@ -27,6 +32,11 @@ export function useAiVaultOriginalPaneActions(): {
 
   const getOriginalPaneTarget = useCallback(
     (session: AiVaultSession) => findOriginalAiVaultSessionPane(originalPaneLookupState, session),
+    [originalPaneLookupState]
+  )
+
+  const getSessionLiveState = useCallback(
+    (session: AiVaultSession) => findAiVaultSessionLiveState(originalPaneLookupState, session),
     [originalPaneLookupState]
   )
 
@@ -70,5 +80,5 @@ export function useAiVaultOriginalPaneActions(): {
     }
   }, [])
 
-  return { getOriginalPaneTarget, jumpToOriginalPane, jumpToWorktree }
+  return { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree }
 }

@@ -60,7 +60,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   )
   const settings = useAppStore((s) => s.settings)
   const agentCmdOverrides = settings?.agentCmdOverrides
-  const { getOriginalPaneTarget, jumpToOriginalPane, jumpToWorktree } =
+  const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
     useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
@@ -360,6 +360,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         getSessionResumeState={getSessionResumeState}
         getSessionResumeActions={getSessionResumeActions}
         getOriginalPaneTarget={getOriginalPaneTarget}
+        getSessionLiveState={getSessionLiveState}
         getWorktreeInfo={(session) => sessionWorktreeById.get(session.id) ?? null}
         onToggleGroup={toggleGroup}
         onJumpToOriginalPane={jumpToOriginalPane}

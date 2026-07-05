@@ -373,7 +373,12 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
-import type { AiVaultListArgs, AiVaultListResult } from '../shared/ai-vault-types'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult,
+  AiVaultSubagentListArgs,
+  AiVaultSubagentListResult
+} from '../shared/ai-vault-types'
 import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
@@ -751,6 +756,8 @@ export type OpenCodeUsageApi = {
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  /** Lists the Task subagent transcripts of one session, on demand. */
+  listSubagentSessions: (args: AiVaultSubagentListArgs) => Promise<AiVaultSubagentListResult>
   /** Fires when any app window regains OS focus; returns an unsubscribe. */
   onWindowFocused: (callback: () => void) => () => void
 }

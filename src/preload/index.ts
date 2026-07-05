@@ -155,7 +155,7 @@ import type {
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
-import type { AiVaultListArgs } from '../shared/ai-vault-types'
+import type { AiVaultListArgs, AiVaultSubagentListArgs } from '../shared/ai-vault-types'
 import type { AgentType } from '../shared/native-chat-types'
 import type {
   NativeChatAppendedMessages,
@@ -3637,6 +3637,8 @@ const api = {
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
       ipcRenderer.invoke('aiVault:listSessions', args),
+    listSubagentSessions: (args: AiVaultSubagentListArgs): Promise<unknown> =>
+      ipcRenderer.invoke('aiVault:listSubagentSessions', args),
     onWindowFocused: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('aiVault:windowFocused', listener)

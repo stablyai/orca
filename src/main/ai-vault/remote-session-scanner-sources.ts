@@ -1,6 +1,7 @@
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
+import { SUBAGENT_DIR_NAME } from './session-scanner-claude-subagents'
 import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
@@ -41,7 +42,11 @@ export function remoteSessionSources(
       remoteHome,
       hostPlatform,
       ['.claude', 'projects'],
-      parseClaudeSessionContent
+      parseClaudeSessionContent,
+      // Why: Task subagent transcripts under `<session>/subagents/` would list
+      // as phantom top-level sessions carrying the parent's sessionId. The
+      // local scanner prunes them at discovery; mirror that exclusion here.
+      (path) => !remotePathSegments(path).includes(SUBAGENT_DIR_NAME)
     ),
     source(
       'gemini',

@@ -412,6 +412,9 @@ export type EditorSlice = {
 
   // Right sidebar
   rightSidebarOpen: boolean
+  // Transient edge-hover reveal (Arc-style). Never persisted: a peek is a
+  // pointer gesture, not a saved layout choice like rightSidebarOpen.
+  rightSidebarPeek: boolean
   rightSidebarWidth: number
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
@@ -421,6 +424,7 @@ export type EditorSlice = {
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
+  setRightSidebarPeek: (peek: boolean) => void
   setRightSidebarWidth: (width: number) => void
   setRightSidebarTab: (tab: ActiveRightSidebarTab) => void
   setRightSidebarExplorerView: (view: RightSidebarExplorerView) => void
@@ -1416,6 +1420,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Right sidebar
   rightSidebarOpen: false,
+  rightSidebarPeek: false,
   rightSidebarWidth: 280,
   rightSidebarTab: 'explorer',
   rightSidebarExplorerView: 'files',
@@ -1423,8 +1428,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   rightSidebarTabByWorktree: {},
   rightSidebarExplorerViewByWorktree: {},
   activityBarPosition: 'top',
-  toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
-  setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
+  // Why: an explicit open/close supersedes a hover peek — clearing the flag
+  // here keeps "toggle while peeking" meaning "pin it open".
+  toggleRightSidebar: () =>
+    set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen, rightSidebarPeek: false })),
+  setRightSidebarOpen: (open) => set({ rightSidebarOpen: open, rightSidebarPeek: false }),
+  setRightSidebarPeek: (peek) => set({ rightSidebarPeek: peek }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
   setRightSidebarTab: (tab) =>
     set((s) => ({

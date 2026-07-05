@@ -633,6 +633,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           issues: [],
           scannedAt: new Date().toISOString()
         }),
+      listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
       onWindowFocused: () => () => {}
     },
     preflight: createPreflightApi(),

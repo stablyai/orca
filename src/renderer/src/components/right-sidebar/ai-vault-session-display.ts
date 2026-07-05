@@ -80,6 +80,10 @@ function normalizeSessionDisplayText(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
+export function sessionModelLabel(session: AiVaultSession): string | null {
+  return session.model || null
+}
+
 export function sessionPreviewSearchText(session: AiVaultSession): string {
   return displayableSessionPreviewMessages(session)
     .map((message) => message.text)

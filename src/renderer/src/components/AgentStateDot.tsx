@@ -18,6 +18,9 @@ export type AgentDotState =
   | 'blocked'
   | 'waiting'
   | 'interrupted'
+  // Why: AI Vault subagent rows report a transcript-derived failure, which is
+  // an outcome (like 'done'), not a live attention state like 'blocked'.
+  | 'failed'
   | 'done'
   | 'idle'
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
@@ -37,6 +40,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Waiting for input'
     case 'interrupted':
       return 'Interrupted'
+    case 'failed':
+      return 'Failed'
     case 'done':
       return 'Done'
     case 'idle':
@@ -71,8 +76,11 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           className={cn(
             // Why: match the sidebar worktree spinner's stepped cadence so
             // long-running visible agents do not keep a full-frame-rate loop.
+            // Sized like the check icon (not the filled dots): both are
+            // outline glyphs, so a smaller ring reads visibly undersized
+            // next to a 'done' check in the same list.
             'block rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]',
-            inner
+            icon
           )}
         />
       </span>
@@ -105,7 +113,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           inner,
           state === 'permission' || state === 'waiting'
             ? 'bg-amber-500'
-            : state === 'blocked' || state === 'interrupted'
+            : state === 'blocked' || state === 'interrupted' || state === 'failed'
               ? 'bg-red-500'
               : 'bg-neutral-500/40'
         )}
