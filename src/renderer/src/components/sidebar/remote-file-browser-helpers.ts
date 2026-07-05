@@ -1,6 +1,12 @@
 import { translate } from '@/i18n/i18n'
 import { shouldHandleTextControlPaste } from '@/lib/text-control-paste'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import {
+  driveRootOf,
+  isDrivePath,
+  joinDrivePath,
+  parentOfDrivePath
+} from './remote-file-browser-drive-paths'
 export type DirEntry = {
   name: string
   isDirectory: boolean
@@ -55,10 +61,20 @@ export function decideEscAction(filter: string): EscAction {
 }
 
 export function joinPath(resolvedPath: string, name: string): string {
+  // Drive rows in a Windows host-root listing are already absolute (`M:\`).
+  if (resolvedPath === '/' && isDrivePath(name)) {
+    return driveRootOf(name)
+  }
+  if (isDrivePath(resolvedPath)) {
+    return joinDrivePath(resolvedPath, name)
+  }
   return resolvedPath === '/' ? `/${name}` : `${resolvedPath}/${name}`
 }
 
 export function parentPath(p: string): string {
+  if (isDrivePath(p)) {
+    return parentOfDrivePath(p)
+  }
   if (p === '/' || p === '') {
     return '/'
   }
@@ -73,8 +89,10 @@ export type ParsedInput =
   | {
       mode: 'path'
       // `root` = absolute `/`, `home` = resolved SSH user home, `cwd` = the
-      // currently committed resolvedPath.
-      base: 'root' | 'home' | 'cwd'
+      // currently committed resolvedPath, `drive` = a Windows drive root.
+      base: 'root' | 'home' | 'cwd' | 'drive'
+      // Canonical `M:\` root; only set when `base` is 'drive'.
+      driveRoot?: string
       // Segments to resolve one-by-one from the base. Empty string segments
       // never appear here — repeated separators are surfaced via `invalid`.
       committedSegments: string[]
@@ -86,11 +104,15 @@ export type ParsedInput =
       invalid?: string
     }
 
-// Path mode triggers when the input contains `/` or is one of the three
-// base-marker literals (`~`, `.`, `..`). The literal `..` rule is required
-// because "contains /" alone would keep bare `..` in filter mode.
+// Path mode triggers when the input contains `/`, is drive-anchored
+// (`M:\...`, for Windows hosts), or is one of the three base-marker literals
+// (`~`, `.`, `..`). The literal `..` rule is required because "contains /"
+// alone would keep bare `..` in filter mode.
 export function isPathMode(raw: string): boolean {
   if (raw.includes('/')) {
+    return true
+  }
+  if (isDrivePath(raw)) {
     return true
   }
   return raw === '~' || raw === '.' || raw === '..'
@@ -123,9 +145,16 @@ export function parsePathInput(raw: string): ParsedInput {
     return { mode: 'path', base: 'cwd', committedSegments: ['..'], trailingFilter: '' }
   }
 
-  let base: 'root' | 'home' | 'cwd'
+  let base: 'root' | 'home' | 'cwd' | 'drive'
+  let driveRoot: string | undefined
   let remainder: string
-  if (raw.startsWith('/')) {
+  if (isDrivePath(raw)) {
+    base = 'drive'
+    driveRoot = driveRootOf(raw)
+    // Strip the `M:` anchor plus its separator; drive segments accept both
+    // separators because Windows users habitually type backslashes.
+    remainder = raw.slice(2).replace(/^[\\/]/, '')
+  } else if (raw.startsWith('/')) {
     base = 'root'
     remainder = raw.slice(1)
   } else if (raw.startsWith('~/')) {
@@ -138,10 +167,13 @@ export function parsePathInput(raw: string): ParsedInput {
 
   // Don't collapse `//`: the visible input must agree with the path being
   // resolved. Report it as invalid and let the caller surface the error.
-  if (remainder.includes('//')) {
+  const hasRepeatedSeparators =
+    base === 'drive' ? /[\\/]{2,}/.test(remainder) : remainder.includes('//')
+  if (hasRepeatedSeparators) {
     return {
       mode: 'path',
       base,
+      driveRoot,
       committedSegments: [],
       trailingFilter: '',
       invalid: 'Invalid path: repeated separators'
@@ -159,6 +191,7 @@ export function parsePathInput(raw: string): ParsedInput {
     return {
       mode: 'path',
       base,
+      driveRoot,
       committedSegments: [],
       trailingFilter: '',
       invalid: 'Invalid path: control characters are not allowed'
@@ -167,11 +200,12 @@ export function parsePathInput(raw: string): ParsedInput {
 
   // `split('/')` leaves an empty string when `remainder` ends with `/`, which
   // is the only legal "empty tail" and simply means "no trailing filter".
-  const parts = remainder === '' ? [''] : remainder.split('/')
+  const parts =
+    remainder === '' ? [''] : base === 'drive' ? remainder.split(/[\\/]/) : remainder.split('/')
   const trailingFilter = parts.at(-1) ?? ''
   const committedSegments = parts.slice(0, -1)
 
-  return { mode: 'path', base, committedSegments, trailingFilter }
+  return { mode: 'path', base, driveRoot, committedSegments, trailingFilter }
 }
 
 export type SegmentOutcome =

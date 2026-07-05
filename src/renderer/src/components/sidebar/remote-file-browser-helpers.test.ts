@@ -7,6 +7,7 @@ import {
   isRemoteFileBrowserFilterQueryTooLarge,
   isRemoteFileBrowserPathResolveTextTooLarge,
   isPathMode,
+  joinPath,
   parentPath,
   parsePathInput,
   resolveSegmentStep,
@@ -334,5 +335,66 @@ describe('resolveSegmentStep', () => {
     if (r.type === 'error') {
       expect(r.message).toMatch(/multiple directories/)
     }
+  })
+})
+
+describe('Windows drive paths', () => {
+  it('isPathMode triggers on drive-anchored input', () => {
+    expect(isPathMode('M:\\')).toBe(true)
+    expect(isPathMode('M:/')).toBe(true)
+    expect(isPathMode('m:')).toBe(true)
+    expect(isPathMode('M:\\dev')).toBe(true)
+    expect(isPathMode('M')).toBe(false)
+    expect(isPathMode('M:x')).toBe(false)
+  })
+
+  it('parsePathInput anchors drive input at the normalized drive root', () => {
+    expect(parsePathInput('m:/dev/')).toEqual({
+      mode: 'path',
+      base: 'drive',
+      driveRoot: 'M:\\',
+      committedSegments: ['dev'],
+      trailingFilter: ''
+    })
+    expect(parsePathInput('M:\\dev\\deb')).toEqual({
+      mode: 'path',
+      base: 'drive',
+      driveRoot: 'M:\\',
+      committedSegments: ['dev'],
+      trailingFilter: 'deb'
+    })
+    expect(parsePathInput('M:')).toEqual({
+      mode: 'path',
+      base: 'drive',
+      driveRoot: 'M:\\',
+      committedSegments: [],
+      trailingFilter: ''
+    })
+  })
+
+  it('parsePathInput rejects repeated separators in drive input, either kind', () => {
+    for (const raw of ['M:\\dev\\\\x', 'M:/dev//x', 'M:\\dev\\/x']) {
+      const parsed = parsePathInput(raw)
+      expect(parsed.mode).toBe('path')
+      if (parsed.mode === 'path') {
+        expect(parsed.invalid).toMatch(/repeated separators/)
+      }
+    }
+  })
+
+  it('joinPath treats drive rows in the host-root listing as absolute', () => {
+    expect(joinPath('/', 'M:\\')).toBe('M:\\')
+    expect(joinPath('/', 'usr')).toBe('/usr')
+  })
+
+  it('joinPath appends with a backslash inside a drive', () => {
+    expect(joinPath('M:\\', 'dev')).toBe('M:\\dev')
+    expect(joinPath('M:\\dev', 'debox')).toBe('M:\\dev\\debox')
+  })
+
+  it('parentPath climbs drive paths and exits to the host root', () => {
+    expect(parentPath('M:\\dev\\debox')).toBe('M:\\dev')
+    expect(parentPath('M:\\dev')).toBe('M:\\')
+    expect(parentPath('M:\\')).toBe('/')
   })
 })
