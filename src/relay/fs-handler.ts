@@ -29,6 +29,10 @@ import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
+import {
+  WATCHER_IGNORE_DIRS,
+  buildParcelWatcherIgnoreOption
+} from '../main/ipc/filesystem-watcher-ignore'
 
 type WatchState = {
   rootPath: string
@@ -408,7 +412,9 @@ export class FsHandler {
           }))
           this.dispatcher.notify('fs.changed', { events: mapped })
         },
-        { ignore: ['.git', 'node_modules', 'dist', 'build', '.next', '.cache', '__pycache__'] }
+        // Why: align remote-Linux watchers with the shared nested-glob exclusion
+        // so nested node_modules/.git don't exhaust inotify on large codebases.
+        { ignore: buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS) }
       )
       watchState.unwatchFn = () => {
         void subscription.unsubscribe()
