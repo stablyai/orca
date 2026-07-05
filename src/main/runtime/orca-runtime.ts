@@ -13029,10 +13029,19 @@ export class OrcaRuntimeService {
           ...localWorktreeGitOptionArgs
         )
         if (remoteTrackingBase) {
-          return this.hasRemoteTrackingRef(
+          if (
+            await this.hasRemoteTrackingRef(
+              repo.path,
+              remoteTrackingBase,
+              ...localWorktreeGitOptionArgs
+            )
+          ) {
+            return true
+          }
+          return hasLocalWorktreeBaseRef(
             repo.path,
-            remoteTrackingBase,
-            ...localWorktreeGitOptionArgs
+            baseBranchCandidate,
+            hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
           )
         }
         return hasLocalWorktreeBaseRef(
@@ -13172,42 +13181,53 @@ export class OrcaRuntimeService {
         `Could not find an available worktree path for "${sanitizedName}". Pick a different worktree name.`
       )
     }
-    const remoteTrackingBase = await this.resolveRemoteTrackingBase(
+    let remoteTrackingBase = await this.resolveRemoteTrackingBase(
       repo.path,
       baseBranch,
       ...localWorktreeGitOptionArgs
     )
     if (remoteTrackingBase) {
-      const hadLocalBaseRef = await this.hasRemoteTrackingRef(
+      const hadRemoteTrackingBaseRef = await this.hasRemoteTrackingRef(
         repo.path,
         remoteTrackingBase,
         ...localWorktreeGitOptionArgs
       )
-      const refreshResult = await this.getOrStartRemoteTrackingBaseRefresh(
-        repo.path,
-        remoteTrackingBase,
-        ...localWorktreeGitOptionArgs
-      )
-      if (!refreshResult.ok && !hadLocalBaseRef) {
-        // Why: only block creation when the refresh failed AND there is no
-        // usable local base ref to fall back on. If a local remote-tracking ref
-        // already exists, `git worktree add` can create from it — a possibly
-        // stale but valid base — so a transient offline/auth failure must not
-        // make the workspace uncreatable. The compare-to-base view reflects any
-        // drift once the remote is reachable again.
-        throw new Error(
-          `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
-        )
-      }
-      if (
-        !hadLocalBaseRef &&
-        !(await this.hasRemoteTrackingRef(
+      const hasLocalBaseRef =
+        hadRemoteTrackingBaseRef ||
+        (await hasLocalWorktreeBaseRef(
+          repo.path,
+          baseBranch,
+          hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
+        ))
+      if (!hadRemoteTrackingBaseRef && hasLocalBaseRef) {
+        remoteTrackingBase = null
+      } else {
+        const refreshResult = await this.getOrStartRemoteTrackingBaseRefresh(
           repo.path,
           remoteTrackingBase,
           ...localWorktreeGitOptionArgs
-        ))
-      ) {
-        throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
+        )
+        if (!refreshResult.ok && !hadRemoteTrackingBaseRef) {
+          // Why: only block creation when the refresh failed AND there is no
+          // usable local base ref to fall back on. If a local remote-tracking ref
+          // already exists, `git worktree add` can create from it — a possibly
+          // stale but valid base — so a transient offline/auth failure must not
+          // make the workspace uncreatable. The compare-to-base view reflects any
+          // drift once the remote is reachable again.
+          throw new Error(
+            `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
+          )
+        }
+        if (
+          !hadRemoteTrackingBaseRef &&
+          !(await this.hasRemoteTrackingRef(
+            repo.path,
+            remoteTrackingBase,
+            ...localWorktreeGitOptionArgs
+          ))
+        ) {
+          throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
+        }
       }
     } else if (
       !(await hasLocalWorktreeBaseRef(

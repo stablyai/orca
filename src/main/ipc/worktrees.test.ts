@@ -3812,6 +3812,160 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
+  it('keeps a usable SSH persisted local branch base after registering the repo root', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'develop'
+    }
+    let repoRootRegistered = false
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'config') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/develop^{commit}')) {
+          return { stdout: repoRootRegistered ? 'develop-sha\n' : '', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/local-branch-base',
+          head: 'develop-sha',
+          branch: 'refs/heads/local-branch-base',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi
+        .fn()
+        .mockImplementation(async (_method: string, payload: { rootPath: string }) => {
+          if (payload.rootPath === repo.path) {
+            repoRootRegistered = true
+          }
+        }),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'local-branch-base'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith('session.registerRoot', { rootPath: repo.path })
+    expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalled()
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'local-branch-base',
+      '/remote/local-branch-base',
+      {
+        base: 'develop'
+      }
+    )
+  })
+
+  it('keeps a usable SSH slash-named local branch base that matches a remote prefix', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'team/feature'
+    }
+    let repoRootRegistered = false
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'config') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'team\norigin\n', stderr: '' }
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
+          return { stdout: 'main-sha\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/team/feature^{commit}')) {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/team/feature^{commit}')) {
+          return { stdout: repoRootRegistered ? 'team-feature-sha\n' : '', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/slash-local-base',
+          head: 'team-feature-sha',
+          branch: 'refs/heads/slash-local-base',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi
+        .fn()
+        .mockImplementation(async (_method: string, payload: { rootPath: string }) => {
+          if (payload.rootPath === repo.path) {
+            repoRootRegistered = true
+          }
+        }),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'slash-local-base'
+    })
+
+    expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalledWith(
+      '/remote/repo',
+      'team',
+      'feature',
+      'refs/remotes/team/feature'
+    )
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'slash-local-base',
+      '/remote/slash-local-base',
+      {
+        base: 'team/feature'
+      }
+    )
+  })
+
   it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -4012,6 +4166,160 @@ describe('registerWorktreeHandlers', () => {
 
     expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledTimes(1)
     expect(provider.addWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers the SSH repo root before create-base prefetch probes refs', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/master'
+    }
+    const registeredRoots = new Set<string>()
+    const events: string[] = []
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        events.push(`exec:${args[0]}:${registeredRoots.has('/remote/repo')}`)
+        if (!registeredRoots.has('/remote/repo')) {
+          throw new Error('root not registered')
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/master^{commit}')) {
+          throw new Error('missing stale base')
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
+          return { stdout: 'main-sha\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/prefetched-worktree',
+          head: 'abc123',
+          branch: 'refs/heads/prefetched-worktree',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi
+        .fn()
+        .mockImplementation(async (_method: string, payload: { rootPath: string }) => {
+          events.push(`register:${payload.rootPath}`)
+          registeredRoots.add(payload.rootPath)
+        }),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-ssh'
+    })
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'prefetched-worktree'
+    })
+
+    expect(events[0]).toBe('register:/remote/repo')
+    expect(events).not.toContain('exec:symbolic-ref:false')
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'prefetched-worktree',
+      '/remote/prefetched-worktree',
+      {
+        base: 'origin/main'
+      }
+    )
+  })
+
+  it('does not let SSH prefetch turn a persisted slash-named local branch into a remote-tracking base', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'team/feature'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'team\norigin\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
+          return { stdout: 'main-sha\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/team/feature^{commit}')) {
+          throw new Error('missing remote-tracking ref')
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/team/feature^{commit}')) {
+          return { stdout: 'team-feature-sha\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/slash-local-base',
+          head: 'team-feature-sha',
+          branch: 'refs/heads/slash-local-base',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-ssh'
+    })
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'slash-local-base'
+    })
+
+    expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalledWith(
+      '/remote/repo',
+      'team',
+      'feature',
+      'refs/remotes/team/feature'
+    )
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'slash-local-base',
+      '/remote/slash-local-base',
+      {
+        base: 'team/feature'
+      }
+    )
   })
 
   it('shares in-flight SSH create-base resolution with create', async () => {
@@ -4418,6 +4726,64 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'improve-dashboard',
       'develop',
+      false
+    )
+  })
+
+  it('keeps a usable persisted slash-named local branch base that matches a remote prefix', async () => {
+    const remoteBase = {
+      remote: 'team',
+      branch: 'feature',
+      ref: 'refs/remotes/team/feature',
+      base: 'team/feature'
+    }
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: 'team/feature'
+    })
+    runtimeStub.resolveRemoteTrackingBase.mockImplementation(async (_repoPath, baseBranch) =>
+      baseBranch === 'team/feature' ? remoteBase : null
+    )
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(false)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/slash-local-base',
+        head: 'created-sha',
+        branch: 'slash-local-base',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/team/feature^{commit}')) {
+        throw new Error('missing remote-tracking ref')
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/team/feature^{commit}')) {
+        return { stdout: 'team-feature-sha\n', stderr: '' }
+      }
+      if (args[0] === 'fetch') {
+        throw new Error('network unavailable')
+      }
+      return { stdout: 'created-sha\n', stderr: '' }
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'slash-local-base'
+      })
+    ).resolves.toEqual(expect.objectContaining({ worktree: expect.any(Object) }))
+
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).not.toHaveBeenCalled()
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/slash-local-base',
+      'slash-local-base',
+      'team/feature',
       false
     )
   })

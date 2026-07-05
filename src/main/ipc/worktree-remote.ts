@@ -55,12 +55,15 @@ import {
 } from '../hooks'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getSshGitUsername } from '../git/git-username'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+import {
+  registerOptionalSshWorktreeCreateRoots,
+  registerRequiredSshWorktreeCreateRoots
+} from './ssh-worktree-create-root-registration'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -1283,7 +1286,10 @@ async function resolveRemoteWorktreeCreateBasePlan(
         baseBranchCandidate
       )
       if (remoteTrackingBase) {
-        return hasRemoteTrackingRefSsh(provider, repo.path, remoteTrackingBase.ref)
+        if (await hasRemoteTrackingRefSsh(provider, repo.path, remoteTrackingBase.ref)) {
+          return true
+        }
+        return hasRemoteWorktreeBaseRef(provider, repo.path, baseBranchCandidate)
       }
       return hasRemoteWorktreeBaseRef(provider, repo.path, baseBranchCandidate)
     }
@@ -1323,13 +1329,21 @@ export async function prefetchRemoteWorktreeCreateBase(
   repo: Repo,
   args: { baseBranch?: string }
 ): Promise<void> {
+  // Why: the shared base-plan probes use generic git.exec, and some relays
+  // require the repo root to be registered before those probes can see refs.
+  await registerOptionalSshWorktreeCreateRoots(repo.connectionId!, [repo.path])
   const basePlan = await getOrStartRemoteWorktreeCreateBasePlan(provider, repo, args.baseBranch)
   if (!basePlan) {
     return
   }
   if (basePlan.remoteTrackingBase) {
-    await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, basePlan.remoteTrackingBase)
-    return
+    if (
+      (await hasRemoteTrackingRefSsh(provider, repo.path, basePlan.remoteTrackingBase.ref)) ||
+      !(await hasRemoteWorktreeBaseRef(provider, repo.path, basePlan.baseBranch))
+    ) {
+      await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, basePlan.remoteTrackingBase)
+      return
+    }
   }
   if (await hasRemoteWorktreeBaseRef(provider, repo.path, basePlan.baseBranch)) {
     // Why: PR/MR resolvers already fetched verified SHA start points. A broad
@@ -1514,6 +1528,10 @@ export async function createRemoteWorktree(
     ? sanitizeWorktreeDisplayName(args.displayName)
     : undefined
 
+  // Why: resolving the create base can probe repo refs through generic git.exec.
+  // Register the repo root first so relays do not report a valid base as stale.
+  await registerRequiredSshWorktreeCreateRoots(repo.connectionId!, [repo.path])
+
   // Why: SSH targets cannot use the local `gh` account, and git email/name are
   // commit author identity rather than hosted-account usernames.
   const username = await getSshGitUsername(provider, repo.path)
@@ -1531,7 +1549,8 @@ export async function createRemoteWorktree(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
   }
-  const { baseBranch, remoteTrackingBase } = basePlan
+  const { baseBranch } = basePlan
+  let { remoteTrackingBase } = basePlan
 
   let branchName = ''
   let checkoutExistingBranch = false
@@ -1637,25 +1656,20 @@ export async function createRemoteWorktree(
     }
   }
 
-  const mux = getActiveMultiplexer(repo.connectionId!)
-  if (!mux) {
-    throw new Error('SSH connection is not available. Please reconnect and try again.')
-  }
-  // Why: register before any generic git.exec probe (base-ref existence, the
-  // local-base advisory) as well as addWorktree. Fresh/older relays may gate
-  // generic git.exec on registered roots; probing first would falsely report a
-  // ref missing (and defeat the offline fallback below) even though create works.
-  try {
-    await Promise.all([
-      mux.request('session.registerRoot', { rootPath: repo.path }),
-      mux.request('session.registerRoot', { rootPath: remotePath })
-    ])
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('Method not found')) {
-      mux.notify('session.registerRoot', { rootPath: repo.path })
-      mux.notify('session.registerRoot', { rootPath: remotePath })
-    } else {
-      throw err
+  // Why: addWorktree and setup probes run inside the new worktree path; older
+  // relays need that root registered before accepting git/fs operations there.
+  await registerRequiredSshWorktreeCreateRoots(repo.connectionId!, [remotePath])
+
+  if (remoteTrackingBase) {
+    const hasRemoteTrackingBaseRef = await hasRemoteTrackingRefSsh(
+      provider,
+      repo.path,
+      remoteTrackingBase.ref
+    )
+    const hasLocalBaseRef =
+      hasRemoteTrackingBaseRef || (await hasRemoteWorktreeBaseRef(provider, repo.path, baseBranch))
+    if (!hasRemoteTrackingBaseRef && hasLocalBaseRef) {
+      remoteTrackingBase = null
     }
   }
 
@@ -1970,18 +1984,23 @@ export async function createLocalWorktree(
           ...localWorktreeGitOptionArgs
         )
         if (remoteTrackingBase) {
-          return runtime.hasRemoteTrackingRef(
+          if (
+            await runtime.hasRemoteTrackingRef(
+              repo.path,
+              remoteTrackingBase,
+              ...localWorktreeGitOptionArgs
+            )
+          ) {
+            return true
+          }
+          return hasLocalWorktreeBaseRefWithOptions(
             repo.path,
-            remoteTrackingBase,
-            ...localWorktreeGitOptionArgs
+            baseBranchCandidate,
+            localGitExecOptions
           )
         }
       }
-      return hasLocalWorktreeBaseRefWithOptions(
-        repo.path,
-        baseBranchCandidate,
-        localGitExecOptions
-      )
+      return hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranchCandidate, localGitExecOptions)
     }
   })
   if (!baseBranch) {
@@ -2010,20 +2029,27 @@ export async function createLocalWorktree(
       ...localWorktreeGitOptionArgs
     )
     if (remoteTrackingBase) {
-      const hasLocalBaseRef = await runtime.hasRemoteTrackingRef(
+      const hasRemoteTrackingBaseRef = await runtime.hasRemoteTrackingRef(
         repo.path,
         remoteTrackingBase,
         ...localWorktreeGitOptionArgs
       )
-      emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
-      remoteTrackingRefresh = {
-        base: remoteTrackingBase,
-        hadLocalBaseRef: hasLocalBaseRef,
-        promise: runtime.getOrStartRemoteTrackingBaseRefresh(
-          repo.path,
-          remoteTrackingBase,
-          ...localWorktreeGitOptionArgs
-        )
+      const hasLocalBaseRef =
+        hasRemoteTrackingBaseRef ||
+        (await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localGitExecOptions))
+      if (!hasRemoteTrackingBaseRef && hasLocalBaseRef) {
+        remoteTrackingBase = null
+      } else {
+        emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
+        remoteTrackingRefresh = {
+          base: remoteTrackingBase,
+          hadLocalBaseRef: hasRemoteTrackingBaseRef,
+          promise: runtime.getOrStartRemoteTrackingBaseRefresh(
+            repo.path,
+            remoteTrackingBase,
+            ...localWorktreeGitOptionArgs
+          )
+        }
       }
     } else if (
       !(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
@@ -2039,7 +2065,9 @@ export async function createLocalWorktree(
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
-    if (!(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))) {
+    if (
+      !(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
+    ) {
       legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], {
         ...localGitExecOptions,
         timeout: CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS

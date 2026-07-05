@@ -20,10 +20,7 @@ type WorktreeCreateBasePrefetchRuntime = {
     repoPath: string,
     baseBranch: string
   ) => Promise<RemoteTrackingBaseForPrefetch | null>
-  hasRemoteTrackingRef: (
-    repoPath: string,
-    base: RemoteTrackingBaseForPrefetch
-  ) => Promise<boolean>
+  hasRemoteTrackingRef: (repoPath: string, base: RemoteTrackingBaseForPrefetch) => Promise<boolean>
   getOrStartRemoteTrackingBaseRefresh: (
     repoPath: string,
     base: RemoteTrackingBaseForPrefetch
@@ -58,7 +55,10 @@ async function prefetchLocalWorktreeCreateBase(
         baseBranchCandidate
       )
       if (remoteTrackingBase) {
-        return runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)
+        if (await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)) {
+          return true
+        }
+        return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate)
       }
       return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate)
     }
@@ -74,8 +74,13 @@ async function prefetchLocalWorktreeCreateBase(
   }
   const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, resolvedBaseBranch)
   if (remoteTrackingBase) {
-    await runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase)
-    return
+    if (
+      (await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)) ||
+      !(await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch))
+    ) {
+      await runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase)
+      return
+    }
   }
   if (await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch)) {
     // Why: hosted-review start points and local branch bases are already local; a broad remote fetch cannot make them fresher.
