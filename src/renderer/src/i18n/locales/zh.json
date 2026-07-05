@@ -9754,7 +9754,9 @@
             "sessionRole": "会话",
             "jumpToOriginalPane": "跳转到原始窗格",
             "jumpToWorktree": "跳转到工作树",
-            "subagentCount": "{{value0}} subagents"
+            "subagentCount": "{{value0}} subagents",
+            "subagentCountSingular": "1 subagent",
+            "subagentCountPlural": "{{value0}} subagents"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",

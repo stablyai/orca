@@ -9754,7 +9754,9 @@
             "sessionRole": "세션",
             "jumpToOriginalPane": "원래 창으로 이동",
             "jumpToWorktree": "작업 트리로 이동",
-            "subagentCount": "{{value0}} subagents"
+            "subagentCount": "{{value0}} subagents",
+            "subagentCountSingular": "1 subagent",
+            "subagentCountPlural": "{{value0}} subagents"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "파일 찾기",

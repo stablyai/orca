@@ -88,6 +88,20 @@ describe('RightSidebarEdgePeekZone', () => {
     expect(useAppStore.getState().rightSidebarPeek).toBe(false)
   })
 
+  it('clears an active peek when the zone unmounts on a view change', () => {
+    const { unmount } = render(<RightSidebarEdgePeekZone />)
+
+    moveMouse(RIGHT_EDGE_X, BELOW_TITLEBAR_Y)
+    vi.advanceTimersByTime(PEEK_OPEN_DELAY_MS)
+    expect(useAppStore.getState().rightSidebarPeek).toBe(true)
+
+    unmount()
+
+    // A surviving flag would render a ghost peek when the user returns to a
+    // sidebar-capable view.
+    expect(useAppStore.getState().rightSidebarPeek).toBe(false)
+  })
+
   it('clears an armed timer if the sidebar opens before it fires', () => {
     const { rerender } = render(<RightSidebarEdgePeekZone />)
 

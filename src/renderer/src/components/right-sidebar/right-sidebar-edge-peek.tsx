@@ -23,6 +23,13 @@ export function RightSidebarEdgePeekZone(): React.JSX.Element | null {
   const setRightSidebarPeek = useAppStore((s) => s.setRightSidebarPeek)
 
   useEffect(() => {
+    // Why: the zone unmounts when the active view loses sidebar controls; a
+    // peek flag surviving that would render a ghost peek (no hover behind it)
+    // when the user returns to a sidebar-capable view.
+    return () => setRightSidebarPeek(false)
+  }, [setRightSidebarPeek])
+
+  useEffect(() => {
     // The revealed overlay covers the edge, so arming is only needed while the
     // sidebar is fully hidden. Skipping the listener here also guarantees an
     // armed timer can't fire after the sidebar opens (the cleanup clears it).

@@ -182,6 +182,19 @@ describe('listAiVaultSubagentSessions gating', () => {
     expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
   })
 
+  it('resolves empty for malformed IPC payloads instead of throwing', async () => {
+    const missing = await _internals.listAiVaultSubagentSessions(undefined)
+    const badPath = await _internals.listAiVaultSubagentSessions({
+      agent: 'claude',
+      parentFilePath: 42 as unknown as string,
+      executionHostId: 'local'
+    })
+
+    expect(missing).toEqual({ sessions: [], issues: [] })
+    expect(badPath).toEqual({ sessions: [], issues: [] })
+    expect(mocks.listClaudeSubagentSessions).not.toHaveBeenCalled()
+  })
+
   it('returns empty for a non-Claude agent', async () => {
     const result = await _internals.listAiVaultSubagentSessions({
       agent: 'codex',

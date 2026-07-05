@@ -9754,7 +9754,9 @@
             "sessionRole": "Sesión",
             "jumpToOriginalPane": "Saltar al panel original",
             "jumpToWorktree": "Saltar al worktree",
-            "subagentCount": "{{value0}} subagents"
+            "subagentCount": "{{value0}} subagents",
+            "subagentCountSingular": "1 subagent",
+            "subagentCountPlural": "{{value0}} subagents"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Buscar archivos",

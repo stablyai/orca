@@ -209,7 +209,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   )
   ipcMain.handle(
     'aiVault:listSubagentSessions',
-    (_event, args: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
+    (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
       listAiVaultSubagentSessions(args)
   )
   // DOM focus/visibility events don't fire in the renderer on macOS app
@@ -224,9 +224,16 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
 // Provider-gated: only Claude materializes Task subagent transcripts as
 // sibling files today; other agents resolve to an empty list.
 async function listAiVaultSubagentSessions(
-  args: AiVaultSubagentListArgs
+  args?: AiVaultSubagentListArgs
 ): Promise<AiVaultSubagentListResult> {
-  if (args.agent !== 'claude' || !args.parentFilePath.trim()) {
+  // IPC payloads are untyped at runtime; malformed input resolves empty like
+  // every other rejected input instead of throwing.
+  if (
+    !args ||
+    args.agent !== 'claude' ||
+    typeof args.parentFilePath !== 'string' ||
+    !args.parentFilePath.trim()
+  ) {
     return { sessions: [], issues: [] }
   }
   // Why: subagent transcripts are read from the local filesystem. Remote
