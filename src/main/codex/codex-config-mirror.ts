@@ -10,6 +10,13 @@ import {
   updateTomlLineScanState
 } from './config-toml-line-scan'
 
+const MANAGED_CODEX_APPS_MCP_SERVER_BLOCK = [
+  '[mcp_servers.codex_apps]',
+  'command = "codex"',
+  'args = ["app-server", "proxy"]',
+  'startup_timeout_sec = 120'
+].join('\n')
+
 function getRuntimeCodexConfigTomlPath(): string {
   return join(getOrcaManagedCodexHomePath(), 'config.toml')
 }
@@ -31,9 +38,6 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
   const runtimeConfigPath = getRuntimeCodexConfigTomlPath()
   const systemConfigExists = existsSync(systemConfigPath)
   const runtimeConfigExists = existsSync(runtimeConfigPath)
-  if (!systemConfigExists && !runtimeConfigExists) {
-    return
-  }
 
   const rawSystemConfig = systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
   if (!runtimeConfigExists) {
@@ -70,7 +74,16 @@ export function prepareSystemConfigForFreshRuntimeMirror(
   config: string,
   systemConfigDir: string
 ): string {
-  return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
+  return withManagedCodexAppsMcpServer(
+    stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
+  )
+}
+
+export function withManagedCodexAppsMcpServer(config: string): string {
+  return joinTomlBlocks([
+    stripTomlSections(config, (section) => isManagedCodexAppsTomlSection(section.header)),
+    MANAGED_CODEX_APPS_MCP_SERVER_BLOCK
+  ])
 }
 
 function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
@@ -156,17 +169,19 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
   // trust and project trust are written under Orca's managed CODEX_HOME and
   // must survive the copy unless the user explicitly revoked project trust in
   // the system config.
-  return joinTomlBlocks([
-    stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders),
-    ...runtimeSections
-      .filter((section) => isRuntimePreservedTomlSection(section.header))
-      .filter(
-        (section) =>
-          !isRuntimeProjectTomlSection(section.header) ||
-          !systemUntrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
-      )
-      .map((section) => section.block)
-  ])
+  return withManagedCodexAppsMcpServer(
+    joinTomlBlocks([
+      stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders),
+      ...runtimeSections
+        .filter((section) => isRuntimePreservedTomlSection(section.header))
+        .filter(
+          (section) =>
+            !isRuntimeProjectTomlSection(section.header) ||
+            !systemUntrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
+        )
+        .map((section) => section.block)
+    ])
+  )
 }
 
 type TomlSection = {
@@ -179,21 +194,29 @@ function stripRuntimeOwnedTomlSections(
   config: string,
   runtimeProjectHeaders = new Set<string>()
 ): string {
+  return stripTomlSections(config, (section) => {
+    if (isRuntimeHookTrustTomlSection(section.header)) {
+      return true
+    }
+    return (
+      isRuntimeProjectTomlSection(section.header) &&
+      runtimeProjectHeaders.has(getTomlSectionHeaderKey(section.header)) &&
+      getProjectTrustLevel(section.block) !== 'untrusted'
+    )
+  })
+}
+
+function stripTomlSections(
+  config: string,
+  shouldStrip: (section: TomlSection) => boolean
+): string {
   const lines = config.split('\n')
   const sections = getTomlSections(config)
   const firstSectionIndex = sections[0]?.start ?? -1
   const preamble = firstSectionIndex === -1 ? config : lines.slice(0, firstSectionIndex).join('\n')
   return joinTomlBlocks([
     preamble,
-    ...sections
-      .filter((section) => !isRuntimeHookTrustTomlSection(section.header))
-      .filter(
-        (section) =>
-          !isRuntimeProjectTomlSection(section.header) ||
-          !runtimeProjectHeaders.has(getTomlSectionHeaderKey(section.header)) ||
-          getProjectTrustLevel(section.block) === 'untrusted'
-      )
-      .map((section) => section.block)
+    ...sections.filter((section) => !shouldStrip(section)).map((section) => section.block)
   ])
 }
 
@@ -234,7 +257,11 @@ function getTomlSections(config: string): TomlSection[] {
 }
 
 function isRuntimePreservedTomlSection(header: string): boolean {
-  return isRuntimeHookTrustTomlSection(header) || isRuntimeProjectTomlSection(header)
+  return (
+    isRuntimeHookTrustTomlSection(header) ||
+    isRuntimeProjectTomlSection(header) ||
+    isManagedCodexAppsTomlSection(header)
+  )
 }
 
 function isRuntimeHookTrustTomlSection(header: string): boolean {
@@ -243,6 +270,10 @@ function isRuntimeHookTrustTomlSection(header: string): boolean {
 
 function isRuntimeProjectTomlSection(header: string): boolean {
   return header.trimStart().startsWith('[projects.')
+}
+
+function isManagedCodexAppsTomlSection(header: string): boolean {
+  return header.trim() === '[mcp_servers.codex_apps]'
 }
 
 function getTomlSectionHeaderKey(header: string): string {

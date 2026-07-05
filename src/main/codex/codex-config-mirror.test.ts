@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
@@ -71,20 +71,10 @@ afterEach(() => {
 })
 
 describe('syncSystemConfigIntoManagedCodexHome', () => {
-  it('seeds a missing runtime config without copying system hook trust', () => {
+  it('seeds a missing runtime config with the managed codex_apps block', () => {
     writeFileSync(
       getSystemConfigPath(),
-      [
-        'model = "system-model"',
-        '',
-        '[hooks.state."system-hooks:stop:0:0"]',
-        'enabled = true',
-        'trusted_hash = "sha256:system"',
-        '',
-        '[projects."/repo"]',
-        'trust_level = "trusted"',
-        ''
-      ].join('\n'),
+      ['model = "system-model"', ''].join('\n'),
       'utf-8'
     )
 
@@ -92,8 +82,54 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
     expect(runtimeConfig).toContain('model = "system-model"')
-    expect(runtimeConfig).toContain('[projects."/repo"]')
-    expect(runtimeConfig).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+    expect(runtimeConfig).toContain('[mcp_servers.codex_apps]')
+    expect(runtimeConfig).toContain('command = "codex"')
+    expect(runtimeConfig).toContain('args = ["app-server", "proxy"]')
+    expect(runtimeConfig).toContain('startup_timeout_sec = 120')
+    expect(runtimeConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
+  })
+
+  it('replaces invalid codex_apps sections in existing runtime configs idempotently', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [
+        'model = "runtime-model"',
+        '',
+        '[mcp_servers.codex_apps]',
+        'startup_timeout_sec = 30',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        'model = "system-model"',
+        '',
+        '[mcp_servers.github]',
+        'command = "gh"',
+        'args = ["auth", "status"]',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+    const firstPass = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    syncSystemConfigIntoManagedCodexHome()
+    const secondPass = readFileSync(getRuntimeConfigPath(), 'utf-8')
+
+    expect(firstPass).toBe(secondPass)
+    expect(secondPass).toContain('[mcp_servers.github]')
+    expect(secondPass).toContain('command = "gh"')
+    expect(secondPass).toContain('args = ["auth", "status"]')
+    expect(secondPass).toContain('[mcp_servers.codex_apps]')
+    expect(secondPass).toContain('command = "codex"')
+    expect(secondPass).toContain('args = ["app-server", "proxy"]')
+    expect(secondPass).toContain('startup_timeout_sec = 120')
+    expect(secondPass).not.toContain('startup_timeout_sec = 30')
+    expect(secondPass.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
   })
 
   it('normalizes deprecated codex_hooks feature flag only in runtime config', () => {
@@ -394,10 +430,15 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain('trusted_hash = "sha256:system"')
   })
 
-  it('does not create a runtime config when neither system nor runtime config exists', () => {
+  it('creates a runtime config with managed codex_apps when neither system nor runtime config exists', () => {
     syncSystemConfigIntoManagedCodexHome()
 
-    expect(existsSync(getRuntimeConfigPath())).toBe(false)
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('[mcp_servers.codex_apps]')
+    expect(runtimeConfig).toContain('command = "codex"')
+    expect(runtimeConfig).toContain('args = ["app-server", "proxy"]')
+    expect(runtimeConfig).toContain('startup_timeout_sec = 120')
+    expect(runtimeConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
   })
 })
 

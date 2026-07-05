@@ -217,6 +217,13 @@ function createCodexAuthJson(email: string, accountId: string, refreshToken: str
   )}\n`
 }
 
+const managedCodexAppsBlock = [
+  '[mcp_servers.codex_apps]',
+  'command = "codex"',
+  'args = ["app-server", "proxy"]',
+  'startup_timeout_sec = 120'
+].join('\n')
+
 describe('CodexAccountService config sync', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -242,11 +249,12 @@ describe('CodexAccountService config sync', () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     const canonicalConfig = 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+    const authJson = '{"account":"managed"}\n'
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
       'approval_policy = "on-request"\n',
-      '{"account":"managed"}\n'
+      authJson
     )
     const settings = createSettings({
       codexManagedAccounts: [
@@ -271,10 +279,15 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
-    expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
-      '{"account":"managed"}\n'
-    )
+    const managedConfig = readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')
+    expect(managedConfig).toContain('approval_policy = "never"')
+    expect(managedConfig).toContain('sandbox_mode = "danger-full-access"')
+    expect(managedConfig).toContain('[mcp_servers.codex_apps]')
+    expect(managedConfig).toContain('command = "codex"')
+    expect(managedConfig).toContain('args = ["app-server", "proxy"]')
+    expect(managedConfig).toContain('startup_timeout_sec = 120')
+    expect(managedConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
+    expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(authJson)
   })
 
   it('rewrites relative path config values when syncing into managed homes', async () => {
@@ -327,7 +340,7 @@ describe('CodexAccountService config sync', () => {
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
-      canonicalConfig,
+      `${canonicalConfig.trimEnd()}\n\n${managedCodexAppsBlock}\n`,
       '{"account":"managed"}\n'
     )
     const managedConfigPath = join(managedHomePath, 'config.toml')
@@ -359,7 +372,7 @@ describe('CodexAccountService config sync', () => {
     expect(statSync(managedConfigPath).mtimeMs).toBeLessThan(Date.now() - 60_000)
   })
 
-  it('does not sync configs when ~/.codex/config.toml is missing', async () => {
+  it('adds managed codex_apps when ~/.codex/config.toml is missing', async () => {
     const firstManagedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
@@ -405,12 +418,15 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    expect(readFileSync(join(firstManagedHomePath, 'config.toml'), 'utf-8')).toBe(
-      'sandbox_mode = "danger-full-access"\n'
-    )
-    expect(readFileSync(join(secondManagedHomePath, 'config.toml'), 'utf-8')).toBe(
-      'sandbox_mode = "workspace-write"\n'
-    )
+    const firstManagedConfig = readFileSync(join(firstManagedHomePath, 'config.toml'), 'utf-8')
+    expect(firstManagedConfig).toContain('sandbox_mode = "danger-full-access"')
+    expect(firstManagedConfig).toContain(managedCodexAppsBlock)
+    expect(firstManagedConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
+
+    const secondManagedConfig = readFileSync(join(secondManagedHomePath, 'config.toml'), 'utf-8')
+    expect(secondManagedConfig).toContain('sandbox_mode = "workspace-write"')
+    expect(secondManagedConfig).toContain(managedCodexAppsBlock)
+    expect(secondManagedConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
   })
 
   it('re-syncs config when selecting an account', async () => {
@@ -452,7 +468,10 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-1')
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+    const managedConfig = readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')
+    expect(managedConfig).toContain(canonicalConfig.trimEnd())
+    expect(managedConfig).toContain(managedCodexAppsBlock)
+    expect(managedConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
   })
@@ -489,9 +508,9 @@ describe('CodexAccountService config sync', () => {
     expect(
       () => new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
     ).not.toThrow()
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      'approval_policy = "on-request"\n'
-    )
+    const managedConfig = readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')
+    expect(managedConfig).toContain('approval_policy = "on-request"')
+    expect(managedConfig).not.toContain('[mcp_servers.codex_apps]')
     expect(warnSpy).toHaveBeenCalled()
   })
 
@@ -515,7 +534,10 @@ describe('CodexAccountService config sync', () => {
 
         const loginHome = options.env.CODEX_HOME
         expect(loginHome).toBeTruthy()
-        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+        const managedConfig = readFileSync(join(loginHome!, 'config.toml'), 'utf-8')
+        expect(managedConfig).toContain(canonicalConfig.trimEnd())
+        expect(managedConfig).toContain(managedCodexAppsBlock)
+        expect(managedConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
 
         const payload = Buffer.from(JSON.stringify({ email: 'user@example.com' })).toString(
           'base64url'
@@ -574,7 +596,10 @@ describe('CodexAccountService config sync', () => {
         const loginHome = options.env.CODEX_HOME
         expect(loginHome).toBeTruthy()
         expect(readFileSync(join(loginHome!, '.orca-managed-home'), 'utf-8')).toBe('account-1\n')
-        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+        const managedConfig = readFileSync(join(loginHome!, 'config.toml'), 'utf-8')
+        expect(managedConfig).toContain(canonicalConfig.trimEnd())
+        expect(managedConfig).toContain(managedCodexAppsBlock)
+        expect(managedConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
 
         const child = new EventEmitter() as EventEmitter & {
           stdout: PassThrough
@@ -780,10 +805,11 @@ describe('CodexAccountService config sync', () => {
       ])
       // Why: codex login runs inside WSL, so the rewritten path must be the
       // Linux-side ~/.codex, not a Windows UNC path.
-      expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
-        'sandbox_mode = "danger-full-access"\n' +
-          "model_instructions_file = '/home/alice/.codex/instructions.md'\n"
-      )
+      const managedConfig = readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')
+      expect(managedConfig).toContain('sandbox_mode = "danger-full-access"')
+      expect(managedConfig).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
+      expect(managedConfig).toContain(managedCodexAppsBlock)
+      expect(managedConfig.match(/\[mcp_servers\.codex_apps\]/g)?.length).toBe(1)
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough
         stderr: PassThrough

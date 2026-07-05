@@ -16,6 +16,7 @@ import type {
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
 import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
+import { withManagedCodexAppsMcpServer } from '../codex/codex-config-mirror'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
@@ -53,6 +54,7 @@ type CanonicalCodexConfig = {
   /** Home the config was read from, in the path style Codex sees at runtime
    *  (Linux-side for WSL); relative path-valued settings resolve against it. */
   sourceHomePath: string
+  useManagedHomeFallback?: boolean
 }
 
 export type CodexAccountAddTarget = {
@@ -463,9 +465,14 @@ export class CodexAccountService {
     // account while preserving consistent Codex behavior. Managed homes are
     // real CODEX_HOMEs for `codex login`, so relative path-valued settings
     // must keep resolving against the home the config was read from.
+    const sourceConfig = canonicalConfig.useManagedHomeFallback
+      ? this.readExistingManagedConfig(trustedManagedHomePath) ?? ''
+      : canonicalConfig.contents
     this.writeManagedConfig(
       trustedManagedHomePath,
-      rewriteRelativePathConfigValues(canonicalConfig.contents, canonicalConfig.sourceHomePath)
+      withManagedCodexAppsMcpServer(
+        rewriteRelativePathConfigValues(sourceConfig, canonicalConfig.sourceHomePath)
+      )
     )
   }
 
@@ -473,7 +480,7 @@ export class CodexAccountService {
     const sourceHomePath = join(homedir(), '.codex')
     const primaryConfigPath = join(sourceHomePath, 'config.toml')
     if (!existsSync(primaryConfigPath)) {
-      return null
+      return { contents: '', sourceHomePath, useManagedHomeFallback: true }
     }
 
     try {
@@ -498,7 +505,7 @@ export class CodexAccountService {
     const wslHome = wslInfo.linuxPath.slice(0, markerIndex)
     const configPath = toWindowsWslPath(`${wslHome}/.codex/config.toml`, wslInfo.distro)
     if (!existsSync(configPath)) {
-      return null
+      return { contents: '', sourceHomePath: wslInfo.linuxPath, useManagedHomeFallback: true }
     }
 
     try {
@@ -522,6 +529,19 @@ export class CodexAccountService {
       // atomic write path owns Windows ACL repair and persistent error surfacing.
     }
     writeFileAtomically(configPath, contents)
+  }
+
+  private readExistingManagedConfig(managedHomePath: string): string | null {
+    const configPath = join(managedHomePath, 'config.toml')
+    if (!existsSync(configPath)) {
+      return null
+    }
+
+    try {
+      return readFileSync(configPath, 'utf-8')
+    } catch {
+      return null
+    }
   }
 
   private getManagedAccountsRoot(): string {
