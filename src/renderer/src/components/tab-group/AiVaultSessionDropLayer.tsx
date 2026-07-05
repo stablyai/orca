@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { toast } from 'sonner'
 import {
   canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import {
@@ -169,7 +170,9 @@ export default function AiVaultSessionDropLayer({
         return true
       }
 
-      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(useAppStore.getState(), worktreeId)
+      const state = useAppStore.getState()
+      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
+      const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId)
       if (targetStatus === 'runtime') {
         toast.error(
           translate(
@@ -191,13 +194,15 @@ export default function AiVaultSessionDropLayer({
       if (
         !canResumeAiVaultSessionOnTarget({
           sessionFilePath: payload.sessionFilePath ?? null,
-          targetStatus
+          sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
+          targetStatus,
+          targetExecutionHostId
         })
       ) {
         toast.error(
           translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.localSessionSshWorkspaceUnsupported',
-            "This session's history is stored on this machine, so it can't resume in an SSH workspace. Drop it onto a local workspace instead."
+            'auto.components.tab.group.AiVaultSessionDropLayer.sessionHostMismatchUnsupported',
+            'This session belongs to a different host. Drop it onto a workspace on the same host.'
           )
         )
         return true

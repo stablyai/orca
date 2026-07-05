@@ -114,12 +114,12 @@ export default function RichMarkdownEditor({
   const editorRef = useRef<Editor | null>(null)
   const cancelAutoFocusRef = useRef<(() => void) | null>(null)
   const serializeTimerRef = useRef<number | null>(null)
-  // Why: normalizeSoftBreaks dispatches a ProseMirror transaction inside onCreate
+  // Why: empty-list repair dispatches a ProseMirror transaction inside onCreate
   // which triggers onUpdate. Without this guard the editor immediately marks the
   // file dirty before the user has typed anything.
   const isInitializingRef = useRef(true)
   // Why: internal maintenance paths can dispatch transactions after mount
-  // (external reloads, soft-break normalization, image-path refresh). Those
+  // (external reloads, empty-list repair, image-path refresh). Those
   // are not user edits, so onUpdate must ignore them or split panes can flip a
   // shared file dirty without any real content change.
   const isApplyingProgrammaticUpdateRef = useRef(false)

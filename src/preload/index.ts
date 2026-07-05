@@ -3799,11 +3799,21 @@ const api = {
       ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
     fetchInactiveCodexAccounts: (): Promise<void> =>
       ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
+    refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)
       return () => ipcRenderer.removeListener('rateLimits:update', listener)
     }
+  },
+
+  minimaxCredentials: {
+    getStatus: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('minimaxCredentials:getStatus'),
+    saveCookie: (cookie: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
+    clearCookie: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('minimaxCredentials:clearCookie')
   },
 
   ssh: {

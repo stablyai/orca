@@ -2763,6 +2763,10 @@ export type GlobalSettings = {
   /** Optional workspace ID override for OpenCode Go. When set, skips the
    *  workspaces lookup and fetches usage directly for this workspace. */
   opencodeWorkspaceId: string
+  /** Optional MiniMax group id. When empty, the usage fetcher extracts minimax_group_id_v2 from the cookie. */
+  minimaxGroupId: string
+  /** Comma-separated MiniMax model names to show in the status bar usage window. */
+  minimaxUsageModels: string
   /** Whether to extract OAuth credentials from the local Gemini CLI installation
    *  for rate-limit fetching. Disabled by default for explicit opt-in. */
   geminiCliOAuthEnabled: boolean
@@ -3109,6 +3113,7 @@ export type StatusBarItem =
   | 'gemini'
   | 'opencode-go'
   | 'kimi'
+  | 'minimax'
   | 'ssh'
   | 'resource-usage'
   | 'ports'

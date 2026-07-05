@@ -5,6 +5,7 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from './types'
+import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [
   'claude',
@@ -53,6 +54,8 @@ export type AiVaultSessionPreviewMessage = {
 
 export type AiVaultSession = {
   id: string
+  executionHostId: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
   agent: AiVaultAgent
   sessionId: string
   title: string
@@ -71,6 +74,7 @@ export type AiVaultSession = {
 }
 
 export type AiVaultScanIssue = {
+  executionHostId?: ExecutionHostId
   agent: AiVaultAgent
   path: string
   message: string
@@ -82,6 +86,7 @@ export type AiVaultListArgs = {
   // Active workspace/project paths. The global result is recency-capped, so these
   // guarantee a scoped view still surfaces its own (possibly older) sessions.
   scopePaths?: readonly string[]
+  executionHostScope?: ExecutionHostScope
 }
 
 export type AiVaultListResult = {

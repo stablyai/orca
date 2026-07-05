@@ -1,14 +1,6 @@
 import { useCallback } from 'react'
 import type React from 'react'
-import { Copy, FileJson, FolderOpen, LocateFixed, PanelTopOpen, Play } from 'lucide-react'
-import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { Badge } from '@/components/ui/badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -27,6 +19,7 @@ import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
 import { SessionInlineDetails, SessionTime } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from './ai-vault-session-display'
+import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import { SessionRowTrailingActions } from './SessionRowTrailingActions'
 import type { AiVaultSessionResumeActions } from './ai-vault-session-resume'
 import {
@@ -74,8 +67,8 @@ export function VaultSessionRow({
   onCopyResume: () => void
   onCopyId: () => void
   onCopyPath: () => void
-  onOpenLog: () => void
-  onRevealLog: () => void
+  onOpenLog?: () => void
+  onRevealLog?: () => void
   onOpenCwd?: () => void
 }) {
   const updatedAt = session.updatedAt ?? session.modifiedAt
@@ -102,6 +95,7 @@ export function VaultSessionRow({
         title: session.title,
         command: resumeStartup.command,
         sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
         ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {})
       })
@@ -220,101 +214,6 @@ export function VaultSessionRow({
         />
       </ContextMenuContent>
     </ContextMenu>
-  )
-}
-
-export function SessionActionMenuItems({
-  menuKind = 'dropdown',
-  resumeDisabled,
-  resumeLabel,
-  onResume,
-  onJumpToOriginalPane,
-  showJumpToWorktree,
-  onJumpToWorktree,
-  onCopyResume,
-  onCopyId,
-  onCopyPath,
-  onOpenLog,
-  onRevealLog,
-  onOpenCwd
-}: {
-  menuKind?: 'dropdown' | 'context'
-  resumeDisabled: boolean
-  resumeLabel: string
-  onResume: () => void
-  onJumpToOriginalPane?: () => void
-  showJumpToWorktree: boolean
-  onJumpToWorktree?: () => void
-  onCopyResume: () => void
-  onCopyId: () => void
-  onCopyPath: () => void
-  onOpenLog: () => void
-  onRevealLog: () => void
-  onOpenCwd?: () => void
-}) {
-  const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
-  const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
-
-  return (
-    <>
-      {onJumpToOriginalPane ? (
-        <Item onSelect={onJumpToOriginalPane}>
-          <LocateFixed className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
-            'Jump to Original Pane'
-          )}
-        </Item>
-      ) : null}
-      {showJumpToWorktree ? (
-        <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
-          <PanelTopOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
-            'Jump to Worktree'
-          )}
-        </Item>
-      ) : null}
-      <Item disabled={resumeDisabled} onSelect={onResume}>
-        <Play className="size-3.5" />
-        {resumeLabel}
-      </Item>
-      <Item onSelect={onCopyResume}>
-        <Copy className="size-3.5" />
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.copyResumeCommand',
-          'Copy Resume Command'
-        )}
-      </Item>
-      <Separator />
-      <Item onSelect={onOpenLog}>
-        <FileJson className="size-3.5" />
-        {translate('auto.components.right.sidebar.AiVaultSessionRow.openLog', 'Open Log')}
-      </Item>
-      <Item onSelect={onRevealLog}>
-        <FolderOpen className="size-3.5" />
-        {translate('auto.components.right.sidebar.AiVaultSessionRow.revealLog', 'Reveal Log')}
-      </Item>
-      {onOpenCwd ? (
-        <Item onSelect={onOpenCwd}>
-          <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.openWorkingDirectory',
-            'Open Working Directory'
-          )}
-        </Item>
-      ) : null}
-      <Separator />
-      <Item onSelect={onCopyId}>
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.copySessionId',
-          'Copy Session ID'
-        )}
-      </Item>
-      <Item onSelect={onCopyPath}>
-        {translate('auto.components.right.sidebar.AiVaultSessionRow.copyLogPath', 'Copy Log Path')}
-      </Item>
-    </>
   )
 }
 

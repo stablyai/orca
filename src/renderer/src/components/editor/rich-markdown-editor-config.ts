@@ -2,7 +2,7 @@ import type { Editor, UseEditorOptions } from '@tiptap/react'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
-import { normalizeSoftBreaks } from './rich-markdown-normalize'
+import { normalizeEmptyListItems } from './rich-markdown-normalize'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 import {
   syncSlashMenu,
@@ -208,7 +208,10 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       clearAnnotationTarget()
     },
     onCreate: ({ editor: nextEditor }) => {
-      normalizeSoftBreaks(nextEditor)
+      // Why: normalizeEmptyListItems (not normalizeSoftBreaks) so hard-wrapped
+      // source paragraphs stay one paragraph and reflow via CSS instead of being
+      // split on load.
+      normalizeEmptyListItems(nextEditor)
       lastCommittedMarkdownRef.current = content
       isInitializingRef.current = false
       cancelAutoFocusRef.current?.()

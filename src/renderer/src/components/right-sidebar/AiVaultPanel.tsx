@@ -41,6 +41,7 @@ import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
+import { useAiVaultExecutionHostScope } from './ai-vault-host-scope'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -77,6 +78,11 @@ export default function AiVaultPanel(): React.JSX.Element {
       'runtime',
     [activeWorktreeId, resumeTargetState]
   )
+  const { executionHostScope, activeSshExecutionHostScope, onExecutionHostScopeChange } =
+    useAiVaultExecutionHostScope({
+      activeWorktreeId: activeWorktreeId ?? null,
+      resumeTargetState
+    })
   const activeWorktreePath = activeWorktree?.path ?? null
   // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
   const activeWorktreePaths = useMemo(
@@ -106,7 +112,10 @@ export default function AiVaultPanel(): React.JSX.Element {
       }),
     [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection]
   )
-  const { error, loading, refresh, scanResult, sessions } = useAiVaultSessionRefresh(scopePaths)
+  const { error, loading, refresh, scanResult, sessions } = useAiVaultSessionRefresh(
+    scopePaths,
+    executionHostScope
+  )
   const sessionProjectById = useMemo(
     () =>
       buildAiVaultProjectContext({
@@ -121,6 +130,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   )
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
+    repos,
     worktrees: allWorktrees,
     activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null
   })
@@ -211,6 +221,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     (session: AiVaultSession) =>
       resolveAiVaultSessionResumeState({
         sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
         worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         worktrees: allWorktrees,
@@ -231,6 +242,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     (session: AiVaultSession) =>
       resolveAiVaultSessionResumeActions({
         sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
         worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         worktrees: allWorktrees,
@@ -293,6 +305,8 @@ export default function AiVaultPanel(): React.JSX.Element {
         activeWorktreePath={activeWorktreePath}
         activeProjectKey={activeProjectKey}
         scope={scope}
+        executionHostScope={executionHostScope}
+        activeSshExecutionHostScope={activeSshExecutionHostScope}
         agents={agents}
         sort={sort}
         group={group}
@@ -300,6 +314,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         adjustmentCount={viewAdjustmentCount}
         onQueryChange={setQuery}
         onScopeChange={handleScopeChange}
+        onExecutionHostScopeChange={onExecutionHostScopeChange}
         onAgentEnabledChange={setAgentEnabled}
         onSortChange={setSort}
         onGroupChange={setGroup}

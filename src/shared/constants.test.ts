@@ -125,3 +125,15 @@ describe('getDefaultPrimarySelectionMiddleClickPaste', () => {
     expect(getDefaultPrimarySelectionMiddleClickPaste('win32')).toBe(false)
   })
 })
+
+describe('MiniMax defaults', () => {
+  it('starts MiniMax with empty group id and the canonical default model', () => {
+    const settings = getDefaultSettings('/tmp')
+    // Why: the fetcher reads these defaults on first launch. An empty
+    // group id is the signal that the fetcher must pull the value from
+    // the cookie itself, and "general" matches the model name the
+    // MiniMax usage endpoint exposes by default.
+    expect(settings.minimaxGroupId).toBe('')
+    expect(settings.minimaxUsageModels).toBe('general')
+  })
+})

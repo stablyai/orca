@@ -13,6 +13,7 @@ import {
 import { useAppStore } from '@/store'
 import {
   canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -79,6 +80,7 @@ export function useAiVaultSessionLaunchActions({
     (session: AiVaultSession, targetWorktreeId?: string): void => {
       const targetId = resolveAiVaultSessionLaunchTarget({
         sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         targetWorktreeId,
         targetState
@@ -130,6 +132,7 @@ export type AiVaultSessionLaunchTarget =
 
 export function resolveAiVaultSessionLaunchTarget(args: {
   sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   activeWorktreeId: string | null
   targetWorktreeId?: string
   targetState: AiVaultSessionResumeTargetState
@@ -143,7 +146,18 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   }
 
   const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, targetWorktreeId)
-  if (!canResumeAiVaultSessionOnTarget({ sessionFilePath: args.sessionFilePath, targetStatus })) {
+  const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
+    args.targetState,
+    targetWorktreeId
+  )
+  if (
+    !canResumeAiVaultSessionOnTarget({
+      sessionFilePath: args.sessionFilePath,
+      sessionExecutionHostId: args.sessionExecutionHostId,
+      targetStatus,
+      targetExecutionHostId
+    })
+  ) {
     return { status: 'unsupported', targetStatus }
   }
 
@@ -159,12 +173,12 @@ function aiVaultResumeUnsupportedMessage(
       'Resume from history is not available in runtime-hosted workspaces.'
     )
   }
-  // Why: 'ssh' only reaches the unsupported branch when the session file lives
-  // on this machine, so the message explains the host mismatch, not SSH itself.
-  if (targetStatus === 'ssh') {
+  // Why: local and SSH targets can both be valid generally; this branch means
+  // the session's recorded host does not match the selected workspace.
+  if (targetStatus === 'ssh' || targetStatus === 'local') {
     return translate(
-      'auto.components.right.sidebar.AiVaultPanel.localSessionSshWorkspaceUnsupported',
-      "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
+      'auto.components.right.sidebar.AiVaultPanel.sessionHostMismatchUnsupported',
+      'This session belongs to a different host. Open a workspace on the same host to resume it.'
     )
   }
   return translate(

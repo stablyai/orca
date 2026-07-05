@@ -6,7 +6,6 @@ import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { selectPetAnimationName, type PetAnimationName } from './pet-agent-state'
-import { translate } from '@/i18n/i18n'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -66,15 +65,12 @@ function SpriteFrame({
   const startY = -(row * sprite.frameHeight * scale)
   const endX = -(frames * sprite.frameWidth * scale)
   const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
+  // Why: sprite keyframes are runtime CSS, not user-visible copy; translated
+  // CSS keywords make the browser discard the animation.
+  const keyframesCss = `@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`
   return (
     <>
-      <style>
-        {translate(
-          'auto.components.pet.PetOverlay.4712d196c6',
-          '@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }',
-          { value0: animKeyframesId, value1: startX, value2: startY, value3: endX, value4: startY }
-        )}
-      </style>
+      <style>{keyframesCss}</style>
       <div
         style={{
           width: renderedW,
@@ -285,6 +281,10 @@ function defaultPosition(size: number = SIZE): Position {
   )
 }
 
+// Why: the bob float is runtime CSS, not user-visible copy; keep CSS keywords
+// out of i18n so translated locales cannot invalidate the keyframes.
+const PET_BOB_KEYFRAMES_CSS =
+  '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
 export function PetOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
@@ -417,12 +417,7 @@ export function PetOverlay(): React.JSX.Element {
             minHeight: 24
           }}
         >
-          <style>
-            {translate(
-              'auto.components.pet.PetOverlay.de932b0e8f',
-              '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
-            )}
-          </style>
+          <style>{PET_BOB_KEYFRAMES_CSS}</style>
           {sprite ? (
             <SpriteFrame
               url={url}

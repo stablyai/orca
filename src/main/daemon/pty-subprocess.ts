@@ -54,6 +54,7 @@ import {
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
+import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -93,20 +94,7 @@ export type PtySubprocessOptions = {
  * Returns a stable default working directory for daemon-spawned PTYs.
  */
 function getDefaultCwd(): string {
-  if (process.platform !== 'win32') {
-    return process.env.HOME || '/'
-  }
-
-  // Why: HOMEPATH alone is drive-relative (`\\Users\\name`). Pair it with
-  // HOMEDRIVE when USERPROFILE is unavailable so daemon-spawned Windows PTYs
-  // still start in a valid absolute home directory.
-  if (process.env.USERPROFILE) {
-    return process.env.USERPROFILE
-  }
-  if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
-    return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
-  }
-  return 'C:\\'
+  return resolveSafePtyDefaultCwd()
 }
 
 /**
@@ -206,11 +194,13 @@ function isExistingDirectory(path: string | undefined): path is string {
  * Moves the daemon process to a stable cwd after its original cwd disappears.
  */
 function repairDaemonCwd(): string | null {
-  const candidates = [
-    process.env.ORCA_USER_DATA_PATH,
-    getDefaultCwd(),
-    process.platform === 'win32' ? 'C:\\' : '/'
-  ]
+  const candidates = [process.env.ORCA_USER_DATA_PATH]
+  try {
+    candidates.push(getDefaultCwd())
+  } catch {
+    // Keep daemon cwd repair best-effort even when no user terminal cwd is safe.
+  }
+  candidates.push(process.platform === 'win32' ? 'C:\\' : '/')
   for (const candidate of candidates) {
     if (isExistingDirectory(candidate)) {
       try {
@@ -312,6 +302,16 @@ function preflightWindowsPtySpawnEnvironment(args: {
   }
 
   validateWorkingDirectory(args.validationCwd)
+}
+
+/**
+ * Validates POSIX spawn cwd before node-pty can fail with an opaque ENOENT.
+ */
+function preflightPosixPtySpawnEnvironment(validationCwd: string): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  validateWorkingDirectory(validationCwd)
 }
 
 /**
@@ -589,6 +589,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
+  if (opts.command && startupAgentRecognition) {
+    assertSafeAgentStartupCwd(opts.cwd, opts.command)
+  }
   const requestedCwd = opts.cwd || getDefaultCwd()
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
@@ -772,6 +775,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // runs in a separate forked process with its own code path.
   ensureNodePtySpawnHelperExecutable()
   preflightUnixPtySpawnEnvironment()
+  preflightPosixPtySpawnEnvironment(validationCwd)
   preflightWindowsPtySpawnEnvironment({
     validationCwd,
     cwdWasExplicit: opts.cwd !== undefined

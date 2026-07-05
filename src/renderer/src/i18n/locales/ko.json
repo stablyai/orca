@@ -57,7 +57,7 @@
     "openWorktreePalette": "워크트리 팔레트 열기",
     "window": "창",
     "help": "도움말",
-    "paste": "Paste"
+    "paste": "붙여넣기"
   },
   "tray": {
     "openOrca": "Orca 열기",
@@ -652,7 +652,7 @@
         "devDescription": "Dev-only tools for exercising UI states.",
         "devBadge": "Dev",
         "devSearchNotificationPlayground": "Notification playground",
-        "devSearchNotificationPlaygroundDescription": "Trigger representative toast and notification UI states.",
+        "devSearchNotificationPlaygroundDescription": "대표적인 토스트 및 알림 UI 상태를 트리거합니다.",
         "devSearchKeywordDev": "dev",
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
@@ -876,7 +876,7 @@
           "moved": "moved this",
           "from": "from",
           "to": "to",
-          "activity": "Activity",
+          "activity": "활동",
           "noActivity": "No activity yet."
         },
         "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
@@ -2014,7 +2014,7 @@
           "13b3ac0a84": "상태",
           "79c54552f7": "필터",
           "8a2ffbf9b3": "{{value0}} 필터 제거",
-          "19bb6f115f": "reviewed-by"
+          "19bb6f115f": "리뷰 완료"
         },
         "PRFilterPickers": {
           "fdf387297c": "지우기 (",
@@ -2452,7 +2452,6 @@
             "0a917b591a": "붙여넣기",
             "f3eeb1de13": "복사",
             "c2f0b72b8d": "삽입",
-            "openLinkDefaultBrowser": "기본 브라우저에서 열기",
             "925f49f210": "창 확장",
             "df766809e0": "창 축소",
             "cff67afad1": "Copy Context"
@@ -2590,7 +2589,8 @@
             "sessionQueued": "세션이 대기열에 추가됨",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
-            "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스에 놓으세요."
+            "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스에 놓으세요.",
+            "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 같은 호스트의 워크스페이스에 놓으세요."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "새 분할"
@@ -2935,7 +2935,9 @@
             "972a1ff497": "Codex 한도를 재설정할까요?",
             "6d1042aa6f": "활성 계정의 Codex rate-limit 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 창을 즉시 초기화합니다.",
             "f077f586db": "다시 묻지 않기",
-            "c0e972d726": "취소"
+            "c0e972d726": "취소",
+            "06741a2f3d": "Open MiniMax usage details",
+            "3bbf140864": "MiniMax Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -4619,7 +4621,46 @@
           "75ca9b718e": "Codex는 활성 계정에 새로 로그인해야 한다고 보고했습니다. 새 Codex 세션을 시작하기 전에 다시 인증하세요.",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "현재 사용 중인",
-          "e05d0ff737": "현재 {{value0}} Claude 로그인을 사용하세요."
+          "e05d0ff737": "현재 {{value0}} Claude 로그인을 사용하세요.",
+          "2f24f244a4": "MiniMax cookie is required.",
+          "8d61637a77": "MiniMax cookie saved.",
+          "b43e761fe5": "MiniMax cookie update failed.",
+          "5d63bbfbec": "MiniMax",
+          "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
+          "21d6eb141e": "MiniMax Session Cookie",
+          "33bba5ad83": "Paste your MiniMax session cookie for local rate-limit fetching.",
+          "73ea15f24b": "Saved",
+          "23afe8f226": "Not saved",
+          "566d9a99ab": "_token=…; minimax_group_id_v2=…",
+          "f38b9cc4bd": "Replace",
+          "590a3130f9": "Save",
+          "79418c782a": "브라우저에서 platform.minimax.io/console/usage 를 열고 로그인한 다음 DevTools(네트워크 → 임의의 remains 요청 → Cookie)에서 Cookie 요청 헤더를 복사하세요.",
+          "9dd50d3f75": "고급",
+          "174fb408f9": "MiniMax 사용량 새로 고침이 잘못된 워크스페이스나 모델을 가리키는 경우에만 이 기본값을 변경하세요.",
+          "bf160bb6c0": "Group ID 재정의",
+          "b1e2743313": "선택 항목입니다. 비워두면 Cookie의 minimax_group_id_v2가 사용됩니다.",
+          "0747d6391a": "Cookie의 Group ID 사용",
+          "4ff2af7524": "사용 모델 이름",
+          "5cf4b0f85f": "선택적인 쉼표로 구분된 모델 이름. MiniMax가 모델 관련 오류를 반환하지 않는 한 general로 두세요.",
+          "3c92b0d31c": "general",
+          "0d8e77bc40": "콘솔 열기",
+          "0b8c1c7e02": "로컬에서 암호화됨",
+          "5e08b0fe57": "platform.minimax.io에만 전송됩니다. Orca 외부로 나가지 않습니다.",
+          "43d7a45b97": "복사 방법",
+          "b8a4f21c3e": "DevTools에서 Cookie 헤더 붙여넣기",
+          "53f7b8c7a2": "마지막 새로 고침: {{value0}}",
+          "31d24a4e87": "브라우저에서 로그아웃하면 Cookie가 만료됩니다.",
+          "42c2cb21cf": "Cookie 삭제",
+          "3a30aaf526": "방금 전",
+          "f5d8d2a6a1": "브라우저에서 platform.minimax.io/console/usage를 열고 로그인합니다.",
+          "24560fe830": "DevTools를 엽니다.",
+          "4cab0fa42d": "네트워크 탭으로 이동하여 Preserve log를 활성화합니다.",
+          "bee4e63e1c": "페이지를 새로 고침합니다.",
+          "87f814af6f": "remains로 필터링하고 coding_plan/remains 요청을 선택합니다.",
+          "435df0ee51": "Request Headers에서 Cookie 값을 복사합니다.",
+          "7492fb3bba": "여기에 붙여넣고 저장을 클릭합니다.",
+          "9fec52de4b": "Cookie 복사 방법",
+          "4e32e030b2": "Cookie는 이 기기에만 보관됩니다. Orca는 사용량 새로 고침을 위해 platform.minimax.io로만 전송합니다."
         },
         "AdvancedPane": {
           "40b29e0bf3": "다시 시작",
@@ -4867,7 +4908,8 @@
           "d420c43729": "{{value1}}{{value2}}에서 {{value0}}개의 쿠키를 {{value3}}(으)로 가져왔습니다.",
           "b4c167764d": "파일에서 {{value0}}개의 쿠키를 {{value1}}에 가져왔습니다.",
           "a3f8c2d1e0b4": "{{value1}} ({{value2}})에서 {{value0}}개의 쿠키를 {{value3}}(으)로 가져왔습니다.",
-          "b4e9d3f2a1c5": "{{value1}}에서 {{value0}}개의 쿠키를 {{value2}}(으)로 가져왔습니다."
+          "b4e9d3f2a1c5": "{{value1}}에서 {{value0}}개의 쿠키를 {{value2}}(으)로 가져왔습니다.",
+          "c5a273a809": "{{value0}}에서"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "컴퓨터 사용 열기",
@@ -4891,7 +4933,7 @@
           "be6df68384": "파일에서…",
           "e44c5d681e": "에서",
           "67d9a53f47": "별도의 로그인을 위한 프로필 관리",
-          "112f70adc4": "마지막으로 가져온 위치",
+          "112f70adc4": "{{value0}}에서 마지막으로 가져옴",
           "72d4815523": "agents가 인증된 페이지에 접근할 수 있도록 기존 로그인을 Orca로 가져오세요. 기본 프로필로 가져옵니다.",
           "2eb906706c": "브라우저 쿠키 가져오기",
           "af8c83ed61": "agents가 로그인을 재사용할 수 있도록 Chrome, Edge 또는 기타 브라우저에서 쿠키를 가져옵니다.",
@@ -4913,7 +4955,8 @@
           "ad8cb0ee22": "경로 수정",
           "0289434ed6": "활성화됨",
           "8b3054dac7": "등록 중...",
-          "8f2675c2f3": "파일에서 {{value0}}개의 쿠키를 가져왔습니다."
+          "8f2675c2f3": "파일에서 {{value0}}개의 쿠키를 가져왔습니다.",
+          "5301857d88": "{{value0}}에서"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "agents가 Orca 브라우저에서 페이지를 탐색하고 확인할 수 있습니다.",
@@ -5287,7 +5330,7 @@
           "aefa1ecb59": "Git 사용자 이름이 구성되지 않았습니다.",
           "f35007e6e8": "git-username",
           "3d172725cc": "없음",
-          "1f32ba27a6": "Custom",
+          "1f32ba27a6": "사용자 정의",
           "a182c5125e": "Git 사용자 이름",
           "sourceControlGroupOrderTitle": "소스 제어 그룹 순서",
           "sourceControlGroupOrderDescription": "소스 제어에서 변경 사항, 스테이징된 변경 사항 또는 추적되지 않는 파일 중 무엇을 먼저 표시할지 선택합니다.",
@@ -6748,7 +6791,9 @@
             "bdbd1e668e": "Windows",
             "593720c17f": "위치",
             "b84a5b0c8a": "이 장치 또는 WSL에서 공급자 계정을 검사하고 추가할지 선택합니다.",
-            "d09fb5ca92": "계정 위치"
+            "d09fb5ca92": "계정 위치",
+            "733f9e2a93": "MiniMax Usage",
+            "f8374c3151": "Paste your platform.minimax.io session cookie for local rate-limit fetching."
           }
         },
         "advanced": {
@@ -8573,12 +8618,12 @@
           "07939d084e": "Reset {{value0}} to default",
           "9b02917027": "Reset to default",
           "a799f90f82": "Disable {{value0}}",
-          "25e6e76618": "Disable shortcut",
-          "035a822ef0": "Add shortcut",
+          "25e6e76618": "단축키 비활성화",
+          "035a822ef0": "단축키 추가",
           "a0e2ef0e61": "Add another shortcut for {{value0}}",
-          "245c83af24": "Add another shortcut",
+          "245c83af24": "다른 단축키 추가",
           "482a60225d": "Enable {{value0}}",
-          "6287677c37": "Enable",
+          "6287677c37": "활성화",
           "01481b964c": "Add shortcut for {{value0}}"
         },
         "ShortcutRecorderButton": {
@@ -8586,10 +8631,10 @@
           "3732775d74": "Add shortcut for {{value0}}",
           "88764af2c1": "Change shortcut for {{value0}}",
           "30feb099d6": "Change shortcut {{value0}} of {{value1}} for {{value2}}",
-          "5d982a2a1f": "Listening for shortcut",
-          "152e0bcd64": "Add shortcut",
-          "5bd56445da": "Change shortcut",
-          "f5ed5dcbf6": "Press keys…"
+          "5d982a2a1f": "단축키 대기 중",
+          "152e0bcd64": "단축키 추가",
+          "5bd56445da": "단축키 변경",
+          "f5ed5dcbf6": "키를 누르세요…"
         },
         "ShortcutRemoveButton": {
           "9e29aff18b": "{{value0}} 바로가기 {{value1}} 제거",
@@ -8638,21 +8683,21 @@
           "forceDeleteClicked": "Force Delete clicked",
           "devOnlyCallback": "Dev-only callback.",
           "infoToast": "Info toast",
-          "infoToastDescription": "Long informational copy with no explicit action.",
+          "infoToastDescription": "명시적 작업이 없는 긴 정보 메시지입니다.",
           "localCanaryBehind": "Local canary is behind origin/canary",
           "successToast": "Success toast",
-          "successToastDescription": "Short confirmation state.",
+          "successToastDescription": "짧은 확인 상태입니다.",
           "settingsSaved": "Settings saved",
-          "shortSuccessCopy": "Short success copy.",
+          "shortSuccessCopy": "짧은 성공 메시지입니다.",
           "errorToast": "Error toast",
-          "errorToastDescription": "Long error copy without recovery actions.",
+          "errorToastDescription": "복구 작업이 없는 긴 오류 메시지입니다.",
           "failedToSyncWorkspaceMetadata": "Failed to sync workspace metadata",
           "nativeActionToast": "Native action toast",
-          "nativeActionToastDescription": "Uses Sonner action and cancel slots.",
+          "nativeActionToastDescription": "Sonner 작업 및 취소 슬롯을 사용합니다.",
           "deleteFailureToast": "Delete failure toast",
-          "deleteFailureToastDescription": "Custom footer with View and Force Delete.",
+          "deleteFailureToastDescription": "보기 및 강제 삭제가 포함된 사용자 정의 바닥글입니다.",
           "behindBaseRefToast": "Behind base ref toast",
-          "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
+          "behindBaseRefToastDescription": "인라인 설정 링크와 바닥글 작업이 있는 영구 프롬프트입니다.",
           "notificationPlayground": "Notification playground",
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
           "devOnly": "Dev only"
@@ -8709,6 +8754,18 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "repo 소유 온디맨드 환경에 대한 설정 제어 및 워크스페이스 실행 대상을 표시합니다.",
           "toggleLabel": "워크스페이스별 환경 전환"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -9206,7 +9263,8 @@
             "ea4788705e": "취소",
             "b0da3a4d3e": "실행 레시피가 이미 저장되었습니다",
             "bff4795a6d": "저장된 레시피를 업데이트하려면 agent, 인수 또는 프롬프트 템플릿을 변경하세요.",
-            "5c75b24735": "Orca가 시작하기 전에 agent가 받을 내용을 사용자 지정합니다."
+            "5c75b24735": "Orca가 시작하기 전에 agent가 받을 내용을 사용자 지정합니다.",
+            "repoAgentOverrideNote": "This repository overrides your global default ({{global}}) and currently runs {{effective}}. Save to this repository to change what runs here."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "전역 기본값으로 저장",
@@ -9305,7 +9363,7 @@
                 "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
                 "5bc9bda2af": "Run from this worktree",
                 "e87fb3d929": "Copy mergeability refresh commands",
-                "1e53e45072": "Copied",
+                "1e53e45072": "복사됨",
                 "084c516efb": "Copy commands",
                 "5dc3af25c0": "댓글 선택",
                 "d7a2f9c401": "해결되지 않은 댓글 {{value0}}개 보내기",
@@ -9320,10 +9378,10 @@
                 "e8b4c1a903": "Resolved · {{value0}}",
                 "c3a8e5d710": "Needs review · {{value0}}",
                 "a7f0c7e8d1": "Queue",
-                "8a621a2c4f": "Grouped",
-                "b13f85d75c": "Timeline",
+                "8a621a2c4f": "그룹화",
+                "b13f85d75c": "타임라인",
                 "f5cf324efa": "Comment display options",
-                "5e6e5a13fa": "View",
+                "5e6e5a13fa": "보기",
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
               },
               "empty": {
@@ -9501,7 +9559,7 @@
                   "d8a4c0e369": "{{value0}}을(를) 만들기 전에 인증하세요.",
                   "e9b5d1f470": "{{value0}}을(를) 만들기 전에 브랜치를 체크아웃하세요.",
                   "f0c6e2a581": "이 브랜치는 아직 {{value0}}을(를) 만들 준비가 되지 않았습니다.",
-                  "8f9a0b1c2d": "Nothing to commit. Branch is up to date.",
+                  "8f9a0b1c2d": "커밋할 항목이 없습니다. 브랜치가 최신 상태입니다.",
                   "h3i4j5k607": "이 브랜치에서 {{value0}}을(를) 만들 수 있는지 확인 중…"
                 }
               }
@@ -9576,7 +9634,8 @@
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
-            "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요."
+            "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요.",
+            "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "세션 스캔 중",
@@ -9605,7 +9664,9 @@
             "globalScope": "전역",
             "projectScope": "프로젝트",
             "currentProjectLower": "현재 프로젝트",
-            "project": "프로젝트"
+            "project": "프로젝트",
+            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "host": "Host"
           },
           "AiVaultSessionDetails": {
             "updated": "업데이트됨",
@@ -9793,10 +9854,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "클라우디노"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {
@@ -10325,7 +10382,7 @@
             "4b2fc4b80c": "사고 강도",
             "be8917699e": "모델",
             "4d9b6d84df": "지원되지 않습니다. Claude, Codex 또는 Custom을 선택하세요.",
-            "560d4feb00": "Custom",
+            "560d4feb00": "사용자 정의",
             "29d119fe95": "에이전트",
             "f9382b48a1": "AI author 활성화",
             "1c0cb4fabb": "AI 작성자",
@@ -10533,7 +10590,7 @@
             "ca2cfbf188": "Terminal을 아래로 분할",
             "e370fa8c2b": "Terminal을 오른쪽으로 분할",
             "b85eab49dd": "src/auth/session.ts",
-            "99f5224f1e": "Edit",
+            "99f5224f1e": "편집",
             "0d93c298a7": "src/auth 던지기",
             "17cfdc3344": "Grep",
             "9923847785": "Read",
@@ -11712,7 +11769,7 @@
             "4bb7424d6b": "Canceled",
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "열기",
-            "09a9489aa5": "Show",
+            "09a9489aa5": "표시",
             "2a4c4b8e1f": "복사"
           },
           "BrowserToolbarMenu": {
@@ -12069,7 +12126,7 @@
         },
         "AutomationSetupDecisionField": {
           "5a7863909c": "새 워크스페이스마다 설정 실행",
-          "18f000ad4e": "Advanced",
+          "18f000ad4e": "고급",
           "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
         }
       },

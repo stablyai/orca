@@ -526,13 +526,47 @@ export function gitOptionalLocksDisabledEnv(
   }
 }
 
-function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return {
-    ...env,
-    GIT_TERMINAL_PROMPT: '0',
-    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
-    SSH_ASKPASS: env.SSH_ASKPASS ?? ''
-  }
+/**
+ * Append git config entries through the GIT_CONFIG_COUNT / GIT_CONFIG_KEY_n /
+ * GIT_CONFIG_VALUE_n env protocol (git >= 2.31), composing with any count
+ * already present in `env` so we never clobber config a caller injected the
+ * same way.
+ */
+export function appendGitConfigEnv(
+  env: NodeJS.ProcessEnv,
+  entries: readonly (readonly [key: string, value: string])[]
+): NodeJS.ProcessEnv {
+  const parsed = Number.parseInt(env.GIT_CONFIG_COUNT ?? '', 10)
+  const base = Number.isInteger(parsed) && parsed > 0 ? parsed : 0
+  const next = { ...env }
+  entries.forEach(([key, value], index) => {
+    next[`GIT_CONFIG_KEY_${base + index}`] = key
+    next[`GIT_CONFIG_VALUE_${base + index}`] = value
+  })
+  next.GIT_CONFIG_COUNT = String(base + entries.length)
+  return next
+}
+
+export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return appendGitConfigEnv(
+    {
+      ...env,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: env.GIT_ASKPASS ?? '',
+      SSH_ASKPASS: env.SSH_ASKPASS ?? '',
+      // Why: Git Credential Manager ignores GIT_TERMINAL_PROMPT / GIT_ASKPASS and
+      // pops a GUI on first auth — the Windows worktree-create hang (STA-1292).
+      // `never` suppresses the prompt while still serving cached credentials.
+      GCM_INTERACTIVE: 'never'
+    },
+    // Why: disable only the *interactive* credential prompt, NOT the helper
+    // itself — an empty credential.helper would break cached-credential auth for
+    // private repos. Harmless on macOS/Linux (no GCM) and on the SSH path.
+    [
+      ['credential.interactive', 'false'],
+      ['credential.guiPrompt', 'false']
+    ]
+  )
 }
 
 /**

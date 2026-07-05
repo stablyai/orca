@@ -2441,6 +2441,12 @@ describe('repos:getBaseRefDefault envelope', () => {
           match: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
+        // The origin/HEAD target is verified before it is trusted, so the
+        // symbolic-ref result must also resolve via rev-parse.
+        {
+          match: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+        },
         {
           match: isRemoteList,
           respond: () => Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
@@ -2470,6 +2476,12 @@ describe('repos:getBaseRefDefault envelope', () => {
         {
           match: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
+        },
+        // The origin/HEAD target is verified before it is trusted, so the
+        // symbolic-ref result must also resolve via rev-parse.
+        {
+          match: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
         },
         {
           match: isRemoteList,

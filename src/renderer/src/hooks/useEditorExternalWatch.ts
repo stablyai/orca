@@ -33,7 +33,7 @@ import { isGitRepoKind } from '../../../shared/repo-kind'
 // VSCode) land as a short burst of `update` events — or `delete + create` on
 // renamers — within a few milliseconds for the same path. Dispatching an
 // `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT` per raw event fan-outs into N full
-// `setContent` + `normalizeSoftBreaks` doc rebuilds per mounted EditorPanel,
+// `setContent` + document-repair rebuilds per mounted EditorPanel,
 // which under split-pane + large markdown is enough to wedge the renderer
 // and black out the window (issue #826). Coalescing per (worktreeId + path)
 // on a short debounce collapses that burst into one reload notification.

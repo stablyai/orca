@@ -191,7 +191,7 @@ function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
 
 function getBufferPositionForTerminalMouseEvent(
   terminal: Terminal,
-  event: Pick<MouseEvent, 'clientX' | 'clientY'>
+  event: MouseEvent
 ): { x: number; y: number } | null {
   const screenElement = getTerminalScreenElement(terminal)
   if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
@@ -260,34 +260,9 @@ export function openHttpLinkAtBufferPosition(
   terminalColumns: number,
   deps: UrlLinkHitTestDeps
 ): boolean {
-  const url = getTerminalHttpLinkAtBufferPosition(buffer, position, terminalColumns)
-  if (!url) {
-    return false
-  }
-
-  openTerminalHttpLink(url, deps)
-  return true
-}
-
-export function getTerminalHttpLinkForMouseEvent(
-  terminal: Terminal,
-  event: Pick<MouseEvent, 'clientX' | 'clientY'>
-): string | null {
-  const position = getBufferPositionForTerminalMouseEvent(terminal, event)
-  if (!position) {
-    return null
-  }
-  return getTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
-}
-
-export function getTerminalHttpLinkAtBufferPosition(
-  buffer: { getLine(y: number): IBufferLine | undefined },
-  position: { x: number; y: number },
-  terminalColumns: number
-): string | null {
   const logicalLines = buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
   if (logicalLines.length === 0) {
-    return null
+    return false
   }
 
   for (const logicalLine of logicalLines) {
@@ -296,11 +271,12 @@ export function getTerminalHttpLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
-      return parsed.url
+      openTerminalHttpLink(parsed.url, deps)
+      return true
     }
   }
 
-  return null
+  return false
 }
 
 export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {

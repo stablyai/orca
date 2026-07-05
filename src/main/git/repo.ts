@@ -467,6 +467,24 @@ function hasGitRef(path: string, ref: string): boolean {
   }
 }
 
+function gitRefToDefaultBaseRef(ref: string): string {
+  return ref.replace(/^refs\/remotes\//, '')
+}
+
+function getVerifiedOriginHeadBaseRef(path: string): string | null {
+  try {
+    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
+      cwd: path
+    }).trim()
+
+    // Why: origin/HEAD may survive a default-branch rename while pointing at a
+    // deleted ref; verify before trusting it over the probe list.
+    return ref && hasGitRef(path, ref) ? gitRefToDefaultBaseRef(ref) : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Resolve the default base ref for new worktrees.
  * Prefer the remote primary branch over a potentially stale local branch.
@@ -478,16 +496,9 @@ function hasGitRef(path: string, ref: string): boolean {
  * degrade gracefully for non-creation uses (e.g. hosted URL building).
  */
 export function getDefaultBaseRef(path: string): string | null {
-  try {
-    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
-      cwd: path
-    }).trim()
-
-    if (ref) {
-      return ref.replace(/^refs\/remotes\//, '')
-    }
-  } catch {
-    // Fall through to explicit remote branch probes.
+  const originHeadBaseRef = getVerifiedOriginHeadBaseRef(path)
+  if (originHeadBaseRef) {
+    return originHeadBaseRef
   }
 
   // Why: walk the shared DEFAULT_BASE_REF_PROBES list so the sync path and the
@@ -595,6 +606,28 @@ export async function getRemoteCount(path: string): Promise<number> {
 /** Callback shape for a git exec function that yields stdout. */
 export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
 
+async function hasGitRefViaExec(exec: GitExec, ref: string): Promise<boolean> {
+  try {
+    await exec(['rev-parse', '--verify', '--quiet', ref])
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function resolveVerifiedOriginHeadBaseRefViaExec(exec: GitExec): Promise<string | null> {
+  try {
+    const { stdout } = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
+    const ref = stdout.trim()
+    if (!ref || !(await hasGitRefViaExec(exec, ref))) {
+      return null
+    }
+    return gitRefToDefaultBaseRef(ref)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Resolve the default base ref given a git exec callback. Prefers
  * origin/HEAD's symbolic-ref target; falls back to DEFAULT_BASE_REF_PROBES.
@@ -609,24 +642,11 @@ export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
  * from a genuine transport failure.
  */
 export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<string | null> {
-  try {
-    const { stdout } = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
-    const ref = stdout.trim()
-    if (ref) {
-      return ref.replace(/^refs\/remotes\//, '')
-    }
-  } catch {
-    // symbolic-ref returns non-zero when origin/HEAD is unset — expected.
-    // Fall through to probes.
+  const originHeadBaseRef = await resolveVerifiedOriginHeadBaseRefViaExec(exec)
+  if (originHeadBaseRef) {
+    return originHeadBaseRef
   }
-  return resolveDefaultBaseRefFromProbes(async (ref) => {
-    try {
-      await exec(['rev-parse', '--verify', '--quiet', ref])
-      return true
-    } catch {
-      return false
-    }
-  })
+  return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
 }
 
 async function getDefaultBaseRefAsync(

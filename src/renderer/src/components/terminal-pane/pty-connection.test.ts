@@ -3120,6 +3120,45 @@ describe('connectPanePty', () => {
     expect(pane.container.dataset.ptyId).toBeUndefined()
   })
 
+  it('refits immediately when binding to a PTY with an active mobile-fit override', async () => {
+    const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    Object.defineProperty(pane.container, 'getBoundingClientRect', {
+      configurable: true,
+      value: () =>
+        ({
+          width: 800,
+          height: 400,
+          top: 0,
+          left: 0,
+          right: 800,
+          bottom: 400
+        }) as DOMRect
+    })
+    ;(
+      pane.fitAddon as unknown as { proposeDimensions: () => { cols: number; rows: number } }
+    ).proposeDimensions = vi.fn(() => ({ cols: 120, rows: 40 }))
+    pane.terminal.resize.mockImplementation((cols: number, rows: number) => {
+      pane.terminal.cols = cols
+      pane.terminal.rows = rows
+    })
+    setFitOverride('pty-fit', 'mobile-fit', 49, 20)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onPtySpawn).toBeTypeOf('function')
+    onPtySpawn?.('pty-fit')
+
+    expect(pane.terminal.resize).toHaveBeenCalledWith(49, 20)
+    expect(pane.terminal.cols).toBe(49)
+    expect(pane.terminal.rows).toBe(20)
+  })
+
   it('continues post-spawn size reconcile after a transient mobile presence lock', async () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {

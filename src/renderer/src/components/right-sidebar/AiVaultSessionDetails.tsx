@@ -31,7 +31,7 @@ export function SessionInlineDetails({
   }
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
-  onOpenLog: () => void
+  onOpenLog?: () => void
 }): React.JSX.Element {
   const showResumeInWorktree = Boolean(resumeActions.worktree.worktreeId)
   const showResumeInNewTab = !showResumeInWorktree || Boolean(resumeActions.newTab.worktreeId)
@@ -132,20 +132,22 @@ export function SessionInlineDetails({
             )}
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          draggable={false}
-          onClick={(event) => {
-            event.stopPropagation()
-            onOpenLog()
-          }}
-          className="h-7 shrink-0 px-2.5 text-[11px] text-muted-foreground"
-        >
-          <FileJson className="size-3.5" />
-          {translate('auto.components.right.sidebar.AiVaultSessionDetails.viewLog', 'View Log')}
-        </Button>
+        {onOpenLog ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            draggable={false}
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpenLog()
+            }}
+            className="h-7 shrink-0 px-2.5 text-[11px] text-muted-foreground"
+          >
+            <FileJson className="size-3.5" />
+            {translate('auto.components.right.sidebar.AiVaultSessionDetails.viewLog', 'View Log')}
+          </Button>
+        ) : null}
       </div>
     </div>
   )

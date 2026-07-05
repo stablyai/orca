@@ -16,6 +16,20 @@ export function parseExplicitGitHubIssueUrl(input: string): string | null {
   return trimmed
 }
 
+export function parseGitHubWorkItemNumberForMetaField(
+  input: string,
+  expectedType: 'issue' | 'pr'
+): number | null {
+  const link = parseGitHubIssueOrPRLink(input)
+  if (link) {
+    // Why: issue and PR numbers live in separate GitHub namespaces for refs;
+    // a URL path mismatch must not silently link the other field.
+    return link.type === expectedType ? link.number : null
+  }
+
+  return parseGitHubIssueOrPRNumber(input)
+}
+
 /** Pure save-payload builder for the worktree meta dialog: empty inputs clear
  *  the link (null), unparseable inputs leave it untouched (omitted). */
 export function buildWorktreeMetaUpdates(args: {
@@ -26,11 +40,11 @@ export function buildWorktreeMetaUpdates(args: {
   commentInput: string
 }): Partial<WorktreeMeta> {
   const trimmedIssue = args.issueInput.trim()
-  const linkedIssueNumber = parseGitHubIssueOrPRNumber(trimmedIssue)
+  const linkedIssueNumber = parseGitHubWorkItemNumberForMetaField(trimmedIssue, 'issue')
   const finalLinkedIssue =
     trimmedIssue === '' ? null : linkedIssueNumber !== null ? linkedIssueNumber : undefined
   const trimmedPR = args.prInput.trim()
-  const linkedPRNumber = parseGitHubIssueOrPRNumber(trimmedPR)
+  const linkedPRNumber = parseGitHubWorkItemNumberForMetaField(trimmedPR, 'pr')
   const finalLinkedPR =
     trimmedPR === '' ? null : linkedPRNumber !== null ? linkedPRNumber : undefined
 

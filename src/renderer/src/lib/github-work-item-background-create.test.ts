@@ -163,6 +163,46 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     )
   })
 
+  it('does not resolve a PR start point for a stale PR-typed issue URL', async () => {
+    const deps = makeDeps()
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue({
+          type: 'pr',
+          number: 6933,
+          title: 'The board columns are displayed backwards',
+          url: 'https://github.com/stablyai/orca/issues/6933',
+          branchName: 'fix-issue-6933',
+          baseRefName: 'main',
+          isCrossRepository: true
+        }),
+        repoId: 'repo-1',
+        telemetrySource: 'sidebar',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    expect(deps.resolvePrStartPoint).not.toHaveBeenCalled()
+    const beginCalls = deps.beginBackgroundCreate.mock.calls as unknown as [
+      WorktreeCreationRequest
+    ][]
+    expect(beginCalls[0]?.[0].linkedIssue).toBe(6933)
+    expect(beginCalls[0]?.[0].linkedPR).toBeUndefined()
+    const continueCalls = deps.continueBackgroundCreate.mock.calls as unknown as [
+      string,
+      WorktreeCreationRequest
+    ][]
+    const request = continueCalls[0]?.[1]
+    expect(request?.linkedIssue).toBe(6933)
+    expect(request?.linkedPR).toBeUndefined()
+    expect(request?.baseBranch).toBeUndefined()
+    expect(request?.pushTarget).toBeUndefined()
+    expect(request?.branchNameOverride).toBeUndefined()
+    expect(request?.compareBaseRef).toBeUndefined()
+  })
+
   it('shows the pending workspace before async preflight resolves', async () => {
     let resolveSetupDecision: ((value: { kind: 'decided'; decision: 'inherit' }) => void) | null =
       null
@@ -566,17 +606,36 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
 
     await createGitHubWorkItemWorkspaceInBackground(
       {
-        item: makeIssue({ type: 'pr', number: 7, url: 'https://github.com/stablyai/orca/pull/7' }),
+        item: makeIssue({
+          type: 'pr',
+          number: 6934,
+          url: 'https://github.com/stablyai/orca/pull/6934',
+          branchName: 'fix-issue-6933',
+          baseRefName: 'main',
+          isCrossRepository: true
+        }),
         repoId: 'repo-1',
         openModalFallback: vi.fn()
       },
       deps
     )
 
+    expect(deps.resolvePrStartPoint).toHaveBeenCalledWith(
+      'repo-1',
+      6934,
+      expect.anything(),
+      expect.objectContaining({
+        type: 'pr',
+        number: 6934,
+        branchName: 'fix-issue-6933',
+        baseRefName: 'main',
+        isCrossRepository: true
+      })
+    )
     expect(deps.continueBackgroundCreate).toHaveBeenCalledWith(
       'creation-1',
       expect.objectContaining({
-        linkedPR: 7,
+        linkedPR: 6934,
         baseBranch: 'feature/from-pr',
         pushTarget: { remote: 'origin', branch: 'feature/from-pr' },
         branchNameOverride: 'feature/from-pr',

@@ -527,6 +527,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         command: 'codex'
       })
 
@@ -1038,6 +1039,97 @@ describe('createPtySubprocess', () => {
     expect(shellArg.length).toBeGreaterThan(0)
   })
 
+  it('allows an explicitly requested plain daemon shell at POSIX root', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, cwd: '/' })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cwd: '/' })
+    )
+  })
+
+  it('rejects daemon automatic agent startup without an explicit cwd', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    spawnMock.mockClear()
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          command: 'codex'
+        })
+      ).toThrow(/requires a non-root workspace/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects daemon automatic agent startup at POSIX root', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    spawnMock.mockClear()
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: '/',
+          command: 'claude'
+        })
+      ).toThrow(/requires a non-root workspace/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a missing explicit POSIX cwd before node-pty spawn', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    spawnMock.mockClear()
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: '/definitely-missing-orca-cwd'
+        })
+      ).toThrow(/definitely-missing-orca-cwd/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
   it('passes custom env to spawned process', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -1238,6 +1330,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: 'codex',
         env: { SHELL: '/bin/zsh' }
       })
@@ -1264,6 +1357,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: "codex 'linked issue context'",
         startupCommandDelivery: 'shell-ready',
         env: { SHELL: '/bin/zsh' }
@@ -1291,6 +1385,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: "codex --prefill 'linked issue context'",
         env: { SHELL: '/bin/zsh' }
       })
@@ -1560,6 +1655,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         shellOverride: 'powershell.exe',
         command: "& 'codex' '--no-alt-screen'"
       })
@@ -1589,6 +1685,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         shellOverride: 'cmd.exe',
         command: `codex ${'x'.repeat(7000)}`
       })

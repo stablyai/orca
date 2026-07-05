@@ -93,6 +93,7 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
+import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
 import {
   inspectRuntimeTerminalProcess,
   isRemoteRuntimePtyId
@@ -350,8 +351,9 @@ export default function TerminalPane({
   const daemonActions = useDaemonActions()
   // Why: override state lives in a plain Map for perf (safeFit reads it on
   // every resize). This counter forces a re-render when overrides change so
-  // the mobile-fit banner appears/disappears. When an override is cleared
-  // (desktop-fit), we also trigger safeFit on affected panes so the terminal
+  // the mobile-fit banner appears/disappears. On both transitions we also
+  // trigger safeFit on affected panes: mobile-fit shrinks the watcher's xterm
+  // to phone dims (matching the live phone-wrapped stream), and desktop-fit
   // resizes back to desktop dimensions.
   const [, setOverrideTick] = useState(0)
   useEffect(() => {
@@ -376,17 +378,49 @@ export default function TerminalPane({
 
     const unsubscribe = onOverrideChange((event) => {
       setOverrideTick((n) => n + 1)
-      if (event.mode === 'desktop-fit') {
-        const manager = managerRef.current
-        if (!manager) {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      // Why: pane IDs are per-tab, so resolve the affected PTY through this
+      // tab's live transport bindings instead of global numeric pane IDs.
+      const getAffectedPanes = (): ReturnType<typeof manager.getPanes> =>
+        getOverrideAffectedPanes(
+          manager.getPanes(),
+          (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
+          event.ptyId
+        )
+      if (event.mode === 'mobile-fit') {
+        // Why: when mobile starts driving, the agent re-renders its output at
+        // phone width and that phone-wrapped byte stream flows live into this
+        // passive watcher's xterm. xterm must shrink to the phone dims now or
+        // the wide desktop grid renders the narrow stream as overlapping,
+        // garbled lines. safeFit honors the active override and parks xterm at
+        // override.cols/rows, matching the incoming stream. rAF lets the DOM
+        // settle before the resize; no loud fallback is needed because the
+        // override branch of safeFit is itself the authoritative resize.
+        // Why: override events fan out to every terminal tab; skip the rAF
+        // unless this tab has a pane still parked at the wrong grid.
+        const panesNeedingFit = getPanesNeedingOverrideFit(
+          getAffectedPanes(),
+          event.cols,
+          event.rows
+        )
+        if (panesNeedingFit.length === 0) {
           return
         }
-        // Why: pane IDs are per-tab, so resolve the affected PTY through this
-        // tab's live transport bindings instead of global numeric pane IDs.
-        const getAffectedPanes = (): ReturnType<typeof manager.getPanes> =>
-          manager
-            .getPanes()
-            .filter((pane) => paneTransportsRef.current.get(pane.id)?.getPtyId() === event.ptyId)
+        scheduleFitFrame(() => {
+          for (const pane of getPanesNeedingOverrideFit(
+            getAffectedPanes(),
+            event.cols,
+            event.rows
+          )) {
+            safeFit(pane)
+          }
+        })
+        return
+      }
+      if (event.mode === 'desktop-fit') {
         // Why: fitAddon.fit() measures DOM dimensions, so it must run after
         // the browser has settled layout. Running synchronously inside the
         // IPC callback can produce stale measurements. rAF ensures the DOM
@@ -2983,8 +3017,6 @@ export default function TerminalPane({
         menuPaneIsExpanded={
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
-        linkUrl={contextMenu.menuLinkUrl}
-        onOpenLinkInDefaultBrowser={contextMenu.onOpenLinkInDefaultBrowser}
         onCopy={() => void contextMenu.onCopy()}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}

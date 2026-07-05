@@ -2452,7 +2452,6 @@
             "0a917b591a": "Paste",
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
-            "openLinkDefaultBrowser": "Open in Default Browser",
             "925f49f210": "Expand Pane",
             "df766809e0": "Collapse Pane",
             "cff67afad1": "Copy Context"
@@ -2590,6 +2589,7 @@
             "sessionQueued": "Session queued",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "sessionHostMismatchUnsupported": "This session belongs to a different host. Drop it onto a workspace on the same host.",
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Drop it onto a local workspace instead."
           },
           "TabGroupDropOverlay": {
@@ -2935,7 +2935,9 @@
             "972a1ff497": "Reset Codex limits?",
             "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
             "f077f586db": "Don't ask again",
-            "c0e972d726": "Cancel"
+            "c0e972d726": "Cancel",
+            "06741a2f3d": "Open MiniMax usage details",
+            "3bbf140864": "MiniMax Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4634,7 +4636,46 @@
           "75ca9b718e": "Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "Use your current {{value0}} Claude login."
+          "e05d0ff737": "Use your current {{value0}} Claude login.",
+          "2f24f244a4": "MiniMax cookie is required.",
+          "8d61637a77": "MiniMax cookie saved.",
+          "b43e761fe5": "MiniMax cookie update failed.",
+          "5d63bbfbec": "MiniMax",
+          "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
+          "21d6eb141e": "MiniMax Session Cookie",
+          "33bba5ad83": "Paste your MiniMax session cookie for local rate-limit fetching.",
+          "73ea15f24b": "Saved",
+          "23afe8f226": "Not saved",
+          "566d9a99ab": "_token=…; minimax_group_id_v2=…",
+          "f38b9cc4bd": "Replace",
+          "590a3130f9": "Save",
+          "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
+          "9dd50d3f75": "Advanced",
+          "174fb408f9": "Leave these defaults alone unless MiniMax usage refresh points at the wrong workspace or model.",
+          "bf160bb6c0": "Group ID override",
+          "b1e2743313": "Optional. Leave blank to use minimax_group_id_v2 from the cookie.",
+          "0747d6391a": "Use group ID from cookie",
+          "4ff2af7524": "Usage model names",
+          "5cf4b0f85f": "Optional comma-separated model names. Leave as general unless MiniMax returns a model-specific error.",
+          "3c92b0d31c": "general",
+          "0d8e77bc40": "Open console",
+          "0b8c1c7e02": "Encrypted locally",
+          "5e08b0fe57": "Sent only to platform.minimax.io. Never leaves Orca.",
+          "43d7a45b97": "How to copy",
+          "b8a4f21c3e": "Paste the Cookie header from DevTools",
+          "53f7b8c7a2": "Last refresh: {{value0}}",
+          "31d24a4e87": "Cookie expires when you sign out in the browser.",
+          "42c2cb21cf": "Forget cookie",
+          "3a30aaf526": "just now",
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
+          "24560fe830": "Open DevTools.",
+          "4cab0fa42d": "Go to the Network tab and enable Preserve log.",
+          "bee4e63e1c": "Reload the page.",
+          "87f814af6f": "Filter for remains and select the coding_plan/remains request.",
+          "435df0ee51": "Under Request Headers, copy the Cookie value.",
+          "7492fb3bba": "Paste it here and click Save.",
+          "9fec52de4b": "How to copy the cookie",
+          "4e32e030b2": "The cookie stays on this device. Orca only sends it to platform.minimax.io for usage refreshes."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -4882,7 +4923,8 @@
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}.",
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
-          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}."
+          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
+          "c5a273a809": "From {{value0}}"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -4906,7 +4948,7 @@
           "be6df68384": "From File…",
           "e44c5d681e": "From",
           "67d9a53f47": "Manage profiles for separate logins",
-          "112f70adc4": "Last imported from",
+          "112f70adc4": "Last imported from {{value0}}",
           "72d4815523": "Bring your existing logins into Orca so agents can reach authenticated pages. Imports into the default profile.",
           "2eb906706c": "Import Browser Cookies",
           "af8c83ed61": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",
@@ -4928,7 +4970,8 @@
           "ad8cb0ee22": "Fix PATH",
           "0289434ed6": "Enabled",
           "8b3054dac7": "Registering...",
-          "8f2675c2f3": "Imported {{value0}} cookies from file."
+          "8f2675c2f3": "Imported {{value0}} cookies from file.",
+          "5301857d88": "From {{value0}}"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -6800,7 +6843,9 @@
             "bdbd1e668e": "windows",
             "593720c17f": "location",
             "b84a5b0c8a": "Choose whether provider accounts are inspected and added on this device or in WSL.",
-            "d09fb5ca92": "Account Location"
+            "d09fb5ca92": "Account Location",
+            "733f9e2a93": "MiniMax Usage",
+            "f8374c3151": "Paste your platform.minimax.io session cookie for local rate-limit fetching."
           }
         },
         "advanced": {
@@ -8709,6 +8754,18 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
           "toggleLabel": "Toggle per-workspace environments"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -9206,7 +9263,8 @@
             "c7ff8cef11": "Detecting agents...",
             "b0da3a4d3e": "Launch recipe already saved",
             "bff4795a6d": "Change the agent, arguments, or prompt template to update the saved recipe.",
-            "5c75b24735": "Customize what the agent receives before Orca starts it."
+            "5c75b24735": "Customize what the agent receives before Orca starts it.",
+            "repoAgentOverrideNote": "This repository overrides your global default ({{global}}) and currently runs {{effective}}. Save to this repository to change what runs here."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Save as global default",
@@ -9576,6 +9634,7 @@
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "sessionHostMismatchUnsupported": "This session belongs to a different host. Open a workspace on the same host to resume it.",
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
           },
           "AiVaultPanelControls": {
@@ -9605,7 +9664,9 @@
             "globalScope": "Global",
             "projectScope": "Project",
             "currentProjectLower": "current project",
-            "project": "Project"
+            "project": "Project",
+            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "host": "Host"
           },
           "AiVaultSessionDetails": {
             "originalAsk": "Original ask",
@@ -9793,10 +9854,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {

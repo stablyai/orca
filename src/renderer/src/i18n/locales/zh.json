@@ -2014,7 +2014,7 @@
           "13b3ac0a84": "状态",
           "79c54552f7": "筛选条件",
           "8a2ffbf9b3": "删除 {{value0}} 筛选条件",
-          "19bb6f115f": "reviewed-by"
+          "19bb6f115f": "已审查"
         },
         "PRFilterPickers": {
           "fdf387297c": "清除 （",
@@ -2452,7 +2452,6 @@
             "0a917b591a": "粘贴",
             "f3eeb1de13": "复制",
             "c2f0b72b8d": "插入",
-            "openLinkDefaultBrowser": "在默认浏览器中打开",
             "925f49f210": "展开窗格",
             "df766809e0": "折叠窗格",
             "cff67afad1": "复制上下文"
@@ -2590,7 +2589,8 @@
             "sessionQueued": "会话已排队",
             "runtimeWorkspacesUnsupported": "在远程运行时托管的工作区中无法从历史记录恢复会话。",
             "openSupportedWorkspace": "在恢复会话之前，请先打开一个本地或 SSH 工作区。",
-            "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为将其拖放到本地工作区。"
+            "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为将其拖放到本地工作区。",
+            "sessionHostMismatchUnsupported": "此会话属于其他主机。请将其拖放到同一主机上的工作区。"
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "新建拆分"
@@ -2935,7 +2935,9 @@
             "972a1ff497": "重置 Codex 限额？",
             "6d1042aa6f": "这会为当前账户使用一次 Codex 速率限制重置额度，并立即重置所有符合条件的用量窗口。",
             "f077f586db": "不再询问",
-            "c0e972d726": "取消"
+            "c0e972d726": "取消",
+            "06741a2f3d": "Open MiniMax usage details",
+            "3bbf140864": "MiniMax Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -4619,7 +4621,46 @@
           "75ca9b718e": "Codex 报告活动账户需要重新登录。在开始新的 Codex 会话之前重新对其进行身份验证。",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "用你已有的",
-          "e05d0ff737": "使用您当前 {{value0}} Claude 登录名。"
+          "e05d0ff737": "使用您当前 {{value0}} Claude 登录名。",
+          "2f24f244a4": "MiniMax cookie is required.",
+          "8d61637a77": "MiniMax cookie saved.",
+          "b43e761fe5": "MiniMax cookie update failed.",
+          "5d63bbfbec": "MiniMax",
+          "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
+          "21d6eb141e": "MiniMax Session Cookie",
+          "33bba5ad83": "Paste your MiniMax session cookie for local rate-limit fetching.",
+          "73ea15f24b": "Saved",
+          "23afe8f226": "Not saved",
+          "566d9a99ab": "_token=…; minimax_group_id_v2=…",
+          "f38b9cc4bd": "Replace",
+          "590a3130f9": "Save",
+          "79418c782a": "在浏览器中打开 platform.minimax.io/console/usage 并登录,然后从 DevTools(网络 → 任一 remains 请求 → Cookie)复制 Cookie 请求头。",
+          "9dd50d3f75": "高级",
+          "174fb408f9": "除非 MiniMax 使用量刷新指向了错误的工作区或模型,否则请保持这些默认值。",
+          "bf160bb6c0": "Group ID 覆盖",
+          "b1e2743313": "可选。留空将使用 Cookie 中的 minimax_group_id_v2。",
+          "0747d6391a": "使用 Cookie 中的 Group ID",
+          "4ff2af7524": "使用模型名称",
+          "5cf4b0f85f": "可选的逗号分隔的模型名称。除非 MiniMax 返回模型特定错误,否则请保持为 general。",
+          "3c92b0d31c": "general",
+          "0d8e77bc40": "打开控制台",
+          "0b8c1c7e02": "本地加密",
+          "5e08b0fe57": "仅发送到 platform.minimax.io。不会离开 Orca。",
+          "43d7a45b97": "如何复制",
+          "b8a4f21c3e": "粘贴来自 DevTools 的 Cookie 请求头",
+          "53f7b8c7a2": "上次刷新: {{value0}}",
+          "31d24a4e87": "在浏览器中退出登录后,Cookie 将过期。",
+          "42c2cb21cf": "忘记 Cookie",
+          "3a30aaf526": "刚刚",
+          "f5d8d2a6a1": "在浏览器中打开 platform.minimax.io/console/usage 并登录。",
+          "24560fe830": "打开 DevTools。",
+          "4cab0fa42d": "转到“网络”选项卡并启用“保留日志”。",
+          "bee4e63e1c": "重新加载页面。",
+          "87f814af6f": "按 remains 筛选并选择 coding_plan/remains 请求。",
+          "435df0ee51": "在请求头中,复制 Cookie 的值。",
+          "7492fb3bba": "在此粘贴并点击保存。",
+          "9fec52de4b": "如何复制 Cookie",
+          "4e32e030b2": "Cookie 仅保留在此设备上。Orca 仅将其发送到 platform.minimax.io 以刷新使用量。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -4867,7 +4908,8 @@
           "d420c43729": "将 {{value0}} cookie 从 {{value1}}{{value2}} 导入到 {{value3}} 中。",
           "b4c167764d": "已从文件将 {{value0}} 个 Cookie 导入到 {{value1}}。",
           "a3f8c2d1e0b4": "已从 {{value1}} ({{value2}}) 导入 {{value0}} 个 Cookie 到 {{value3}}。",
-          "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}。"
+          "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}。",
+          "c5a273a809": "从 {{value0}}"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "开放计算机使用",
@@ -4891,7 +4933,7 @@
           "be6df68384": "从文件...",
           "e44c5d681e": "从",
           "67d9a53f47": "管理单独登录的配置文件",
-          "112f70adc4": "上次导入自",
+          "112f70adc4": "上次导入自 {{value0}}",
           "72d4815523": "将您现有的登录信息带入 Orca，以便智能体可以访问经过身份验证的页面。导入到默认配置文件中。",
           "2eb906706c": "导入浏览器 Cookie",
           "af8c83ed61": "从 Chrome、Edge 或其他浏览器导入 cookie，以便智能体可以重复使用您的登录信息。",
@@ -4913,7 +4955,8 @@
           "ad8cb0ee22": "修复路径",
           "0289434ed6": "启用",
           "8b3054dac7": "注册...",
-          "8f2675c2f3": "已从文件导入 {{value0}} 个 Cookie。"
+          "8f2675c2f3": "已从文件导入 {{value0}} 个 Cookie。",
+          "5301857d88": "从 {{value0}}"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "使智能体能够在 Orca 浏览器中导航和验证页面。",
@@ -5153,7 +5196,7 @@
           "bf16ef0af2": "关闭",
           "3f6892f307": "开启",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
@@ -6748,7 +6791,9 @@
             "bdbd1e668e": "视窗",
             "593720c17f": "位置",
             "b84a5b0c8a": "选择是否在此设备上或 WSL 中检查和添加提供商账户。",
-            "d09fb5ca92": "账户位置"
+            "d09fb5ca92": "账户位置",
+            "733f9e2a93": "MiniMax Usage",
+            "f8374c3151": "Paste your platform.minimax.io session cookie for local rate-limit fetching."
           }
         },
         "advanced": {
@@ -7408,7 +7453,7 @@
             "defaultProjectRuntime": "默认项目运行时",
             "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。"
           }
         },
         "git": {
@@ -8181,7 +8226,7 @@
               "keyword_warp": "warp",
               "keyword_themes": "themes",
               "keyword_yaml": "yaml",
-              "keyword_legacy_title": "Import themes from Warp"
+              "keyword_legacy_title": "从 Warp 导入主题"
             },
             "yaml_import": {
               "title": "从 YAML 导入",
@@ -8709,6 +8754,18 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "显示仓库自带按需环境的设置控件和工作区运行目标。",
           "toggleLabel": "切换工作区专属环境"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -9206,7 +9263,8 @@
             "ea4788705e": "取消",
             "b0da3a4d3e": "启动预设已保存",
             "bff4795a6d": "更改智能体、参数或提示词模板以更新已保存的预设。",
-            "5c75b24735": "自定义 Orca 启动智能体前发送给它的内容。"
+            "5c75b24735": "自定义 Orca 启动智能体前发送给它的内容。",
+            "repoAgentOverrideNote": "此仓库会覆盖你的全局默认值（{{global}}），当前运行 {{effective}}。保存到此仓库以更改这里运行的内容。"
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "保存为全局默认值",
@@ -9576,7 +9634,8 @@
             "runtimeBrowseLocalHistory": "远程运行时托管的工作区可以浏览本地历史。恢复操作在本地和 SSH 工作区中可用。",
             "runtimeWorkspacesUnsupported": "在远程运行时托管的工作区中无法从历史记录恢复会话。",
             "openSupportedWorkspace": "在恢复会话之前，请先打开一个本地或 SSH 工作区。",
-            "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。"
+            "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",
+            "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -9605,7 +9664,9 @@
             "globalScope": "全局",
             "projectScope": "项目",
             "currentProjectLower": "当前项目",
-            "project": "项目"
+            "project": "项目",
+            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "host": "Host"
           },
           "AiVaultSessionDetails": {
             "updated": "更新时间",
@@ -9793,10 +9854,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "克劳迪诺"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { 变换：translateY(0); } 50% { 变换：translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { 背景位置：{{value1}}px {{value2}}px; } 到 { 背景位置：{{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {

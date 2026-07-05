@@ -883,12 +883,32 @@ jobs:
         if: matrix.platform == 'win'
         shell: pwsh
         run: |
-          # Why: Some hosted Windows images start without PSGallery registered.
-          if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-            Register-PSRepository -Default -InstallationPolicy Trusted
-          }
+          $ErrorActionPreference = 'Stop'
+          # Why: force TLS 1.2 so gallery downloads work on older hosted images.
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          # Why: on some hosted Windows images `Register-PSRepository -Default`
+          # fails inside the legacy nuget.exe provider with "Missing option value
+          # for: '-source'", so PSGallery is never registered and the install
+          # below dies with "No repository with the name 'PSGallery'". PSResourceGet
+          # (bundled with PowerShell 7.4+) has PSGallery registered by default and
+          # avoids that code path, so prefer it and fall back to PowerShellGet only
+          # when it is absent.
+          $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
+
+          if ($useResourceGet) {
+            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+              Register-PSResourceRepository -PSGallery -Trusted
+            } else {
+              Set-PSResourceRepository -Name PSGallery -Trusted
+            }
+          } else {
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
+            if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+              Register-PSRepository -Default -InstallationPolicy Trusted
+            }
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          }
 
           $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
           $documentsRoot = [System.IO.Path]::GetFullPath([Environment]::GetFolderPath('MyDocuments')).TrimEnd($trimChars)
@@ -917,7 +937,11 @@ jobs:
             }
 
             try {
-              Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+              if ($useResourceGet) {
+                Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
+              } else {
+                Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+              }
               Import-Module SignPath -ErrorAction Stop
               Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
               break

@@ -46,6 +46,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
@@ -581,7 +583,8 @@ import {
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
-import { hasLocalCommitObject } from '../git/commit-object-ref'
+import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
+import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
 import {
   listWorktrees,
@@ -1961,6 +1964,26 @@ type LayoutQueueEntry = {
     target: PtyLayoutTarget
     waiters: ((r: ApplyLayoutResult) => void)[]
   }[]
+}
+
+async function hasLocalWorktreeBaseRef(
+  repoPath: string,
+  baseRef: string,
+  options: { wslDistro?: string } = {}
+): Promise<boolean> {
+  const refExists = (qualifiedRef: string) =>
+    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
+  if (resolvedBaseRef !== baseRef) {
+    return true
+  }
+  if (baseRef.startsWith('refs/')) {
+    return refExists(baseRef)
+  }
+  return hasCommitObjectViaGitExec(
+    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
+    baseRef
+  )
 }
 
 export class OrcaRuntimeService {
@@ -12992,12 +13015,42 @@ export class OrcaRuntimeService {
     let effectiveSanitizedName = sanitizedName
     const username = await resolveLocalGitUsername(repo.path)
 
-    const baseBranch =
-      args.baseBranch ||
-      repo.worktreeBaseRef ||
-      (hasLocalWorktreeGitOptions
-        ? await resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions))
-        : getDefaultBaseRef(repo.path))
+    const baseBranch = await resolveWorktreeCreateBase({
+      requestedBaseBranch: args.baseBranch,
+      repoWorktreeBaseRef: repo.worktreeBaseRef,
+      resolveDefaultBaseRef: () =>
+        hasLocalWorktreeGitOptions
+          ? resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, localGitExecOptions))
+          : Promise.resolve(getDefaultBaseRef(repo.path)),
+      isBaseUsable: async (baseBranchCandidate) => {
+        const remoteTrackingBase = await this.resolveRemoteTrackingBase(
+          repo.path,
+          baseBranchCandidate,
+          ...localWorktreeGitOptionArgs
+        )
+        if (remoteTrackingBase) {
+          if (
+            await this.hasRemoteTrackingRef(
+              repo.path,
+              remoteTrackingBase,
+              ...localWorktreeGitOptionArgs
+            )
+          ) {
+            return true
+          }
+          return hasLocalWorktreeBaseRef(
+            repo.path,
+            baseBranchCandidate,
+            hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
+          )
+        }
+        return hasLocalWorktreeBaseRef(
+          repo.path,
+          baseBranchCandidate,
+          hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
+        )
+      }
+    })
     if (!baseBranch) {
       // Why: getDefaultBaseRef returns null when no suitable ref exists.
       // Don't fabricate 'origin/main' — passing it to addWorktree would
@@ -13128,44 +13181,61 @@ export class OrcaRuntimeService {
         `Could not find an available worktree path for "${sanitizedName}". Pick a different worktree name.`
       )
     }
-    const remoteTrackingBase = await this.resolveRemoteTrackingBase(
+    let remoteTrackingBase = await this.resolveRemoteTrackingBase(
       repo.path,
       baseBranch,
       ...localWorktreeGitOptionArgs
     )
     if (remoteTrackingBase) {
-      const hadLocalBaseRef = await this.hasRemoteTrackingRef(
+      const hadRemoteTrackingBaseRef = await this.hasRemoteTrackingRef(
         repo.path,
         remoteTrackingBase,
         ...localWorktreeGitOptionArgs
       )
-      const refreshResult = await this.getOrStartRemoteTrackingBaseRefresh(
-        repo.path,
-        remoteTrackingBase,
-        ...localWorktreeGitOptionArgs
-      )
-      if (!refreshResult.ok && !hadLocalBaseRef) {
-        // Why: only block creation when the refresh failed AND there is no
-        // usable local base ref to fall back on. If a local remote-tracking ref
-        // already exists, `git worktree add` can create from it — a possibly
-        // stale but valid base — so a transient offline/auth failure must not
-        // make the workspace uncreatable. The compare-to-base view reflects any
-        // drift once the remote is reachable again.
-        throw new Error(
-          `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
-        )
-      }
-      if (
-        !hadLocalBaseRef &&
-        !(await this.hasRemoteTrackingRef(
+      const hasLocalBaseRef =
+        hadRemoteTrackingBaseRef ||
+        (await hasLocalWorktreeBaseRef(
+          repo.path,
+          baseBranch,
+          hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
+        ))
+      if (!hadRemoteTrackingBaseRef && hasLocalBaseRef) {
+        remoteTrackingBase = null
+      } else {
+        const refreshResult = await this.getOrStartRemoteTrackingBaseRefresh(
           repo.path,
           remoteTrackingBase,
           ...localWorktreeGitOptionArgs
-        ))
-      ) {
-        throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
+        )
+        if (!refreshResult.ok && !hadRemoteTrackingBaseRef) {
+          // Why: only block creation when the refresh failed AND there is no
+          // usable local base ref to fall back on. If a local remote-tracking ref
+          // already exists, `git worktree add` can create from it — a possibly
+          // stale but valid base — so a transient offline/auth failure must not
+          // make the workspace uncreatable. The compare-to-base view reflects any
+          // drift once the remote is reachable again.
+          throw new Error(
+            `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
+          )
+        }
+        if (
+          !hadRemoteTrackingBaseRef &&
+          !(await this.hasRemoteTrackingRef(
+            repo.path,
+            remoteTrackingBase,
+            ...localWorktreeGitOptionArgs
+          ))
+        ) {
+          throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
+        }
       }
-    } else if (!(await hasLocalCommitObject(repo.path, baseBranch))) {
+    } else if (
+      !(await hasLocalWorktreeBaseRef(
+        repo.path,
+        baseBranch,
+        hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
+      ))
+    ) {
       // Why: local bases keep legacy best-effort fetch behavior. Verified PR
       // SHA bases already have the commit object needed by `git worktree add`.
       try {
@@ -14075,7 +14145,13 @@ export class OrcaRuntimeService {
     }
 
     const promise = this.enqueueRemoteFetch(key, () =>
-      gitExecFileAsync(['fetch', remote], { cwd: repoPath, ...gitOptions })
+      gitExecFileAsync(['fetch', remote], {
+        cwd: repoPath,
+        ...gitOptions,
+        // Why: cap the create-path base-ref fetch so a stuck first-auth on
+        // Windows (GCM prompt) fails fast instead of hanging creation (STA-1292).
+        timeout: REMOTE_FETCH_TIMEOUT_MS
+      })
         .then((): RemoteFetchResult => {
           // Why (§3.3 Lifecycle): timestamp on success ONLY. Writing on rejection
           // would make the freshness cache lie about the last known remote state.
@@ -14134,7 +14210,7 @@ export class OrcaRuntimeService {
           // Why: exact remote-base refresh is the network gate for worktree
           // creation, so honor repo SSH routing and bound custom wrappers.
           useConfiguredSshCommandForNetwork: true,
-          timeout: 60_000
+          timeout: REMOTE_FETCH_TIMEOUT_MS
         }
       )
         .then((): RemoteFetchResult => {
@@ -22520,6 +22596,10 @@ const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
 // clicks and successive coordinator dispatches feel snappy, while still being
 // short enough that a genuinely-changed remote is observed on the next action.
 const FETCH_FRESHNESS_MS = 30_000
+// Why: bound create-path remote fetches so a Windows credential-manager GUI hang
+// (STA-1292) can't wedge worktree creation forever; parity with the exact-base
+// refresh sibling's timeout.
+const REMOTE_FETCH_TIMEOUT_MS = 60_000
 const REMOTE_FETCH_CACHE_MAX = 512
 const DRIFT_PROBE_SUBJECT_LIMIT = 5
 

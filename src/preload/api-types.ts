@@ -2796,7 +2796,13 @@ export type PreloadApi = {
     setPollingInterval: (ms: number) => Promise<void>
     fetchInactiveClaudeAccounts: () => Promise<void>
     fetchInactiveCodexAccounts: () => Promise<void>
+    refreshMiniMax: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
+  }
+  minimaxCredentials: {
+    getStatus: () => Promise<{ configured: boolean }>
+    saveCookie: (cookie: string) => Promise<{ configured: boolean }>
+    clearCookie: () => Promise<{ configured: boolean }>
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>

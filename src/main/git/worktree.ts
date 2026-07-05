@@ -68,6 +68,12 @@ type LocalBaseRefRefreshability =
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
+// Why: bound `git worktree add` so a OneDrive cloud-placeholder base path can't
+// stall its checkout writes for minutes (STA-1292) — a stuck create then fails
+// fast instead of spinning forever. Generous enough not to kill a legit large
+// checkout (mirrors the SYNC runner's cloud-placeholder floor, #7225).
+export const WORKTREE_ADD_TIMEOUT_MS = 180_000
+
 function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
@@ -878,7 +884,12 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, gitExecOptions(repoPath, options))
+  await gitExecFileAsync(args, {
+    ...gitExecOptions(repoPath, options),
+    // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292)
+    // fails fast rather than hanging worktree creation indefinitely.
+    timeout: WORKTREE_ADD_TIMEOUT_MS
+  })
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}

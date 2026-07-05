@@ -14,6 +14,7 @@ vi.mock('node-pty', () => ({
 }))
 
 import { fetchViaPty } from './claude-pty'
+import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -97,6 +98,22 @@ describe('fetchViaPty', () => {
     await resultPromise
   })
 
+  it('spawns the hidden usage PTY in a bounded non-root cwd', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+    await vi.advanceTimersByTimeAsync(0)
+
+    const spawnCwd = spawnMock.mock.calls[0]?.[2]?.cwd as string
+    expect(spawnCwd).toContain('rate-limit-pty-cwd')
+    expect(spawnCwd).not.toBe('/')
+    expect(spawnCwd).not.toMatch(/^[A-Za-z]:(?:[\\/])?$/)
+
+    term.emitExit()
+    await resultPromise
+  })
+
   it('leaves the spawn env proxy untouched when no proxy is configured', async () => {
     const term = makeMockTerm()
     spawnMock.mockReturnValue(term)
@@ -135,11 +152,35 @@ describe('fetchViaPty', () => {
     const [spawnFile, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]]
     expect(spawnFile).toBe('wsl.exe')
     const bashCommand = spawnArgs.at(-1) as string
+    expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
+    expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
     expect(bashCommand).toContain("export HTTPS_PROXY='http://127.0.0.1:7890'")
     expect(bashCommand).toContain('exec claude')
 
     term.emitExit()
     await resultPromise
+  })
+
+  it('kills and unregisters the hidden PTY when the fetch signal aborts', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+    const controller = new AbortController()
+    const killMock = term.kill
+
+    const resultPromise = fetchViaPty({ signal: controller.signal })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(1)
+
+    controller.abort()
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Rate-limit fetch aborted'
+    })
+    expect(killMock).toHaveBeenCalledTimes(1)
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(0)
   })
 
   it('clears the startup delay timer when the hidden PTY exits early', async () => {

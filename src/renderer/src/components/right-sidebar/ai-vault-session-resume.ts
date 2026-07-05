@@ -1,8 +1,10 @@
 import type { Repo, Worktree } from '../../../../shared/types'
 import {
   canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
+import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -34,6 +36,7 @@ export type AiVaultSessionResumeActions = {
 
 export function resolveAiVaultSessionResumeState(args: {
   sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   activeWorktreeId: string | null
   worktrees: readonly Worktree[]
@@ -56,6 +59,7 @@ export function resolveAiVaultSessionResumeState(args: {
   for (const worktreeId of candidateWorktreeIds) {
     const targetId = resolveSupportedResumeWorktreeId({
       sessionFilePath: args.sessionFilePath,
+      sessionExecutionHostId: args.sessionExecutionHostId,
       worktreeId,
       targetState
     })
@@ -78,6 +82,7 @@ export function resolveAiVaultSessionResumeState(args: {
 
 export function resolveAiVaultSessionResumeActions(args: {
   sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   activeWorktreeId: string | null
   worktrees: readonly Worktree[]
@@ -92,11 +97,13 @@ export function resolveAiVaultSessionResumeActions(args: {
 
   const sessionTargetId = resolveSupportedResumeWorktreeId({
     sessionFilePath: args.sessionFilePath,
+    sessionExecutionHostId: args.sessionExecutionHostId,
     worktreeId: sessionWorktreeId,
     targetState
   })
   const activeTargetId = resolveSupportedResumeWorktreeId({
     sessionFilePath: args.sessionFilePath,
+    sessionExecutionHostId: args.sessionExecutionHostId,
     worktreeId:
       args.activeWorktreeId && args.activeWorktreeId !== sessionWorktreeId
         ? args.activeWorktreeId
@@ -142,6 +149,7 @@ export function isKnownAiVaultResumeWorkspaceTarget(
 
 function resolveSupportedResumeWorktreeId(args: {
   sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   worktreeId: string | null
   targetState: AiVaultSessionResumeTargetState
 }): string | null {
@@ -154,7 +162,18 @@ function resolveSupportedResumeWorktreeId(args: {
   }
 
   const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, args.worktreeId)
-  if (!canResumeAiVaultSessionOnTarget({ sessionFilePath: args.sessionFilePath, targetStatus })) {
+  const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
+    args.targetState,
+    args.worktreeId
+  )
+  if (
+    !canResumeAiVaultSessionOnTarget({
+      sessionFilePath: args.sessionFilePath,
+      sessionExecutionHostId: args.sessionExecutionHostId,
+      targetStatus,
+      targetExecutionHostId
+    })
+  ) {
     return null
   }
 

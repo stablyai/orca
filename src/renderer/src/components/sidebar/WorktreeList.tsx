@@ -268,7 +268,7 @@ import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import { translate } from '@/i18n/i18n'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isConfirmedStaleFolderPathStatus,
@@ -403,6 +403,22 @@ function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>):
 
 function getWorktreeOptionId(rowKey: string): string {
   return `worktree-list-option-${encodeURIComponent(rowKey)}`
+}
+
+// Why: folder workspaces are tracked by the scoped active key, while older
+// worktree-only paths still read activeWorktreeId.
+function getActiveSidebarWorkspaceId(
+  activeWorkspaceKey: string | null,
+  activeWorktreeId: string | null
+): string | null {
+  const scope = activeWorkspaceKey ? parseWorkspaceKey(activeWorkspaceKey) : null
+  if (scope?.type === 'folder') {
+    return folderWorkspaceKey(scope.folderWorkspaceId)
+  }
+  if (scope?.type === 'worktree') {
+    return scope.worktreeId
+  }
+  return activeWorktreeId
 }
 
 function getMountedWorktreeOptions(worktreeId: string, root?: ParentNode | null): HTMLElement[] {
@@ -5151,7 +5167,11 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const currentSidebarWorktreeId = activeWorktreeId
+  const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+  const currentSidebarWorktreeId = useMemo(
+    () => getActiveSidebarWorkspaceId(activeWorkspaceKey, activeWorktreeId),
+    [activeWorkspaceKey, activeWorktreeId]
+  )
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
@@ -6642,31 +6662,31 @@ const WorktreeList = React.memo(function WorktreeList({
         })
         return
       }
-      if (!activeWorktreeId) {
+      if (!currentSidebarWorktreeId) {
         return
       }
       const activeWorktree = getKnownSidebarWorktreeById(
-        activeWorktreeId,
+        currentSidebarWorktreeId,
         worktreeMap,
         folderWorkspaces
       )
       if (!activeWorktree || activeWorktree.isArchived) {
         return
       }
-      if (!renderedWorktreeIds.includes(activeWorktreeId)) {
+      if (!renderedWorktreeIds.includes(currentSidebarWorktreeId)) {
         // Why: the toolbar action promises to reveal the current workspace; when
         // sidebar filters hide it, relax those filters before queuing the reveal.
         clearFilters()
       }
-      revealWorktreeInSidebar(activeWorktreeId, {
+      revealWorktreeInSidebar(currentSidebarWorktreeId, {
         behavior: 'smooth',
         highlight: true,
         beginRename: (detail as { beginRename?: boolean } | undefined)?.beginRename === true
       })
     },
     [
-      activeWorktreeId,
       clearFilters,
+      currentSidebarWorktreeId,
       folderWorkspaces,
       revealSidebarRow,
       renderedWorktreeIds,

@@ -1,5 +1,6 @@
 import {
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
@@ -43,10 +44,32 @@ export function isWslStoredAiVaultSessionFile(sessionFilePath: string | null | u
 
 export function canResumeAiVaultSessionOnTarget(args: {
   sessionFilePath: string | null | undefined
+  sessionExecutionHostId?: ExecutionHostId | null
   targetStatus: AiVaultResumeTargetStatus
+  targetExecutionHostId?: ExecutionHostId | null
 }): boolean {
   if (!isSupportedAiVaultResumeTargetStatus(args.targetStatus)) {
     return false
+  }
+  const sessionExecutionHostId = normalizeExecutionHostId(args.sessionExecutionHostId)
+  const targetExecutionHostId = normalizeExecutionHostId(args.targetExecutionHostId)
+  if (sessionExecutionHostId) {
+    if (targetExecutionHostId) {
+      if (sessionExecutionHostId === targetExecutionHostId) {
+        return true
+      }
+      // Why: SSH-to-local-WSL setups (#6270) tag the session 'local' but the
+      // file lives under a WSL UNC path reachable from any SSH shell into this
+      // machine, so we bypass the exact host-id match for that case.
+      return (
+        sessionExecutionHostId === LOCAL_EXECUTION_HOST_ID &&
+        args.targetStatus === 'ssh' &&
+        isWslStoredAiVaultSessionFile(args.sessionFilePath)
+      )
+    }
+    if (sessionExecutionHostId !== LOCAL_EXECUTION_HOST_ID) {
+      return false
+    }
   }
   // Why: vault sessions are scanned from this machine's disk (host home dirs
   // plus local WSL homes). An SSH shell can only reach the WSL-stored ones
@@ -83,6 +106,32 @@ export function getAiVaultResumeWorktreeTargetStatus(args: {
   return getAiVaultResumeRepoTargetStatus(
     args.repos.find((candidate) => candidate.id === worktree.repoId)
   )
+}
+
+export function getAiVaultResumeWorkspaceExecutionHostId(
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
+  workspaceId: string | null
+): ExecutionHostId | null {
+  if (!workspaceId) {
+    return null
+  }
+
+  const workspaceKey = parseWorkspaceKey(workspaceId)
+  if (workspaceKey?.type === 'folder') {
+    return getAiVaultResumeFolderExecutionHostId(state, workspaceKey.folderWorkspaceId)
+  }
+
+  const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
+  const worktree = Object.values(state.worktreesByRepo ?? {})
+    .flat()
+    .find((candidate) => candidate.id === worktreeId)
+  const worktreeHostId = normalizeExecutionHostId(worktree?.hostId)
+  if (worktreeHostId) {
+    return worktreeHostId
+  }
+  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+  const repo = state.repos.find((candidate) => candidate.id === repoId)
+  return repo ? getRepoExecutionHostId(repo) : null
 }
 
 export function getAiVaultResumeWorkspaceTargetStatus(
@@ -136,6 +185,29 @@ function getAiVaultResumeFolderTargetStatus(
   )
 }
 
+function getAiVaultResumeFolderExecutionHostId(
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos'>,
+  folderWorkspaceId: string
+): ExecutionHostId | null {
+  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+  if (!workspace) {
+    return null
+  }
+
+  const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
+  const groupHostId = normalizeExecutionHostId(group?.executionHostId)
+  if (groupHostId) {
+    return groupHostId
+  }
+  const explicitConnectionId = (workspace.connectionId ?? group?.connectionId ?? '').trim()
+  if (explicitConnectionId) {
+    return toSshExecutionHostId(explicitConnectionId)
+  }
+  return mergeAiVaultResumeExecutionHostIds(
+    getFolderWorkspaceCandidateRepos(state, folderWorkspaceId).map(getRepoExecutionHostId)
+  )
+}
+
 function getAiVaultResumeExecutionHostTargetStatus(
   hostId: ExecutionHostId | null | undefined
 ): AiVaultResumeTargetStatus {
@@ -161,4 +233,14 @@ function mergeAiVaultResumeExecutionHostTargetStatuses(
     return 'runtime'
   }
   return new Set(hostIds).size === 1 ? (statuses[0] ?? 'unknown') : 'unknown'
+}
+
+function mergeAiVaultResumeExecutionHostIds(
+  hostIds: readonly ExecutionHostId[]
+): ExecutionHostId | null {
+  if (hostIds.length === 0) {
+    return LOCAL_EXECUTION_HOST_ID
+  }
+  const uniqueHostIds = new Set(hostIds)
+  return uniqueHostIds.size === 1 ? (hostIds[0] ?? null) : null
 }
