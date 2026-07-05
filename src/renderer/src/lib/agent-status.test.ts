@@ -394,6 +394,26 @@ describe('normalizeTerminalTitle', () => {
     expect(normalizeTerminalTitle('bash')).toBe('bash')
   })
 
+  it.each([
+    '✳ Compare Gemini CLI vs Claude',
+    '. Compare Gemini CLI vs Claude',
+    '* Review Gemini CLI output'
+  ])('preserves Claude-prefixed title %s when task text mentions Gemini', (title) => {
+    expect(normalizeTerminalTitle(title)).toBe(title)
+  })
+
+  it('preserves the bare Claude idle prefix', () => {
+    expect(normalizeTerminalTitle('✳')).toBe('✳')
+  })
+
+  it.each([
+    ['. Compare Gemini CLI vs Claude', 'working'],
+    ['✳ Compare Gemini CLI vs Claude', 'idle'],
+    ['* Review Gemini CLI output', 'idle']
+  ] as const)('keeps working-title classification for %s', (title, expectedStatus) => {
+    expect(detectAgentStatusFromTitle(normalizeTerminalTitle(title))).toBe(expectedStatus)
+  })
+
   it('collapses Pi spinner and idle titles to stable labels', () => {
     expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
     expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
@@ -404,10 +424,12 @@ describe('isGeminiTerminalTitle', () => {
   it('detects Gemini titles by symbol or name', () => {
     expect(isGeminiTerminalTitle('✦  Typing prompt... (workspace)')).toBe(true)
     expect(isGeminiTerminalTitle('◇  Ready (workspace)')).toBe(true)
+    expect(isGeminiTerminalTitle('✦ Typing prompt... (workspace)')).toBe(true)
     expect(isGeminiTerminalTitle('gemini waiting for input')).toBe(true)
   })
 
   it('does not match other terminal titles', () => {
+    expect(isGeminiTerminalTitle('geminitools ready')).toBe(false)
     expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
@@ -420,8 +442,13 @@ describe('getAgentLabel', () => {
 
   it('treats Claude Code prefixed task titles as Claude even when they mention another CLI', () => {
     expect(getAgentLabel('✳ Gemini CLI')).toBe('Claude Code')
+    expect(getAgentLabel('✳ Compare Gemini CLI vs Claude')).toBe('Claude Code')
     expect(getAgentLabel('. Compare Opencode Vs Orca')).toBe('Claude Code')
     expect(getAgentLabel('* Review Codex behavior')).toBe('Claude Code')
+  })
+
+  it('labels the bare Claude idle prefix as Claude Code', () => {
+    expect(getAgentLabel('✳')).toBe('Claude Code')
   })
 
   it('labels supported agent families consistently', () => {

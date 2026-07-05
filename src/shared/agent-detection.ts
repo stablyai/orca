@@ -18,9 +18,11 @@ import {
   getPiCompatibleSyntheticAgentLabel,
   getPiCompatibleSyntheticAgentStatus
 } from './pi-compatible-synthetic-title'
+import { CLAUDE_IDLE, hasClaudeStatusPrefix } from './claude-title-prefix'
 
 // Re-export so existing `agent-detection` importers keep working.
 export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
+export { hasClaudeStatusPrefix } from './claude-title-prefix'
 export {
   extractAllOscTitles,
   extractLastOscTitle,
@@ -30,7 +32,6 @@ export { isShellProcess } from './shell-process-detection'
 
 export type AgentStatus = 'working' | 'permission' | 'idle'
 
-const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Code idle prefix)
 const CLAUDE_MANAGEMENT_TITLE_RE =
   /^\s*(?:"(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?"|'(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?'|(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?)\s+agents\s*$/i
 
@@ -104,7 +105,9 @@ export function isGeminiTerminalTitle(title: string): boolean {
     title.includes(GEMINI_WORKING) ||
     title.includes(GEMINI_SILENT_WORKING) ||
     title.includes(GEMINI_IDLE) ||
-    title.toLowerCase().includes('gemini')
+    // Why: Gemini status glyphs are exact signals, but the name must be
+    // token-matched so path/substring fragments do not claim Gemini identity.
+    titleHasAgentName(title, 'gemini')
   )
 }
 
@@ -231,6 +234,12 @@ export function normalizeTerminalTitle(title: string): string {
     return title
   }
 
+  // Why: issue #5270 — a Claude task title that mentions another agent (for
+  // example "Gemini CLI") must not be rewritten to that agent's stable label.
+  if (hasClaudeStatusPrefix(title)) {
+    return title
+  }
+
   if (isGeminiTerminalTitle(title)) {
     const status = detectAgentStatusFromTitle(title)
     if (status === 'permission') {
@@ -312,12 +321,7 @@ export function getAgentLabel(title: string): string | null {
   }
   // Why: Claude Code title text is often the task title. If that task mentions
   // another CLI, the Claude-specific prefix is the identity signal, not the words.
-  if (
-    title.startsWith(`${CLAUDE_IDLE} `) ||
-    title === CLAUDE_IDLE ||
-    title.startsWith('. ') ||
-    title.startsWith('* ')
-  ) {
+  if (hasClaudeStatusPrefix(title)) {
     return 'Claude Code'
   }
   if (isGeminiTerminalTitle(title)) {
