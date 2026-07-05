@@ -1013,6 +1013,10 @@ export function checkForUpdates(): void {
   })
 }
 
+function enablePrereleaseManifestChecks(): void {
+  getAutoUpdater().allowPrerelease = true
+}
+
 function enableIncludePrerelease(): void {
   if (includePrereleaseActive) {
     return
@@ -1021,7 +1025,7 @@ function enableIncludePrerelease(): void {
   // accept a prerelease manifest for users who intentionally Shift-clicked.
   // We keep using the manifest-probed generic feed instead of the native
   // GitHub provider because cancelled RC releases can appear without assets.
-  getAutoUpdater().allowPrerelease = true
+  enablePrereleaseManifestChecks()
   includePrereleaseActive = true
 }
 
@@ -1033,9 +1037,14 @@ export function checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
   }
 
   const checkVariant = getUpdateCheckVariant(options)
-  if (checkVariant !== 'default') {
+  if (checkVariant === 'prerelease') {
     clearPrereleaseFallbackContext()
     enableIncludePrerelease()
+  } else if (checkVariant === 'perf') {
+    clearPrereleaseFallbackContext()
+    // Why: perf checks need prerelease manifests for this check, but must not
+    // opt future default/background checks into the RC channel.
+    enablePrereleaseManifestChecks()
   }
 
   const checkAlreadyInFlight = backgroundCheckLaunchPending || currentStatus.state === 'checking'

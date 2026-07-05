@@ -61,18 +61,21 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({
     children,
     disabled,
+    onPointerDown,
     onSelect,
     title
   }: {
     children: ReactNode
     disabled?: boolean
+    onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void
     onSelect?: (event: Event) => void
     title?: string
   }) => (
     <button
       data-testid="menu-item"
       disabled={disabled}
-      onClick={(event) => onSelect?.(event.nativeEvent)}
+      onClick={() => onSelect?.(new Event('menu.itemSelect'))}
+      onPointerDown={onPointerDown}
       title={title}
     >
       {children}
@@ -265,8 +268,8 @@ describe('SidebarSettingsHelpMenu', () => {
   it('renders Check for Updates menu item', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('Check for Updates')
-    expect(html).toContain('Shift-click checks the latest RC')
-    expect(html).toMatch(/(⌘|Ctrl)-click checks the latest perf build/)
+    expect(html).toMatch(/(⇧\+click|Shift\+click) checks the latest RC/)
+    expect(html).toMatch(/(⌘\+click|Ctrl\+click) checks the latest perf build/)
   })
 
   it('passes update-check modifier options through the updater bridge', async () => {
@@ -277,10 +280,17 @@ describe('SidebarSettingsHelpMenu', () => {
       : { ctrlKey: true }
 
     await act(async () => {
-      checkButton.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))
+      checkButton.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, shiftKey: true }))
+      checkButton.click()
     })
     await act(async () => {
-      checkButton.dispatchEvent(new MouseEvent('click', { bubbles: true, ...primaryModifier }))
+      checkButton.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, ...primaryModifier })
+      )
+      checkButton.click()
+    })
+    await act(async () => {
+      checkButton.click()
     })
 
     expect(mocks.updaterCheck).toHaveBeenNthCalledWith(1, {
@@ -290,6 +300,10 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(mocks.updaterCheck).toHaveBeenNthCalledWith(2, {
       includePrerelease: false,
       includePerfPrerelease: true
+    })
+    expect(mocks.updaterCheck).toHaveBeenNthCalledWith(3, {
+      includePrerelease: false,
+      includePerfPrerelease: false
     })
   })
 

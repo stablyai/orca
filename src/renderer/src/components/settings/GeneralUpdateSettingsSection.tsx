@@ -7,10 +7,7 @@ import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-import {
-  getPerfUpdateModifierLabel,
-  getUpdateCheckClickOptions
-} from '@/lib/update-check-click-options'
+import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -40,8 +37,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const perfUpdateModifierLabel = getPerfUpdateModifierLabel()
-  const updateCheckHint = `Shift-click checks the latest RC; ${perfUpdateModifierLabel}-click checks the latest perf build.`
+  const updateCheckHint = getUpdateCheckHint()
 
   useEffect(() => {
     let cancelled = false

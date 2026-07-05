@@ -7,8 +7,10 @@ function isMacShortcutPlatform(): boolean {
   return getShortcutPlatform() === 'darwin'
 }
 
-export function getPerfUpdateModifierLabel(isMac = isMacShortcutPlatform()): string {
-  return isMac ? '⌘' : 'Ctrl'
+export function getUpdateCheckHint(isMac = isMacShortcutPlatform()): string {
+  const rcClickLabel = isMac ? '⇧+click' : 'Shift+click'
+  const perfClickLabel = isMac ? '⌘+click' : 'Ctrl+click'
+  return `${rcClickLabel} checks the latest RC; ${perfClickLabel} checks the latest perf build.`
 }
 
 export function getUpdateCheckClickOptions(

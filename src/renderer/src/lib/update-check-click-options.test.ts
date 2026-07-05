@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getPerfUpdateModifierLabel,
-  getUpdateCheckClickOptions
-} from './update-check-click-options'
+import { getUpdateCheckClickOptions, getUpdateCheckHint } from './update-check-click-options'
 
 function clickEvent(overrides: Partial<Pick<MouseEvent, 'ctrlKey' | 'metaKey' | 'shiftKey'>>) {
   return {
@@ -45,8 +42,12 @@ describe('getUpdateCheckClickOptions', () => {
     })
   })
 
-  it('formats the perf modifier label by platform', () => {
-    expect(getPerfUpdateModifierLabel(true)).toBe('⌘')
-    expect(getPerfUpdateModifierLabel(false)).toBe('Ctrl')
+  it('formats the tooltip hint by platform', () => {
+    expect(getUpdateCheckHint(true)).toBe(
+      '⇧+click checks the latest RC; ⌘+click checks the latest perf build.'
+    )
+    expect(getUpdateCheckHint(false)).toBe(
+      'Shift+click checks the latest RC; Ctrl+click checks the latest perf build.'
+    )
   })
 })
