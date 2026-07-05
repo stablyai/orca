@@ -1,4 +1,5 @@
 /* oxlint-disable max-lines */
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -129,7 +130,7 @@ describe('browserManager', () => {
     expect(shellOpenExternalMock).toHaveBeenCalledWith('http://localhost:3000/')
   })
 
-  it('routes safe popup URLs into a new Orca browser tab for the owning renderer', () => {
+  it('allows registered safe popup URLs as Electron child windows', () => {
     const rendererSendMock = vi.fn()
     const guest = {
       id: 103,
@@ -160,18 +161,56 @@ describe('browserManager', () => {
 
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
-    }) => { action: 'deny' }
-    expect(handler({ url: 'https://example.com/login' })).toEqual({ action: 'deny' })
+    }) => { action: 'allow' | 'deny' }
+    expect(handler({ url: 'https://example.com/login' })).toEqual({ action: 'allow' })
 
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
-    expect(rendererSendMock).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
-      browserPageId: 'browser-1',
-      url: 'https://example.com/login'
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks unsafe popup URLs for registered guests', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 106,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
     })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+    }) => { action: 'allow' | 'deny' }
+    expect(handler({ url: 'javascript:alert(1)' })).toEqual({ action: 'deny' })
+
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalledWith(
+      'browser:open-link-in-orca-tab',
+      expect.anything()
+    )
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
-      origin: 'https://example.com',
-      action: 'opened-in-orca'
+      origin: 'null',
+      action: 'blocked'
     })
   })
 
@@ -855,6 +894,61 @@ describe('browserManager', () => {
     expect(guestSetWindowOpenHandlerMock).toHaveBeenCalledTimes(1)
     expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-navigate')).toHaveLength(1)
     expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-redirect')).toHaveLength(1)
+    expect(guestOnMock.mock.calls.filter(([event]) => event === 'did-create-window')).toHaveLength(
+      1
+    )
+  })
+
+  it('attaches guest policies to created popup child windows', () => {
+    const childSetBackgroundThrottlingMock = vi.fn()
+    const childSetWindowOpenHandlerMock = vi.fn()
+    const childOnMock = vi.fn()
+    const childOffMock = vi.fn()
+    const childOpenDevToolsMock = vi.fn()
+    const childGuest = {
+      id: 4040,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: childSetBackgroundThrottlingMock,
+      setWindowOpenHandler: childSetWindowOpenHandlerMock,
+      on: childOnMock,
+      off: childOffMock,
+      openDevTools: childOpenDevToolsMock
+    }
+    const guest = {
+      id: 404,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const didCreateWindowHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-create-window'
+    )?.[1] as ((window: { webContents: typeof childGuest }) => void) | undefined
+    expect(didCreateWindowHandler).toBeTypeOf('function')
+
+    didCreateWindowHandler?.({ webContents: childGuest })
+
+    expect(childSetBackgroundThrottlingMock).toHaveBeenCalledWith(false)
+    expect(childSetWindowOpenHandlerMock).toHaveBeenCalledTimes(1)
+    expect(childOnMock.mock.calls.filter(([event]) => event === 'did-create-window')).toHaveLength(
+      1
+    )
+    expect(childOnMock.mock.calls.filter(([event]) => event === 'will-navigate')).toHaveLength(1)
+    expect(childOnMock.mock.calls.filter(([event]) => event === 'will-redirect')).toHaveLength(1)
+
+    browserManager.unregisterAll()
+
+    expect(childOffMock).toHaveBeenCalledWith('did-create-window', expect.any(Function))
+    expect(childOffMock).toHaveBeenCalledWith('will-navigate', expect.any(Function))
+    expect(childOffMock).toHaveBeenCalledWith('will-redirect', expect.any(Function))
   })
 
   it('cleans attached guest policy state when a guest is destroyed before registration', () => {
@@ -1068,11 +1162,11 @@ describe('browserManager', () => {
         origin: 'https://example.com',
         totalBytes: 2048,
         mimeType: 'text/csv',
-        savePath: '/downloads/report.csv',
+        savePath: join('/downloads', 'report.csv'),
         status: 'downloading'
       })
     )
-    expect(item.setSavePath).toHaveBeenCalledWith('/downloads/report.csv')
+    expect(item.setSavePath).toHaveBeenCalledWith(join('/downloads', 'report.csv'))
   })
 
   it('sets the download save path immediately and reports progress and completion', () => {
@@ -1106,7 +1200,7 @@ describe('browserManager', () => {
     })
     browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item })
 
-    expect(item.setSavePath).toHaveBeenCalledWith('/downloads/report.csv')
+    expect(item.setSavePath).toHaveBeenCalledWith(join('/downloads', 'report.csv'))
     expect(item.on).toHaveBeenCalledWith('updated', expect.any(Function))
     expect(item.once).toHaveBeenCalledWith('done', expect.any(Function))
     expect(rendererSendMock).toHaveBeenCalledWith(
@@ -1114,7 +1208,7 @@ describe('browserManager', () => {
       expect.objectContaining({
         browserPageId: 'browser-1',
         filename: 'report.csv',
-        savePath: '/downloads/report.csv',
+        savePath: join('/downloads', 'report.csv'),
         status: 'downloading'
       })
     )
@@ -1139,7 +1233,7 @@ describe('browserManager', () => {
       expect.objectContaining({
         browserPageId: 'browser-1',
         status: 'completed',
-        savePath: '/downloads/report.csv',
+        savePath: join('/downloads', 'report.csv'),
         error: null
       })
     )

@@ -575,22 +575,17 @@ export class BrowserManager {
     // Orca window is not the focused foreground app. With throttling enabled,
     // the compositor stops producing frames and capturePage() returns empty.
     guest.setBackgroundThrottling(false)
+    const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
+      this.attachGuestPolicies(window.webContents)
+    }
+    guest.on('did-create-window', handleDidCreateWindow)
     guest.setWindowOpenHandler(({ url }) => {
       const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
 
-      // Why: popup-capable guests are required for OAuth and target=_blank
-      // flows, but Orca still does not host child windows itself. For normal
-      // web URLs, route the request into Orca's own browser-tab model first so
-      // the user stays in the IDE. Only fall back to the system browser when
-      // Orca cannot safely host the destination or when the guest is not yet
-      // associated with a trusted browser tab/renderer.
-      if (browserTabId && browserUrl && this.openLinkInOrcaTab(browserTabId, browserUrl)) {
-        this.forwardOrQueuePopupEvent(guest.id, {
-          origin: safeOrigin(browserUrl),
-          action: 'opened-in-orca'
-        })
+      if (browserTabId && browserUrl) {
+        return { action: 'allow' }
       } else if (externalUrl) {
         // Why: a target=_blank click on a Kagi search result page produces a
         // popup URL that still contains the bearer token; redact before
@@ -671,6 +666,7 @@ export class BrowserManager {
       disposeAntiDetection()
       try {
         guest.off('destroyed', handleDestroyed)
+        guest.off('did-create-window', handleDidCreateWindow)
       } catch {
         // guest may already be destroyed
       }
@@ -1774,25 +1770,6 @@ export class BrowserManager {
     })
   }
 
-  private openLinkInOrcaTab(browserTabId: string, rawUrl: string): boolean {
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
-      return false
-    }
-    const normalizedUrl = normalizeBrowserNavigationUrl(rawUrl)
-    if (!normalizedUrl || normalizedUrl === 'about:blank') {
-      return false
-    }
-    // Why: the guest context menu knows which browser tab the click came from,
-    // but only the renderer owns the worktree/tab model. Forward the validated
-    // URL back to that renderer so it can open a sibling Orca browser tab in
-    // the same worktree without letting the guest process mutate app state.
-    renderer.send('browser:open-link-in-orca-tab', {
-      browserPageId: browserTabId,
-      url: normalizedUrl
-    })
-    return true
-  }
 }
 
 export const browserManager = new BrowserManager()
