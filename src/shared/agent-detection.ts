@@ -98,6 +98,7 @@ export const STRONG_WORKING_KEYWORDS_RE = new RegExp(
 // correctly refuse to classify as working.
 const STRONG_WORKING_KEYWORDS_RE_GLOBAL = new RegExp(STRONG_WORKING_KEYWORDS_RE.source, 'gi')
 export function isGeminiTerminalTitle(title: string): boolean {
+  // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||
     title.includes(GEMINI_WORKING) ||

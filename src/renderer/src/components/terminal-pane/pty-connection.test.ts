@@ -12636,8 +12636,11 @@ describe('connectPanePty', () => {
       throw new Error('Expected onTitleChange to be registered')
     }
 
+    manager.setPaneGpuRendering.mockClear()
+
     titleHandler('\u280b Pi', '\u280b π: gemini')
 
+    expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
     expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, true)
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '\u280b OMP')
     expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '\u280b OMP')
