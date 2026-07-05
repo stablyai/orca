@@ -1,4 +1,5 @@
 import type { Store } from '../persistence'
+import { parseExecutionHostId } from '../../shared/execution-host'
 
 export type DiagnosticRuntimeStore = Pick<Store, 'getRepos' | 'getAllWorktreeMeta'> & {
   getProjects?: Store['getProjects']
@@ -20,8 +21,8 @@ export function collectRuntimeDiagnosticCounts(
   const worktreeMeta = store.getAllWorktreeMeta()
   const hostCounts = new Map<string, number>()
   for (const meta of Object.values(worktreeMeta)) {
-    const hostId = meta.hostId ?? 'legacy-local'
-    hostCounts.set(hostId, (hostCounts.get(hostId) ?? 0) + 1)
+    const hostBucket = getDiagnosticHostBucket(meta.hostId)
+    hostCounts.set(hostBucket, (hostCounts.get(hostBucket) ?? 0) + 1)
   }
   return {
     repoCount: store.getRepos().length,
@@ -33,6 +34,15 @@ export function collectRuntimeDiagnosticCounts(
     terminalPaneCount,
     runtimeHostCounts: Object.fromEntries(hostCounts)
   }
+}
+
+function getDiagnosticHostBucket(hostId: string | null | undefined): string {
+  if (!hostId) {
+    return 'legacy-local'
+  }
+  const parsed = parseExecutionHostId(hostId)
+  // Why: SSH/runtime ids can reveal host labels; diagnostics only need host kind counts.
+  return parsed?.kind ?? 'unknown'
 }
 
 type DiagnosticTerminalLayoutNode = {

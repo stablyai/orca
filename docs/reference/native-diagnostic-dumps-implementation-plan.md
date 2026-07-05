@@ -234,6 +234,51 @@ linux/shells.json
 - skipped categories with reason codes
 - errors with sanitized reason codes
 
+## Reading And Triage Workflow
+
+Support engineers should treat the exported file as a ZIP diagnostics bundle, not
+as an executable to run. The normal review flow is:
+
+1. Ask the user to run `orca diagnostics bundle --json` or
+   `orca diagnostics bundle --open`.
+2. Open the ZIP with the OS archive tool, 7-Zip, Finder, or `unzip -l`.
+3. Start with `manifest.json` to see the bundle ID, Orca version/channel,
+   platform/arch, effective lookback window, included files, skipped categories,
+   and collector errors.
+4. Read JSON/NDJSON files with any text editor, `jq`, or log tooling. The
+   highest-signal files are usually `app/orca.json`, `system/os.json`,
+   `system/resources.json`, `memory/snapshot.json`, `app/runtime-counts.json`,
+   `diagnostics/observability.ndjson`, and `crash/orca-crash-reports.json`.
+5. If `crash/minidumps/*.dmp` exists, inspect it with native dump tooling such
+   as WinDbg or Visual Studio on Windows, `minidump_stackwalk` with matching
+   symbols, or a future Orca symbolication service. Do not paste minidump bytes
+   into issues or chat.
+
+Expected CLI text output:
+
+```text
+bundleId: <uuid>
+outputPath: <logs>/diagnostics/orca-diagnostics-<timestamp>.zip
+bytes: <archive-byte-size>
+files: <manifest-file-count>
+lookbackMinutes: <effective-lookback>
+includedCategories: app, system, observability, ...
+skippedCategories: native-minidumps (none_found)
+errorCategories: windows-events (<sanitized-reason>)
+```
+
+Expected `--json` output is the same data as a structured
+`DiagnosticBundleExportResult`. The archive itself is the support artifact; the
+CLI output is only the receipt and quick status summary.
+
+This is helpful because it puts crash artifacts and the surrounding runtime
+context in the same time-bounded artifact. A minidump can show the crashing
+thread, loaded modules, and native stack state; the bundle explains whether the
+app was packaged, which Orca/Electron/Chrome/Node versions were running, which
+OS resources were constrained, whether terminal/runtime state was unusual, and
+which platform collectors failed or were unavailable. That combination is much
+more actionable than a standalone `.dmp` file or a screenshot of an error.
+
 ## Privacy And Permissions Rules
 
 - Main process collects all bytes. Renderer and CLI callers may request
@@ -245,6 +290,9 @@ linux/shells.json
 - Do not collect repository contents by default.
 - Runtime/workspace/project summaries should be count-only unless a future
   explicit "include names/paths" option is added.
+- Runtime host summaries must bucket host IDs by kind (`local`, `ssh`,
+  `runtime`, `legacy-local`, or `unknown`) rather than emitting configured host
+  names or target IDs.
 - Platform collectors must be bounded by lookback, max event count, max byte
   count, and timeout.
 - Permission failures should be visible in the manifest, not fatal.
@@ -286,6 +334,26 @@ linux/shells.json
 - macOS without DiagnosticReports access: category skipped.
 - Archive size cap exceeded: category truncates or skips according to manifest
   policy; command does not silently omit data.
+
+## Privacy Regression Coverage
+
+Add broad tests at the bundle boundary, not only at individual collectors:
+
+- Build a fake runtime store containing realistic sensitive values: usernames,
+  Windows and POSIX home paths, repository names, branch names, host target
+  labels, terminal IDs/prompts, and token-like strings.
+- Export the default low-risk categories and parse the stored ZIP entries.
+- Assert the archive text contains expected diagnostic fields such as counts,
+  category statuses, role labels, and host-kind buckets.
+- Assert the archive text does not contain the seeded sensitive strings.
+- Keep direct unit tests for path policy, category sanitizers, shell/platform
+  collectors, and runtime count bucketing so regressions fail close to their
+  source.
+
+Native minidumps require a different test posture because their bytes can contain
+process memory by design. Tests should verify consent/default behavior,
+lookback/size caps, manifest labeling, and local-only export behavior; they
+should not claim minidump contents are redacted.
 
 ## Validation Gates
 

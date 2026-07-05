@@ -168,6 +168,46 @@ linux/journal.json
 linux/shells.json
 ```
 
+### Reading The Output
+
+The exported artifact is a ZIP diagnostics bundle. Support should not run it or
+double-click it as an executable. The expected workflow is to unzip it, inspect
+`manifest.json`, then read the category files named in the manifest.
+
+`manifest.json` is the table of contents and triage starting point. It tells a
+reviewer which Orca build produced the bundle, which OS/arch it came from, which
+lookback window was used after defaulting or clamping, which categories were
+included, and which categories were skipped or errored. JSON files can be read
+with a text editor or `jq`; `diagnostics/observability.ndjson` can be read as
+one JSON object per line.
+
+If the bundle includes `crash/minidumps/*.dmp`, those files are native minidumps.
+They are useful, but they are not self-explanatory. A reviewer needs native dump
+tooling such as WinDbg or Visual Studio on Windows, `minidump_stackwalk` with
+matching symbols, or a future Orca symbolication service. Without symbols, a
+minidump can still show process type, loaded modules, thread state, exception
+codes, and stack shapes, but source-level root cause analysis is limited.
+
+Expected CLI receipt:
+
+```text
+bundleId: <uuid>
+outputPath: <logs>/diagnostics/orca-diagnostics-<timestamp>.zip
+bytes: <archive-byte-size>
+files: <manifest-file-count>
+lookbackMinutes: <effective-lookback>
+includedCategories: app, system, observability, memory, ...
+skippedCategories: native-minidumps (none_found)
+errorCategories: <category> (<sanitized-reason>)
+```
+
+This is particularly helpful for support because a crash dump alone answers
+"what crashed", while the bundle also answers "what environment and runtime state
+surrounded the crash". The app, OS, memory, runtime-count, shell, WSL, event-log,
+observability, and crash-report files let support correlate native failures with
+resource pressure, platform configuration, recent app telemetry, terminal
+lifecycle anomalies, and missing platform facilities.
+
 Default category set:
 
 - Include all low-risk, redacted, bounded categories by default.
@@ -195,6 +235,7 @@ Avoid by default:
 - Full environment variables.
 - Git remotes with embedded credentials.
 - Repository paths, workspace names, branch names, prompts, transcripts, or file contents.
+- Raw SSH/runtime host target names; emit host-kind counts instead.
 - Full heap snapshots.
 - Full sysdiagnose archives.
 
@@ -232,7 +273,9 @@ Unit tests:
 - Crash reporter starts with `uploadToServer: false` unless a consented upload path is enabled.
 - Bundle category selection includes default categories and honors `--include`/`--exclude`.
 - Bundle manifest records every file, byte count, category, and skipped/error category.
-- Redaction rejects raw paths, env variables, prompts, branch names, terminal output, and repo names in default summaries.
+- Redaction rejects raw paths, env variables, prompts, branch names, terminal output, repo names, token-like strings, and SSH/runtime host target names in default summaries.
+- Runtime count summaries bucket host IDs by kind rather than emitting configured host IDs.
+- A bundle-level privacy regression test seeds realistic sensitive values into the fake store, exports low-risk categories, parses the ZIP, and asserts none of those values appear in any default text entry.
 - Windows CIM output parser covers normal JSON, singleton JSON object, empty output, timeout, access denied, and malformed JSON.
 - Existing NDJSON 4 MiB cap remains enforced for current upload path.
 

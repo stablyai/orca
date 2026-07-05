@@ -194,6 +194,36 @@ describe('exportDiagnosticBundle', () => {
     expect(manifest.lookbackMinutes).toBe(MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES)
     expect(result.lookbackMinutes).toBe(MAX_DIAGNOSTIC_BUNDLE_LOOKBACK_MINUTES)
   })
+
+  it('keeps default runtime and app diagnostics free of raw user identifiers', async () => {
+    const { exportDiagnosticBundle } = await import('./diagnostic-bundle-export')
+    const output = 'bundle-privacy.zip'
+
+    const result = await exportDiagnosticBundle({
+      output,
+      include: ['app', 'runtime-counts'],
+      store: makeSensitiveStore()
+    })
+
+    const entries = readStoredZipEntries(await readFile(result.outputPath))
+    const archiveText = [...entries.values()].map((entry) => entry.toString('utf8')).join('\n')
+    expect(archiveText).toContain('"runtimeHostCounts"')
+    expect(archiveText).toContain('"ssh": 1')
+    expect(archiveText).toContain('"runtime": 1')
+    for (const forbidden of [
+      'alice',
+      'private-xaerus-repo',
+      'secret-branch',
+      'prod-gpu-host',
+      'runtime-owner-machine',
+      'ghp_private_token',
+      'C:/Users/Alice/source/private-xaerus-repo',
+      '/home/alice/private-xaerus-repo',
+      'terminal prompt with customer name'
+    ]) {
+      expect(archiveText).not.toContain(forbidden)
+    }
+  })
 })
 
 function makeStore(): DiagnosticBundleRuntimeStore {
@@ -206,6 +236,48 @@ function makeStore(): DiagnosticBundleRuntimeStore {
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
     getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })
+  } as unknown as DiagnosticBundleRuntimeStore
+}
+
+function makeSensitiveStore(): DiagnosticBundleRuntimeStore {
+  return {
+    getRepos: () => [
+      {
+        name: 'private-xaerus-repo',
+        path: 'C:/Users/Alice/source/private-xaerus-repo',
+        branch: 'secret-branch'
+      }
+    ],
+    getRepo: () => undefined,
+    getProjects: () => [{ name: 'Alice Customer Project' }],
+    getProjectHostSetups: () => [
+      {
+        displayName: 'prod-gpu-host',
+        path: '/home/alice/private-xaerus-repo',
+        gitUsername: 'alice'
+      }
+    ],
+    getFolderWorkspaces: () => [{ path: 'C:/Users/Alice/source/private-xaerus-repo' }],
+    getAllWorktreeMeta: () => ({
+      'C:/Users/Alice/source/private-xaerus-repo': {
+        hostId: 'ssh:prod-gpu-host',
+        branch: 'secret-branch'
+      },
+      '/home/alice/private-xaerus-repo': {
+        hostId: 'runtime:runtime-owner-machine'
+      }
+    }),
+    getWorktreeMeta: () => undefined,
+    getWorkspaceSession: () => ({
+      tabsByWorktree: {
+        'C:/Users/Alice/source/private-xaerus-repo': [{ id: 'tab-ghp_private_token' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-ghp_private_token': {
+          root: { type: 'leaf', leafId: 'terminal prompt with customer name' }
+        }
+      }
+    })
   } as unknown as DiagnosticBundleRuntimeStore
 }
 
