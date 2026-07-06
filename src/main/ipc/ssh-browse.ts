@@ -10,6 +10,24 @@ export type RemoteDirEntry = {
 
 const SSH_BROWSE_TIMEOUT_MS = 15_000
 
+// Why: cmd.exe returns ERRORLEVEL 9009 for an unrecognized command regardless of
+// OS display language, so it's the locale-independent signal that a Windows host
+// rejected Orca's POSIX `exec` wrapper. Localized stderr text ("no se reconoce",
+// German/French/etc.) is only a fallback heuristic.
+const WINDOWS_COMMAND_NOT_FOUND_EXIT = 9009
+
+// Carries the raw exit code so the Windows-fallback predicate can key off the
+// locale-independent 9009 rather than parsing localized shell prose.
+class RemoteBrowseError extends Error {
+  constructor(
+    message: string,
+    readonly exitCode: number | null
+  ) {
+    super(message)
+    this.name = 'RemoteBrowseError'
+  }
+}
+
 // Why: the relay's fs.readDir enforces workspace root ACLs, which aren't
 // registered until a repo is added. This handler uses a raw SSH exec channel
 // to list directories, allowing the user to browse the remote filesystem
@@ -40,7 +58,14 @@ export function registerSshBrowseHandler(
         if (!shouldFallbackToWindowsBrowse(error)) {
           throw error
         }
-        return browseWithWindowsPowerShell(conn, args.dirPath)
+        try {
+          return await browseWithWindowsPowerShell(conn, args.dirPath)
+        } catch {
+          // Why: if the PowerShell retry also fails (e.g. the predicate matched a
+          // POSIX error that merely mentioned "exec"/"not found"), surface the
+          // original shell failure — not a misleading "powershell.exe not found".
+          throw error
+        }
       }
     }
   )
@@ -68,6 +93,10 @@ function browseWithWindowsPowerShell(
 ): Promise<{ entries: RemoteDirEntry[]; resolvedPath: string }> {
   const script = [
     "$ErrorActionPreference = 'Stop'",
+    // Why: Windows PowerShell 5.1 writes redirected stdout in the legacy OEM
+    // code page, but runBrowseCommand decodes as UTF-8; pin UTF-8 output so
+    // non-ASCII names (e.g. C:\Users\José, CJK, Cyrillic) don't come back mojibake.
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     `$dir = ${powerShellPathExpression(dirPath)}`,
     'Set-Location -LiteralPath $dir',
     '$resolved = (Get-Location).ProviderPath',
@@ -170,7 +199,7 @@ async function runBrowseCommand(
           (exitCode === null
             ? 'Remote listing failed (channel closed without exit status)'
             : `Remote listing failed (exit ${exitCode})`)
-        rejectOnce(new Error(msg))
+        rejectOnce(new RemoteBrowseError(msg, exitCode))
         return
       }
       if (stderr.trim() && !stdout.trim()) {
@@ -180,8 +209,7 @@ async function runBrowseCommand(
 
       // Why: Windows OpenSSH exec emits CRLF, so split on \r?\n — otherwise a
       // trailing \r defeats the endsWith('/') dir check and leaves a stray CR
-      // in every name. Splitting on the CR too preserves POSIX filenames whose
-      // names contain legitimate leading/trailing spaces.
+      // in every name.
       const lines = stdout.trim().split(/\r?\n/)
       if (lines.length === 0) {
         rejectOnce(new Error('Empty response from remote'))
@@ -230,6 +258,12 @@ async function runBrowseCommand(
 }
 
 function shouldFallbackToWindowsBrowse(error: unknown): boolean {
+  // Why: cmd.exe's 9009 exit is the locale-independent signal that a Windows
+  // host rejected Orca's POSIX `exec` wrapper — it fires the fallback even on
+  // German/French/Japanese/etc. hosts whose stderr text the heuristics miss.
+  if (error instanceof RemoteBrowseError && error.exitCode === WINDOWS_COMMAND_NOT_FOUND_EXIT) {
+    return true
+  }
   const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   // Why: only retry when the remote login shell rejects Orca's POSIX wrapper.
   // Ordinary POSIX browse failures (permission denied, missing path, etc.)

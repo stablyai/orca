@@ -25,6 +25,16 @@ function createMockChannel(): EventEmitter & { stderr: EventEmitter } {
   })
 }
 
+// Recover the PowerShell script from a `powershell.exe ... -EncodedCommand <b64>`
+// command so tests can assert on the actual (UTF-16LE) payload sent to the host.
+function decodeEncodedCommand(command: string): string {
+  const match = /-EncodedCommand (\S+)/.exec(command)
+  if (!match) {
+    throw new Error(`no -EncodedCommand in: ${command}`)
+  }
+  return Buffer.from(match[1], 'base64').toString('utf16le')
+}
+
 describe('registerSshBrowseHandler', () => {
   let handler: BrowseHandler
 
@@ -125,6 +135,65 @@ describe('registerSshBrowseHandler', () => {
     expect(exec).toHaveBeenNthCalledWith(1, "cd 'C:/Users/alice' && pwd && command ls -1Ap")
     expect(exec.mock.calls[1]?.[0]).toMatch(/^powershell\.exe /)
     expect(exec.mock.calls[1]?.[1]).toEqual({ wrapCommand: false })
+
+    // Decode the -EncodedCommand payload so an accidental switch from the
+    // single-quote-escaped PowerShell literal to raw interpolation (an injection
+    // regression) is caught, and to lock in the UTF-8 output pin.
+    const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
+    expect(script).toContain('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8')
+    expect(script).toContain("$dir = 'C:/Users/alice'")
+    expect(script).toContain('Get-ChildItem -LiteralPath $resolved -Force')
+  })
+
+  it('escapes single quotes in the PowerShell literal path', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: "C:/O'Brien" })
+    await Promise.resolve()
+    // cmd.exe returns ERRORLEVEL 9009 for an unrecognized command in every locale;
+    // the fallback must trigger off that even when stderr text isn't English/Spanish.
+    posixChannel.stderr.emit('data', Buffer.from('Der Befehl "exec" ist falsch geschrieben'))
+    posixChannel.emit('exit', 9009)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.emit('data', Buffer.from("C:\\O'Brien\r\n"))
+    windowsChannel.emit('exit', 0)
+    windowsChannel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: "C:\\O'Brien",
+      entries: []
+    })
+    const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
+    // Single quote must be doubled inside the PowerShell literal, not passed raw.
+    expect(script).toContain("$dir = 'C:/O''Brien'")
+  })
+
+  it('does not retry with PowerShell for an ordinary POSIX browse failure', async () => {
+    const channel = createMockChannel()
+    const exec = vi.fn().mockResolvedValue(channel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/root/secret' })
+    await Promise.resolve()
+    channel.stderr.emit('data', Buffer.from('ls: /root/secret: Permission denied'))
+    channel.emit('exit', 1)
+    channel.emit('close')
+
+    await expect(resultPromise).rejects.toThrow('Permission denied')
+    // A permission failure must surface directly — no masking PowerShell retry.
+    expect(exec).toHaveBeenCalledTimes(1)
   })
 
   it('rejects and detaches listeners when the browse channel errors', async () => {
