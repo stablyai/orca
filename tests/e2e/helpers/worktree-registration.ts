@@ -37,13 +37,10 @@ async function resolveE2eWorktreeId(
             if (!repo) {
               throw new Error(`Seeded E2E repo was not registered: ${repoPath}`)
             }
-            const listedWorktrees = await window.api.worktrees.list({ repoId: repo.id })
-            store.setState((current) => ({
-              worktreesByRepo: {
-                ...current.worktreesByRepo,
-                [repo.id]: listedWorktrees
-              }
-            }))
+            // Why: use the store's own fetch (like loadWorktreesUntilPathsPresent)
+            // so both TTL workarounds stay behaviorally identical.
+            await store.getState().fetchWorktrees(repo.id)
+            const listedWorktrees = store.getState().worktreesByRepo[repo.id] ?? []
             const normalize = (value: string): string =>
               value.startsWith('/private/var/') ? value.slice('/private'.length) : value
             const worktree = listedWorktrees.find(

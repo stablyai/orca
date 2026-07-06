@@ -445,11 +445,8 @@ const mod = isMac ? 'Meta' : 'Control'
 const splitVerticalChord = isMac ? `${mod}+d` : `${mod}+Shift+d`
 const splitHorizontalChord = isMac ? `${mod}+Shift+d` : 'Alt+Shift+d'
 
-// Why: a freshly split pane can transiently report a running child (node-pty's
-// proc.process lags the spawn), surfacing a confirm dialog instead of closing
-// immediately. A fixed 500ms dialog wait races that transient. Poll instead:
-// confirm the dialog whenever it appears and wait for the pane count to settle,
-// so each Cmd/Ctrl+W close is deterministic rather than racing the next chord.
+// Why: a freshly split pane can transiently still report a running child, so
+// poll for the confirm dialog and pane-count settling instead of a fixed wait.
 async function closeActivePaneAndSettle(page: Page, expectedCount: number): Promise<void> {
   await focusActiveTerminal(page)
   await page.keyboard.press(`${mod}+w`)
@@ -460,7 +457,11 @@ async function closeActivePaneAndSettle(page: Page, expectedCount: number): Prom
     .poll(
       async () => {
         if (await confirmButton.isVisible().catch(() => false)) {
-          await confirmButton.click().catch(() => {})
+          // Why: surface a click failure so a real actionability/strict-mode
+          // error isn't hidden behind the generic pane-count timeout.
+          await confirmButton.click().catch((err) => {
+            console.warn('closeActivePaneAndSettle: confirm click failed', err)
+          })
         }
         return countVisibleTerminalPanes(page)
       },

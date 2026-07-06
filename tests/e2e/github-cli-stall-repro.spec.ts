@@ -124,13 +124,9 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
   })
   await expect(detailHeading).toBeVisible({ timeout: 10_000 })
 
-  // Why: this is the user-visible regression signal. Before ghExecFileAsync had
-  // a default timeout, the pending details promise never settled and the detail
-  // body stayed stuck in its loading shell. The bounded gh detail call now
-  // rejects after ORCA_GH_EXEC_TIMEOUT_MS, so the body degrades to a terminal
-  // "details unavailable" state instead of spinning forever — the stable proof
-  // that the stall recovered. The error state replaces the conversation body,
-  // so its presence also means no spinner remains.
+  // Why: bounded gh timeout makes the detail fetch reject instead of hanging,
+  // so this terminal error text is the stable proof the stall recovered (it
+  // replaces the conversation body, so its presence also means no spinner).
   await expect(orcaPage.getByText('Unable to load details for this GitHub item.')).toBeVisible({
     timeout: 5_000
   })
