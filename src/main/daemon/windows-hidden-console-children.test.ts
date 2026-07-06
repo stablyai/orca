@@ -62,7 +62,10 @@ describe('wrapChildProcessApi', () => {
       }
     })
     const wrapped = wrapChildProcessApi(original)
-    await expect(promisify(wrapped)('powershell.exe', ['-NoProfile'])).resolves.toBe('done')
+    // wrapChildProcessApi is typed (...args) => unknown, so promisify() can't
+    // infer the runtime-attached [promisify.custom] signature — assert the real one.
+    const promisified = promisify(wrapped) as (command: string, args: string[]) => Promise<string>
+    await expect(promisified('powershell.exe', ['-NoProfile'])).resolves.toBe('done')
     expect(seen[2]).toEqual({ windowsHide: true })
   })
 })
