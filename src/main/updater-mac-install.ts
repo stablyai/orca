@@ -132,9 +132,10 @@ export function handleMacInstallerReady(
     void Promise.resolve()
       .then(() => onReadyToInstall())
       .catch((error) => {
-        console.warn(
-          '[updater] Deferred macOS install handoff failed:',
-          error instanceof Error ? error.name : typeof error
+        recordUpdaterLifecycle(
+          'macos_deferred_install_handoff_failed',
+          { errorType: error instanceof Error ? error.name : typeof error },
+          { level: 'warn', message: 'Deferred macOS install handoff failed' }
         )
       })
     return

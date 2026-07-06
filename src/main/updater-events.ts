@@ -28,6 +28,7 @@ type UpdaterHandlerContext = {
   getKnownReleaseUrl: () => string | undefined
   getPendingInstallVersion: () => string
   getUserInitiatedCheck: () => boolean
+  handleQuitAndInstallFailure: () => void
   hasNewerDownloadedVersion: () => boolean
   shouldHandleUpdaterErrorEvent: () => boolean
   clearUpdateAvailableEventPending: (attemptId: number | null) => void
@@ -65,6 +66,7 @@ export function registerAutoUpdaterHandlers({
   getKnownReleaseUrl,
   getPendingInstallVersion,
   getUserInitiatedCheck,
+  handleQuitAndInstallFailure,
   hasNewerDownloadedVersion,
   shouldHandleUpdaterErrorEvent,
   clearUpdateAvailableEventPending,
@@ -283,6 +285,11 @@ export function registerAutoUpdaterHandlers({
 
   autoUpdater.on('error', (err) => {
     const message = err?.message ?? 'Unknown error'
+    // Why: quitAndInstall reports the common "no staged update" failure through
+    // this event, not a thrown error. Recover the quit-for-update flags before
+    // any suppression guard can early-return, so a failed install never leaves
+    // the app half-transitioned with PTYs killed and windows unable to reopen.
+    handleQuitAndInstallFailure()
     // Why: primary/fallback promise handlers may already own this failure; do
     // not let their delayed paired error event consume fallback context.
     if (shouldSuppressMissingManifestPrereleaseFallbackEvent(message, err)) {

@@ -603,9 +603,7 @@ async function performQuitAndInstall(): Promise<void> {
       span.addEvent('native_quit_and_install_invoked')
     })
   } catch (error) {
-    quitAndInstallInProgress = false
-    quittingForUpdate = false
-    resetMacInstallState()
+    resetQuitForUpdateState()
     recordUpdaterLifecycle(
       'quit_and_install_failed',
       { errorType: error instanceof Error ? error.name : typeof error },
@@ -618,6 +616,29 @@ async function performQuitAndInstall(): Promise<void> {
       'Could not restart to install the update. Quit and reopen Orca, then try again.'
     )
   }
+}
+
+function resetQuitForUpdateState(): void {
+  quitAndInstallInProgress = false
+  quittingForUpdate = false
+  resetMacInstallState()
+}
+
+// electron-updater surfaces the common "no staged update" quitAndInstall
+// failure through the async 'error' event rather than a thrown error, so
+// performQuitAndInstall's try/catch never sees it. Without this recovery a
+// failed install leaves quitAndInstallInProgress/quittingForUpdate stuck true
+// after PTYs were killed — the activate handler then refuses to reopen a window
+// and the app is trapped half-transitioned.
+function handleQuitAndInstallFailure(): void {
+  if (!quitAndInstallInProgress) {
+    return
+  }
+  resetQuitForUpdateState()
+  recordUpdaterLifecycle('quit_and_install_failed_via_event', undefined, {
+    level: 'warn',
+    message: 'Update install could not start; recovered app state'
+  })
 }
 
 async function runBeforeUpdateQuitCleanup(): Promise<void> {
@@ -1357,6 +1378,7 @@ export function setupAutoUpdater(
     getKnownReleaseUrl,
     getPendingInstallVersion,
     getUserInitiatedCheck: () => userInitiatedCheck,
+    handleQuitAndInstallFailure,
     hasNewerDownloadedVersion,
     shouldHandleUpdaterErrorEvent,
     performQuitAndInstall,
