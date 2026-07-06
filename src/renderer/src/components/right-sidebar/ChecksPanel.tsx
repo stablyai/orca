@@ -49,6 +49,10 @@ import {
   PRCommentsList,
   PRTriageStrip
 } from './checks-panel-content'
+import {
+  clearPRCommentsListSelection,
+  type PRCommentsListSelectionClearRequest
+} from './pr-comments-list-selection'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type {
   GitLabDiscussionResolveResult,
@@ -435,6 +439,9 @@ export default function ChecksPanel(): React.JSX.Element {
   const [comments, setComments] = useState<PRComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const commentsRef = useRef<PRComment[]>([])
+  const [commentsSelectionClearRequest, setCommentsSelectionClearRequest] =
+    useState<PRCommentsListSelectionClearRequest | null>(null)
+  const commentsSelectionClearTokenRef = useRef(0)
   const [emptyRefreshing, setEmptyRefreshing] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const refreshInFlightRef = useRef(false)
@@ -2789,6 +2796,15 @@ export default function ChecksPanel(): React.JSX.Element {
     ]
   )
 
+  const clearSentCommentSelection = useCallback((reviewContextKey: string): void => {
+    clearPRCommentsListSelection(reviewContextKey)
+    commentsSelectionClearTokenRef.current += 1
+    setCommentsSelectionClearRequest({
+      contextKey: reviewContextKey,
+      token: commentsSelectionClearTokenRef.current
+    })
+  }, [])
+
   const refreshCommentsAfterBulkResolve = useCallback(
     async (provider: ChecksPanelReview['provider']): Promise<void> => {
       if (provider === 'gitlab') {
@@ -2802,9 +2818,14 @@ export default function ChecksPanel(): React.JSX.Element {
 
   const resolveSelectedThreadsAfterLaunch = useCallback(
     async (resolution: NonNullable<ChecksAgentComposerState['commentResolution']>) => {
+      clearSentCommentSelection(resolution.reviewContextKey)
       let resolved = 0
-      let skipped = 0
+      let skipped = Math.max(
+        0,
+        resolution.selectedGroups.length - resolution.selectedThreadIds.length
+      )
       let failed = 0
+      let attemptedThreadCount = 0
       if (resolution.selectedThreadIds.length === 0) {
         toast.success(
           translate(
@@ -2816,9 +2837,10 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       for (const threadId of resolution.selectedThreadIds) {
         if (asyncResultKeyRef.current !== resolution.reviewContextKey) {
-          skipped += resolution.selectedThreadIds.length - resolved - skipped - failed
+          skipped += resolution.selectedThreadIds.length - attemptedThreadCount
           break
         }
+        attemptedThreadCount += 1
         const currentGroup = groupPRComments(commentsRef.current).find(
           (group) => group.kind === 'thread' && group.threadId === threadId
         )
@@ -2856,7 +2878,7 @@ export default function ChecksPanel(): React.JSX.Element {
         )
       )
     },
-    [handleResolve, refreshCommentsAfterBulkResolve]
+    [clearSentCommentSelection, handleResolve, refreshCommentsAfterBulkResolve]
   )
 
   const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
@@ -3780,6 +3802,7 @@ export default function ChecksPanel(): React.JSX.Element {
         commentsDisabled={!canTargetPRComments}
         commentsDisabledReason={commentsDisabledReason}
         selectionContextKey={stateRequestKey}
+        selectionClearRequest={commentsSelectionClearRequest}
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
         onAddComment={pr ? handleAddPRComment : undefined}

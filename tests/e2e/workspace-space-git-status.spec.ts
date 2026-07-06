@@ -3,13 +3,19 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
+import { loadWorktreesUntilPathsPresent } from './helpers/worktree-registration'
 
 test.describe('Workspace Space git status checks', () => {
   test('checks every scanned deletable row, including rows after the first 50', async ({
     orcaPage,
     testRepoPath
   }) => {
-    const worktreeParent = mkdtempSync(path.join(os.tmpdir(), 'orca-space-git-status-'))
+    // Why: on symlinked tmpdirs (/var→/private/var on macOS, /tmp→… on CI) Orca
+    // registers worktrees under their realpath, so the parent must be canonical
+    // before `git worktree add` or the recorded paths won't match and rows drop.
+    const worktreeParent = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), 'orca-space-git-status-'))
+    )
     const worktreePaths = Array.from({ length: 60 }, (_, index) =>
       path.join(worktreeParent, `worktree-${index}`)
     )
@@ -25,6 +31,22 @@ test.describe('Workspace Space git status checks', () => {
         realpathSync(worktreePath)
       )
 
+      const repoId = await orcaPage.evaluate((testRepoPath) => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('Expected e2e store to be exposed')
+        }
+        const repo = store.getState().repos.find((item) => item.path === testRepoPath)
+        if (!repo) {
+          throw new Error('Expected test repo to be loaded')
+        }
+        return repo.id
+      }, testRepoPath)
+
+      // Why: the 60 worktrees were added via raw git, so poll past the 5s scan
+      // cache TTL until every path registers before deriving the space rows.
+      await loadWorktreesUntilPathsPresent(orcaPage, repoId, registeredWorktreePaths)
+
       await orcaPage.evaluate(
         async ({ testRepoPath, worktreePaths }) => {
           const store = window.__store
@@ -37,7 +59,6 @@ test.describe('Workspace Space git status checks', () => {
           if (!repo) {
             throw new Error('Expected test repo to be loaded')
           }
-          await initialState.fetchWorktrees(repo.id)
           await window.api.git.status({ worktreePath: worktreePaths[0] })
 
           const state = store.getState()

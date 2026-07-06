@@ -63,6 +63,7 @@ import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
@@ -973,8 +974,7 @@ function Terminal(): React.JSX.Element | null {
         return
       }
       createBrowserTab(activeWorktreeId, source.url, {
-        title: source.title,
-        sessionProfileId: source.sessionProfileId
+        ...buildDuplicatedBrowserTabOptions(source)
       })
     },
     [activeWorktreeId, createBrowserTab]
@@ -1886,7 +1886,7 @@ function Terminal(): React.JSX.Element | null {
                           key={`${tab.id}-${tab.generation ?? 0}`}
                           tabId={tab.id}
                           worktreeId={workspace.id}
-                          cwd={workspace.path}
+                          cwd={tab.startupCwd ?? workspace.path}
                           isActive={isActiveTerminalTab || activityTerminalPortal?.active === true}
                           // Why: the activity page hosts this existing pane via
                           // portal while the workspace surface remains hidden.

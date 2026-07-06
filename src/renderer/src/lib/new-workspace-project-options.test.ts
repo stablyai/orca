@@ -108,6 +108,257 @@ describe('buildNewWorkspaceProjectOptions', () => {
     expect(options.map((option) => option.id)).toEqual(['github:stablyai/orca'])
   })
 
+  it('shows configured directories when project names are duplicated', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        project({
+          id: 'project:merchant-a',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        }),
+        project({
+          id: 'project:merchant-b',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'merchant-a-setup',
+          projectId: 'project:merchant-a',
+          repoId: 'merchant-a-repo',
+          path: '/workspace/storefront/merchant'
+        }),
+        setup({
+          id: 'merchant-b-setup',
+          projectId: 'project:merchant-b',
+          repoId: 'merchant-b-repo',
+          path: '/workspace/admin/merchant'
+        })
+      ],
+      eligibleRepos: [repo('merchant-a-repo'), repo('merchant-b-repo')]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({
+        id: 'project:merchant-b',
+        detail: '/workspace/admin/merchant'
+      }),
+      expect.objectContaining({
+        id: 'project:merchant-a',
+        detail: '/workspace/storefront/merchant'
+      })
+    ])
+  })
+
+  it('keeps provider details when duplicate project names are already distinguishable', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        project({
+          id: 'github:acme/merchant',
+          displayName: 'merchant',
+          providerIdentity: { provider: 'github', owner: 'acme', repo: 'merchant' }
+        }),
+        project({
+          id: 'github:contoso/merchant',
+          displayName: 'merchant',
+          providerIdentity: { provider: 'github', owner: 'contoso', repo: 'merchant' }
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'acme-setup',
+          projectId: 'github:acme/merchant',
+          repoId: 'acme-repo',
+          path: '/workspace/acme/merchant'
+        }),
+        setup({
+          id: 'contoso-setup',
+          projectId: 'github:contoso/merchant',
+          repoId: 'contoso-repo',
+          path: '/workspace/contoso/merchant'
+        })
+      ],
+      eligibleRepos: [repo('acme-repo'), repo('contoso-repo')]
+    })
+
+    expect(options.map((option) => option.detail).sort()).toEqual([
+      'acme/merchant',
+      'contoso/merchant'
+    ])
+  })
+
+  it('shows directory details for non-provider duplicates with different setup counts', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        project({
+          id: 'project:merchant-single',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        }),
+        project({
+          id: 'project:merchant-multi',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'merchant-single-setup',
+          projectId: 'project:merchant-single',
+          repoId: 'merchant-single-repo',
+          path: '/workspace/single/merchant'
+        }),
+        setup({
+          id: 'merchant-multi-local-setup',
+          projectId: 'project:merchant-multi',
+          repoId: 'merchant-multi-local-repo',
+          path: '/workspace/multi/local/merchant'
+        }),
+        setup({
+          id: 'merchant-multi-remote-setup',
+          projectId: 'project:merchant-multi',
+          hostId: 'ssh:builder',
+          repoId: 'merchant-multi-remote-repo',
+          path: '/workspace/multi/remote/merchant'
+        })
+      ],
+      eligibleRepos: [
+        repo('merchant-single-repo'),
+        repo('merchant-multi-local-repo'),
+        repo('merchant-multi-remote-repo')
+      ]
+    })
+
+    expect(options.map((option) => option.detail).sort()).toEqual([
+      '/workspace/multi/local/merchant (+1 more)',
+      '/workspace/single/merchant'
+    ])
+  })
+
+  it('keeps provider details while disambiguating non-provider duplicate names', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        project({
+          id: 'github:acme/merchant',
+          displayName: 'merchant',
+          providerIdentity: { provider: 'github', owner: 'acme', repo: 'merchant' }
+        }),
+        project({
+          id: 'project:merchant-local',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'acme-setup',
+          projectId: 'github:acme/merchant',
+          repoId: 'acme-repo',
+          path: '/workspace/acme/merchant'
+        }),
+        setup({
+          id: 'merchant-local-setup',
+          projectId: 'project:merchant-local',
+          repoId: 'merchant-local-repo',
+          path: '/workspace/local/merchant'
+        })
+      ],
+      eligibleRepos: [repo('acme-repo'), repo('merchant-local-repo')]
+    })
+
+    expect(options.map((option) => option.detail).sort()).toEqual([
+      '/workspace/local/merchant',
+      'acme/merchant'
+    ])
+  })
+
+  it('adds host labels when duplicate project directory details collide', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        project({
+          id: 'project:merchant-local',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        }),
+        project({
+          id: 'project:merchant-remote',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'merchant-local-setup',
+          projectId: 'project:merchant-local',
+          hostId: 'local',
+          repoId: 'merchant-local-repo',
+          path: '/workspace/merchant'
+        }),
+        setup({
+          id: 'merchant-remote-setup',
+          projectId: 'project:merchant-remote',
+          hostId: 'ssh:builder',
+          repoId: 'merchant-remote-repo',
+          path: '/workspace/merchant'
+        })
+      ],
+      eligibleRepos: [repo('merchant-local-repo'), repo('merchant-remote-repo')],
+      hosts: [
+        { id: 'local', label: 'Local Mac' },
+        { id: 'ssh:builder', label: 'Builder' }
+      ]
+    })
+
+    expect(options.map((option) => option.detail).sort()).toEqual([
+      'Builder · /workspace/merchant',
+      'Local Mac · /workspace/merchant'
+    ])
+  })
+
+  it('adds host ids when duplicate project host labels still collide', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [
+        project({
+          id: 'project:merchant-builder-a',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        }),
+        project({
+          id: 'project:merchant-builder-b',
+          displayName: 'merchant',
+          providerIdentity: undefined
+        })
+      ],
+      projectHostSetups: [
+        setup({
+          id: 'merchant-builder-a-setup',
+          projectId: 'project:merchant-builder-a',
+          hostId: 'ssh:builder-a',
+          repoId: 'merchant-builder-a-repo',
+          path: '/workspace/merchant'
+        }),
+        setup({
+          id: 'merchant-builder-b-setup',
+          projectId: 'project:merchant-builder-b',
+          hostId: 'ssh:builder-b',
+          repoId: 'merchant-builder-b-repo',
+          path: '/workspace/merchant'
+        })
+      ],
+      eligibleRepos: [repo('merchant-builder-a-repo'), repo('merchant-builder-b-repo')],
+      hosts: [
+        { id: 'ssh:builder-a', label: 'Builder' },
+        { id: 'ssh:builder-b', label: 'Builder' }
+      ]
+    })
+
+    expect(options.map((option) => option.detail).sort()).toEqual([
+      'Builder (ssh:builder-a) · /workspace/merchant',
+      'Builder (ssh:builder-b) · /workspace/merchant'
+    ])
+  })
+
   it('filters project options by display name and detail', () => {
     const options: NewWorkspaceProjectOption[] = [
       {

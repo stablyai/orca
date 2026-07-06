@@ -133,7 +133,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     worktreeCardProperties = ['status']
   })
 
-  it('opens the reconnect dialog for an active disconnected SSH worktree during render', () => {
+  it('does not auto-open the blocking reconnect dialog for a restored active disconnected SSH worktree', () => {
     sshConnectionStates.set('ssh-target-1', { status: 'disconnected' })
     sshTargetLabels.set('ssh-target-1', 'Remote target')
 
@@ -141,9 +141,11 @@ describe('WorktreeCard SSH reconnect prompt', () => {
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={true} />
     )
 
-    expect(markup).toContain('data-ssh-disconnected-dialog="open"')
-    expect(markup).toContain('data-ssh-status="disconnected"')
-    expect(markup).toContain('data-ssh-target-label="Remote target"')
+    // The dialog is blocking, so being the active/restored card must not steal
+    // focus app-wide; it only opens on deliberate click (see handleClick).
+    expect(markup).toContain('data-ssh-disconnected-dialog="closed"')
+    // The disconnected state is still discoverable via the non-blocking card chip.
+    expect(markup).toContain('SSH disconnected')
   })
 
   it('marks a runtime-host worktree disconnected when its environment has no status', () => {

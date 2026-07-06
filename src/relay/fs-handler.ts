@@ -21,10 +21,18 @@ import { isQuickOpenReaddirBudgetError } from '../shared/quick-open-readdir-walk
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
+import {
+  readVerifiedTerminalArtifact,
+  writeVerifiedTerminalArtifact
+} from './fs-handler-terminal-artifact'
 import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
+import {
+  WATCHER_IGNORE_DIRS,
+  buildParcelWatcherIgnoreOption
+} from '../main/ipc/filesystem-watcher-ignore'
 
 type WatchState = {
   rootPath: string
@@ -59,7 +67,15 @@ function fileStatFromLstat(stats: Awaited<ReturnType<typeof lstat>>) {
   } else if (stats.isSymbolicLink()) {
     type = 'symlink'
   }
-  return { size: stats.size, type, mtime: stats.mtimeMs }
+  return {
+    size: stats.size,
+    type,
+    mtime: stats.mtimeMs,
+    mtimeMs: stats.mtimeMs,
+    dev: stats.dev,
+    ino: stats.ino,
+    nlink: stats.nlink
+  }
 }
 
 export class FsHandler {
@@ -77,8 +93,10 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.readDir', (p) => this.readDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
+    this.dispatcher.onRequest('fs.readTerminalArtifact', (p) => this.readTerminalArtifact(p))
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => this.writeFile(p))
+    this.dispatcher.onRequest('fs.writeTerminalArtifact', (p) => this.writeTerminalArtifact(p))
     this.dispatcher.onRequest('fs.stat', (p) => this.stat(p))
     this.dispatcher.onRequest('fs.lstat', (p) => this.lstat(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
@@ -120,6 +138,13 @@ export class FsHandler {
     return readRelayFileContent(filePath)
   }
 
+  private async readTerminalArtifact(params: Record<string, unknown>) {
+    return readVerifiedTerminalArtifact({
+      ...params,
+      filePath: expandTilde(params.filePath as string)
+    })
+  }
+
   private async readFileStream(params: Record<string, unknown>, context?: RequestContext) {
     const filePath = expandTilde(params.filePath as string)
     const ctx = context ?? { clientId: 0, isStale: () => false }
@@ -153,6 +178,13 @@ export class FsHandler {
     await writeFile(filePath, content, 'utf-8')
   }
 
+  private async writeTerminalArtifact(params: Record<string, unknown>) {
+    return writeVerifiedTerminalArtifact({
+      ...params,
+      filePath: expandTilde(params.filePath as string)
+    })
+  }
+
   private async stat(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
     const stats = await lstat(filePath)
@@ -164,7 +196,11 @@ export class FsHandler {
         return {
           size: targetStats.size,
           type: targetStats.isDirectory() ? 'directory' : 'file',
-          mtime: targetStats.mtimeMs
+          mtime: targetStats.mtimeMs,
+          mtimeMs: targetStats.mtimeMs,
+          dev: targetStats.dev,
+          ino: targetStats.ino,
+          nlink: targetStats.nlink
         }
       } catch {
         return { size: stats.size, type: 'symlink', mtime: stats.mtimeMs }
@@ -376,7 +412,9 @@ export class FsHandler {
           }))
           this.dispatcher.notify('fs.changed', { events: mapped })
         },
-        { ignore: ['.git', 'node_modules', 'dist', 'build', '.next', '.cache', '__pycache__'] }
+        // Why: align remote-Linux watchers with the shared nested-glob exclusion
+        // so nested node_modules/.git don't exhaust inotify on large codebases.
+        { ignore: buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS) }
       )
       watchState.unwatchFn = () => {
         void subscription.unsubscribe()

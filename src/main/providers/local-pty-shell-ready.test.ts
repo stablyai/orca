@@ -165,6 +165,61 @@ describe('writeStartupCommandWhenShellReady', () => {
     await Promise.resolve()
     expect(proc._writes).toEqual(['codex\n'])
   })
+
+  // Why: regression for the multiline agent-prompt bug. A startup command with
+  // embedded newlines must be wrapped in bracketed paste (ESC[200~ … ESC[201~)
+  // followed by a single submit byte, so bash readline / zsh zle insert the
+  // whole prompt literally instead of reading each LF as Enter and mangling it
+  // into PS2 continuation.
+  it('wraps a multiline startup command in bracketed paste when the shell supports it', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    const command = "claude '--dangerously-skip-permissions' 'line one\nline two'"
+    writeStartupCommandWhenShellReady(ready, proc, command, () => {}, {
+      bracketedPasteSafe: true
+    })
+
+    await ready
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~\n`])
+  })
+
+  it('leaves a single-line command on the raw submit path even when bracketed paste is safe', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {}, {
+      bracketedPasteSafe: true
+    })
+
+    await ready
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual(['claude\n'])
+  })
+
+  it('does not bracket-wrap a multiline command when the shell lacks bracketed paste', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    const command = 'echo one\necho two'
+    // Default options: bracketedPasteSafe is false, so the raw path is kept to
+    // avoid echoing the ESC[200~ markers on shells without bracketed paste.
+    writeStartupCommandWhenShellReady(ready, proc, command, () => {})
+
+    await ready
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual([`${command}\n`])
+  })
 })
 
 describe('scanForShellReady', () => {

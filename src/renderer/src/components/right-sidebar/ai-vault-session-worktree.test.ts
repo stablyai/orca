@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { Worktree } from '../../../../shared/types'
+import type { Repo, Worktree } from '../../../../shared/types'
 import {
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeJumpTooltip,
@@ -10,11 +10,13 @@ import {
   resolveAiVaultSessionWorktreeDisplay,
   resolveAiVaultSessionWorktreeInfo,
   shouldShowAiVaultWorktreeStatusBadge,
+  shouldShowAiVaultSessionWorktreeLine,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
 
 const baseSession: AiVaultSession = {
   id: 'codex:session-1',
+  executionHostId: 'local',
   agent: 'codex',
   sessionId: 'session-1',
   title: 'Find the pane',
@@ -53,6 +55,19 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     isMainWorktree: false
   }
   return { ...worktree, ...overrides }
+}
+
+function makeRepo(overrides: Partial<Repo> = {}): Repo {
+  return {
+    id: 'repo-1',
+    path: '/repo/orca',
+    displayName: 'orca',
+    badgeColor: '#737373',
+    addedAt: 1,
+    connectionId: null,
+    executionHostId: 'local',
+    ...overrides
+  }
 }
 
 describe('resolveAiVaultSessionWorktreeInfo', () => {
@@ -135,6 +150,55 @@ describe('resolveAiVaultSessionWorktreeInfo', () => {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca'
     })
   })
+
+  it('uses the session host when multiple worktrees share the same path', () => {
+    const localWorktree = makeWorktree({
+      id: 'repo-local::/srv/orca',
+      repoId: 'repo-local',
+      displayName: 'local',
+      path: '/srv/orca',
+      hostId: 'local'
+    })
+    const sshWorktree = makeWorktree({
+      id: 'repo-ssh::/srv/orca',
+      repoId: 'repo-ssh',
+      displayName: 'ssh',
+      path: '/srv/orca',
+      hostId: 'ssh:target-1'
+    })
+
+    expect(
+      resolveAiVaultSessionWorktreeInfo({
+        session: { ...baseSession, cwd: '/srv/orca/src', executionHostId: 'ssh:target-1' },
+        worktrees: [localWorktree, sshWorktree],
+        activeWorktreeId: null
+      })
+    ).toMatchObject({
+      label: 'ssh',
+      worktreeId: sshWorktree.id
+    })
+  })
+
+  it('uses repo host ownership when a legacy worktree lacks host metadata', () => {
+    const worktree = makeWorktree({
+      id: 'repo-ssh::/srv/orca',
+      repoId: 'repo-ssh',
+      displayName: 'ssh',
+      path: '/srv/orca'
+    })
+
+    expect(
+      resolveAiVaultSessionWorktreeInfo({
+        session: { ...baseSession, cwd: '/srv/orca/src', executionHostId: 'ssh:target-1' },
+        repos: [makeRepo({ id: 'repo-ssh', connectionId: 'target-1', executionHostId: null })],
+        worktrees: [worktree],
+        activeWorktreeId: null
+      })
+    ).toMatchObject({
+      label: 'ssh',
+      worktreeId: worktree.id
+    })
+  })
 })
 
 describe('canJumpToAiVaultSessionWorktree', () => {
@@ -206,12 +270,33 @@ describe('aiVaultWorktreeCompactPath', () => {
   })
 })
 
+describe('shouldShowAiVaultSessionWorktreeLine', () => {
+  it('hides the worktree row for the current worktree in workspace scope', () => {
+    expect(
+      shouldShowAiVaultSessionWorktreeLine(makeWorktreeInfo('current'), { vaultScope: 'workspace' })
+    ).toBe(false)
+    expect(
+      shouldShowAiVaultSessionWorktreeLine(makeWorktreeInfo('current'), { vaultScope: 'all' })
+    ).toBe(true)
+    expect(
+      shouldShowAiVaultSessionWorktreeLine(makeWorktreeInfo('active'), { vaultScope: 'workspace' })
+    ).toBe(true)
+    expect(shouldShowAiVaultSessionWorktreeLine(null, { vaultScope: 'workspace' })).toBe(false)
+  })
+})
+
 describe('shouldShowAiVaultWorktreeStatusBadge', () => {
   it('hides the generic active badge but keeps meaningful states', () => {
     expect(shouldShowAiVaultWorktreeStatusBadge('active')).toBe(false)
     expect(shouldShowAiVaultWorktreeStatusBadge('current')).toBe(true)
     expect(shouldShowAiVaultWorktreeStatusBadge('archived')).toBe(true)
     expect(shouldShowAiVaultWorktreeStatusBadge('unavailable')).toBe(true)
+  })
+
+  it('hides the current badge in workspace scope', () => {
+    expect(shouldShowAiVaultWorktreeStatusBadge('current', { vaultScope: 'workspace' })).toBe(false)
+    expect(shouldShowAiVaultWorktreeStatusBadge('current', { vaultScope: 'all' })).toBe(true)
+    expect(shouldShowAiVaultWorktreeStatusBadge('archived', { vaultScope: 'workspace' })).toBe(true)
   })
 })
 

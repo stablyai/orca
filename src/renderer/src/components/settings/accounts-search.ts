@@ -171,10 +171,31 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsMiniMaxSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.733f9e2a93', 'MiniMax Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.f8374c3151',
+      'Paste your platform.minimax.io session cookie for local rate-limit fetching.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.d16378a88f', 'minimax'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.61f7d1fcbe', 'cookie'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.9c4e40cf6b', 'session'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
-  ...getAccountsOpencodeSearchEntries()
+  ...getAccountsOpencodeSearchEntries(),
+  ...getAccountsMiniMaxSearchEntries()
 ])

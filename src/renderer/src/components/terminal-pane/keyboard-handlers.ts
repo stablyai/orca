@@ -22,6 +22,7 @@ import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { isLocalWindowsConptyPaneForCtrlArrow } from './terminal-ctrl-arrow-conpty'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
@@ -137,6 +138,7 @@ export function matchFileSearchShortcut(
 
 type KeyboardHandlersDeps = {
   tabId: string
+  worktreeId: string
   isActive: boolean
   keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
@@ -170,6 +172,7 @@ type KeyboardHandlersDeps = {
  */
 export function useTerminalKeyboardShortcuts({
   tabId,
+  worktreeId,
   isActive,
   keyboardScopeRef,
   managerRef,
@@ -268,13 +271,36 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      // Why: the active pane's live PTY session decides whether Ctrl+Arrow should
+      // pass through as native \e[1;5C/\e[1;5D or be translated to \eb/\ef.
+      // Resolved lazily so session/runtime lookups stay off other keystrokes.
+      const isLocalWindowsConptyPane = (): boolean => {
+        const activePane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!activePane) {
+          return false
+        }
+        const storeState = useAppStore.getState()
+        return isLocalWindowsConptyPaneForCtrlArrow({
+          isWindows,
+          userAgent: navigator.userAgent,
+          state: storeState,
+          worktreeId,
+          tabId,
+          paneId: activePane.id,
+          paneCwd: paneCwdRef.current,
+          fallbackCwd,
+          transport: paneTransportsRef.current.get(activePane.id) ?? null
+        })
+      }
+
       const action = resolveTerminalShortcutAction(
         e,
         isMac,
         macOptionAsAltRef.current,
         optionKeyLocation,
         isWindows,
-        keybindings
+        keybindings,
+        isLocalWindowsConptyPane
       )
       if (!action) {
         return
@@ -513,7 +539,8 @@ export function useTerminalKeyboardShortcuts({
     macOptionAsAltRef,
     keybindings,
     terminalShortcutPolicy,
-    tabId
+    tabId,
+    worktreeId
   ])
 }
 

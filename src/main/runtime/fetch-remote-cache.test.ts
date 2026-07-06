@@ -36,6 +36,12 @@ function exactBaseRefreshOptions(cwd: string): {
   return { cwd, timeout: 60_000, useConfiguredSshCommandForNetwork: true }
 }
 
+// Why (STA-1292): the broad create-path fetch must carry a timeout so a Windows
+// credential-manager GUI hang can't wedge worktree creation forever.
+function fullRemoteFetchOptions(cwd: string): { cwd: string; timeout: number } {
+  return { cwd, timeout: 60_000 }
+}
+
 function mockFetchResults(results: (Promise<unknown> | unknown)[]): void {
   let fetchIndex = 0
   gitExecFileAsyncMock.mockImplementation((argv: string[]) => {
@@ -299,7 +305,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
         ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
         exactBaseRefreshOptions('/repo/h')
       ],
-      [['fetch', 'origin'], { cwd: '/repo/h' }]
+      [['fetch', 'origin'], fullRemoteFetchOptions('/repo/h')]
     ])
   })
 
@@ -341,7 +347,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       ([argv]) => Array.isArray(argv) && argv[0] === 'fetch'
     )
     expect(fetchCalls).toEqual([
-      [['fetch', 'origin'], { cwd: '/repo/i' }],
+      [['fetch', 'origin'], fullRemoteFetchOptions('/repo/i')],
       [
         ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
         exactBaseRefreshOptions('/repo/i')
@@ -387,7 +393,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       ([argv]) => Array.isArray(argv) && argv[0] === 'fetch'
     )
     expect(fetchCalls).toEqual([
-      [['fetch', 'origin'], { cwd: '/repo/i-fail' }],
+      [['fetch', 'origin'], fullRemoteFetchOptions('/repo/i-fail')],
       [
         ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
         exactBaseRefreshOptions('/repo/i-fail')

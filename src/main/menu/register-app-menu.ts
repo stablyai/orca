@@ -5,6 +5,7 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../shared/keybindings'
+import type { UpdateCheckOptions } from '../../shared/types'
 import { translateMain } from '../i18n/main-i18n'
 
 export type AppearanceMenuState = {
@@ -26,7 +27,7 @@ type RegisterAppMenuOptions = {
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
-  onCheckForUpdates: (options: { includePrerelease: boolean }) => void
+  onCheckForUpdates: (options: UpdateCheckOptions) => void
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   onZoomIn: () => void
   onZoomOut: () => void
@@ -83,16 +84,19 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     webContents.reload()
   }
 
-  // Why: holding Shift while clicking Check for Updates opts this check into
-  // the release-candidate channel. Extracted so both the macOS app-menu entry
-  // and the Windows/Linux Help-menu entry share the exact same behavior.
+  // Why: modifier-click update checks are hidden power-user affordances.
+  // Extracted so the macOS app-menu entry and Windows/Linux Help entry share
+  // identical RC/perf channel routing.
   const checkForUpdatesClick: Electron.MenuItemConstructorOptions['click'] = (
     _menuItem,
     _window,
     event
   ) => {
-    const includePrerelease = !event.triggeredByAccelerator && event.shiftKey === true
-    onCheckForUpdates({ includePrerelease })
+    const modifierClick = !event.triggeredByAccelerator
+    const includePerfPrerelease =
+      modifierClick && (isMac ? event.metaKey === true : event.ctrlKey === true)
+    const includePrerelease = modifierClick && event.shiftKey === true
+    onCheckForUpdates({ includePrerelease, includePerfPrerelease })
   }
 
   const checkForUpdatesItem: Electron.MenuItemConstructorOptions = {

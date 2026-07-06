@@ -6,7 +6,9 @@ import {
   type NativeChatSession,
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat-types'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
 import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
+import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
 
 /** Messages grouped by source. Higher-priority sources (transcript > hook >
  *  scrape) supersede lower ones when they describe the same turn. */
@@ -84,10 +86,29 @@ function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): 
   return candidateRank > existingRank
 }
 
+// Why: the tail bubbles form fixed tiers that timestamps alone can't express.
+// The streaming preview (null timestamp) must follow real content but sit ahead
+// of the optimistic composer echoes, which carry finite `sentAt` timestamps that
+// would otherwise sort past it. Rank first, then timestamp within a tier.
+function messageSortRank(message: NativeChatMessage): number {
+  if (message.id === NATIVE_CHAT_STREAMING_ID) {
+    return 1
+  }
+  if (isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
+    return 2
+  }
+  return 0
+}
+
 // Why: null timestamps (sources that can't supply one, e.g. scrape segments)
-// sort before any real timestamp so they don't jump to the end. Ties break on
-// id for a stable, deterministic order.
+// sort before any real timestamp within their tier so they don't jump to the
+// end. Ties break on id for a stable, deterministic order.
 export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): number {
+  const ar = messageSortRank(a)
+  const br = messageSortRank(b)
+  if (ar !== br) {
+    return ar - br
+  }
   const at = a.timestamp ?? Number.NEGATIVE_INFINITY
   const bt = b.timestamp ?? Number.NEGATIVE_INFINITY
   if (at !== bt) {

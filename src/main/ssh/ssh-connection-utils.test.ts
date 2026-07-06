@@ -326,6 +326,8 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
     forwardAgent: false,
     identitiesOnly: false,
     proxyUseFdpass: false,
+    controlMaster: 'no',
+    controlPersist: 'no',
     ...overrides
   }
 }

@@ -91,6 +91,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import {
+  WORKTREE_REFRESH_CONCURRENCY,
   createWorktreeSlice,
   getHostedReviewLinkMutationGenerationForTests,
   getHostedReviewLinkWorktreeAliasCountForTests,
@@ -5648,7 +5649,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
   it('bounds concurrent repo scans during hydration-time refresh', async () => {
     const store = createTestStore()
-    const repos = Array.from({ length: 7 }, (_, index) => ({
+    const repos = Array.from({ length: WORKTREE_REFRESH_CONCURRENCY + 2 }, (_, index) => ({
       id: `repo-${index}`,
       path: `/repos/${index}`,
       displayName: `repo-${index}`,
@@ -5670,14 +5671,14 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
     await store.getState().fetchAllWorktrees()
 
-    expect(maxActiveScans).toBeLessThanOrEqual(5)
+    expect(maxActiveScans).toBeLessThanOrEqual(WORKTREE_REFRESH_CONCURRENCY)
     expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   })
 
   it('bounds concurrent repo scans after the hydration purge has run', async () => {
     const store = createTestStore()
-    const repos = Array.from({ length: 7 }, (_, index) => ({
+    const repos = Array.from({ length: WORKTREE_REFRESH_CONCURRENCY + 2 }, (_, index) => ({
       id: `repo-${index}`,
       path: `/repos/${index}`,
       displayName: `repo-${index}`,
@@ -5702,7 +5703,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
     await store.getState().fetchAllWorktrees()
 
-    expect(maxActiveScans).toBeLessThanOrEqual(5)
+    expect(maxActiveScans).toBeLessThanOrEqual(WORKTREE_REFRESH_CONCURRENCY)
     expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   })

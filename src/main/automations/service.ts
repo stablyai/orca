@@ -69,7 +69,9 @@ export class AutomationService {
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
     }, this.tickMs)
-    if (this.rendererReady) {
+    // Why: headless serve never gets a renderer-ready IPC, but due runs still
+    // need the same startup catch-up pass desktop gets after renderer attach.
+    if (this.rendererReady || this.headlessDispatcher) {
       void this.evaluateDueRuns()
     }
   }

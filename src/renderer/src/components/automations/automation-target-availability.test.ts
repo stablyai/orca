@@ -140,6 +140,72 @@ describe('automation target availability', () => {
     ).toBe('host-mismatch')
   })
 
+  it('allows a run context whose derived projectId tier drifted but repo/host/path still match', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            // Snapshotted at the repo: tier before the setup climbed to github:.
+            projectId: 'repo:repo-1',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ projectId: 'github:o/r' })],
+        sshConnectionStates: new Map()
+      })
+    ).toEqual({ canRunNow: true, reason: 'available', message: null })
+  })
+
+  it('still blocks a run context whose repoId no longer matches despite projectId drift', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'repo:repo-2',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-2',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ projectId: 'github:o/r', repoId: 'repo-2' })],
+        sshConnectionStates: new Map()
+      }).reason
+    ).toBe('host-mismatch')
+  })
+
+  it('still blocks when the setup repoId drifts even though the live repo still matches', () => {
+    // Live repo matches runContext.repoId (repoMatchesContext passes), so this
+    // isolates the setup-side repoId clause that survives the projectId removal.
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'repo:repo-1',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [makeProjectHostSetup({ projectId: 'github:o/r', repoId: 'repo-2' })],
+        sshConnectionStates: new Map()
+      }).reason
+    ).toBe('host-mismatch')
+  })
+
   it('allows remote-listed SSH automations whose repo is projected through a runtime server', () => {
     expect(
       getAutomationTargetAvailability({

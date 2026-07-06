@@ -71,9 +71,14 @@ function makeStore(repoPath: string) {
     badgeColor: '#000',
     addedAt: 0
   }
+  let activeRuntimeEnvironmentId: string | null = null
   return {
     getRepo: vi.fn((repoId: string) => (repoId === 'repo-1' ? repo : null)),
-    getRepos: vi.fn(() => [repo])
+    getRepos: vi.fn(() => [repo]),
+    getSettings: vi.fn(() => ({ activeRuntimeEnvironmentId })),
+    updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
+      activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
+    })
   }
 }
 
@@ -129,7 +134,8 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
 
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    const store = makeStore(repoPath)
+    registerEphemeralVmHandlers(store as never)
     const result = await handlers.get('ephemeralVm:listRecipes')?.(null, {
       repoId: 'repo-1'
     } as never)
@@ -163,7 +169,8 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
 
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    const store = makeStore(repoPath)
+    registerEphemeralVmHandlers(store as never)
     const result = await handlers.get('ephemeralVm:listRecipeCatalog')?.(null, undefined as never)
 
     expect(result).toEqual([
@@ -212,7 +219,8 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
 
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    const store = makeStore(repoPath)
+    registerEphemeralVmHandlers(store as never)
     const result = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox',
@@ -252,6 +260,17 @@ describe('registerEphemeralVmHandlers', () => {
         id: result.runtime?.id,
         workspaceId: 'repo-1::/workspace/repo/worktree'
       })
+    )
+
+    store.updateSettings({ activeRuntimeEnvironmentId: result.environment!.id })
+    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: result.runtime?.id
+    } as never)
+    expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
+    expect(listEnvironments(userDataPath)).toEqual([])
+    expect(store.updateSettings).toHaveBeenLastCalledWith(
+      { activeRuntimeEnvironmentId: null },
+      { notifyListeners: true }
     )
   })
 

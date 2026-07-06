@@ -77,6 +77,110 @@ describe('mapGhosttyToOrca — window-padding', () => {
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['window-padding-x'])
   })
+
+  it('averages a dual-value window-padding-y', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-y': '10,8' })
+    expect(result.diff).toEqual({ terminalPaddingY: 9 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('averages a dual-value window-padding-x with surrounding whitespace', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-x': '16, 12' })
+    expect(result.diff).toEqual({ terminalPaddingX: 14 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('preserves odd-sum dual-value padding as a fractional average', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-x': '1,2' })
+    expect(result.diff).toEqual({ terminalPaddingX: 1.5 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rejects a dual-value padding with an invalid half', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-y': '10,wide' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['window-padding-y'])
+  })
+
+  it('rejects a dual-value padding with an out-of-range half', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-y': '10,600' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['window-padding-y'])
+  })
+
+  it('rejects paddings with more than two values', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-y': '10,8,6' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['window-padding-y'])
+  })
+})
+
+describe('mapGhosttyToOrca — adjust-cell-height', () => {
+  it('maps a percentage to terminalLineHeight', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '35%' })
+    expect(result.diff).toEqual({ terminalLineHeight: 1.35 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rounds the mapped line height to two decimals', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '33%' })
+    expect(result.diff).toEqual({ terminalLineHeight: 1.33 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rounds half-boundary decimal percentages to the nearest hundredth', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '0.5%' })
+    expect(result.diff).toEqual({ terminalLineHeight: 1.01 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rounds higher half-boundary decimal percentages to the nearest hundredth', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '1.5%' })
+    expect(result.diff).toEqual({ terminalLineHeight: 1.02 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rounds high half-boundary decimal percentages without floating-point drift', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '101.5%' })
+    expect(result.diff).toEqual({ terminalLineHeight: 2.02 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('accepts the inclusive 1x line-height floor', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '0%' })
+    expect(result.diff).toEqual({ terminalLineHeight: 1 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('accepts the inclusive 3x line-height ceiling', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '200%' })
+    expect(result.diff).toEqual({ terminalLineHeight: 3 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rejects a pixel value (not convertible to a line-height ratio)', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '2' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['adjust-cell-height'])
+  })
+
+  it('rejects a negative percentage (below the 1x line-height floor)', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '-10%' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['adjust-cell-height'])
+  })
+
+  it('rejects a percentage above the 3x line-height ceiling', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '250%' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['adjust-cell-height'])
+  })
+
+  it('rejects values that only fall inside the ceiling after rounding', () => {
+    const result = mapGhosttyToOrca({ 'adjust-cell-height': '200.4%' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['adjust-cell-height'])
+  })
 })
 
 describe('mapGhosttyToOrca — cursor-text', () => {

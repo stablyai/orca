@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 vi.mock('@/lib/agent-catalog', () => ({
@@ -20,7 +21,9 @@ import {
   formatResetCountdown,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
-  getWindowSections
+  getWindowSections,
+  ProviderIcon,
+  ProviderPanel
 } from './tooltip'
 
 function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
@@ -274,6 +277,29 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('returns a separate Fable section when Claude reports Fable weekly usage', () => {
+    const p: ProviderRateLimits = {
+      provider: 'claude',
+      session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 20, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      fableWeekly: {
+        usedPercent: 42,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    const sections = getWindowSections(p)
+    expect(sections).toEqual([
+      { label: 'Session', window: p.session },
+      { label: 'Weekly', window: p.weekly },
+      { label: 'Fable', window: p.fableWeekly }
+    ])
+  })
+
   it('returns session and weekly for empty buckets array', () => {
     const p: ProviderRateLimits = {
       provider: 'gemini',
@@ -353,5 +379,82 @@ describe('getWindowSections', () => {
     expect(sections[0].label).toBe('Pro')
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')
+  })
+})
+
+describe('ProviderPanel reset rendering', () => {
+  it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
+    const p = provider({
+      status: 'ok',
+      session: null,
+      weekly: null,
+      fableWeekly: {
+        usedPercent: 62,
+        windowMinutes: 10080,
+        resetsAt: Date.now() + (6 * 24 + 17) * 60 * 60_000,
+        resetDescription: 'Jul 10 at 1:00 PM'
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('Fable')
+    expect(markup).toContain('Resets in 6d 17h')
+  })
+
+  it('renders MiniMax session as `100 - usedPercent` left so the value matches the bar', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'minimax',
+      status: 'ok',
+      session: {
+        usedPercent: 35,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 2 * 60 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    // Why: the bar reads "65% 5h"; the tooltip must read "65% left" from the
+    // same source field so the two views stay consistent.
+    expect(markup).toContain('65%')
+    expect(markup).toContain('% left')
+    expect(markup).not.toContain('100% left')
+  })
+
+  it('clamps MiniMax session to 0% left when usedPercent reports 100', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'minimax',
+      status: 'ok',
+      session: {
+        usedPercent: 100,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 2 * 60 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('0% left')
+  })
+})
+
+describe('ProviderIcon', () => {
+  it('renders the official MiniMax icon asset for the minimax provider', () => {
+    // Why: the icon must travel to the status bar / tooltip unchanged so the
+    // user recognises the brand. We pin it to an <img> with a non-empty
+    // resource URL and aria-hidden so the icon stays purely decorative.
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'minimax' }))
+    expect(markup.startsWith('<img')).toBe(true)
+    expect(markup).toContain('aria-hidden="true"')
+    expect(markup).toMatch(/src="[^"]+"/)
   })
 })

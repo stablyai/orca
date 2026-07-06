@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
+import type { PRInfo } from '../../../../shared/types'
+import {
+  getWorktreeCardPrDisplay,
+  isCachedMergedBranchPRCurrentForWorktree
+} from './worktree-card-pr-display'
 
 const pr: HostedReviewInfo = {
   provider: 'github',
@@ -102,5 +106,40 @@ describe('getWorktreeCardPrDisplay', () => {
 
   it('preserves branch-discovered hosted reviews for providers without worktree metadata', () => {
     expect(getWorktreeCardPrDisplay(bitbucketReview, null)).toBe(bitbucketReview)
+  })
+})
+
+describe('isCachedMergedBranchPRCurrentForWorktree', () => {
+  const mergedPR: PRInfo = {
+    number: 55,
+    title: 'Merged PR',
+    state: 'merged',
+    url: 'https://github.com/stablyai/orca/pull/55',
+    checksStatus: 'success',
+    updatedAt: '2026-07-03T00:00:00.000Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'final-head'
+  }
+
+  it('matches when the worktree sits exactly on the merged head', () => {
+    expect(isCachedMergedBranchPRCurrentForWorktree(mergedPR, { head: 'final-head' })).toBe(true)
+  })
+
+  it('matches when the worktree head is a confirmed commit of the merged PR', () => {
+    expect(
+      isCachedMergedBranchPRCurrentForWorktree(
+        { ...mergedPR, confirmedContainedHeadOid: 'behind-head' },
+        { head: 'behind-head' }
+      )
+    ).toBe(true)
+  })
+
+  it('rejects a merged PR when the worktree head is neither the final head nor confirmed', () => {
+    expect(
+      isCachedMergedBranchPRCurrentForWorktree(
+        { ...mergedPR, confirmedContainedHeadOid: 'other-head' },
+        { head: 'reused-branch-head' }
+      )
+    ).toBe(false)
   })
 })

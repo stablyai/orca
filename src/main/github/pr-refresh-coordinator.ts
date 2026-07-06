@@ -34,7 +34,7 @@ type PRRefreshOutcomeObserver = (
 
 type PRBranchLookupCandidate = Pick<
   GitHubPRRefreshCandidate,
-  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource'
+  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'currentHeadOid'
 >
 
 function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
@@ -54,6 +54,9 @@ function hostedReviewOptionArgs(
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
+  }
+  if (typeof candidate.currentHeadOid === 'string' && candidate.currentHeadOid.trim().length > 0) {
+    options.currentHeadOid = candidate.currentHeadOid.trim()
   }
   return Object.keys(options).length > 0 ? [options] : []
 }

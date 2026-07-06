@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
-import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/ai-vault-resume-target'
+import {
+  canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
+  getAiVaultResumeWorkspaceTargetStatus
+} from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
@@ -166,7 +170,9 @@ export default function AiVaultSessionDropLayer({
         return true
       }
 
-      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(useAppStore.getState(), worktreeId)
+      const state = useAppStore.getState()
+      const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
+      const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId)
       if (targetStatus === 'runtime') {
         toast.error(
           translate(
@@ -181,6 +187,22 @@ export default function AiVaultSessionDropLayer({
           translate(
             'auto.components.tab.group.AiVaultSessionDropLayer.openSupportedWorkspace',
             'Open a local or SSH workspace before resuming a session.'
+          )
+        )
+        return true
+      }
+      if (
+        !canResumeAiVaultSessionOnTarget({
+          sessionFilePath: payload.sessionFilePath ?? null,
+          sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
+          targetStatus,
+          targetExecutionHostId
+        })
+      ) {
+        toast.error(
+          translate(
+            'auto.components.tab.group.AiVaultSessionDropLayer.sessionHostMismatchUnsupported',
+            'This session belongs to a different host. Drop it onto a workspace on the same host.'
           )
         )
         return true

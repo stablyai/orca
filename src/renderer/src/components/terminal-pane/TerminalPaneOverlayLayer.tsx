@@ -50,6 +50,7 @@ type TerminalOverlaySlotProps = {
   terminalGeneration: number | undefined
   worktreeId: string
   worktreePath: string
+  startupCwd: string | undefined
   groupId: string | undefined
   isWorktreeActive: boolean
   isVisible: boolean
@@ -66,6 +67,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   terminalGeneration,
   worktreeId,
   worktreePath,
+  startupCwd,
   groupId,
   isWorktreeActive,
   isVisible,
@@ -223,7 +225,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       key={`${terminalTabId}-${terminalGeneration ?? 0}`}
       tabId={terminalTabId}
       worktreeId={worktreeId}
-      cwd={worktreePath}
+      cwd={startupCwd ?? worktreePath}
       isActive={isActive || activityTerminalPortal?.active === true}
       // Why: split-group changes reparent TabGroupPanel subtrees. Keeping the
       // TerminalPane mounted here preserves alt-screen TUI state while this
@@ -365,6 +367,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             terminalGeneration={terminalTab.generation}
             worktreeId={worktreeId}
             worktreePath={worktreePath}
+            startupCwd={terminalTab.startupCwd}
             groupId={assignment?.groupId}
             isWorktreeActive={isWorktreeActive}
             isVisible={isVisible}

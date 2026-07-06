@@ -117,6 +117,103 @@ function failWith(error: string): void {
   })
 }
 
+class TestEvent {
+  type: string
+  bubbles: boolean
+
+  constructor(type: string, init?: { bubbles?: boolean }) {
+    this.type = type
+    this.bubbles = init?.bubbles ?? false
+  }
+}
+
+type FillEvalNode = {
+  tagName: string
+  getAttribute: (name: string) => string | null
+  matches: (selector: string) => boolean
+  querySelector?: (selector: string) => FillEvalNode | null
+  dispatchEvent: (event: TestEvent) => boolean
+  value: string
+}
+
+function matchesFillEvalSelector(node: FillEvalNode, selector: string): boolean {
+  return selector.split(',').some((candidate) => {
+    const trimmed = candidate.trim()
+    if (trimmed === 'textarea') {
+      return node.tagName === 'TEXTAREA'
+    }
+    if (!trimmed.startsWith('input') || node.tagName !== 'INPUT') {
+      return false
+    }
+    const excludedTypes = [...trimmed.matchAll(/:not\(\[type='([^']+)'\]\)/g)].map((match) =>
+      match[1].toLowerCase()
+    )
+    const inputType = node.getAttribute('type')?.toLowerCase() ?? ''
+    return !excludedTypes.includes(inputType)
+  })
+}
+
+function createFillEvalNode(options: {
+  tagName: string
+  role?: string
+  ariaControls?: string
+  descendant?: FillEvalNode | null
+  descendants?: FillEvalNode[]
+  type?: string
+}) {
+  const events: TestEvent[] = []
+  let value = ''
+  const proto = {
+    get value() {
+      return value
+    },
+    set value(next: string) {
+      value = next
+    }
+  }
+  const node = Object.create(proto) as FillEvalNode
+
+  node.tagName = options.tagName
+  node.getAttribute = (name: string) => {
+    if (name === 'role') {
+      return options.role ?? null
+    }
+    if (name === 'aria-controls') {
+      return options.ariaControls ?? null
+    }
+    if (name === 'type') {
+      return options.type ?? null
+    }
+    return null
+  }
+  node.matches = vi.fn((selector: string) => matchesFillEvalSelector(node, selector))
+  const descendants = options.descendants ?? (options.descendant ? [options.descendant] : [])
+  node.querySelector = vi.fn(
+    (selector: string) => descendants.find((descendant) => descendant.matches(selector)) ?? null
+  )
+  node.dispatchEvent = vi.fn((event: TestEvent) => {
+    events.push(event)
+    return true
+  })
+
+  return {
+    node,
+    events,
+    get value() {
+      return value
+    }
+  }
+}
+
+function runFillEvalExpressions(
+  expressions: string[],
+  document: { activeElement: unknown; getElementById: (id: string) => unknown }
+): void {
+  for (const expression of expressions) {
+    new Function('document', 'Event', `return (${expression})`)(document, TestEvent)
+  }
+}
+
 const CDP_DISCOVERY_FAILURE =
   'Auto-launch failed: All CDP discovery methods failed: connect ECONNREFUSED 127.0.0.1:9222; WebSocket connect failed'
 
@@ -1430,6 +1527,155 @@ describe('AgentBrowserBridge', () => {
     const args = evalCall![1] as string[]
     const expression = args[args.indexOf('eval') + 1]
     expect(() => new Function(expression)).not.toThrow()
+  })
+
+  it('routes focused spinbutton wrappers to editable descendants before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      descendant: input.node
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: () => null
+    })
+
+    expect(input.value).toBe('200')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('routes aria-controlled spinbutton wrappers to editable inputs before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      ariaControls: 'target-id'
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: (id: string) => (id === 'target-id' ? input.node : null)
+    })
+
+    expect(input.value).toBe('200')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('routes aria-controlled spinbutton containers to editable descendants before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const controlled = createFillEvalNode({ tagName: 'DIV', descendant: input.node })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      ariaControls: 'target-id'
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: (id: string) => (id === 'target-id' ? controlled.node : null)
+    })
+
+    expect(input.value).toBe('200')
+    expect(controlled.value).toBe('')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(controlled.events).toHaveLength(0)
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('skips non-text spinbutton descendant inputs before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const hiddenInput = createFillEvalNode({ tagName: 'INPUT', type: 'hidden' })
+    const numberInput = createFillEvalNode({ tagName: 'INPUT', type: 'number' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      descendants: [hiddenInput.node, numberInput.node]
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: () => null
+    })
+
+    expect(numberInput.value).toBe('200')
+    expect(hiddenInput.value).toBe('')
+    expect(wrapper.value).toBe('')
+    expect(numberInput.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(hiddenInput.events).toHaveLength(0)
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('keeps plain focused inputs as fill targets', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@input', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: input.node,
+      getElementById: () => null
+    })
+
+    expect(input.value).toBe('200')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
   })
 
   it('chunks large agent-browser fill values before eval transport', async () => {

@@ -8,6 +8,7 @@ import {
   scanForShellReady,
   type ShellReadyScanState
 } from '../shell-ready-marker-scanner'
+import { isPowerShellProcess } from '../../shared/shell-process-detection'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -41,6 +42,10 @@ export type SubprocessHandle = {
   startupCommandDeliveredInShellArgs?: boolean
   write(data: string): void
   resize(cols: number, rows: number): void
+  /** Resync the native PTY's own screen state after a frontend clear.
+   *  No-op except on Windows/ConPTY, where a stale ConPTY cursor row makes
+   *  the next prompt repaint land below a blank gap. */
+  clear?(): void
   kill(): void
   forceKill(): void
   signal(sig: string): void
@@ -56,6 +61,7 @@ export type SessionOptions = {
   sessionId: string
   cols: number
   rows: number
+  terminalHandle?: string
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
@@ -76,6 +82,7 @@ type AttachedClient = {
 
 export class Session {
   readonly sessionId: string
+  readonly terminalHandle: string | null
   private _state: SessionState = 'running'
   private _shellState: ShellReadyState
   private _exitCode: number | null = null
@@ -97,6 +104,7 @@ export class Session {
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
+    this.terminalHandle = opts.terminalHandle ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
     const size = normalizePtySize(opts.cols, opts.rows)
@@ -282,6 +290,35 @@ export class Session {
     }
     this.emulator.clearScrollback()
     this.recordPendingOutput({ kind: 'clear' })
+    this.subprocess.clear?.()
+    this.#nudgePowerShellPromptRepaint()
+  }
+
+  /** Why: ConPTY's buffer clear cannot reach PSReadLine's cached cursor row,
+   *  so PowerShell's first Enter after a clear would still repaint the prompt
+   *  at the stale row, leaving a blank gap. A form feed (Ctrl+L) makes
+   *  PSReadLine itself repaint at the true origin. Gated to a PowerShell
+   *  foreground so a running command or TUI never gets a stray 0x0C, and to
+   *  an empty prompt because PSReadLine repaints pending input at a stale
+   *  cached row that ConPTY's fixed viewport doesn't track. */
+  #nudgePowerShellPromptRepaint(): void {
+    if (process.platform !== 'win32') {
+      return
+    }
+    // Why: before shell-ready, write() would queue the form feed behind the
+    // buffered startup command and deliver it at an arbitrary later moment,
+    // when the foreground/prompt gates below no longer hold. The nudge is
+    // cosmetic — skip it rather than defer it.
+    if (this._shellState === 'pending' || this.postReadyFlushGate.isPending) {
+      return
+    }
+    if (!isPowerShellProcess(this.subprocess.getForegroundProcess())) {
+      return
+    }
+    if (!this.emulator.isCursorOnEmptyPromptLine()) {
+      return
+    }
+    this.subprocess.write('\x0c')
   }
 
   prepareForFinalSnapshot(): string {

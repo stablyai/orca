@@ -8,7 +8,7 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
 import { Markdown } from '@tiptap/markdown'
-import { normalizeSoftBreaks } from './rich-markdown-normalize'
+import { normalizeEmptyListItems } from './rich-markdown-normalize'
 
 const testExtensions = [
   StarterKit,
@@ -49,12 +49,12 @@ function shouldSyncPropIntoEditor(
 }
 
 /**
- * Simulates the onCreate flow: normalizeSoftBreaks then getMarkdown().
+ * Simulates the onCreate flow: empty-list repair then getMarkdown().
  */
 function simulateOnCreate(diskContent: string): string {
   const editor = createEditor(diskContent)
   try {
-    normalizeSoftBreaks(editor)
+    normalizeEmptyListItems(editor)
     return editor.getMarkdown()
   } finally {
     editor.destroy()
@@ -65,7 +65,7 @@ function simulateOnCreate(diskContent: string): string {
 // 1. trimEnd normalization prevents phantom dirty from trailing newlines
 //
 // getMarkdown() always appends a trailing \n. For content that round-trips
-// cleanly (no soft-break normalization), the ONLY difference is that
+// cleanly (no structural repair changes), the ONLY difference is that
 // trailing newline. trimEnd() must eliminate that false positive.
 // -----------------------------------------------------------------------
 describe('trailing newline does not cause false dirty state', () => {
@@ -94,45 +94,37 @@ describe('trailing newline does not cause false dirty state', () => {
 })
 
 // -----------------------------------------------------------------------
-// 2. normalizeSoftBreaks produces structural differences that getMarkdown()
-//    serializes differently. These cannot be hidden by trimEnd — they are
-//    handled at runtime by the isInitializingRef guard in onUpdate.
-//
-//    The tests below document the known divergence so that future changes
-//    to the serializer or normalizer don't silently shift which category
-//    a given input falls into.
+// 2. Hard-wrapped prose must stay structurally clean. The rich editor renders
+//    soft breaks through CSS reflow, not by splitting the document model.
 // -----------------------------------------------------------------------
-describe('normalizeSoftBreaks: known structural changes', () => {
-  it('splits consecutive lines into separate paragraphs', () => {
+describe('document soft-break round-trip', () => {
+  it('keeps consecutive source lines in one paragraph', () => {
     const editor = createEditor('Line one\nLine two\nLine three')
     try {
       const before = countParagraphs(editor)
-      normalizeSoftBreaks(editor)
+      normalizeEmptyListItems(editor)
       const after = countParagraphs(editor)
 
-      expect(after).toBeGreaterThan(before)
-      expect(after).toBe(3)
+      expect(before).toBe(1)
+      expect(after).toBe(1)
+      expect(editor.state.doc.firstChild?.textContent).toBe('Line one\nLine two\nLine three')
     } finally {
       editor.destroy()
     }
   })
 
-  it('serialized soft-break content differs from disk content', () => {
+  it('round-trips a hard-wrapped paragraph without blank-line expansion', () => {
     const disk = 'Line one\nLine two'
     const serialized = simulateOnCreate(disk)
 
-    // After normalization each line is its own paragraph, serialized with
-    // blank-line separators. This difference is NOT a bug — the
-    // isInitializingRef guard prevents it from marking the file dirty.
-    expect(trimEnd(serialized)).not.toBe(trimEnd(disk))
-    expect(trimEnd(serialized)).toBe('Line one\n\nLine two')
+    expect(trimEnd(serialized)).toBe(trimEnd(disk))
   })
 
   it('does not modify content without soft breaks', () => {
     const editor = createEditor('# Title\n\nBody text')
     try {
       const docBefore = editor.state.doc.toJSON()
-      normalizeSoftBreaks(editor)
+      normalizeEmptyListItems(editor)
       const docAfter = editor.state.doc.toJSON()
 
       expect(docAfter).toEqual(docBefore)
@@ -171,7 +163,7 @@ describe('real edits are detected as dirty', () => {
     const diskContent = '# README\n\nOriginal text'
     const editor = createEditor(diskContent)
     try {
-      normalizeSoftBreaks(editor)
+      normalizeEmptyListItems(editor)
 
       // Insert text via a ProseMirror transaction (no DOM required)
       const { tr } = editor.state
@@ -189,7 +181,7 @@ describe('real edits are detected as dirty', () => {
     const diskContent = '# Title\n\nParagraph to keep\n\nParagraph to delete'
     const editor = createEditor(diskContent)
     try {
-      normalizeSoftBreaks(editor)
+      normalizeEmptyListItems(editor)
 
       // Delete the last paragraph node
       const doc = editor.state.doc

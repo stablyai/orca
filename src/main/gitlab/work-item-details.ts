@@ -361,7 +361,7 @@ export async function getWorkItemDetails(
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(),
+        await getGlabKnownHosts(connectionId),
         connectionId,
         localGitOptions
       )
