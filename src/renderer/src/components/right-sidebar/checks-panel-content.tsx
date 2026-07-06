@@ -1481,16 +1481,17 @@ export function isMutablePRConversationComment(comment: PRComment): boolean {
 
 function CommentMoreMenu({
   comment,
+  botAuthorOverrides,
   onStartEdit,
   onDelete,
   onQueueForAgent
 }: {
   comment: PRComment
+  botAuthorOverrides: ReadonlySet<string>
   onStartEdit?: () => void
   onDelete?: () => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element | null {
-  const botAuthorOverrides = usePRBotAuthorOverrides()
   const authorLogin = normalizePRCommentAuthorLogin(comment.author)
   const isOverriddenBot = authorLogin.length > 0 && botAuthorOverrides.has(authorLogin)
   // Why: the override is an escape hatch for bots the heuristics miss, so hide
@@ -1790,6 +1791,7 @@ function CommentRow({
       <CopyButton text={buildCopyText(comment)} />
       <CommentMoreMenu
         comment={comment}
+        botAuthorOverrides={botAuthorOverrides}
         onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
         onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
         onQueueForAgent={!isReply ? onQueueForAgent : undefined}

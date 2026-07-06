@@ -6,10 +6,13 @@ import { createBotAuthorOverrideSet } from '../../../src/shared/pr-bot-author-ov
 
 // Fetches the desktop's manual bot-author overrides (GlobalSettings.prBotAuthorOverrides,
 // marked from the desktop Comments panel) so the mobile Humans/Bots comment filter
-// classifies the same authors as bots.
+// classifies the same authors as bots. There is no settings-change stream over the
+// mobile RPC, so callers pass a refreshKey (e.g. the PR payload identity) to re-fetch
+// alongside PR data instead of holding a one-shot snapshot for the whole session.
 export function usePRBotAuthorOverrides(
   client: RpcClient | null,
-  connState: ConnectionState
+  connState: ConnectionState,
+  refreshKey?: unknown
 ): ReadonlySet<string> {
   const [logins, setLogins] = useState<string[]>([])
 
@@ -38,7 +41,7 @@ export function usePRBotAuthorOverrides(
     return () => {
       stale = true
     }
-  }, [client, connState])
+  }, [client, connState, refreshKey])
 
   return useMemo(() => createBotAuthorOverrideSet(logins), [logins])
 }

@@ -21,10 +21,16 @@ export function createBotAuthorOverrideSet(
   return set
 }
 
+// Cap the persisted list so a malformed settings payload can't bloat
+// GlobalSettings or slow down per-comment override lookups.
+export const MAX_PR_BOT_AUTHOR_OVERRIDES = 500
+
 /** Sanitizes an untrusted settings update value into a sorted, deduped login list. */
 export function normalizePRBotAuthorOverrides(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
-  return [...createBotAuthorOverrideSet(value.filter((login) => typeof login === 'string'))].sort()
+  return [...createBotAuthorOverrideSet(value.filter((login) => typeof login === 'string'))]
+    .sort()
+    .slice(0, MAX_PR_BOT_AUTHOR_OVERRIDES)
 }

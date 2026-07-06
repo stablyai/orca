@@ -55,7 +55,7 @@ export function isBotPRComment(
   botAuthorOverrides?: ReadonlySet<string>
 ): boolean {
   const author = comment.author.trim()
-  const normalized = author.toLowerCase()
+  const normalized = normalizePRCommentAuthorLogin(author)
   if (botAuthorOverrides?.has(normalized)) {
     return true
   }

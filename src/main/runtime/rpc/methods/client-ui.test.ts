@@ -135,6 +135,26 @@ describe('client UI RPC methods', () => {
     })
   })
 
+  it('caps oversized bot-author override payloads', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => ({}))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        prBotAuthorOverrides: Array.from(
+          { length: 600 },
+          (_, i) => `bot-${String(i).padStart(4, '0')}`
+        )
+      })
+    )
+
+    const [update] = vi.mocked(runtime.updateClientSettings).mock.calls[0]!
+    expect((update as { prBotAuthorOverrides: string[] }).prBotAuthorOverrides).toHaveLength(500)
+  })
+
   it('returns the runtime host persisted UI state', async () => {
     const ui: PersistedUIState = {
       ...getDefaultUIState(),

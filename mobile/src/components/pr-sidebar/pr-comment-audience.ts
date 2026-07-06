@@ -1,5 +1,8 @@
 import type { PRComment } from '../../../../src/shared/types'
-import { createBotAuthorOverrideSet } from '../../../../src/shared/pr-bot-author-overrides'
+import {
+  createBotAuthorOverrideSet,
+  normalizePRCommentAuthorLogin
+} from '../../../../src/shared/pr-bot-author-overrides'
 
 export { createBotAuthorOverrideSet }
 
@@ -51,7 +54,7 @@ export function isBotPRComment(
   botAuthorOverrides?: ReadonlySet<string>
 ): boolean {
   const author = comment.author.trim()
-  const normalized = author.toLowerCase()
+  const normalized = normalizePRCommentAuthorLogin(author)
   if (botAuthorOverrides?.has(normalized)) {
     return true
   }
