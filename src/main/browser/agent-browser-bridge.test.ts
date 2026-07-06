@@ -129,19 +129,37 @@ class TestEvent {
 
 type FillEvalNode = {
   tagName: string
-  isContentEditable: boolean
   getAttribute: (name: string) => string | null
+  matches: (selector: string) => boolean
   querySelector?: (selector: string) => FillEvalNode | null
   dispatchEvent: (event: TestEvent) => boolean
   value: string
+}
+
+function matchesFillEvalSelector(node: FillEvalNode, selector: string): boolean {
+  return selector.split(',').some((candidate) => {
+    const trimmed = candidate.trim()
+    if (trimmed === 'textarea') {
+      return node.tagName === 'TEXTAREA'
+    }
+    if (!trimmed.startsWith('input') || node.tagName !== 'INPUT') {
+      return false
+    }
+    const excludedTypes = [...trimmed.matchAll(/:not\(\[type='([^']+)'\]\)/g)].map((match) =>
+      match[1].toLowerCase()
+    )
+    const inputType = node.getAttribute('type')?.toLowerCase() ?? ''
+    return !excludedTypes.includes(inputType)
+  })
 }
 
 function createFillEvalNode(options: {
   tagName: string
   role?: string
   ariaControls?: string
-  isContentEditable?: boolean
   descendant?: FillEvalNode | null
+  descendants?: FillEvalNode[]
+  type?: string
 }) {
   const events: TestEvent[] = []
   let value = ''
@@ -156,7 +174,6 @@ function createFillEvalNode(options: {
   const node = Object.create(proto) as FillEvalNode
 
   node.tagName = options.tagName
-  node.isContentEditable = options.isContentEditable ?? false
   node.getAttribute = (name: string) => {
     if (name === 'role') {
       return options.role ?? null
@@ -164,9 +181,16 @@ function createFillEvalNode(options: {
     if (name === 'aria-controls') {
       return options.ariaControls ?? null
     }
+    if (name === 'type') {
+      return options.type ?? null
+    }
     return null
   }
-  node.querySelector = vi.fn(() => options.descendant ?? null)
+  node.matches = vi.fn((selector: string) => matchesFillEvalSelector(node, selector))
+  const descendants = options.descendants ?? (options.descendant ? [options.descendant] : [])
+  node.querySelector = vi.fn(
+    (selector: string) => descendants.find((descendant) => descendant.matches(selector)) ?? null
+  )
   node.dispatchEvent = vi.fn((event: TestEvent) => {
     events.push(event)
     return true
@@ -1562,6 +1586,72 @@ describe('AgentBrowserBridge', () => {
     expect(input.value).toBe('200')
     expect(wrapper.value).toBe('')
     expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('routes aria-controlled spinbutton containers to editable descendants before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const controlled = createFillEvalNode({ tagName: 'DIV', descendant: input.node })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      ariaControls: 'target-id'
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: (id: string) => (id === 'target-id' ? controlled.node : null)
+    })
+
+    expect(input.value).toBe('200')
+    expect(controlled.value).toBe('')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(controlled.events).toHaveLength(0)
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('skips non-text spinbutton descendant inputs before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const hiddenInput = createFillEvalNode({ tagName: 'INPUT', type: 'hidden' })
+    const numberInput = createFillEvalNode({ tagName: 'INPUT', type: 'number' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      descendants: [hiddenInput.node, numberInput.node]
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: () => null
+    })
+
+    expect(numberInput.value).toBe('200')
+    expect(hiddenInput.value).toBe('')
+    expect(wrapper.value).toBe('')
+    expect(numberInput.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(hiddenInput.events).toHaveLength(0)
     expect(wrapper.events).toHaveLength(0)
   })
 
