@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Terminal shortcut E2E keeps platform keyboard paths beside their shared PTY assertions. */
 /**
  * E2E test for terminal keyboard shortcuts.
  *

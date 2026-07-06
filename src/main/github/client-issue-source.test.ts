@@ -1,7 +1,3 @@
-/* eslint-disable max-lines -- Why: the issue-source test suite covers the
-heuristic split (#1076), the partial-failure envelope (feature 1), and the
-three-state preference matrix (feature 2) as one surface so a regression in
-any of them blocks the same merge gate. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtils from './gh-utils'
 

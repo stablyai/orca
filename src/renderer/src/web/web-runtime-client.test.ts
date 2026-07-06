@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: these tests share one mocked browser
-   WebSocket/E2EE transport fixture, and splitting them would obscure the
-   subscription lifecycle regressions they cover. */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import WebSocket, { WebSocketServer } from 'ws'
 import { WebRuntimeClient } from './web-runtime-client'

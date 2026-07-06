@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: one Quick Open file-list suite covers both rg and git fallback process lifecycles. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const {

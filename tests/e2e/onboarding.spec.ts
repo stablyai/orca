@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: onboarding E2E coverage shares one first-launch wizard fixture and step helpers; splitting this file would make the linear flow harder to audit. */
 /**
  * E2E tests for the first-launch Onboarding flow.
  *

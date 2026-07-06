@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: browser runtime command tests share one
-mocked BrowserManager/agent-browser bridge so page wake and registration
-ordering regressions stay in one boundary-focused suite. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'

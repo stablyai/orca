@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: scan, cancellation, SSH fallback, and compaction tests share temp-repo fixtures. */
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

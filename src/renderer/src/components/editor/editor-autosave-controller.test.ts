@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: autosave behavior depends on event wiring,
-   dirty drafts, remote routing, quiesce, and failure cleanup in one harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'

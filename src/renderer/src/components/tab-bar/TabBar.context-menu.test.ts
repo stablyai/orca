@@ -1,5 +1,3 @@
-/* oxlint-disable max-lines -- Why: keeping these mocked TabBar wiring cases
- * together avoids duplicating the lightweight renderer harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const appStoreSnapshot: {

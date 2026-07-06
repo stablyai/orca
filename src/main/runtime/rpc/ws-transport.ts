@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: the WebSocket transport owns connection
-   admission, heartbeat, pre-auth timeout, and client-id cleanup together; those
-   invariants are easier to audit in one transport boundary. */
 // Why: the WebSocket transport enables mobile clients to connect to the Orca
 // runtime over the local network. When TLS cert/key are provided it uses wss://
 // to prevent passive sniffing; otherwise it falls back to plain ws://. Per-device

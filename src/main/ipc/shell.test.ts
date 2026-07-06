@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: shell IPC path validation, OS opener fallbacks, and launcher lifecycle tests share one mocked Electron/child_process boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'

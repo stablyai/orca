@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this suite covers relay filesystem RPCs,
-   Space scans, file watcher lifecycle edges, and cross-platform path behavior together. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
 import { MAX_TEXT_FILE_SIZE } from './fs-handler-utils'

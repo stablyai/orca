@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: import tests cover local copy, SSH routing,
-symlink safety, and runtime-upload staging against one shared IPC fixture. */
 import path from 'node:path'
 import { constants } from 'node:fs'
 import { Readable, Writable } from 'node:stream'

@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: this component keeps compact/full inline
-   agent rendering and lineage disclosure behavior together; splitting during
-   this bug fix would risk divergent parent-child row behavior. */
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'

@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: diagnostics bundle fixtures cover collection, preview deletion, upload URL hardening, and byte caps as one contract surface. Splitting would duplicate the temp-file/server harness and make edge-case coverage harder to audit. */
 // Bundle collection + upload tests. Upload helpers live outside bundle.ts, but
 // this suite keeps the diagnostic bundle contract in one place.
 
