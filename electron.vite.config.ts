@@ -178,6 +178,13 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
+          // Why a separate entry: preloaded into the node.exe-hosted daemon via
+          // `--require` before its module graph loads. Inlining it into
+          // daemon-entry does not work — rollup hoists chunk requires above
+          // inlined code, so other modules capture promisify(execFile) first.
+          'windows-hidden-console-children': resolve(
+            'src/main/daemon/windows-hidden-console-children.ts'
+          ),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),

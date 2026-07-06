@@ -6,6 +6,12 @@
  * Signals readiness to parent via IPC: { type: 'ready' }
  * Shuts down cleanly on SIGTERM.
  */
+// Note: the windowsHide child_process shim is NOT imported here. Rollup's CJS
+// chunking hoists chunk requires above inlined module code, so an in-graph
+// "first import" runs AFTER sibling chunks capture promisify(execFile) — the
+// shim silently did nothing in packaged builds. It ships as its own bundle
+// entry and the daemon fork preloads it via `--require` (daemon-init.ts),
+// which Node guarantees runs before any of this graph loads.
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'

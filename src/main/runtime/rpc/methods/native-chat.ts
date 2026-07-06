@@ -22,7 +22,15 @@ const NativeChatSession = z.object({
     .pipe(z.string().min(1, 'Missing session id')),
   // How many of the most-recent messages to return. Clients start small for a
   // fast first paint and raise it to page older history in as the user scrolls.
-  limit: z.number().int().positive().max(2000).optional(),
+  // Clamp (don't reject) a limit past the max window so a client paging beyond it
+  // gets the capped tail and pagination stops cleanly — a hard `.max` rejection
+  // would fail the read and stall "load earlier" at the boundary.
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .transform((value) => Math.min(value, MOBILE_NATIVE_CHAT_MAX_WINDOW))
+    .optional(),
   // Optional client-supplied cleanup token. When present, the subscribe handler
   // keys the fs-watcher cleanup under it so registration and unsubscribe derive
   // from the SAME token (back-compat: falls back to `agent:sessionId` when absent,

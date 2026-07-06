@@ -92,17 +92,27 @@ function focusedValueSetExpression(
   options?: { append?: boolean; dispatchEvents?: boolean }
 ): string {
   const nextValue = options?.append
-    ? ["String(el.value ?? '') + ", valueExpression].join('')
+    ? ["String(target.value ?? '') + ", valueExpression].join('')
     : valueExpression
   const dispatchEvents = options?.dispatchEvents
-    ? " el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));"
+    ? " target.dispatchEvent(new Event('input', { bubbles: true })); target.dispatchEvent(new Event('change', { bubbles: true }));"
     : ''
   return [
-    '(() => { const el = document.activeElement; if (el) {' +
-      " const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;",
+    '(() => { const el = document.activeElement; if (el) {',
+    // Why: ARIA spinbutton wrappers can hold focus while a contained or controlled input owns the value.
+    " const editableSelector = \"input:not([type='hidden']):not([type='button']):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='image']):not([type='reset']):not([type='submit']), textarea\";",
+    " const isEditable = (node) => !!node && (node.matches?.(editableSelector) ?? (node.tagName === 'TEXTAREA' || (node.tagName === 'INPUT' && !/^(hidden|button|checkbox|radio|file|image|reset|submit)$/i.test(node.getAttribute?.('type') ?? ''))));",
+    ' const findEditable = (root) => root?.querySelector?.(editableSelector) ?? null;',
+    ' let target = el;',
+    " if (!isEditable(target) && target.getAttribute?.('role') === 'spinbutton') {",
+    "   const controls = target.getAttribute('aria-controls');",
+    '   if (controls) { for (const id of controls.split(/\\s+/)) { if (!id) continue; const controlled = document.getElementById(id); if (isEditable(controlled)) { target = controlled; break; } const descendant = findEditable(controlled); if (descendant) { target = descendant; break; } } }',
+    '   if (target === el) { const descendant = findEditable(target); if (descendant) target = descendant; }',
+    ' }',
+    " const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')?.set;",
     ' const nextValue = ',
     nextValue,
-    '; if (nativeSetter) { nativeSetter.call(el, nextValue); } else { el.value = nextValue; }',
+    '; if (nativeSetter) { nativeSetter.call(target, nextValue); } else { target.value = nextValue; }',
     dispatchEvents,
     ' } })()'
   ].join('')

@@ -36,6 +36,12 @@ export type PtySpawnOptions = {
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
+  /** Stable terminal pane identity. Remote providers use this as PTY metadata
+   *  even when it must not be exported into the spawned shell environment. */
+  paneKey?: string
+  /** Stable terminal tab identity used as a coarser attach guard when a pane
+   *  identity is unavailable. */
+  tabId?: string
   /** Daemon session ID. A caller-provided ID is treated as an attach request;
    *  daemon hosts also pass minted IDs for fresh sessions that need stable
    *  per-PTY state before provider.spawn returns. */

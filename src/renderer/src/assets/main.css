@@ -1904,6 +1904,16 @@
   text-underline-offset: 2px;
 }
 
+/* Why: Monaco owns Peek References scrollables and auto-hides faded needed
+   vertical thumbs while the widget stays open; revalidate these classes on upgrade. */
+.monaco-editor
+  .reference-zone-widget
+  .monaco-scrollable-element
+  > .scrollbar.vertical.invisible.fade {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* ── Git conflict decorations ───────────────────────────────────── */
 
 .monaco-editor .orca-conflict-marker-line {

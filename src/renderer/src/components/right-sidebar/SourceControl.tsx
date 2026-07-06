@@ -279,6 +279,7 @@ import {
   resolveHostedReviewActionUpstreamStatus,
   resolveHostedReviewStateForActions
 } from './source-control-hosted-review-push-target'
+import { buildSourceControlManualReviewUrlFromContext } from './source-control-manual-review-url'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -1477,6 +1478,41 @@ function SourceControlInner(): React.JSX.Element {
   const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
   const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
   const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
+  const manualReviewUrl = useMemo(
+    () =>
+      buildSourceControlManualReviewUrlFromContext({
+        hostedReviewProvider: hostedReview?.provider ?? null,
+        hostedReviewCreationProvider: hostedReviewCreation?.provider ?? null,
+        linkedGitHubPR,
+        fallbackGitHubPRNumber,
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR,
+        baseRef: compareBaseRef,
+        branchName,
+        repoRemoteName: activeRepo?.gitRemoteIdentity?.remoteName ?? null,
+        repoRemoteUrl: activeRepo?.gitRemoteIdentity?.remoteUrl ?? null,
+        pushTarget: activeWorktree?.pushTarget ?? null,
+        upstreamName: remoteStatus?.upstreamName ?? null
+      }),
+    [
+      activeRepo?.gitRemoteIdentity?.remoteName,
+      activeRepo?.gitRemoteIdentity?.remoteUrl,
+      activeWorktree?.pushTarget,
+      branchName,
+      compareBaseRef,
+      fallbackGitHubPRNumber,
+      hostedReview?.provider,
+      hostedReviewCreation?.provider,
+      linkedAzureDevOpsPR,
+      linkedBitbucketPR,
+      linkedGitHubPR,
+      linkedGitLabMR,
+      linkedGiteaPR,
+      remoteStatus?.upstreamName
+    ]
+  )
   const shouldResolveHostedReviewCreation =
     isBranchVisible &&
     Boolean(activeRepo) &&
@@ -5438,6 +5474,7 @@ function SourceControlInner(): React.JSX.Element {
           branchSummary={branchSummary}
           compareBaseRef={compareBaseRef}
           upstreamStatus={remoteStatus}
+          manualReviewUrl={manualReviewUrl}
         />
 
         {detachedHeadDisplay && (

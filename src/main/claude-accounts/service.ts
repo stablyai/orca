@@ -449,7 +449,8 @@ export class ClaudeAccountService {
         throw new Error('Claude sign-in was cancelled.')
       }
       await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS, {
-        signal: loginAbortController.signal
+        signal: loginAbortController.signal,
+        keepStdinOpen: true
       })
       this.cancelPendingClaudeLogin = null
       const status = await this.runClaudeCommand(
@@ -885,7 +886,7 @@ export class ClaudeAccountService {
     args: string[],
     configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
     timeoutMs: number,
-    options?: { allowFailure?: boolean; signal?: AbortSignal }
+    options?: { allowFailure?: boolean; signal?: AbortSignal; keepStdinOpen?: boolean }
   ): Promise<string> {
     return new Promise((resolvePromise, rejectPromise) => {
       const spawnConfig =
@@ -913,13 +914,26 @@ export class ClaudeAccountService {
               shell: process.platform === 'win32'
             }
       const child = spawn(spawnConfig.command, spawnConfig.args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
+        // Why: Claude's browser auth can bind its callback lifetime to stdin.
+        // Keeping stdin open prevents hidden managed-login runs from tearing down
+        // the local callback server before the browser returns.
+        stdio: [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         shell: spawnConfig.shell,
         env: spawnConfig.env,
         // Why: Claude auth can leave browser/login descendants alive after denial.
         // A process group lets cancellation terminate the whole POSIX login tree.
         detached: process.platform !== 'win32'
       })
+      const stdout = child.stdout
+      const stderr = child.stderr
+      if (!stdout || !stderr) {
+        if (options?.keepStdinOpen) {
+          child.stdin?.destroy()
+        }
+        child.kill()
+        rejectPromise(new Error('Claude command failed to open output streams.'))
+        return
+      }
 
       let settled = false
       let output = ''
@@ -941,11 +955,14 @@ export class ClaudeAccountService {
           clearTimeout(timeout)
           timeout = null
         }
-        child.stdout.off('data', appendOutput)
-        child.stderr.off('data', appendOutput)
+        stdout.off('data', appendOutput)
+        stderr.off('data', appendOutput)
         child.off('error', onError)
         child.off('close', onClose)
         options?.signal?.removeEventListener('abort', onAbort)
+        if (options?.keepStdinOpen) {
+          child.stdin?.destroy()
+        }
       }
       const settle = (callback: () => void): void => {
         if (settled) {
@@ -1006,8 +1023,8 @@ export class ClaudeAccountService {
         })
       }
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
+      stdout.on('data', appendOutput)
+      stderr.on('data', appendOutput)
       child.on('error', onError)
       child.on('close', onClose)
       if (options?.signal?.aborted) {
