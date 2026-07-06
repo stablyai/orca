@@ -102,6 +102,7 @@ import {
 } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
+import { shouldShutdownDaemonForQuit } from './startup/quit-daemon-teardown-policy'
 import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
@@ -2210,6 +2211,10 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  if (isQuittingForUpdate()) {
+    recordCrashBreadcrumb('updater_before_quit_allowed')
+    console.info('[updater] before-quit allowed for update install')
+  }
   isQuitting = true
   unsubscribeSystemResumeBroadcast?.()
   unsubscribeSystemResumeBroadcast = null
@@ -2231,6 +2236,22 @@ app.on('before-quit', () => {
 // async work and let Electron exit.
 let daemonDisconnectDone = false
 app.on('will-quit', (e) => {
+  const updateQuitInProgress = isQuittingForUpdate()
+  const devParentShutdownRequested = isDevParentShutdownRequested()
+  const shouldShutdownDaemon = shouldShutdownDaemonForQuit({
+    isDevParentShutdownRequested: devParentShutdownRequested,
+    isQuittingForUpdate: updateQuitInProgress
+  })
+  if (updateQuitInProgress) {
+    recordCrashBreadcrumb('updater_will_quit_cleanup_started', {
+      daemonTeardown: shouldShutdownDaemon ? 'shutdown' : 'disconnect'
+    })
+    console.info(
+      `[updater] will-quit cleanup for update install; daemonTeardown=${
+        shouldShutdownDaemon ? 'shutdown' : 'disconnect'
+      }`
+    )
+  }
   // Why: before-quit can still be aborted by renderer beforeunload; wait until
   // the committed quit path before removing the Windows notification icon.
   destroySystemTray()
@@ -2299,9 +2320,9 @@ app.on('will-quit', (e) => {
     // inside `shutdownTelemetry()` are caught by the client itself — we
     // catch again here defensively so a flush failure cannot cancel the
     // quit chain.
-    // Why: normal quits preserve the detached daemon for warm reattach, but a
-    // dev parent dying means the temp/dev profile has no owner left to reattach.
-    const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+    // Why: normal and update quits preserve daemon-backed PTYs for warm
+    // reattach; dev parent shutdowns have no owner left to reattach.
+    const daemonTeardown = shouldShutdownDaemon ? shutdownDaemon() : disconnectDaemon()
     Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown, emulatorShutdown])
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())

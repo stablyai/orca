@@ -11,6 +11,7 @@ import {
 import { compareVersions } from './updater-fallback'
 import { fetchChangelog } from './updater-changelog'
 import type { ElectronAutoUpdater } from './electron-updater-loader'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -89,9 +90,16 @@ export function registerAutoUpdaterHandlers({
   // Track Squirrel readiness so we don't show "ready to install" prematurely.
   if (process.platform === 'darwin') {
     nativeUpdater.on('update-downloaded', () => {
-      handleMacInstallerReady(hasNewerDownloadedVersion(), performQuitAndInstall, () => {
+      const hasNewerVersion = hasNewerDownloadedVersion()
+      recordUpdaterLifecycle('macos_squirrel_ready', {
+        hasNewerDownloadedVersion: hasNewerVersion
+      })
+      handleMacInstallerReady(hasNewerVersion, performQuitAndInstall, () => {
         // If we were holding the 'downloaded' status, send it now — but only
         // when the staged version is actually newer than what's running.
+        recordUpdaterLifecycle('macos_downloaded_status_released', {
+          version: getPendingInstallVersion()
+        })
         sendStatus({
           state: 'downloaded',
           version: getPendingInstallVersion(),
@@ -102,7 +110,12 @@ export function registerAutoUpdaterHandlers({
   }
 
   app.on('before-quit', (event) => {
-    if (consumeMacInstallGuardBypass() || isMacQuitAndInstallInFlight()) {
+    if (consumeMacInstallGuardBypass()) {
+      recordUpdaterLifecycle('macos_before_quit_guard_bypassed')
+      return
+    }
+    if (isMacQuitAndInstallInFlight()) {
+      recordUpdaterLifecycle('macos_before_quit_install_in_flight')
       return
     }
 
@@ -119,6 +132,9 @@ export function registerAutoUpdaterHandlers({
         sendStatus
       )
     ) {
+      recordUpdaterLifecycle('macos_before_quit_deferred', {
+        version: getPendingInstallVersion()
+      })
       event.preventDefault()
     }
   })
@@ -255,12 +271,17 @@ export function registerAutoUpdaterHandlers({
       sendStatus({ state: 'not-available' })
       return
     }
+    recordUpdaterLifecycle('update_downloaded', {
+      version: info.version,
+      macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
+    })
     // On macOS, defer the 'downloaded' status until Squirrel.Mac has finished
     // processing the update via the localhost proxy. On other platforms,
     // the update is ready immediately after electron-updater downloads it.
     if (process.platform === 'darwin' && !isMacInstallerReady()) {
       // Squirrel is still processing. Keep the UI at 100% downloaded so the
       // user sees the handoff instead of a misleading "ready to install".
+      recordUpdaterLifecycle('macos_waiting_for_squirrel', { version: info.version })
       sendStatus({ state: 'downloading', percent: 100, version: info.version })
       return
     }

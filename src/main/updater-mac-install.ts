@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import type { UpdateStatus } from '../shared/types'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 
 const MAC_INSTALL_READY_TIMEOUT_MS = 15000
 
@@ -34,6 +35,9 @@ export function resetMacInstallState(): void {
 export function beginMacUpdateDownload(): void {
   resetMacInstallState()
   squirrelReady = false
+  if (process.platform === 'darwin') {
+    recordUpdaterLifecycle('macos_download_started')
+  }
 }
 
 export function markMacQuitAndInstallInFlight(): void {
@@ -41,6 +45,9 @@ export function markMacQuitAndInstallInFlight(): void {
   quitAndInstallInFlight = true
   bypassMacInstallGuardOnce = false
   clearPendingInstallTimeout()
+  if (process.platform === 'darwin') {
+    recordUpdaterLifecycle('macos_quit_and_install_in_flight')
+  }
 }
 
 export function consumeMacInstallGuardBypass(): boolean {
@@ -84,6 +91,9 @@ export function deferMacQuitUntilInstallerReady(
   }
 
   installRequestedAfterSquirrelReady = true
+  recordUpdaterLifecycle('macos_install_waiting_for_squirrel', {
+    version: getPendingInstallVersion()
+  })
   sendStatus({ state: 'downloading', percent: 100, version: getPendingInstallVersion() })
 
   if (pendingInstallTimeout) {
@@ -96,8 +106,13 @@ export function deferMacQuitUntilInstallerReady(
       return
     }
 
-    console.warn(
-      `[updater] macOS installer was not ready after ${MAC_INSTALL_READY_TIMEOUT_MS}ms; allowing quit without install`
+    recordUpdaterLifecycle(
+      'macos_install_guard_timeout',
+      { timeoutMs: MAC_INSTALL_READY_TIMEOUT_MS },
+      {
+        level: 'warn',
+        message: `macOS installer was not ready after ${MAC_INSTALL_READY_TIMEOUT_MS}ms; allowing quit without install`
+      }
     )
     installRequestedAfterSquirrelReady = false
     // This is a safety valve. The updater path should wait for ShipIt so the
@@ -117,6 +132,10 @@ export function handleMacInstallerReady(
 ): void {
   squirrelReady = true
   clearPendingInstallTimeout()
+  recordUpdaterLifecycle('macos_installer_ready', {
+    deferredInstallRequested: installRequestedAfterSquirrelReady,
+    hasNewerDownloadedVersion
+  })
 
   if (installRequestedAfterSquirrelReady && hasNewerDownloadedVersion) {
     void Promise.resolve()

@@ -9,9 +9,12 @@ import { writeMainThreadDiagnosticMarker } from './diagnostics/main-thread-churn
 import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
-  markMacQuitAndInstallInFlight
+  isMacInstallerReady,
+  markMacQuitAndInstallInFlight,
+  resetMacInstallState
 } from './updater-mac-install'
 import { registerAutoUpdaterHandlers } from './updater-events'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   compareVersions,
   isBenignCheckFailure,
@@ -547,6 +550,7 @@ function clearPrereleaseFallbackContextIfSettled(): void {
 
 async function performQuitAndInstall(): Promise<void> {
   if (quitAndInstallInProgress) {
+    recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
     return
   }
   quitAndInstallInProgress = true
@@ -566,18 +570,59 @@ async function performQuitAndInstall(): Promise<void> {
   // either can't replace it or the user ends up on the old version.
   quittingForUpdate = true
 
-  await runBeforeUpdateQuitCleanup()
-  killAllPty()
+  const pendingVersion = getPendingInstallVersion()
+  try {
+    await withUpdaterSpan({ stage: 'install' }, async (span) => {
+      span.setAttribute('updater.version', pendingVersion || 'unknown')
+      span.setAttribute('updater.platform', process.platform)
+      span.setAttribute(
+        'updater.macosInstallerReady',
+        process.platform === 'darwin' ? isMacInstallerReady() : true
+      )
+      recordUpdaterLifecycle('quit_and_install_started', {
+        version: pendingVersion || null,
+        macInstallerReady: process.platform === 'darwin' ? isMacInstallerReady() : true
+      })
+      span.addEvent('pre_quit_cleanup_start')
+      await runBeforeUpdateQuitCleanup()
+      span.addEvent('pre_quit_cleanup_done')
+      killAllPty()
+      span.addEvent('pty_kill_all')
 
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.removeAllListeners('close')
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.removeAllListeners('close')
+      }
+      span.addEvent('window_close_listeners_removed', {
+        windowCount: BrowserWindow.getAllWindows().length
+      })
+
+      recordUpdaterLifecycle('quit_and_install_invoking_native', {
+        version: pendingVersion || null
+      })
+      getAutoUpdater().quitAndInstall(false, true)
+      span.addEvent('native_quit_and_install_invoked')
+    })
+  } catch (error) {
+    quitAndInstallInProgress = false
+    quittingForUpdate = false
+    resetMacInstallState()
+    recordUpdaterLifecycle(
+      'quit_and_install_failed',
+      { errorType: error instanceof Error ? error.name : typeof error },
+      {
+        level: 'warn',
+        message: 'Could not start update install'
+      }
+    )
+    sendErrorStatus(
+      'Could not restart to install the update. Quit and reopen Orca, then try again.'
+    )
   }
-
-  getAutoUpdater().quitAndInstall(false, true)
 }
 
 async function runBeforeUpdateQuitCleanup(): Promise<void> {
   if (!onBeforeQuitCleanup) {
+    recordUpdaterLifecycle('pre_quit_cleanup_skipped', { reason: 'no-callback' })
     return
   }
 
@@ -585,9 +630,13 @@ async function runBeforeUpdateQuitCleanup(): Promise<void> {
   const cleanup = Promise.resolve()
     .then(() => onBeforeQuitCleanup?.())
     .catch((error) => {
-      console.warn(
-        '[updater] Pre-quit cleanup failed; continuing update install:',
-        error instanceof Error ? error.name : typeof error
+      recordUpdaterLifecycle(
+        'pre_quit_cleanup_failed',
+        { errorType: error instanceof Error ? error.name : typeof error },
+        {
+          level: 'warn',
+          message: 'Pre-quit cleanup failed; continuing update install'
+        }
       )
     })
   const timeoutResult = new Promise<'timeout'>((resolve) => {
@@ -596,8 +645,13 @@ async function runBeforeUpdateQuitCleanup(): Promise<void> {
 
   const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
   if (result === 'timeout') {
-    console.warn(
-      `[updater] Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+    recordUpdaterLifecycle(
+      'pre_quit_cleanup_timeout',
+      { timeoutMs: PRE_QUIT_CLEANUP_TIMEOUT_MS },
+      {
+        level: 'warn',
+        message: `Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+      }
     )
     return
   }
