@@ -187,6 +187,16 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit'],
     notes: [
       'Omit --terminal to target the active terminal in the current worktree.',
+      '--json result (result.terminal):',
+      '  handle             terminal handle echoed from the request',
+      '  status             running | exited | unknown',
+      '  tail               string[], the output lines returned by this read',
+      '  truncated          older output is unrecoverable (retained buffer trimmed, or a non-pageable partial line was clipped)',
+      '  limited            this read hit --limit but more output is retained (page via cursors)',
+      '  oldestCursor       retained-history entry point; start reading older retained output with --cursor <oldestCursor>',
+      '  nextCursor         forward paging cursor; pass its value to --cursor to read newer output (equals latestCursor when caught up)',
+      '  latestCursor       newest retained extent; forward paging is complete when nextCursor reaches it',
+      '  returnedLineCount  number of lines in this tail',
       'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
       'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
       'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'

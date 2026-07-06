@@ -459,7 +459,7 @@ export function formatFlagHelp(flag: string): string {
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
-    cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
+    cursor: '--cursor <n>           Line-offset cursor from a prior read; pass nextCursor to page newer output',
     action: '--action <name>       Secondary accessibility action name',
     activate: '--activate             Reveal the new worktree in the Orca app',
     app: '--app <app>            App name, bundle ID, or pid:N',

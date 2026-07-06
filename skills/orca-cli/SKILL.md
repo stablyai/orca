@@ -168,6 +168,20 @@ orca terminal switch --terminal <handle> --json
 orca terminal close --terminal <handle> --json
 ```
 
+When you call `terminal read --json`, the response is wrapped as `result.terminal` with:
+
+- `handle` — terminal handle echoed from the request.
+- `status` — `running` | `exited` | `unknown`.
+- `tail` — `string[]`, the output lines returned by this read.
+- `truncated` — older output is unrecoverable (retained buffer trimmed, or a non-pageable partial line was clipped).
+- `limited` — this read hit `--limit` but more output is retained (page via cursors).
+- `oldestCursor` — retained-history entry point; start reading older retained output with `--cursor <oldestCursor>`.
+- `nextCursor` — forward paging cursor; pass its value to `--cursor` to read newer output (equals `latestCursor` when caught up).
+- `latestCursor` — newest retained extent; forward paging is complete when `nextCursor` reaches it.
+- `returnedLineCount` — number of lines in this `tail`.
+
+Cursor values are non-negative integer line offsets serialized as strings (e.g. `"3000"`); pass the digits to `--cursor`.
+
 Terminal rules:
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
