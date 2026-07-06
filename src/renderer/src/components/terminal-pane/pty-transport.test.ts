@@ -82,6 +82,37 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('leaves the transport silently unbound after a failed connect — sendInput drops with no write IPC (frozen-terminal repro)', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const write = window.api.pty.write as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+
+    // Generic spawn failure (e.g. daemon not ready during a startup restore):
+    // the error IS surfaced via onError, but the transport stays unbound and
+    // every later keystroke is dropped with no further signal.
+    spawn.mockRejectedValueOnce(new Error('daemon socket not ready'))
+    const onError = vi.fn()
+    await transport.connect({ url: '', callbacks: { onError } })
+    expect(onError).toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(false)
+    expect(transport.sendInput('echo hello\r')).toBe(false)
+    await flushPtySideEffects()
+    expect(write).not.toHaveBeenCalled()
+
+    // The tombstoned-session rejection is swallowed with NO callback at all —
+    // a restored pane that hits it renders persisted content while eating
+    // keystrokes with zero user-visible signal (Discord #performance / #2836).
+    spawn.mockRejectedValueOnce(new Error('TerminalKilledError: session xyz was explicitly killed'))
+    const onErrorKilled = vi.fn()
+    await transport.connect({ url: '', callbacks: { onError: onErrorKilled } })
+    expect(onErrorKilled).not.toHaveBeenCalled()
+    expect(transport.isConnected()).toBe(false)
+    expect(transport.sendInput('echo hello\r')).toBe(false)
+    await flushPtySideEffects()
+    expect(write).not.toHaveBeenCalled()
+  })
+
   it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

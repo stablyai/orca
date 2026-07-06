@@ -14,6 +14,7 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
@@ -62,6 +63,7 @@ import {
 import { handleOsc52ClipboardRequest } from './osc52-clipboard'
 import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
+import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import {
@@ -545,6 +547,10 @@ export function useTerminalPaneLifecycle({
   const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
     settings?.terminalScrollbackRows
   )
+  // Why here: the output scheduler's backlog cap scales with the same
+  // scrollback setting; applying it where the setting is read keeps the two
+  // in lockstep without a separate settings subscription.
+  configureTerminalOutputBacklogCap(settings?.terminalScrollbackRows)
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
   const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
@@ -790,12 +796,15 @@ export function useTerminalPaneLifecycle({
         // both the enabled and disabled paths so xterm doesn't fall
         // through to any other OSC 52 handler and so our intentional drop
         // in the disabled path is explicit.
-        const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) =>
-          handleOsc52ClipboardRequest(data, {
-            allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
-            writeClipboardText: window.api.ui.writeClipboardText,
-            onBlockedWrite: showOsc52ClipboardBlockedToast
-          })
+        const osc52Disposable = pane.terminal.parser.registerOscHandler(
+          52,
+          guardParserHandler('osc-52-clipboard', (data) =>
+            handleOsc52ClipboardRequest(data, {
+              allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
+              writeClipboardText: window.api.ui.writeClipboardText,
+              onBlockedWrite: showOsc52ClipboardBlockedToast
+            })
+          )
         )
         osc52DisposablesRef.current.set(pane.id, osc52Disposable)
 
@@ -821,14 +830,17 @@ export function useTerminalPaneLifecycle({
             confirmed: false
           })
         }
-        const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
-          const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
-          if (parsedCwd) {
-            const confirmed = !isPaneReplaying(replayingPanesRef, pane.id)
-            paneCwdRef.current.set(pane.id, { cwd: parsedCwd, confirmed })
-          }
-          return true
-        })
+        const osc7Disposable = pane.terminal.parser.registerOscHandler(
+          7,
+          guardParserHandler('osc-7-cwd', (data) => {
+            const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
+            if (parsedCwd) {
+              const confirmed = !isPaneReplaying(replayingPanesRef, pane.id)
+              paneCwdRef.current.set(pane.id, { cwd: parsedCwd, confirmed })
+            }
+            return true
+          })
+        )
         osc7DisposablesRef.current.set(pane.id, osc7Disposable)
 
         // Why: let host-handled keys bypass xterm's kitty CSI-u encoder.

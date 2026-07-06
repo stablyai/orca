@@ -3,6 +3,7 @@ import type {
   CrashReportDetailValue
 } from '../../../shared/crash-reporting'
 import { getBrowserWebviewMemoryProfile } from '../components/browser-pane/webview-registry'
+import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
@@ -16,22 +17,10 @@ type BrowserPerformanceMemory = {
 let rendererCrashDiagnosticsInstalled = false
 let rendererMemoryInterval: number | null = null
 
-export function recordRendererCrashBreadcrumb(
-  name: string,
-  data?: CrashReportBreadcrumbData
-): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    // Why: crash diagnostics must never create or mask renderer startup failures.
-    const api = (window as Window & { api?: Window['api'] }).api
-    api?.crashReports.recordBreadcrumb({ name, ...(data ? { data } : {}) })
-  } catch {
-    // Best-effort crash evidence only.
-  }
-}
+// Why re-exported from a leaf module: terminal modules and their e2e-visible
+// import chains need breadcrumb recording without this file's import.meta /
+// webview-registry baggage. See crash-breadcrumb-recorder.ts.
+export { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 
 export function installRendererCrashDiagnostics(): void {
   if (rendererCrashDiagnosticsInstalled || typeof window === 'undefined') {

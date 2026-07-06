@@ -1198,6 +1198,7 @@ export type PreloadApi = {
         seq?: number
         rawLength?: number
         background?: boolean
+        droppedOutput?: boolean
       }) => void
     ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void

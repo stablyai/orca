@@ -25,6 +25,9 @@ export type PtyDataMeta = {
   seq?: number
   rawLength?: number
   background?: boolean
+  /** Main dropped this PTY's buffered output at the pending cap; the pane
+   *  must repaint from the main-owned snapshot instead of the live stream. */
+  droppedOutput?: boolean
 }
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
@@ -119,6 +122,10 @@ export function ensurePtyDispatcher(): void {
       if (payload.background === true) {
         meta ??= {}
         meta.background = true
+      }
+      if (payload.droppedOutput === true) {
+        meta ??= {}
+        meta.droppedOutput = true
       }
       const handler = ptyDataHandlers.get(payload.id)
       if (handler) {
