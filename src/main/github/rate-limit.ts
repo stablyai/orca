@@ -20,6 +20,13 @@ import type {
 } from '../../shared/types'
 import { acquire, release } from './gh-utils'
 import { ghExecFileAsync } from '../git/runner'
+import {
+  clearGhRateLimitBlock,
+  getGhRateLimitBlockedUntilMs,
+  recordGhPrimaryRateLimit,
+  registerGhRateLimitResetProbe,
+  type GhRateLimitBucket
+} from '../git/gh-rate-limit-breaker'
 
 // Why: GitHub explicitly states `GET /rate_limit` does NOT count against
 // any bucket, so the only reason to cache is to avoid spawning a `gh`
@@ -93,6 +100,18 @@ export function rateLimitGuard(bucket: RateLimitBucketKind):
       limit: number
       resetAt: number
     } {
+  // Why: the runner-level breaker learns about exhaustion from actual 403s,
+  // which can happen long before (or without) a snapshot probe — e.g. quota
+  // burned by another tool on the same account.
+  const breakerBlockedUntilMs = getGhRateLimitBlockedUntilMs(bucket)
+  if (breakerBlockedUntilMs !== null) {
+    return {
+      blocked: true,
+      remaining: 0,
+      limit: cached?.[bucket].limit ?? 0,
+      resetAt: Math.ceil(breakerBlockedUntilMs / 1000)
+    }
+  }
   if (!cached) {
     return { blocked: false }
   }
@@ -103,6 +122,11 @@ export function rateLimitGuard(bucket: RateLimitBucketKind):
       : bucket === 'graphql'
         ? MIN_REMAINING_GRAPHQL
         : MIN_REMAINING_SEARCH
+  // Why: a snapshot from before the bucket's reset time describes a window
+  // that has already ended — fail open rather than blocking on stale data.
+  if (b.resetAt * 1000 <= Date.now()) {
+    return { blocked: false }
+  }
   // Why: only block when we have a positive limit (limit:0 means "unknown" per
   // parseBucket fallback — don't block on missing data, that would brick the
   // app on a single bad rate_limit response).
@@ -130,10 +154,63 @@ export function noteRateLimitSpend(bucket: RateLimitBucketKind, cost = 1): void 
   }
 }
 
+// Why: when the runner's breaker trips it only knows "blocked", not for how
+// long. `gh api rate_limit` is exempt from limits, so one forced probe turns
+// the fallback block into the bucket's real reset time (or clears a block
+// that a stale fallback would otherwise keep alive). Single-flight: a 90-repo
+// 403 burst must refine once, not 90 times.
+let resetRefinementInFlight: Promise<void> | null = null
+
+function refineBreakerFromSnapshot(): void {
+  if (resetRefinementInFlight) {
+    return
+  }
+  resetRefinementInFlight = (async () => {
+    try {
+      const result = await getRateLimit({ force: true })
+      if (!result.ok) {
+        return
+      }
+      for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
+        const b = result.snapshot[bucket]
+        if (b.limit > 0 && b.remaining <= 0) {
+          recordGhPrimaryRateLimit(bucket, b.resetAt * 1000)
+        } else if (b.limit > 0) {
+          clearGhRateLimitBlock(bucket)
+        }
+      }
+    } finally {
+      resetRefinementInFlight = null
+    }
+  })()
+}
+
+registerGhRateLimitResetProbe(() => refineBreakerFromSnapshot())
+
+// Why: a 90-repo fan-out that primes the guard concurrently must resolve to
+// one `gh api rate_limit` spawn, not one per repo — the TTL cache alone can't
+// dedupe calls that all start before the first probe lands.
+let probeInFlight: Promise<GetRateLimitResult> | null = null
+
 export async function getRateLimit(options?: { force?: boolean }): Promise<GetRateLimitResult> {
   if (!options?.force && cached && Date.now() - cached.fetchedAt < RATE_LIMIT_CACHE_TTL_MS) {
     return { ok: true, snapshot: cached }
   }
+  if (!options?.force && probeInFlight) {
+    return probeInFlight
+  }
+  const probe = fetchRateLimitSnapshot()
+  probeInFlight = probe
+  try {
+    return await probe
+  } finally {
+    if (probeInFlight === probe) {
+      probeInFlight = null
+    }
+  }
+}
+
+async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
   await acquire()
   try {
     const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], { encoding: 'utf-8' })

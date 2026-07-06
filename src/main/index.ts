@@ -92,6 +92,7 @@ import {
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
+import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
@@ -432,6 +433,9 @@ if (startupDiagnosticsEnabled) {
   })
   startEventLoopStallProbe()
 }
+// Self-gated on ORCA_MAIN_THREAD_DIAGNOSTICS; unlike the startup probe it
+// runs for the whole session to catch steady-state churn (issue #7576).
+startMainThreadChurnProbe()
 
 function focusExistingWindow(): void {
   focusExistingMainWindow({

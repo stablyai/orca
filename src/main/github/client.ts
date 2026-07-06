@@ -73,6 +73,12 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
+import {
+  getRememberedGhCwdResolutionFailure,
+  isGhCwdRepoResolutionFailure,
+  rememberGhCwdResolutionFailure
+} from './gh-cwd-repo-negative-cache'
+import type { GitHubRepoContext } from './github-repository-identity'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -1005,6 +1011,32 @@ async function resolvePrWorkItemSource(
   return { source, originCandidate, upstreamCandidate }
 }
 
+/**
+ * gh exec for calls that rely on gh's own cwd→repo resolution (no explicit
+ * owner/repo). Serves a remembered deterministic resolution failure without
+ * spawning, so a remote-less repo costs one gh spawn per config change/TTL
+ * instead of two per Tasks refresh.
+ */
+async function ghCwdResolvedExec(
+  context: GitHubRepoContext,
+  args: string[],
+  ghOptions: GhExecOptions
+): Promise<{ stdout: string; stderr: string }> {
+  const remembered = await getRememberedGhCwdResolutionFailure(context)
+  if (remembered !== null) {
+    throw new Error(remembered)
+  }
+  try {
+    return await ghExecFileAsync(args, ghOptions)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (isGhCwdRepoResolutionFailure(message)) {
+      await rememberGhCwdResolutionFailure(context, message)
+    }
+    throw err
+  }
+}
+
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -1014,7 +1046,8 @@ async function listRecentWorkItems(
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
   const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
@@ -1034,7 +1067,8 @@ async function listRecentWorkItems(
           )
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghExecFileAsync(
+          : ghCwdResolvedExec(
+              repoContext,
               [
                 'issue',
                 'list',
@@ -1058,7 +1092,8 @@ async function listRecentWorkItems(
           )
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghExecFileAsync(
+          : ghCwdResolvedExec(
+              repoContext,
               [
                 'pr',
                 'list',
@@ -1130,7 +1165,8 @@ async function listRecentWorkItems(
   // effectively unusable for the feature — reject-all matches reality. If
   // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
-    ghExecFileAsync(
+    ghCwdResolvedExec(
+      repoContext,
       [
         'issue',
         'list',
@@ -1143,7 +1179,8 @@ async function listRecentWorkItems(
       ],
       ghOptions
     ),
-    ghExecFileAsync(
+    ghCwdResolvedExec(
+      repoContext,
       [
         'pr',
         'list',
@@ -1180,7 +1217,8 @@ async function listQueriedWorkItems(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
@@ -1209,7 +1247,9 @@ async function listQueriedWorkItems(
       before
     })
     try {
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const { stdout } = issueOwnerRepo
+        ? await ghExecFileAsync(args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, args, ghOptions)
       return {
         items: (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
       }
@@ -1234,7 +1274,9 @@ async function listQueriedWorkItems(
       before
     })
     try {
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const { stdout } = prOwnerRepo
+        ? await ghExecFileAsync(args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, args, ghOptions)
       const mapped = (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
         mapPullRequestWorkItem(item, prOwnerRepo)
       )
@@ -1398,6 +1440,9 @@ async function countWorkItemsForQuery(
     ],
     ghOptions
   )
+  // Why: over-counts gh cache hits, which is the safe direction — the search
+  // bucket is only 30/min and the next probe corrects the estimate.
+  noteRateLimitSpend('search')
   return Number.parseInt(stdout.trim(), 10) || 0
 }
 
@@ -1452,6 +1497,15 @@ export async function countWorkItems(
 
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
+
+  // Why: counts are decorative (pagination totals). The search bucket is only
+  // 30/min, so a multi-repo Tasks page must stop counting when the budget is
+  // gone instead of converting the remaining repos into 403 spawns. getRateLimit
+  // is 30s-cached and single-flight, so priming here is one spawn per window.
+  await getRateLimit()
+  if (rateLimitGuard('search').blocked) {
+    return 0
+  }
 
   await acquire()
   try {
