@@ -1177,7 +1177,7 @@ describe('updater', () => {
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
   })
 
-  it('runs pre-quit cleanup before killing PTYs during update install', async () => {
+  it('runs pre-quit cleanup before local PTY cleanup during update install', async () => {
     vi.useFakeTimers()
 
     const onBeforeQuit = vi.fn()

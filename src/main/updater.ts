@@ -587,7 +587,7 @@ async function performQuitAndInstall(): Promise<void> {
       await runBeforeUpdateQuitCleanup()
       span.addEvent('pre_quit_cleanup_done')
       killAllPty()
-      span.addEvent('pty_kill_all')
+      span.addEvent('local_pty_kill_all')
 
       for (const win of BrowserWindow.getAllWindows()) {
         win.removeAllListeners('close')
