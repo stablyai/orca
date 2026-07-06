@@ -302,6 +302,7 @@ async function main() {
     : null
 
   const allReports = []
+  const markers = []
   const startupEvents = []
   let buffer = ''
   child.stderr.setEncoding('utf-8')
@@ -314,7 +315,13 @@ async function main() {
       newlineIndex = buffer.indexOf('\n')
       const report = parseMainThreadLine(line)
       if (report) {
-        allReports.push({ ...report, wallMs: Date.now() })
+        // Marker lines (e.g. updater-check-attempt) timestamp one-off
+        // activities for correlation; they are not 5s report windows.
+        if (report.marker) {
+          markers.push({ ...report, wallMs: Date.now() })
+        } else {
+          allReports.push({ ...report, wallMs: Date.now() })
+        }
         continue
       }
       if (line.startsWith('[startup] ')) {
@@ -368,6 +375,7 @@ async function main() {
       events: perfDiagnosticsEvents.slice(0, 200)
     },
     reports,
+    markers,
     startupEvents: startupEvents.map((event) => event.line)
   }
 

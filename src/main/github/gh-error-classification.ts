@@ -27,12 +27,6 @@ export function classifyGhError(stderr: string): ClassifiedError {
   if (s.includes('http 422') || s.includes('validation failed')) {
     return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
   }
-  if (s.includes('rate limit')) {
-    return {
-      type: 'rate_limited',
-      message: 'GitHub rate limit hit. Try again in a few minutes.'
-    }
-  }
   if (
     s.includes('timeout') ||
     s.includes('no such host') ||

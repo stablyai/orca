@@ -17,6 +17,11 @@ export function isMainThreadDiagnosticsEnabled(env: NodeJS.ProcessEnv = process.
 // skipped together with their value to find the real subcommand.
 const GIT_VALUE_FLAGS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--exec-path'])
 
+// Why: only subcommand-style CLIs get a "<binary> <subcommand>" bucket; for
+// anything else (rg, node, …) the first positional is an operand, not a
+// subcommand, and would fragment the aggregation.
+const SUBCOMMAND_BINARIES = new Set(['git', 'gh', 'glab'])
+
 /**
  * Reduce a resolved spawn to a stable aggregation key like "git status" or
  * "gh api". Handles WSL wrapping (`wsl.exe -d <distro> -- git …`), absolute
@@ -45,6 +50,9 @@ export function classifySubprocessCommand(command: string, args: readonly string
     }
     binary = binaryName(unwrapped)
   }
+  if (!SUBCOMMAND_BINARIES.has(binary)) {
+    return binary
+  }
   let subcommand: string | null = null
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]
@@ -52,7 +60,9 @@ export function classifySubprocessCommand(command: string, args: readonly string
       subcommand = arg
       break
     }
-    if (GIT_VALUE_FLAGS.has(arg)) {
+    // Why: only git's global flags take a separate value; e.g. rg's -C takes
+    // a number that must not be consumed as if it were a flag value.
+    if (binary === 'git' && GIT_VALUE_FLAGS.has(arg)) {
       i++
     }
   }
@@ -107,6 +117,21 @@ export function drainSubprocessSpawnStats(): Record<string, SubprocessSpawnStats
   }
   spawnStatsByCommand.clear()
   return drained
+}
+
+/**
+ * Timestamped marker line for correlating a specific main-process activity
+ * (e.g. an updater check) with the probe's stall windows and with macOS
+ * Performance Diagnostics log entries in field captures. No-op unless
+ * ORCA_MAIN_THREAD_DIAGNOSTICS=1.
+ */
+export function writeMainThreadDiagnosticMarker(marker: string): void {
+  if (!isMainThreadDiagnosticsEnabled()) {
+    return
+  }
+  writeStartupDiagnosticLine(
+    `[main-thread] ${JSON.stringify({ marker, t: Math.round(performance.now()) })}`
+  )
 }
 
 /**

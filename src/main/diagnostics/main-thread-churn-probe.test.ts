@@ -43,6 +43,13 @@ describe('classifySubprocessCommand', () => {
   it('falls back to the binary name when no subcommand exists', () => {
     expect(classifySubprocessCommand('rg', ['--files'])).toBe('rg')
   })
+
+  it('never treats positionals or git-flag values as subcommands for non-subcommand CLIs', () => {
+    // rg's -C takes a number; it must not be consumed as a git-style flag
+    // value, and "3"/"pattern" must not become fake subcommand buckets.
+    expect(classifySubprocessCommand('rg', ['-C', '3', 'pattern'])).toBe('rg')
+    expect(classifySubprocessCommand('node', ['script.js'])).toBe('node')
+  })
 })
 
 describe('recordSubprocessSpawn', () => {
