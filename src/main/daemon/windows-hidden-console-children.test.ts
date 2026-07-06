@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { withHiddenConsoleDefault } from './windows-hidden-console-children'
+import { promisify } from 'node:util'
+import { wrapChildProcessApi, withHiddenConsoleDefault } from './windows-hidden-console-children'
 
 describe('withHiddenConsoleDefault', () => {
   it('injects windowsHide into an existing options object', () => {
@@ -38,5 +39,30 @@ describe('withHiddenConsoleDefault', () => {
     expect(args[0]).toBe('node')
     expect(args[1]).toEqual(['-v'])
     expect(args[2]).toEqual({ windowsHide: true })
+  })
+})
+
+describe('wrapChildProcessApi', () => {
+  it('injects windowsHide through the direct call', () => {
+    let seen: unknown[] = []
+    const original = (...args: unknown[]): void => {
+      seen = args
+    }
+    wrapChildProcessApi(original)('cmd.exe', ['/c'])
+    expect(seen[2]).toEqual({ windowsHide: true })
+  })
+
+  it('injects windowsHide through util.promisify (the rc.6 bypass)', async () => {
+    let seen: unknown[] = []
+    const original = (..._args: unknown[]): void => {}
+    Object.defineProperty(original, promisify.custom, {
+      value: (...args: unknown[]) => {
+        seen = args
+        return Promise.resolve('done')
+      }
+    })
+    const wrapped = wrapChildProcessApi(original)
+    await expect(promisify(wrapped)('powershell.exe', ['-NoProfile'])).resolves.toBe('done')
+    expect(seen[2]).toEqual({ windowsHide: true })
   })
 })

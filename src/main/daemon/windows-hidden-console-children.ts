@@ -57,20 +57,39 @@ export function installHiddenConsoleChildDefaults(): void {
   }
   installed = true
   for (const name of PATCHED_APIS) {
-    const original = childProcess[name] as (...args: unknown[]) => unknown
-    const wrapped = (...args: unknown[]): unknown => original(...withHiddenConsoleDefault(args))
-    // Why: exec/execFile carry promisify custom symbols; copy them so
-    // util.promisify keeps returning {stdout, stderr} promises.
-    Object.setPrototypeOf(wrapped, original)
-    for (const sym of Object.getOwnPropertySymbols(original)) {
-      Object.defineProperty(wrapped, sym, Object.getOwnPropertyDescriptor(original, sym)!)
-    }
-    ;(childProcess as Record<string, unknown>)[name] = wrapped
+    ;(childProcess as Record<string, unknown>)[name] = wrapChildProcessApi(
+      childProcess[name] as (...args: unknown[]) => unknown
+    )
   }
 }
 
-// Why install on import (not via an exported call): modules capture bindings
-// like `promisify(execFile)` at their own import time, so the patch must land
-// before ANY other daemon module evaluates. daemon-entry imports this module
-// first for that reason.
+export function wrapChildProcessApi(
+  original: (...args: unknown[]) => unknown
+): (...args: unknown[]) => unknown {
+  const wrapped = (...args: unknown[]): unknown => original(...withHiddenConsoleDefault(args))
+  Object.setPrototypeOf(wrapped, original)
+  // Why: exec/execFile carry a util.promisify.custom implementation that
+  // internally calls the ORIGINAL function — copying the symbol verbatim lets
+  // every `promisify(execFile)` call site bypass the wrapper (rc.6 shipped
+  // this bug: the daemon's CIM probes are promisified and kept flashing).
+  // Wrap each symbol-attached function so the injection applies there too.
+  for (const sym of Object.getOwnPropertySymbols(original)) {
+    const desc = Object.getOwnPropertyDescriptor(original, sym)!
+    if (typeof desc.value === 'function') {
+      const originalCustom = desc.value as (...args: unknown[]) => unknown
+      desc.value = (...args: unknown[]): unknown =>
+        originalCustom(...withHiddenConsoleDefault(args))
+    }
+    Object.defineProperty(wrapped, sym, desc)
+  }
+  return wrapped
+}
+
+// Why install on load: this file is built as its own self-contained bundle
+// entry (electron.vite.config.ts) and preloaded into the daemon via
+// `node --require` (daemon-init.ts). An in-graph import cannot work: rollup's
+// CJS output hoists chunk requires above inlined module code, so sibling
+// chunks capture `promisify(execFile)` before any "first import" executes.
+// --require runs before the whole graph loads, immune to bundler ordering.
+// It must therefore never import anything that could be split into a chunk.
 installHiddenConsoleChildDefaults()

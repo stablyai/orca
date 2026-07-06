@@ -6,7 +6,7 @@ it would scatter the "swap the running provider atomically" invariant across
 files with no cleaner ownership seam: restart, replaceDaemonProvider, and the
 module-level spawner/adapter singletons must stay co-located so a future
 change cannot leave them drifting out of sync. */
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import { mkdirSync, existsSync, unlinkSync, writeFileSync } from 'node:fs'
 import { fork } from 'node:child_process'
@@ -284,6 +284,13 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     // absent (dev, non-win32, pre-relocation builds) fall back to the install-dir
     // Electron host run as plain Node via ELECTRON_RUN_AS_NODE.
     const relocatedHostExecPath = getRelocatedDaemonHostExecPath()
+    // Why --require and not an import inside daemon-entry: Electron's Node
+    // defaults windowsHide=true but standalone node.exe does not, and rollup's
+    // CJS chunking hoists chunk requires above inlined code — an in-graph
+    // import runs AFTER sibling modules capture promisify(execFile), so the
+    // shim silently no-ops (shipped broken in rc.6). Preloading guarantees it
+    // runs before the daemon's module graph loads.
+    const consoleShimPath = join(dirname(entryPath), 'windows-hidden-console-children.js')
     // Why: without this span a silent fallback to the install-dir host (back
     // inside the updater kill zone) is indistinguishable from the fixed path
     // in field trace files.
@@ -304,8 +311,11 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       detached: true,
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
       // Why: a standalone node.exe is already plain Node; reset execArgv so the
-      // Electron main process's node flags don't leak into it.
-      ...(relocatedHostExecPath ? { execPath: relocatedHostExecPath, execArgv: [] } : {}),
+      // Electron main process's node flags don't leak into it, then preload
+      // the windowsHide shim ahead of the daemon's module graph.
+      ...(relocatedHostExecPath
+        ? { execPath: relocatedHostExecPath, execArgv: ['--require', consoleShimPath] }
+        : {}),
       env: {
         ...process.env,
         // Why: ELECTRON_RUN_AS_NODE makes the forked Electron binary run as a
