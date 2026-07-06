@@ -555,15 +555,42 @@ export class OrchestrationDb {
       if (!deps.includes(completedTaskId)) {
         continue
       }
-
-      const allDepsCompleted = deps.every((depId) => {
-        const dep = this.getTask(depId)
-        return dep?.status === 'completed'
-      })
-      if (allDepsCompleted) {
-        this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
-      }
+      this.recomputeReadiness(task)
     }
+  }
+
+  // Why: shared per-task readiness check. Promotes pending→ready when every
+  // dep is completed and demotes ready→pending when a dep is no longer met.
+  // The demote path is only reachable via updateTaskDeps: a completion can only
+  // unblock dependents, never block them.
+  private recomputeReadiness(task: TaskRow): void {
+    const deps: string[] = JSON.parse(task.deps)
+    const allDepsCompleted = deps.every((depId) => this.getTask(depId)?.status === 'completed')
+    if (allDepsCompleted && task.status === 'pending') {
+      this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
+    } else if (!allDepsCompleted && task.status === 'ready') {
+      this.db.prepare("UPDATE tasks SET status = 'pending' WHERE id = ?").run(task.id)
+    }
+  }
+
+  updateTaskDeps(id: string, deps: string[]): TaskRow | undefined {
+    const task = this.getTask(id)
+    if (!task) {
+      return undefined
+    }
+    // Why: deps encode the DAG edges that decide readiness; once a task is
+    // dispatched, blocked, or terminal its readiness is locked, so refuse to
+    // rewrite edges underneath it.
+    if (task.status !== 'pending' && task.status !== 'ready') {
+      throw new Error(
+        `Task ${id} is ${task.status}; deps can only be edited while pending or ready`
+      )
+    }
+    this.db.prepare('UPDATE tasks SET deps = ? WHERE id = ?').run(JSON.stringify(deps), id)
+    // Why: recompute in the same writer so a deps edit flips readiness
+    // synchronously — no window where the task is dispatchable but still pending.
+    this.recomputeReadiness(this.getTask(id)!)
+    return this.getTask(id)
   }
 
   // ── Dispatch Contexts ──

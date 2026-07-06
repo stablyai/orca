@@ -81,11 +81,16 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'task-update'],
-    summary: 'Update a task status',
+    summary: 'Update a task status or dependencies',
     usage:
-      'orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result'],
-    notes: ['Valid --status values: pending, ready, dispatched, completed, failed, blocked.']
+      'orca orchestration task-update --id <task_id> [--status <status>] [--deps <json_array>] [--result <json>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'deps', 'result'],
+    notes: [
+      'Provide at least one of --status or --deps.',
+      'Valid --status values: pending, ready, dispatched, completed, failed, blocked.',
+      '--deps is a JSON array of task IDs; editable only while a task is pending or ready.',
+      'When both are given, --deps is applied before --status, so --status is the final word.'
+    ]
   },
   {
     path: ['orchestration', 'dispatch'],

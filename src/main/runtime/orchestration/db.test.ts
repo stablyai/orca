@@ -231,6 +231,62 @@ describe('OrchestrationDb', () => {
       expect(d.getTask(t3.id)?.status).toBe('ready')
     })
 
+    it('updateTaskDeps writes the deps column', () => {
+      const d = createDb()
+      const a = d.createTask({ spec: 'a' })
+      const b = d.createTask({ spec: 'b' })
+      const task = d.createTask({ spec: 'task', deps: [a.id] })
+
+      const updated = d.updateTaskDeps(task.id, [b.id])
+
+      expect(JSON.parse(updated!.deps)).toEqual([b.id])
+    })
+
+    it('updateTaskDeps promotes a pending task to ready when deps are satisfied', () => {
+      const d = createDb()
+      const done = d.createTask({ spec: 'done' })
+      d.updateTaskStatus(done.id, 'completed')
+      // Why: starts pending against an unsatisfied dep, then deps are rewritten
+      // to point only at the completed task.
+      const task = d.createTask({ spec: 'task', deps: ['task_unmet'] })
+
+      expect(d.getTask(task.id)?.status).toBe('pending')
+
+      d.updateTaskDeps(task.id, [done.id])
+
+      expect(d.getTask(task.id)?.status).toBe('ready')
+    })
+
+    it('updateTaskDeps demotes a ready task to pending when a dep is added', () => {
+      const d = createDb()
+      const blocker = d.createTask({ spec: 'blocker' })
+      // Why: a no-dep task is ready at creation; adding an incomplete dep must
+      // flip it back to pending so it is not dispatchable.
+      const task = d.createTask({ spec: 'task' })
+
+      expect(task.status).toBe('ready')
+
+      d.updateTaskDeps(task.id, [blocker.id])
+
+      expect(d.getTask(task.id)?.status).toBe('pending')
+    })
+
+    it('updateTaskDeps rejects deps edits once a task has left the pending/ready states', () => {
+      const d = createDb()
+      const dispatched = d.createTask({ spec: 'dispatched' })
+      d.updateTaskStatus(dispatched.id, 'dispatched')
+      const completed = d.createTask({ spec: 'completed' })
+      d.updateTaskStatus(completed.id, 'completed')
+
+      expect(() => d.updateTaskDeps(dispatched.id, [])).toThrow('pending or ready')
+      expect(() => d.updateTaskDeps(completed.id, [])).toThrow('pending or ready')
+    })
+
+    it('updateTaskDeps returns undefined for a nonexistent task', () => {
+      const d = createDb()
+      expect(d.updateTaskDeps('task_fake', [])).toBeUndefined()
+    })
+
     it('sets completed_at on completion', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'do it' })

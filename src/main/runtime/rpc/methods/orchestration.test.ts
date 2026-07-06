@@ -1034,6 +1034,53 @@ describe('orchestration RPC methods', () => {
         call('orchestration.taskUpdate', { id: 'task_fake', status: 'completed' })
       ).rejects.toThrow('Task not found')
     })
+
+    it('updates deps and recomputes readiness', async () => {
+      setup()
+      const done = db.createTask({ spec: 'done' })
+      db.updateTaskStatus(done.id, 'completed')
+      const task = db.createTask({ spec: 'task', deps: ['task_unmet'] })
+
+      const result = (await call('orchestration.taskUpdate', {
+        id: task.id,
+        deps: JSON.stringify([done.id])
+      })) as { task: { status: string; deps: string } }
+
+      expect(JSON.parse(result.task.deps)).toEqual([done.id])
+      expect(result.task.status).toBe('ready')
+    })
+
+    it('rejects invalid deps JSON with the same message as taskCreate', async () => {
+      setup()
+      const task = db.createTask({ spec: 'task' })
+      await expect(
+        call('orchestration.taskUpdate', { id: task.id, deps: 'not-json' })
+      ).rejects.toThrow('Invalid --deps')
+    })
+
+    it('requires at least one of status or deps', async () => {
+      setup()
+      const task = db.createTask({ spec: 'task' })
+      await expect(call('orchestration.taskUpdate', { id: task.id })).rejects.toThrow(
+        'at least one of --status or --deps'
+      )
+    })
+
+    it('applies deps before status so an explicit status is the final word', async () => {
+      setup()
+      // Why: ready task; adding an unmet dep would demote it, but the caller
+      // also sets completed, which must win.
+      const task = db.createTask({ spec: 'task' })
+      const blocker = db.createTask({ spec: 'blocker' })
+
+      const result = (await call('orchestration.taskUpdate', {
+        id: task.id,
+        deps: JSON.stringify([blocker.id]),
+        status: 'completed'
+      })) as { task: { status: string } }
+
+      expect(result.task.status).toBe('completed')
+    })
   })
 
   describe('orchestration.dispatch', () => {

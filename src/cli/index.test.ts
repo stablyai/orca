@@ -3293,6 +3293,45 @@ describe('orca cli worktree awareness', () => {
     errSpy.mockRestore()
   })
 
+  it('advertises --deps in task-update help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['orchestration', 'task-update', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('[--deps <json_array>]')
+    expect(help).toContain('Update a task status or dependencies')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('passes --deps through orchestration task-update', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    callMock.mockResolvedValueOnce({
+      id: 'req_task_update_deps',
+      ok: true,
+      result: {
+        task: { id: 'task_1', status: 'ready' }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['orchestration', 'task-update', '--id', 'task_1', '--deps', '["task_2"]'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.taskUpdate', {
+      id: 'task_1',
+      status: undefined,
+      deps: '["task_2"]',
+      result: undefined
+    })
+  })
+
   it('passes the caller terminal handle through orchestration task-create', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
     callMock.mockResolvedValueOnce({

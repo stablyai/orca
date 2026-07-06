@@ -106,12 +106,14 @@ A task is the work item, a dispatch assigns it to a terminal, and a gate blocks 
 ```bash
 orca orchestration task-create --spec <text> [--deps <json_array>] [--parent <task_id>] [--json]
 orca orchestration task-list [--status <status>] [--ready] [--json]
-orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--json]
+orca orchestration task-update --id <task_id> [--status <status>] [--deps <json_array>] [--result <json>] [--json]
 orca orchestration dispatch --task <task_id> --to <handle> [--from <handle>] [--inject] [--json]
 orca orchestration dispatch-show --task <task_id> [--json]
 ```
 
 Task statuses: `pending`, `ready`, `dispatched`, `completed`, `failed`, `blocked`.
+
+`task-update` requires at least one of `--status` or `--deps`; deps are editable only while a task is `pending` or `ready`.
 
 Dispatch rules:
 
