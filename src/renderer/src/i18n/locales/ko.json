@@ -5198,6 +5198,8 @@
           "4aa4d9fb73": "가로 스크롤을 요구하는 대신 diff 편집기에서 긴 줄을 줄 바꿈합니다.",
           "bf16ef0af2": "끄다",
           "3f6892f307": "~에",
+          "455658d770": "When on, sending review notes to an agent deletes them. Off keeps them as dimmed history you can revisit.",
+          "fa151d9def": "Clear Review Notes After Sending",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
@@ -11296,7 +11298,10 @@
           "f3ef92952b": "이 메모",
           "9cde7ad994": "agent를 위한 메모 복사",
           "117432e2c6": "복사된 메모",
-          "3ababd949d": "리뷰 노트"
+          "3ababd949d": "리뷰 노트",
+          "004e3fa53a": "Resolve note",
+          "3695b489ca": "Reopen note",
+          "cd102ad42c": "Agent"
         },
         "RichMarkdownReviewRailActions": {
           "636394af72": "agent 용 메모 복사",
@@ -11509,6 +11514,12 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "붙여넣기 내용이 너무 큽니다."
+        },
+        "RichMarkdownReviewNoteThread": {
+          "4994dba39d": "Send reply",
+          "665b0d63d1": "Reply…",
+          "88270bb163": "You",
+          "2bf33695c2": "Agent"
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "성공했다",

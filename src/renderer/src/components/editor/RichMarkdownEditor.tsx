@@ -80,7 +80,7 @@ export default function RichMarkdownEditor({
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
-  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+  const applyReviewNotesDelivery = useAppStore((s) => s.applyReviewNotesDelivery)
   const allDiffComments = useAppStore((s): DiffComment[] | undefined => {
     for (const list of Object.values(s.worktreesByRepo)) {
       const worktree = list.find((candidate) => candidate.id === worktreeId)
@@ -399,7 +399,7 @@ export default function RichMarkdownEditor({
       onCopyReviewNotes={() => void review.handleCopyMarkdownReviewNotes()}
       onCopyReviewNote={(note) => void review.handleCopyMarkdownReviewNote(note)}
       onToggleReviewRail={() => review.setReviewRailOpen((open) => !open)}
-      onReviewNotesDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+      onReviewNotesDelivered={(notes) => void applyReviewNotesDelivery(worktreeId, notes)}
       onReviewNoteSourceClick={review.scrollRichMarkdownReviewNoteSourceIntoView}
       onDeleteReviewComment={(commentId) => void deleteDiffComment(worktreeId, commentId)}
       onSubmitReviewCommentEdit={(commentId, body) =>

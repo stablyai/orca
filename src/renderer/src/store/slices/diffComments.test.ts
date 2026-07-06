@@ -714,3 +714,158 @@ describe('bulk clear diff comments', () => {
     errSpy.mockRestore()
   })
 })
+
+describe('applyReviewNotesDelivery', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+  })
+
+  it('preserves delivered notes as sent history by default', async () => {
+    const store = createTestStore()
+    const delivered = makeComment({ id: 'c1' })
+    seed(store, [delivered])
+
+    const ok = await store.getState().applyReviewNotesDelivery(WT, [delivered])
+
+    expect(ok).toBe(true)
+    const saved = store.getState().getDiffComments(WT)
+    expect(saved).toHaveLength(1)
+    expect(typeof saved[0].sentAt).toBe('number')
+  })
+
+  it('deletes delivered notes when the clear-after-send setting is on', async () => {
+    const store = createTestStore()
+    store.setState((s) => ({
+      settings: { ...s.settings, clearReviewNotesAfterSend: true } as typeof s.settings
+    }))
+    const delivered = makeComment({ id: 'c1' })
+    const pending = makeComment({ id: 'c2' })
+    seed(store, [delivered, pending])
+
+    const ok = await store.getState().applyReviewNotesDelivery(WT, [delivered])
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toEqual([pending])
+  })
+
+  it('does not stamp a note edited after send started (snapshot guard)', async () => {
+    const store = createTestStore()
+    const sentSnapshot = makeComment({ id: 'c1', body: 'old body' })
+    const edited = makeComment({ id: 'c1', body: 'new body' })
+    seed(store, [edited])
+
+    const ok = await store.getState().applyReviewNotesDelivery(WT, [sentSnapshot])
+
+    // The newer unsent edit must stay unsent — the agent only saw the old body.
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)[0].sentAt).toBeUndefined()
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+})
+
+describe('resolveDiffComment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+  })
+
+  it('stamps resolvedAt when resolving and clears it when reopening', async () => {
+    const store = createTestStore()
+    seed(store, [makeComment({ id: 'c1' })])
+
+    expect(await store.getState().resolveDiffComment(WT, 'c1', true)).toBe(true)
+    const resolved = store.getState().getDiffComments(WT)[0]
+    expect(typeof resolved.resolvedAt).toBe('number')
+    expect(resolved.resolvedAt).toBeGreaterThan(0)
+    expect(updateMeta).toHaveBeenCalledTimes(1)
+
+    expect(await store.getState().resolveDiffComment(WT, 'c1', false)).toBe(true)
+    expect(store.getState().getDiffComments(WT)[0].resolvedAt).toBeUndefined()
+    expect(updateMeta).toHaveBeenCalledTimes(2)
+  })
+
+  it('is a no-op (no persist) when already in the requested state', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' })]
+    seed(store, comments)
+
+    expect(await store.getState().resolveDiffComment(WT, 'c1', false)).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('rolls back on persist failure', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' })]
+    seed(store, comments)
+    updateMeta.mockRejectedValueOnce(new Error('disk full'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    expect(await store.getState().resolveDiffComment(WT, 'c1', true)).toBe(false)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(store.getState().getDiffComments(WT)[0].resolvedAt).toBeUndefined()
+    errSpy.mockRestore()
+  })
+})
+
+describe('addDiffCommentReply', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+  })
+
+  it('appends a trimmed reply with role and persists once', async () => {
+    const store = createTestStore()
+    seed(store, [makeComment({ id: 'c1' })])
+
+    const reply = await store
+      .getState()
+      .addDiffCommentReply(WT, 'c1', { body: '  looks good  ', authorRole: 'agent' })
+
+    expect(reply).toEqual(expect.objectContaining({ body: 'looks good', authorRole: 'agent' }))
+    const saved = store.getState().getDiffComments(WT)[0]
+    expect(saved.replies).toHaveLength(1)
+    expect(saved.replies?.[0]).toEqual(
+      expect.objectContaining({ body: 'looks good', authorRole: 'agent' })
+    )
+    expect(updateMeta).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an empty reply without persisting', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' })]
+    seed(store, comments)
+
+    expect(
+      await store.getState().addDiffCommentReply(WT, 'c1', { body: '   ', authorRole: 'user' })
+    ).toBe(null)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('returns null when the target comment is missing', async () => {
+    const store = createTestStore()
+    seed(store, [makeComment({ id: 'c1' })])
+
+    expect(
+      await store.getState().addDiffCommentReply(WT, 'missing', { body: 'hi', authorRole: 'user' })
+    ).toBe(null)
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+})

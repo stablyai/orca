@@ -131,7 +131,7 @@ export function useDiffCommentDecorator({
   pendingScrollCommentId,
   onPendingScrollConsumed
 }: DecoratorArgs): void {
-  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+  const applyReviewNotesDelivery = useAppStore((s) => s.applyReviewNotesDelivery)
   const activeGroupId = useAppStore((s) =>
     worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
   )
@@ -553,7 +553,7 @@ export function useDiffCommentDecorator({
                   targetModeLabel="This note"
                   triggerClassName="orca-diff-comment-edit"
                   disabledTooltip="Note already sent"
-                  onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+                  onDelivered={(notes) => void applyReviewNotesDelivery(worktreeId, notes)}
                 />
               ) : null
             }
@@ -682,7 +682,7 @@ export function useDiffCommentDecorator({
   }, [
     activeGroupId,
     cancelScrollToZoneFrame,
-    clearDeliveredDiffComments,
+    applyReviewNotesDelivery,
     editor,
     filePath,
     formatCommentPrompt,

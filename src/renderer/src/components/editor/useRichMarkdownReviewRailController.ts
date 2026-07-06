@@ -84,6 +84,14 @@ export function useRichMarkdownReviewRailController({
     scrollContainerRef
   ])
 
+  // Why: the rAF below must run the LATEST measure. A pending frame scheduled
+  // before a new comment/reply landed would otherwise fire a stale closure and
+  // drop that change (e.g. the first reply only appearing once a second was
+  // sent). Reading through a ref keeps the scheduler debounced but always
+  // current.
+  const syncNotePositionsRef = useRef(syncNotePositions)
+  syncNotePositionsRef.current = syncNotePositions
+
   const requestSyncNotePositions = useCallback((): void => {
     if (!reviewRailVisible) {
       clearRichMarkdownNotePositions(setNotePositions)
@@ -94,9 +102,9 @@ export function useRichMarkdownReviewRailController({
     }
     notePositionsFrameRef.current = window.requestAnimationFrame(() => {
       notePositionsFrameRef.current = null
-      syncNotePositions()
+      syncNotePositionsRef.current()
     })
-  }, [reviewRailVisible, syncNotePositions])
+  }, [reviewRailVisible])
 
   const pulseRichMarkdownReviewNote = useCallback((commentId: string): void => {
     clearWindowTimer(attentionReviewCommentTimeoutRef)
@@ -189,7 +197,13 @@ export function useRichMarkdownReviewRailController({
     [editorRef, markdownSourceLineOffsetRef, pulseRichMarkdownSourceRange, scrollContainerRef]
   )
 
-  useEffect(() => requestSyncNotePositions(), [content, markdownComments, requestSyncNotePositions])
+  // Why: measure synchronously when notes/content change so a new comment or
+  // reply renders on the same commit. A reply doesn't move the source-line
+  // anchor, so an immediate measure is safe — and it avoids depending on a
+  // requestAnimationFrame that the browser throttles when the tab is idle
+  // (which made the first reply only appear once a second was sent). Scroll and
+  // resize still go through the rAF-debounced path below.
+  useEffect(() => syncNotePositions(), [content, markdownComments, syncNotePositions])
 
   useEffect(() => {
     if (!reviewRailVisible) {

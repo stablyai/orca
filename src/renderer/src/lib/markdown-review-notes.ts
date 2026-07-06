@@ -179,6 +179,23 @@ function escapeMarkdownReviewNoteBody(body: string): string {
     .replace(/\n/g, '\\n')
 }
 
+function commentAuthorLabel(authorRole: DiffComment['authorRole']): string {
+  return authorRole === 'agent' ? 'Agent' : 'User'
+}
+
+function formatMarkdownReviewReplies(replies: MarkdownReviewNote['replies']): string | null {
+  if (!replies || replies.length === 0) {
+    return null
+  }
+  // Why: re-sending a note should carry its thread so the agent sees the prior
+  // back-and-forth instead of replying to the original comment in isolation.
+  const lines = replies.map(
+    (reply) =>
+      `${commentAuthorLabel(reply.authorRole)} reply: "${escapeMarkdownReviewNoteBody(reply.body)}"`
+  )
+  return lines.join('\n')
+}
+
 function formatMarkdownReviewNoteDetails(note: MarkdownReviewNote, content: string): string {
   const excerpt = note.selectedText
     ? quoteMarkdownReviewText(getMarkdownReviewHighlightedText(content, note))
@@ -186,7 +203,8 @@ function formatMarkdownReviewNoteDetails(note: MarkdownReviewNote, content: stri
   const parts = [
     getDiffCommentLineLabel(note),
     excerpt ? `Excerpt:\n${excerpt}` : null,
-    `User comment: "${escapeMarkdownReviewNoteBody(note.body)}"`
+    `${commentAuthorLabel(note.authorRole)} comment: "${escapeMarkdownReviewNoteBody(note.body)}"`,
+    formatMarkdownReviewReplies(note.replies)
   ]
   return parts.filter((part): part is string => part !== null).join('\n')
 }

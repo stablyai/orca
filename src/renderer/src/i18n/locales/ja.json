@@ -5198,6 +5198,8 @@
           "4aa4d9fb73": "水平スクロールを必要とせずに、差分エディターで長い行を折り返します。",
           "bf16ef0af2": "オフ",
           "3f6892f307": "オン",
+          "455658d770": "When on, sending review notes to an agent deletes them. Off keeps them as dimmed history you can revisit.",
+          "fa151d9def": "Clear Review Notes After Sending",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
@@ -11296,7 +11298,10 @@
           "f3ef92952b": "このメモ",
           "9cde7ad994": "agent 用のメモをコピーする",
           "117432e2c6": "コピーされたメモ",
-          "3ababd949d": "レビューノート"
+          "3ababd949d": "レビューノート",
+          "004e3fa53a": "Resolve note",
+          "3695b489ca": "Reopen note",
+          "cd102ad42c": "Agent"
         },
         "RichMarkdownReviewRailActions": {
           "636394af72": "agent 用のメモをコピーする",
@@ -11509,6 +11514,12 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "貼り付け内容が大きすぎます。"
+        },
+        "RichMarkdownReviewNoteThread": {
+          "4994dba39d": "Send reply",
+          "665b0d63d1": "Reply…",
+          "88270bb163": "You",
+          "2bf33695c2": "Agent"
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "成功しました",

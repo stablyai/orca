@@ -5213,6 +5213,8 @@
           "4aa4d9fb73": "Ajusta líneas largas en editores de diff en lugar de requerir desplazamiento horizontal.",
           "bf16ef0af2": "Desactivado",
           "3f6892f307": "Activado",
+          "455658d770": "When on, sending review notes to an agent deletes them. Off keeps them as dimmed history you can revisit.",
+          "fa151d9def": "Clear Review Notes After Sending",
           "b82f86d7d2": "Corrector ortográfico de Rich Markdown",
           "5195f0b9ef": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown."
         },
@@ -11296,7 +11298,10 @@
           "f3ef92952b": "Esta nota",
           "9cde7ad994": "Copiar nota para el agente",
           "117432e2c6": "Nota copiada",
-          "3ababd949d": "Notas de revisión"
+          "3ababd949d": "Notas de revisión",
+          "004e3fa53a": "Resolve note",
+          "3695b489ca": "Reopen note",
+          "cd102ad42c": "Agent"
         },
         "RichMarkdownReviewRailActions": {
           "636394af72": "Copiar notas para el agente",
@@ -11509,6 +11514,12 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "El contenido pegado es demasiado grande."
+        },
+        "RichMarkdownReviewNoteThread": {
+          "4994dba39d": "Send reply",
+          "665b0d63d1": "Reply…",
+          "88270bb163": "You",
+          "2bf33695c2": "Agent"
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "tuvo éxito",

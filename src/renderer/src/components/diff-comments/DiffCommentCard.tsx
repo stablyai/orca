@@ -33,6 +33,9 @@ type Props = {
   onContentResize?: () => void
   onSubmitEdit?: (body: string) => Promise<boolean>
   headerActions?: ReactNode
+  /** Rendered below the body (e.g. a reply thread). Hidden while editing so the
+   *  edit footer is the only interactive control. Opt-in; the diff side omits it. */
+  footer?: ReactNode
 }
 
 export function DiffCommentCard({
@@ -48,7 +51,8 @@ export function DiffCommentCard({
   onDelete,
   onContentResize,
   onSubmitEdit,
-  headerActions
+  headerActions,
+  footer
 }: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
@@ -291,6 +295,8 @@ export function DiffCommentCard({
         ) : (
           <div className="orca-diff-comment-body">{body}</div>
         )}
+
+        {!editing && footer ? footer : null}
       </div>
     </div>
   )

@@ -475,7 +475,7 @@ export default function MarkdownPreview({
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
-  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+  const applyReviewNotesDelivery = useAppStore((s) => s.applyReviewNotesDelivery)
   const keybindings = useAppStore((s) => s.keybindings)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const sourceOpenFile = useAppStore((s) =>
@@ -1136,7 +1136,7 @@ export default function MarkdownPreview({
                         note={comment as MarkdownReviewNote}
                         modeSlot="preview-inline"
                         onDelivered={(notes) =>
-                          void clearDeliveredDiffComments(sourceWorktree.id, notes)
+                          void applyReviewNotesDelivery(sourceWorktree.id, notes)
                         }
                       />
                     </>
@@ -1153,7 +1153,7 @@ export default function MarkdownPreview({
       activeReviewCommentId,
       attentionReviewCommentId,
       addDiffComment,
-      clearDeliveredDiffComments,
+      applyReviewNotesDelivery,
       copiedReviewNoteId,
       deleteDiffComment,
       filePath,
@@ -1835,7 +1835,7 @@ export default function MarkdownPreview({
                 modeIdParts={['markdown-notes', sourceWorktree.id, filePath, 'preview-toolbar']}
                 scopes={unsentMarkdownReviewScope}
                 triggerClassName="markdown-review-icon-button"
-                onDelivered={(notes) => void clearDeliveredDiffComments(sourceWorktree.id, notes)}
+                onDelivered={(notes) => void applyReviewNotesDelivery(sourceWorktree.id, notes)}
               />
             ) : null}
           </div>

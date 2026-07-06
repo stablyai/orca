@@ -9,6 +9,7 @@ import {
 import { clampNumber } from '@/lib/terminal-theme'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { GeneralEditorMarkdownReviewSettings } from './GeneralEditorMarkdownReviewSettings'
 import { SearchableSetting } from './SearchableSetting'
 import {
   SettingsSegmentedControl,
@@ -381,32 +382,7 @@ export function GeneralEditorSettingsSection({
 
       <RichMarkdownSpellcheckSetting settings={settings} updateSettings={updateSettings} />
 
-      <SearchableSetting
-        title={translate(
-          'auto.components.settings.GeneralEditorSettingsSection.4edc104f0f',
-          'Markdown Review Notes'
-        )}
-        description={translate(
-          'auto.components.settings.GeneralEditorSettingsSection.5f02e6fb21',
-          'Show local markdown review note controls in rich editor mode.'
-        )}
-        keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
-      >
-        <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.GeneralEditorSettingsSection.4edc104f0f',
-            'Markdown Review Notes'
-          )}
-          description={translate(
-            'auto.components.settings.GeneralEditorSettingsSection.f80603d293',
-            'Show local markdown note controls in rich editor mode and agent handoff actions.'
-          )}
-          checked={settings.markdownReviewToolsEnabled}
-          onChange={() =>
-            updateSettings({ markdownReviewToolsEnabled: !settings.markdownReviewToolsEnabled })
-          }
-        />
-      </SearchableSetting>
+      <GeneralEditorMarkdownReviewSettings settings={settings} updateSettings={updateSettings} />
     </section>
   )
 }

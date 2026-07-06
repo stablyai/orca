@@ -5198,6 +5198,8 @@
           "4aa4d9fb73": "在差异编辑器中换行显示长行，而不是要求水平滚动。",
           "bf16ef0af2": "关闭",
           "3f6892f307": "开启",
+          "455658d770": "When on, sending review notes to an agent deletes them. Off keeps them as dimmed history you can revisit.",
+          "fa151d9def": "Clear Review Notes After Sending",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。"
         },
@@ -11296,7 +11298,10 @@
           "f3ef92952b": "此注",
           "9cde7ad994": "复制备注给智能体",
           "117432e2c6": "复制的注释",
-          "3ababd949d": "复习笔记"
+          "3ababd949d": "复习笔记",
+          "004e3fa53a": "Resolve note",
+          "3695b489ca": "Reopen note",
+          "cd102ad42c": "Agent"
         },
         "RichMarkdownReviewRailActions": {
           "636394af72": "复制备注给智能体",
@@ -11509,6 +11514,12 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "粘贴内容过大。"
+        },
+        "RichMarkdownReviewNoteThread": {
+          "4994dba39d": "Send reply",
+          "665b0d63d1": "Reply…",
+          "88270bb163": "You",
+          "2bf33695c2": "Agent"
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "已成功",

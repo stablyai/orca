@@ -5213,6 +5213,8 @@
           "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
           "bf16ef0af2": "Off",
           "3f6892f307": "On",
+          "455658d770": "When on, sending review notes to an agent deletes them. Off keeps them as dimmed history you can revisit.",
+          "fa151d9def": "Clear Review Notes After Sending",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
@@ -11296,7 +11298,10 @@
           "f3ef92952b": "This note",
           "9cde7ad994": "Copy note for agent",
           "117432e2c6": "Copied note",
-          "3ababd949d": "Review notes"
+          "3ababd949d": "Review notes",
+          "004e3fa53a": "Resolve note",
+          "3695b489ca": "Reopen note",
+          "cd102ad42c": "Agent"
         },
         "RichMarkdownReviewRailActions": {
           "636394af72": "Copy notes for agent",
@@ -11516,6 +11521,12 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "Paste is too large."
+        },
+        "RichMarkdownReviewNoteThread": {
+          "4994dba39d": "Send reply",
+          "665b0d63d1": "Reply…",
+          "88270bb163": "You",
+          "2bf33695c2": "Agent"
         }
       },
       "diff": {

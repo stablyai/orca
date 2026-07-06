@@ -3,7 +3,7 @@ mutation, rollback, persistence ordering, and sent-state transitions together
 so every write follows the same queue and rollback invariants. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { DiffComment, Worktree } from '../../../../shared/types'
+import type { DiffComment, DiffCommentReply, Worktree } from '../../../../shared/types'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
@@ -18,11 +18,24 @@ export type DiffCommentsSlice = {
     worktreeId: string,
     comments: readonly DiffCommentDeliverySnapshot[]
   ) => Promise<boolean>
+  /** Apply the outcome of sending notes to an agent: preserve them as dimmed
+   *  "sent" history by default, or delete them when the user opted into the
+   *  legacy clear-on-send behavior. Centralizes the per-call-site branch. */
+  applyReviewNotesDelivery: (
+    worktreeId: string,
+    comments: readonly DiffCommentDeliverySnapshot[]
+  ) => Promise<boolean>
   markDiffCommentsSent: (
     worktreeId: string,
     commentIds: readonly string[],
     sentAt?: number
   ) => Promise<boolean>
+  resolveDiffComment: (worktreeId: string, commentId: string, resolved: boolean) => Promise<boolean>
+  addDiffCommentReply: (
+    worktreeId: string,
+    commentId: string,
+    reply: { body: string; authorRole: DiffCommentReply['authorRole'] }
+  ) => Promise<DiffCommentReply | null>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
   clearDiffComments: (worktreeId: string) => Promise<boolean>
   clearDiffCommentsForFile: (worktreeId: string, filePath: string) => Promise<boolean>
@@ -58,6 +71,13 @@ function normalizeDiffComment(comment: DiffComment): DiffComment {
     typeof rawSentAt === 'number' && Number.isFinite(rawSentAt) && rawSentAt > 0
       ? rawSentAt
       : undefined
+  const authorRole = normalizeAuthorRole((comment as { authorRole?: unknown }).authorRole)
+  const rawResolvedAt = (comment as { resolvedAt?: unknown }).resolvedAt
+  const resolvedAt =
+    typeof rawResolvedAt === 'number' && Number.isFinite(rawResolvedAt) && rawResolvedAt > 0
+      ? rawResolvedAt
+      : undefined
+  const replies = normalizeReplies((comment as { replies?: unknown }).replies)
 
   return {
     ...comment,
@@ -68,8 +88,46 @@ function normalizeDiffComment(comment: DiffComment): DiffComment {
     ...(startLine !== undefined ? { startLine } : {}),
     ...(startLine === undefined ? { startLine: undefined } : {}),
     ...(sentAt !== undefined ? { sentAt } : {}),
-    ...(sentAt === undefined ? { sentAt: undefined } : {})
+    ...(sentAt === undefined ? { sentAt: undefined } : {}),
+    ...(authorRole !== undefined ? { authorRole } : {}),
+    ...(authorRole === undefined ? { authorRole: undefined } : {}),
+    ...(resolvedAt !== undefined ? { resolvedAt } : {}),
+    ...(resolvedAt === undefined ? { resolvedAt: undefined } : {}),
+    ...(replies !== undefined ? { replies } : {}),
+    ...(replies === undefined ? { replies: undefined } : {})
   }
+}
+
+// Why: 'user' is the implicit role for legacy/unknown values, so we only store
+// an explicit role when it differs (the agent) — keeping legacy notes untouched
+// and the on-disk shape minimal.
+function normalizeAuthorRole(value: unknown): DiffCommentReply['authorRole'] | undefined {
+  return value === 'agent' || value === 'user' ? value : undefined
+}
+
+function normalizeReplies(value: unknown): DiffCommentReply[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+  const replies: DiffCommentReply[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue
+    }
+    const candidate = entry as Record<string, unknown>
+    const authorRole = candidate.authorRole === 'agent' ? 'agent' : 'user'
+    const body = typeof candidate.body === 'string' ? candidate.body.trim() : ''
+    const id = typeof candidate.id === 'string' && candidate.id ? candidate.id : ''
+    const createdAt =
+      typeof candidate.createdAt === 'number' && Number.isFinite(candidate.createdAt)
+        ? candidate.createdAt
+        : 0
+    if (!body || !id || createdAt <= 0) {
+      continue
+    }
+    replies.push({ id, authorRole, body, createdAt })
+  }
+  return replies.length > 0 ? replies : undefined
 }
 
 function deliverySnapshotMatches(
@@ -387,6 +445,46 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
   },
 
+  applyReviewNotesDelivery: async (worktreeId, comments) => {
+    if (comments.length === 0) {
+      return true
+    }
+    // Why: undefined/false preserves notes as "sent" history (the default);
+    // only the explicit opt-in deletes them, matching the legacy workflow.
+    if (get().settings?.clearReviewNotesAfterSend) {
+      return get().clearDeliveredDiffComments(worktreeId, comments)
+    }
+    // Why: stamp sentAt only on notes whose current body still matches what the
+    // agent was shown. A note edited after send started (same snapshot guard as
+    // clearDeliveredDiffComments) must stay unsent so it can be re-sent.
+    const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
+    const sentAt = Date.now()
+    const result = mutateComments(set, worktreeId, (existing) => {
+      let changed = false
+      const next = existing.map((comment) => {
+        const snapshot = snapshotsById.get(comment.id)
+        if (!snapshot || !deliverySnapshotMatches(comment, snapshot) || comment.sentAt === sentAt) {
+          return comment
+        }
+        changed = true
+        return { ...comment, sentAt }
+      })
+      return changed ? next : null
+    })
+    if (!result) {
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      get().recordFeatureInteraction?.('review-notes')
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
+    }
+  },
+
   markDiffCommentsSent: async (worktreeId, commentIds, sentAt = Date.now()) => {
     if (commentIds.length === 0) {
       return true
@@ -414,6 +512,71 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       console.error('Failed to persist diff comments:', err)
       rollback(set, worktreeId, result.previous, result.next)
       return false
+    }
+  },
+
+  resolveDiffComment: async (worktreeId, commentId, resolved) => {
+    const result = mutateComments(set, worktreeId, (existing) => {
+      const idx = existing.findIndex((c) => c.id === commentId)
+      if (idx === -1) {
+        return null
+      }
+      const current = existing[idx]
+      // Why: resolving a never-resolved note stamps resolvedAt; reopening clears
+      // it. No-op when already in the requested state so we don't churn disk.
+      if (resolved === (current.resolvedAt !== undefined)) {
+        return null
+      }
+      const next = existing.slice()
+      next[idx] = { ...current, resolvedAt: resolved ? Date.now() : undefined }
+      return next
+    })
+    if (!result) {
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      get().recordFeatureInteraction?.('review-notes')
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
+    }
+  },
+
+  addDiffCommentReply: async (worktreeId, commentId, reply) => {
+    const body = reply.body.trim()
+    if (!body) {
+      return null
+    }
+    const created: DiffCommentReply = {
+      id: generateId(),
+      authorRole: reply.authorRole,
+      body,
+      createdAt: Date.now()
+    }
+    const result = mutateComments(set, worktreeId, (existing) => {
+      const idx = existing.findIndex((c) => c.id === commentId)
+      if (idx === -1) {
+        return null
+      }
+      const current = existing[idx]
+      const next = existing.slice()
+      next[idx] = { ...current, replies: [...(current.replies ?? []), created] }
+      return next
+    })
+    if (!result) {
+      return null
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      get().recordFeatureInteraction?.('review-notes')
+      return created
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return null
     }
   },
 

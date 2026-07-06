@@ -298,8 +298,9 @@
   position: absolute;
   top: 0;
   right: 16px;
-  /* Why: the card action pill needs the same minimum rail width as preview mode. */
-  width: clamp(220px, 24%, 250px);
+  /* Why: a roomier rail so note bodies + reply threads are readable without a
+     cramped popup; clamps so it never crowds out the document on narrow panes. */
+  width: clamp(300px, 34%, 420px);
   pointer-events: none;
   z-index: 30;
 }
@@ -360,6 +361,108 @@
   border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   color: var(--foreground);
+}
+
+/* Why: resolved notes read as "done" — a subtle green wash + left accent and a
+   slight dim — but stay as history rather than disappearing. Hover restores
+   full strength so the thread is readable. */
+.rich-markdown-review-note-card.is-resolved > .orca-diff-comment-card {
+  opacity: 0.62;
+  border-color: color-mix(in srgb, var(--status-success) 28%, var(--border));
+  background: color-mix(in srgb, var(--status-success) 7%, var(--editor-surface));
+}
+
+.rich-markdown-review-note-card.is-resolved:hover > .orca-diff-comment-card {
+  opacity: 1;
+  background: color-mix(in srgb, var(--status-success) 11%, var(--editor-surface));
+}
+
+.rich-markdown-review-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.rich-markdown-review-reply-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Base reply = user; the --agent modifier tints it distinctly so the
+   back-and-forth is scannable at a glance. */
+.rich-markdown-review-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+}
+
+.rich-markdown-review-reply--agent {
+  background: color-mix(in srgb, var(--ring) 9%, transparent);
+  border-left-color: color-mix(in srgb, var(--ring) 65%, transparent);
+}
+
+.rich-markdown-review-reply-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.rich-markdown-review-reply-author {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-review-reply--agent .rich-markdown-review-reply-author {
+  color: color-mix(in srgb, var(--ring) 75%, var(--foreground));
+}
+
+.rich-markdown-review-reply-time {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.rich-markdown-review-reply-body {
+  font-size: 12px;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rich-markdown-review-reply-compose {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rich-markdown-review-reply-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--editor-surface);
+  color: var(--foreground);
+}
+
+.rich-markdown-review-reply-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--ring) 55%, transparent);
 }
 
 .rich-markdown-search {

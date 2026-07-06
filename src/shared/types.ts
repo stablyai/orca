@@ -721,6 +721,21 @@ export type MobileDiffReviewState = {
   files: Record<string, MobileDiffReviewFileState>
 }
 
+/** Whether a note or reply came from the user or the agent. Undefined on a
+ *  stored note means a legacy note, which predates attribution and is always
+ *  treated as 'user'. Named *role* (not author) to avoid colliding with the
+ *  GitHub-login `author` field on PR review comment view models. */
+export type DiffCommentAuthorRole = 'user' | 'agent'
+
+/** A threaded follow-up on a {@link DiffComment}, forming a back-and-forth
+ *  between the user and the agent on the note itself instead of in chat. */
+export type DiffCommentReply = {
+  id: string
+  authorRole: DiffCommentAuthorRole
+  body: string
+  createdAt: number
+}
+
 export type DiffComment = {
   id: string
   worktreeId: string
@@ -733,10 +748,17 @@ export type DiffComment = {
   startLine?: number
   lineNumber: number
   body: string
+  /** Who wrote the note. Undefined means a legacy note, treated as 'user'. */
+  authorRole?: DiffCommentAuthorRole
   createdAt: number
   updatedAt?: number
   /** Set after the note has been handed to an agent. Edits clear it. */
   sentAt?: number
+  /** Set when the note is resolved; undefined means open. Resolved notes are
+   *  kept as dimmed history rather than deleted, like a doc comment thread. */
+  resolvedAt?: number
+  /** Threaded follow-ups on the note (user ↔ agent). */
+  replies?: DiffCommentReply[]
   scope?: DiffReviewScope
   oldPath?: string
   diffIdentity?: string
@@ -2499,6 +2521,10 @@ export type GlobalSettings = {
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** When true, sending review notes to an agent deletes them (legacy behavior).
+   *  Default/undefined preserves them as dimmed "sent" history, like a doc
+   *  comment thread, so prior comments stay visible. */
+  clearReviewNotesAfterSend?: boolean
   /** Why: mirrors terminal selection-paste muscle memory without mutating the
    *  normal system clipboard; Linux and macOS enable it by default, Windows
    *  leaves middle-click semantics unchanged unless the user opts in. */

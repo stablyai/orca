@@ -178,6 +178,37 @@ describe('markdown review notes', () => {
     expect(split).not.toHaveBeenCalled()
   })
 
+  it('labels agent-authored notes and includes the reply thread', () => {
+    const formatted = formatMarkdownReviewNotes(
+      [
+        note({
+          id: 'a',
+          lineNumber: 2,
+          body: 'is this right?',
+          replies: [
+            { id: 'r1', authorRole: 'agent', body: 'yes, fixed it', createdAt: 1 },
+            { id: 'r2', authorRole: 'user', body: 'thanks', createdAt: 2 }
+          ]
+        })
+      ],
+      'one\ntwo\nthree'
+    )
+
+    expect(formatted).toBe(
+      [
+        'File: README.md',
+        'Source: markdown',
+        '',
+        'Line 2',
+        'Excerpt:',
+        '> two',
+        'User comment: "is this right?"',
+        'Agent reply: "yes, fixed it"',
+        'User reply: "thanks"'
+      ].join('\n')
+    )
+  })
+
   it('groups multiple notes for one markdown file under a single header', () => {
     const formatted = formatMarkdownReviewNotes(
       [

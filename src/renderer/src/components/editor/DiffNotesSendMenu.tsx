@@ -30,7 +30,7 @@ export function DiffNotesSendMenu({
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
 }): React.JSX.Element {
-  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+  const applyReviewNotesDelivery = useAppStore((s) => s.applyReviewNotesDelivery)
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
   const unsentPrompt = useMemo(() => formatDiffComments(unsentNotes), [unsentNotes])
   const fileNotes = useMemo(
@@ -76,7 +76,7 @@ export function DiffNotesSendMenu({
       actionLabel={actionLabel}
       iconClassName={iconClassName}
       align={align}
-      onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+      onDelivered={(notes) => void applyReviewNotesDelivery(worktreeId, notes)}
     />
   )
 }
