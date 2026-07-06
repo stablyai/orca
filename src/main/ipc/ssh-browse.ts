@@ -10,12 +10,12 @@ export type RemoteDirEntry = {
 
 const SSH_BROWSE_TIMEOUT_MS = 15_000
 
-// Why: cmd.exe returns ERRORLEVEL 9009 for an unrecognized command regardless of
-// OS display language, so on the ssh2 transport (which surfaces the remote exit
-// code intact) it's the locale-independent signal that a Windows host rejected
-// Orca's POSIX `exec` wrapper. The system-ssh transport truncates the exit code
-// to 8 bits (9009 -> 49), so localized stderr text ("no se reconoce", etc.)
-// remains the only heuristic there.
+// Why: a cmd.exe DefaultShell returns ERRORLEVEL 9009 for an unrecognized command
+// regardless of OS display language, so on the ssh2 transport (which surfaces the
+// remote exit code intact) it's the locale-independent signal that a Windows host
+// rejected Orca's POSIX `exec` wrapper. Two cases still fall back only via the
+// localized stderr heuristics below: the system-ssh transport (truncates the exit
+// code to 8 bits, 9009 -> 49) and a powershell.exe DefaultShell (exits 1, not 9009).
 const WINDOWS_COMMAND_NOT_FOUND_EXIT = 9009
 
 // Carries the raw exit code so the Windows-fallback predicate can key off the

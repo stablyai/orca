@@ -177,6 +177,33 @@ describe('registerSshBrowseHandler', () => {
     expect(script).toContain("$dir = 'C:/O''Brien'")
   })
 
+  it('expands ~ to $HOME in the PowerShell fallback (the default browse path)', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
+    await Promise.resolve()
+    posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
+    posixChannel.emit('exit', 9009)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.emit('data', Buffer.from('C:\\Users\\alice\r\n'))
+    windowsChannel.emit('exit', 0)
+    windowsChannel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({ resolvedPath: 'C:\\Users\\alice', entries: [] })
+    const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
+    // ~ must expand to $HOME, not be passed literally to Set-Location.
+    expect(script).toContain('$dir = $HOME')
+  })
+
   it('does not retry with PowerShell for an ordinary POSIX browse failure', async () => {
     const channel = createMockChannel()
     const exec = vi.fn().mockResolvedValue(channel)
