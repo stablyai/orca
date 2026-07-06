@@ -9241,6 +9241,7 @@
             "c1a8f3e204": "落后 {{value0}} 1 个提交",
             "d2b9g4f315": "落后 {{value1}} {{value0}} 个提交",
             "e9c2a5d416": "与 {{value0}} 同步",
+            "4b4a7de138": "Open review page in browser",
             "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR."
           },
           "SourceControlAgentActionDialog": {
@@ -12448,7 +12449,8 @@
         "title": "允许 {{value0}}？",
         "allow": "允许",
         "deny": "拒绝"
-      }
+      },
+      "launchPromptNotDelivered": "Not delivered — check the terminal"
     },
     "tab": {
       "bar": {

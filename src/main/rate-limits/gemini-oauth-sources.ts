@@ -94,68 +94,54 @@ export async function refreshAccessToken(
   clientId: string,
   clientSecret: string
 ): Promise<RefreshTokenResult> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  const res = await net.fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token'
+    }).toString(),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS)
+  })
 
-  try {
-    const res = await net.fetch(GOOGLE_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token'
-      }).toString(),
-      signal: controller.signal
-    })
+  if (!res.ok) {
+    return { accessToken: null, newRefreshToken: null }
+  }
 
-    if (!res.ok) {
-      return { accessToken: null, newRefreshToken: null }
-    }
-
-    const data = (await res.json()) as {
-      access_token?: string
-      refresh_token?: string
-      expires_in?: number
-    }
-    return {
-      accessToken: typeof data.access_token === 'string' ? data.access_token : null,
-      newRefreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : null,
-      expiresIn: typeof data.expires_in === 'number' ? data.expires_in : undefined
-    }
-  } finally {
-    clearTimeout(timeout)
+  const data = (await res.json()) as {
+    access_token?: string
+    refresh_token?: string
+    expires_in?: number
+  }
+  return {
+    accessToken: typeof data.access_token === 'string' ? data.access_token : null,
+    newRefreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : null,
+    expiresIn: typeof data.expires_in === 'number' ? data.expires_in : undefined
   }
 }
 
 export async function loadProjectId(accessToken: string): Promise<string> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  const res = await net.fetch(LOAD_CODE_ASSIST_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({ metadata: { ideType: 'GEMINI_CLI', pluginType: 'GEMINI' } }),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS)
+  })
 
-  try {
-    const res = await net.fetch(LOAD_CODE_ASSIST_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ metadata: { ideType: 'GEMINI_CLI', pluginType: 'GEMINI' } }),
-      signal: controller.signal
-    })
-
-    if (!res.ok) {
-      throw new Error(`Failed to load Gemini project ID (HTTP ${res.status})`)
-    }
-
-    const data = (await res.json()) as { cloudaicompanionProject?: string }
-    if (typeof data.cloudaicompanionProject !== 'string') {
-      throw new Error('Gemini project ID not found in API response')
-    }
-    return data.cloudaicompanionProject
-  } finally {
-    clearTimeout(timeout)
+  if (!res.ok) {
+    throw new Error(`Failed to load Gemini project ID (HTTP ${res.status})`)
   }
+
+  const data = (await res.json()) as { cloudaicompanionProject?: string }
+  if (typeof data.cloudaicompanionProject !== 'string') {
+    throw new Error('Gemini project ID not found in API response')
+  }
+  return data.cloudaicompanionProject
 }
 
 // Why: accepts a plain refresh token string so both the oauth_creds.json path

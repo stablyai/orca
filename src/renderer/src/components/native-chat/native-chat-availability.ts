@@ -1,25 +1,8 @@
 import type { Tab, TuiAgent } from '../../../../shared/types'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 
-/** Agents whose transcripts the native chat view can actually parse and render.
- *  Native chat depends on provider-specific transcript/streaming parsing, so the
- *  toggle must stay limited to the providers we support — currently Claude
- *  (including the OpenClaude variant) and Codex. Other agents (Grok, Gemini, …)
- *  run fine in the terminal but have no native-chat rendering, so they must not
- *  show the toggle. */
-const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set<string>([
-  'claude',
-  'openclaude',
-  'codex'
-])
-
-/** Whether the given agent identity (from any signal: launch hint, live
- *  detection, or title resolution) is one native chat can render. */
-export function isNativeChatSupportedAgent(
-  agent: TuiAgent | AgentType | null | undefined
-): boolean {
-  return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
-}
+export { isNativeChatSupportedAgent }
 
 /** Inputs that decide whether a tab may toggle into the native chat view.
  *  Kept as a plain shape (not the live store) so the decision stays pure and

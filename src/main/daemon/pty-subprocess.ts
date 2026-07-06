@@ -941,6 +941,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           ) {
             cachedAgentForeground = null
             startupAgentForeground = null
+          } else if (
+            cachedAgentForeground !== null &&
+            Date.now() - cachedAgentForeground.refreshedAt > FOREGROUND_AGENT_CACHE_TTL_MS &&
+            currentFallbackProcess !== null &&
+            isAgentForegroundWrapperProcess(currentFallbackProcess)
+          ) {
+            // Why: the wrapper's tree no longer resolves to an agent — an expired
+            // identity must not transfer to an unrelated wrapper (e.g. npm right
+            // after an agent exit). Fresh identities survive one-off scan hiccups.
+            cachedAgentForeground = null
           }
           return
         }
@@ -995,6 +1005,18 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         if (
           cachedAgentForeground &&
           now - cachedAgentForeground.refreshedAt <= FOREGROUND_AGENT_CACHE_TTL_MS
+        ) {
+          return cachedAgentForeground.processName
+        }
+        // Why: a wrapper foreground (node/python) can never identify itself, and
+        // readers poll slower than the cache TTL — returning the raw wrapper here
+        // would hide the resolved identity forever. Serve the last resolved agent
+        // while the scheduled refresh revalidates; exit truth is safe because an
+        // exited agent's foreground falls back to the shell, not a wrapper.
+        if (
+          cachedAgentForeground &&
+          fallbackProcess !== null &&
+          isAgentForegroundWrapperProcess(fallbackProcess)
         ) {
           return cachedAgentForeground.processName
         }

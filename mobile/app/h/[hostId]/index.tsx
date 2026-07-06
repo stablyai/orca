@@ -158,7 +158,6 @@ export function HostScreen({
   const now = useNow(30_000)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
-  const [repoSummaries, setRepoSummaries] = useState<RepoSummary[]>([])
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
   const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
@@ -205,9 +204,7 @@ export function HostScreen({
     hideDefaultBranch: false,
     filterRepoIds: [],
     collapsedGroups: [],
-    workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES,
-    workspaceHostScope: undefined,
-    visibleWorkspaceHostIds: undefined
+    workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES
   })
 
   useEffect(() => {
@@ -218,9 +215,7 @@ export function HostScreen({
       hideDefaultBranch: filters.hideDefaultBranch,
       filterRepoIds: [...filters.filterRepoIds],
       collapsedGroups: [...collapsedGroups],
-      workspaceStatuses,
-      workspaceHostScope: viewStateRef.current.workspaceHostScope,
-      visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds
+      workspaceStatuses
     }
   }, [groupMode, sortMode, filters, collapsedGroups, workspaceStatuses])
 
@@ -339,7 +334,6 @@ export function HostScreen({
     setCompatVerdict({ kind: 'ok' })
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
-    setRepoSummaries([])
     repoMetadataFetchedAtRef.current = 0
     // Why: re-seed from the current host's cache on every hostId change.
     // The useState initializer only runs on first mount, so if Expo Router
@@ -398,7 +392,6 @@ export function HostScreen({
         const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
         repoMetadataFetchedAtRef.current = Date.now()
         setCachedRepos(requestHostId, repoResult.repos)
-        setRepoSummaries(repoResult.repos)
         setRepoColorsByName(
           new Map(
             repoResult.repos.map((repo) => [
@@ -821,11 +814,8 @@ export function HostScreen({
     groupMode,
     pinnedIds,
     repoIdsByName,
-    repoSummaries,
     repoColorsByName,
     collapsedGroups,
-    workspaceHostScope: viewStateRef.current.workspaceHostScope,
-    visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds,
     workspaceStatuses
   })
   const existingWorktreePaths = useMemo(() => worktrees.map((w) => w.path), [worktrees])

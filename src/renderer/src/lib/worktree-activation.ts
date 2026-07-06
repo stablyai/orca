@@ -578,7 +578,13 @@ export function ensureWorktreeHasInitialTerminal(
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
     pendingActivationSpawn: true,
     ...(launchAgent
-      ? { launchAgent, ...initialAgentTabViewModeProps(store.settings ?? null) }
+      ? {
+          launchAgent,
+          ...initialAgentTabViewModeProps(store.settings ?? null, {
+            agent: launchAgent,
+            promptDelivery: sequencedStartup?.draftPrompt != null ? 'draft' : undefined
+          })
+        }
       : {}),
     ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
   })
@@ -637,7 +643,13 @@ function applyDefaultTerminalTabs(
       pendingActivationSpawn: true,
       recordInteraction: false,
       ...(launchAgent
-        ? { launchAgent, ...initialAgentTabViewModeProps(store.settings ?? null) }
+        ? {
+            launchAgent,
+            ...initialAgentTabViewModeProps(store.settings ?? null, {
+              agent: launchAgent,
+              promptDelivery: isStartupTab && startup?.draftPrompt != null ? 'draft' : undefined
+            })
+          }
         : {}),
       ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
     })

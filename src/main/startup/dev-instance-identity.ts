@@ -22,7 +22,7 @@ function cleanEnvValue(value: string | undefined): string | null {
 
 function lastPathSegment(value: string): string {
   const normalized = value.replace(/\\/g, '/')
-  return normalized.split('/').filter(Boolean).at(-1) ?? value
+  return normalized.split('/').findLast(Boolean) ?? value
 }
 
 function formatLabel(branch: string | null, worktreeName: string | null): string | null {

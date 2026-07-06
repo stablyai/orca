@@ -94,6 +94,12 @@ type TerminalMultiplexStream = {
   unsubscribeFit: () => void
   unsubscribeDriver: () => void
   unregisterBinaryHandler: () => void
+  // Why: the exit-wait promise for this slot is only removed from the runtime's
+  // waiter set on real PTY exit. Aborting this on detach releases it on slot
+  // unsubscribe, tab-switch re-subscribe, and connection close instead of
+  // leaking a waiter (and the closed-connection handler context it captures)
+  // for the life of a never-exiting agent terminal.
+  exitWaiterAbort: AbortController
 }
 
 type TerminalOutputChunk = {
@@ -1256,6 +1262,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         stream.unsubscribeDriver()
         stream.unregisterBinaryHandler()
         streams.delete(streamId)
+        // Why: release the runtime exit-waiter for this slot (see the field's
+        // note). The .catch below no-ops because the stream is already deleted.
+        stream.exitWaiterAbort.abort()
         if (stream.isMobile && stream.client?.id) {
           runtime.handleMobileUnsubscribe(stream.ptyId, stream.client.id)
         }
@@ -1472,7 +1481,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           unsubscribeResize: () => {},
           unsubscribeFit: () => {},
           unsubscribeDriver: () => {},
-          unregisterBinaryHandler: () => {}
+          unregisterBinaryHandler: () => {},
+          exitWaiterAbort: new AbortController()
         }
         streams.set(request.streamId, stream)
         stream.unregisterBinaryHandler = registerBinaryStreamHandler(request.streamId, (frame) =>
@@ -1660,7 +1670,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             sendResizedFrame(stream, event)
           })
           void runtime
-            .waitForTerminal(request.terminal, { condition: 'exit' })
+            .waitForTerminal(request.terminal, {
+              condition: 'exit',
+              signal: stream.exitWaiterAbort.signal
+            })
             .then(() => {
               if (streams.get(request.streamId) === stream) {
                 detachStream(request.streamId, true)
@@ -1797,8 +1810,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             },
             connectionId
           )
+          // Why: bind the exit-waiter to the connection dispatch signal so it is
+          // removed on socket close/error instead of leaking until real exit.
           void runtime
-            .waitForTerminal(params.terminal, { condition: 'exit' })
+            .waitForTerminal(params.terminal, { condition: 'exit', signal })
             .then(() => runtime.cleanupSubscription(subscriptionId))
             .catch(() => runtime.cleanupSubscription(subscriptionId))
         })
@@ -1847,8 +1862,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         },
         connectionId
       )
+      // Why: bind the exit-waiter to the connection dispatch signal so it is
+      // removed on socket close/error instead of leaking until real exit.
       void runtime
-        .waitForTerminal(params.terminal, { condition: 'exit' })
+        .waitForTerminal(params.terminal, { condition: 'exit', signal })
         .then(() => runtime.cleanupSubscription(subscriptionId))
         .catch(() => runtime.cleanupSubscription(subscriptionId))
       const sendFrame = (

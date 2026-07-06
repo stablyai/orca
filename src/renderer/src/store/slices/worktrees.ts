@@ -1991,6 +1991,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
+    nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
     // Why: these tab/pane-scoped agent-status, unread, and input maps are only
     // cleared on the single removeWorktree path (via shutdownWorktreeTerminals /
     // dropAgentStatusByWorktree / clearPaneForegroundAgentByWorktree, which read
@@ -3096,11 +3097,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextAutomaticAgentResumeClaimsByTabId = {
           ...s.automaticAgentResumeClaimsByTabId
         }
+        const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
         for (const tabId of tabIds) {
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
           delete nextRuntimePaneTitlesByTabId[tabId]
           delete nextAutomaticAgentResumeClaimsByTabId[tabId]
+          delete nextNativeChatLaunchPromptByTabId[tabId]
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
@@ -3246,6 +3249,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
           automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
+          nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
           baseStatusByWorktreeId: (() => {

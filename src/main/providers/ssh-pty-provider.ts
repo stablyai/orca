@@ -15,10 +15,16 @@ type RemoteCliBridgeEnv = {
 }
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
 
 export function isSshPtyNotFoundError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
   return /PTY ".+" not found/i.test(message)
+}
+
+export function isSshPtyIdentityMismatchError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR) || /identity mismatch/i.test(message)
 }
 
 /**
@@ -101,11 +107,19 @@ export class SshPtyProvider implements IPtyProvider {
         `[ssh-pty] spawn() called with sessionId=${opts.sessionId}, attempting pty.attach`
       )
       try {
+        // Why: pass the pane's expected identity so the relay can reject a
+        // cross-generation id collision (see pty-handler attach) instead of
+        // replaying the wrong shell into this pane. ORCA_PANE_KEY is the
+        // renderer's per-pane identity; ORCA_TAB_ID is the coarser fallback.
+        const expectedPaneKey = opts.paneKey ?? opts.env?.ORCA_PANE_KEY
+        const expectedTabId = opts.tabId ?? opts.env?.ORCA_TAB_ID
         const attachResult = (await this.mux.request('pty.attach', {
           id: relaySessionId,
           cols: opts.cols,
           rows: opts.rows,
-          suppressReplayNotification: true
+          suppressReplayNotification: true,
+          ...(expectedPaneKey ? { expectedPaneKey } : {}),
+          ...(expectedTabId ? { expectedTabId } : {})
         })) as { replay?: string }
         console.warn(
           `[ssh-pty] pty.attach succeeded for ${opts.sessionId}, replay=${!!attachResult.replay}`
@@ -121,7 +135,10 @@ export class SshPtyProvider implements IPtyProvider {
         // binding before replacing the dead relay PTY in the same pane.
         console.warn(`[ssh-pty] pty.attach FAILED for ${opts.sessionId}:`, err)
         if (isSshPtyNotFoundError(err)) {
-          throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
+          const mismatchMarker = isSshPtyIdentityMismatchError(err)
+            ? ` ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
+            : ''
+          throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}${mismatchMarker}`)
         }
         throw err
       }
@@ -143,7 +160,12 @@ export class SshPtyProvider implements IPtyProvider {
       ...(opts.commandDelivery ? { commandDelivery: opts.commandDelivery } : {}),
       ...(opts.startupCommandDelivery
         ? { startupCommandDelivery: opts.startupCommandDelivery }
-        : {})
+        : {}),
+      // Why: main may strip ORCA_PANE_KEY/ORCA_TAB_ID from the shell env when
+      // remote hooks are disabled, but the relay still needs attach identity
+      // metadata to reject cross-generation PTY id collisions.
+      ...(opts.paneKey ? { paneKey: opts.paneKey } : {}),
+      ...(opts.tabId ? { tabId: opts.tabId } : {})
     })
     return {
       ...(result as PtySpawnResult),
@@ -185,12 +207,19 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
   }
 
-  async attachForReconnect(id: string): Promise<{ replay?: string }> {
+  async attachForReconnect(
+    id: string,
+    expected?: { paneKey?: string; tabId?: string }
+  ): Promise<{ replay?: string }> {
     // Why: reconnect owns replay delivery so stale/duplicate attach results can
-    // be filtered before they reach the renderer.
+    // be filtered before they reach the renderer. The expected identity lets the
+    // relay reject a cross-generation id collision instead of reattaching this
+    // lease to a different pane's freshly spawned PTY.
     const result = (await this.mux.request('pty.attach', {
       id: this.toRelayPtyId(id),
-      suppressReplayNotification: true
+      suppressReplayNotification: true,
+      ...(expected?.paneKey ? { expectedPaneKey: expected.paneKey } : {}),
+      ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
     })) as { replay?: string } | undefined
     return result ?? {}
   }

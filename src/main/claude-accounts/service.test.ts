@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
+import type { ClaudeManagedAccount } from '../../shared/types'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
   readActiveClaudeKeychainCredentials,
@@ -1052,13 +1053,16 @@ describe('ClaudeAccountService credential capture', () => {
     vi.resetModules()
     vi.useFakeTimers()
     const child = new EventEmitter() as EventEmitter & {
+      stdin: PassThrough
       stdout: PassThrough
       stderr: PassThrough
       kill: () => void
     }
+    child.stdin = new PassThrough()
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
+    const destroyStdin = vi.spyOn(child.stdin, 'destroy')
     const spawnMock = vi.fn(() => child)
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
 
@@ -1074,13 +1078,15 @@ describe('ClaudeAccountService credential capture', () => {
           runClaudeCommand(
             args: string[],
             configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
-            timeoutMs: number
+            timeoutMs: number,
+            options?: { keepStdinOpen?: boolean }
           ): Promise<string>
         }
       ).runClaudeCommand(
         ['login'],
         { windowsPath: '/tmp/claude-auth', linuxPath: null, wslDistro: null },
-        1000
+        1000,
+        { keepStdinOpen: true }
       )
       const rejection = expect(commandPromise).rejects.toThrow(
         'Claude sign-in took too long to finish.'
@@ -1090,6 +1096,7 @@ describe('ClaudeAccountService credential capture', () => {
 
       await rejection
       expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(destroyStdin).toHaveBeenCalledTimes(1)
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
@@ -1100,18 +1107,109 @@ describe('ClaudeAccountService credential capture', () => {
     }
   })
 
+  it('pipes stdin only for the explicit Claude account login command', async () => {
+    setPlatform('linux')
+    vi.resetModules()
+    vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
+    const loginChild = new EventEmitter() as EventEmitter & {
+      stdin: PassThrough
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    loginChild.stdin = new PassThrough()
+    loginChild.stdout = new PassThrough()
+    loginChild.stderr = new PassThrough()
+    loginChild.kill = vi.fn()
+    const statusChild = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    statusChild.stdout = new PassThrough()
+    statusChild.stderr = new PassThrough()
+    statusChild.kill = vi.fn()
+    const spawnMock = vi.fn(
+      (_command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
+        if (args[1] === 'login') {
+          writeFileSync(
+            join(options.env.CLAUDE_CONFIG_DIR!, '.credentials.json'),
+            '{"claudeAiOauth":{"email":"user@example.com","accessToken":"token"}}\n',
+            'utf-8'
+          )
+          queueMicrotask(() => loginChild.emit('close', 0))
+          return loginChild
+        }
+        statusChild.stdout.write('{"email":"user@example.com"}\n')
+        queueMicrotask(() => statusChild.emit('close', 0))
+        return statusChild
+      }
+    )
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      let settings = {
+        claudeManagedAccounts: [] as ClaudeManagedAccount[],
+        activeClaudeManagedAccountId: null,
+        activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+      }
+      const store = {
+        getSettings: vi.fn(() => settings),
+        updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+          settings = { ...settings, ...updates }
+          return settings
+        })
+      }
+      const runtimeAuth = {
+        clearLastWrittenCredentialsJson: vi.fn(),
+        forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+      }
+      const rateLimits = {
+        evictInactiveClaudeCache: vi.fn(),
+        refreshForClaudeAccountChange: vi.fn()
+      }
+      const service = new ClaudeAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeAuth as never
+      )
+
+      await service.addAccount()
+
+      expect(spawnMock).toHaveBeenNthCalledWith(
+        1,
+        'claude',
+        ['auth', 'login', '--claudeai'],
+        expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
+      )
+      expect(spawnMock).toHaveBeenNthCalledWith(
+        2,
+        'claude',
+        ['auth', 'status', '--json'],
+        expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'] })
+      )
+      expect(settings.claudeManagedAccounts[0]?.email).toBe('user@example.com')
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
   it('rejects immediately when Claude sign-in is denied', async () => {
     vi.resetModules()
     const child = new EventEmitter() as EventEmitter & {
+      stdin: PassThrough
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
       pid: number
     }
+    child.stdin = new PassThrough()
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
     child.pid = 4242
+    const destroyStdin = vi.spyOn(child.stdin, 'destroy')
     const spawnMock = vi.fn(() => child)
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
     // Denial must tear down the whole detached login/browser tree (process-group kill on POSIX),
@@ -1130,13 +1228,15 @@ describe('ClaudeAccountService credential capture', () => {
           runClaudeCommand(
             args: string[],
             configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
-            timeoutMs: number
+            timeoutMs: number,
+            options?: { keepStdinOpen?: boolean }
           ): Promise<string>
         }
       ).runClaudeCommand(
         ['login'],
         { windowsPath: '/tmp/claude-auth', linuxPath: null, wslDistro: null },
-        180_000
+        180_000,
+        { keepStdinOpen: true }
       )
 
       child.stderr.write('OAuth authorization failed: access_denied\n')
@@ -1144,6 +1244,7 @@ describe('ClaudeAccountService credential capture', () => {
       await expect(commandPromise).rejects.toThrow('Claude sign-in was denied. Please try again.')
       expect(killTree).toHaveBeenCalledWith(-child.pid)
       expect(child.kill).not.toHaveBeenCalled()
+      expect(destroyStdin).toHaveBeenCalledTimes(1)
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
@@ -1157,13 +1258,16 @@ describe('ClaudeAccountService credential capture', () => {
   it('cancels an in-flight Claude account add', async () => {
     vi.resetModules()
     const child = new EventEmitter() as EventEmitter & {
+      stdin: PassThrough
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
     }
+    child.stdin = new PassThrough()
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
+    const destroyStdin = vi.spyOn(child.stdin, 'destroy')
     const spawnMock = vi.fn(() => child)
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
 
@@ -1203,6 +1307,7 @@ describe('ClaudeAccountService credential capture', () => {
       expect(service.cancelPendingLogin()).toBe(true)
       await expect(addPromise).rejects.toThrow('Claude sign-in was cancelled.')
       expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(destroyStdin).toHaveBeenCalledTimes(1)
       expect(service.cancelPendingLogin()).toBe(false)
       expect(settings.claudeManagedAccounts).toEqual([])
       expect(child.stdout.listenerCount('data')).toBe(0)
@@ -1278,14 +1383,17 @@ describe('ClaudeAccountService credential capture', () => {
     vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
     const child = new EventEmitter() as EventEmitter & {
       pid: number
+      stdin: PassThrough
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
     }
     child.pid = 1234
+    child.stdin = new PassThrough()
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
+    const destroyStdin = vi.spyOn(child.stdin, 'destroy')
     const taskkill = new EventEmitter() as EventEmitter & {
       unref: ReturnType<typeof vi.fn>
     }
@@ -1339,6 +1447,7 @@ describe('ClaudeAccountService credential capture', () => {
         expect.objectContaining({ stdio: 'ignore', windowsHide: true })
       )
       expect(taskkill.unref).toHaveBeenCalled()
+      expect(destroyStdin).toHaveBeenCalledTimes(1)
       expect(service.cancelPendingLogin()).toBe(false)
     } finally {
       vi.doUnmock('node:child_process')

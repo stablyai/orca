@@ -1137,6 +1137,13 @@ export type PRInfo = {
   // of the PR's own commits (behind update-branch/web commits). Cache staleness
   // checks must honor that confirmation without re-querying GitHub.
   confirmedContainedHeadOid?: string
+  // Why: the worktree HEAD OID this merged linked PR was confirmed to have
+  // diverged from (a definite not-contained probe). Head-scoped, not a bare
+  // boolean, so a PR-number-coalesced refresh broadcast cannot clear a sibling
+  // worktree whose own head is still on the PR's line of work. Clearing a
+  // durable linked PR requires this positive signal for that exact head, never
+  // the mere absence of a containment confirmation after a rate-limit/error.
+  headDivergedFromMergedPRAtOid?: string
   /** Target branch name for PR-created worktree compare-base repair. */
   baseRefName?: string
   prRepo?: GitHubRepositoryIdentity
@@ -1179,6 +1186,10 @@ export type GitHubPRRefreshAlias = {
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
+  // Why: request-time worktree HEAD. Merged branch-matched PRs are only visible
+  // for heads that belong to the PR, and refresh consumers need this snapshot to
+  // clear a durable linked PR once main confirms the head diverged.
+  currentHeadOid?: string | null
 }
 
 export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
@@ -1196,10 +1207,6 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedMergeable?: PRMergeableState | null
   cachedMergeStateStatus?: string | null
   localGitOptions?: { wslDistro?: string }
-  // Why: merged branch-matched PRs are only visible for heads that belong to
-  // the PR; without the worktree head, a panel-supplied fallback number would
-  // keep a merged PR alive head-blind after the branch moves on.
-  currentHeadOid?: string | null
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -3492,6 +3499,10 @@ export type PersistedState = {
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  /** Daemon session ids of live local Claude launches. Seeds the Claude
+   *  live-PTY gate on startup so an early OAuth refresh cannot rotate the
+   *  single-use refresh token out from under a still-running daemon CLI. */
+  claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]

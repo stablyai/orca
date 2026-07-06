@@ -64,11 +64,10 @@ export function resolveAutomationRunTarget(
       error: `Project setup on the selected automation host is ${setup.setupState}.`
     }
   }
-  if (
-    setup.projectId !== context.projectId ||
-    setup.hostId !== context.hostId ||
-    setup.repoId !== context.repoId
-  ) {
+  // Why: projectId is a derived identity that upgrades over time (repo:→git:→github:);
+  // matching on it strands automations created before their repo's identity resolved.
+  // Anchor on repoId/hostId/path instead — the durable, stable target identity.
+  if (setup.hostId !== context.hostId || setup.repoId !== context.repoId) {
     return {
       ok: false,
       error: 'Automation run target no longer matches the selected project host setup.'

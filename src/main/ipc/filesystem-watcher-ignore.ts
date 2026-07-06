@@ -25,7 +25,12 @@ export const MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT = 8
 
 export function buildParcelWatcherIgnoreOption(ignoreDirs: readonly string[]): string[] {
   if (process.platform !== 'darwin') {
-    return [...ignoreDirs]
+    // Linux/Windows: @parcel/watcher resolves plain names to top-level-only
+    // absolute paths, so nested node_modules/.git/build/etc. (monorepos) get
+    // fully watched — on Linux that means one inotify watch per nested dir,
+    // exhausting fs.inotify.max_user_watches. Nested globs match at any depth
+    // (and **/dir still matches the top-level dir), pruning those subtrees.
+    return ignoreDirs.flatMap((dir) => [`**/${dir}`, `**/${dir}/**`])
   }
   return [
     ...ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT),

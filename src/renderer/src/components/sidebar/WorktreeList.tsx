@@ -675,8 +675,8 @@ type VirtualizedWorktreeViewportProps = {
   allRepoIds: string[]
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void
   onHostDragActiveChange: (active: boolean) => void
-  prCache: Record<string, unknown> | null
-  hostedReviewCache: Record<string, unknown> | null
+  prCache: AppState['prCache'] | null
+  hostedReviewCache: AppState['hostedReviewCache'] | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectGrouping?: ProjectGroupingModel
   projectGroups?: readonly ProjectGroup[]
@@ -1252,7 +1252,7 @@ function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
 }
 
 function getVirtualRowIndex(element: Element): number | null {
-  const index = parseInt(element.getAttribute('data-index') ?? '', 10)
+  const index = Number.parseInt(element.getAttribute('data-index') ?? '', 10)
   return Number.isNaN(index) ? null : index
 }
 

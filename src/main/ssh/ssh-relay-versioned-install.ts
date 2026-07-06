@@ -223,7 +223,7 @@ async function isLockStale(
     // We try GNU first, then BSD; both produce a Unix epoch in seconds on
     // stdout. If both fail we conservatively treat the lock as not stale.
     const out = await execHostCommand(conn, host, lockMtimeEpochCommand(host, lockDir))
-    const mtimeSec = parseInt(out.trim(), 10)
+    const mtimeSec = Number.parseInt(out.trim(), 10)
     if (!Number.isFinite(mtimeSec)) {
       return false
     }

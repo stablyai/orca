@@ -37,4 +37,18 @@ describe('SourceControlBranchContextRow', () => {
     expect(markup).toContain('min-w-0 flex-1')
     expect(markup).not.toContain('max-w-[9rem]')
   })
+
+  it('renders a compact external review link when a manual URL is available', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={readySummary}
+        compareBaseRef={null}
+        manualReviewUrl="https://github.com/stablyai/orca/compare/main...feature?expand=1"
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Open review page in browser"')
+  })
 })

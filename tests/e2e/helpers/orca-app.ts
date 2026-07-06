@@ -347,18 +347,22 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       )
       .toBe(true)
 
-    // Wait for the repo to appear and fetch its worktrees
-    await page.evaluate(async () => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-
-      const repos = store.getState().repos
-      for (const repo of repos) {
-        await store.getState().fetchWorktrees(repo.id)
-      }
-    })
+    // Best-effort fetch of every repo's worktrees. Why: the renderer can still
+    // re-navigate during initial hydration and destroy the execution context
+    // mid-evaluate; the authoritative seeded-worktree poll below is the real wait,
+    // so swallow a hydration-reload failure here instead of failing setup.
+    await page
+      .evaluate(async () => {
+        const store = window.__store
+        if (!store) {
+          return
+        }
+        const repos = store.getState().repos
+        for (const repo of repos) {
+          await store.getState().fetchWorktrees(repo.id)
+        }
+      })
+      .catch(() => false)
 
     // Why: parallel specs mutate real git worktrees in the shared fixture repo.
     // A first scan can briefly return no rows while git holds a worktree lock,

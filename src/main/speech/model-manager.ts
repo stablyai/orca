@@ -440,8 +440,10 @@ export class ModelManager {
 
         const contentLength = response.headers['content-length']
         const totalSize =
-          parseInt(Array.isArray(contentLength) ? contentLength[0] : contentLength || '0', 10) ||
-          expectedSize
+          Number.parseInt(
+            Array.isArray(contentLength) ? contentLength[0] : contentLength || '0',
+            10
+          ) || expectedSize
         let downloaded = 0
 
         const fileStream = createWriteStream(dest)

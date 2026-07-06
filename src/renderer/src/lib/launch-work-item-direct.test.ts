@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   ensureRemoteDetectedAgents: vi.fn(),
   updateWorktreeMeta: vi.fn(),
   setSidebarOpen: vi.fn(),
+  seedNativeChatLaunchPrompt: vi.fn(),
+  markNativeChatLaunchPromptFailed: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
   pasteDraftWhenAgentReady: vi.fn(),
   openModalFallback: vi.fn(),
@@ -21,6 +23,8 @@ const mocks = vi.hoisted(() => ({
     createWorktree: ReturnType<typeof vi.fn>
     updateWorktreeMeta: ReturnType<typeof vi.fn>
     setSidebarOpen: ReturnType<typeof vi.fn>
+    seedNativeChatLaunchPrompt: ReturnType<typeof vi.fn>
+    markNativeChatLaunchPromptFailed: ReturnType<typeof vi.fn>
   }
 }))
 
@@ -185,7 +189,9 @@ describe('launchWorkItemDirect', () => {
       ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents,
       createWorktree: mocks.createWorktree,
       updateWorktreeMeta: mocks.updateWorktreeMeta,
-      setSidebarOpen: mocks.setSidebarOpen
+      setSidebarOpen: mocks.setSidebarOpen,
+      seedNativeChatLaunchPrompt: mocks.seedNativeChatLaunchPrompt,
+      markNativeChatLaunchPromptFailed: mocks.markNativeChatLaunchPromptFailed
     } as typeof mocks.store
     // @ts-expect-error -- test shim
     globalThis.window = { api: mockApi }
@@ -449,13 +455,21 @@ describe('launchWorkItemDirect', () => {
     ).resolves.toBe(true)
 
     expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
-    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith({
+    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        content: 'Use this explicit user prompt.',
+        agent: 'claude',
+        submit: true,
+        forcePaste: true,
+        onTimeout: expect.any(Function)
+      })
+    )
+    expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalledWith({
       tabId: 'tab-1',
-      content: 'Use this explicit user prompt.',
       agent: 'claude',
-      submit: true,
-      forcePaste: true,
-      onTimeout: expect.any(Function)
+      text: 'Use this explicit user prompt.',
+      createdAt: expect.any(Number)
     })
   })
 
