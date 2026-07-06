@@ -1,10 +1,29 @@
 /* eslint-disable max-lines -- Why: SSH config parsing fixtures cover OpenSSH file parsing and ssh -G output together so import and connection resolution stay aligned. */
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
+import {
+  parseSshConfig,
+  sshConfigHostsToTargets,
+  parseSshGOutput,
+  loadUserSshConfig
+} from './ssh-config-parser'
+import { setSshConfigFilePathOverride } from './ssh-config-file-path'
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
+}))
+
+const { existsSyncMock, expandSshConfigIncludesMock } = vi.hoisted(() => ({
+  existsSyncMock: vi.fn(),
+  expandSshConfigIncludesMock: vi.fn()
+}))
+
+vi.mock('fs', () => ({
+  existsSync: (...args: unknown[]) => existsSyncMock(...args)
+}))
+
+vi.mock('./ssh-config-include-expander', () => ({
+  expandSshConfigIncludes: (...args: unknown[]) => expandSshConfigIncludesMock(...args)
 }))
 
 const LARGE_HOST_ALIAS_COUNT = 150_000
@@ -21,6 +40,45 @@ function buildHostAliases(count: number): string {
   }
   return aliases.join(' ')
 }
+
+describe('loadUserSshConfig', () => {
+  afterEach(() => {
+    setSshConfigFilePathOverride(undefined)
+    existsSyncMock.mockReset()
+    expandSshConfigIncludesMock.mockReset()
+  })
+
+  it('reads the default ~/.ssh/config path when no override is set', () => {
+    existsSyncMock.mockReturnValue(true)
+    expandSshConfigIncludesMock.mockReturnValue('Host def\n  HostName def.example.com\n')
+
+    const hosts = loadUserSshConfig()
+
+    expect(existsSyncMock).toHaveBeenCalledWith(testHomePath('.ssh', 'config'))
+    expect(expandSshConfigIncludesMock).toHaveBeenCalledWith(testHomePath('.ssh', 'config'))
+    expect(hosts[0].host).toBe('def')
+  })
+
+  it('reads the overridden config path', () => {
+    setSshConfigFilePathOverride('/etc/ssh/custom_config')
+    existsSyncMock.mockReturnValue(true)
+    expandSshConfigIncludesMock.mockReturnValue('Host custom\n  HostName custom.example.com\n')
+
+    const hosts = loadUserSshConfig()
+
+    expect(existsSyncMock).toHaveBeenCalledWith('/etc/ssh/custom_config')
+    expect(expandSshConfigIncludesMock).toHaveBeenCalledWith('/etc/ssh/custom_config')
+    expect(hosts[0].host).toBe('custom')
+  })
+
+  it('returns empty when the overridden path does not exist', () => {
+    setSshConfigFilePathOverride('/etc/ssh/missing_config')
+    existsSyncMock.mockReturnValue(false)
+
+    expect(loadUserSshConfig()).toEqual([])
+    expect(expandSshConfigIncludesMock).not.toHaveBeenCalled()
+  })
+})
 
 describe('parseSshConfig', () => {
   it('parses a basic host block', () => {

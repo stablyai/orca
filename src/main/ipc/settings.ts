@@ -20,6 +20,7 @@ import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-them
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
+import { setSshConfigFilePathOverride } from '../ssh/ssh-config-file-path'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -146,6 +147,9 @@ export function registerSettingsHandlers(
     }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)
+    }
+    if ('sshConfigPath' in sanitizedArgs) {
+      setSshConfigFilePathOverride(result.sshConfigPath)
     }
 
     // Why: telemetry-plan.md§Settings — fire `settings_changed` only for

@@ -40,6 +40,19 @@ export const getSshPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.ssh.search.3c9e5a1d24', 'SSH config file'),
+    description: translate(
+      'auto.components.settings.ssh.search.4da06b2e35',
+      'Set the OpenSSH client config file path.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.ssh.search.7efd17e816', 'ssh'),
+      ...translateSearchKeyword('auto.components.settings.ssh.search.5220501141', 'config'),
+      ...translateSearchKeyword('auto.components.settings.ssh.search.5eb17c3f46', 'path'),
+      ...translateSearchKeyword('auto.components.settings.ssh.search.6fc28d4057', 'file')
+    ]
+  },
+  {
     title: translate('auto.components.settings.ssh.search.a3058f3605', 'Test Connection'),
     description: translate(
       'auto.components.settings.ssh.search.96ca5d9a0b',

@@ -2582,6 +2582,11 @@ export type GlobalSettings = {
    *  changing the default terminal shell. */
   localAgentRuntime?: 'host' | 'wsl'
   localAgentWslDistro?: string | null
+  /** Absolute (or ~-prefixed) path to the OpenSSH client config file. When unset
+   *  or empty, Orca uses the OpenSSH default (~/.ssh/config) and passes no -F flag,
+   *  preserving stock behavior. Local-client setting: it governs the machine Orca
+   *  runs the ssh binary on, not the remote host. */
+  sshConfigPath?: string
   /** Why: global is only the default policy; project-level runtime preference wins. */
   localWindowsRuntimeDefault: GlobalWindowsRuntimeDefault
   /** Why: "PowerShell" is the product-facing shell family. Auto resolves to

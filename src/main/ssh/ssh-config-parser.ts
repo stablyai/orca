@@ -1,9 +1,8 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { homedir } from 'node:os'
 import type { SshTarget } from '../../shared/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { getSshConfigFilePath } from './ssh-config-file-path'
 export { parseSshGOutput, resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 
 export type SshConfigHost = {
@@ -206,9 +205,10 @@ function splitOpenSshArguments(input: string): string[] {
   return args
 }
 
-/** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
+/** Read and parse the user's SSH config file (default ~/.ssh/config, or the
+ *  configured override). Returns empty array if not found. */
 export function loadUserSshConfig(): SshConfigHost[] {
-  const configPath = join(homedir(), '.ssh', 'config')
+  const configPath = getSshConfigFilePath()
   if (!existsSync(configPath)) {
     return []
   }

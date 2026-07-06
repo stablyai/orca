@@ -8051,7 +8051,11 @@
             "f5a691bb6c": "SSH ターゲットの追加",
             "d4bcd497c7": "リモート",
             "74c6d90d78": "リモート SSH ターゲットを管理します。",
-            "380a788da7": "SSH 接続"
+            "380a788da7": "SSH 接続",
+            "3c9e5a1d24": "SSH config file",
+            "4da06b2e35": "Set the OpenSSH client config file path.",
+            "5eb17c3f46": "path",
+            "6fc28d4057": "file"
           }
         },
         "tasks": {
@@ -8774,6 +8778,10 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "SshConfigFileSetting": {
+          "7a1c2e0b45": "SSH config file",
+          "9d3f5a1c67": "Local OpenSSH client config used to import hosts and connect. Use an absolute or ~-based path. Leave blank to use ~/.ssh/config."
         }
       },
       "right": {

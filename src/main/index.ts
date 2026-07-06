@@ -15,6 +15,7 @@ import {
   migrateMobilePairingDataToCanonicalUserDataPath
 } from './persistence'
 import { applyAppIcon } from './app-icon'
+import { setSshConfigFilePathOverride } from './ssh/ssh-config-file-path'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
@@ -1620,6 +1621,10 @@ app.whenReady().then(async () => {
 
   store = new Store()
   logStartupMilestone('store-loaded')
+  // Why: seed the SSH config-path override before any startup SSH restore /
+  // auto-reconnect can drive `ssh -G` or a connection; otherwise a restored
+  // connection could resolve against ~/.ssh/config until the next settings edit.
+  setSshConfigFilePathOverride(store.getSettings().sshConfigPath)
   // Why: must run before ClaudeRuntimeAuthService's constructor sync — a Claude
   // CLI that survived the restart inside the daemon still holds the current
   // single-use refresh token, and an unguarded early refresh would rotate it

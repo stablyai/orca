@@ -8029,7 +8029,11 @@
             "f5a691bb6c": "Agregar destino SSH",
             "d4bcd497c7": "remoto",
             "74c6d90d78": "Administra hosts SSH.",
-            "380a788da7": "Conexiones SSH"
+            "380a788da7": "Conexiones SSH",
+            "3c9e5a1d24": "SSH config file",
+            "4da06b2e35": "Set the OpenSSH client config file path.",
+            "5eb17c3f46": "path",
+            "6fc28d4057": "file"
           }
         },
         "tasks": {
@@ -8774,6 +8778,10 @@
           "reviewFirst": "Revisar primero",
           "singular": "Los guardados globales no cambiarán 1 repositorio con su propia receta.",
           "tooltipTitle": "Anulaciones del repositorio"
+        },
+        "SshConfigFileSetting": {
+          "7a1c2e0b45": "SSH config file",
+          "9d3f5a1c67": "Local OpenSSH client config used to import hosts and connect. Use an absolute or ~-based path. Leave blank to use ~/.ssh/config."
         }
       },
       "right": {

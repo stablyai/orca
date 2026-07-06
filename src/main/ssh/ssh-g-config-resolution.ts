@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { getSshConfigFilePathOverride, getSshConfigFileFlagArgs } from './ssh-config-file-path'
 
 export type SshResolvedConfig = {
   hostname: string
@@ -18,6 +19,16 @@ export type SshResolvedConfig = {
 }
 
 const SSH_G_TIMEOUT_MS = 5000
+
+// Why: '--' prevents host labels starting with '-' from becoming SSH flags.
+// Emit `-F <path>` only when a config-path override is set so default users get
+// byte-identical argv (no behavior change).
+export function buildSshGArgs(
+  host: string,
+  overridePath = getSshConfigFilePathOverride()
+): string[] {
+  return ['-G', ...getSshConfigFileFlagArgs(overridePath), '--', host]
+}
 
 // Why: `ssh -G <host>` asks OpenSSH for the effective config, including
 // Include/Match/wildcard inheritance, without reimplementing OpenSSH matching.
@@ -43,10 +54,9 @@ export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null>
       callback()
     }
 
-    // Why: '--' prevents host labels starting with '-' from becoming SSH flags.
-    // execFile's timeout only signals ssh; keep the null fallback for stuck callbacks.
+    // Why: execFile's timeout only signals ssh; keep the null fallback for stuck callbacks.
     try {
-      child = execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
+      child = execFile('ssh', buildSshGArgs(host), { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
         if (err) {
           settle(() => resolve(null))
           return

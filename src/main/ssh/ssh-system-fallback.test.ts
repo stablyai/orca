@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -32,8 +32,15 @@ import {
 } from './ssh-system-fallback'
 import { spawnSystemSshPortForward } from './system-ssh-forward-process'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { setSshConfigFilePathOverride } from './ssh-config-file-path'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SystemSshResolvedConfig } from './ssh-control-socket'
+
+// Why: buildSshArgs reads the module-level SSH config-path override; reset it
+// after every test so a `-F` case never leaks into unrelated argv assertions.
+afterEach(() => {
+  setSshConfigFilePathOverride(undefined)
+})
 
 const SYSTEM_SSH_PATH =
   process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
@@ -381,6 +388,21 @@ describe('spawnSystemSsh', () => {
     expect(args).toContain('ControlPersist=300')
     expect(args).toContain('ServerAliveInterval=15')
     expect(args).toContain('ServerAliveCountMax=3')
+  })
+
+  it('omits -F when no SSH config-path override is set', () => {
+    const args = buildSshArgs(createTarget())
+    expect(args).not.toContain('-F')
+  })
+
+  it('passes -F with the expanded config path when an override is set', () => {
+    setSshConfigFilePathOverride('/etc/ssh/custom_config')
+    const args = buildSshArgs(createTarget())
+    const flagIdx = args.indexOf('-F')
+    expect(flagIdx).toBeGreaterThan(-1)
+    expect(args[flagIdx + 1]).toBe('/etc/ssh/custom_config')
+    // Why: -F must precede the host so OpenSSH reads it before resolving the alias.
+    expect(flagIdx).toBeLessThan(args.indexOf('deploy@example.com'))
   })
 
   it('spawns a remote command through the system ssh target', () => {

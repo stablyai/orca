@@ -1,5 +1,6 @@
 import type { SshTarget } from '../../shared/ssh-types'
 import { getControlSocketPath, type SystemSshResolvedConfig } from './ssh-control-socket'
+import { getSshConfigFileFlagArgs } from './ssh-config-file-path'
 
 export type SystemSshBuildArgsOptions = {
   resolvedConfig?: SystemSshResolvedConfig | null
@@ -9,6 +10,11 @@ export type SystemSshBuildArgsOptions = {
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
   const args: string[] = []
+
+  // Why: emit `-F <path>` (before the host) only when a config-path override is
+  // set, so default users get byte-identical argv. Absolute expanded path works
+  // on Win32 ssh.exe without relying on ssh's own tilde handling.
+  args.push(...getSshConfigFileFlagArgs())
 
   args.push('-o', 'BatchMode=no')
   // Forward stdin/stdout for relay communication

@@ -12,6 +12,7 @@ import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
 import { getEditingTargetForSshTarget } from './ssh-target-draft'
 import { buildSshTargetSavePayload } from './ssh-target-save-payload'
+import { SshConfigFileSetting } from './SshConfigFileSetting'
 import { translate } from '@/i18n/i18n'
 export { getSshPaneSearchEntries } from './ssh-search'
 
@@ -287,8 +288,19 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     setForm(EMPTY_FORM)
   }
 
+  const reloadFromSshConfig = async (): Promise<void> => {
+    try {
+      await window.api.ssh.importConfig()
+    } catch {
+      // Best-effort; the explicit Import button surfaces failures on demand.
+    }
+    await loadTargets()
+  }
+
   return (
     <div className="space-y-4">
+      <SshConfigFileSetting onCommitted={reloadFromSshConfig} />
+
       {/* Header row */}
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">

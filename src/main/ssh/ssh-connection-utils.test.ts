@@ -44,8 +44,10 @@ import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
   RECONNECT_BACKOFF_MS,
-  spawnProxyCommand
+  spawnProxyCommand,
+  buildProxyJumpSshArgs
 } from './ssh-connection-utils'
+import { setSshConfigFilePathOverride } from './ssh-config-file-path'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 
@@ -679,5 +681,40 @@ describe('spawnProxyCommand', () => {
     expect(proc.stdout.listenerCount('end')).toBe(0)
     expect(proc.stdin.listenerCount('error')).toBe(0)
     expect(proc.listenerCount('error')).toBe(0)
+  })
+})
+
+// ── buildProxyJumpSshArgs ───────────────────────────────────────────
+
+describe('buildProxyJumpSshArgs', () => {
+  afterEach(() => {
+    setSshConfigFilePathOverride(undefined)
+  })
+
+  it('omits -F when no override is set', () => {
+    expect(buildProxyJumpSshArgs('target.example.com', 22, 'bastion')).toEqual([
+      '-W',
+      'target.example.com:22',
+      '--',
+      'bastion'
+    ])
+  })
+
+  it('adds -F with the override path when set (module holder)', () => {
+    setSshConfigFilePathOverride('/etc/ssh/custom_config')
+    expect(buildProxyJumpSshArgs('target.example.com', 22, 'bastion')).toEqual([
+      '-W',
+      'target.example.com:22',
+      '-F',
+      '/etc/ssh/custom_config',
+      '--',
+      'bastion'
+    ])
+  })
+
+  it('expands a ~-prefixed override path passed explicitly', () => {
+    expect(buildProxyJumpSshArgs('target.example.com', 22, 'bastion', '~/work/ssh_config')).toEqual(
+      ['-W', 'target.example.com:22', '-F', testHomePath('work', 'ssh_config'), '--', 'bastion']
+    )
   })
 })
