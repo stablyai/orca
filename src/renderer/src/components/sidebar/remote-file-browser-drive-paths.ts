@@ -36,6 +36,9 @@ export function splitBrowsePath(p: string): BrowsePathParts {
   return { kind: 'posix', segments: p.split('/').filter(Boolean) }
 }
 
+// Why: the backslash is deliberate, not a platform assumption — these paths
+// target a remote Windows host regardless of the client OS, and the sandboxed
+// renderer bundle has no Node `path.win32` to delegate to.
 export function joinDrivePath(base: string, name: string): string {
   return `${base.replace(/[\\/]+$/, '')}\\${name}`
 }
