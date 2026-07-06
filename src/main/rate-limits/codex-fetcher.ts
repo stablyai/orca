@@ -371,7 +371,7 @@ function mapRpcWindow(
   if (raw.resetsAt) {
     // Why: Codex returns resetsAt as Unix seconds, not milliseconds.
     const date = new Date(raw.resetsAt * 1000)
-    if (!isNaN(date.getTime())) {
+    if (!Number.isNaN(date.getTime())) {
       resetsAt = date.getTime()
       const now = new Date()
       const isToday = date.toDateString() === now.toDateString()
@@ -650,7 +650,7 @@ function parsePtyStatus(output: string): {
 
   const session: RateLimitWindow | null = fiveMatch
     ? {
-        usedPercent: Math.min(100, parseInt(fiveMatch[1], 10)),
+        usedPercent: Math.min(100, Number.parseInt(fiveMatch[1], 10)),
         windowMinutes: 300,
         resetsAt: null,
         resetDescription: null
@@ -659,7 +659,7 @@ function parsePtyStatus(output: string): {
 
   const weekly: RateLimitWindow | null = weeklyMatch
     ? {
-        usedPercent: Math.min(100, parseInt(weeklyMatch[1], 10)),
+        usedPercent: Math.min(100, Number.parseInt(weeklyMatch[1], 10)),
         windowMinutes: 10080,
         resetsAt: null,
         resetDescription: null

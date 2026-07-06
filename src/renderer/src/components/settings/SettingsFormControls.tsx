@@ -662,7 +662,7 @@ export function FontAutocomplete({
     if (!open || visibleSuggestions.length === 0) {
       setHighlightedIndex(-1)
     } else {
-      const selectedIndex = visibleSuggestions.findIndex((font) => font === value)
+      const selectedIndex = visibleSuggestions.indexOf(value)
       setHighlightedIndex(Math.max(selectedIndex, 0))
     }
   }

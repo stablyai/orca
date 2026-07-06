@@ -122,11 +122,11 @@ function parseArgs(argv: string[]): {
   let endpointDir: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
-      const parsed = parseInt(argv[i + 1], 10)
+      const parsed = Number.parseInt(argv[i + 1], 10)
       // Why: the CLI flag is in seconds for ergonomics, but internally we track
       // ms. 0 is allowed for opt-in synced workspaces that intentionally keep a
       // relay alive until explicitly terminated.
-      if (!isNaN(parsed) && parsed >= 0) {
+      if (!Number.isNaN(parsed) && parsed >= 0) {
         graceTimeMs = parsed * 1000
       }
       i++

@@ -214,8 +214,7 @@ function bestErrorLine(stderr: string): string {
     stderr
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .filter(Boolean)
-      .at(-1) ?? ''
+      .findLast(Boolean) ?? ''
   )
 }
 

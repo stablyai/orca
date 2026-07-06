@@ -42,7 +42,7 @@ export function getRuntimePathBasename(value: string): string {
   if (!trimmed) {
     return ''
   }
-  return trimmed.split(/[\\/]/).filter(Boolean).at(-1) ?? ''
+  return trimmed.split(/[\\/]/).findLast(Boolean) ?? ''
 }
 
 export function isPathInsideOrEqual(rootPath: string, candidatePath: string): boolean {

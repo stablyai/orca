@@ -107,7 +107,7 @@ async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<
   try {
     const assetUrl = assetName.startsWith('http')
       ? assetName
-      : getReleaseAssetUrl(tag, assetName.split('/').filter(Boolean).at(-1) ?? assetName)
+      : getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
     const res = await net.fetch(assetUrl, {
       method: 'HEAD',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)

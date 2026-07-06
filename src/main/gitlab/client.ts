@@ -1215,7 +1215,7 @@ export async function updateMRReviewers(
       try {
         const fields =
           reviewerIds.length > 0
-            ? reviewerIds.map((id) => ['-f', `reviewer_ids[]=${id}`]).flat()
+            ? reviewerIds.flatMap((id) => ['-f', `reviewer_ids[]=${id}`])
             : ['-f', 'reviewer_ids=']
         const { stdout } = await glabExecFileAsync(
           [
