@@ -8432,7 +8432,8 @@
             "98a79948b3": "Copiar",
             "b234ab25b4": "No se pudo copiar el archivo al portapapeles",
             "f9d7ca753d": "Copiar rutas",
-            "3161c4e425": "carpeta"
+            "3161c4e425": "carpeta",
+            "1d8e182c32": "View File"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados de Git",

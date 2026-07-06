@@ -8432,7 +8432,8 @@
             "98a79948b3": "Copy",
             "b234ab25b4": "Could not copy the file to the clipboard",
             "f9d7ca753d": "Copy Paths",
-            "3161c4e425": "folder"
+            "3161c4e425": "folder",
+            "1d8e182c32": "View File"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",

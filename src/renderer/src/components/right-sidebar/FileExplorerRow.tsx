@@ -683,7 +683,7 @@ export function FileExplorerRow({
         {!node.isDirectory && (
           <ContextMenuItem onSelect={onViewFile}>
             <File />
-            View File
+            {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && (
