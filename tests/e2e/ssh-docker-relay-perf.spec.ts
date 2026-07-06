@@ -207,6 +207,104 @@ test.describe('Docker SSH relay perf', () => {
     }
   })
 
+  test('keeps remote typing responsive while relay file streams and git churn are active', async ({
+    orcaPage
+  }, testInfo) => {
+    test.slow()
+    let target: DockerSshRelayTarget | null = null
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      const remote = await connectDockerRemote(orcaPage, target)
+      await ensureTerminalVisible(orcaPage, 45_000)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
+
+      const runId = String(Date.now())
+      // Large remote binaries: each read streams ~8MB of fs.streamChunk frames
+      // over the same SSH channel that carries the pty echo.
+      const loadFiles = [
+        `${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}/stream-load-a.png`,
+        `${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}/stream-load-b.png`
+      ]
+      await execInTerminal(
+        orcaPage,
+        ptyId,
+        `dd if=/dev/urandom of=${shellQuote(loadFiles[0])} bs=1M count=8 status=none && ` +
+          `dd if=/dev/urandom of=${shellQuote(loadFiles[1])} bs=1M count=8 status=none && ` +
+          `echo LOAD_FILES_READY_${runId}`
+      )
+      await waitForTerminalOutput(orcaPage, `LOAD_FILES_READY_${runId}`, 60_000, 80_000)
+
+      await execInTerminal(orcaPage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
+      await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
+
+      // Background relay pressure: continuous large file reads plus git status
+      // refreshes, mirroring file preview + source-control churn while typing.
+      await orcaPage.evaluate(
+        ({ targetId, files, repoPath }) => {
+          const state = { stopped: false, reads: 0, errors: [] as string[] }
+          ;(window as unknown as { __sshRelayLoad: typeof state }).__sshRelayLoad = state
+          const loop = async (run: () => Promise<unknown>): Promise<void> => {
+            while (!state.stopped) {
+              try {
+                await run()
+                state.reads += 1
+              } catch (err) {
+                state.errors.push(String(err))
+                await new Promise((r) => setTimeout(r, 100))
+              }
+            }
+          }
+          for (const filePath of files) {
+            void loop(() => window.api.fs.readFile({ filePath, connectionId: targetId }))
+          }
+          void loop(() => window.api.git.status({ worktreePath: repoPath, connectionId: targetId }))
+        },
+        {
+          targetId: remote.targetId,
+          files: loadFiles,
+          repoPath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH
+        }
+      )
+      // Let the bulk load ramp before measuring.
+      await orcaPage.waitForTimeout(1_000)
+
+      const measurement = await measureRemoteTyping(orcaPage, ptyId, runId)
+      const load = await orcaPage.evaluate(() => {
+        const state = (
+          window as unknown as {
+            __sshRelayLoad: { stopped: boolean; reads: number; errors: string[] }
+          }
+        ).__sshRelayLoad
+        state.stopped = true
+        return { reads: state.reads, errors: state.errors.slice(0, 3) }
+      })
+
+      const summary =
+        `median=${measurement.medianLatencyMs.toFixed(1)}ms ` +
+        `worst=${measurement.worstLatencyMs.toFixed(1)}ms ` +
+        `bulkReads=${load.reads} ` +
+        `samples=${measurement.latencies.map((value) => value.toFixed(1)).join(',')}`
+      console.log(`[docker-ssh-relay-perf:busy] ${summary}`)
+      testInfo.annotations.push({
+        type: 'docker-ssh-relay-typing-busy',
+        description: summary
+      })
+
+      // The load must actually have been streaming and error-free, otherwise
+      // the latency numbers prove nothing.
+      expect(load.errors).toEqual([])
+      expect(load.reads).toBeGreaterThan(0)
+      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+      await stopRemoteLoad(orcaPage, ptyId)
+    } finally {
+      cleanupDockerSshRelayTarget(target)
+    }
+  })
+
   test('keeps an SSH workspace terminal usable after disconnect and reconnect', async ({
     orcaPage
   }, testInfo) => {
