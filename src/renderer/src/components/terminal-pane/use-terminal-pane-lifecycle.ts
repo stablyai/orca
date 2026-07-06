@@ -866,7 +866,8 @@ export function useTerminalPaneLifecycle({
         pane.terminal.attachCustomKeyEventHandler((e) => {
           if (
             shouldSuppressTerminalImeKeyboardEvent(e, {
-              compositionActive: imeCompositionTracker.isActive()
+              compositionActive: imeCompositionTracker.isActive(),
+              isMac
             })
           ) {
             return false
@@ -1281,6 +1282,13 @@ export function useTerminalPaneLifecycle({
           persistLayoutSnapshot()
         }
         reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
+        // Why: the tab icon resolves from the active leaf's process identity;
+        // focusing a shell-marked pane whose agent is still running must
+        // re-sample it, since no further OSC boundary will.
+        const focusedBinding = panePtyBindings.get(pane.id) as
+          | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
+          | undefined
+        focusedBinding?.sampleForegroundAgentOnFocus?.()
         // Why: when the user switches focus between split panes, update the
         // tab title to the newly active pane's last-known title so the tab
         // label reflects the focused agent — not a stale title from the

@@ -95,10 +95,11 @@ function claudeDiscoveries(
       agent: 'claude',
       issues,
       extensions: ['.jsonl'],
-      // Why: Task subagent transcripts live in `<session>/subagents/`. Pruning
-      // that subtree keeps them from being parsed and listed as phantom
-      // top-level sessions; they are read on demand under their parent instead.
-      dirPredicate: (name) => name !== SUBAGENT_DIR_NAME
+      // Why: Task subagent transcripts under `<session>/subagents/` share the parent
+      // sessionId and aren't independently resumable, so they'd just duplicate the
+      // parent as untitled rows; prune the subtree and read them on demand under
+      // their parent instead.
+      directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
     })
   )
 }

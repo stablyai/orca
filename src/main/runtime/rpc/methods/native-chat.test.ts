@@ -70,6 +70,19 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(firstOutput(result)).toBe(OVERSIZED)
   })
 
+  it('clamps a limit past the max window instead of rejecting (keeps pagination unstuck)', () => {
+    const method = NATIVE_CHAT_METHODS.find((m) => m.name === 'nativeChat.readSession')
+    const parsed = method?.params?.parse({ agent: 'claude', sessionId: 's', limit: 5000 })
+    // A hard reject here would fail the read and stall "load earlier" at the cap;
+    // clamping returns the 2000-tail so pagination stops cleanly instead.
+    expect((parsed as { limit: number }).limit).toBe(2000)
+  })
+
+  it('still rejects a non-positive limit', () => {
+    const method = NATIVE_CHAT_METHODS.find((m) => m.name === 'nativeChat.readSession')
+    expect(() => method?.params?.parse({ agent: 'claude', sessionId: 's', limit: 0 })).toThrow()
+  })
+
   it('windows by count for all client kinds', async () => {
     const many = Array.from({ length: 60 }, (_unused, n) => {
       const message = makeMessage('small')

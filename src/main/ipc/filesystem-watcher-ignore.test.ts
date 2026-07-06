@@ -32,8 +32,18 @@ describe('buildParcelWatcherIgnoreOption', () => {
     }
   })
 
-  it('passes the plain list through on other platforms', () => {
-    setPlatform('linux')
-    expect(buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS)).toEqual(WATCHER_IGNORE_DIRS)
+  it('expands to nested globs on Linux/Windows so nested node_modules/.git are excluded', () => {
+    for (const platform of ['linux', 'win32'] as const) {
+      setPlatform(platform)
+      const option = buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS)
+      // @parcel/watcher resolves plain names to top-level-only absolute paths on
+      // these platforms, so nested dirs must be matched via depth-agnostic globs.
+      for (const dir of WATCHER_IGNORE_DIRS) {
+        expect(option).toContain(`**/${dir}`)
+        expect(option).toContain(`**/${dir}/**`)
+      }
+      // No plain (glob-free) entries — those would only exclude the top level.
+      expect(option.every((entry) => entry.includes('*'))).toBe(true)
+    }
   })
 })

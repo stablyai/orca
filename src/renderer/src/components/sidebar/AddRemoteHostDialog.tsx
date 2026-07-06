@@ -72,7 +72,7 @@ export function AddRemoteHostDialog({
       )
       return
     }
-    if (isNaN(port) || port < 1 || port > 65535) {
+    if (Number.isNaN(port) || port < 1 || port > 65535) {
       toast.error(
         translate(
           'auto.components.sidebar.AddRemoteHostDialog.sshPortInvalid',

@@ -50,7 +50,7 @@ function axNode(
 ): AXNode {
   return {
     nodeId: id,
-    backendDOMNodeId: opts?.backendDOMNodeId ?? parseInt(id, 10) * 100,
+    backendDOMNodeId: opts?.backendDOMNodeId ?? Number.parseInt(id, 10) * 100,
     role: { type: 'role', value: role },
     name: { type: 'computedString', value: name },
     childIds: opts?.childIds

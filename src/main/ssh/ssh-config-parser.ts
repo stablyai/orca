@@ -81,7 +81,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'port':
         for (const host of current) {
-          host.port = parseInt(value, 10) || 22
+          host.port = Number.parseInt(value, 10) || 22
         }
         break
       case 'user':

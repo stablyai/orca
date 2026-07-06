@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
-import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import type { TuiAgent } from '../../../../shared/types'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import { useNativeChatLiveSession } from './use-native-chat-live-session'
@@ -24,10 +23,12 @@ import {
   appendPendingSendCache,
   commandMarkersAsMessages,
   appendCommandMarkerCache,
+  launchPromptAsMessage,
   pendingSendsAsMessages,
   prunePendingSends,
   readCommandMarkerCache,
   readPendingSendCache,
+  shouldPruneLaunchPrompt,
   writePendingSendCache,
   type NativeChatCommandMarker,
   type NativeChatPendingSend
@@ -47,6 +48,8 @@ import {
   resolveNativeChatFileLink,
   resolveNativeChatFileLinkContext
 } from './native-chat-file-link'
+import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
+import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
 
@@ -155,7 +158,21 @@ function NativeChatResolvedView({
   onSwitchToTerminal?: () => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }): React.JSX.Element {
-  const session = useNativeChatLiveSession({ paneKey, agent, sessionId, transcriptPath })
+  // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
+  // the remote runtime host for a runtime-owned pane; null keeps the local path.
+  const runtimeEnvironmentId = useAppStore((s) =>
+    selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
+  )
+  const session = useNativeChatLiveSession({
+    paneKey,
+    agent,
+    sessionId,
+    transcriptPath,
+    runtimeEnvironmentId
+  })
+  const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
+  const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
+  const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
   // Live hook state for this pane, selected directly so the working indicator
   // flips the instant the agent reports 'working' — even when switching to chat
   // mid-turn before the transcript merge has caught up.
@@ -173,12 +190,7 @@ function NativeChatResolvedView({
   const fileLinkContext = useAppStore(
     useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
   )
-  // Delegate to the composer so a pane-level Cmd/Ctrl+V (or context-menu /
-  // app-menu paste) attaches a clipboard image when present, falling back to
-  // text — matching the textarea's own paste behavior and the hosted TUI.
-  const pasteClipboardIntoComposer = useCallback(() => {
-    composerRef.current?.pasteFromClipboard()
-  }, [])
+  const pasteClipboardIntoComposer = useNativeChatPasteBridge({ rootRef, composerRef })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     onSwitchToTerminal,
@@ -187,51 +199,6 @@ function NativeChatResolvedView({
       ...(contextMenuActions ?? emptyNativeChatContextMenuActions)
     }
   })
-
-  // Handle Cmd/Ctrl+V at the pane root rather than relying on the composer
-  // textarea's own onPaste: the React-bound onPaste proved unreliable here (the
-  // composer can mount more than once, and the live `paste` event does not
-  // consistently dispatch to the textarea's React handler). A root capture
-  // listener catches the paste for the focused pane in every case.
-  useEffect(() => {
-    const root = rootRef.current
-    if (!root) {
-      return
-    }
-    const onPaste = (event: ClipboardEvent): void => {
-      composerRef.current?.handlePasteEvent(event)
-    }
-    // Capture phase so the image is intercepted before the textarea's own
-    // bubble-phase onPaste fires (which would otherwise attach it twice).
-    root.addEventListener('paste', onPaste, { capture: true })
-    return () => {
-      root.removeEventListener('paste', onPaste, { capture: true })
-    }
-  }, [])
-
-  // Real Cmd/Ctrl+V is claimed by the Edit > Paste menu accelerator, which
-  // sends this app-menu paste event instead of producing a DOM `paste` event on
-  // the composer. Route it into the composer whenever focus is anywhere inside
-  // this chat pane — including the composer textarea itself (the previous
-  // non-interactive-target guard skipped exactly the focused-textarea case,
-  // which is why Cmd+V appeared to do nothing).
-  useEffect(() => {
-    const onAppMenuPaste = (event: Event): void => {
-      const root = rootRef.current
-      const activeElement = document.activeElement
-      if (!root || !(activeElement instanceof Element) || !root.contains(activeElement)) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      pasteClipboardIntoComposer()
-    }
-
-    window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
-    return () => {
-      window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
-    }
-  }, [pasteClipboardIntoComposer])
 
   // Optimistic "queued" sends (mobile parity): a composer send is echoed
   // immediately and pruned once its real user turn lands in the transcript, so
@@ -270,6 +237,12 @@ function NativeChatResolvedView({
       writePendingSendCache(pendingScope, prunePendingSends(prev, session.messages))
     )
   }, [session.messages, pendingScope])
+  useEffect(() => {
+    if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
+      return
+    }
+    clearNativeChatLaunchPrompt(terminalTabId)
+  }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
   const onOptimisticSend = useCallback(
     (text: string, imagePaths?: string[]) => {
       setWorkingInterrupted(false)
@@ -291,10 +264,32 @@ function NativeChatResolvedView({
     [commandMarkerScope]
   )
 
+  const launchPromptMessage = useMemo(
+    () => launchPromptAsMessage(paneLaunchPrompt, session.messages),
+    [paneLaunchPrompt, session.messages]
+  )
+  const sessionWithLaunchPrompt = useMemo<typeof session>(() => {
+    if (!launchPromptMessage) {
+      return session
+    }
+    return { ...session, messages: [...session.messages, launchPromptMessage] }
+  }, [launchPromptMessage, session])
+
   const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
-    const messages = applyCommandMarkerBoundaries(session.messages, commandMarkers)
-    return messages === session.messages ? session : { ...session, messages }
-  }, [session, commandMarkers])
+    const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
+    return messages === sessionWithLaunchPrompt.messages
+      ? sessionWithLaunchPrompt
+      : { ...sessionWithLaunchPrompt, messages }
+  }, [sessionWithLaunchPrompt, commandMarkers])
+  const launchPromptVisible =
+    launchPromptMessage !== null &&
+    sessionAfterCommandBoundaries.messages.some((message) => message.id === launchPromptMessage.id)
+  const failedLaunchPromptMessageIds = useMemo(() => {
+    if (!paneLaunchPrompt?.failed || !launchPromptVisible || !launchPromptMessage) {
+      return undefined
+    }
+    return new Set([launchPromptMessage.id])
+  }, [paneLaunchPrompt?.failed, launchPromptMessage, launchPromptVisible])
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
@@ -422,6 +417,7 @@ function NativeChatResolvedView({
             fontScale={fontScale.scale}
             onLinkClick={nativeChatFileLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
+            failedDeliveryMessageIds={failedLaunchPromptMessageIds}
           />
         )}
       </div>

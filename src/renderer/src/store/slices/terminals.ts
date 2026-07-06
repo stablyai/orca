@@ -64,6 +64,7 @@ import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sani
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree,
@@ -370,6 +371,11 @@ export type TerminalSlice = {
    *  bridges the gap after startup payload consumption and before hooks go live. */
   automaticAgentResumeClaimsByTabId: Record<string, AutomaticAgentResumeClaim>
   claimAutomaticAgentResume: (tabId: string, claim: AutomaticAgentResumeClaim) => void
+  /** Launch-time native-chat prompt echo, keyed by terminal tab. In-memory only. */
+  nativeChatLaunchPromptByTabId: Record<string, NativeChatLaunchPrompt>
+  seedNativeChatLaunchPrompt: (prompt: NativeChatLaunchPrompt) => void
+  markNativeChatLaunchPromptFailed: (tabId: string) => void
+  clearNativeChatLaunchPrompt: (tabId: string) => void
   pendingStartupByTabId: Record<
     string,
     {
@@ -636,6 +642,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingSetupSplitByTabId: {},
   pendingIssueCommandSplitByTabId: {},
   automaticAgentResumeClaimsByTabId: {},
+  nativeChatLaunchPromptByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
   defaultTerminalTabsAppliedByWorktreeId: {},
@@ -683,6 +690,41 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         [tabId]: claim
       }
     }))
+  },
+
+  seedNativeChatLaunchPrompt: (prompt) => {
+    set((s) => ({
+      nativeChatLaunchPromptByTabId: {
+        ...s.nativeChatLaunchPromptByTabId,
+        [prompt.tabId]: prompt
+      }
+    }))
+  },
+
+  markNativeChatLaunchPromptFailed: (tabId) => {
+    set((s) => {
+      const current = s.nativeChatLaunchPromptByTabId[tabId]
+      if (!current || current.failed) {
+        return {}
+      }
+      return {
+        nativeChatLaunchPromptByTabId: {
+          ...s.nativeChatLaunchPromptByTabId,
+          [tabId]: { ...current, failed: true }
+        }
+      }
+    })
+  },
+
+  clearNativeChatLaunchPrompt: (tabId) => {
+    set((s) => {
+      if (!s.nativeChatLaunchPromptByTabId[tabId]) {
+        return {}
+      }
+      const next = { ...s.nativeChatLaunchPromptByTabId }
+      delete next[tabId]
+      return { nativeChatLaunchPromptByTabId: next }
+    })
   },
 
   recordTerminalInput: (paneKey, timestamp = Date.now()) => {
@@ -1091,6 +1133,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextPendingStartupByTabId[tabId]
       const nextAutomaticAgentResumeClaimsByTabId = { ...s.automaticAgentResumeClaimsByTabId }
       delete nextAutomaticAgentResumeClaimsByTabId[tabId]
+      const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
+      delete nextNativeChatLaunchPromptByTabId[tabId]
       const nextPendingInitialCwdByTabId = { ...s.pendingInitialCwdByTabId }
       delete nextPendingInitialCwdByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
@@ -1168,6 +1212,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         terminalLayoutsByTabId: nextLayouts,
         pendingStartupByTabId: nextPendingStartupByTabId,
         automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
+        nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
         pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,

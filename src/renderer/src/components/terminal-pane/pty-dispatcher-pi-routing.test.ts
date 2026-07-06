@@ -186,7 +186,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
-    const workingIdx = seenTitles.findIndex((t) => t === '⠋ Pi')
+    const workingIdx = seenTitles.indexOf('⠋ Pi')
     const finalIdleIdx = seenTitles.lastIndexOf('Pi')
     expect(workingIdx).toBeGreaterThanOrEqual(0)
     expect(finalIdleIdx).toBeGreaterThan(workingIdx)

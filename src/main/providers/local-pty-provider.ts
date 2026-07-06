@@ -805,9 +805,21 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyDisposables.set(id, disposables)
 
     if (args.command && !startupCommandDeliveredInShellArgs) {
-      writeStartupCommandWhenShellReady(shellReadyPromise, proc, args.command, (cleanup) => {
-        startupCommandCleanup = cleanup
-      })
+      // Why: only Orca-wrapped POSIX bash/zsh have bracketed-paste mode armed
+      // (bash via `bind`, zsh on by default), so multiline startup prompts can
+      // be pasted literally there; other shells keep the raw submit path.
+      const spawnedShellName = getSpawnedShellName(shellPath).toLowerCase()
+      const bracketedPasteSafe =
+        process.platform !== 'win32' && (spawnedShellName === 'bash' || spawnedShellName === 'zsh')
+      writeStartupCommandWhenShellReady(
+        shellReadyPromise,
+        proc,
+        args.command,
+        (cleanup) => {
+          startupCommandCleanup = cleanup
+        },
+        { bracketedPasteSafe }
+      )
     }
 
     // Why: publish the OS pid so ipc/pty can register the PTY with the memory

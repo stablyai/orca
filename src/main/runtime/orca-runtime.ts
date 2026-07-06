@@ -884,6 +884,10 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   tailLinesTotal: number
   preview: string
   waitBlockedAt: number | null
+  // Why: memoized wait scan of the current retained tail so the next PTY chunk
+  // reuses it as its "previous" state instead of rebuilding + rescanning the
+  // full tail. See computeTerminalTailWaitState.
+  tailWaitState?: TerminalTailWaitState
   lastAgentStatus: AgentStatus | null
   // Why: the most recent OSC title observed on this leaf's PTY data. Used by
   // worktree.ps so daemon-hosted terminals (no renderer pushing pane titles)
@@ -951,6 +955,8 @@ type RuntimePtyWorktreeRecord = {
   tailLinesTotal: number
   preview: string
   waitBlockedAt: number | null
+  // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
+  tailWaitState?: TerminalTailWaitState
 }
 
 type TerminalCreateOptions = {
@@ -5265,26 +5271,28 @@ export class OrcaRuntimeService {
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       pty.tailPendingAnsi = normalized.pendingAnsi
-      const previousWaitText = buildTerminalWaitText(
-        pty.tailBuffer,
-        pty.tailPartialLine,
-        pty.preview
-      )
+      // Why: the prior chunk's post-append tail is this chunk's pre-append tail,
+      // so its cached wait scan is exact — reuse it instead of rebuilding and
+      // rescanning the full tail. Only a tail-derived state is safe to reuse.
+      const previousWaitState =
+        pty.tailWaitState?.fromTail === true
+          ? pty.tailWaitState
+          : computeTerminalTailWaitState(pty.tailBuffer, pty.tailPartialLine, pty.preview)
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,
         normalized.text,
         pty.tailRedrawCursor
       )
-      if (
-        nextTailHasNewerBlockedReason(
-          previousWaitText,
-          buildTerminalWaitText(nextTail.lines, nextTail.partialLine, pty.preview),
-          normalized.text
-        )
-      ) {
+      const nextWaitState = computeTerminalTailWaitState(
+        nextTail.lines,
+        nextTail.partialLine,
+        pty.preview
+      )
+      if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
         pty.waitBlockedAt = at
       }
+      pty.tailWaitState = nextWaitState
       ptyTailAfter = nextTail
       pty.tailBuffer = nextTail.lines
       pty.tailPartialLine = nextTail.partialLine
@@ -5363,29 +5371,30 @@ export class OrcaRuntimeService {
         leaf.tailLinesTotal = pty.tailLinesTotal
         leaf.preview = pty.preview
         leaf.waitBlockedAt = pty.waitBlockedAt
+        // Why: the leaf mirrors the PTY tail here, so share the cached wait scan.
+        leaf.tailWaitState = pty.tailWaitState
       } else {
         const normalized = normalizeTerminalChunk(data, leaf.tailPendingAnsi)
         leaf.tailPendingAnsi = normalized.pendingAnsi
-        const previousWaitText = buildTerminalWaitText(
-          leaf.tailBuffer,
-          leaf.tailPartialLine,
-          leaf.preview
-        )
+        const previousWaitState =
+          leaf.tailWaitState?.fromTail === true
+            ? leaf.tailWaitState
+            : computeTerminalTailWaitState(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
         const nextTail = appendNormalizedToTailBuffer(
           leaf.tailBuffer,
           leaf.tailPartialLine,
           normalized.text,
           leaf.tailRedrawCursor
         )
-        if (
-          nextTailHasNewerBlockedReason(
-            previousWaitText,
-            buildTerminalWaitText(nextTail.lines, nextTail.partialLine, leaf.preview),
-            normalized.text
-          )
-        ) {
+        const nextWaitState = computeTerminalTailWaitState(
+          nextTail.lines,
+          nextTail.partialLine,
+          leaf.preview
+        )
+        if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
           leaf.waitBlockedAt = at
         }
+        leaf.tailWaitState = nextWaitState
         leaf.tailBuffer = nextTail.lines
         leaf.tailPartialLine = nextTail.partialLine
         leaf.tailRedrawCursor = nextTail.redrawCursor
@@ -18185,6 +18194,10 @@ export class OrcaRuntimeService {
     pty.tailTruncated = false
     pty.tailLinesTotal = 0
     pty.waitBlockedAt = null
+    // Why: the tail is now empty, so the memoized wait scan must not be reused as
+    // the next chunk's "previous" state — clear it so onPtyData recomputes from
+    // the reset tail if this record resumes output (adoption/reattach).
+    pty.tailWaitState = undefined
   }
 
   private pruneDisconnectedPtyRecords(): void {
@@ -21507,7 +21520,7 @@ export class OrcaRuntimeService {
   }
 
   private defaultLinearAttachmentTitle(url: URL): string {
-    const tail = url.pathname.split('/').filter(Boolean).at(-1)
+    const tail = url.pathname.split('/').findLast(Boolean)
     return tail ? `${url.host}/${tail}` : url.host
   }
 
@@ -22974,6 +22987,63 @@ function buildTerminalWaitText(lines: string[], partialLine: string, preview: st
   return waitText.length > 0 ? waitText : preview
 }
 
+export type TerminalTailWaitState = {
+  waitText: string
+  signal: { reason: RuntimeTerminalWaitBlockedReason; index: number } | null
+  // Why: the retained tail is authoritative; `preview` is only a fallback for an
+  // empty tail. A preview-derived state depends on a value that is recomputed
+  // after each append, so it must not be reused as the next chunk's previous
+  // state — reuse is gated on fromTail.
+  fromTail: boolean
+}
+
+// Why: onPtyData runs per raw PTY chunk (hundreds/sec under load). Building the
+// wait text (a full map/trim/filter/join over the up-to-256KB retained tail)
+// and lower-casing + scanning it once per chunk is unavoidable, but the old
+// code did it twice — once for the pre-append tail and once for the post-append
+// tail — every chunk. Caching the post-append state lets the next chunk reuse it
+// as its pre-append state, halving the per-chunk full-tail work.
+export function computeTerminalTailWaitState(
+  lines: string[],
+  partialLine: string,
+  preview: string
+): TerminalTailWaitState {
+  const tailText = buildTailLines(lines, partialLine)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n')
+  const fromTail = tailText.length > 0
+  const waitText = fromTail ? tailText : preview
+  return {
+    waitText,
+    signal: findActionableTerminalWaitBlockedSignal(waitText.toLowerCase()),
+    fromTail
+  }
+}
+
+// Why: decides whether the appended chunk introduced a newer actionable blocked
+// prompt, consuming precomputed wait states so the full-tail scans are not
+// repeated per chunk (replaces the former inline double full-tail scan).
+export function tailGainedNewerBlockedReason(
+  previous: TerminalTailWaitState,
+  next: TerminalTailWaitState,
+  appendedText: string
+): boolean {
+  if (next.signal === null) {
+    return false
+  }
+  // Why: permission prompts can arrive split across PTY chunks. Stamp when the
+  // accumulated tail first becomes blocked, or when a later prompt appears after
+  // stale blocked text already in the tail.
+  if (previous.signal === null) {
+    return true
+  }
+  const appendCandidateSignal = findActionableTerminalWaitBlockedSignal(
+    `${previous.waitText}${appendedText}`.toLowerCase()
+  )
+  return appendCandidateSignal !== null && appendCandidateSignal.index > previous.signal.index
+}
+
 export function appendNormalizedToTailBuffer(
   previousLines: string[],
   previousPartialLine: string,
@@ -23815,30 +23885,6 @@ function isKnownReadyPromptPreview(preview: string): boolean {
 function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
   const normalized = preview.toLowerCase()
   return findActionableTerminalWaitBlockedSignal(normalized)?.reason ?? null
-}
-
-function nextTailHasNewerBlockedReason(
-  previousWaitText: string,
-  nextWaitText: string,
-  appendedText: string
-): boolean {
-  const nextBlockedSignal = findActionableTerminalWaitBlockedSignal(nextWaitText.toLowerCase())
-  if (!nextBlockedSignal) {
-    return false
-  }
-  // Why: permission prompts can arrive split across PTY chunks. Stamp the
-  // blocked signal when the accumulated tail first becomes blocked, or when
-  // a later prompt appears after stale blocked text already in the tail.
-  const previousBlockedSignal = findActionableTerminalWaitBlockedSignal(
-    previousWaitText.toLowerCase()
-  )
-  if (previousBlockedSignal === null) {
-    return true
-  }
-  const appendCandidateSignal = findActionableTerminalWaitBlockedSignal(
-    `${previousWaitText}${appendedText}`.toLowerCase()
-  )
-  return appendCandidateSignal !== null && appendCandidateSignal.index > previousBlockedSignal.index
 }
 
 function findActionableTerminalWaitBlockedSignal(

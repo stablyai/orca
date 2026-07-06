@@ -15,6 +15,7 @@ import {
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
+import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   createShellReadyScanState,
@@ -61,6 +62,9 @@ type ManagedPty = {
    *  state when this PTY exits. Symmetric with Orca's local pty.ts. */
   paneKey?: string
   tabId?: string
+  /** Attach-only identity metadata supplied over RPC. Kept separate from
+   *  paneKey/tabId because those fields also control shell env/revive hooks. */
+  attachIdentity?: PtyIdentity
   worktreeId?: string
   terminalHandle?: string
   startupCommand?: ManagedStartupCommand
@@ -172,11 +176,28 @@ type SerializedPtyEntry = {
   cwd: string
   paneKey?: string
   tabId?: string
+  attachIdentity?: PtyIdentity
   worktreeId?: string
   terminalHandle?: string
 }
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
+
+type PtyIdentity = { paneKey?: string; tabId?: string }
+
+/**
+ * True when a reattach's expected pane identity contradicts the target PTY's
+ * own. Used to reject cross-relay-generation id collisions: a reset relay mints
+ * `pty-N` from 1 again, so an old lease's `pty-N` can name a different pane's
+ * fresh PTY. Only compares fields present on *both* sides — absent identity on
+ * either side is permissive so legacy PTYs and identity-less callers still attach.
+ */
+export function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
+  return Boolean(
+    (expected.paneKey && managed.paneKey && expected.paneKey !== managed.paneKey) ||
+    (expected.tabId && managed.tabId && expected.tabId !== managed.tabId)
+  )
+}
 /** Returns env to merge into the PTY's spawn env. Receives spawn context so
  *  augmenters that need a per-PTY identity (e.g. OPENCODE_CONFIG_DIR overlay
  *  paths derived from the renderer's paneKey) can compute it without pulling
@@ -323,8 +344,14 @@ export class PtyHandler {
       }
     }
     const submit = process.platform === 'win32' ? '\r' : '\n'
-    const endsWithSubmit = startup.command.endsWith('\r') || startup.command.endsWith('\n')
-    const payload = endsWithSubmit ? startup.command : `${startup.command}${submit}`
+    // Why: a multiline startup prompt is pasted literally via bracketed paste
+    // only when the Orca shell-ready wrapper is active (waitForShellReady) —
+    // that is the bash/zsh overlay that arms bracketed-paste mode. Other remote
+    // shells keep the raw submit path so the ESC[200~ markers are not echoed.
+    const payload = buildStartupCommandSubmission(startup.command, {
+      submit,
+      bracketedPasteSafe: startup.waitForShellReady
+    })
     managed.startupCommand = undefined
     managed.pty.write(payload)
   }
@@ -593,6 +620,10 @@ export class PtyHandler {
     // separate ptyId→paneKey map. ORCA_PANE_KEY is shaped `${tabId}:${paneId}`
     // and is bounded by the renderer; the relay treats it as opaque.
     const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
+    const attachIdentity = {
+      paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
+      tabId: typeof params.tabId === 'string' ? params.tabId : tabId
+    }
     const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const managed: ManagedPty = {
       id,
@@ -601,6 +632,7 @@ export class PtyHandler {
       buffered: '',
       paneKey,
       tabId,
+      ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
       worktreeId,
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(shouldProviderDeliverCommand
@@ -658,6 +690,25 @@ export class PtyHandler {
     // silent failure into the existing error callers already handle.
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
+    }
+
+    // Why: PTY ids are a per-relay-process counter (pty-1, pty-2, …). When the
+    // relay changes generation — an app update deploys a new content-hashed
+    // relay dir, or a grace-expired relay restarts — the counter resets, so an
+    // old lease's `pty-N` can name a freshly spawned `pty-N` that belongs to a
+    // *different* pane. Attaching by id alone then wires a tab to the wrong
+    // shell. Reject when the caller's expected identity disagrees with this
+    // PTY's own so the client falls back to a fresh spawn. Absent identity on
+    // either side stays permissive for backward compatibility.
+    const mismatch = attachIdentityMismatches(
+      {
+        paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
+        tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
+      },
+      managed.attachIdentity ?? { paneKey: managed.paneKey, tabId: managed.tabId }
+    )
+    if (mismatch) {
+      throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
     // Replay buffered output. During pty.spawn({ sessionId }) the renderer has
@@ -865,6 +916,7 @@ export class PtyHandler {
         cwd: managed.initialCwd,
         paneKey: managed.paneKey,
         tabId: managed.tabId,
+        attachIdentity: managed.attachIdentity,
         worktreeId: managed.worktreeId,
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
@@ -937,6 +989,7 @@ export class PtyHandler {
         buffered: '',
         paneKey: entry.paneKey,
         tabId: entry.tabId,
+        attachIdentity: entry.attachIdentity,
         worktreeId: entry.worktreeId,
         ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
       })
@@ -947,7 +1000,7 @@ export class PtyHandler {
       // revived PTY.
       const match = entry.id.match(/^pty-(\d+)$/)
       if (match) {
-        const revivedNum = parseInt(match[1], 10)
+        const revivedNum = Number.parseInt(match[1], 10)
         if (revivedNum >= this.nextId) {
           this.nextId = revivedNum + 1
         }

@@ -33,12 +33,14 @@ import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
 import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
+import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 
 const DOCS_URL = 'https://www.onorca.dev/docs'
 const CHANGELOG_URL = 'https://onorca.dev/changelog'
 const GITHUB_URL = 'https://github.com/stablyai/orca'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
+const NO_UPDATE_CHECK_MODIFIERS = { ctrlKey: false, metaKey: false, shiftKey: false }
 
 function openExternalUrl(url: string): void {
   void window.api.shell.openUrl(url)
@@ -91,13 +93,16 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const [showAdminOptions, setShowAdminOptions] = useState(false)
   const [isRestartingOrca, setIsRestartingOrca] = useState(false)
   const lastShowOnboardingAtRef = React.useRef(0)
+  const updateCheckModifiersRef = React.useRef(NO_UPDATE_CHECK_MODIFIERS)
   const mountedRef = useMountedRef()
+  const updateCheckHint = getUpdateCheckHint()
 
   const showMilestones =
     setupProgress.ready && setupProgress.coreDoneCount < setupProgress.coreTotal
 
   const handleMenuOpenChange = (open: boolean): void => {
     setMenuOpen(open)
+    updateCheckModifiersRef.current = NO_UPDATE_CHECK_MODIFIERS
     if (!open) {
       setShowAdminOptions(false)
     }
@@ -147,9 +152,18 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
     openSettingsPage()
   }
 
-  const handleCheckForUpdates = (event: Event): void => {
-    const shiftKey = (event as PointerEvent).shiftKey
-    void window.api.updater.check({ includePrerelease: shiftKey })
+  const handleCheckForUpdatesPointerDown = (event: React.PointerEvent): void => {
+    updateCheckModifiersRef.current = {
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey
+    }
+  }
+
+  const handleCheckForUpdates = (): void => {
+    const modifiers = updateCheckModifiersRef.current
+    updateCheckModifiersRef.current = NO_UPDATE_CHECK_MODIFIERS
+    void window.api.updater.check(getUpdateCheckClickOptions(modifiers))
   }
 
   const openMilestones = (): void => {
@@ -299,7 +313,9 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
+              onPointerDown={handleCheckForUpdatesPointerDown}
               onSelect={handleCheckForUpdates}
+              title={updateCheckHint}
             >
               {updateStatus.state === 'checking' ? (
                 <Loader2 className="size-3.5 animate-spin" />

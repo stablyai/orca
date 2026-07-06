@@ -67,6 +67,7 @@ async function parseClaudeSessionLines(args: {
   })
   let metaTitle: string | null = null
   let generatedTitle: string | null = null
+  let firstUserTitle: string | null = null
 
   for await (const line of args.lines) {
     const record = parseJsonObject(line)
@@ -86,7 +87,11 @@ async function parseClaudeSessionLines(args: {
     }
 
     if (record.type === 'ai-title') {
-      generatedTitle ??= normalizeTitleText(extractString(record.aiTitle) ?? '')
+      const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
+      if (title) {
+        // Claude can revise generated names; AI Vault should mirror the current one.
+        generatedTitle = title
+      }
       continue
     }
 
@@ -99,10 +104,13 @@ async function parseClaudeSessionLines(args: {
       accumulator.messageCount++
       const title = extractMessageText(record.message)
       addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
-      if (title && record.isMeta !== true && !accumulator.title) {
-        accumulator.title = title
-      } else if (title && !metaTitle) {
-        metaTitle = title
+      if (title) {
+        // Meta prompts (injected context) only seed the last-resort title.
+        if (record.isMeta === true) {
+          metaTitle ??= title
+        } else {
+          firstUserTitle ??= title
+        }
       }
       continue
     }
@@ -119,7 +127,9 @@ async function parseClaudeSessionLines(args: {
     }
   }
 
-  accumulator.fallbackTitle = generatedTitle ?? metaTitle
+  // Why: a user-set custom-title (accumulator.title) wins, but Claude's generated
+  // session name (ai-title) should outrank the raw first prompt when present.
+  accumulator.fallbackTitle = generatedTitle ?? firstUserTitle ?? metaTitle
   return finalizeSession(accumulator, args.platform, args.options)
 }
 

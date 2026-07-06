@@ -657,7 +657,7 @@ function emitCloneProgressFromText(mainWindow: BrowserWindow, text: string): voi
     if (match && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('repos:clone-progress', {
         phase: match[1].trim(),
-        percent: parseInt(match[2], 10)
+        percent: Number.parseInt(match[2], 10)
       })
     }
   }

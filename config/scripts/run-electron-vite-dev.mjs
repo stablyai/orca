@@ -50,7 +50,7 @@ function readGitValue(args) {
 }
 
 function lastBranchSegment(value) {
-  return value.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ?? value
+  return value.replace(/\\/g, '/').split('/').findLast(Boolean) ?? value
 }
 
 function formatDevInstanceLabel(branch, worktreeName) {
@@ -433,7 +433,7 @@ function isPortFree(port) {
 async function pickDebugPort() {
   // Why: 32 bits of SHA1 (vs 16) reduces truncation bias; modulo 200 still
   // collides routinely across many worktrees, hence the probe sweep below.
-  const seed = parseInt(createHash('sha1').update(repoRoot).digest('hex').slice(0, 8), 16)
+  const seed = Number.parseInt(createHash('sha1').update(repoRoot).digest('hex').slice(0, 8), 16)
   const base = 9333 + (seed % 200) // deterministic base in 9333..9532; probe sweeps up to base+63
   for (let i = 0; i < 64; i++) {
     const p = base + i

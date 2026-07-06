@@ -2,6 +2,7 @@ import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
 import { resolveProcessCwd } from '../providers/process-cwd'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import type {
   SessionInfo,
   TakePendingOutputResult,
@@ -163,8 +164,15 @@ export class TerminalHost {
       // the user would need to press Enter after Orca launches the agent or
       // setup script. POSIX shells accept CR as Enter under ICRNL.
       const submit = process.platform === 'win32' ? '\r' : '\n'
-      const endsWithSubmit = opts.command.endsWith('\r') || opts.command.endsWith('\n')
-      session.write(endsWithSubmit ? opts.command : `${opts.command}${submit}`)
+      // Why: multiline startup prompts are pasted literally via bracketed paste
+      // only for Orca-wrapped bash/zsh, which is exactly when the shell-ready
+      // barrier is supported; other shells keep the raw submit path.
+      session.write(
+        buildStartupCommandSubmission(opts.command, {
+          submit,
+          bracketedPasteSafe: opts.shellReadySupported ?? false
+        })
+      )
     }
 
     return {
