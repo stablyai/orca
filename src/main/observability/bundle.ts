@@ -39,10 +39,6 @@ const DEFAULT_LOOKBACK_MINUTES = 30
 export type CollectBundleOptions = {
   readonly traceFilePath: string
   readonly maxFiles: number
-  /** Detached-daemon lifecycle log. Its rotated family is merged into the
-   *  bundle so daemon-side failures are diagnosable from a field report. */
-  readonly daemonLogFilePath?: string
-  readonly daemonLogMaxFiles?: number
   readonly lookbackMinutes?: number
   readonly appVersion: string
   readonly platform: string
@@ -99,8 +95,7 @@ function* readLinesNewestFirst(text: string): Iterable<string> {
  */
 export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
   const lookbackMs = (opts.lookbackMinutes ?? DEFAULT_LOOKBACK_MINUTES) * 60 * 1000
-  const cutoffMs = Date.now() - lookbackMs
-  const cutoffNanos = BigInt(cutoffMs) * 1_000_000n
+  const cutoffNanos = BigInt(Date.now() - lookbackMs) * 1_000_000n
   const bundleSubmissionId = generateBundleSubmissionId()
   const header: BundleHeader = {
     bundle_submission_id: bundleSubmissionId,
@@ -128,15 +123,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
   // older than the cutoff in an older file we can stop entirely. We don't
   // optimize that yet; the worst case (10 × 10 MB = 100 MB scan) takes
   // <1 s on a modern SSD and bundles are user-initiated, not hot-path.
-  // Trace spans first (the primary payload), then the daemon lifecycle log.
-  // Daemon records carry an ISO `ts` instead of `endTimeUnixNano`; both are
-  // filtered by the same lookback below.
-  const files = [
-    ...listRotatedFiles(opts.traceFilePath, opts.maxFiles),
-    ...(opts.daemonLogFilePath
-      ? listRotatedFiles(opts.daemonLogFilePath, opts.daemonLogMaxFiles ?? opts.maxFiles)
-      : [])
-  ]
+  const files = listRotatedFiles(opts.traceFilePath, opts.maxFiles)
   outer: for (const file of files) {
     let text: string
     try {
@@ -166,11 +153,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
         continue
       }
-      const record = parsed as {
-        startTimeUnixNano?: string
-        endTimeUnixNano?: string
-        ts?: string
-      }
+      const record = parsed as { startTimeUnixNano?: string; endTimeUnixNano?: string }
       // Filter by end-time, not start-time. A long-lived span started 35
       // minutes ago but ending inside the lookback is exactly what we want
       // in the bundle for diagnosing "session crashed at minute 32."
@@ -182,13 +165,6 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
         } catch {
           // Non-numeric end-time — keep it; better to over-include than to
           // drop a record we couldn't classify.
-        }
-      } else if (typeof record.ts === 'string') {
-        // Daemon lifecycle lines timestamp with an ISO `ts`; bound them by the
-        // same lookback window. Unparseable timestamps are kept (over-include).
-        const tsMs = Date.parse(record.ts)
-        if (Number.isFinite(tsMs) && tsMs < cutoffMs) {
-          continue
         }
       }
 

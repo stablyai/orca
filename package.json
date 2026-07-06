@@ -80,7 +80,6 @@
     "test:e2e:terminal-perf:check-report": "node config/scripts/check-terminal-perf-report-budgets.mjs",
     "test:e2e:terminal-perf:summarize": "node config/scripts/summarize-terminal-perf-report.mjs",
     "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
-    "win-update-e2e": "node tools/win-update-e2e/run.mjs",
     "test:e2e:ssh-codex-artifacts-repro": "node config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
     "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts",

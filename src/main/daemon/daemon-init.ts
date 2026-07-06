@@ -44,7 +44,6 @@ import {
   rebindLocalProviderListeners
 } from '../ipc/pty'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
-import { getDaemonLogFilePath } from '../observability/logs-directory'
 
 // Why: daemon init runs concurrently with window load, so harness-side stderr
 // arrival times are useless — in-process `t` lets the startup benchmark derive
@@ -88,18 +87,6 @@ function getDaemonEntryPath(): string {
     return directEntryPath
   }
   return join(basePath, 'out', 'main', 'daemon-entry.js')
-}
-
-// Why: the detached daemon writes lifecycle events to a rotated file so field
-// failures are diagnosable from a bundle. Honor the same hard privacy switch
-// the local trace sink honors (ORCA_DIAGNOSTICS_DISABLED); absence of the arg
-// is fully supported, so gating it off is safe and adoption-neutral.
-function daemonLogArgs(): string[] {
-  const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
-  if (disabled === '1' || disabled === 'true') {
-    return []
-  }
-  return ['--log-file', getDaemonLogFilePath()]
 }
 
 // Why: before spawning a new daemon, check if an existing one is alive by
@@ -273,31 +260,27 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     await killStaleDaemon(runtimeDir, socketPath, tokenPath)
 
     const userDataPath = app.getPath('userData')
-    const child = fork(
-      entryPath,
-      ['--socket', socketPath, '--token', tokenPath, ...daemonLogArgs()],
-      {
-        // Why: detached daemons can outlive dev worktrees. Starting from
-        // userData keeps process.cwd() valid after a repo/worktree is deleted.
-        cwd: userDataPath,
-        // Why: detached + unref lets the daemon outlive the Electron process.
-        // stdio 'ignore' prevents the child from holding the parent's stdout
-        // open, which would prevent Electron from exiting cleanly.
-        detached: true,
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-        // Why: ELECTRON_RUN_AS_NODE makes the forked process run as a plain
-        // Node.js process instead of an Electron renderer/main process. Without
-        // it, Electron's GPU/display initialization can interfere with native
-        // module operations like node-pty's posix_spawn of the spawn-helper.
-        env: {
-          ...process.env,
-          ELECTRON_RUN_AS_NODE: '1',
-          // Why: the detached daemon is plain Node and cannot call Electron's
-          // app.getPath(), but shell-ready rcfiles must live outside swept tmp.
-          ORCA_USER_DATA_PATH: userDataPath
-        }
+    const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
+      // Why: detached daemons can outlive dev worktrees. Starting from
+      // userData keeps process.cwd() valid after a repo/worktree is deleted.
+      cwd: userDataPath,
+      // Why: detached + unref lets the daemon outlive the Electron process.
+      // stdio 'ignore' prevents the child from holding the parent's stdout
+      // open, which would prevent Electron from exiting cleanly.
+      detached: true,
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      // Why: ELECTRON_RUN_AS_NODE makes the forked process run as a plain
+      // Node.js process instead of an Electron renderer/main process. Without
+      // it, Electron's GPU/display initialization can interfere with native
+      // module operations like node-pty's posix_spawn of the spawn-helper.
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        // Why: the detached daemon is plain Node and cannot call Electron's
+        // app.getPath(), but shell-ready rcfiles must live outside swept tmp.
+        ORCA_USER_DATA_PATH: userDataPath
       }
-    )
+    })
 
     // Wait for the daemon to signal readiness via IPC
     await new Promise<void>((resolve, reject) => {

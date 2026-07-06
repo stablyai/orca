@@ -1,11 +1,9 @@
 import { DaemonServer, type DaemonServerOptions } from './daemon-server'
-import type { DaemonFileLog } from './daemon-file-log'
 
 export type DaemonStartOptions = {
   socketPath: string
   tokenPath: string
   spawnSubprocess: DaemonServerOptions['spawnSubprocess']
-  log?: DaemonFileLog
 }
 
 export type DaemonHandle = {
@@ -16,8 +14,7 @@ export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandl
   const server = new DaemonServer({
     socketPath: opts.socketPath,
     tokenPath: opts.tokenPath,
-    spawnSubprocess: opts.spawnSubprocess,
-    ...(opts.log ? { log: opts.log } : {})
+    spawnSubprocess: opts.spawnSubprocess
   })
 
   await server.start()
