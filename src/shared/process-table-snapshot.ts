@@ -63,8 +63,8 @@ type ProcessTableSnapshotReaderDeps<T> = {
  * near-simultaneous scans behind a single in-flight promise + short TTL.
  * Exposed as a factory so tests can inject the scan and clock; production code
  * uses the shared `getProcessTableSnapshot` instance below. Generic over the
- * scan result so the Windows path can cache parsed rows while POSIX caches the
- * raw `ps` stdout string (the default).
+ * scan result so both the POSIX and Windows readers cache already-parsed rows,
+ * letting a burst of panes share one parse per TTL window.
  */
 export function createProcessTableSnapshotReader<T = string>(
   deps: ProcessTableSnapshotReaderDeps<T>
