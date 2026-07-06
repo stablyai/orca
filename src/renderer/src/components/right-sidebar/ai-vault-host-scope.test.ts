@@ -5,7 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
-import { useAiVaultExecutionHostScope } from './ai-vault-host-scope'
+import {
+  getAiVaultScanExecutionHostScope,
+  useAiVaultExecutionHostScope
+} from './ai-vault-host-scope'
 
 type HostScopeResult = ReturnType<typeof useAiVaultExecutionHostScope>
 
@@ -83,6 +86,7 @@ describe('useAiVaultExecutionHostScope', () => {
     })
 
     expect(latest?.executionHostScope).toBe('ssh:dev-box')
+    expect(latest?.workspaceExecutionHostScope).toBe('ssh:dev-box')
     expect(latest?.activeSshExecutionHostScope).toBe('ssh:dev-box')
   })
 
@@ -96,6 +100,7 @@ describe('useAiVaultExecutionHostScope', () => {
     })
 
     expect(latest?.executionHostScope).toBe('local')
+    expect(latest?.workspaceExecutionHostScope).toBe('local')
     expect(latest?.activeSshExecutionHostScope).toBeNull()
   })
 
@@ -116,5 +121,32 @@ describe('useAiVaultExecutionHostScope', () => {
     await renderHook({ ...props, resumeTargetState: { ...props.resumeTargetState } })
 
     expect(latest?.executionHostScope).toBe('all')
+    expect(latest?.workspaceExecutionHostScope).toBe('ssh:dev-box')
+  })
+
+  it('uses the selected host scope only for all-session scans', () => {
+    expect(
+      getAiVaultScanExecutionHostScope({
+        scope: 'all',
+        executionHostScope: 'all',
+        workspaceExecutionHostScope: 'ssh:dev-box'
+      })
+    ).toBe('all')
+
+    expect(
+      getAiVaultScanExecutionHostScope({
+        scope: 'workspace',
+        executionHostScope: 'all',
+        workspaceExecutionHostScope: 'ssh:dev-box'
+      })
+    ).toBe('ssh:dev-box')
+
+    expect(
+      getAiVaultScanExecutionHostScope({
+        scope: 'project',
+        executionHostScope: 'local',
+        workspaceExecutionHostScope: 'ssh:dev-box'
+      })
+    ).toBe('ssh:dev-box')
   })
 })

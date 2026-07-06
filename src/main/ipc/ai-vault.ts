@@ -1,5 +1,6 @@
 import { app, ipcMain } from 'electron'
 import { join } from 'node:path'
+import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from '../codex/codex-session-bridge'
 import { scanRemoteAiVaultSessions } from '../ai-vault/remote-session-scanner'
 import { scanAiVaultSessions } from '../ai-vault/session-scanner'
 import { sessionSortTime } from '../ai-vault/session-scanner-accumulator'
@@ -120,6 +121,9 @@ async function scanAiVaultSessionsByHostScope(
 }
 
 async function scanLocalAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
+  if (args?.force === true) {
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
+  }
   const additionalCodexSessionsDirs =
     handlerOptions.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ??
     []

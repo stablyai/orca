@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
 import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-sources'
@@ -9,9 +10,7 @@ import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner
 import { normalizePiSessionsDir } from './session-scanner-values'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
-export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
-const CODEX_HOME_DIR = process.env.CODEX_HOME?.trim() || DEFAULT_CODEX_HOME_DIR
-const CODEX_SESSIONS_DIR = join(CODEX_HOME_DIR, 'sessions')
+export const DEFAULT_CODEX_HOME_DIR = getSystemCodexHomePath()
 const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
   process.env.COPILOT_HOME?.trim() || join(homedir(), '.copilot'),
@@ -42,8 +41,9 @@ export async function discoverAiVaultSessionSources(args: {
   const { options, limitPerAgent, issues } = args
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
   const codexSessionsDirs = uniqueCodexSessionsDirs([
-    options.codexSessionsDir ?? CODEX_SESSIONS_DIR,
-    ...wslHomeDirs.map((homeDir) => join(homeDir, '.codex', 'sessions')),
+    // Why: AI Vault displays Orca's runtime CODEX_HOME. The user's ~/.codex
+    // sessions are imported into this tree instead of scanned as a second source.
+    options.codexSessionsDir ?? join(getOrcaManagedCodexHomePath(), 'sessions'),
     // Why: Orca-launched WSL Codex sessions use an Orca-owned CODEX_HOME,
     // not the user's default ~/.codex history root.
     ...wslHomeDirs.map((homeDir) =>
