@@ -220,17 +220,19 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'create'],
     summary: 'Create a terminal session in the current worktree',
     usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--parent <handle>] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'parent', 'focus'],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.'
+      'Use this, not worktree create, for a fresh agent in the current checkout.',
+      'Pass --parent <handle> to nest the new terminal under an existing terminal in the dashboard, even when it lives in a different worktree. This is a lightweight lineage edge — no orchestration task or dispatch is created.'
     ],
     examples: [
       'orca terminal create --json',
       'orca terminal create --worktree active --command "codex" --json',
       'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
-      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus'
+      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus',
+      'orca terminal create --worktree path:/projects/other --parent term_abc123 --command "claude"'
     ]
   },
   {

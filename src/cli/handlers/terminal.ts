@@ -143,7 +143,12 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       // unless the caller explicitly asks for focus.
       focus,
       ...(focus ? { presentation: 'focused' } : {}),
-      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
+      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {}),
+      // Why: nest the new terminal under an existing parent in the dashboard,
+      // even across worktrees, without an orchestration task/dispatch.
+      ...(getOptionalStringFlag(flags, 'parent')
+        ? { parentTerminalHandle: getOptionalStringFlag(flags, 'parent') }
+        : {})
     })
     printResult(result, json, formatTerminalCreate)
   },

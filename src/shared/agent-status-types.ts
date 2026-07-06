@@ -92,6 +92,16 @@ export type AgentStatusEntry = {
   /** Runtime terminal handle for matching retained parent rows when the parent
    *  pane key cannot be re-derived after terminal teardown. */
   terminalHandle?: string
+  /** Explicit lineage parent set at `terminal create --parent <handle>` time.
+   *  Why: lets a caller nest a terminal under a parent in the dashboard without
+   *  going through the orchestration task/dispatch system. Independent of
+   *  `orchestration` (whose taskId/dispatchId are required); consulted by the
+   *  agent-row lineage resolver as a first-class parent edge. Groups
+   *  cross-worktree because nesting keys on terminal handle, not worktree. */
+  parentTerminalHandle?: string
+  /** Pane key of the explicit lineage parent, resolved by main when the parent
+   *  terminal is live. Preferred over parentTerminalHandle when present. */
+  parentPaneKey?: string
   /** Worktree attribution stamped by main when a hook can be resolved there.
    *  Why: orchestration workers can report status before their terminal tab is
    *  present in a renderer; retaining this lets worktree-level UI still show

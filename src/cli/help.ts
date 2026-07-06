@@ -435,6 +435,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear create' && flag === 'parent-current') {
     return '--parent-current      Use the current linked issue as parent'
   }
+  if (command === 'terminal create' && flag === 'parent') {
+    return '--parent <handle>     Nest the new terminal under this parent terminal handle in the dashboard (works cross-worktree; no orchestration task created)'
+  }
   if (command === 'worktree create' && flag === 'parent-worktree') {
     return '--parent-worktree <selector> Parent selector such as active/current, id:<id>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<id>'
   }

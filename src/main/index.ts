@@ -999,6 +999,7 @@ function openMainWindow(): BrowserWindow {
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+      const explicitParent = runtime?.getAgentStatusExplicitParentForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
         paneKey,
@@ -1010,7 +1011,11 @@ function openMainWindow(): BrowserWindow {
         receivedAt,
         stateStartedAt,
         ...(providerSession ? { providerSession } : {}),
-        ...(orchestration ? { orchestration } : {})
+        ...(orchestration ? { orchestration } : {}),
+        ...(explicitParent?.parentTerminalHandle
+          ? { parentTerminalHandle: explicitParent.parentTerminalHandle }
+          : {}),
+        ...(explicitParent?.parentPaneKey ? { parentPaneKey: explicitParent.parentPaneKey } : {})
       })
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: some native OSC titles miss terminal idle/permission frames.

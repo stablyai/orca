@@ -978,6 +978,8 @@ type TerminalCreateOptions = {
   presentation?: RuntimeTerminalPresentation
   tabId?: string
   leafId?: string
+  // Why: explicit lineage parent handle from `terminal create --parent`.
+  parentTerminalHandle?: string
   sessionId?: string
   persistHostSessionBinding?: boolean
   // Why: the headless mobile-session create publishes its own authoritative
@@ -2077,6 +2079,11 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  // Why: explicit `terminal create --parent` lineage edges, keyed by the child
+  // terminal handle. Lets the dashboard nest a terminal under a parent without
+  // an orchestration task/dispatch, and covers both background and
+  // renderer-backed creates (leaves and pty records alike). Pruned on close.
+  private explicitParentByChildHandle = new Map<string, string>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
   private ptyOutputSequenceById = new Map<string, number>()
@@ -15850,6 +15857,7 @@ export class OrcaRuntimeService {
         pty.launchAgent = launchOpts.launchAgent ?? null
       }
       const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+      this.recordExplicitParentForChildHandle(handle, launchOpts.parentTerminalHandle)
       if (pty && launchOpts.deferMobileSessionPublish !== true) {
         this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
           tabId,
@@ -15963,6 +15971,7 @@ export class OrcaRuntimeService {
     // populates this.leaves may not have arrived yet. Wait for the leaf to
     // appear so we can return a valid handle the caller can use right away.
     const handle = await this.waitForTerminalHandle(reply.tabId)
+    this.recordExplicitParentForChildHandle(handle, launchOpts.parentTerminalHandle)
     return {
       handle,
       tabId: reply.tabId,
@@ -16612,6 +16621,9 @@ export class OrcaRuntimeService {
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
     const pty = this.getLivePtyForHandle(handle)
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+    // Why: drop any explicit-parent lineage edge so a reused handle can't inherit
+    // a stale parent after this terminal is gone.
+    this.explicitParentByChildHandle.delete(handle)
     if (pty) {
       const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
       return { handle, tabId: pty.pty.tabId ?? pty.record.tabId, ptyKilled }
@@ -18986,6 +18998,40 @@ export class OrcaRuntimeService {
 
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
+  }
+
+  private recordExplicitParentForChildHandle(
+    childHandle: string,
+    parentTerminalHandle: string | undefined
+  ): void {
+    const parent = parentTerminalHandle?.trim()
+    // Why: a terminal cannot be its own lineage parent; ignore self-references
+    // so the dashboard resolver never forms a trivial cycle.
+    if (!parent || parent === childHandle) {
+      return
+    }
+    this.explicitParentByChildHandle.set(childHandle, parent)
+  }
+
+  /**
+   * Explicit lineage parent for a pane, set at `terminal create --parent` time.
+   * Task-free: sourced from the explicitParentByChildHandle map, not the
+   * orchestration DB. Resolves the parent's live pane key when available so the
+   * dashboard can nest without re-deriving it from the handle.
+   */
+  getAgentStatusExplicitParentForPaneKey(
+    paneKey: string
+  ): { parentTerminalHandle: string; parentPaneKey?: string } | undefined {
+    const handle = this.getTerminalHandleForPaneKey(paneKey)
+    const parentTerminalHandle = handle ? this.explicitParentByChildHandle.get(handle) : undefined
+    if (!parentTerminalHandle || parentTerminalHandle === handle) {
+      return undefined
+    }
+    const parentPaneKey = this.getPaneKeyForTerminalHandle(parentTerminalHandle) ?? undefined
+    return {
+      parentTerminalHandle,
+      ...(parentPaneKey && parentPaneKey !== paneKey ? { parentPaneKey } : {})
+    }
   }
 
   getAgentStatusLaunchConfigForPaneKey(

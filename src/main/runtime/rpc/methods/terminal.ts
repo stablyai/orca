@@ -669,7 +669,10 @@ const TerminalCreateParams = z.object({
   activate: z.unknown().optional(),
   presentation: z.enum(['background', 'focused']).optional(),
   tabId: OptionalString,
-  leafId: OptionalString
+  leafId: OptionalString,
+  // Why: explicit lineage parent so the new terminal nests under the given
+  // parent handle in the dashboard, without an orchestration task/dispatch.
+  parentTerminalHandle: OptionalString
 })
 
 const TerminalSplit = TerminalHandle.extend({
@@ -1043,7 +1046,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         activate: params.activate === true,
         presentation: params.presentation,
         tabId: params.tabId,
-        leafId: params.leafId
+        leafId: params.leafId,
+        parentTerminalHandle: params.parentTerminalHandle
       })
     })
   }),

@@ -24,6 +24,10 @@ function makeRow(
     parentPaneKey?: string
     parentTerminalHandle?: string
     coordinatorHandle?: string
+    /** Explicit, task-free lineage parent set on the entry (from `terminal
+     *  create --parent`), independent of orchestration context. */
+    entryParentPaneKey?: string
+    entryParentTerminalHandle?: string
   } = {}
 ): DashboardAgentRow {
   const orchestration =
@@ -47,6 +51,10 @@ function makeRow(
     stateHistory: [],
     agentType: 'codex',
     ...(options.terminalHandle ? { terminalHandle: options.terminalHandle } : {}),
+    ...(options.entryParentPaneKey ? { parentPaneKey: options.entryParentPaneKey } : {}),
+    ...(options.entryParentTerminalHandle
+      ? { parentTerminalHandle: options.entryParentTerminalHandle }
+      : {}),
     ...(orchestration ? { orchestration } : {})
   }
 
@@ -76,6 +84,34 @@ describe('buildAgentRowLineageTree', () => {
   it('falls back to the parent terminal handle when the parent pane key is absent', () => {
     const parent = makeRow('parent:1', { terminalHandle: 'term-parent' })
     const child = makeRow('child:1', { parentTerminalHandle: 'term-parent' })
+
+    const tree = buildAgentRowLineageTree([parent, child])
+
+    expect(tree.rootRows.map((row) => row.paneKey)).toEqual(['parent:1'])
+    expect(tree.childrenByParentPaneKey.get('parent:1')?.map((row) => row.paneKey)).toEqual([
+      'child:1'
+    ])
+  })
+
+  it('groups by an explicit entry parent pane key without orchestration context', () => {
+    const parent = makeRow('parent:1')
+    const child = makeRow('child:1', { entryParentPaneKey: 'parent:1' })
+
+    expect(child.entry.orchestration).toBeUndefined()
+
+    const tree = buildAgentRowLineageTree([parent, child])
+
+    expect(tree.rootRows.map((row) => row.paneKey)).toEqual(['parent:1'])
+    expect(tree.childrenByParentPaneKey.get('parent:1')?.map((row) => row.paneKey)).toEqual([
+      'child:1'
+    ])
+  })
+
+  it('groups by an explicit entry parent terminal handle without orchestration context', () => {
+    const parent = makeRow('parent:1', { terminalHandle: 'term-parent' })
+    const child = makeRow('child:1', { entryParentTerminalHandle: 'term-parent' })
+
+    expect(child.entry.orchestration).toBeUndefined()
 
     const tree = buildAgentRowLineageTree([parent, child])
 

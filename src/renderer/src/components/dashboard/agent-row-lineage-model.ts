@@ -23,7 +23,11 @@ export function resolveAgentRowParentPaneKey<T extends DashboardAgentRow>(
   rowsByPaneKey: ReadonlyMap<string, T>,
   paneKeyByTerminalHandle: ReadonlyMap<string, string>
 ): string | undefined {
-  const explicitParentPaneKey = row.entry.orchestration?.parentPaneKey
+  // Why: an explicit `terminal create --parent` edge (entry.parentPaneKey /
+  // parentTerminalHandle) is a first-class, task-free lineage signal — honor it
+  // ahead of orchestration-derived context so callers can nest a terminal
+  // without creating an orchestration task/dispatch.
+  const explicitParentPaneKey = row.entry.parentPaneKey ?? row.entry.orchestration?.parentPaneKey
   if (
     explicitParentPaneKey &&
     explicitParentPaneKey !== row.paneKey &&
@@ -33,6 +37,7 @@ export function resolveAgentRowParentPaneKey<T extends DashboardAgentRow>(
   }
 
   const parentTerminalHandles = [
+    row.entry.parentTerminalHandle,
     row.entry.orchestration?.parentTerminalHandle,
     row.entry.orchestration?.coordinatorHandle
   ]
