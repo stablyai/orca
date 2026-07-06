@@ -8,7 +8,11 @@ import { emulatorProbe } from '../emulator/emulator-probe'
 // units arrive on emulator:videoStreamMeta / emulator:videoStreamFrame. Mirrors
 // the MJPEG emulator-frame-stream handler but for the Android H.264 path.
 export function registerEmulatorVideoStreamHandlers(): void {
-  type Subscription = { owner: WebContents; unsubscribe: () => void }
+  type Subscription = {
+    owner: WebContents
+    unsubscribe: () => void
+    onOwnerDestroyed: () => void
+  }
   const subscriptions = new Map<string, Subscription>()
 
   const stopSubscription = (streamId: string, owner?: WebContents): void => {
@@ -17,6 +21,10 @@ export function registerEmulatorVideoStreamHandlers(): void {
       return
     }
     subscription.unsubscribe()
+    // Why: `.once('destroyed')` only self-removes when that event fires (window
+    // close). An explicit stop must drop it too, or every emulator tab
+    // show/hide cycle leaks a closure on the long-lived main-window webContents.
+    subscription.owner.removeListener('destroyed', subscription.onOwnerDestroyed)
     subscriptions.delete(streamId)
   }
 
@@ -37,7 +45,12 @@ export function registerEmulatorVideoStreamHandlers(): void {
         throw new Error('Video stream id is already in use by another renderer')
       }
       stopSubscription(streamId, owner)
-      const pendingSubscription = { owner, unsubscribe: () => {} }
+      const onOwnerDestroyed = (): void => stopSubscription(streamId, owner)
+      const pendingSubscription: Subscription = {
+        owner,
+        unsubscribe: () => {},
+        onOwnerDestroyed
+      }
       subscriptions.set(streamId, pendingSubscription)
       setTimeout(() => {
         if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
@@ -63,9 +76,7 @@ export function registerEmulatorVideoStreamHandlers(): void {
         })
         pendingSubscription.unsubscribe = unsubscribe
       }, 0)
-      owner.once('destroyed', () => {
-        stopSubscription(streamId, owner)
-      })
+      owner.once('destroyed', onOwnerDestroyed)
       return { streamId }
     }
   )

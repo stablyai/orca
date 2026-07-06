@@ -5,6 +5,7 @@ import { MjpegFrameStream } from '../emulator/mjpeg-frame-stream'
 type FrameStreamSession = {
   owner: WebContents
   stream: MjpegFrameStream
+  onOwnerDestroyed: () => void
 }
 
 const sessions = new Map<string, FrameStreamSession>()
@@ -15,6 +16,10 @@ function stopFrameStream(streamId: string): void {
     return
   }
   session.stream.stop()
+  // Why: `.once('destroyed')` only self-removes when that event fires (window
+  // close). An explicit stop must drop it too, or every emulator tab
+  // show/hide cycle leaks a closure on the long-lived main-window webContents.
+  session.owner.removeListener('destroyed', session.onOwnerDestroyed)
   sessions.delete(streamId)
 }
 
@@ -57,8 +62,9 @@ export function registerEmulatorFrameStreamHandlers(): void {
         args.streamKey
       )
 
-      sessions.set(streamId, { owner, stream })
-      owner.once('destroyed', () => stopFrameStream(streamId))
+      const onOwnerDestroyed = (): void => stopFrameStream(streamId)
+      sessions.set(streamId, { owner, stream, onOwnerDestroyed })
+      owner.once('destroyed', onOwnerDestroyed)
       stream.start()
       return { streamId }
     }
