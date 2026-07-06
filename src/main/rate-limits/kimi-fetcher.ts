@@ -242,14 +242,12 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     return result('error', 'Kimi token expired — open Kimi to refresh')
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
   try {
     const res = await net.fetch(`${KIMI_BASE_URL.replace(/\/$/, '')}/usages`, {
       // Why: identical to the CLI's fetchManagedUsage — bearer token + Accept.
       // No extra User-Agent: the usages endpoint authenticates by token only.
       headers: { Authorization: `Bearer ${creds.access_token}`, Accept: 'application/json' },
-      signal: controller.signal
+      signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
     if (res.status === 401 || res.status === 403) {
       return result('error', `Kimi usage request unauthorized (HTTP ${res.status})`)
@@ -261,7 +259,5 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     return mapUsageResponse(typeof data === 'object' && data !== null ? data : {})
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Kimi usage request failed')
-  } finally {
-    clearTimeout(timeout)
   }
 }
