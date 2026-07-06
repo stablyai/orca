@@ -7,7 +7,7 @@ import {
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
-import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
+import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -62,7 +62,10 @@ export function resumeTerminalVisibility({
       // overlay's delayed geometry fit. Still request hidden-output recovery:
       // agent TUIs can suppress hidden bytes until the pane is foregrounded.
       requestLightTabBacklogRecovery(manager)
-      scheduleTerminalWebglAtlasRecovery()
+      // Why: reveal recovery must be immediate, not the terminal-output debounce
+      // — a background agent streaming in another pane must not defer this tab's
+      // atlas rebuild.
+      scheduleTabRevealWebglAtlasRecovery()
       if (isActive) {
         focusActivePane(manager)
       }
