@@ -15,6 +15,7 @@ export type EditingTarget = {
   identityFile: string
   proxyCommand: string
   jumpHost: string
+  systemSshConnectionReuse: boolean
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
 }
@@ -28,6 +29,7 @@ export const EMPTY_FORM: EditingTarget = {
   identityFile: '',
   proxyCommand: '',
   jumpHost: '',
+  systemSshConnectionReuse: true,
   relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
   relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0
 }
@@ -45,6 +47,7 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     identityFile: target.identityFile ?? '',
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
+    systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
     relayGracePeriodSeconds: String(
       target.relayGracePeriodSeconds === 0
         ? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS

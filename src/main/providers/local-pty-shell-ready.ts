@@ -21,6 +21,7 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
   getZshEnvTemplate,
   getZshFinalZdotdirRestoreBlock,
@@ -118,6 +119,11 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
+# Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
+# a single literal paste (ESC[200~…ESC[201~). Without it, older readline builds
+# treat each embedded newline as Enter and mangle the prompt into PS2
+# continuation. Modern readline defaults this on; force it for the rest.
+[[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 # Why: preserve bash's normal login-shell contract. Many users already source
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
@@ -432,7 +438,11 @@ export function writeStartupCommandWhenShellReady(
   readyPromise: Promise<void | ShellReadySignal>,
   proc: pty.IPty,
   startupCommand: string,
-  onExit: (cleanup: () => void) => void
+  onExit: (cleanup: () => void) => void,
+  // Why: only Orca-wrapped bash/zsh have bracketed-paste mode active, so
+  // multiline startup commands are wrapped in ESC[200~/ESC[201~ only there;
+  // other shells keep the raw submit path to avoid echoing the markers.
+  options: { bracketedPasteSafe?: boolean } = {}
 ): void {
   let sent = false
   let postReadyTimer: ReturnType<typeof setTimeout> | null = null
@@ -470,12 +480,17 @@ export function writeStartupCommandWhenShellReady(
     // Enter under ICRNL, so CR works there too, but this code path is reached
     // on Windows as well as POSIX via writeStartupCommandWhenShellReady.
     const submit = process.platform === 'win32' ? '\r' : '\n'
-    const endsWithSubmit = startupCommand.endsWith('\r') || startupCommand.endsWith('\n')
-    const payload = endsWithSubmit ? startupCommand : `${startupCommand}${submit}`
     // Why: startup commands are usually long, quoted agent launches. Writing
     // them in one PTY call after the shell-ready barrier avoids the incremental
-    // paste behavior that still dropped characters in practice.
-    proc.write(payload)
+    // paste behavior that still dropped characters in practice. Multiline
+    // prompts are additionally wrapped in bracketed paste (see the helper) so
+    // embedded newlines are inserted literally instead of submitting early.
+    proc.write(
+      buildStartupCommandSubmission(startupCommand, {
+        submit,
+        bracketedPasteSafe: options.bracketedPasteSafe === true
+      })
+    )
   }
 
   const schedulePostReadyFlush = (): void => {

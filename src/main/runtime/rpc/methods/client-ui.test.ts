@@ -22,6 +22,8 @@ describe('client UI RPC methods', () => {
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
       compactWorktreeCards: true,
+      minimaxGroupId: 'group-42',
+      minimaxUsageModels: 'general,abab6.5',
       githubProjects: {
         pinned: [],
         recent: [],
@@ -77,6 +79,8 @@ describe('client UI RPC methods', () => {
         defaultTaskViewPreset: 'my-prs',
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        minimaxGroupId: 'group-42',
+        minimaxUsageModels: 'general,abab6.5',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
@@ -91,6 +95,8 @@ describe('client UI RPC methods', () => {
       defaultTaskViewPreset: 'my-prs',
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      minimaxGroupId: 'group-42',
+      minimaxUsageModels: 'general,abab6.5',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
@@ -176,7 +182,10 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex'],
+      statusBarItems: ['codex', 'kimi', 'minimax', 'ports'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
         githubItemsQuery: 'is:open',
@@ -212,7 +221,10 @@ describe('client UI RPC methods', () => {
     const payload = {
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex'],
+      statusBarItems: ['codex', 'kimi', 'minimax', 'ports'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
         githubItemsQuery: 'is:open',

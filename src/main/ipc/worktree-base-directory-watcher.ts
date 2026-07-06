@@ -1,5 +1,4 @@
 import type { BrowserWindow } from 'electron'
-import type { AsyncSubscription } from '@parcel/watcher'
 import type { FsChangeEvent } from '../../shared/types'
 import type { Store } from '../persistence'
 import { notifyWorktreesChanged } from './worktree-remote'
@@ -12,10 +11,11 @@ import {
   buildWorktreeBaseDirectoryWatchTargets,
   clearWorktreeBaseDirectoryWatchTargetWarnings
 } from './worktree-base-directory-watch-targets'
+import { startWorktreeBaseDirectoryPoller } from './worktree-base-directory-poller'
 
 type ActiveWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
-  subscription: Pick<AsyncSubscription, 'unsubscribe'>
+  subscription: { unsubscribe: () => Promise<void> }
   notifyTimer: ReturnType<typeof setTimeout> | null
   pendingRepoIds: Set<string>
   disposed: boolean
@@ -137,19 +137,19 @@ async function subscribeTarget(
     return activeWatch
   }
 
-  const watcher = await import('@parcel/watcher')
-  const subscription = await watcher.subscribe(
-    target.path,
-    (error, events) => {
+  // Why: a recursive native watcher here forced fseventsd to deliver every
+  // event under the whole workspace root (all worktrees) / whole common .git
+  // (objects included) just to observe a few shallow paths. The poller reads
+  // exactly those paths and registers zero fseventsd clients.
+  const subscription = await startWorktreeBaseDirectoryPoller(
+    target,
+    () => (activeWatches.get(target.key) ?? activeWatch)?.repos ?? target.repos,
+    (events) => {
       const currentWatch = activeWatches.get(target.key) ?? activeWatch
       if (!currentWatch || currentWatch.disposed) {
         return
       }
-      handleLocalWatchEvents(currentWatch, error, events)
-    },
-    {
-      ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.next/**', '**/.cache/**'],
-      ...(process.platform === 'win32' ? { backend: 'windows' as const } : {})
+      handleLocalWatchEvents(currentWatch, null, events)
     }
   )
   activeWatch = {

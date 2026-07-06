@@ -73,15 +73,16 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
 
 === AFTER YOU SEND worker_done ===
 
-Keep the shell session open for a grace period (10 minutes) in case the
-coordinator sends a follow-up or re-dispatches you. Poll with
-\`orca orchestration check\` every 2 minutes during that window. If no
-follow-up arrives, you may exit after the grace period — the coordinator
-will not expect further output from you.
+worker_done ends your turn for this task. Your dispatched work is complete:
+stop, return to an idle prompt, and take no further actions — do NOT start
+new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
+\`orca orchestration check\`. The coordinator has already recorded your
+completion and expects no further output.
 
-If the coordinator re-dispatches you (you will receive a fresh preamble +
-TASK block), reset your polling and start the new task. Do not respond
-to the previous task's follow-ups after a re-dispatch.
+Do not exit the shell. Your terminal stays available, and if the
+coordinator has more for you it will re-engage this terminal with a fresh
+preamble + TASK block, which arrives as new input. When that happens,
+reset and start the new task; ignore the previous task's follow-ups.
 
 === TASK ===
 TASK_BODY"

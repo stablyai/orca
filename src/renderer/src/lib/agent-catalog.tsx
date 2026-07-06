@@ -10,6 +10,7 @@ import {
   CopilotIcon,
   KiloIcon,
   OmpIcon,
+  OpenCodeIcon,
   PiIcon
 } from './agent-icon-glyphs'
 import { translate } from '@/i18n/i18n'
@@ -88,7 +89,6 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'opencode',
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
-    faviconDomain: 'opencode.ai',
     homepageUrl: 'https://opencode.ai/docs/cli/'
   },
   {
@@ -384,6 +384,9 @@ export function AgentIcon({
     return <CopilotIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === iconAgent)
+  if (iconAgent === 'opencode') {
+    return <OpenCodeIcon size={size} />
+  }
   if (catalogEntry?.iconUrl) {
     return (
       <img

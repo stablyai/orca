@@ -2,7 +2,7 @@ import type { Editor, UseEditorOptions } from '@tiptap/react'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
-import { normalizeSoftBreaks } from './rich-markdown-normalize'
+import { normalizeEmptyListItems } from './rich-markdown-normalize'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 import {
   syncSlashMenu,
@@ -26,6 +26,7 @@ import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
 } from './rich-markdown-image-context'
+import { getRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { DiffComment } from '../../../../shared/types'
 
@@ -36,6 +37,7 @@ export type EditorConfigParams = {
   worktreeRoot: string | null
   runtimeEnvironmentId?: string | null
   isMac: boolean
+  richMarkdownSpellcheckEnabled: boolean
   settings: RichMarkdownRuntimeSettings
   activateMarkdownLink: ActivateMarkdownLink
   rootRef: MutableRefObject<HTMLDivElement | null>
@@ -82,6 +84,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     worktreeRoot,
     runtimeEnvironmentId,
     isMac,
+    richMarkdownSpellcheckEnabled,
     settings,
     activateMarkdownLink,
     rootRef,
@@ -127,7 +130,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     editorProps: {
       attributes: {
         class: 'rich-markdown-editor',
-        spellcheck: 'true'
+        spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)
       },
       handleDOMEvents: {
         cut: handleRichMarkdownCut
@@ -205,7 +208,10 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       clearAnnotationTarget()
     },
     onCreate: ({ editor: nextEditor }) => {
-      normalizeSoftBreaks(nextEditor)
+      // Why: normalizeEmptyListItems (not normalizeSoftBreaks) so hard-wrapped
+      // source paragraphs stay one paragraph and reflow via CSS instead of being
+      // split on load.
+      normalizeEmptyListItems(nextEditor)
       lastCommittedMarkdownRef.current = content
       isInitializingRef.current = false
       cancelAutoFocusRef.current?.()

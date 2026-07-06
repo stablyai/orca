@@ -21,31 +21,35 @@ const PS_TIMEOUT_MS = 3000
 // identically to a fresh fork.
 const DEFAULT_SNAPSHOT_TTL_MS = 500
 
-type Snapshot = { stdout: string; capturedAtMs: number }
+type Snapshot<T> = { value: T; capturedAtMs: number }
 
-type ProcessTableSnapshotReaderDeps = {
-  runPs: () => Promise<string>
+type ProcessTableSnapshotReaderDeps<T> = {
+  runPs: () => Promise<T>
   now: () => number
   ttlMs?: number
 }
 
 /**
  * Build a process-table snapshot reader that deduplicates concurrent and
- * near-simultaneous `ps` scans behind a single in-flight promise + short TTL.
+ * near-simultaneous scans behind a single in-flight promise + short TTL.
  * Exposed as a factory so tests can inject the scan and clock; production code
- * uses the shared `getProcessTableSnapshot` instance below.
+ * uses the shared `getProcessTableSnapshot` instance below. Generic over the
+ * scan result so the Windows path can cache parsed rows while POSIX caches the
+ * raw `ps` stdout string (the default).
  */
-export function createProcessTableSnapshotReader(deps: ProcessTableSnapshotReaderDeps): {
-  getSnapshot: () => Promise<string>
+export function createProcessTableSnapshotReader<T = string>(
+  deps: ProcessTableSnapshotReaderDeps<T>
+): {
+  getSnapshot: () => Promise<T>
   reset: () => void
 } {
   const ttlMs = deps.ttlMs ?? DEFAULT_SNAPSHOT_TTL_MS
-  let cached: Snapshot | null = null
-  let inFlight: Promise<string> | null = null
+  let cached: Snapshot<T> | null = null
+  let inFlight: Promise<T> | null = null
 
-  async function getSnapshot(): Promise<string> {
+  async function getSnapshot(): Promise<T> {
     if (cached && deps.now() - cached.capturedAtMs < ttlMs) {
-      return cached.stdout
+      return cached.value
     }
     if (inFlight) {
       return inFlight
@@ -53,11 +57,11 @@ export function createProcessTableSnapshotReader(deps: ProcessTableSnapshotReade
     const promise = deps.runPs()
     inFlight = promise
     try {
-      const stdout = await promise
-      // Why: stamp capture time AFTER the scan returns so a slow `ps` can't
+      const value = await promise
+      // Why: stamp capture time AFTER the scan returns so a slow scan can't
       // hand back a snapshot that is already older than its TTL.
-      cached = { stdout, capturedAtMs: deps.now() }
-      return stdout
+      cached = { value, capturedAtMs: deps.now() }
+      return value
     } finally {
       // Clear in-flight on success and failure so a transient `ps` error
       // (timeout, nonzero exit) retries on the next call instead of being

@@ -34,7 +34,6 @@ import { isTuiAgentProfileDetected } from '../../../shared/tui-agent-profiles'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
 import {
   buildTaskSourceContextFromRepo,
@@ -100,6 +99,10 @@ import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
 } from '@/lib/github-work-item-source-lookup'
+import {
+  resolveGitHubWorkItemIdentity,
+  type GitHubWorkItemIdentity
+} from '@/lib/github-work-item-identity'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
 import {
@@ -146,6 +149,7 @@ import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-foc
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
 import { getForkPushWarning } from './fork-push-warning'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
@@ -168,6 +172,7 @@ import {
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchReuse,
   resolveComposerBranchSelection,
+  resolveComposerManualBranchNameChange,
   resolveComposerReuseOverride
 } from './composer-branch-selection'
 import { isCurrentComposerDropOwner } from './composer-drop-owner'
@@ -306,9 +311,12 @@ export type ComposerCardProps = {
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
   name: string
   onNameValueChange: (value: string) => void
+  branchNameOverride: string | undefined
+  onBranchNameOverrideChange: (value: string | undefined) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
+  onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   /** GitLab parallel of onBaseBranchPrSelect. */
@@ -519,6 +527,38 @@ function getLinkedWorkItemSeedName(item: LinkedWorkItemSummary | null | undefine
     return ''
   }
   return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
+}
+
+function getGitHubLinkedWorkItemIdentity(
+  item: LinkedWorkItemSummary | null | undefined
+): GitHubWorkItemIdentity | null {
+  if (
+    !item ||
+    getLinkedWorkItemProvider(item) !== 'github' ||
+    (item.type !== 'issue' && item.type !== 'pr')
+  ) {
+    return null
+  }
+
+  return resolveGitHubWorkItemIdentity({
+    type: item.type,
+    number: item.number,
+    url: item.url
+  })
+}
+
+function normalizeGitHubLinkedWorkItem(
+  item: LinkedWorkItemSummary | null | undefined
+): LinkedWorkItemSummary | null {
+  if (!item) {
+    return null
+  }
+  const identity = getGitHubLinkedWorkItemIdentity(item)
+  if (!identity || (identity.type === item.type && identity.number === item.number)) {
+    return item
+  }
+
+  return { ...item, type: identity.type, number: identity.number }
 }
 
 export function getInitialAutoManagedWorkspaceName({
@@ -839,9 +879,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         projects,
         projectHostSetups,
         eligibleRepos,
-        projectGroups
+        projectGroups,
+        hosts: hostOptions
       }),
-    [eligibleRepos, projectGroups, projectHostSetups, projects]
+    [eligibleRepos, hostOptions, projectGroups, projectHostSetups, projects]
   )
   const selectedRepoSettings = useMemo(() => {
     if (!settings) {
@@ -954,10 +995,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [attachmentPaths, setAttachmentPaths] = useState<string[]>(
     persistDraft ? (newWorkspaceDraft?.attachments ?? []) : []
   )
+  const initialLinkedWorkItemSeed = normalizeGitHubLinkedWorkItem(initialLinkedWorkItem)
+  const draftLinkedWorkItemSeed = persistDraft
+    ? normalizeGitHubLinkedWorkItem(newWorkspaceDraft?.linkedWorkItem)
+    : null
+  const linkedWorkItemSeed = persistDraft
+    ? (draftLinkedWorkItemSeed ?? initialLinkedWorkItemSeed)
+    : initialLinkedWorkItemSeed
+  const linkedWorkItemSeedIdentity = getGitHubLinkedWorkItemIdentity(linkedWorkItemSeed)
   const [linkedWorkItem, setLinkedWorkItem] = useState<LinkedWorkItemSummary | null>(
-    persistDraft
-      ? (newWorkspaceDraft?.linkedWorkItem ?? initialLinkedWorkItem)
-      : initialLinkedWorkItem
+    () => linkedWorkItemSeed
   )
   const taskSourceContext = useMemo(() => {
     if (
@@ -1031,6 +1078,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     })
   }, [projects, selectedRepo, selectedRepoIsGit, selectedWorkspaceTarget, taskSourceContext])
   const [linkedIssue, setLinkedIssue] = useState<string>(() => {
+    if (linkedWorkItemSeedIdentity?.type === 'issue') {
+      return String(linkedWorkItemSeedIdentity.number)
+    }
     if (persistDraft && newWorkspaceDraft?.linkedIssue) {
       return newWorkspaceDraft.linkedIssue
     }
@@ -1043,6 +1093,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return ''
   })
   const [linkedPR, setLinkedPR] = useState<number | null>(() => {
+    if (linkedWorkItemSeedIdentity?.type === 'pr') {
+      return linkedWorkItemSeedIdentity.number
+    }
+    if (linkedWorkItemSeedIdentity?.type === 'issue') {
+      return null
+    }
     if (persistDraft && newWorkspaceDraft?.linkedPR !== undefined) {
       return newWorkspaceDraft.linkedPR
     }
@@ -1075,6 +1131,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
   const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] =
     useState(false)
+  const [smartNameMode, setSmartNameMode] = useState<SmartNameMode>('smart')
   // Why (#5181): when the user picks an existing LOCAL branch, let them reuse it
   // (check it out) instead of creating a new branch from it. `reuseEligibleBranch`
   // is the local branch name eligible for reuse (null = not a reusable local
@@ -1206,9 +1263,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const lastAutoNameRef = useRef<string>(
     getInitialAutoManagedWorkspaceName({
       draftName: persistDraft ? newWorkspaceDraft?.name : null,
-      draftLinkedWorkItem: persistDraft ? newWorkspaceDraft?.linkedWorkItem : null,
+      draftLinkedWorkItem: persistDraft ? draftLinkedWorkItemSeed : null,
       initialName,
-      initialLinkedWorkItem
+      initialLinkedWorkItem: initialLinkedWorkItemSeed
     })
   )
   const nameRef = useRef<string>(name)
@@ -2011,16 +2068,28 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     let cancelled = false
     setLinkDirectLoading(true)
     // Why: Superset lets users paste a full GitHub URL or type a raw issue/PR
-    // number and still get a concrete selectable result. Orca mirrors that by
-    // resolving direct lookups against the selected repo instead of requiring a
-    // text match in the recent-items list.
+    // number and still get a concrete selectable result. Full URLs carry
+    // issue-vs-PR intent, so preserve the URL route instead of probing by
+    // number only.
     const lookupRepoId = selectedRepo.id
-    void lookupGitHubWorkItemForSource({
-      repoPath: selectedRepo.path,
-      repoId: selectedRepo.id,
-      sourceContext: selectedRepoGitHubSourceContext,
-      number: normalizedLinkQuery.directNumber
-    })
+    const lookup =
+      normalizedLinkQuery.directLink !== undefined
+        ? lookupGitHubWorkItemByOwnerRepoForSource({
+            repoPath: selectedRepo.path,
+            repoId: selectedRepo.id,
+            sourceContext: selectedRepoGitHubSourceContext,
+            owner: normalizedLinkQuery.directLink.slug.owner,
+            repo: normalizedLinkQuery.directLink.slug.repo,
+            number: normalizedLinkQuery.directLink.number,
+            type: normalizedLinkQuery.directLink.type
+          })
+        : lookupGitHubWorkItemForSource({
+            repoPath: selectedRepo.path,
+            repoId: selectedRepo.id,
+            sourceContext: selectedRepoGitHubSourceContext,
+            number: normalizedLinkQuery.directNumber
+          })
+    void lookup
       .then((item) => {
         if (!cancelled) {
           setLinkDirectItem(
@@ -2043,6 +2112,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       cancelled = true
     }
   }, [
+    normalizedLinkQuery.directLink,
     linkPopoverOpen,
     normalizedLinkQuery.directNumber,
     selectedRepo,
@@ -2052,24 +2122,31 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const applyLinkedWorkItem = useCallback(
     (item: GitHubWorkItem, options: { preserveBranchNameOverride?: boolean } = {}): void => {
-      if (item.type === 'issue') {
-        setLinkedIssue(String(item.number))
+      const identity = resolveGitHubWorkItemIdentity(item)
+      const normalizedItem: GitHubWorkItem = {
+        ...item,
+        type: identity.type,
+        number: identity.number
+      }
+      if (identity.type === 'issue') {
+        setLinkedIssue(String(identity.number))
         setLinkedPR(null)
       } else {
         setLinkedIssue('')
-        setLinkedPR(item.number)
+        setLinkedPR(identity.number)
       }
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
       setLinkedWorkItem({
-        type: item.type,
+        type: identity.type,
         provider: 'github',
-        number: item.number,
+        number: identity.number,
         title: item.title,
         url: item.url
       })
       const suggestedName =
-        getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
+        getLinkedWorkItemWorkspaceName(normalizedItem)?.seedName ??
+        getLinkedWorkItemSuggestedName(normalizedItem)
       // Why: a pasted URL/#123 in the field is the lookup query that found
       // this item, not a deliberate name — replace it with the title-derived
       // name or it silently becomes a slugified-URL workspace name.
@@ -2091,20 +2168,25 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     useCallback(async (): Promise<PendingSmartGitHubSubmitResolution> => {
       if (linkedWorkItem) {
         const startPointSelection = smartGitHubPrStartPointSelectionRef.current
+        const linkedWorkItemIdentity = getGitHubLinkedWorkItemIdentity(linkedWorkItem)
+        const startPointIdentity = startPointSelection
+          ? resolveGitHubWorkItemIdentity(startPointSelection.item)
+          : null
         if (
           !isProjectGroupTarget &&
-          linkedWorkItem.type === 'pr' &&
+          linkedWorkItemIdentity?.type === 'pr' &&
+          startPointIdentity?.type === 'pr' &&
           getLinkedWorkItemProvider(linkedWorkItem) === 'github' &&
           selectedRepo &&
           selectedRepoIsGit &&
           startPointSelection?.repoId === selectedRepo.id &&
-          startPointSelection.item.number === linkedWorkItem.number
+          startPointIdentity.number === linkedWorkItemIdentity.number
         ) {
           const selectedPrStartPoint =
             startPointSelection.resolved ??
             (await resolveGitHubPrStartPointForRepo({
               repoId: selectedRepo.id,
-              prNumber: startPointSelection.item.number,
+              prNumber: startPointIdentity.number,
               settings: getSettingsForRepoRuntimeOwner(
                 { repos: [selectedRepo], settings },
                 selectedRepo.id
@@ -2191,11 +2273,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         throw new Error('Could not resolve the GitHub item before creating the workspace.')
       }
 
+      const itemIdentity = resolveGitHubWorkItemIdentity(item)
       const prStartPoint =
-        !isProjectGroupTarget && item.type === 'pr' && selectedRepo && selectedRepoIsGit
+        !isProjectGroupTarget && itemIdentity.type === 'pr' && selectedRepo && selectedRepoIsGit
           ? await resolveGitHubPrStartPointForRepo({
               repoId: selectedRepo.id,
-              prNumber: item.number,
+              prNumber: itemIdentity.number,
               settings: getSettingsForRepoRuntimeOwner(
                 { repos: [selectedRepo], settings },
                 selectedRepo.id
@@ -2369,6 +2452,23 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreateError(null)
     },
     [branchNameOverride, branchNameOverridePreservesNameEdits, name]
+  )
+  const handleBranchNameOverrideChange = useCallback(
+    (value: string | undefined): void => {
+      const next = resolveComposerManualBranchNameChange({
+        value,
+        pushTarget,
+        forkPushWarning
+      })
+      setBranchNameOverride(next.branchNameOverride)
+      setBranchNameOverridePreservesNameEdits(Boolean(next.branchNameOverride))
+      setPushTarget(next.pushTarget)
+      setForkPushWarning(next.forkPushWarning)
+      setReuseEligibleBranch(null)
+      setReuseSelectedBranch(false)
+      branchAutoNameRef.current = ''
+    },
+    [forkPushWarning, pushTarget]
   )
 
   const addComposerAttachments = useCallback((paths: string[]): void => {
@@ -2839,8 +2939,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // worktree's comment should surface (`orca worktree current`, sidebar).
       // Prefill the note if it's empty or still equal to a prior auto-fill, so
       // we don't overwrite anything the user has typed.
-      if (item.type === 'pr') {
-        const suggestedNote = `PR #${item.number} — ${item.title}`
+      const identity = resolveGitHubWorkItemIdentity(item)
+      if (identity.type === 'pr') {
+        const suggestedNote = `PR #${identity.number} — ${item.title}`
         const currentNote = noteRef.current
         if (!currentNote.trim() || currentNote === lastAutoNoteRef.current) {
           setNote(suggestedNote)
@@ -2882,10 +2983,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
+      const identity = resolveGitHubWorkItemIdentity(item)
+      const normalizedItem: GitHubWorkItem = {
+        ...item,
+        type: identity.type,
+        number: identity.number
+      }
       if (isProjectGroupTarget) {
-        const linkedItem = toGitHubLinkedWorkItem(item)
-        setLinkedIssue(String(item.number))
-        setLinkedPR(item.type === 'pr' ? item.number : null)
+        const linkedItem = toGitHubLinkedWorkItem(normalizedItem)
+        setLinkedIssue(identity.type === 'issue' ? String(identity.number) : '')
+        setLinkedPR(identity.type === 'pr' ? identity.number : null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
         setLinkedWorkItem(linkedItem)
@@ -2908,8 +3015,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // selected run host. Resolve git refs against the run repo; keep item
       // metadata/source context separate for provider identity.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
-      applyLinkedWorkItem(item)
-      if (item.type !== 'pr' || !runRepo) {
+      applyLinkedWorkItem(normalizedItem)
+      if (identity.type !== 'pr' || !runRepo) {
         setBaseBranch(undefined)
         setCompareBaseRef(undefined)
         setPushTarget(undefined)
@@ -2920,7 +3027,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setPushTarget(undefined)
       const startPointSelection: SmartGitHubPrStartPointSelection = {
         repoId: runRepo.id,
-        item
+        item: normalizedItem
       }
       smartGitHubPrStartPointSelectionRef.current = startPointSelection
       const itemRepoSettings = getSettingsForRepoRuntimeOwner(
@@ -2929,12 +3036,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       )
       const resolvePrBase = resolveGitHubPrStartPointForRepo({
         repoId: runRepo.id,
-        prNumber: item.number,
+        prNumber: identity.number,
         settings: itemRepoSettings,
-        ...(item.branchName ? { headRefName: item.branchName } : {}),
-        ...(item.baseRefName ? { baseRefName: item.baseRefName } : {}),
-        ...(item.isCrossRepository !== undefined
-          ? { isCrossRepository: item.isCrossRepository }
+        ...(normalizedItem.branchName ? { headRefName: normalizedItem.branchName } : {}),
+        ...(normalizedItem.baseRefName ? { baseRefName: normalizedItem.baseRefName } : {}),
+        ...(normalizedItem.isCrossRepository !== undefined
+          ? { isCrossRepository: normalizedItem.isCrossRepository }
           : {})
       })
       void resolvePrBase
@@ -2945,7 +3052,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           startPointSelection.resolved = result
           handleBaseBranchPrSelect(
             result.baseBranch,
-            item,
+            normalizedItem,
             result.pushTarget,
             result.branchNameOverride,
             result.compareBaseRef
@@ -3575,7 +3682,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         branchAutoName: branchAutoNameRef.current,
         workspaceName,
         preserveWorkspaceNameEdits:
-          smartGitHubResolution.kind === 'pr-start-point' || branchNameOverridePreservesNameEdits
+          smartGitHubResolution.kind === 'pr-start-point' || branchNameOverridePreservesNameEdits,
+        createBranchFromWorkspaceName:
+          smartGitHubResolution.kind === 'none' && smartNameMode === 'branches'
       })
       const createDisplayName =
         smartGitHubResolution.kind === 'none'
@@ -3773,6 +3882,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     settings?.autoRenameBranchFromWork,
     agentProfiles,
     selectedRepoPath,
+    smartNameMode,
     setSidebarOpen,
     setupDecision,
     sparseEnabled,
@@ -3970,15 +4080,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           branchAutoName: branchAutoNameRef.current,
           workspaceName,
           preserveWorkspaceNameEdits:
-            smartGitHubResolution.kind === 'pr-start-point' || branchNameOverridePreservesNameEdits
+            smartGitHubResolution.kind === 'pr-start-point' || branchNameOverridePreservesNameEdits,
+          createBranchFromWorkspaceName:
+            smartGitHubResolution.kind === 'none' && smartNameMode === 'branches'
         })
         const submitBaseBranch = selectedRepoIsGit
           ? await resolveWorktreeCreateBaseBranch({
-              explicitBaseBranch: smartSubmitBaseBranch,
-              repoWorktreeBaseRef: selectedRepo.worktreeBaseRef,
-              loadDefaultBaseRef: async () =>
-                (await getRuntimeRepoBaseRefDefault(selectedRepoSettings, repoId).catch(() => null))
-                  ?.defaultBaseRef
+              explicitBaseBranch: smartSubmitBaseBranch
             })
           : undefined
         const createDisplayName =
@@ -4190,6 +4298,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
       agentProfiles,
+      smartNameMode,
       disabledTuiAgents,
       setupDecision,
       sparseEnabled,
@@ -4248,9 +4357,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     smartNameRepoSwitchTarget: isProjectGroupTarget ? 'task-source' : 'project',
     name,
     onNameValueChange: handleNameValueChange,
+    branchNameOverride: isProjectGroupTarget ? undefined : branchNameOverride,
+    onBranchNameOverrideChange: isProjectGroupTarget ? () => {} : handleBranchNameOverrideChange,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
     onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
     onSmartBranchSelect: isProjectGroupTarget ? () => {} : handleSmartBranchSelect,
+    onSmartNameModeChange: setSmartNameMode,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
     smartNameGitHubSourceContext: selectedRepoGitHubSourceContext,
     smartNameSelection,

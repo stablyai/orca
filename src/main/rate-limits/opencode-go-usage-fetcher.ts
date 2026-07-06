@@ -130,8 +130,6 @@ export async function fetchOpenCodeGoRateLimits(
     }
     ids = [override]
   } else {
-    const workspacesController = new AbortController()
-    const workspacesTimeout = setTimeout(() => workspacesController.abort(), API_TIMEOUT_MS)
     try {
       // The /_server endpoint uses SST server-function protocol: GET with ?id=<hash>
       // and X-Server-Id / X-Server-Instance headers for routing.
@@ -147,7 +145,7 @@ export async function fetchOpenCodeGoRateLimits(
           Origin: OPENCODE_BASE_URL,
           Referer: OPENCODE_BASE_URL
         },
-        signal: workspacesController.signal
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
       })
 
       if (!workspacesRes.ok) {
@@ -175,8 +173,6 @@ export async function fetchOpenCodeGoRateLimits(
         error: message,
         status: 'error'
       }
-    } finally {
-      clearTimeout(workspacesTimeout)
     }
   }
 
@@ -193,12 +189,10 @@ export async function fetchOpenCodeGoRateLimits(
   }
 
   // Step 2: Robust workspace resolution. Try each candidate ID until one returns 200 OK
-  // and valid usage data. Each candidate gets its own AbortController so a slow or
+  // and valid usage data. Each candidate gets its own timeout so a slow or
   // hung candidate cannot starve the rest.
   let lastError = ''
   for (const candidateId of ids) {
-    const candidateController = new AbortController()
-    const candidateTimeout = setTimeout(() => candidateController.abort(), API_TIMEOUT_MS)
     try {
       const usagePageUrl = `${OPENCODE_BASE_URL}/workspace/${candidateId}/go`
       const pageRes = await net.fetch(usagePageUrl, {
@@ -209,7 +203,7 @@ export async function fetchOpenCodeGoRateLimits(
           Origin: OPENCODE_BASE_URL,
           Referer: OPENCODE_BASE_URL
         },
-        signal: candidateController.signal
+        signal: AbortSignal.timeout(API_TIMEOUT_MS)
       })
 
       if (!pageRes.ok) {
@@ -239,8 +233,6 @@ export async function fetchOpenCodeGoRateLimits(
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       lastError = message
-    } finally {
-      clearTimeout(candidateTimeout)
     }
   }
 

@@ -7,7 +7,8 @@ import type {
   AiVaultScope,
   AiVaultSort
 } from '../../../../shared/ai-vault-types'
-import { VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
+import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
 
 type AiVaultPanelHeaderProps = {
   query: string
@@ -18,6 +19,8 @@ type AiVaultPanelHeaderProps = {
   activeWorktreePath: string | null
   activeProjectKey: string | null
   scope: AiVaultScope
+  executionHostScope: ExecutionHostScope
+  activeSshExecutionHostScope: ExecutionHostScope | null
   agents: readonly AiVaultAgent[]
   sort: AiVaultSort
   group: AiVaultGroup
@@ -25,6 +28,7 @@ type AiVaultPanelHeaderProps = {
   adjustmentCount: number
   onQueryChange: (query: string) => void
   onScopeChange: (scope: AiVaultScope) => void
+  onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
   onAgentEnabledChange: (agent: AiVaultAgent, enabled: boolean) => void
   onSortChange: (sort: AiVaultSort) => void
   onGroupChange: (group: AiVaultGroup) => void
@@ -42,6 +46,8 @@ export function AiVaultPanelHeader({
   activeWorktreePath,
   activeProjectKey,
   scope,
+  executionHostScope,
+  activeSshExecutionHostScope,
   agents,
   sort,
   group,
@@ -49,6 +55,7 @@ export function AiVaultPanelHeader({
   adjustmentCount,
   onQueryChange,
   onScopeChange,
+  onExecutionHostScopeChange,
   onAgentEnabledChange,
   onSortChange,
   onGroupChange,
@@ -99,6 +106,11 @@ export function AiVaultPanelHeader({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
+          <VaultHostScopeMenu
+            executionHostScope={executionHostScope}
+            activeSshExecutionHostScope={activeSshExecutionHostScope}
+            onExecutionHostScopeChange={onExecutionHostScopeChange}
+          />
           <VaultViewMenu
             agents={agents}
             sort={sort}

@@ -397,6 +397,22 @@ describe('normalizeTerminalTitle', () => {
   it('collapses Pi spinner and idle titles to stable labels', () => {
     expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
     expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: my-project')).toBe('Pi')
+    expect(normalizeTerminalTitle('π -')).toBe('Pi')
+    expect(normalizeTerminalTitle('π:')).toBe('Pi')
+    expect(normalizeTerminalTitle('π ')).toBe('Pi')
+  })
+
+  it('does not collapse Pi-compatible titles whose cwd mentions Gemini', () => {
+    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - gemini-project')).toBe('Pi')
   })
 })
 
@@ -409,6 +425,17 @@ describe('isGeminiTerminalTitle', () => {
 
   it('does not match other terminal titles', () => {
     expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π -')).toBe(false)
+    expect(isGeminiTerminalTitle('π:')).toBe(false)
+    expect(isGeminiTerminalTitle('π ')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini-project')).toBe(false)
+    expect(isGeminiTerminalTitle('/tmp/gemini/working')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
 })

@@ -4,10 +4,10 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { buildLaunchAgentTabStartupPlan } from '@/lib/launch-agent-tab-startup-plan'
 import { launchWebRuntimeAgentTab } from '@/lib/launch-agent-web-runtime-tab'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -118,19 +118,24 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   )
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt, forcePasteAfterLaunch } =
-    buildLaunchAgentTabStartupPlan({
-      agent,
-      prompt,
-      promptDelivery,
-      cmdOverrides,
-      platform: resolvedLaunchPlatform,
-      agentArgs: effectiveAgentArgs,
-      agentEnv,
-      agentProfiles,
-      variables,
-      isRemote
-    })
+  const {
+    startupPlan,
+    pasteDraftAfterLaunch,
+    submitPastedPrompt,
+    forcePasteAfterLaunch,
+    isFollowupPath
+  } = buildLaunchAgentTabStartupPlan({
+    agent,
+    prompt,
+    promptDelivery,
+    cmdOverrides,
+    platform: resolvedLaunchPlatform,
+    agentArgs: effectiveAgentArgs,
+    agentEnv,
+    agentProfiles,
+    variables,
+    isRemote
+  })
 
   if (!startupPlan) {
     return null
@@ -157,10 +162,19 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // lands after mount the agent binary never starts; the user sees a bare shell.
   // Since both calls happen synchronously in the same React batch, the queue
   // is in place by the time the pane commits.
+  // Why: the followup path pastes the prompt as an unsubmitted draft (submit
+  // stays false), so gate the initial chat view like a `draft` launch —
+  // otherwise a default `auto-submit` followup would open native chat with no
+  // submitted turn to render.
+  const viewModePromptDelivery =
+    hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialAgentTabViewModeProps(store.settings)
+    ...initialAgentTabViewModeProps(store.settings, {
+      agent,
+      promptDelivery: viewModePromptDelivery
+    })
   })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
@@ -191,7 +205,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     // don't fire for user-initiated cancellation (mirrors the 5s launch
     // watchdog in QuickLaunchButton).
     const tabId = tab.id
-    void pasteDraftWhenAgentReady({
+    void deliverLaunchPromptToAgentTab({
       tabId,
       content: pasteDraftAfterLaunch,
       agent,

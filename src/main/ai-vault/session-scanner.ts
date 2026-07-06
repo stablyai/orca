@@ -3,6 +3,7 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../shared/ai-vault-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { sessionSortTime } from './session-scanner-accumulator'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
@@ -41,6 +42,7 @@ export async function scanAiVaultSessions(
   const limit = clampPositiveInteger(options.limit, DEFAULT_LIMIT)
   const limitPerAgent = clampPositiveInteger(options.limitPerAgent, DEFAULT_SCAN_LIMIT_PER_AGENT)
   const platform = options.platform ?? process.platform
+  const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
   const issues: AiVaultScanIssue[] = []
   const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
 
@@ -63,6 +65,7 @@ export async function scanAiVaultSessions(
     candidates,
     limit,
     platform,
+    executionHostId,
     issues
   })
 
@@ -75,12 +78,13 @@ export async function scanAiVaultSessions(
     scopePaths: options.scopePaths ?? [],
     alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
     platform,
+    executionHostId,
     issues
   })
 
   return {
     sessions: mergeSessions(cappedSessions, scopeSessions),
-    issues,
+    issues: issues.map((issue) => ({ executionHostId, ...issue })),
     scannedAt: new Date().toISOString()
   }
 }
@@ -110,6 +114,7 @@ async function scanInScopeSessions(args: {
   scopePaths: readonly string[]
   alreadyParsedFilePaths: ReadonlySet<string>
   platform: NodeJS.Platform
+  executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
 }): Promise<AiVaultSession[]> {
   if (args.scopePaths.length === 0) {
@@ -136,6 +141,7 @@ async function scanInScopeSessions(args: {
     candidates,
     limit: candidates.length,
     platform: args.platform,
+    executionHostId: args.executionHostId,
     issues: args.issues
   })
 }
@@ -144,6 +150,7 @@ async function parseSessionCandidates(args: {
   candidates: SessionFileCandidate[]
   limit: number
   platform: NodeJS.Platform
+  executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
 }): Promise<AiVaultSession[]> {
   const sessions: AiVaultSession[] = []
@@ -159,7 +166,9 @@ async function parseSessionCandidates(args: {
     const batchSize = Math.min(SESSION_PARSE_CONCURRENCY, needed, remaining)
     const batch = args.candidates.slice(index, index + batchSize)
     const results = await Promise.all(
-      batch.map((candidate) => parseSessionCandidate(candidate, args.platform))
+      batch.map((candidate) =>
+        parseSessionCandidate(candidate, args.platform, args.executionHostId)
+      )
     )
 
     for (const result of results) {
@@ -179,20 +188,39 @@ async function parseSessionCandidates(args: {
 
 async function parseSessionCandidate(
   candidate: SessionFileCandidate,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  executionHostId: ExecutionHostId
 ): Promise<SessionParseResult> {
   try {
     const session = await parseAgentSessionFile(candidate, platform)
-    return { session, issue: null }
+    return {
+      session: session ? withSessionExecutionHost(session, executionHostId) : null,
+      issue: null
+    }
   } catch (err) {
     return {
       session: null,
       issue: {
+        executionHostId,
         agent: candidate.agent,
         path: candidate.file.path,
         message: errorMessage(err)
       }
     }
+  }
+}
+
+function withSessionExecutionHost(
+  session: AiVaultSession,
+  executionHostId: ExecutionHostId
+): AiVaultSession {
+  if (session.executionHostId === executionHostId) {
+    return session
+  }
+  return {
+    ...session,
+    executionHostId,
+    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
   }
 }
 

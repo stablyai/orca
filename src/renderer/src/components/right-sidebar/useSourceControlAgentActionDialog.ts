@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getAgentCatalogWithProfiles } from '@/lib/agent-catalog'
-import { pickSourceControlLaunchAgent } from '@/lib/source-control-launch-agent-selection'
+import {
+  pickSourceControlLaunchAgent,
+  resolveSourceControlLaunchAgentScope
+} from '@/lib/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/types'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
 import { useSavedSourceControlAgentActionAutoStart } from './useSavedSourceControlAgentActionAutoStart'
 import {
   buildSourceControlAgentSaveTargets,
-  buildSourceControlAgentStatusCopy,
-  isSourceControlAgentDetectedAndEnabled
+  buildSourceControlAgentStatusCopy
 } from './source-control-agent-action-dialog-support'
+import {
+  buildSourceControlAgentDialogOptions,
+  buildSourceControlAgentScopeNote
+} from './source-control-agent-action-dialog-options'
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
@@ -41,6 +45,15 @@ export function useSourceControlAgentActionDialog({
   const settings = useAppStore((state) => state.settings)
   const repo = useRepoById(repoId ?? null)
   const worktree = useWorktreeById(worktreeId ?? null)
+  const launchAgentScope = useMemo(
+    () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
+    [actionId, repo, settings]
+  )
+  // Why: when this repo already overrides the global default, default the save
+  // scope to the repo so saving the corrected agent updates that override in
+  // place instead of writing a global default the override would still shadow.
+  const defaultSaveTargetValue =
+    launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
   const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
   const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
   const [commandTemplate, setCommandTemplate] = useState(
@@ -56,7 +69,7 @@ export function useSourceControlAgentActionDialog({
   const [detectedOpenCycle, setDetectedOpenCycle] = useState<number | null>(null)
   const saveTargets = useMemo(() => buildSourceControlAgentSaveTargets(repoId), [repoId])
   const [saveLaunchRecipe, setSaveLaunchRecipe] = useState(true)
-  const [saveTargetValue, setSaveTargetValue] = useState(DEFAULT_SAVE_TARGET_VALUE)
+  const [saveTargetValue, setSaveTargetValue] = useState(defaultSaveTargetValue)
 
   const disabledAgents = settings?.disabledTuiAgents
   const agentProfiles = settings?.agentProfiles ?? EMPTY_AGENT_PROFILES
@@ -97,7 +110,7 @@ export function useSourceControlAgentActionDialog({
     setAgentArgs(savedAgentArgs ?? '')
     setSelectedAgent(savedAgentId ?? null)
     setSaveLaunchRecipe(true)
-    setSaveTargetValue(DEFAULT_SAVE_TARGET_VALUE)
+    setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
     void refreshDetectedAgents().then((nextAgents) => {
       if (stale || openCycleRef.current !== cycle) {
@@ -120,6 +133,7 @@ export function useSourceControlAgentActionDialog({
       stale = true
     }
   }, [
+    defaultSaveTargetValue,
     disabledAgents,
     open,
     refreshDetectedAgents,
@@ -133,33 +147,16 @@ export function useSourceControlAgentActionDialog({
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 
-  const enabledDetectedAgents = useMemo(
-    () => detectedAgents.filter((agent) => isTuiAgentEnabled(agent, disabledAgents)),
-    [detectedAgents, disabledAgents]
-  )
-  const agentOptions = useMemo(
+  const { agentOptions, selectedAgentUnavailable, hasEnabledAgents } = useMemo(
     () =>
-      getAgentCatalogWithProfiles(agentProfiles).filter(
-        (entry) =>
-          isSourceControlAgentDetectedAndEnabled(
-            entry.id,
-            enabledDetectedAgents,
-            disabledAgents,
-            agentProfiles
-          ) || entry.id === selectedAgent
-      ),
-    [agentProfiles, disabledAgents, enabledDetectedAgents, selectedAgent]
+      buildSourceControlAgentDialogOptions({
+        detectedAgents,
+        disabledAgents,
+        selectedAgent,
+        agentProfiles
+      }),
+    [agentProfiles, detectedAgents, disabledAgents, selectedAgent]
   )
-  const selectedAgentUnavailable = Boolean(
-    selectedAgent &&
-    !isSourceControlAgentDetectedAndEnabled(
-      selectedAgent,
-      detectedAgents,
-      disabledAgents,
-      agentProfiles
-    )
-  )
-  const hasEnabledAgents = enabledDetectedAgents.length > 0
   const repoPath = repo?.path ?? null
   const worktreePath = worktree?.path ?? null
   const commandInput = renderSourceControlActionCommandTemplate(commandTemplate, {
@@ -212,11 +209,11 @@ export function useSourceControlAgentActionDialog({
       if (!nextOpen) {
         resetDeliveryPlan()
         setSaveLaunchRecipe(true)
-        setSaveTargetValue(DEFAULT_SAVE_TARGET_VALUE)
+        setSaveTargetValue(defaultSaveTargetValue)
       }
       onOpenChange(nextOpen)
     },
-    [onOpenChange, resetDeliveryPlan]
+    [defaultSaveTargetValue, onOpenChange, resetDeliveryPlan]
   )
 
   const { autoLaunchPending } = useSavedSourceControlAgentActionAutoStart({
@@ -285,9 +282,15 @@ export function useSourceControlAgentActionDialog({
     [resetDeliveryPlan]
   )
 
+  const agentScopeNote = useMemo(
+    () => buildSourceControlAgentScopeNote({ launchAgentScope, agentProfiles }),
+    [agentProfiles, launchAgentScope]
+  )
+
   return {
     handleOpenChange,
     shouldRenderDialog: !autoLaunchPending,
+    agentScopeNote,
     agentOptions,
     selectedAgent,
     hasEnabledAgents,

@@ -1,7 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
+import {
+  createTomlLineScanState,
+  getTomlTableHeader,
+  isTomlStructuralLine,
+  updateTomlLineScanState
+} from './config-toml-line-scan'
 
 function getRuntimeCodexConfigTomlPath(): string {
   return join(getOrcaManagedCodexHomePath(), 'config.toml')
@@ -28,21 +35,42 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
     return
   }
 
-  const systemConfig = normalizeDeprecatedCodexHookFeatureFlag(
-    systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
-  )
+  const rawSystemConfig = systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
   if (!runtimeConfigExists) {
-    // Why: trust blocks reference a hooks.json path, so system-home hook trust
-    // entries are not valid in Orca's runtime CODEX_HOME until install remaps them.
-    writeFileAtomically(runtimeConfigPath, stripRuntimeOwnedTomlSections(systemConfig))
+    writeFileAtomically(
+      runtimeConfigPath,
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, dirname(systemConfigPath))
+    )
     return
   }
 
+  const systemConfig = prepareSystemConfigForRuntimeMirror(
+    rawSystemConfig,
+    dirname(systemConfigPath)
+  )
   const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
   const mergedConfig = mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig)
   if (mergedConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, mergedConfig)
   }
+}
+
+function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {
+  return rewriteRelativePathConfigValues(
+    normalizeDeprecatedCodexHookFeatureFlag(config),
+    systemConfigDir
+  )
+}
+
+// Why: trust blocks reference a hooks.json path, so system-home hook trust
+// entries are not valid in a fresh runtime CODEX_HOME until install remaps
+// them. Also seeds WSL runtime homes, where systemConfigDir must be the
+// Linux-side ~/.codex the config resolves against inside the distro.
+export function prepareSystemConfigForFreshRuntimeMirror(
+  config: string,
+  systemConfigDir: string
+): string {
+  return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
 }
 
 function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
@@ -56,7 +84,9 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
 
   for (let index = 0; index <= lines.length; index += 1) {
     const line = lines[index]
-    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?$/.test(line)
+    // Why: CRLF configs keep a trailing \r after the split, so header anchors
+    // must tolerate it or Windows-shaped configs skip normalization entirely.
+    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?\r?$/.test(line)
     if (!isHeader) {
       continue
     }
@@ -65,7 +95,7 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
       featureSections.push({ start: featureStart, end: index })
       featureStart = null
     }
-    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?$/.test(line)) {
+    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?\r?$/.test(line)) {
       featureStart = index
     }
   }
@@ -145,13 +175,6 @@ type TomlSection = {
   start: number
 }
 
-type TomlMultilineState = {
-  basic: boolean
-  literal: boolean
-}
-
-type TomlMultilineMode = 'basic' | 'literal' | null
-
 function stripRuntimeOwnedTomlSections(
   config: string,
   runtimeProjectHeaders = new Set<string>()
@@ -179,14 +202,12 @@ function getTomlSections(config: string): TomlSection[] {
   const sections: TomlSection[] = []
   let sectionStart = -1
   let sectionHeader: string | null = null
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
 
   for (let index = 0; index < lines.length; index += 1) {
-    const header = isInsideTomlMultilineString(multilineState)
-      ? null
-      : getTomlTableHeader(lines[index] ?? '')
+    const header = isTomlStructuralLine(scanState) ? getTomlTableHeader(lines[index] ?? '') : null
     if (!header) {
-      multilineState = updateTomlMultilineState(multilineState, lines[index] ?? '')
+      scanState = updateTomlLineScanState(scanState, lines[index] ?? '')
       continue
     }
 
@@ -199,7 +220,7 @@ function getTomlSections(config: string): TomlSection[] {
     }
     sectionStart = index
     sectionHeader = header
-    multilineState = updateTomlMultilineState(multilineState, lines[index] ?? '')
+    scanState = updateTomlLineScanState(scanState, lines[index] ?? '')
   }
 
   if (sectionStart !== -1) {
@@ -240,88 +261,4 @@ function getProjectTrustLevel(block: string): 'trusted' | 'untrusted' | null {
 function joinTomlBlocks(blocks: string[]): string {
   const normalizedBlocks = blocks.map((block) => block.trim()).filter((block) => block.length > 0)
   return normalizedBlocks.length === 0 ? '' : `${normalizedBlocks.join('\n\n')}\n`
-}
-
-function getTomlTableHeader(line: string): string | null {
-  const match = /^(\s*\[\[?.+\]\]?\s*)(?:#.*)?$/.exec(line)
-  return match?.[1] ?? null
-}
-
-function isInsideTomlMultilineString(state: TomlMultilineState): boolean {
-  return state.basic || state.literal
-}
-
-function updateTomlMultilineState(state: TomlMultilineState, line: string): TomlMultilineState {
-  let mode: TomlMultilineMode = state.basic ? 'basic' : state.literal ? 'literal' : null
-  let index = 0
-  while (index < line.length) {
-    if (mode === 'basic') {
-      if (line[index] === '\\') {
-        index += 2
-        continue
-      }
-      if (line.startsWith('"""', index)) {
-        mode = null
-        index += 3
-        continue
-      }
-      index += 1
-      continue
-    }
-    if (mode === 'literal') {
-      if (line.startsWith("'''", index)) {
-        mode = null
-        index += 3
-        continue
-      }
-      index += 1
-      continue
-    }
-
-    const char = line[index]
-    if (char === '#') {
-      break
-    }
-    if (line.startsWith('"""', index)) {
-      mode = 'basic'
-      index += 3
-      continue
-    }
-    if (line.startsWith("'''", index)) {
-      mode = 'literal'
-      index += 3
-      continue
-    }
-    if (char === '"') {
-      index = skipTomlBasicString(line, index + 1)
-      continue
-    }
-    if (char === "'") {
-      index = skipTomlLiteralString(line, index + 1)
-      continue
-    }
-    index += 1
-  }
-  return { basic: mode === 'basic', literal: mode === 'literal' }
-}
-
-function skipTomlBasicString(line: string, startIndex: number): number {
-  let index = startIndex
-  while (index < line.length) {
-    const char = line[index]
-    if (char === '\\') {
-      index += 2
-      continue
-    }
-    if (char === '"') {
-      return index + 1
-    }
-    index += 1
-  }
-  return index
-}
-
-function skipTomlLiteralString(line: string, startIndex: number): number {
-  const endIndex = line.indexOf("'", startIndex)
-  return endIndex === -1 ? line.length : endIndex + 1
 }

@@ -235,6 +235,141 @@ describe('runtime file client', () => {
     ).rejects.toThrow('Remote file is too large to open in the editor')
   })
 
+  it('falls back to files.readPreview when a remote binary file is opened', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.resolve({
+          id: 'rpc-read',
+          ok: false,
+          error: { code: 'runtime_error', message: 'binary_file' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: 'rpc-preview',
+        ok: true,
+        result: {
+          content: 'JVBERi0=',
+          isBinary: true,
+          isImage: true,
+          mimeType: 'application/pdf'
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/doc.pdf',
+        relativePath: 'doc.pdf',
+        worktreeId: 'wt-1'
+      })
+    ).resolves.toEqual({
+      content: 'JVBERi0=',
+      isBinary: true,
+      isImage: true,
+      mimeType: 'application/pdf'
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'files.read',
+      params: { worktree: 'id:wt-1', relativePath: 'doc.pdf' },
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'files.readPreview',
+      params: { worktree: 'id:wt-1', relativePath: 'doc.pdf' },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('does not fall back to files.readPreview for non-binary remote read errors', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.resolve({
+          id: 'rpc-read',
+          ok: false,
+          error: { code: 'runtime_error', message: 'permission_denied' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      throw new Error('files.readPreview should not be called')
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/secret.txt',
+        relativePath: 'secret.txt',
+        worktreeId: 'wt-1'
+      })
+    ).rejects.toThrow('permission_denied')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.readPreview' })
+    )
+  })
+
+  it('propagates a files.readPreview failure during the binary fallback', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.resolve({
+          id: 'rpc-read',
+          ok: false,
+          error: { code: 'runtime_error', message: 'binary_file' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: 'rpc-preview',
+        ok: false,
+        error: { code: 'runtime_error', message: 'file_too_large' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/huge.pdf',
+        relativePath: 'huge.pdf',
+        worktreeId: 'wt-1'
+      })
+    ).rejects.toThrow('file_too_large')
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.readPreview' })
+    )
+  })
+
+  it('does not fall back when a non-RPC error merely shares the binary_file message', async () => {
+    // Why: only a typed RuntimeRpcCallError('binary_file') means the server
+    // classified the file as binary. A transport-level failure that happens to
+    // carry the same message text must propagate, not trigger a preview read.
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.reject(new Error('binary_file'))
+      }
+      throw new Error('files.readPreview should not be called')
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/doc.pdf',
+        relativePath: 'doc.pdf',
+        worktreeId: 'wt-1'
+      })
+    ).rejects.toThrow('binary_file')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.readPreview' })
+    )
+  })
+
   it('uses the active runtime id as the dedupe scope', () => {
     expect(getRuntimeFileReadScope({ activeRuntimeEnvironmentId: 'env-1' }, 'ssh-1')).toBe(
       'runtime:env-1'

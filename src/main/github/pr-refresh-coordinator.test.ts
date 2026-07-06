@@ -94,6 +94,28 @@ describe('pr-refresh-coordinator', () => {
     vi.useRealTimers()
   })
 
+  it('forwards the candidate worktree head into the branch lookup options', async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'no-pr',
+      fetchedAt: Date.now()
+    })
+
+    reportVisiblePRRefreshCandidates([makeCandidate({ currentHeadOid: 'worktree-head-oid' })], 1, 1)
+    await vi.runOnlyPendingTimersAsync()
+
+    // Why: without the head, a panel-supplied fallback number preserves a
+    // merged PR head-blind after the branch moves on to new work.
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      null,
+      expect.objectContaining({ currentHeadOid: 'worktree-head-oid' })
+    )
+  })
+
   it('does not show visible background refreshes as queued', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock.mockResolvedValueOnce({

@@ -229,6 +229,18 @@ describe('isLocalNativeWindowsConpty', () => {
     ).toBe(false)
   })
 
+  it('does NOT treat unresolved connection ownership as native ConPTY', () => {
+    expect(
+      isLocalNativeWindowsConpty({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: undefined,
+        cwd: '/home/me/repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      })
+    ).toBe(false)
+  })
+
   it('stays false on a local host when the pane is not a native Windows PTY', () => {
     // Non-Windows client: the raw heuristic is false, so the gate result is false
     // regardless of the local execution host.

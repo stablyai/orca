@@ -4,6 +4,8 @@ export type PiCompatibleSyntheticAgentStatus = 'working' | 'permission' | 'idle'
 const PI_COMPATIBLE_SYNTHETIC_TITLE_RE =
   /^\s*(?:[\u2800-\u28ff]\s+)?(pi|omp)(?:\s+-\s+action required|\s+(?:ready|idle|done))?\s*$/i
 const PI_COMPATIBLE_IDLE_RE = /(?<![\w./\\-])(?:ready|idle|done)(?![\w-])/i
+// Why: legacy Pi/OMP-compatible shells can emit the delimiter before cwd text exists.
+const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?π(?:\s*[-:]|\s)\s*.*$/u
 
 function containsBrailleSpinner(title: string): boolean {
   for (const char of title) {
@@ -46,4 +48,8 @@ export function getPiCompatibleSyntheticAgentStatus(
     return 'idle'
   }
   return null
+}
+
+export function isLegacyPiCompatibleTitle(title: string): boolean {
+  return LEGACY_PI_COMPATIBLE_TITLE_RE.test(title)
 }

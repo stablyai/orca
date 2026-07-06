@@ -526,13 +526,47 @@ export function gitOptionalLocksDisabledEnv(
   }
 }
 
-function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return {
-    ...env,
-    GIT_TERMINAL_PROMPT: '0',
-    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
-    SSH_ASKPASS: env.SSH_ASKPASS ?? ''
-  }
+/**
+ * Append git config entries through the GIT_CONFIG_COUNT / GIT_CONFIG_KEY_n /
+ * GIT_CONFIG_VALUE_n env protocol (git >= 2.31), composing with any count
+ * already present in `env` so we never clobber config a caller injected the
+ * same way.
+ */
+export function appendGitConfigEnv(
+  env: NodeJS.ProcessEnv,
+  entries: readonly (readonly [key: string, value: string])[]
+): NodeJS.ProcessEnv {
+  const parsed = Number.parseInt(env.GIT_CONFIG_COUNT ?? '', 10)
+  const base = Number.isInteger(parsed) && parsed > 0 ? parsed : 0
+  const next = { ...env }
+  entries.forEach(([key, value], index) => {
+    next[`GIT_CONFIG_KEY_${base + index}`] = key
+    next[`GIT_CONFIG_VALUE_${base + index}`] = value
+  })
+  next.GIT_CONFIG_COUNT = String(base + entries.length)
+  return next
+}
+
+export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return appendGitConfigEnv(
+    {
+      ...env,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: env.GIT_ASKPASS ?? '',
+      SSH_ASKPASS: env.SSH_ASKPASS ?? '',
+      // Why: Git Credential Manager ignores GIT_TERMINAL_PROMPT / GIT_ASKPASS and
+      // pops a GUI on first auth — the Windows worktree-create hang (STA-1292).
+      // `never` suppresses the prompt while still serving cached credentials.
+      GCM_INTERACTIVE: 'never'
+    },
+    // Why: disable only the *interactive* credential prompt, NOT the helper
+    // itself — an empty credential.helper would break cached-credential auth for
+    // private repos. Harmless on macOS/Linux (no GCM) and on the SSH path.
+    [
+      ['credential.interactive', 'false'],
+      ['credential.guiPrompt', 'false']
+    ]
+  )
 }
 
 /**
@@ -976,6 +1010,13 @@ export async function gitStreamStdout(
   })
 }
 
+// Why: sync git calls run on the Electron main thread. Local git is normally
+// fast, but a repo on a dead network drive / cloud-placeholder path can hang
+// git on filesystem timeouts for minutes with no timeout set — the leading
+// explanation for issue #7225's 127s "Not Responding" freeze. Callers needing
+// longer operations should use the async runners instead.
+const GIT_EXEC_SYNC_TIMEOUT_MS = 15_000
+
 /**
  * Sync git command execution. Drop-in replacement for
  * `execFileSync('git', args, { cwd, encoding, ... })`.
@@ -988,13 +1029,15 @@ export function gitExecFileSync(
     cwd: string
     encoding?: BufferEncoding
     stdio?: SpawnOptions['stdio']
+    timeout?: number
   }
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
   return execFileSync(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: options.encoding ?? 'utf-8',
-    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe']
+    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
+    timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
   }) as string
 }
 
@@ -1409,10 +1452,40 @@ type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
  *
  * Retry policy mirrors ghExecFileAsync.
  */
+/**
+ * glab's `--hostname` flag rejects a host that carries a port
+ * ("error parsing --hostname: invalid hostname"). A self-hosted GitLab on a
+ * non-default port (e.g. `gitlab.example.com:8443`) must instead be selected
+ * via the `GITLAB_HOST` env var, which accepts `host:port`. Translate any
+ * `--hostname host:port` pair into `GITLAB_HOST` so every call site (`api`,
+ * `auth status`, …) works against ported self-hosted instances. Port-less
+ * `--hostname` values are left untouched.
+ *
+ * @internal exported for tests.
+ */
+export function redirectPortedHostnameToEnv(
+  args: string[],
+  options: GlabExecOptions
+): { args: string[]; options: GlabExecOptions } {
+  const i = args.indexOf('--hostname')
+  if (i === -1 || i + 1 >= args.length) {
+    return { args, options }
+  }
+  const host = args[i + 1]
+  if (!/^[^/\s]+:\d+$/.test(host)) {
+    return { args, options }
+  }
+  return {
+    args: [...args.slice(0, i), ...args.slice(i + 2)],
+    options: { ...options, env: { ...(options.env ?? process.env), GITLAB_HOST: host } }
+  }
+}
+
 export async function glabExecFileAsync(
   args: string[],
   options: GlabExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
+  ;({ args, options } = redirectPortedHostnameToEnv(args, options))
   let resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
   let lastError: unknown
   let attemptedDefaultWslFallback = false

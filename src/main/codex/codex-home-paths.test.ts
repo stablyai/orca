@@ -217,4 +217,16 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expect(lstatSync(runtimeProfilePath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeProfilePath, 'utf-8')).toBe('second\n')
   })
+
+  it('mirrors hooks directory into the managed runtime home (regression test for 127 exit)', () => {
+    const systemHooksPath = join(getSystemCodexHomePath(), 'hooks')
+    const runtimeHooksPath = join(getRuntimeCodexHomePath(), 'hooks')
+    mkdirSync(systemHooksPath, { recursive: true })
+    writeFileSync(join(systemHooksPath, 'observe-tool-use.sh'), '#!/bin/bash\necho ok\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(lstatSync(runtimeHooksPath).isSymbolicLink()).toBe(true)
+    expectSymbolicLinkTargetIfLinked(runtimeHooksPath, systemHooksPath)
+  })
 })

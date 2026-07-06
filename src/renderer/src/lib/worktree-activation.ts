@@ -49,6 +49,7 @@ import {
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getRuntimeEnvironmentIdForWorktree,
@@ -506,6 +507,24 @@ export function ensureWorktreeHasInitialTerminal(
       )
       return existingTerminalTabId
     }
+    if (setup || issueCommand) {
+      // Why: runtime-owned worktrees mirror their session tabs asynchronously,
+      // so right after create there is usually no tab yet. Hold the commands
+      // for the first mirrored tab instead of silently dropping them.
+      queueHookCommandsForFirstWorktreeTab({
+        worktreeId,
+        deliver: (state, firstTerminalTabId) =>
+          queueSetupAndIssueCommands(
+            state,
+            worktreeId,
+            firstTerminalTabId,
+            setup,
+            issueCommand,
+            wrappedSetupCommandStr,
+            opts
+          )
+      })
+    }
     return null
   }
 
@@ -559,7 +578,13 @@ export function ensureWorktreeHasInitialTerminal(
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
     pendingActivationSpawn: true,
     ...(launchAgent
-      ? { launchAgent, ...initialAgentTabViewModeProps(store.settings ?? null) }
+      ? {
+          launchAgent,
+          ...initialAgentTabViewModeProps(store.settings ?? null, {
+            agent: launchAgent,
+            promptDelivery: sequencedStartup?.draftPrompt != null ? 'draft' : undefined
+          })
+        }
       : {}),
     ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
   })
@@ -618,7 +643,13 @@ function applyDefaultTerminalTabs(
       pendingActivationSpawn: true,
       recordInteraction: false,
       ...(launchAgent
-        ? { launchAgent, ...initialAgentTabViewModeProps(store.settings ?? null) }
+        ? {
+            launchAgent,
+            ...initialAgentTabViewModeProps(store.settings ?? null, {
+              agent: launchAgent,
+              promptDelivery: isStartupTab && startup?.draftPrompt != null ? 'draft' : undefined
+            })
+          }
         : {}),
       ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
     })

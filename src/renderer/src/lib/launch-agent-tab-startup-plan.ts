@@ -15,6 +15,7 @@ export type LaunchAgentTabStartupPlan = {
   pasteDraftAfterLaunch: string | null
   submitPastedPrompt: boolean
   forcePasteAfterLaunch: boolean
+  isFollowupPath: boolean
 }
 
 export function buildLaunchAgentTabStartupPlan(args: {
@@ -55,7 +56,8 @@ export function buildLaunchAgentTabStartupPlan(args: {
       }),
       pasteDraftAfterLaunch: trimmedPrompt,
       submitPastedPrompt: true,
-      forcePasteAfterLaunch: true
+      forcePasteAfterLaunch: true,
+      isFollowupPath
     }
   }
 
@@ -69,7 +71,8 @@ export function buildLaunchAgentTabStartupPlan(args: {
         startupPlan: draftPlanToStartupPlan(draftLaunchPlan),
         pasteDraftAfterLaunch: null,
         submitPastedPrompt: false,
-        forcePasteAfterLaunch: false
+        forcePasteAfterLaunch: false,
+        isFollowupPath
       }
     }
     return {
@@ -80,7 +83,8 @@ export function buildLaunchAgentTabStartupPlan(args: {
       }),
       pasteDraftAfterLaunch: trimmedPrompt,
       submitPastedPrompt: false,
-      forcePasteAfterLaunch: false
+      forcePasteAfterLaunch: false,
+      isFollowupPath
     }
   }
 
@@ -93,7 +97,8 @@ export function buildLaunchAgentTabStartupPlan(args: {
       }),
       pasteDraftAfterLaunch: trimmedPrompt,
       submitPastedPrompt: false,
-      forcePasteAfterLaunch: false
+      forcePasteAfterLaunch: false,
+      isFollowupPath
     }
   }
 
@@ -105,7 +110,8 @@ export function buildLaunchAgentTabStartupPlan(args: {
     }),
     pasteDraftAfterLaunch: null,
     submitPastedPrompt: false,
-    forcePasteAfterLaunch: false
+    forcePasteAfterLaunch: false,
+    isFollowupPath
   }
 }
 

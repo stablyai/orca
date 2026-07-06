@@ -15,6 +15,7 @@ import { waitForAgentReady } from './agent-ready-wait'
 import { getSettingsForWorktreeRuntimeOwner } from './worktree-runtime-owner'
 import type { GlobalSettings } from '../../../shared/types'
 import { sendAgentDraftPasteContent } from './agent-draft-paste-content'
+import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 export {
@@ -94,7 +95,7 @@ export async function pasteDraftWhenAgentReady(args: {
   // duplicate it. Callers should not invoke this helper for those agents;
   // the early return guards against accidental double-injection if a stale
   // call slips through.
-  if (!forcePaste && (agentConfig?.draftPromptFlag || agentConfig?.draftPromptEnvVar)) {
+  if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
     return false
   }
 
@@ -147,7 +148,7 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   const baseAgent = agent ? resolveTuiAgentBaseAgent(agent, agentProfiles) : null
   const agentConfig = baseAgent ? TUI_AGENT_CONFIG[baseAgent] : null
 
-  if (!forcePaste && (agentConfig?.draftPromptFlag || agentConfig?.draftPromptEnvVar)) {
+  if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
     return false
   }
 

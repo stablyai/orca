@@ -31,7 +31,7 @@ type NativeChatFileLinkState = Pick<
   | 'worktreesByRepo'
 >
 
-function findTerminalTabWorktreeId(
+export function findTerminalTabWorktreeId(
   tabsByWorktree: NativeChatFileLinkState['tabsByWorktree'],
   terminalTabId: string
 ): string | null {

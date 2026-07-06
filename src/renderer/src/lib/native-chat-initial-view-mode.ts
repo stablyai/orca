@@ -1,29 +1,49 @@
-import type { GlobalSettings, Tab } from '../../../shared/types'
+import type { GlobalSettings, Tab, TuiAgent } from '../../../shared/types'
+import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
+
+export type NativeChatLaunchPromptDelivery = 'auto-submit' | 'draft' | 'submit-after-ready'
 
 /**
  * Decide the initial `viewMode` for a newly launched agent tab from the
  * opt-in `openAgentTabsInChatByDefault` setting.
  *
- * Returns `'chat'` only when the setting is explicitly on; otherwise returns
- * `undefined` so the tab keeps the implicit default (`'terminal'`) and stays
- * backward-compatible with tabs persisted before the setting existed. A pure
- * function so the decision can be unit-tested without the store or launch path.
+ * Returns `'chat'` only when the setting is explicitly on and the launched
+ * agent has a native-chat renderer. Draft launches stay in the terminal because
+ * their prompt exists only in the TUI input buffer.
  */
-export function decideInitialAgentTabViewMode(
-  experimentalNativeChat: boolean | undefined,
-  openAgentTabsInChatByDefault: boolean | undefined
-): Tab['viewMode'] {
-  return experimentalNativeChat === true && openAgentTabsInChatByDefault === true
-    ? 'chat'
-    : undefined
+export function decideInitialAgentTabViewMode(args: {
+  experimentalNativeChat?: boolean
+  openAgentTabsInChatByDefault?: boolean
+  agent?: TuiAgent | null
+  promptDelivery?: NativeChatLaunchPromptDelivery
+}): Tab['viewMode'] {
+  if (args.experimentalNativeChat !== true || args.openAgentTabsInChatByDefault !== true) {
+    return undefined
+  }
+  if (!isNativeChatSupportedAgent(args.agent)) {
+    return undefined
+  }
+  if (args.promptDelivery === 'draft') {
+    return undefined
+  }
+  return 'chat'
 }
 
 export function initialAgentTabViewModeProps(
-  settings: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
+  settings:
+    | Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'>
+    | null
+    | undefined,
+  options: {
+    agent?: TuiAgent | null
+    promptDelivery?: NativeChatLaunchPromptDelivery
+  } = {}
 ): { viewMode?: Tab['viewMode'] } {
-  const viewMode = decideInitialAgentTabViewMode(
-    settings?.experimentalNativeChat,
-    settings?.openAgentTabsInChatByDefault
-  )
+  const viewMode = decideInitialAgentTabViewMode({
+    experimentalNativeChat: settings?.experimentalNativeChat,
+    openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
+    agent: options.agent,
+    promptDelivery: options.promptDelivery
+  })
   return viewMode ? { viewMode } : {}
 }

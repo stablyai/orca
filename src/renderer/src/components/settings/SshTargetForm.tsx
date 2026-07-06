@@ -1,12 +1,13 @@
+import { useEffect, useRef, useState } from 'react'
 import { FileKey } from 'lucide-react'
-import {
-  DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
-} from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import {
+  SshTargetAdvancedConnectionSection,
+  hasAdvancedConnectionValues
+} from './SshTargetAdvancedConnectionSection'
+import { SshTargetTerminalPersistenceSection } from './SshTargetTerminalPersistenceSection'
 import { applyParsedSshHostInput, type EditingTarget } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 export { EMPTY_FORM, type EditingTarget } from './ssh-target-draft'
@@ -26,6 +27,20 @@ export function SshTargetForm({
   onSave,
   onCancel
 }: SshTargetFormProps): React.JSX.Element {
+  const hasAdvancedConnectionFields = hasAdvancedConnectionValues(form)
+  const [advancedConnectionOpen, setAdvancedConnectionOpen] = useState(hasAdvancedConnectionFields)
+  const [terminalPersistenceOpen, setTerminalPersistenceOpen] = useState(true)
+  const lastEditingIdRef = useRef(editingId)
+
+  useEffect(() => {
+    if (lastEditingIdRef.current === editingId) {
+      return
+    }
+    lastEditingIdRef.current = editingId
+    setAdvancedConnectionOpen(hasAdvancedConnectionFields)
+    setTerminalPersistenceOpen(true)
+  }, [editingId, hasAdvancedConnectionFields])
+
   return (
     <form
       className="space-y-4 rounded-lg border border-border/50 bg-card/40 p-4"
@@ -107,114 +122,18 @@ export function SshTargetForm({
             )}
           </p>
         </div>
-        <div className="col-span-2 space-y-1.5">
-          <Label>
-            {translate('auto.components.settings.SshTargetForm.c7d0e18ecb', 'Proxy Command')}
-          </Label>
-          <Input
-            value={form.proxyCommand}
-            onChange={(e) => onFormChange((f) => ({ ...f, proxyCommand: e.target.value }))}
-            placeholder={translate(
-              'auto.components.settings.SshTargetForm.f42d844544',
-              'e.g. cloudflared access ssh --hostname %h'
-            )}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.settings.SshTargetForm.3b01ca44a0',
-              'Optional. Used for tunneling (e.g. Cloudflare Access, ProxyCommand).'
-            )}
-          </p>
-        </div>
-        <div className="col-span-2 space-y-1.5">
-          <Label>
-            {translate('auto.components.settings.SshTargetForm.b2ab248ded', 'Jump Host')}
-          </Label>
-          <Input
-            value={form.jumpHost}
-            onChange={(e) => onFormChange((f) => ({ ...f, jumpHost: e.target.value }))}
-            placeholder={translate(
-              'auto.components.settings.SshTargetForm.11bcb4507a',
-              'bastion.example.com'
-            )}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.settings.SshTargetForm.feae1d1e69',
-              'Optional. Equivalent to ProxyJump / ssh -J.'
-            )}
-          </p>
-        </div>
-        <div className="col-span-2 space-y-2">
-          <div className="space-y-1">
-            <Label>
-              {translate(
-                'auto.components.settings.SshTargetForm.92f80edbfd',
-                'Remote Terminal Persistence'
-              )}
-            </Label>
-            <p className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.settings.SshTargetForm.137e88ce8d',
-                'Remote terminals keep running after Orca disconnects from this host.'
-              )}
-            </p>
-          </div>
-          <label className="flex cursor-pointer items-start gap-2.5 py-1 text-xs">
-            <input
-              type="checkbox"
-              className="mt-0.5 size-3.5 shrink-0 accent-foreground"
-              checked={form.relayKeepAliveUntilReset}
-              onChange={(e) =>
-                onFormChange((f) => ({ ...f, relayKeepAliveUntilReset: e.target.checked }))
-              }
-            />
-            <span className="space-y-0.5">
-              <span className="block font-medium text-foreground">
-                {translate(
-                  'auto.components.settings.SshTargetForm.71fc546097',
-                  'Keep terminals alive until reset'
-                )}
-              </span>
-              <span className="block text-muted-foreground">
-                {translate(
-                  'auto.components.settings.SshTargetForm.b574994adc',
-                  'Use End Remote Terminals or Reset Relay when you want to stop them.'
-                )}
-              </span>
-            </span>
-          </label>
-          <div className="space-y-1.5">
-            <Label htmlFor="ssh-relay-grace-period" className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.SshTargetForm.55c56cf2c7',
-                'Timeout after disconnect (seconds)'
-              )}
-            </Label>
-            <Input
-              id="ssh-relay-grace-period"
-              type={form.relayKeepAliveUntilReset ? 'text' : 'number'}
-              value={
-                form.relayKeepAliveUntilReset
-                  ? translate('auto.components.settings.SshTargetForm.7c13f58c91', 'Until reset')
-                  : form.relayGracePeriodSeconds
-              }
-              onChange={(e) =>
-                onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
-              }
-              placeholder={String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS)}
-              min={MIN_SSH_RELAY_GRACE_PERIOD_SECONDS}
-              max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
-              disabled={form.relayKeepAliveUntilReset}
-            />
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.settings.SshTargetForm.1b19b00e93',
-              'Bounded timeouts must be between 60 seconds and 7 days.'
-            )}
-          </p>
-        </div>
+        <SshTargetAdvancedConnectionSection
+          open={advancedConnectionOpen}
+          onOpenChange={setAdvancedConnectionOpen}
+          form={form}
+          onFormChange={onFormChange}
+        />
+        <SshTargetTerminalPersistenceSection
+          open={terminalPersistenceOpen}
+          onOpenChange={setTerminalPersistenceOpen}
+          form={form}
+          onFormChange={onFormChange}
+        />
       </div>
 
       <div className="flex items-center gap-2">

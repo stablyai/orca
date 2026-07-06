@@ -87,6 +87,40 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
+  it('rejects a stale supported title when live detection found an unsupported agent', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: null,
+        detectedAgent: 'gemini',
+        resolvedAgent: 'codex'
+      })
+    ).toBe(false)
+  })
+
+  it('rejects stale launch metadata when live detection found an unsupported agent', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'codex',
+        detectedAgent: 'gemini'
+      })
+    ).toBe(false)
+  })
+
+  it('rejects a stale supported title when launch metadata names an unsupported agent', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'grok',
+        resolvedAgent: 'claude'
+      })
+    ).toBe(false)
+  })
+
   it('rejects otherwise eligible terminals while the experimental flag is off', () => {
     expect(
       canToggleNativeChat({

@@ -6,6 +6,7 @@ import {
   type AiVaultSession,
   type AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {
   extractPreviewContentText,
@@ -43,7 +44,11 @@ export function createAccumulator(args: {
 export function finalizeSession(
   accumulator: SessionAccumulator,
   platform: NodeJS.Platform,
-  options: { codexHome?: string | null } = {}
+  options: {
+    codexHome?: string | null
+    executionHostId?: ExecutionHostId
+    executionHostPlatform?: NodeJS.Platform | null
+  } = {}
 ): AiVaultSession | null {
   const sessionId = accumulator.sessionId.trim()
   if (!sessionId) {
@@ -54,8 +59,14 @@ export function finalizeSession(
     accumulator.fallbackTitle ||
     `${aiVaultAgentLabel(accumulator.agent)} ${sessionId.slice(0, 8)}`
 
+  const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+
   return {
-    id: `${accumulator.agent}:${sessionId}:${accumulator.filePath}`,
+    id: `${executionHostId}:${accumulator.agent}:${sessionId}:${accumulator.filePath}`,
+    executionHostId,
+    ...(options.executionHostPlatform
+      ? { executionHostPlatform: options.executionHostPlatform }
+      : {}),
     agent: accumulator.agent,
     sessionId,
     title,

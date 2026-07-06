@@ -1,5 +1,13 @@
 import React from 'react'
-import { CheckCircle2, RefreshCw, RotateCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
+import {
+  CheckCircle2,
+  Info,
+  RefreshCw,
+  RotateCcw,
+  Settings,
+  Sparkles,
+  TriangleAlert
+} from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
@@ -15,10 +23,11 @@ import {
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
+import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
+import { sourceControlLaunchSaveTargetFromValue } from './source-control-agent-action-dialog-options'
 import { translate } from '@/i18n/i18n'
 
 export type SourceControlAgentActionDeliveryPlanState =
@@ -29,6 +38,7 @@ export type SourceControlAgentActionDeliveryPlanState =
 type SourceControlAgentActionDialogFormProps = {
   actionId: SourceControlLaunchActionId
   baseCommandInput: string
+  agentScopeNote: SourceControlAgentScopeNote | null
   agentOptions: AgentCatalogEntry[]
   selectedAgent: TuiAgent | null
   hasEnabledAgents: boolean
@@ -59,22 +69,10 @@ type SourceControlAgentActionDialogFormProps = {
   onStart: () => void
 }
 
-function sourceControlLaunchSaveTargetFromValue(
-  value: string,
-  repo: Pick<Repo, 'id'> | null
-): SourceControlAiWriteTarget | null {
-  if (value === 'repo' && repo?.id) {
-    return { type: 'repo', repoId: repo.id }
-  }
-  if (value === 'global') {
-    return { type: 'global' }
-  }
-  return null
-}
-
 export function SourceControlAgentActionDialogForm({
   actionId,
   baseCommandInput,
+  agentScopeNote,
   agentOptions,
   selectedAgent,
   hasEnabledAgents,
@@ -270,6 +268,22 @@ export function SourceControlAgentActionDialogForm({
             </p>
           ) : null}
         </div>
+
+        {showSaveLaunchRecipe && agentScopeNote ? (
+          <div className="flex items-start gap-1.5 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
+            <Info className="mt-px size-3 shrink-0" />
+            <span>
+              {translate(
+                'auto.components.right.sidebar.SourceControlAgentActionDialogForm.repoAgentOverrideNote',
+                'This repository overrides your global default ({{global}}) and currently runs {{effective}}. Save to this repository to change what runs here.',
+                {
+                  effective: agentScopeNote.effectiveAgentLabel,
+                  global: agentScopeNote.globalAgentLabel
+                }
+              )}
+            </span>
+          </div>
+        ) : null}
 
         {showSaveLaunchRecipe ? (
           <div

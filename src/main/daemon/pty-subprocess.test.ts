@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const {
@@ -254,9 +254,17 @@ describe('createPtySubprocess', () => {
       }
     }
 
+    // On macOS the shell is spawned through /usr/bin/login so terminal children
+    // carry their own TCC identity (#6996); the real shell rides behind it, and
+    // env(1) re-asserts the SHELL that login(1) would overwrite.
     expect(spawnMock).toHaveBeenCalledWith(
-      '/bin/bash',
-      expect.any(Array),
+      '/usr/bin/login',
+      expect.arrayContaining([
+        '-flpq',
+        '/usr/bin/env',
+        expect.stringMatching(/^SHELL=/),
+        '/bin/bash'
+      ]),
       expect.objectContaining({ cwd: originalCwd })
     )
   })
@@ -353,6 +361,81 @@ describe('createPtySubprocess', () => {
       resolveForeground('codex')
       await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
     } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('serves the resolved agent identity past the cache TTL while a wrapper holds the foreground', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
+    const proc = mockPtyProcess()
+    proc.process = 'node'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    resolveAgentForegroundProcessMock.mockResolvedValue('grok')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('node')
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('grok')
+
+      // Why: renderer reads poll slower than the 1s cache TTL — an expired
+      // cache must keep answering with the resolved identity, not the wrapper.
+      vi.advanceTimersByTime(1_500)
+      expect(handle.getForegroundProcess()).toBe('grok')
+    } finally {
+      vi.useRealTimers()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('clears an expired identity when the wrapper tree no longer resolves to an agent', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
+    const proc = mockPtyProcess()
+    proc.process = 'node'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    resolveAgentForegroundProcessMock.mockResolvedValueOnce('grok').mockResolvedValue('node')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('node')
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('grok')
+      // Flush the first refresh's finally so the next read can revalidate.
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // An unrelated wrapper (e.g. npm) now owns the pane: the stale-served
+      // identity is revalidated and dropped once the refresh finds no agent.
+      vi.advanceTimersByTime(1_500)
+      expect(handle.getForegroundProcess()).toBe('grok')
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('node')
+    } finally {
+      vi.useRealTimers()
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -519,6 +602,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         command: 'codex'
       })
 
@@ -758,6 +842,55 @@ describe('createPtySubprocess', () => {
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 
+  it('does not inherit AppImage runtime env into daemon PTY shells', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const saved = {
+      APPIMAGE: process.env.APPIMAGE,
+      APPDIR: process.env.APPDIR,
+      ARGV0: process.env.ARGV0,
+      OWD: process.env.OWD,
+      APPIMAGE_LIBRARY_PATH: process.env.APPIMAGE_LIBRARY_PATH,
+      PATH: process.env.PATH,
+      LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
+    }
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    process.env.APPIMAGE = '/data/apps/orca.appimage'
+    process.env.APPDIR = '/tmp/.mount_orca123'
+    process.env.ARGV0 = '/data/apps/orca.appimage'
+    process.env.OWD = '/home/user/project'
+    process.env.APPIMAGE_LIBRARY_PATH = '/tmp/.mount_orca123/usr/lib'
+    process.env.PATH = ['/tmp/.mount_orca123', '/tmp/.mount_orca123/usr/sbin', '/usr/bin'].join(
+      delimiter
+    )
+    process.env.LD_LIBRARY_PATH = ['/tmp/.mount_orca123/usr/lib', '/opt/audio/lib'].join(delimiter)
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.APPIMAGE).toBeUndefined()
+    expect(env.APPDIR).toBeUndefined()
+    expect(env.ARGV0).toBeUndefined()
+    expect(env.OWD).toBeUndefined()
+    expect(env.APPIMAGE_LIBRARY_PATH).toBeUndefined()
+    expect(env.PATH).toBe('/usr/bin')
+    expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
+  })
+
   it('does not inherit parent agent hook endpoint for development hook env', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -981,6 +1114,97 @@ describe('createPtySubprocess', () => {
     expect(shellArg.length).toBeGreaterThan(0)
   })
 
+  it('allows an explicitly requested plain daemon shell at POSIX root', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, cwd: '/' })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cwd: '/' })
+    )
+  })
+
+  it('rejects daemon automatic agent startup without an explicit cwd', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    spawnMock.mockClear()
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          command: 'codex'
+        })
+      ).toThrow(/requires a non-root workspace/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects daemon automatic agent startup at POSIX root', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    spawnMock.mockClear()
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: '/',
+          command: 'claude'
+        })
+      ).toThrow(/requires a non-root workspace/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a missing explicit POSIX cwd before node-pty spawn', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    spawnMock.mockClear()
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: '/definitely-missing-orca-cwd'
+        })
+      ).toThrow(/definitely-missing-orca-cwd/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
   it('passes custom env to spawned process', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -1181,6 +1405,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: 'codex',
         env: { SHELL: '/bin/zsh' }
       })
@@ -1207,6 +1432,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: "codex 'linked issue context'",
         startupCommandDelivery: 'shell-ready',
         env: { SHELL: '/bin/zsh' }
@@ -1234,6 +1460,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: "codex --prefill 'linked issue context'",
         env: { SHELL: '/bin/zsh' }
       })
@@ -1503,6 +1730,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         shellOverride: 'powershell.exe',
         command: "& 'codex' '--no-alt-screen'"
       })
@@ -1532,6 +1760,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         shellOverride: 'cmd.exe',
         command: `codex ${'x'.repeat(7000)}`
       })
@@ -1971,15 +2200,14 @@ describe('createPtySubprocess', () => {
       }
     }
 
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      expect.any(Array),
-      expect.objectContaining({
-        env: expect.objectContaining({
-          ORCA_TERMINAL_HANDLE: 'term_wsl',
-          WSLENV: 'FOO/u:ORCA_TERMINAL_HANDLE/u:POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
-        })
-      })
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    expect(spawnCall[0]).toBe('wsl.exe')
+    expect(spawnCall[1]).toEqual(expect.any(Array))
+    expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
+    // Why: the daemon inherits optional agent-hook env in development. This
+    // test owns only the terminal handle and Powerlevel10k WSLENV contract.
+    expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
+      expect.arrayContaining(['FOO/u', 'ORCA_TERMINAL_HANDLE/u', POWERLEVEL10K_WIZARD_DISABLE_ENV])
     )
   })
 

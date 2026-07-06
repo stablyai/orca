@@ -12,6 +12,16 @@ function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[
   }
 }
 
+function afterWorkerDoneSection(result: string) {
+  const sectionStart = result.indexOf('=== AFTER YOU SEND worker_done ===')
+  const sectionEnd = result.indexOf('=== TASK ===')
+
+  expect(sectionStart).toBeGreaterThan(-1)
+  expect(sectionEnd).toBeGreaterThan(sectionStart)
+
+  return result.slice(sectionStart, sectionEnd)
+}
+
 describe('buildDispatchPreamble', () => {
   it('substitutes template variables', () => {
     const result = buildDispatchPreamble(baseParams())
@@ -93,11 +103,33 @@ describe('buildDispatchPreamble', () => {
     expect(occurrences).toBe(3)
   })
 
-  it('includes AFTER YOU SEND block with 2-minute poll cadence and release signal', () => {
+  it('tells prompt-returning workers to idle without post-done polling', () => {
     const result = buildDispatchPreamble(baseParams())
-    expect(result).toContain('=== AFTER YOU SEND worker_done ===')
-    expect(result).toMatch(/2 minutes/)
-    expect(result).toMatch(/may exit/)
+    const section = afterWorkerDoneSection(result)
+
+    expect(section).toContain('=== AFTER YOU SEND worker_done ===')
+    expect(section).toContain('worker_done ends your turn for this task')
+    expect(section).toContain('return to an idle prompt')
+    expect(section).toContain('Do not exit the shell')
+    expect(section).toContain('do NOT run a sleep/poll loop')
+    expect(section).toContain('do NOT keep calling')
+    expect(section).toMatch(/fresh\s+preamble \+ TASK block/)
+    expect(section).not.toMatch(/2 minutes/)
+    expect(section).not.toMatch(/10 minutes/)
+    expect(section).not.toMatch(/may exit/)
+    expect(section).not.toMatch(/grace period/)
+  })
+
+  it('tells bare-shell workers to exit after worker_done', () => {
+    const result = buildDispatchPreamble(baseParams({ workerKind: 'bare-shell' }))
+    const section = afterWorkerDoneSection(result)
+
+    expect(section).toContain('Exit the shell after completion')
+    expect(section).toContain('Bare-shell workers have no idle agent')
+    expect(section).toContain('do NOT run a sleep/poll loop')
+    expect(section).not.toContain('Do not exit the shell')
+    expect(section).not.toMatch(/2 minutes/)
+    expect(section).not.toMatch(/may exit/)
   })
 
   it('uses === TASK === separator with the task spec appended', () => {

@@ -46,6 +46,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
+        cwd: params.cwd,
         ...(params.env ? { env: params.env } : {}),
         startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,

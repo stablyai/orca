@@ -120,6 +120,9 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     ...(pr.mergeQueueRequired !== undefined ? { mergeQueueRequired: pr.mergeQueueRequired } : {}),
     ...(pr.mergeStateStatus !== undefined ? { mergeStateStatus: pr.mergeStateStatus } : {}),
     ...(pr.headSha ? { headSha: pr.headSha } : {}),
+    ...(pr.confirmedContainedHeadOid
+      ? { confirmedContainedHeadOid: pr.confirmedContainedHeadOid }
+      : {}),
     ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
   }
 }

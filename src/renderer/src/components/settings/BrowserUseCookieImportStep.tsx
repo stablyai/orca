@@ -116,9 +116,9 @@ export function BrowserUseCookieImportStep({
             <p className="text-[11px] text-muted-foreground">
               {translate(
                 'auto.components.settings.BrowserUsePane.112f70adc4',
-                'Last imported from'
+                'Last imported from {{value0}}',
+                { value0: sourceLabel }
               )}
-              {sourceLabel}
             </p>
           ) : null}
           {onConfigureMoreBrowsers ? (
@@ -163,8 +163,11 @@ export function BrowserUseCookieImportStep({
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
                   <DropdownMenuSubTrigger>
-                    {translate('auto.components.settings.BrowserUsePane.e44c5d681e', 'From')}
-                    {browser.label}
+                    {translate(
+                      'auto.components.settings.BrowserUsePane.5301857d88',
+                      'From {{value0}}',
+                      { value0: browser.label }
+                    )}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent>
@@ -186,8 +189,11 @@ export function BrowserUseCookieImportStep({
                   key={browser.family}
                   onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  {translate('auto.components.settings.BrowserUsePane.e44c5d681e', 'From')}
-                  {browser.label}
+                  {translate(
+                    'auto.components.settings.BrowserUsePane.5301857d88',
+                    'From {{value0}}',
+                    { value0: browser.label }
+                  )}
                 </DropdownMenuItem>
               )
             )}
