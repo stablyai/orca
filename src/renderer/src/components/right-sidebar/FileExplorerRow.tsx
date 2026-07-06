@@ -311,6 +311,10 @@ export function shouldShowOpenInTerminalAction(node: TreeNode): boolean {
   return node.isDirectory
 }
 
+export function shouldShowViewFileAction(node: TreeNode): boolean {
+  return !node.isDirectory
+}
+
 export function shouldShowRemoteDownloadAction(
   node: TreeNode,
   connectionId?: string | null,
@@ -714,7 +718,7 @@ export function FileExplorerRow({
             )}
           </ContextMenuItem>
         )}
-        {!node.isDirectory && (
+        {shouldShowViewFileAction(node) && (
           <ContextMenuItem onSelect={onViewFile}>
             <File />
             {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}

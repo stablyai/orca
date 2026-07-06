@@ -19,7 +19,8 @@ import {
   shouldShowFindInFolderAction,
   shouldShowCopyFileAction,
   shouldShowOpenInTerminalAction,
-  shouldShowRemoteDownloadAction
+  shouldShowRemoteDownloadAction,
+  shouldShowViewFileAction
 } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import type { TreeNode } from './file-explorer-types'
@@ -579,6 +580,11 @@ describe('FileExplorerRow collapse folder action', () => {
   it('only shows open in terminal for directories', () => {
     expect(shouldShowOpenInTerminalAction(directoryNode)).toBe(true)
     expect(shouldShowOpenInTerminalAction(fileNode)).toBe(false)
+  })
+
+  it('only shows view file for files', () => {
+    expect(shouldShowViewFileAction(fileNode)).toBe(true)
+    expect(shouldShowViewFileAction(directoryNode)).toBe(false)
   })
 
   it('shows remote download only for desktop SSH or Remote Host file-like rows', () => {
