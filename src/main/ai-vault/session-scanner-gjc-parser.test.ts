@@ -123,4 +123,57 @@ describe('parseGjcSessionContent', () => {
 
     expect(session?.totalTokens).toBe(13)
   })
+
+  it('captures the model from a model_change record', async () => {
+    const content = jsonl([
+      {
+        type: 'session',
+        id: 'model-change',
+        timestamp: '2026-05-01T10:00:00.000Z',
+        cwd: '/tmp/repo'
+      },
+      {
+        type: 'model_change',
+        id: 'mc1',
+        parentId: null,
+        timestamp: '2026-05-01T10:00:01.000Z',
+        model: 'minimax/minimax-m2'
+      },
+      {
+        type: 'message',
+        id: 'm1',
+        parentId: 'mc1',
+        timestamp: '2026-05-01T10:00:02.000Z',
+        message: { role: 'user', content: 'hello' }
+      }
+    ])
+
+    const session = await parseGjcSessionContent(FILE, content, 'linux')
+
+    expect(session?.model).toBe('minimax/minimax-m2')
+  })
+
+  it('maps developer messages to the system preview role', async () => {
+    const content = jsonl([
+      {
+        type: 'session',
+        id: 'developer-role',
+        timestamp: '2026-05-01T10:00:00.000Z',
+        cwd: '/tmp/repo'
+      },
+      {
+        type: 'message',
+        id: 'm1',
+        parentId: null,
+        timestamp: '2026-05-01T10:00:01.000Z',
+        message: { role: 'developer', content: 'injected system context' }
+      }
+    ])
+
+    const session = await parseGjcSessionContent(FILE, content, 'linux')
+
+    expect(session?.previewMessages).toEqual([
+      expect.objectContaining({ role: 'system', text: 'injected system context' })
+    ])
+  })
 })
