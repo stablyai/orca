@@ -21,9 +21,8 @@ export function registerEmulatorVideoStreamHandlers(): void {
       return
     }
     subscription.unsubscribe()
-    // Why: `.once('destroyed')` only self-removes when that event fires (window
-    // close). An explicit stop must drop it too, or every emulator tab
-    // show/hide cycle leaks a closure on the long-lived main-window webContents.
+    // Why: `.once('destroyed')` self-removes only when that event fires (window
+    // close), so an explicit stop must drop it or each show/hide cycle leaks one.
     subscription.owner.removeListener('destroyed', subscription.onOwnerDestroyed)
     subscriptions.delete(streamId)
   }

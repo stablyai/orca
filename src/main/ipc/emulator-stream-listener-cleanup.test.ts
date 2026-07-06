@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Capture the ipcMain handlers the modules register so tests can invoke them
 // directly with a fake WebContents owner.
@@ -45,10 +45,6 @@ function makeOwner(): EventEmitter & { isDestroyed: () => boolean; send: () => v
 
 beforeEach(() => {
   handlers.clear()
-})
-
-afterEach(() => {
-  vi.clearAllTimers()
 })
 
 describe('emulator frame stream listener cleanup', () => {
