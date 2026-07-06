@@ -24,6 +24,10 @@ export function seedLiveClaudePtysFromPersistence(sessionIds: readonly string[])
   }
 }
 
+export function hasSeededUnconfirmedClaudePtys(): boolean {
+  return seededUnconfirmedPtyIds.size > 0
+}
+
 /**
  * Reconcile seeded ids against the daemon's live session list. Seeded ids the
  * daemon no longer knows are dead — release them so they cannot defer OAuth

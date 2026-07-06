@@ -44,7 +44,10 @@ import {
   rebindLocalProviderListeners
 } from '../ipc/pty'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
-import { confirmSeededClaudeLivePtys } from '../claude-accounts/live-pty-gate'
+import {
+  confirmSeededClaudeLivePtys,
+  hasSeededUnconfirmedClaudePtys
+} from '../claude-accounts/live-pty-gate'
 
 // Why: daemon init runs concurrently with window load, so harness-side stderr
 // arrival times are useless — in-process `t` lets the startup benchmark derive
@@ -463,6 +466,9 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
 // Listing failures keep the seeds: over-holding the gate only delays a usage
 // refresh, while releasing it early can rotate a live CLI's refresh token.
 async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<void> {
+  if (!hasSeededUnconfirmedClaudePtys()) {
+    return
+  }
   try {
     const adapters =
       provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
