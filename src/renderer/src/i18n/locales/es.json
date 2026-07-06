@@ -4096,7 +4096,7 @@
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
           "sidebarRowMissing": "El destino ya no existe",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "No se pudo quitar la anidación del espacio de trabajo"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
