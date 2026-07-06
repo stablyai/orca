@@ -15,10 +15,16 @@ type RemoteCliBridgeEnv = {
 }
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
 
 export function isSshPtyNotFoundError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
   return /PTY ".+" not found/i.test(message)
+}
+
+export function isSshPtyIdentityMismatchError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR) || /identity mismatch/i.test(message)
 }
 
 /**
@@ -105,8 +111,8 @@ export class SshPtyProvider implements IPtyProvider {
         // cross-generation id collision (see pty-handler attach) instead of
         // replaying the wrong shell into this pane. ORCA_PANE_KEY is the
         // renderer's per-pane identity; ORCA_TAB_ID is the coarser fallback.
-        const expectedPaneKey = opts.env?.ORCA_PANE_KEY
-        const expectedTabId = opts.env?.ORCA_TAB_ID
+        const expectedPaneKey = opts.paneKey ?? opts.env?.ORCA_PANE_KEY
+        const expectedTabId = opts.tabId ?? opts.env?.ORCA_TAB_ID
         const attachResult = (await this.mux.request('pty.attach', {
           id: relaySessionId,
           cols: opts.cols,
@@ -129,7 +135,10 @@ export class SshPtyProvider implements IPtyProvider {
         // binding before replacing the dead relay PTY in the same pane.
         console.warn(`[ssh-pty] pty.attach FAILED for ${opts.sessionId}:`, err)
         if (isSshPtyNotFoundError(err)) {
-          throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
+          const mismatchMarker = isSshPtyIdentityMismatchError(err)
+            ? ` ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
+            : ''
+          throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}${mismatchMarker}`)
         }
         throw err
       }
@@ -151,7 +160,12 @@ export class SshPtyProvider implements IPtyProvider {
       ...(opts.commandDelivery ? { commandDelivery: opts.commandDelivery } : {}),
       ...(opts.startupCommandDelivery
         ? { startupCommandDelivery: opts.startupCommandDelivery }
-        : {})
+        : {}),
+      // Why: main may strip ORCA_PANE_KEY/ORCA_TAB_ID from the shell env when
+      // remote hooks are disabled, but the relay still needs attach identity
+      // metadata to reject cross-generation PTY id collisions.
+      ...(opts.paneKey ? { paneKey: opts.paneKey } : {}),
+      ...(opts.tabId ? { tabId: opts.tabId } : {})
     })
     return {
       ...(result as PtySpawnResult),

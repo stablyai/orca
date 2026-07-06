@@ -821,6 +821,51 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
   })
 
+  it('uses attach identity metadata without exporting it to the shell env', async () => {
+    const oldPaneKey = process.env.ORCA_PANE_KEY
+    const oldTabId = process.env.ORCA_TAB_ID
+    delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_TAB_ID
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: { FOO: 'bar' },
+        paneKey: 'tab-a:leaf-a',
+        tabId: 'tab-a'
+      })
+    } finally {
+      if (oldPaneKey === undefined) {
+        delete process.env.ORCA_PANE_KEY
+      } else {
+        process.env.ORCA_PANE_KEY = oldPaneKey
+      }
+      if (oldTabId === undefined) {
+        delete process.env.ORCA_TAB_ID
+      } else {
+        process.env.ORCA_TAB_ID = oldTabId
+      }
+    }
+
+    const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnOptions.env.ORCA_PANE_KEY).toBeUndefined()
+    expect(spawnOptions.env.ORCA_TAB_ID).toBeUndefined()
+
+    await expect(
+      dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        expectedPaneKey: 'tab-b:leaf-b',
+        expectedTabId: 'tab-b'
+      })
+    ).rejects.toThrow('PTY "pty-1" not found')
+
+    await expect(
+      dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        expectedPaneKey: 'tab-a:leaf-a',
+        expectedTabId: 'tab-a'
+      })
+    ).resolves.toEqual({})
+  })
+
   it('notifies on PTY exit and removes from map', async () => {
     let exitCallback: ((info: { exitCode: number }) => void) | undefined
     mockPtySpawn.mockReturnValue({
@@ -1276,6 +1321,70 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_WORKTREE_ID).toBe('wt-5')
     expect(callArgs.env.ORCA_AGENT_HOOK_PORT).toBe('12345')
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
+  })
+
+  it('revive preserves attach identity metadata without exporting hook identity env', async () => {
+    const oldPaneKey = process.env.ORCA_PANE_KEY
+    const oldTabId = process.env.ORCA_TAB_ID
+    delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_TAB_ID
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 90,
+        rows: 30,
+        cwd: '/tmp',
+        env: { FOO: 'bar' },
+        paneKey: 'tab-5:leaf-5',
+        tabId: 'tab-5'
+      })
+    } finally {
+      if (oldPaneKey === undefined) {
+        delete process.env.ORCA_PANE_KEY
+      } else {
+        process.env.ORCA_PANE_KEY = oldPaneKey
+      }
+      if (oldTabId === undefined) {
+        delete process.env.ORCA_TAB_ID
+      } else {
+        process.env.ORCA_TAB_ID = oldTabId
+      }
+    }
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+
+    handler.dispose()
+    mockPtySpawn.mockClear()
+    dispatcher = createMockDispatcher()
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_TAB_ID
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+      if (oldPaneKey === undefined) {
+        delete process.env.ORCA_PANE_KEY
+      } else {
+        process.env.ORCA_PANE_KEY = oldPaneKey
+      }
+      if (oldTabId === undefined) {
+        delete process.env.ORCA_TAB_ID
+      } else {
+        process.env.ORCA_TAB_ID = oldTabId
+      }
+    }
+
+    const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(callArgs.env.ORCA_PANE_KEY).toBeUndefined()
+    expect(callArgs.env.ORCA_TAB_ID).toBeUndefined()
+
+    await expect(
+      dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        expectedPaneKey: 'tab-other:leaf',
+        expectedTabId: 'tab-other'
+      })
+    ).rejects.toThrow('PTY "pty-1" not found')
   })
 
   it('invokes the exit listener with the spawn-time paneKey', async () => {

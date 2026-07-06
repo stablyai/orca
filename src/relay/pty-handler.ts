@@ -61,6 +61,9 @@ type ManagedPty = {
    *  state when this PTY exits. Symmetric with Orca's local pty.ts. */
   paneKey?: string
   tabId?: string
+  /** Attach-only identity metadata supplied over RPC. Kept separate from
+   *  paneKey/tabId because those fields also control shell env/revive hooks. */
+  attachIdentity?: PtyIdentity
   worktreeId?: string
   startupCommand?: ManagedStartupCommand
 }
@@ -164,6 +167,7 @@ type SerializedPtyEntry = {
   cwd: string
   paneKey?: string
   tabId?: string
+  attachIdentity?: PtyIdentity
   worktreeId?: string
 }
 
@@ -596,6 +600,10 @@ export class PtyHandler {
     // separate ptyId→paneKey map. ORCA_PANE_KEY is shaped `${tabId}:${paneId}`
     // and is bounded by the renderer; the relay treats it as opaque.
     const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
+    const attachIdentity = {
+      paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
+      tabId: typeof params.tabId === 'string' ? params.tabId : tabId
+    }
     const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const managed: ManagedPty = {
       id,
@@ -604,6 +612,7 @@ export class PtyHandler {
       buffered: '',
       paneKey,
       tabId,
+      ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
       worktreeId,
       ...(shouldProviderDeliverCommand
         ? {
@@ -675,10 +684,10 @@ export class PtyHandler {
         paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
         tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
       },
-      { paneKey: managed.paneKey, tabId: managed.tabId }
+      managed.attachIdentity ?? { paneKey: managed.paneKey, tabId: managed.tabId }
     )
     if (mismatch) {
-      throw new Error(`PTY "${id}" not found`)
+      throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
     // Replay buffered output. During pty.spawn({ sessionId }) the renderer has
@@ -881,6 +890,7 @@ export class PtyHandler {
         cwd: managed.initialCwd,
         paneKey: managed.paneKey,
         tabId: managed.tabId,
+        attachIdentity: managed.attachIdentity,
         worktreeId: managed.worktreeId
       })
     }
@@ -949,6 +959,7 @@ export class PtyHandler {
         buffered: '',
         paneKey: entry.paneKey,
         tabId: entry.tabId,
+        attachIdentity: entry.attachIdentity,
         worktreeId: entry.worktreeId
       })
 
