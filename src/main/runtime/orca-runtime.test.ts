@@ -8440,6 +8440,41 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('records an explicit --parent lineage edge and stamps it onto the child pane, with no orchestration state', async () => {
+    let ptyCounter = 0
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      // Why: distinct pty ids per spawn so parent and child map to separate
+      // pty records instead of colliding on a shared id.
+      spawn: vi.fn().mockImplementation(async () => ({ id: `pty-${++ptyCounter}` })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const parent = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      presentation: 'background'
+    })
+    const child = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      presentation: 'background',
+      parentTerminalHandle: parent.handle
+    })
+
+    expect(child.paneKey).toBeDefined()
+    expect(runtime.getAgentStatusExplicitParentForPaneKey(child.paneKey!)).toEqual({
+      parentTerminalHandle: parent.handle,
+      parentPaneKey: parent.paneKey
+    })
+    // The parent has no explicit parent of its own.
+    expect(runtime.getAgentStatusExplicitParentForPaneKey(parent.paneKey!)).toBeUndefined()
+    // Grouping is task-free — no orchestration context is fabricated.
+    expect(runtime.getAgentStatusOrchestrationContextForPaneKey(child.paneKey!)).toBeUndefined()
+
+    // Closing the child prunes the edge so a reused handle can't inherit it.
+    await runtime.closeTerminal(child.handle)
+    expect(runtime.getAgentStatusExplicitParentForPaneKey(child.paneKey!)).toBeUndefined()
+  })
+
   it('drops retained PTY transcript memory when a background terminal exits', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
