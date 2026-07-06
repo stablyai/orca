@@ -5277,7 +5277,8 @@ describe('OrcaRuntimeService', () => {
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
-      getProjectHostSetups: () => projectHostSetupProjectionFromRepos(repos as never).setups as never
+      getProjectHostSetups: () =>
+        projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
@@ -5364,6 +5365,48 @@ describe('OrcaRuntimeService', () => {
     expect(repos).toHaveLength(1)
   })
 
+  it('does not hijack a legacy SSH repo at the same path into a runtime host', async () => {
+    // A legacy SSH repo resolves to `ssh:<connectionId>` even with a null executionHostId,
+    // so a same-path runtime import must create a new repo instead of adopting it.
+    const repos: Record<string, unknown>[] = [
+      {
+        id: 'repo-ssh-1',
+        path: '/workspace',
+        displayName: 'workspace',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'folder',
+        connectionId: 'ssh-target-1'
+      }
+    ]
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+      updateRepo: (id: string, updates: Record<string, unknown>) => {
+        const index = repos.findIndex((repo) => repo.id === id)
+        if (index === -1) {
+          return null
+        }
+        repos[index] = { ...repos[index], ...updates }
+        return repos[index] as never
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const repo = await runtime.addRepo('/workspace', 'folder', 'runtime:env-1')
+
+    expect(repos).toHaveLength(2)
+    expect(repo.id).not.toBe('repo-ssh-1')
+    expect(repo).toMatchObject({ path: '/workspace', executionHostId: 'runtime:env-1' })
+    // The legacy SSH repo must be untouched (no executionHostId stamped onto it).
+    expect(repos[0]).toMatchObject({ id: 'repo-ssh-1', connectionId: 'ssh-target-1' })
+    expect(repos[0]).not.toHaveProperty('executionHostId')
+  })
+
   it('keeps project clone setup on the cloned host-qualified repo', async () => {
     const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')
@@ -5386,7 +5429,8 @@ describe('OrcaRuntimeService', () => {
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
-      getProjectHostSetups: () => projectHostSetupProjectionFromRepos(repos as never).setups as never
+      getProjectHostSetups: () =>
+        projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
@@ -5447,7 +5491,8 @@ describe('OrcaRuntimeService', () => {
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
-      getProjectHostSetups: () => projectHostSetupProjectionFromRepos(repos as never).setups as never
+      getProjectHostSetups: () =>
+        projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
@@ -5526,7 +5571,8 @@ describe('OrcaRuntimeService', () => {
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
-      getProjectHostSetups: () => projectHostSetupProjectionFromRepos(repos as never).setups as never
+      getProjectHostSetups: () =>
+        projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }

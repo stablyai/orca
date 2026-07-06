@@ -1415,14 +1415,20 @@ function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
   return `${repo.id}::${repo.path}`
 }
 
-// Null means host-unaware: path-only callers match any repo, and the first runtime host can adopt a legacy repo.
+// Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
+// host can adopt a legacy (unstamped) repo. But an unstamped repo with a connectionId is an SSH repo
+// (resolves to ssh:<id>), so it must not be adopted/matched by a runtime host at the same path.
 function runtimeRepoMatchesExecutionHost(
-  repo: Pick<Repo, 'executionHostId'>,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
   executionHostId?: ExecutionHostId | null
 ): boolean {
-  return (
-    executionHostId == null || repo.executionHostId == null || repo.executionHostId === executionHostId
-  )
+  if (executionHostId == null) {
+    return true
+  }
+  if (repo.executionHostId != null) {
+    return repo.executionHostId === executionHostId
+  }
+  return repo.connectionId == null
 }
 
 function getRuntimeFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
@@ -9884,11 +9890,7 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    let repo = await this.addRepo(
-      args.path,
-      args.kind === 'folder' ? 'folder' : 'git',
-      args.hostId
-    )
+    let repo = await this.addRepo(args.path, args.kind === 'folder' ? 'folder' : 'git', args.hostId)
     let setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
     if (setup.projectId !== args.projectId) {
       const existingProject = this.listProjects().find((project) => project.id === args.projectId)
