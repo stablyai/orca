@@ -35,6 +35,10 @@ export type XtermBypassOptions = {
 
 export type XtermImeKeyboardOptions = {
   compositionActive: boolean
+  /** True when the current input-source or composition text identifies CJK.
+   *  Gates the IME-owned-key swallow to candidate-window IMEs and away from
+   *  inline IMEs (Vietnamese Telex/VNI), where mid-composition Backspace is real. */
+  isCjkCompositionActive: boolean
 }
 
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
@@ -69,18 +73,24 @@ function isXtermHandledKeyEvent(type: string): boolean {
 
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
-  options: XtermImeKeyboardOptions = { compositionActive: false }
+  options: XtermImeKeyboardOptions = { compositionActive: false, isCjkCompositionActive: false }
 ): boolean {
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }
-  // Why: IMEs own Process-key / composing keystrokes. Letting xterm translate
-  // Backspace/Enter/etc. into PTY bytes makes TUIs delete committed CJK text
-  // while the user is only editing the preedit candidate.
+  // Why: clauses 1-2 are Chromium per-event flags safe for all IMEs. Clause 3
+  // is a CJK candidate-window workaround only: a candidate keystroke can carry
+  // isComposing=false yet still belong to the preedit session, so we swallow
+  // editing keys to stop TUIs deleting committed CJK text. It must NOT fire for
+  // inline IMEs (Vietnamese Telex/VNI) where mid-composition Backspace
+  // legitimately rebuilds a base char into its accented form (aa -> â), hence
+  // the CJK input-source gate.
   return (
     event.isComposing === true ||
     event.keyCode === 229 ||
-    (options.compositionActive && TERMINAL_IME_OWNED_KEYS.has(event.key))
+    (options.compositionActive &&
+      options.isCjkCompositionActive &&
+      TERMINAL_IME_OWNED_KEYS.has(event.key))
   )
 }
 

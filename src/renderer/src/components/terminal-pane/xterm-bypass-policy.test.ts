@@ -184,23 +184,63 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     ).toBe(false)
   })
 
-  it('suppresses IME-owned editing keys while composition is active', () => {
+  it('suppresses IME-owned editing keys while a CJK composition is active', () => {
+    // Why: CJK candidate-window editing — Backspace/arrows belong to the
+    // preedit session and must not delete committed text in a TUI (#6396).
     expect(
       shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), {
-        compositionActive: true
+        compositionActive: true,
+        isCjkCompositionActive: true
       })
     ).toBe(true)
     expect(
       shouldSuppressTerminalImeKeyboardEvent(event({ key: 'ArrowDown', code: 'ArrowDown' }), {
-        compositionActive: true
+        compositionActive: true,
+        isCjkCompositionActive: true
       })
     ).toBe(true)
   })
 
-  it('does not suppress ordinary text keys solely because composition is active', () => {
+  it('does NOT suppress IME-owned editing keys for inline non-CJK IMEs (Vietnamese Telex/VNI)', () => {
+    // Why: Telex/VNI compose inline and use Backspace/Enter mid-composition to
+    // rebuild a base char into its accented form (aa -> â). Swallowing those
+    // drops/garbles diacritics (#6494). Only CJK candidate windows need the
+    // swallow, so a non-CJK active composition must fall through to xterm.
+    for (const key of ['Backspace', 'Enter', 'ArrowDown', 'ArrowLeft']) {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(event({ key, code: key }), {
+          compositionActive: true,
+          isCjkCompositionActive: false
+        })
+      ).toBe(false)
+    }
+  })
+
+  it('still suppresses universal Chromium IME signals regardless of CJK gate', () => {
+    // Why: clauses 1-2 (isComposing, keyCode 229) are per-event Chromium flags
+    // valid for every IME and must not depend on the CJK input-source gate.
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', isComposing: true }), {
+        compositionActive: false,
+        isCjkCompositionActive: false
+      })
+    ).toBe(true)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        {
+          compositionActive: true,
+          isCjkCompositionActive: false
+        }
+      )
+    ).toBe(true)
+  })
+
+  it('does not suppress ordinary text keys solely because a CJK composition is active', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), {
-        compositionActive: true
+        compositionActive: true,
+        isCjkCompositionActive: true
       })
     ).toBe(false)
   })
