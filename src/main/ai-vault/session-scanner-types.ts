@@ -41,6 +41,10 @@ export type FileWithMtime = {
   path: string
   mtimeMs: number
   modifiedAt: string
+  // Present when discovery statted the file; lets the parse cache detect
+  // unchanged/truncated files without a second stat. Synthetic candidates
+  // (OpenCode SQLite rows, remote files) omit it.
+  sizeBytes?: number
 }
 
 export type SessionFileCandidate = {

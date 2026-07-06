@@ -29,6 +29,116 @@ type ParserSessionOptions = {
   executionHostPlatform?: NodeJS.Platform | null
 }
 
+// Parse state kept resumable so the scan cache can append newly written
+// transcript lines without re-reading the whole (potentially huge) file.
+export type ClaudeSessionParseState = {
+  accumulator: SessionAccumulator
+  metaTitle: string | null
+  generatedTitle: string | null
+  firstUserTitle: string | null
+}
+
+export function createClaudeSessionParseState(file: FileWithMtime): ClaudeSessionParseState {
+  return {
+    accumulator: createAccumulator({
+      agent: 'claude',
+      file,
+      sessionId: sessionIdFromFileName(file.path)
+    }),
+    metaTitle: null,
+    generatedTitle: null,
+    firstUserTitle: null
+  }
+}
+
+export function cloneClaudeSessionParseState(
+  state: ClaudeSessionParseState
+): ClaudeSessionParseState {
+  return {
+    accumulator: {
+      ...state.accumulator,
+      previewMessages: [...state.accumulator.previewMessages]
+    },
+    metaTitle: state.metaTitle,
+    generatedTitle: state.generatedTitle,
+    firstUserTitle: state.firstUserTitle
+  }
+}
+
+export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: string): void {
+  const { accumulator } = state
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
+  }
+
+  if (typeof record.sessionId === 'string' && record.sessionId.trim()) {
+    accumulator.sessionId = record.sessionId.trim()
+  }
+  updateTimeline(accumulator, extractString(record.timestamp))
+  updateLatestLocation(accumulator, record)
+
+  if (record.type === 'custom-title') {
+    accumulator.title = normalizeTitleText(extractString(record.customTitle) ?? '')
+    return
+  }
+
+  if (record.type === 'ai-title') {
+    const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
+    if (title) {
+      // Claude can revise generated names; AI Vault should mirror the current one.
+      state.generatedTitle = title
+    }
+    return
+  }
+
+  if (record.type === 'agent-name' && !state.generatedTitle) {
+    state.metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
+    return
+  }
+
+  if (record.type === 'user') {
+    accumulator.messageCount++
+    const title = extractMessageText(record.message)
+    addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
+    if (title) {
+      // Meta prompts (injected context) only seed the last-resort title.
+      if (record.isMeta === true) {
+        state.metaTitle ??= title
+      } else {
+        state.firstUserTitle ??= title
+      }
+    }
+    return
+  }
+
+  if (record.type === 'assistant') {
+    accumulator.messageCount++
+    const message = asRecord(record.message)
+    addPreviewContent(accumulator, 'assistant', message?.content, record.timestamp)
+    const model = extractString(message?.model)
+    if (model) {
+      accumulator.model = model
+    }
+    accumulator.totalTokens += claudeUsageTotal(message?.usage)
+  }
+}
+
+export function finalizeClaudeSessionParseState(
+  state: ClaudeSessionParseState,
+  platform: NodeJS.Platform,
+  options: ParserSessionOptions = {}
+): AiVaultSession | null {
+  // Finalize a snapshot: the live state (and its preview array) may keep
+  // accumulating appended lines after this session object is handed out.
+  const snapshot = cloneClaudeSessionParseState(state)
+  // Why: a user-set custom-title (accumulator.title) wins, but Claude's generated
+  // session name (ai-title) should outrank the raw first prompt when present.
+  snapshot.accumulator.fallbackTitle =
+    snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
+  return finalizeSession(snapshot.accumulator, platform, options)
+}
+
 export async function parseClaudeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
@@ -60,77 +170,11 @@ async function parseClaudeSessionLines(args: {
   platform: NodeJS.Platform
   options?: ParserSessionOptions
 }): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'claude',
-    file: args.file,
-    sessionId: sessionIdFromFileName(args.file.path)
-  })
-  let metaTitle: string | null = null
-  let generatedTitle: string | null = null
-  let firstUserTitle: string | null = null
-
+  const state = createClaudeSessionParseState(args.file)
   for await (const line of args.lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-
-    if (typeof record.sessionId === 'string' && record.sessionId.trim()) {
-      accumulator.sessionId = record.sessionId.trim()
-    }
-    updateTimeline(accumulator, extractString(record.timestamp))
-    updateLatestLocation(accumulator, record)
-
-    if (record.type === 'custom-title') {
-      accumulator.title = normalizeTitleText(extractString(record.customTitle) ?? '')
-      continue
-    }
-
-    if (record.type === 'ai-title') {
-      const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
-      if (title) {
-        // Claude can revise generated names; AI Vault should mirror the current one.
-        generatedTitle = title
-      }
-      continue
-    }
-
-    if (record.type === 'agent-name' && !generatedTitle) {
-      metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
-      continue
-    }
-
-    if (record.type === 'user') {
-      accumulator.messageCount++
-      const title = extractMessageText(record.message)
-      addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
-      if (title) {
-        // Meta prompts (injected context) only seed the last-resort title.
-        if (record.isMeta === true) {
-          metaTitle ??= title
-        } else {
-          firstUserTitle ??= title
-        }
-      }
-      continue
-    }
-
-    if (record.type === 'assistant') {
-      accumulator.messageCount++
-      const message = asRecord(record.message)
-      addPreviewContent(accumulator, 'assistant', message?.content, record.timestamp)
-      const model = extractString(message?.model)
-      if (model) {
-        accumulator.model = model
-      }
-      accumulator.totalTokens += claudeUsageTotal(message?.usage)
-    }
+    consumeClaudeSessionLine(state, line)
   }
-
-  // Why: a user-set custom-title (accumulator.title) wins, but Claude's generated
-  // session name (ai-title) should outrank the raw first prompt when present.
-  accumulator.fallbackTitle = generatedTitle ?? firstUserTitle ?? metaTitle
-  return finalizeSession(accumulator, args.platform, args.options)
+  return finalizeClaudeSessionParseState(state, args.platform, args.options)
 }
 
 export async function parseGeminiSessionFile(
