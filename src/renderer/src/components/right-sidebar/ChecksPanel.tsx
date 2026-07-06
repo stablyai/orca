@@ -60,7 +60,8 @@ import type {
   PRInfo,
   PRCheckDetail,
   PRCheckRunDetails,
-  PRComment
+  PRComment,
+  TuiAgent
 } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -129,7 +130,12 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { gitLabPipelineJobsToPRChecks } from '../../../../shared/gitlab-pipeline-checks'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
-import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
+import { getAgentCatalog } from '@/lib/agent-catalog'
+import {
+  pickSourceControlLaunchAgent,
+  readSourceControlLaunchRecipeAgentId
+} from '@/lib/source-control-launch-agent-selection'
+import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
   resolveSourceControlActionRecipe,
@@ -455,6 +461,8 @@ export default function ChecksPanel(): React.JSX.Element {
   const [agentComposerState, setAgentComposerState] = useState<ChecksAgentComposerState | null>(
     null
   )
+  const [resolveCommentsPreferredAgent, setResolveCommentsPreferredAgent] =
+    useState<TuiAgent | null>(null)
   const [hostedReviewCreationSnapshot, setHostedReviewCreationSnapshot] =
     useState<HostedReviewCreationSnapshot | null>(null)
   const [gitStatusSnapshot, setGitStatusSnapshot] = useState<ChecksPanelGitStatusSnapshot | null>(
@@ -2564,6 +2572,42 @@ export default function ChecksPanel(): React.JSX.Element {
             : activeReview.provider === 'gitlab' && !activeGitLabReview
               ? 'Open a GitLab MR before resolving comments.'
               : undefined
+  const resolveCommentsLaunchAgent = useMemo(
+    () =>
+      pickSourceControlLaunchAgent({
+        savedAgent: readSourceControlLaunchRecipeAgentId(
+          resolveSourceControlActionRecipe({
+            settings,
+            repo,
+            actionId: 'resolveComments'
+          })
+        ),
+        defaultAgent: settings?.defaultTuiAgent,
+        detectedAgents: detectedAgentsForAI ?? [],
+        disabledAgents: settings?.disabledTuiAgents
+      }),
+    [detectedAgentsForAI, repo, settings]
+  )
+  const resolveCommentsAgentOptions = useMemo(
+    () =>
+      getAgentCatalog().filter((entry) => {
+        const detected = detectedAgentsForAI ?? []
+        const enabled = filterEnabledTuiAgents(detected, settings?.disabledTuiAgents)
+        return enabled.includes(entry.id) || entry.id === resolveCommentsPreferredAgent
+      }),
+    [detectedAgentsForAI, resolveCommentsPreferredAgent, settings?.disabledTuiAgents]
+  )
+  const resolveCommentsReviewKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (resolveCommentsReviewKeyRef.current === stateRequestKey) {
+      return
+    }
+    resolveCommentsReviewKeyRef.current = stateRequestKey
+    setResolveCommentsPreferredAgent(resolveCommentsLaunchAgent)
+  }, [resolveCommentsLaunchAgent, stateRequestKey])
+  useEffect(() => {
+    setResolveCommentsPreferredAgent((current) => current ?? resolveCommentsLaunchAgent)
+  }, [resolveCommentsLaunchAgent])
 
   const handleAddPRComment = useCallback(
     async (body: string) => {
@@ -3805,6 +3849,11 @@ export default function ChecksPanel(): React.JSX.Element {
         selectionClearRequest={commentsSelectionClearRequest}
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
+        resolveCommentsAgentOptions={
+          sourceControlAiActionsVisible ? resolveCommentsAgentOptions : undefined
+        }
+        resolveCommentsAgent={resolveCommentsPreferredAgent}
+        onResolveCommentsAgentChange={setResolveCommentsPreferredAgent}
         onAddComment={pr ? handleAddPRComment : undefined}
         onResolveSelectedCommentsWithAI={
           sourceControlAiActionsVisible ? handleResolveCommentsWithAI : undefined
@@ -3835,6 +3884,10 @@ export default function ChecksPanel(): React.JSX.Element {
         promptDelivery="submit-after-ready"
         launchPlatform={activeSourceControlLaunchPlatform}
         launchSource={agentComposerState?.launchSource ?? 'task_page'}
+        disableSavedRecipeAutoStart={agentComposerState?.actionId === 'resolveComments'}
+        preferredAgentId={
+          agentComposerState?.actionId === 'resolveComments' ? resolveCommentsPreferredAgent : null
+        }
         savedAgentId={
           agentComposerState
             ? readSourceControlLaunchRecipeAgentId(

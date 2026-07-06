@@ -200,6 +200,14 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
     expect(container.textContent).not.toContain('Launch agent')
   })
+  it('renders the form and does not auto-start when saved recipe auto-start is disabled', async () => {
+    renderControlledDialog({ disableSavedRecipeAutoStart: true })
+    await vi.waitFor(() => expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1))
+    await flushEffects()
+    expect(mocks.onStart).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Launch agent')
+  })
+
   it('hides the dialog and auto-starts once when the saved repo launch recipe matches', async () => {
     resetStore(
       settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' }),
