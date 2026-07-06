@@ -3205,6 +3205,10 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% 使用済み",
+            "remaining": "残り {{value0}}%"
           }
         }
       },
@@ -7223,7 +7227,9 @@
             "f8e2a1c4b6": "Grok の使用状況",
             "e7d1b0f3a5": "Grok CLI OAuth から Grok の週次クレジット使用量を表示します。",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "使用率",
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
           }
         },
         "auto": {
@@ -8994,6 +9000,10 @@
           "a8f3e2c1b4": "週次クレジット",
           "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
           "c6d1a8f4e2": "{{when}} にリセット"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "使用済み",
+          "usagePercentageDisplayRemaining": "残り"
         }
       },
       "right": {

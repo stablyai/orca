@@ -29,6 +29,11 @@ import type {
   WorkspaceHostScope,
   VisibleWorkspaceHostIds
 } from '../../../../shared/types'
+import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import {
+  DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+  normalizeUsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -869,6 +874,8 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
+  usagePercentageDisplay: UsagePercentageDisplay
+  setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   workspacePortScan: { key: string; result: WorkspacePortScanResult } | null
   workspacePortScansByKey: Record<string, WorkspacePortScanResult>
   workspacePortScanRefreshing: boolean
@@ -2112,6 +2119,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ statusBarVisible: v }).catch(console.error)
     set({ statusBarVisible: v })
   },
+  usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+  setUsagePercentageDisplay: (display) => {
+    const normalized = normalizeUsagePercentageDisplay(display)
+    window.api.ui.set({ usagePercentageDisplay: normalized }).catch(console.error)
+    set({ usagePercentageDisplay: normalized })
+  },
   workspacePortScan: null,
   workspacePortScansByKey: {},
   workspacePortScanRefreshing: false,
@@ -2400,6 +2413,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
         statusBarItems: statusBarItemsWithGrok,
         statusBarVisible: ui.statusBarVisible ?? true,
+        usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         // Why: absent → true so existing users see the pet the first time
         // they enable the experimental flag. Only an explicit Hide pet
         // dismissal persists a `false` value.

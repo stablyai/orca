@@ -71,6 +71,7 @@ import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -3251,6 +3252,9 @@ function mergeWebUIState(
       safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    ),
+    usagePercentageDisplay: normalizeUsagePercentageDisplay(
+      safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay
     )
   }
 }

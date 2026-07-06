@@ -40,6 +40,7 @@ import type {
   GlobalWindowsRuntimeDefault,
   LocalWindowsRuntimePreference
 } from './project-execution-runtime'
+import type { UsagePercentageDisplay } from './usage-percentage-display'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -3311,6 +3312,8 @@ export type PersistedUIState = {
   _grokStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
+  /** Why: this is client-side presentation, not a provider/account or execution-host setting. */
+  usagePercentageDisplay?: UsagePercentageDisplay
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
   pendingUpdateNudgeId?: string | null

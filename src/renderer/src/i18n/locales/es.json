@@ -3205,6 +3205,10 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% usado",
+            "remaining": "{{value0}}% restante"
           }
         }
       },
@@ -7201,7 +7205,9 @@
             "f8e2a1c4b6": "Uso de Grok",
             "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "Porcentajes de uso",
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
           }
         },
         "auto": {
@@ -8994,6 +9000,10 @@
           "a8f3e2c1b4": "Créditos semanales",
           "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
           "c6d1a8f4e2": "Se restablece {{when}}"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "Usado",
+          "usagePercentageDisplayRemaining": "Restante"
         }
       },
       "right": {

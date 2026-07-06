@@ -7,6 +7,8 @@ import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from './usage-error-copy'
+import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import { formatUsagePercentageLabel } from './usage-percentage-label'
 
 export {
   getProviderDisplayName,
@@ -213,12 +215,14 @@ export function ProviderPanel({
   p,
   inverted = false,
   className,
-  showResetCredits = true
+  showResetCredits = true,
+  usagePercentageDisplay = 'used'
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
+  usagePercentageDisplay?: UsagePercentageDisplay
 }): React.JSX.Element {
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -288,8 +292,8 @@ export function ProviderPanel({
     if (!w) {
       return null
     }
-    // Why: show % used (consumption), not remaining — matches Claude/Codex
-    // harness meters and avoids the "full green bar = exhausted" misread (#7551).
+    // Why: preference changes the copy only; consumption-based bar direction
+    // preserves the empty/green to full/red meter convention from #8167.
     const usedPct = clampUsedPercent(w.usedPercent)
     const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
@@ -303,10 +307,7 @@ export function ProviderPanel({
           />
         </div>
         <div className={`flex justify-between ${mutedClass}`}>
-          <span>
-            {usedPct}
-            {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')}
-          </span>
+          <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
           {resetLabel && <span>{resetLabel}</span>}
         </div>
       </div>

@@ -104,6 +104,7 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostOrder,
@@ -5333,6 +5334,9 @@ export class Store {
         this.state.ui?.workspaceBoardColumnWidth
       ),
       syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      usagePercentageDisplay: normalizeUsagePercentageDisplay(
+        this.state.ui?.usagePercentageDisplay
+      ),
       // Why: strict boolean coercion so a missing/legacy value reads as false
       // (first-run notice still fires) rather than leaking a non-bool through.
       trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
@@ -5412,6 +5416,9 @@ export class Store {
         sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
           ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true
           : this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      usagePercentageDisplay: normalizeUsagePercentageDisplay(
+        sanitizedUpdates.usagePercentageDisplay ?? this.state.ui?.usagePercentageDisplay
+      ),
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
       ),

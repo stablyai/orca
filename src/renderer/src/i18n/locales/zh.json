@@ -3205,6 +3205,10 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
+          },
+          "usagePercentageLabel": {
+            "used": "已用 {{value0}}%",
+            "remaining": "剩余 {{value0}}%"
           }
         }
       },
@@ -7186,7 +7190,9 @@
             "f8e2a1c4b6": "Grok 使用量",
             "e7d1b0f3a5": "显示来自 Grok CLI OAuth 的 Grok 每周额度使用量。",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "用量百分比",
+            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。"
           }
         },
         "auto": {
@@ -8994,6 +9000,10 @@
           "a8f3e2c1b4": "每周额度",
           "b7e2d9f0a3": "与终端中 grok /usage 屏幕显示的每周额度百分比相同。",
           "c6d1a8f4e2": "{{when}} 重置"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "已用",
+          "usagePercentageDisplayRemaining": "剩余"
         }
       },
       "right": {
