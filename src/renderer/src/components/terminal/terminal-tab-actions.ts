@@ -101,7 +101,8 @@ function isPinnedVisibleTab(
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
-  shellOverride?: string
+  shellOverride?: string,
+  options?: { startupCwd?: string }
 ): void {
   if (!activeWorktreeId) {
     return
@@ -116,11 +117,17 @@ export function createNewTerminalTab(
       worktreeId: activeWorktreeId,
       environmentId: runtimeEnvironmentId,
       command: shellOverride,
+      ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
       activate: true
     })
     return
   }
-  const newTab = state.createTab(activeWorktreeId, undefined, shellOverride)
+  const newTab = state.createTab(
+    activeWorktreeId,
+    undefined,
+    shellOverride,
+    options?.startupCwd ? { startupCwd: options.startupCwd } : undefined
+  )
   state.setActiveTabType('terminal')
   // Why: persist the tab bar order with the new terminal at the end of the
   // current visual order. Without this, reconcileTabOrder falls back to

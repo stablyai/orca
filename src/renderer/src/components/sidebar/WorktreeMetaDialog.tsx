@@ -11,8 +11,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
-import { buildWorktreeMetaUpdates, type WorktreeMetaSavedPayload } from './worktree-meta-updates'
+import {
+  buildWorktreeMetaUpdates,
+  parseGitHubWorkItemNumberForMetaField,
+  type WorktreeMetaSavedPayload
+} from './worktree-meta-updates'
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
@@ -95,8 +98,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     }
     const trimmedIssue = issueInput.trim()
     const trimmedPR = prInput.trim()
-    const issueValid = trimmedIssue === '' || parseGitHubIssueOrPRNumber(trimmedIssue) !== null
-    const prValid = trimmedPR === '' || parseGitHubIssueOrPRNumber(trimmedPR) !== null
+    const issueValid =
+      trimmedIssue === '' || parseGitHubWorkItemNumberForMetaField(trimmedIssue, 'issue') !== null
+    const prValid =
+      trimmedPR === '' || parseGitHubWorkItemNumberForMetaField(trimmedPR, 'pr') !== null
     return issueValid && prValid
   }, [worktreeId, issueInput, prInput])
 

@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 const { existsSyncMock, spawnMock, connectMock, createServerMock } = vi.hoisted(() => ({
@@ -61,6 +61,12 @@ function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   }
 }
 
+function expectNoOrcaControlMasterArgs(args: string[]): void {
+  expect(args).not.toContain('ControlMaster=auto')
+  expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(false)
+  expect(args).not.toContain('ControlPersist=300')
+}
+
 function createFakeProcess(): FakeChildProcess {
   const child = new EventEmitter() as FakeChildProcess
   child.stderr = new EventEmitter()
@@ -112,22 +118,81 @@ describe('system SSH forward process', () => {
 
     spawnSystemSshPortForward(createTarget({ configHost: 'fdpass-host' }), 5173, '127.0.0.1', 3000)
 
+    const args = spawnMock.mock.calls[0][1] as string[]
+    const terminatorIdx = args.indexOf('--')
+    const forwardFlagIdx = args.indexOf('-N')
+    const localForwardIdx = args.indexOf('-L')
+    const exitOnForwardFailureIdx = args.indexOf('ExitOnForwardFailure=yes')
+    const standaloneControlIdx = args.indexOf('-S')
+
+    expect(terminatorIdx).toBeGreaterThan(-1)
+    expect(forwardFlagIdx).toBeGreaterThan(-1)
+    expect(localForwardIdx).toBeGreaterThan(-1)
+    expect(exitOnForwardFailureIdx).toBeGreaterThan(-1)
+    // Why: -N and -L must appear before -- or OpenSSH treats them as remote command args.
+    expect(forwardFlagIdx).toBeLessThan(terminatorIdx)
+    expect(localForwardIdx).toBeLessThan(terminatorIdx)
+    expect(args[exitOnForwardFailureIdx - 1]).toBe('-o')
+    expect(exitOnForwardFailureIdx).toBeLessThan(terminatorIdx)
+    expect(standaloneControlIdx).toBe(-1)
+    expectNoOrcaControlMasterArgs(args)
+    expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
+    expect(args[terminatorIdx + 1]).toBe('deploy@fdpass-host')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
-      [
-        '-o',
-        'BatchMode=no',
-        '-T',
-        '-N',
-        '-o',
-        'ExitOnForwardFailure=yes',
-        '-L',
-        '127.0.0.1:5173:127.0.0.1:3000',
-        '--',
-        'deploy@fdpass-host'
-      ],
+      expect.any(Array),
       expect.objectContaining({ stdio: ['ignore', 'ignore', 'pipe'] })
     )
+  })
+
+  it('suppresses Orca mux flags for port forwards without disabling ssh_config muxing', () => {
+    spawnMock.mockReturnValue(createFakeProcess())
+
+    spawnSystemSshPortForward(createTarget(), 5173, '127.0.0.1', 3000, {
+      resolvedConfig: {
+        hostname: 'example.com',
+        port: 22,
+        identityFile: [],
+        forwardAgent: false,
+        identitiesOnly: false,
+        proxyUseFdpass: false,
+        controlMaster: 'no',
+        controlPersist: 'no'
+      }
+    })
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args.indexOf('-S')).toBe(-1)
+    expectNoOrcaControlMasterArgs(args)
+  })
+
+  it('preserves user-configured muxing for port forwards', () => {
+    spawnMock.mockReturnValue(createFakeProcess())
+
+    spawnSystemSshPortForward(
+      createTarget({ configHost: 'workbox', source: 'ssh-config' }),
+      5173,
+      '127.0.0.1',
+      3000,
+      {
+        resolvedConfig: {
+          hostname: 'workbox.internal',
+          port: 22,
+          identityFile: [],
+          forwardAgent: false,
+          identitiesOnly: false,
+          proxyUseFdpass: false,
+          controlMaster: 'auto',
+          controlPath: '/Users/me/.ssh/cm/%r@%h:%p',
+          controlPersist: '10m'
+        }
+      }
+    )
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args.indexOf('-S')).toBe(-1)
+    expectNoOrcaControlMasterArgs(args)
+    expect(args).toContain('deploy@workbox')
   })
 
   it('preserves manual target port and identity options in the forwarded ssh command', () => {

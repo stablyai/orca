@@ -27,9 +27,11 @@ export function MobileTerminalLiveInputStatus({
     ? 'Tap mic to stop'
     : dictation.isProcessing
       ? 'Transcribing on desktop'
-      : isAttaching
-        ? 'Uploading image to host'
-        : 'Keyboard goes directly to terminal'
+      : dictation.isStarting
+        ? 'Preparing microphone'
+        : isAttaching
+          ? 'Uploading image to host'
+          : 'Tap to show keyboard'
 
   return (
     <View style={styles.status}>

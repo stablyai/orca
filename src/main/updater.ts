@@ -2,7 +2,7 @@
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import type { NsisUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateCheckOptions, UpdateStatus } from '../shared/types'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
@@ -29,6 +29,8 @@ import { fetchNudge, shouldApplyNudge } from './updater-nudge'
 type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
 type PrimaryEventSuppression = { failureKey: string; error: unknown }
+type UpdateCheckVariant = 'default' | 'prerelease' | 'perf'
+type ReleaseFeedPreflightResult = 'ready' | 'not-available'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -44,9 +46,9 @@ let currentStatus: UpdateStatus = { state: 'idle' }
 let userInitiatedCheck = false
 let onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
 let autoUpdaterInitialized = false
-// Why: Shift-clicking "Check for Updates" opts the user into the RC release
-// channel for the rest of this process. The generic feed still gets pinned to
-// a concrete tag on every check so cancelled RCs without manifests are skipped.
+// Why: modifier-clicking "Check for Updates" can target prerelease manifests.
+// The generic feed still gets pinned to a concrete tag on every check so
+// cancelled prereleases without manifests are skipped.
 let includePrereleaseActive = false
 let availableVersion: string | null = null
 let availableReleaseUrl: string | null = null
@@ -69,7 +71,7 @@ let activeUpdateCheckAttemptId: number | null = null
 let activeUpdateCheckLaunchAttemptId: number | null = null
 let activeUpdateCheckEventAttemptId: number | null = null
 let updateAvailableEventPendingAttemptId: number | null = null
-let pendingPrereleaseUserInitiatedCheckAfterInFlight = false
+let pendingUserInitiatedCheckAfterInFlight: UpdateCheckVariant | null = null
 let activeUpdateNudgeId: string | null = null
 let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
@@ -156,8 +158,9 @@ function decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
 }
 
 function sendStatus(status: UpdateStatus): void {
-  const shouldLaunchPendingPrereleaseCheck =
-    pendingPrereleaseUserInitiatedCheckAfterInFlight &&
+  const pendingUserInitiatedCheckVariant = pendingUserInitiatedCheckAfterInFlight
+  const shouldLaunchPendingUserInitiatedCheck =
+    pendingUserInitiatedCheckVariant !== null &&
     (status.state === 'idle' ||
       status.state === 'not-available' ||
       status.state === 'available' ||
@@ -225,8 +228,8 @@ function sendStatus(status: UpdateStatus): void {
   ) {
     downloadInFlight = false
   }
-  if (shouldLaunchPendingPrereleaseCheck) {
-    launchPendingPrereleaseUserInitiatedCheckAfterInFlight()
+  if (shouldLaunchPendingUserInitiatedCheck) {
+    launchPendingUserInitiatedCheckAfterInFlight(pendingUserInitiatedCheckVariant)
     return
   }
   if (statusesEqual(currentStatus, decoratedStatus)) {
@@ -236,16 +239,37 @@ function sendStatus(status: UpdateStatus): void {
   mainWindowRef?.webContents.send('updater:status', decoratedStatus)
 }
 
-function launchPendingPrereleaseUserInitiatedCheckAfterInFlight(): void {
-  pendingPrereleaseUserInitiatedCheckAfterInFlight = false
+function getOptionsForUpdateCheckVariant(variant: UpdateCheckVariant): UpdateCheckOptions {
+  switch (variant) {
+    case 'perf':
+      return { includePrerelease: true, includePerfPrerelease: true }
+    case 'prerelease':
+      return { includePrerelease: true }
+    case 'default':
+      return { includePrerelease: false }
+  }
+}
+
+function getUpdateCheckVariant(options?: UpdateCheckOptions): UpdateCheckVariant {
+  if (options?.includePerfPrerelease) {
+    return 'perf'
+  }
+  if (options?.includePrerelease) {
+    return 'prerelease'
+  }
+  return 'default'
+}
+
+function launchPendingUserInitiatedCheckAfterInFlight(variant: UpdateCheckVariant): void {
+  pendingUserInitiatedCheckAfterInFlight = null
   setTimeout(() => {
     // Why: electron-updater clears its in-flight promise after emitting the
-    // terminal event. Deferring one tick lets the queued RC check start fresh
-    // instead of being deduped into the just-finished stable check.
+    // terminal event. Deferring one tick lets the queued modifier check start
+    // fresh instead of being deduped into the just-finished stable check.
     if (currentStatus.state === 'checking') {
       currentStatus = { state: 'idle' }
     }
-    checkForUpdatesFromMenu({ includePrerelease: true })
+    checkForUpdatesFromMenu(getOptionsForUpdateCheckVariant(variant))
   }, 0)
 }
 
@@ -769,7 +793,9 @@ function markMissingManifestPrereleaseFallbackPromiseHandled(message: string): v
   )
 }
 
-async function pinDefaultReleaseFeed(): Promise<void> {
+async function pinDefaultReleaseFeed(
+  variant: UpdateCheckVariant = 'default'
+): Promise<ReleaseFeedPreflightResult> {
   const autoUpdater = getAutoUpdater()
   // Why: the /releases/latest/download/ redirect can move between the update
   // check and the later manual download click. Pinning to the concrete tag
@@ -778,12 +804,15 @@ async function pinDefaultReleaseFeed(): Promise<void> {
   // Prerelease users still need any-channel resolution so they can move to a
   // newer RC or the next stable. Stable users should only resolve stable tags.
   const currentVersion = app.getVersion()
-  const includePrerelease = includePrereleaseActive || isPrereleaseVersion(currentVersion)
+  const isPerfCheck = variant === 'perf'
+  const includePrerelease =
+    isPerfCheck || includePrereleaseActive || isPrereleaseVersion(currentVersion)
   const releaseTagsResult = await fetchNewerReleaseTagsWithReadiness(
     currentVersion,
     includePrerelease ? 2 : 1,
     {
-      includePrerelease
+      includePrerelease,
+      ...(isPerfCheck ? { releaseFilter: 'perf' as const } : {})
     }
   )
   const newerTag = releaseTagsResult.tags[0] ?? null
@@ -814,6 +843,7 @@ async function pinDefaultReleaseFeed(): Promise<void> {
       `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
     )
     autoUpdater.setFeedURL({ provider: 'generic', url })
+    return 'ready'
   } else if (releaseTagsResult.state === 'not-ready') {
     clearPrereleaseFallbackContext()
     if (releaseTagsResult.lastGoodTag) {
@@ -825,13 +855,23 @@ async function pinDefaultReleaseFeed(): Promise<void> {
       )
       publishingWindowLastGoodCheck = { lastGoodTag: releaseTagsResult.lastGoodTag }
       autoUpdater.setFeedURL({ provider: 'generic', url })
-      return
+      return 'ready'
     }
     clearPublishingWindowLastGoodCheck()
     console.info(
       `[updater] release feed deferred: current=${currentVersion} includePrerelease=${includePrerelease}; newest release assets are still publishing`
     )
     throw new Error('Latest release assets are still publishing')
+  } else if (isPerfCheck) {
+    clearPrereleaseFallbackContext()
+    clearPublishingWindowLastGoodCheck()
+    if (releaseTagsResult.state === 'no-newer') {
+      console.info(
+        `[updater] perf release not found: current=${currentVersion} includePrerelease=${includePrerelease}`
+      )
+      return 'not-available'
+    }
+    throw new Error('Could not resolve perf update feed')
   } else {
     clearPrereleaseFallbackContext()
     clearPublishingWindowLastGoodCheck()
@@ -840,6 +880,7 @@ async function pinDefaultReleaseFeed(): Promise<void> {
       `[updater] release feed fallback: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
     )
     autoUpdater.setFeedURL({ provider: 'generic', url })
+    return 'ready'
   }
 }
 
@@ -972,6 +1013,10 @@ export function checkForUpdates(): void {
   })
 }
 
+function enablePrereleaseManifestChecks(): void {
+  getAutoUpdater().allowPrerelease = true
+}
+
 function enableIncludePrerelease(): void {
   if (includePrereleaseActive) {
     return
@@ -980,20 +1025,26 @@ function enableIncludePrerelease(): void {
   // accept a prerelease manifest for users who intentionally Shift-clicked.
   // We keep using the manifest-probed generic feed instead of the native
   // GitHub provider because cancelled RC releases can appear without assets.
-  getAutoUpdater().allowPrerelease = true
+  enablePrereleaseManifestChecks()
   includePrereleaseActive = true
 }
 
 /** Menu-triggered check — delegates feedback to renderer toasts via userInitiated flag */
-export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean }): void {
+export function checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
   if (!app.isPackaged || is.dev) {
     sendStatus({ state: 'not-available', userInitiated: true })
     return
   }
 
-  if (options?.includePrerelease) {
+  const checkVariant = getUpdateCheckVariant(options)
+  if (checkVariant === 'prerelease') {
     clearPrereleaseFallbackContext()
     enableIncludePrerelease()
+  } else if (checkVariant === 'perf') {
+    clearPrereleaseFallbackContext()
+    // Why: perf checks need prerelease manifests for this check, but must not
+    // opt future default/background checks into the RC channel.
+    enablePrereleaseManifestChecks()
   }
 
   const checkAlreadyInFlight = backgroundCheckLaunchPending || currentStatus.state === 'checking'
@@ -1009,10 +1060,10 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   if (checkAlreadyInFlight) {
     backgroundCheckPromotedToUserInitiated = true
     rearmActiveUpdateCheckStallTimer()
-    if (options?.includePrerelease) {
-      // Why: the in-flight check may have already pinned the stable feed.
-      // Queue a fresh RC check so Shift-click doesn't inherit a stable result.
-      pendingPrereleaseUserInitiatedCheckAfterInFlight = true
+    if (checkVariant !== 'default') {
+      // Why: the in-flight check may have already pinned the stable feed. Queue
+      // a fresh modifier check so it doesn't inherit a stale-channel result.
+      pendingUserInitiatedCheckAfterInFlight = checkVariant
     }
     return
   }
@@ -1026,9 +1077,26 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
     markUpdateCheckLaunched(attemptId)
     return autoUpdater.checkForUpdates()
   }
-  const run = pinDefaultReleaseFeed().then(launch)
+  const run = pinDefaultReleaseFeed(checkVariant).then((preflightResult) => {
+    if (preflightResult === 'not-available') {
+      if (!isActiveUpdateCheckAttempt(attemptId)) {
+        return false
+      }
+      userInitiatedCheck = false
+      finishActiveUpdateCheckAttempt()
+      recordCompletedUpdateCheck()
+      sendStatus({ state: 'not-available', userInitiated: true })
+      return false
+    }
+    return launch()
+  })
   void Promise.resolve(run)
-    .then(() => handleSettledUpdateCheckPromise(attemptId))
+    .then((launchResult) => {
+      if (launchResult === false) {
+        return
+      }
+      handleSettledUpdateCheckPromise(attemptId)
+    })
     .catch((err) => {
       if (!isActiveUpdateCheckAttempt(attemptId)) {
         return

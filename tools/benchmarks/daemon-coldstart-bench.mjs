@@ -21,10 +21,9 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
 
-const scriptDir = dirname(fileURLToPath(import.meta.url))
+const scriptDir = import.meta.dirname
 const repoRoot = resolve(scriptDir, '..', '..')
 
 const CURRENT_PROTOCOL_VERSION = 12

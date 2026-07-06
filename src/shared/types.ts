@@ -237,7 +237,6 @@ export type Repo = {
    *  default avatar (upstream owner, not the personal fork) and the fork
    *  indicator. Absent = not a fork, or fork status not yet resolved. */
   upstream?: GitHubRepositoryIdentity | null
-  gitRemoteIdentity?: GitRemoteIdentity | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string
@@ -258,6 +257,8 @@ export type Repo = {
   issueSourcePreference?: IssueSourcePreference
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
+  /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
+  gitRemoteIdentity?: GitRemoteIdentity | null
   /** Controls whether worktrees Orca did not create appear in the sidebar. */
   externalWorktreeVisibility?: ExternalWorktreeVisibility
   /** True when the repo predates hidden-by-default external worktrees. */
@@ -835,6 +836,9 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: explorer-created terminals can start below the workspace root while
+   *  still belonging to that workspace for tab/session ownership. */
+  startupCwd?: string
   /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
    *  show the provider icon immediately, before the agent emits its first hook
    *  event (a freshly-launched, idle agent reports no live status yet). Live
@@ -917,6 +921,9 @@ export type BrowserWorkspace = {
   // partition, which keeps backward compat with workspaces persisted before
   // session profiles existed.
   sessionProfileId?: string | null
+  // Why: runtime-created tabs resolve profile partition in main. Persisting it
+  // keeps isolated storage stable when the renderer profile mirror is stale.
+  sessionPartition?: string | null
   activePageId?: string | null
   pageIds?: string[]
   // Why: the active page owns real browser chrome state now, but the top-level
@@ -1126,6 +1133,10 @@ export type PRInfo = {
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
   headSha?: string
+  // Why: a merged branch-matched PR stays visible when the worktree head is one
+  // of the PR's own commits (behind update-branch/web commits). Cache staleness
+  // checks must honor that confirmation without re-querying GitHub.
+  confirmedContainedHeadOid?: string
   /** Target branch name for PR-created worktree compare-base repair. */
   baseRefName?: string
   prRepo?: GitHubRepositoryIdentity
@@ -1185,6 +1196,10 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedMergeable?: PRMergeableState | null
   cachedMergeStateStatus?: string | null
   localGitOptions?: { wslDistro?: string }
+  // Why: merged branch-matched PRs are only visible for heads that belong to
+  // the PR; without the worktree head, a panel-supplied fallback number would
+  // keep a merged PR alive head-blind after the branch moves on.
+  currentHeadOid?: string | null
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -1935,12 +1950,31 @@ export type OrcaHooks = {
   }
   issueCommand?: string // Shared default command for linked GitHub issues
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
+  environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
+  environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
 }
 
 export type OrcaDefaultTabTemplate = {
   title?: string
   color?: string
   command?: string
+}
+
+export type OrcaVmRecipe = {
+  id: string
+  name: string
+  create: string
+  description?: string
+  suspend?: string
+  resume?: string
+  destroy?: string
+  destroyDisabled?: boolean
+}
+
+export type OrcaVmRecipeDiagnostic = {
+  index: number
+  field?: string
+  message: string
 }
 
 export type RepoHookSettings = {
@@ -2154,6 +2188,11 @@ export type ChangelogRelease = {
 export type ChangelogData = {
   release: ChangelogRelease
   releasesBehind: number | null
+}
+
+export type UpdateCheckOptions = {
+  includePrerelease?: boolean
+  includePerfPrerelease?: boolean
 }
 
 export type UpdateStatus =
@@ -2449,6 +2488,8 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
+  richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
   /** Why: mirrors terminal selection-paste muscle memory without mutating the
@@ -2468,6 +2509,8 @@ export type GlobalSettings = {
   terminalScrollSensitivity: number
   terminalFastScrollSensitivity: number
   terminalTuiScrollSensitivity: number
+  /** One-shot migration guard for moving inherited TUI wheel reports from 3 to 1. */
+  terminalTuiScrollSensitivityDefaultedToOne?: boolean
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
@@ -2725,6 +2768,10 @@ export type GlobalSettings = {
   /** Optional workspace ID override for OpenCode Go. When set, skips the
    *  workspaces lookup and fetches usage directly for this workspace. */
   opencodeWorkspaceId: string
+  /** Optional MiniMax group id. When empty, the usage fetcher extracts minimax_group_id_v2 from the cookie. */
+  minimaxGroupId: string
+  /** Comma-separated MiniMax model names to show in the status bar usage window. */
+  minimaxUsageModels: string
   /** Whether to extract OAuth credentials from the local Gemini CLI installation
    *  for rate-limit fetching. Disabled by default for explicit opt-in. */
   geminiCliOAuthEnabled: boolean
@@ -2812,6 +2859,8 @@ export type GlobalSettings = {
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
   experimentalNewWorktreeCardStyle?: boolean
+  /** Experimental: per-workspace on-demand environment recipes and setup surface. */
+  experimentalEphemeralVms?: boolean
   /** Compact worktree cards by hiding a redundant metadata row when the title
    *  and branch already say the same thing. */
   compactWorktreeCards: boolean
@@ -3069,6 +3118,7 @@ export type StatusBarItem =
   | 'gemini'
   | 'opencode-go'
   | 'kimi'
+  | 'minimax'
   | 'ssh'
   | 'resource-usage'
   | 'ports'
@@ -3169,9 +3219,11 @@ export type PersistedUIState = {
    *  default workspace statuses in reverse workflow order. Once stamped,
    *  user-authored status ordering is never inferred from IDs/labels again. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
-  /** One-shot migration flag for the default status workflow order/label:
-   *  Done -> In review -> In progress -> Todo. Exact legacy default payloads
-   *  migrate; customized statuses are preserved. */
+  /** One-shot repair flag for the exact default payload that a short-lived
+   *  build persisted in reverse workflow order. */
+  _workspaceStatusesReorderedDefaultRepaired?: boolean
+  /** One-shot migration flag for default status workflow labels/visuals.
+   *  Exact legacy default payloads migrate; customized statuses are preserved. */
   _workspaceStatusesDefaultWorkflowMigrated?: boolean
   /** One-shot migration flag for the old default blue/violet/emerald status
    *  visuals. Once stamped, valid user-authored colors/icons are preserved. */
@@ -3180,6 +3232,8 @@ export type PersistedUIState = {
   _portsStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Kimi status item. */
   _kimiStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on MiniMax status item. */
+  _minimaxStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   dismissedUpdateVersion: string | null
@@ -3396,6 +3450,7 @@ export type PersistedTrustedOrcaHookRepo = {
   setup?: PersistedTrustedOrcaHookEntry
   archive?: PersistedTrustedOrcaHookEntry
   issueCommand?: PersistedTrustedOrcaHookEntry
+  vmRecipe?: PersistedTrustedOrcaHookEntry
 }
 
 export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookRepo>

@@ -14,6 +14,7 @@ import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -232,19 +233,20 @@ export function buildGitHubWorkItemStartupPlan(args: {
 }
 
 function getGitHubWorkItemName(item: GitHubWorkItem): { seedName: string; displayName?: string } {
+  const identity = resolveGitHubWorkItemIdentity(item)
   const intent =
-    item.number !== null
+    identity.number !== null
       ? getWorkspaceIntentName({
           sourceText: item.title,
-          workItem: { type: item.type, number: item.number, title: item.title }
+          workItem: { type: identity.type, number: identity.number, title: item.title }
         })
       : null
   return {
     seedName: getWorkspaceSeedName({
       explicitName: intent?.seedName ?? '',
       prompt: '',
-      linkedIssueNumber: item.type === 'issue' ? item.number : null,
-      linkedPR: item.type === 'pr' ? item.number : null
+      linkedIssueNumber: identity.type === 'issue' ? identity.number : null,
+      linkedPR: identity.type === 'pr' ? identity.number : null
     }),
     ...(intent?.displayName ? { displayName: intent.displayName } : {})
   }
@@ -257,6 +259,7 @@ export function buildInitialGitHubWorkItemRequest(
   const { seedName, displayName } = getGitHubWorkItemName(args.item)
   const workspaceRunContext = getWorkspaceRunContextForRepo(repo, args.workspaceRunContext)
   const ownerHost = parseExecutionHostId(getRepoExecutionHostId(repo))
+  const identity = resolveGitHubWorkItemIdentity(args.item)
   return {
     repoId: args.repoId,
     worktreeCreateProgressMode: ownerHost?.kind === 'local' ? 'stepped' : 'indeterminate',
@@ -264,8 +267,8 @@ export function buildInitialGitHubWorkItemRequest(
     ...(workspaceRunContext ? { workspaceRunContext } : {}),
     name: seedName,
     ...(displayName ? { displayName } : {}),
-    ...(args.item.type === 'issue' && args.item.number ? { linkedIssue: args.item.number } : {}),
-    ...(args.item.type === 'pr' && args.item.number ? { linkedPR: args.item.number } : {}),
+    ...(identity.type === 'issue' && identity.number ? { linkedIssue: identity.number } : {}),
+    ...(identity.type === 'pr' && identity.number ? { linkedPR: identity.number } : {}),
     ...(args.telemetrySource ? { telemetrySource: args.telemetrySource } : {}),
     setupDecision: 'inherit',
     agent: null,

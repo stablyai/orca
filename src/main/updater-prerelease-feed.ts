@@ -43,6 +43,18 @@ type ReleaseFeedTag = {
   version: string
 }
 
+export function isPerfPrereleaseTag(tag: string): boolean {
+  const version = normalizeTagToVersion(tag)
+  const match = version.match(/^\d+\.\d+\.\d+-([0-9A-Za-z-.]+)(?:\+[0-9A-Za-z-.]+)?$/)
+  const identifiers = match?.[1]?.split('.') ?? []
+  return (
+    identifiers.length === 3 &&
+    identifiers[0] === 'rc' &&
+    /^\d+$/.test(identifiers[1]) &&
+    identifiers[2] === 'perf'
+  )
+}
+
 async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
@@ -156,6 +168,7 @@ async function hasReadyPlatformManifest(tag: string): Promise<boolean> {
  */
 type FetchNewerReleaseTagOptions = {
   includePrerelease?: boolean
+  releaseFilter?: 'perf'
 }
 
 export type FetchNewerReleaseTagsResult = {
@@ -190,9 +203,14 @@ export async function fetchNewerReleaseTagsWithReadiness(
     return { tags: [], state: 'unavailable' }
   }
 
-  const candidates = includePrerelease
-    ? tags
-    : tags.filter(({ version }) => !isPrereleaseVersion(version))
+  // Why: perf builds are explicit opt-in; regular prerelease checks should
+  // stay on the main RC/stable series even though perf tags are semver-newer.
+  const candidates =
+    options.releaseFilter === 'perf'
+      ? tags.filter(({ tag }) => isPerfPrereleaseTag(tag))
+      : includePrerelease
+        ? tags.filter(({ tag }) => !isPerfPrereleaseTag(tag))
+        : tags.filter(({ version }) => !isPrereleaseVersion(version))
   const newestNewerIndex = candidates.findIndex(
     ({ version }) => compareVersions(version, currentVersion) > 0
   )

@@ -10,9 +10,9 @@
 // module uses only Node builtins (http/fs/crypto/net/path/url/os) — none of
 // which pull `electron` — so it is safe to import from `src/relay/`. See
 // docs/design/agent-status-over-ssh.md §3 ("relay normalizes; Orca routes").
-import type { IncomingMessage } from 'http'
-import { createHash, randomUUID } from 'crypto'
-import { homedir } from 'os'
+import type { IncomingMessage } from 'node:http'
+import { createHash, randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import {
   chmodSync,
   closeSync,
@@ -24,8 +24,8 @@ import {
   statSync,
   unlinkSync,
   writeFileSync
-} from 'fs'
-import { join } from 'path'
+} from 'node:fs'
+import { join } from 'node:path'
 
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
@@ -35,6 +35,7 @@ import {
   type AgentProviderSessionMetadata
 } from './agent-session-resume'
 import { parsePaneKey } from './stable-pane-id'
+import { isHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -392,6 +393,12 @@ function resolvePrompt(
   promptText: string,
   options?: { resetOnNewTurn?: boolean }
 ): string {
+  // Why: harness-injected turns (task notifications, system reminders) fire
+  // UserPromptSubmit but are not the user's ask — keep the cached real prompt
+  // instead of surfacing raw machinery tags in status labels.
+  if (isHarnessInjectedUserTurnText(promptText)) {
+    return state.lastPromptByPaneKey.get(paneKey) ?? ''
+  }
   if (options?.resetOnNewTurn) {
     state.lastPromptByPaneKey.delete(paneKey)
   }
@@ -2083,6 +2090,11 @@ function hasExplicitUserPrompt(
     return (source === 'opencode' || source === 'mimo-code') && eventName === 'MessagePart'
   }
   if (extractedPrompt.text.length === 0) {
+    return false
+  }
+  // Why: harness-injected machinery turns are not proof of a user submit —
+  // they must not count for prompt-sent telemetry or permission stickiness.
+  if (isHarnessInjectedUserTurnText(extractedPrompt.text)) {
     return false
   }
   // Why: bare `message` fields often contain permission or status copy. They

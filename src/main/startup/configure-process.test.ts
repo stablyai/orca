@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { homedir, tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => {
@@ -297,6 +297,17 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
+  it('raises the WebGL context budget above the 16-context Blink default', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('max-active-webgl-contexts', '128')
+  })
+
   it('disables the GPU sandbox on Linux Wayland without disabling acceleration', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
@@ -445,6 +456,10 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu')
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
       'enable-features',
+      expect.any(String)
+    )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'max-active-webgl-contexts',
       expect.any(String)
     )
   })

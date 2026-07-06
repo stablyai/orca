@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
 import type React from 'react'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { Repo, TuiAgent } from '../../../../shared/types'
 import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import type { RepoSourceControlAiOverrides } from '../../../../shared/source-control-ai-types'
 import {
   normalizeRepoSourceControlAiOverrides,
-  normalizeSourceControlAiSettings,
-  resolveSourceControlActionRecipe
+  normalizeSourceControlAiSettings
 } from '../../../../shared/source-control-ai'
 import { toSourceControlAiRepoUpdate } from '../../../../shared/source-control-ai-recipe-save'
 import type { SourceControlAiRepoUpdate } from '../../../../shared/source-control-ai-recipe-save'
-import type { SourceControlActionId } from '../../../../shared/source-control-ai-actions'
+import {
+  SOURCE_CONTROL_ACTION_IDS,
+  type SourceControlActionId
+} from '../../../../shared/source-control-ai-actions'
 import { Button } from '../ui/button'
 import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -20,18 +22,21 @@ import { RepositorySourceControlAiCustomCommand } from './RepositorySourceContro
 import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAiEnablement'
 import { RepositorySourceControlAiHostedReviewDefaults } from './RepositorySourceControlAiHostedReviewDefaults'
 import {
+  buildActionScopedRepoAiSave,
   createRepoAiDraftState,
   dropRepoLegacyInstructionForAction,
   hasOwnActionOverride,
   normalizeRepoAiDraft,
+  readCompleteRecipeForDraft,
   resolveRepoAiDraftState,
+  serializeActionOverride,
   serializeRepoAiDraft,
+  setActionOverride,
   type RepoAiDraftState
 } from './repository-source-control-ai-draft'
 import {
   ACTION_MODE_INHERIT,
   DEFAULT_AGENT_VALUE,
-  completeRepoActionRecipe,
   readInheritedCommandTemplate
 } from './repository-source-control-ai-labels'
 import { getSettingOwnershipSummary } from './setting-ownership'
@@ -49,40 +54,6 @@ type RepositorySourceControlAiSectionProps = {
 }
 
 type HostedReviewDefaultKey = keyof NonNullable<RepoSourceControlAiOverrides['prCreationDefaults']>
-
-function readCompleteRecipeForDraft(
-  current: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
-  actionId: SourceControlActionId
-): NonNullable<
-  NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
-> {
-  const recipe = resolveSourceControlActionRecipe({
-    settings,
-    repo: { sourceControlAi: current },
-    actionId
-  })
-  return completeRepoActionRecipe(recipe, actionId)
-}
-
-function setActionOverride(
-  current: RepoSourceControlAiOverrides,
-  actionId: SourceControlActionId,
-  recipe: NonNullable<
-    NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
-  >
-): RepoSourceControlAiOverrides {
-  return dropRepoLegacyInstructionForAction(
-    {
-      ...current,
-      actionOverrides: {
-        ...current.actionOverrides,
-        [actionId]: recipe
-      }
-    },
-    actionId
-  )
-}
 
 export function RepositorySourceControlAiSection({
   repo,
@@ -130,6 +101,17 @@ export function RepositorySourceControlAiSection({
   const draftSerialized = useMemo(() => serializeRepoAiDraft(repoAi), [repoAi])
   const isDirty =
     resolvedDraftState.repoId !== repo.id || draftSerialized !== resolvedDraftState.baseSerialized
+  const actionDirtyById = useMemo(
+    () =>
+      Object.fromEntries(
+        SOURCE_CONTROL_ACTION_IDS.map((actionId) => [
+          actionId,
+          serializeActionOverride(repoAi, actionId) !==
+            serializeActionOverride(persistedRepoAi, actionId)
+        ])
+      ) as Record<SourceControlActionId, boolean>,
+    [persistedRepoAi, repoAi]
+  )
 
   const updateDraftRepoAi = (
     update: (current: RepoSourceControlAiOverrides) => RepoSourceControlAiOverrides
@@ -196,6 +178,50 @@ export function RepositorySourceControlAiSection({
   const discardDraft = (): void => {
     setDraftState(createRepoAiDraftState(repo.id, persistedRepoAi))
     setSaveError(null)
+  }
+
+  const discardActionDraft = (actionId: SourceControlActionId): void => {
+    updateDraftRepoAi((current) => {
+      const nextActionOverrides = { ...current.actionOverrides }
+      if (hasOwnActionOverride(persistedRepoAi.actionOverrides, actionId)) {
+        nextActionOverrides[actionId] = persistedRepoAi.actionOverrides?.[actionId]
+      } else {
+        delete nextActionOverrides[actionId]
+      }
+      return dropRepoLegacyInstructionForAction(
+        { ...current, actionOverrides: nextActionOverrides },
+        actionId
+      )
+    })
+  }
+
+  const saveActionDraft = async (actionId: SourceControlActionId): Promise<void> => {
+    if (isSaving || !actionDirtyById[actionId]) {
+      return
+    }
+    // Why: a per-action Save persists only that action's override (its Discard is
+    // action-scoped, so its Save must be too) — never other rows' pending edits.
+    const next = buildActionScopedRepoAiSave(persistedRepoAi, repoAi, actionId)
+    const repoUpdate = toSourceControlAiRepoUpdate(next)
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      const result = await updateRepo(repo.id, repoUpdate)
+      if (!mountedRef.current) {
+        return
+      }
+      if (result === false) {
+        setSaveError('Failed to save Source Control AI settings.')
+      }
+    } catch {
+      if (mountedRef.current) {
+        setSaveError('Failed to save Source Control AI settings.')
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsSaving(false)
+      }
+    }
   }
 
   const updateEnablement = (value: boolean | undefined): void => {
@@ -364,14 +390,19 @@ export function RepositorySourceControlAiSection({
         onChange={updateCustomCommand}
       />
       <RepositorySourceControlAiActionRows
+        repoId={repo.id}
         repoAi={repoAi}
         source={source}
         defaultTuiAgent={settings?.defaultTuiAgent}
+        isSaving={isSaving}
+        actionDirtyById={actionDirtyById}
         onActionModeChange={updateActionMode}
         onActionAgentChange={updateActionAgent}
         onActionTemplateChange={updateActionTemplate}
         onActionAgentArgsChange={updateActionAgentArgs}
         onAppendVariable={appendVariable}
+        onActionDiscard={discardActionDraft}
+        onActionSave={(actionId) => void saveActionDraft(actionId)}
       />
       <RepositorySourceControlAiHostedReviewDefaults
         value={repoAi.prCreationDefaults}

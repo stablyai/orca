@@ -65,6 +65,7 @@ type ManagedPty = {
    *  paneKey/tabId because those fields also control shell env/revive hooks. */
   attachIdentity?: PtyIdentity
   worktreeId?: string
+  terminalHandle?: string
   startupCommand?: ManagedStartupCommand
 }
 
@@ -159,6 +160,13 @@ function resolvePtyShellOverride(shellOverride: string): string {
   return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
 }
 
+type PtyProcessSummary = {
+  id: string
+  cwd: string
+  title: string
+  terminalHandle?: string
+}
+
 type SerializedPtyEntry = {
   id: string
   pid: number
@@ -169,6 +177,7 @@ type SerializedPtyEntry = {
   tabId?: string
   attachIdentity?: PtyIdentity
   worktreeId?: string
+  terminalHandle?: string
 }
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
@@ -559,6 +568,10 @@ export class PtyHandler {
     // for overlay resolution; runtime-owned PTYs opt into relay delivery
     // because no renderer TerminalPane exists to type the command.
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
+    // Why: kept so a restarted runtime can re-adopt this live PTY under its
+    // originally-exported handle (reported via listProcesses, survives revive).
+    const terminalHandle =
+      typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
     const terminalWindowsWslDistro =
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
@@ -614,6 +627,7 @@ export class PtyHandler {
       tabId,
       ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
       worktreeId,
+      ...(terminalHandle ? { terminalHandle } : {}),
       ...(shouldProviderDeliverCommand
         ? {
             startupCommand: {
@@ -863,12 +877,17 @@ export class PtyHandler {
     return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
   }
 
-  private async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
-    const results: { id: string; cwd: string; title: string }[] = []
+  private async listProcesses(): Promise<PtyProcessSummary[]> {
+    const results: PtyProcessSummary[] = []
     for (const [id, managed] of this.ptys) {
       const title =
         (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
-      results.push({ id, cwd: managed.initialCwd, title })
+      results.push({
+        id,
+        cwd: managed.initialCwd,
+        title,
+        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
+      })
     }
     return results
   }
@@ -891,7 +910,8 @@ export class PtyHandler {
         paneKey: managed.paneKey,
         tabId: managed.tabId,
         attachIdentity: managed.attachIdentity,
-        worktreeId: managed.worktreeId
+        worktreeId: managed.worktreeId,
+        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }
     return JSON.stringify(entries)
@@ -929,6 +949,9 @@ export class PtyHandler {
       if (entry.worktreeId) {
         revivedEnv.ORCA_WORKTREE_ID = entry.worktreeId
       }
+      if (entry.terminalHandle) {
+        revivedEnv.ORCA_TERMINAL_HANDLE = entry.terminalHandle
+      }
       const shell = resolveDefaultShell()
       // Why: `command` is intentionally absent from this revive path because
       // SerializedPtyEntry (see line 99) does not persist it — ManagedPty
@@ -960,7 +983,8 @@ export class PtyHandler {
         paneKey: entry.paneKey,
         tabId: entry.tabId,
         attachIdentity: entry.attachIdentity,
-        worktreeId: entry.worktreeId
+        worktreeId: entry.worktreeId,
+        ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
       })
 
       // Why: nextId starts at 1 and is only incremented by spawn(). Revived

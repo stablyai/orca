@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: hook parsing, shell selection, and execution-path regressions are tightly coupled, so these cases stay in one file to preserve the behavior matrix across platforms. */
 import type { Repo } from '../shared/types'
 
-import { join } from 'path'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultTabsLaunch, parseOrcaYaml } from './hooks'
 
@@ -193,11 +193,108 @@ describe('parseOrcaYaml', () => {
       defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
     })
   })
+
+  it('parses environmentRecipes from orca.yaml', () => {
+    const yaml = [
+      'environmentRecipes:',
+      '  - id: cloud-sandbox',
+      '    name: Cloud Sandbox',
+      '    description: Starts a per-workspace VM.',
+      '    create: ./scripts/orca-vm/start-cloud-sandbox.sh',
+      '    suspend: ./scripts/orca-vm/suspend-cloud-sandbox.sh',
+      '    resume: ./scripts/orca-vm/resume-cloud-sandbox.sh',
+      '    destroy: ./scripts/orca-vm/destroy-cloud-sandbox.sh'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      environmentRecipes: [
+        {
+          id: 'cloud-sandbox',
+          name: 'Cloud Sandbox',
+          description: 'Starts a per-workspace VM.',
+          create: './scripts/orca-vm/start-cloud-sandbox.sh',
+          suspend: './scripts/orca-vm/suspend-cloud-sandbox.sh',
+          resume: './scripts/orca-vm/resume-cloud-sandbox.sh',
+          destroy: './scripts/orca-vm/destroy-cloud-sandbox.sh'
+        }
+      ]
+    })
+  })
+
+  it('parses legacy environmentRecipes command and cleanup aliases', () => {
+    const yaml = [
+      'environmentRecipes:',
+      '  - id: manual-sandbox',
+      '    name: Manual Sandbox',
+      '    command: ./scripts/orca-vm/start-manual-sandbox.sh',
+      '    cleanup: none'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      environmentRecipes: [
+        {
+          id: 'manual-sandbox',
+          name: 'Manual Sandbox',
+          create: './scripts/orca-vm/start-manual-sandbox.sh',
+          destroyDisabled: true
+        }
+      ]
+    })
+  })
+
+  it('drops invalid and duplicate environmentRecipes', () => {
+    const yaml = [
+      'environmentRecipes:',
+      '  - id: cloud-sandbox',
+      '    name: Cloud Sandbox',
+      '    create: ./scripts/orca-vm/start-cloud-sandbox.sh',
+      '  - id: cloud-sandbox',
+      '    name: Duplicate Cloud Sandbox',
+      '    create: ./scripts/orca-vm/start-duplicate.sh',
+      '  - id: missing-create',
+      '    name: Missing Create',
+      '  - name: Missing Id',
+      '    create: ./scripts/orca-vm/start-missing-id.sh',
+      '  - id: "Cloud Sandbox"',
+      '    name: Unsafe Id',
+      '    create: ./scripts/orca-vm/start-unsafe-id.sh',
+      '  - 42'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      environmentRecipes: [
+        {
+          id: 'cloud-sandbox',
+          name: 'Cloud Sandbox',
+          create: './scripts/orca-vm/start-cloud-sandbox.sh'
+        }
+      ],
+      environmentRecipeDiagnostics: [
+        {
+          index: 1,
+          field: 'id',
+          message: 'Duplicate recipe id "cloud-sandbox". Recipe ids must be unique.'
+        },
+        { index: 2, field: 'create', message: 'Recipe "missing-create" is missing create.' },
+        { index: 3, field: 'id', message: 'Recipe id is required.' },
+        {
+          index: 4,
+          field: 'id',
+          message:
+            'Invalid recipe id "Cloud Sandbox". Use 1-64 lowercase letters, numbers, dots, underscores, or hyphens, starting with a letter or number.'
+        },
+        { index: 5, message: 'Recipe entry must be a mapping.' }
+      ]
+    })
+  })
 })
 
 describe('hasUnrecognizedOrcaYamlKeys', () => {
   it('returns true when the file contains only keys this version does not handle', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.readFileSync).mockReturnValue('futureFeature: |\n  some config\n')
 
     const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
@@ -205,7 +302,7 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
   })
 
   it('returns true when an unknown key has no trailing space (block-value form)', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.readFileSync).mockReturnValue('futureFeature:\n  nested: value\n')
 
     const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
@@ -213,7 +310,7 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
   })
 
   it('returns true when the file mixes recognised and unrecognised keys', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.readFileSync).mockReturnValue(
       'scripts:\n  setup: |\n    pnpm install\nnewFeature: enabled\n'
     )
@@ -223,7 +320,7 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
   })
 
   it('returns false when the file contains only recognised keys', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.readFileSync).mockReturnValue(
       [
         'scripts:',
@@ -232,7 +329,11 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
         'issueCommand: |',
         '  claude -p "test"',
         'defaultTabs:',
-        '  - title: Claude'
+        '  - title: Claude',
+        'environmentRecipes:',
+        '  - id: cloud-sandbox',
+        '    name: Cloud Sandbox',
+        '    create: ./scripts/orca-vm/start-cloud-sandbox.sh'
       ].join('\n')
     )
 
@@ -241,7 +342,7 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
   })
 
   it('returns false when the file is empty or has no top-level keys', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.readFileSync).mockReturnValue('# just a comment\n')
 
     const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
@@ -249,7 +350,7 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
   })
 
   it('returns false when the file cannot be read', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.readFileSync).mockImplementation(() => {
       throw new Error('ENOENT')
     })
@@ -261,7 +362,7 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
 
 describe('readIssueCommand', () => {
   it('prefers the local override over the shared orca.yaml command', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation(
       (path) => path === TEST_ISSUE_COMMAND_PATH || path === TEST_REPO_ORCA_YAML_PATH
     )
@@ -286,7 +387,7 @@ describe('readIssueCommand', () => {
   })
 
   it('falls back to the shared orca.yaml command when no local override exists', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation((path) => path === TEST_REPO_ORCA_YAML_PATH)
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
       if (path === TEST_REPO_ORCA_YAML_PATH) {
@@ -308,7 +409,7 @@ describe('readIssueCommand', () => {
 
 describe('writeIssueCommand', () => {
   it('writes only the local override file and keeps .orca ignored locally', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation(
       (path) => path === TEST_GITIGNORE_PATH || path === join(TEST_REPO_PATH, '.orca')
     )
@@ -336,7 +437,7 @@ describe('writeIssueCommand', () => {
 
   it('deletes the local override when the override is cleared', async () => {
     const { writeIssueCommand } = await import('./hooks')
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     writeIssueCommand(TEST_REPO_PATH, '   ')
 
     expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith(TEST_ISSUE_COMMAND_PATH, {
@@ -413,7 +514,7 @@ describe('getEffectiveHooks', () => {
     }) as unknown as Repo
 
   it('uses hooks from orca.yaml when present', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
 
@@ -430,7 +531,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it("loads setup hooks from the target worktree's orca.yaml when a worktree path is provided", async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation(
       (path) => path === TEST_REPO_ORCA_YAML_PATH || path === TEST_WORKTREE_ORCA_YAML_PATH
     )
@@ -456,7 +557,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('falls back to legacy local hooks when policy is unset and yaml is missing', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
     const { getEffectiveHooks } = await import('./hooks')
@@ -475,7 +576,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('does not fall back to local hooks when policy is explicitly shared-only', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
     const { getEffectiveHooks } = await import('./hooks')
@@ -490,7 +591,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('uses local settings over shared yaml settings by default when local hooks exist', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
 
@@ -509,7 +610,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('uses only local settings when command source policy is local-only', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
 
@@ -529,7 +630,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('runs yaml before local settings when command source policy is run-both', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
 
@@ -549,7 +650,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('uses local settings by default even when orca.yaml defines only one command', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
 
@@ -569,7 +670,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('keeps shared setup when only archive has a legacy local script', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue(
       'scripts:\n  setup: |\n    echo "yaml setup"\n  archive: |\n    echo "yaml archive"\n'
@@ -591,7 +692,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('uses local settings by default when yaml exists without supported hooks', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('futureFeature: enabled\n')
 
@@ -611,7 +712,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('treats legacy shared-first policy as orca.yaml only', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
 
@@ -631,7 +732,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('returns null when no hooks at all', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
     const { getEffectiveHooks } = await import('./hooks')
@@ -642,7 +743,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('falls back to legacy local setup source only when yaml is missing', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
     const { getSetupCommandSource } = await import('./hooks')
@@ -656,7 +757,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('uses local setup source by default when yaml omits setup', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
 
@@ -671,7 +772,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('uses local setup source by default when yaml exists without supported hooks', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('futureFeature: enabled\n')
 
@@ -686,7 +787,7 @@ describe('getEffectiveHooks', () => {
   })
 
   it('uses shared setup source when only archive has a legacy local script', async () => {
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue(
       'scripts:\n  setup: |\n    echo "yaml setup"\n  archive: |\n    echo "yaml archive"\n'
@@ -724,7 +825,7 @@ describe('runHook', () => {
       return {} as never
     })
 
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
 
@@ -769,7 +870,7 @@ describe('runHook', () => {
       return {} as never
     })
 
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
 
@@ -826,7 +927,7 @@ describe('runHook', () => {
       return {} as never
     })
 
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
 
@@ -877,7 +978,7 @@ describe('runHook', () => {
       return {} as never
     })
 
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
 
@@ -927,7 +1028,7 @@ describe('runHook', () => {
     gitExecFileSyncMock.mockReset()
     gitExecFileSyncMock.mockReturnValue('/mnt/c/Users/jinwo/git/orca/.git/orca/setup-runner.sh\n')
 
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     const mkdirSyncMock = vi.mocked(fs.mkdirSync)
     const writeFileSyncMock = vi.mocked(fs.writeFileSync)
     const chmodSyncMock = vi.mocked(fs.chmodSync)
@@ -980,7 +1081,7 @@ describe('runHook', () => {
     const killMock = vi.fn()
     execFileMock.mockImplementation(() => ({ kill: killMock }) as never)
 
-    const fs = await import('fs')
+    const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
 

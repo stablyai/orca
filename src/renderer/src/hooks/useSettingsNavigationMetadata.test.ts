@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/types'
@@ -89,6 +88,23 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'voice')?.badge).toBeUndefined()
   })
 
+  it('places per-workspace environments under Experimental instead of as a beta sidebar item', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const experimental = sections.find((section) => section.id === 'experimental')
+    const entry = experimental?.searchEntries.find(
+      (searchEntry) => searchEntry.title === 'Per-Workspace Environments'
+    )
+
+    expect(sections.map((section) => section.id)).not.toContain('ephemeral-vms')
+    expect(experimental?.group).toBe('experimental')
+    expect(entry?.targetSectionId).toBe('ephemeral-vms')
+  })
+
   it('omits Windows project runtime search entries when the active host is unsupported', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
@@ -169,7 +185,7 @@ describe('settings navigation metadata', () => {
   })
 
   it('does not import Settings page or pane UI modules from the metadata hook', () => {
-    const testDir = dirname(fileURLToPath(import.meta.url))
+    const testDir = import.meta.dirname
     const hookSource = readFileSync(resolve(testDir, 'useSettingsNavigationMetadata.ts'), 'utf8')
     const importLines = hookSource
       .split('\n')
@@ -182,7 +198,7 @@ describe('settings navigation metadata', () => {
   })
 
   it('does not import Settings page or pane UI modules from the quick action registry', () => {
-    const testDir = dirname(fileURLToPath(import.meta.url))
+    const testDir = import.meta.dirname
     const registrySource = readFileSync(
       resolve(testDir, '../components/cmd-j/quick-actions.ts'),
       'utf8'

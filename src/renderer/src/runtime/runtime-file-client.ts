@@ -17,6 +17,7 @@ import type {
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
+  RuntimeRpcCallError,
   unwrapRuntimeRpcResult
 } from './runtime-rpc-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -155,12 +156,29 @@ export async function readRuntimeFileContent({
     throw new Error('Remote file is outside the owning runtime worktree')
   }
 
-  const result = await callRuntimeRpc<RuntimeFileReadResult>(
-    target,
-    'files.read',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), relativePath },
-    { timeoutMs: 15_000 }
-  )
+  const worktree = toRuntimeWorktreeSelector(worktreeId)
+  let result: RuntimeFileReadResult
+  try {
+    result = await callRuntimeRpc<RuntimeFileReadResult>(
+      target,
+      'files.read',
+      { worktree, relativePath },
+      { timeoutMs: 15_000 }
+    )
+  } catch (err) {
+    // Why: files.read rejects binary paths with the typed 'binary_file' error; fall
+    // back to the base64 preview RPC so PDFs/images render like local/SSH paths.
+    // Match the exact typed error so an unrelated failure can't spoof the fallback.
+    if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
+      return callRuntimeRpc<RuntimeFilePreviewResult>(
+        target,
+        'files.readPreview',
+        { worktree, relativePath },
+        { timeoutMs: 15_000 }
+      )
+    }
+    throw err
+  }
   if (result.truncated) {
     // Why: the runtime file RPC is preview-sized today; treating a truncated
     // payload as editable content would make saves overwrite the rest of the file.

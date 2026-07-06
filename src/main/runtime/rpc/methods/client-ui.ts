@@ -40,7 +40,17 @@ const WorktreeCardProperties = z
   .array(LegacyWorktreeCardProperty)
   .transform((value) => normalizeWorktreeCardProperties(value))
 const AgentActivityDisplayMode = z.enum(['compact', 'full'])
-const StatusBarItem = z.enum(['claude', 'codex', 'gemini', 'opencode-go', 'ssh', 'resource-usage'])
+const StatusBarItem = z.enum([
+  'claude',
+  'codex',
+  'gemini',
+  'opencode-go',
+  'kimi',
+  'minimax',
+  'ssh',
+  'resource-usage',
+  'ports'
+])
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
   label: z.string(),
@@ -142,6 +152,8 @@ const SettingsUpdate = z
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     compactWorktreeCards: z.boolean().optional(),
+    minimaxGroupId: z.string().optional(),
+    minimaxUsageModels: z.string().optional(),
     githubProjects: GitHubProjectSettings.optional()
   })
   .strict()
@@ -184,9 +196,13 @@ const UiUpdate = z
     workspaceBoardColumnWidth: z.number().finite().optional(),
     syncTaskStatusFromWorkspaceBoard: z.boolean().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
+    _workspaceStatusesReorderedDefaultRepaired: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultVisualsMigrated: z.boolean().optional(),
     statusBarItems: z.array(StatusBarItem).optional(),
+    _portsStatusBarDefaultAdded: z.boolean().optional(),
+    _kimiStatusBarDefaultAdded: z.boolean().optional(),
+    _minimaxStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     dismissedUpdateVersion: NullableString.optional(),
     lastUpdateCheckAt: z.number().finite().nullable().optional(),

@@ -8,11 +8,11 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { EventEmitter } from 'events'
-import type { ChildProcess } from 'child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
-import { tmpdir } from 'os'
+import { EventEmitter } from 'node:events'
+import type { ChildProcess } from 'node:child_process'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithRg } from './fs-handler-list-files'
 import { searchWithRg } from './fs-handler-utils'

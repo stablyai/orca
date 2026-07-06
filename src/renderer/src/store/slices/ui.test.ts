@@ -1162,11 +1162,18 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports', 'kimi'])
+    expect(store.getState().statusBarItems).toEqual([
+      'claude',
+      'resource-usage',
+      'ports',
+      'kimi',
+      'minimax'
+    ])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi'],
+      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi', 'minimax'],
       _portsStatusBarDefaultAdded: true,
-      _kimiStatusBarDefaultAdded: true
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true
     })
   })
 
@@ -1179,7 +1186,8 @@ describe('createUISlice hydratePersistedUI', () => {
       makePersistedUI({
         statusBarItems: ['claude', 'resource-usage'],
         _portsStatusBarDefaultAdded: true,
-        _kimiStatusBarDefaultAdded: true
+        _kimiStatusBarDefaultAdded: true,
+        _minimaxStatusBarDefaultAdded: true
       })
     )
 

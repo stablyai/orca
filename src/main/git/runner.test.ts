@@ -2,7 +2,65 @@
 // (transient detection must propagate, not silently retry on 250ms cadence)
 // and stderr extraction from execFile rejections (err.message is unreliable).
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { extractExecError, isTransientGhError, parseRetryAfterMs } from './runner'
+import {
+  appendGitConfigEnv,
+  extractExecError,
+  isTransientGhError,
+  nonInteractiveGitEnv,
+  parseRetryAfterMs,
+  promptGuardGitEnv,
+  redirectPortedHostnameToEnv
+} from './runner'
+
+// Reads git config injected via the GIT_CONFIG_COUNT/KEY/VALUE env protocol
+// back into a plain key→value map so tests can assert on it directly.
+function readGitConfigEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const count = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10)
+  const config: Record<string, string> = {}
+  for (let i = 0; i < count; i++) {
+    const key = env[`GIT_CONFIG_KEY_${i}`]
+    const value = env[`GIT_CONFIG_VALUE_${i}`]
+    if (key !== undefined && value !== undefined) {
+      config[key] = value
+    }
+  }
+  return config
+}
+
+describe('redirectPortedHostnameToEnv', () => {
+  it('moves a ported --hostname into GITLAB_HOST and strips the flag', () => {
+    const { args, options } = redirectPortedHostnameToEnv(
+      ['api', '--hostname', 'gitlab.example.com:8443', 'projects/foo%2Fbar/issues'],
+      { cwd: '/repo' }
+    )
+    expect(args).toEqual(['api', 'projects/foo%2Fbar/issues'])
+    expect(options.env?.GITLAB_HOST).toBe('gitlab.example.com:8443')
+    expect(options.cwd).toBe('/repo')
+  })
+
+  it('leaves a port-less --hostname untouched', () => {
+    const input = ['api', '--hostname', 'gitlab.com', 'user']
+    const { args, options } = redirectPortedHostnameToEnv(input, {})
+    expect(args).toEqual(input)
+    expect(options.env).toBeUndefined()
+  })
+
+  it('is a no-op when no --hostname is present', () => {
+    const input = ['auth', 'status']
+    const { args, options } = redirectPortedHostnameToEnv(input, { env: { A: '1' } })
+    expect(args).toEqual(input)
+    expect(options.env).toEqual({ A: '1' })
+  })
+
+  it('preserves existing env entries alongside GITLAB_HOST', () => {
+    const { options } = redirectPortedHostnameToEnv(
+      ['auth', 'status', '--hostname', 'gl.example.org:3001'],
+      { env: { PATH: '/usr/bin' } }
+    )
+    expect(options.env?.PATH).toBe('/usr/bin')
+    expect(options.env?.GITLAB_HOST).toBe('gl.example.org:3001')
+  })
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -105,5 +163,58 @@ describe('extractExecError', () => {
       stderr: 'plain string error',
       stdout: ''
     })
+  })
+})
+
+describe('appendGitConfigEnv', () => {
+  it('injects entries starting at count 0 when none exist', () => {
+    const env = appendGitConfigEnv({ PATH: '/usr/bin' }, [['credential.interactive', 'false']])
+    expect(env.GIT_CONFIG_COUNT).toBe('1')
+    expect(env.GIT_CONFIG_KEY_0).toBe('credential.interactive')
+    expect(env.GIT_CONFIG_VALUE_0).toBe('false')
+    expect(env.PATH).toBe('/usr/bin')
+  })
+
+  it('composes with an existing count instead of clobbering caller config', () => {
+    const env = appendGitConfigEnv(
+      { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.quotePath', GIT_CONFIG_VALUE_0: 'false' },
+      [['credential.guiPrompt', 'false']]
+    )
+    expect(env.GIT_CONFIG_COUNT).toBe('2')
+    // Existing entry preserved.
+    expect(env.GIT_CONFIG_KEY_0).toBe('core.quotePath')
+    expect(env.GIT_CONFIG_VALUE_0).toBe('false')
+    // New entry appended at the next index.
+    expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
+    expect(env.GIT_CONFIG_VALUE_1).toBe('false')
+  })
+})
+
+describe('promptGuardGitEnv credential-interactivity disable (STA-1292)', () => {
+  it('disables the GCM GUI prompt without nuking the credential helper', () => {
+    const env = promptGuardGitEnv({ PATH: '/usr/bin' })
+    // GCM: never show the GUI, but still serve cached credentials.
+    expect(env.GCM_INTERACTIVE).toBe('never')
+    const config = readGitConfigEnv(env)
+    expect(config['credential.interactive']).toBe('false')
+    expect(config['credential.guiPrompt']).toBe('false')
+    // Regression guard: we must NOT clear the helper — that would break
+    // cached-credential auth for private repos.
+    expect(config['credential.helper']).toBeUndefined()
+    // Existing prompt guards remain intact.
+    expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+  })
+})
+
+describe('nonInteractiveGitEnv credential-interactivity disable (STA-1292)', () => {
+  it('carries the credential-interactivity disable through from promptGuardGitEnv', () => {
+    const env = nonInteractiveGitEnv({ PATH: '/usr/bin' })
+    expect(env.GCM_INTERACTIVE).toBe('never')
+    const config = readGitConfigEnv(env)
+    expect(config['credential.interactive']).toBe('false')
+    expect(config['credential.guiPrompt']).toBe('false')
+    expect(config['credential.helper']).toBeUndefined()
+    // Its own BatchMode SSH guard is still applied and unaffected.
+    expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
   })
 })

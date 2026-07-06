@@ -24,9 +24,12 @@ const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
-// Why: match the right sidebar's 4px resize target; a 1px seam is too hard to acquire.
+// Why: straddle the sidebar/terminal seam so the divider sits on the border-l
+// instead of leaving a blank strip between the hover target and the edge.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
-  'absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30'
+  'group absolute -right-1.5 top-0 z-10 flex h-full w-3 cursor-col-resize items-stretch justify-center'
+export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
+  'h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring'
 
 type SidebarProps = {
   worktreeScrollOffsetRef: React.MutableRefObject<number>
@@ -116,7 +119,7 @@ function Sidebar({
     }
   }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
-  const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
+  const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
     width: sidebarWidth,
     minWidth: MIN_WIDTH,
@@ -184,9 +187,16 @@ function Sidebar({
         {sidebarOpen && (
           <div
             data-sidebar-resize-handle=""
-            className={WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME}
+            className={cn(WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME, isResizing && 'bg-ring/10')}
             onMouseDown={onResizeStart}
-          />
+          >
+            <div
+              className={cn(
+                WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME,
+                isResizing && 'bg-ring'
+              )}
+            />
+          </div>
         )}
       </div>
 

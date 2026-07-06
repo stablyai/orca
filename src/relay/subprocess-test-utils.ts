@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'child_process'
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import {
   RELAY_SENTINEL,
   FrameDecoder,

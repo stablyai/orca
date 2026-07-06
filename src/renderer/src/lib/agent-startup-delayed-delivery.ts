@@ -133,6 +133,14 @@ export function beginAgentStartupDeliveryAttempt(args: {
   return true
 }
 
+export function releaseAgentStartupDeliveryAttempt(args: {
+  worktreeId: string
+  tabId: string
+  launchToken: string
+}): void {
+  consumedAgentStartupDeliveries.delete(deliveryKey(args))
+}
+
 function deliveryKey(
   delivery: Pick<PendingAgentStartupDelivery, 'worktreeId' | 'tabId' | 'launchToken'>
 ): string {

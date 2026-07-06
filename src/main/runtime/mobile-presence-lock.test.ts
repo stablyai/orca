@@ -13,6 +13,7 @@
  *   - terminalDriverChanged notifications fire at the right transitions
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
 
 vi.mock('../git/worktree', () => ({
@@ -34,9 +35,13 @@ vi.mock('../git/repo', async (importOriginal) => {
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null),
-    getGitUsername: vi.fn().mockReturnValue('')
+    getBranchConflictKind: vi.fn().mockResolvedValue(null)
   }
+})
+
+vi.mock('../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+  return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
 const store = {
@@ -218,7 +223,7 @@ describe('mobile presence lock — driver state machine', () => {
 
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
     // The last emitted event for pty-1 must be idle.
-    const last = [...driverEvents].reverse().find((e) => e.ptyId === 'pty-1')
+    const last = [...driverEvents].toReversed().find((e) => e.ptyId === 'pty-1')
     expect(last?.driver).toEqual({ kind: 'idle' })
   })
 })

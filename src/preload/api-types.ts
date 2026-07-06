@@ -162,6 +162,7 @@ import type {
   StatsSummary,
   MemorySnapshot,
   TuiAgent,
+  UpdateCheckOptions,
   UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
@@ -195,6 +196,11 @@ import type {
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type {
+  EphemeralVmRecipeDoctorResult,
+  EphemeralVmRecipeResultWarning
+} from '../shared/ephemeral-vm-recipes'
+import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { ExecutionHostId } from '../shared/execution-host'
@@ -263,6 +269,7 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
+  RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../shared/runtime-types'
@@ -602,7 +609,9 @@ export type PtyManagementSession = {
 }
 
 export type PtyManagementApi = {
-  listSessions: () => Promise<{ sessions: PtyManagementSession[] }>
+  // `degraded` is true when the daemon is alive but cannot spawn fresh PTYs, so
+  // new terminals run on the local provider without daemon persistence.
+  listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
   killAll: () => Promise<{ killedCount: number; remainingCount: number }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
@@ -743,6 +752,8 @@ export type OpenCodeUsageApi = {
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  /** Fires when any app window regains OS focus; returns an unsubscribe. */
+  onWindowFocused: (callback: () => void) => () => void
 }
 
 export type NativeChatReadSessionResult = { messages: NativeChatMessage[] } | { error: string }
@@ -804,6 +815,8 @@ export type AppApi = {
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
+  /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
+  startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
   /** Returns the macOS active input mode, or layout ID when no IME mode is
    *  selected (e.g. `com.apple.keylayout.PolishPro`). Used by the
    *  keyboard-layout probe to distinguish CJK IMEs and layouts whose base
@@ -1110,6 +1123,7 @@ export type PreloadApi = {
       // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
       shellOverride?: string
       projectRuntime?: ProjectExecutionRuntimeResolution
+      terminalColorQueryReplies?: { foreground?: string; background?: string }
       // Why: closes the SIGKILL race documented in INVESTIGATION.md — main
       // sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before
       // pty:spawn returns. Only the renderer's daemon-host path threads these.
@@ -1137,15 +1151,18 @@ export type PreloadApi = {
     resize: (id: string, cols: number, rows: number) => void
     reportGeometry: (id: string, cols: number, rows: number) => void
     signal: (id: string, signal: string) => void
+    clearBuffer: (id: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number) => void
     setActiveRendererPty: (id: string, active: boolean) => void
+    setRendererPtyVisible: (id: string, visible: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
+    hasPty: (id: string) => Promise<boolean | null>
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
@@ -1175,7 +1192,13 @@ export type PreloadApi = {
     }>
     resetRendererDeliveryDebug: () => Promise<void>
     onData: (
-      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+      callback: (data: {
+        id: string
+        data: string
+        seq?: number
+        rawLength?: number
+        background?: boolean
+      }) => void
     ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
@@ -1236,6 +1259,7 @@ export type PreloadApi = {
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
       acceptMergedFallbackPR?: boolean
+      currentHeadOid?: string | null
     }) => Promise<PRInfo | null>
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) => Promise<PRRefreshOutcome>
     enqueuePRRefresh: (args: {
@@ -2036,6 +2060,70 @@ export type PreloadApi = {
     }>
     writeIssueCommand: (args: { repoId: string; content: string }) => Promise<void>
   }
+  ephemeralVm: {
+    listRecipes: (args: { repoId: string }) => Promise<{
+      status: 'ok' | 'error'
+      repoPath: string | null
+      recipes: OrcaHooks['environmentRecipes']
+      diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
+      message?: string
+    }>
+    listRecipeCatalog: () => Promise<
+      {
+        repoId: string
+        repoName: string
+        repoPath: string
+        recipes: NonNullable<OrcaHooks['environmentRecipes']>
+        diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
+      }[]
+    >
+    doctor: (args: { repoId: string; recipeId: string }) => Promise<EphemeralVmRecipeDoctorResult>
+    provision: (args: {
+      repoId: string
+      recipeId: string
+      workspaceName?: string
+      projectId?: string
+      workspaceId?: string
+      provisionId?: string
+    }) => Promise<
+      | {
+          ok: true
+          connectionType: 'orca-server'
+          runtime: EphemeralVmRuntimeRecord
+          environment: PublicKnownRuntimeEnvironment
+          stderr: string
+          warnings: EphemeralVmRecipeResultWarning[]
+        }
+      | {
+          ok: true
+          connectionType: 'ssh'
+          runtime: EphemeralVmRuntimeRecord
+          sshTargetId: string
+          stderr: string
+          warnings: EphemeralVmRecipeResultWarning[]
+        }
+      | { ok: false; error: string; stderr: string; stdout: string }
+    >
+    cancelProvision: (args: { provisionId: string }) => Promise<{ cancelled: boolean }>
+    onProvisionEvent: (
+      callback: (event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void
+    ) => () => void
+    listRuntimes: () => Promise<EphemeralVmRuntimeRecord[]>
+    attachWorkspace: (args: {
+      runtimeId: string
+      workspaceId: string
+    }) => Promise<EphemeralVmRuntimeRecord>
+    suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+    resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+    cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
+    getCleanupCommand: (args: { runtimeId: string }) => Promise<{
+      runtimeId: string
+      command: string | null
+      payloadJson: string
+      cleanupDisabled: boolean
+      message?: string
+    }>
+  }
   cache: {
     getGitHub: () => Promise<{
       pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
@@ -2073,7 +2161,7 @@ export type PreloadApi = {
   updater: {
     getVersion: () => Promise<string>
     getStatus: () => Promise<UpdateStatus>
-    check: (options?: { includePrerelease?: boolean }) => Promise<void>
+    check: (options?: UpdateCheckOptions) => Promise<void>
     download: () => Promise<void>
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
@@ -2440,6 +2528,7 @@ export type PreloadApi = {
       callback: (data: { actionId: KeybindingActionId }) => void
     ) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
+    onToggleQuickCommandsMenu: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
     onOpenWorkspaceBoard: (callback: () => void) => () => void
@@ -2455,13 +2544,19 @@ export type PreloadApi = {
         requestId: string
         url: string
         worktreeId?: string
-        sessionProfileId?: string
+        sessionProfileId?: string | null
+        sessionPartition?: string
         activate?: boolean
       }) => void
     ) => () => void
     replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
     onRequestTabSetProfile: (
-      callback: (data: { requestId: string; browserPageId: string; profileId: string }) => void
+      callback: (data: {
+        requestId: string
+        browserPageId: string
+        profileId: string
+        sessionPartition?: string
+      }) => void
     ) => () => void
     replyTabSetProfile: (reply: { requestId: string; error?: string }) => void
     onRequestTabClose: (
@@ -2501,6 +2596,7 @@ export type PreloadApi = {
         requestId?: string
         worktreeId: string
         command?: string
+        cwd?: string
         env?: Record<string, string>
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string
@@ -2517,21 +2613,7 @@ export type PreloadApi = {
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
-      callback: (data: {
-        requestId: string
-        worktreeId?: string
-        afterTabId?: string
-        targetGroupId?: string
-        command?: string
-        env?: Record<string, string>
-        launchConfig?: SleepingAgentLaunchConfig
-        launchToken?: string
-        launchAgent?: TuiAgent
-        startupCommandDelivery?: StartupCommandDelivery
-        title?: string
-        activate?: boolean
-        presentation?: RuntimeTerminalPresentation
-      }) => void
+      callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ) => () => void
     replyTerminalCreate: (reply: {
       requestId: string
@@ -2716,7 +2798,13 @@ export type PreloadApi = {
     setPollingInterval: (ms: number) => Promise<void>
     fetchInactiveClaudeAccounts: () => Promise<void>
     fetchInactiveCodexAccounts: () => Promise<void>
+    refreshMiniMax: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
+  }
+  minimaxCredentials: {
+    getStatus: () => Promise<{ configured: boolean }>
+    saveCookie: (cookie: string) => Promise<{ configured: boolean }>
+    clearCookie: () => Promise<{ configured: boolean }>
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>

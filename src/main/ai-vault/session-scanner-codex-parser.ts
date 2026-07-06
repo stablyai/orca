@@ -1,8 +1,9 @@
-import { createReadStream } from 'fs'
-import { stat } from 'fs/promises'
-import { basename, dirname, join } from 'path'
-import { createInterface } from 'readline'
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   addPreviewContent,
   createAccumulator,
@@ -35,21 +36,61 @@ const codexSessionIndexTitleCache = new Map<string, Promise<CodexSessionIndexTit
 export async function parseCodexSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  codexHome: string | null = null
+  codexHome: string | null = null,
+  executionHostId?: ExecutionHostId
 ): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'codex',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
-  let previousTotals: CodexUsageSnapshot | null = null
-
   const lines = createInterface({
     input: createReadStream(file.path, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
 
-  for await (const line of lines) {
+  return parseCodexSessionLines({
+    file,
+    lines,
+    platform,
+    codexHome,
+    executionHostId,
+    titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
+  })
+}
+
+export async function parseCodexSessionContent(args: {
+  file: FileWithMtime
+  content: string
+  platform?: NodeJS.Platform
+  codexHome?: string | null
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+  readIndexedTitle?: (sessionId: string) => Promise<string | null>
+}): Promise<AiVaultSession | null> {
+  return parseCodexSessionLines({
+    file: args.file,
+    lines: args.content.split(/\r?\n/),
+    platform: args.platform ?? process.platform,
+    codexHome: args.codexHome ?? null,
+    executionHostId: args.executionHostId,
+    executionHostPlatform: args.executionHostPlatform,
+    titleReader: args.readIndexedTitle
+  })
+}
+
+async function parseCodexSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  codexHome: string | null
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+  titleReader?: (sessionId: string) => Promise<string | null>
+}): Promise<AiVaultSession | null> {
+  const accumulator = createAccumulator({
+    agent: 'codex',
+    file: args.file,
+    sessionId: sessionIdFromFileName(args.file.path)
+  })
+  let previousTotals: CodexUsageSnapshot | null = null
+
+  for await (const line of args.lines) {
     const record = parseJsonObject(line)
     if (!record) {
       continue
@@ -70,7 +111,7 @@ export async function parseCodexSessionFile(
       }
       const indexedTitle =
         extractCodexSessionMetadataTitle(payload) ??
-        (await readCodexSessionIndexTitle(file.path, codexHome, accumulator.sessionId))
+        (await args.titleReader?.(accumulator.sessionId))
       if (indexedTitle) {
         accumulator.title = indexedTitle
       }
@@ -158,7 +199,11 @@ export async function parseCodexSessionFile(
     }
   }
 
-  return finalizeSession(accumulator, platform, { codexHome })
+  return finalizeSession(accumulator, args.platform, {
+    codexHome: args.codexHome,
+    executionHostId: args.executionHostId,
+    executionHostPlatform: args.executionHostPlatform
+  })
 }
 
 function addCodexUsage(

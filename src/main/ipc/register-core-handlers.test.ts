@@ -28,11 +28,13 @@ const {
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerRuntimeEnvironmentHandlersMock,
+  registerEphemeralVmHandlersMock,
   registerAiVaultHandlersMock,
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
+  registerMiniMaxCredentialsHandlersMock,
   registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
@@ -82,11 +84,13 @@ const {
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
+  registerEphemeralVmHandlersMock: vi.fn(),
   registerAiVaultHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
+  registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
@@ -253,6 +257,10 @@ vi.mock('./runtime-environments', () => ({
   registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
 }))
 
+vi.mock('./ephemeral-vm', () => ({
+  registerEphemeralVmHandlers: registerEphemeralVmHandlersMock
+}))
+
 vi.mock('./ai-vault', () => ({
   registerAiVaultHandlers: registerAiVaultHandlersMock
 }))
@@ -271,6 +279,10 @@ vi.mock('./agent-trust', () => ({
 
 vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
+}))
+
+vi.mock('./minimax-credentials', () => ({
+  registerMiniMaxCredentialsHandlers: registerMiniMaxCredentialsHandlersMock
 }))
 
 vi.mock('../window/attach-main-window-services', () => ({
@@ -341,11 +353,13 @@ describe('registerCoreHandlers', () => {
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerRuntimeEnvironmentHandlersMock.mockReset()
+    registerEphemeralVmHandlersMock.mockReset()
     registerAiVaultHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
+    registerMiniMaxCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     setTrustedClipboardRendererWebContentsIdMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
@@ -411,6 +425,7 @@ describe('registerCoreHandlers', () => {
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
+    expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
@@ -436,7 +451,8 @@ describe('registerCoreHandlers', () => {
     expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
-    expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalled()
+    expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store)
     expect(registerAiVaultHandlersMock).toHaveBeenCalledWith({
       getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths
     })

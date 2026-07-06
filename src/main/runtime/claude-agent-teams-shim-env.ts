@@ -1,7 +1,7 @@
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
-import { accessSync, constants, existsSync } from 'fs'
-import { homedir } from 'os'
-import { delimiter, dirname, join } from 'path'
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { accessSync, constants, existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { delimiter, dirname, join } from 'node:path'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess,

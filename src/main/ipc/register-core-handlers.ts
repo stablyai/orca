@@ -23,6 +23,7 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
 import { registerNotificationHandlers } from './notifications'
@@ -52,6 +53,7 @@ import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
+import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
 import {
   registerClipboardHandlers,
@@ -116,6 +118,7 @@ export function registerCoreHandlers(
   registerAgentHookHandlers(runtime)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
+  registerMiniMaxCredentialsHandlers(rateLimits)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)
@@ -165,7 +168,8 @@ export function registerCoreHandlers(
   }
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
-  registerRuntimeEnvironmentHandlers()
+  registerRuntimeEnvironmentHandlers(store)
+  registerEphemeralVmHandlers(store)
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths
   })

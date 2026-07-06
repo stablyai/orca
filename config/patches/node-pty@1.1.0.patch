@@ -384,3 +384,27 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
    }
  }
  #endif
+diff --git a/lib/utils.js b/lib/utils.js
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -19,7 +19,20 @@ function loadNativeModule(name) {
+     var dirs = ['build/Release', 'build/Debug', "prebuilds/" + process.platform + "-" + process.arch];
+     // Check relative to the parent dir for unbundled and then the current dir for bundled
+     var relative = ['..', '.'];
+     var lastError;
++    // Why (Orca): the Windows updater force-closes every process whose image
++    // lives under the app install dir; this env var relocates the native
++    // binaries (conpty.dll spawns OpenConsole.exe from beside itself) so PTY
++    // console hosts run outside it and survive updates.
++    var overrideDir = process.env.ORCA_NODE_PTY_NATIVE_DIR;
++    if (overrideDir) {
++        try {
++            return { dir: overrideDir, module: require(overrideDir + "/" + name + ".node") };
++        }
++        catch (e) {
++            lastError = e;
++        }
++    }
+     for (var _i = 0, dirs_1 = dirs; _i < dirs_1.length; _i++) {
+         var d = dirs_1[_i];
+         for (var _a = 0, relative_1 = relative; _a < relative_1.length; _a++) {

@@ -25,6 +25,7 @@
         "geminiToggleDescription": "Show Gemini token and cost usage for the active workspace.",
         "opencodeGoToggleDescription": "Show OpenCode Go token and cost usage for the active workspace.",
         "kimiToggleDescription": "Show Kimi subscription usage for the active workspace.",
+        "minimaxToggleDescription": "Show MiniMax subscription usage for the active workspace.",
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners."
@@ -133,7 +134,8 @@
         "7a566540de": "Pairing URL or code",
         "cb4d287238": "Server name",
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
-        "e3bcd082ac": "Connect to Orca"
+        "e3bcd082ac": "Connect to Orca",
+        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
       },
       "web": {
         "preload": {
@@ -228,7 +230,9 @@
           "2e17f825d4": "Worktree deleted, branch kept",
           "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
           "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits.",
+          "runtimeScopeForbiddenTitle": "This connection has limited (mobile) access",
+          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server."
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -532,6 +536,12 @@
         "distroRequired": "Select a WSL distro for this project before installing this skill.",
         "distroMissing": "The selected WSL distro is unavailable. Choose an available distro or switch this project to Windows.",
         "wslDefault": "WSL default"
+      },
+      "sidebarWorktreeActivation": {
+        "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
+      },
+      "ephemeralVmWorkspaceTarget": {
+        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
       }
     },
     "hooks": {
@@ -1154,7 +1164,16 @@
         "notConnected": "Not connected",
         "notePasteTooLarge": "Paste is too large for the note field.",
         "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.",
+        "destroyDisabled": "destroy disabled",
+        "destroyConfigured": "destroy configured",
+        "noDestroyConfigured": "no destroy",
+        "ephemeralVm": "Per-Workspace Environment",
+        "chooseRunTarget": "Choose target",
+        "noRunTargets": "No run targets are ready for this project.",
+        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe",
+        "branchName": "Branch name",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -1169,6 +1188,8 @@
         "94d95cf1f7": "Checks",
         "9e8d45700e": "Conversation",
         "e6996f4024": "· updated",
+        "dd5d9a4f17": "updated {{value0}}",
+        "71a3c0f9d2": "Start workspace",
         "00b7b82329": "head branch",
         "e1f3641bfd": "from",
         "c44b70352b": "base branch",
@@ -2203,7 +2224,10 @@
             "ed2a664f8b": "Couldn’t create worktree",
             "a3346fc6ed": "Cancel worktree creation",
             "532aea14ce": "Cancel",
-            "767951265d": "Something went wrong while creating the worktree."
+            "767951265d": "Something went wrong while creating the worktree.",
+            "vmProvisioningTitle": "Provisioning VM",
+            "cancelProvisioning": "Cancel",
+            "vmProvisioningLogEmpty": "Waiting for recipe output…"
           }
         }
       },
@@ -2528,6 +2552,17 @@
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
             "c337c9d75c": "Close"
+          },
+          "TerminalSshReconnectOverlay": {
+            "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
+            "reconnectFailed": "The SSH connection to {{value0}} failed. Connect again to continue this terminal session.",
+            "connecting": "Connecting to {{value0}}. This terminal will resume after the host is available.",
+            "connected": "SSH is connected.",
+            "disconnected": "This terminal is waiting for {{value0}}. Connect to continue this SSH session.",
+            "connectFailed": "SSH connection failed",
+            "title": "SSH connection required",
+            "connectingButton": "Connecting...",
+            "connectButton": "Connect"
           }
         }
       },
@@ -2554,7 +2589,9 @@
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "sessionHostMismatchUnsupported": "This session belongs to a different host. Drop it onto a workspace on the same host.",
+            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Drop it onto a local workspace instead."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
@@ -2659,7 +2696,7 @@
             "39676a184c": "Open any file, URL, agent, ..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "Add Quick Command…",
+            "a2c7a33831": "Command",
             "20bbd75896": "No commands",
             "b82e237a4b": "More quick commands",
             "85482c57bc": "Run quick command",
@@ -2809,10 +2846,7 @@
             "41ae4fa725": "Killing…",
             "138b99bd80": "this session",
             "888dad8c55": "Loading…",
-            "56b6888304": "Local resource usage hidden for runtime servers.",
-            "14ff448686": "Unavailable for runtime servers",
             "6d9793d4bc": "Resource Manager - Terminals",
-            "6a822b06a7": "Resource Manager",
             "ca95d077db": "Daemon unreachable",
             "a82253b458": "Delete workspace.",
             "946724a70a": "The main workspace cannot be deleted.",
@@ -2871,7 +2905,9 @@
             "c35af53b73": "Sign in",
             "f19a63e7cd": "Sign in to see usage",
             "5c938d39ac": "% wk",
+            "54e8d6bb2d": "% Fable",
             "d79c3362c4": "% 5h",
+            "a79c64f87e": "Fable",
             "8295903d17": "Restart live Claude terminals before continuing old conversations after switching.",
             "c98ea88392": "No other accounts",
             "9332ba8684": "Switch to",
@@ -2900,7 +2936,9 @@
             "972a1ff497": "Reset Codex limits?",
             "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
             "f077f586db": "Don't ask again",
-            "c0e972d726": "Cancel"
+            "c0e972d726": "Cancel",
+            "06741a2f3d": "Open MiniMax usage details",
+            "3bbf140864": "MiniMax Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3035,6 +3073,7 @@
             "6d6df77f41": "No data available",
             "7f7f208060": "Monthly",
             "252c096536": "Weekly",
+            "a79c64f87e": "Fable",
             "94038ad2fa": "Session",
             "2c35eca8d4": "Unable to fetch usage",
             "1292d4f2ee": "Unavailable",
@@ -3458,7 +3497,16 @@
           "host": "Host",
           "local": "Local",
           "runtime": "Server",
-          "ssh": "SSH"
+          "ssh": "SSH",
+          "connecting": "Connecting",
+          "connect": "Connect",
+          "addSshHost": "Add SSH host",
+          "addRemoteServer": "Add remote server",
+          "addRemoteHost": "Add remote host",
+          "addRemoteHostTooltip": "Choose SSH for a machine you can log into, or remote server for an Orca server.",
+          "addSshHostDetail": "Use an existing machine over SSH.",
+          "addRemoteServerDetail": "Pair with Orca running on another computer.",
+          "addRemoteHostDetail": "SSH host or Orca server"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Scanning repositories. Click to stop.",
@@ -3478,7 +3526,9 @@
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
-          "24eda6c8b2": "Scanning... {{value0}}"
+          "24eda6c8b2": "Scanning... {{value0}}",
+          "6149d5203f": "No repositories are selected. Open the parent folder instead to use editor, terminal, and search without Git features.",
+          "e52454b7f6": "Open as Folder"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Stop scan",
@@ -4074,7 +4124,8 @@
           "groupDeleteFailed": "Failed to delete group",
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
-          "sidebarRowMissing": "Target no longer exists"
+          "sidebarRowMissing": "Target no longer exists",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -4417,6 +4468,48 @@
           "8c0b2e7a41": "Open Non-Orca worktrees settings",
           "5d1c9f0a82": "Cancel",
           "3b7e4a1c96": "Hide external worktrees"
+        },
+        "useAddRepoHostSelection": {
+          "connectionFailed": "SSH connection failed."
+        },
+        "AddRemoteHostDialog": {
+          "sshHostRequired": "Host or SSH config alias is required.",
+          "sshPortInvalid": "Port must be between 1 and 65535.",
+          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
+          "sshSaved": "SSH host added.",
+          "sshSaveFailed": "Failed to add SSH host.",
+          "serverFieldsRequired": "Server name and pairing code are required.",
+          "serverSaved": "Remote server added.",
+          "serverSaveFailed": "Failed to add remote server.",
+          "serverTitle": "Add remote server",
+          "sshTitle": "Add SSH host",
+          "serverDescription": "Pair with Orca running on another computer.",
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
+          "cancel": "Cancel",
+          "saving": "Saving...",
+          "save": "Save",
+          "label": "Label",
+          "sshLabelPlaceholder": "Dev box",
+          "sshHost": "Host or alias",
+          "sshHostPlaceholder": "deploy@server:22",
+          "username": "Username",
+          "usernamePlaceholder": "deploy",
+          "port": "Port",
+          "identityFile": "Identity file",
+          "identityFilePlaceholder": "~/.ssh/id_ed25519 (optional)",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay.",
+          "serverName": "Server name",
+          "serverNamePlaceholder": "Dev box",
+          "pairingCode": "Pairing code",
+          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingHelpPrefix": "Run",
+          "pairingCommand": "orca serve --pairing-address <host>",
+          "pairingHelpSuffix": "on the server and paste the printed pairing URL.",
+          "sshImportAlreadySynced": "~/.ssh/config already in sync.",
+          "sshImportSynced": "Synced {{value0}} host{{value1}}.",
+          "sshImportFailed": "Failed to import SSH config.",
+          "importing": "Importing...",
+          "importSshConfig": "Import ~/.ssh/config"
         }
       },
       "shared": {
@@ -4479,6 +4572,7 @@
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Find this in the URL after logging into opencode.ai (e.g.",
           "b398b834c9": "Clear",
+          "316ca4e610": "Forget cookie",
           "a122332371": "wrk_… (leave blank for automatic lookup)",
           "dbdb0b0bd8": "Workspace ID override",
           "d70a5287a4": "Optional workspace ID override if the automatic lookup fails.",
@@ -4544,7 +4638,47 @@
           "75ca9b718e": "Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "Use your current {{value0}} Claude login."
+          "e05d0ff737": "Use your current {{value0}} Claude login.",
+          "2f24f244a4": "MiniMax cookie is required.",
+          "8e6f0cb1d8": "MiniMax cookie was not saved.",
+          "8d61637a77": "MiniMax cookie saved.",
+          "b43e761fe5": "MiniMax cookie update failed.",
+          "5d63bbfbec": "MiniMax",
+          "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
+          "21d6eb141e": "MiniMax Session Cookie",
+          "33bba5ad83": "Paste your MiniMax session cookie for local rate-limit fetching.",
+          "73ea15f24b": "Saved",
+          "23afe8f226": "Not saved",
+          "566d9a99ab": "_token=…; minimax_group_id_v2=…",
+          "f38b9cc4bd": "Replace",
+          "590a3130f9": "Save",
+          "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
+          "9dd50d3f75": "Advanced",
+          "174fb408f9": "Leave these defaults alone unless MiniMax usage refresh points at the wrong workspace or model.",
+          "bf160bb6c0": "Group ID override",
+          "b1e2743313": "Optional. Leave blank to use minimax_group_id_v2 from the cookie.",
+          "0747d6391a": "Use group ID from cookie",
+          "4ff2af7524": "Usage model names",
+          "5cf4b0f85f": "Optional comma-separated model names. Leave as general unless MiniMax returns a model-specific error.",
+          "3c92b0d31c": "general",
+          "0d8e77bc40": "Open console",
+          "0b8c1c7e02": "Stored locally",
+          "1fd1b1b6b4": "Cookie not set",
+          "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
+          "43d7a45b97": "How to copy",
+          "b8a4f21c3e": "Paste the Cookie header from DevTools",
+          "53f7b8c7a2": "Last refresh: {{value0}}",
+          "31d24a4e87": "Cookie expires when you sign out in the browser.",
+          "3a30aaf526": "just now",
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
+          "24560fe830": "Open DevTools.",
+          "4cab0fa42d": "Go to the Network tab and enable Preserve log.",
+          "bee4e63e1c": "Reload the page.",
+          "87f814af6f": "Filter for remains and select the coding_plan/remains request.",
+          "435df0ee51": "Under Request Headers, copy the Cookie value.",
+          "7492fb3bba": "Paste it here and click Save.",
+          "9fec52de4b": "How to copy the cookie",
+          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -4792,7 +4926,8 @@
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}.",
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
-          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}."
+          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
+          "c5a273a809": "From {{value0}}"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -4816,7 +4951,7 @@
           "be6df68384": "From File…",
           "e44c5d681e": "From",
           "67d9a53f47": "Manage profiles for separate logins",
-          "112f70adc4": "Last imported from",
+          "112f70adc4": "Last imported from {{value0}}",
           "72d4815523": "Bring your existing logins into Orca so agents can reach authenticated pages. Imports into the default profile.",
           "2eb906706c": "Import Browser Cookies",
           "af8c83ed61": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",
@@ -4838,7 +4973,8 @@
           "ad8cb0ee22": "Fix PATH",
           "0289434ed6": "Enabled",
           "8b3054dac7": "Registering...",
-          "8f2675c2f3": "Imported {{value0}} cookies from file."
+          "8f2675c2f3": "Imported {{value0}} cookies from file.",
+          "5301857d88": "From {{value0}}"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -5076,7 +5212,9 @@
           "8f1afdfbd8": "Diff Word Wrap",
           "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
           "bf16ef0af2": "Off",
-          "3f6892f307": "On"
+          "3f6892f307": "On",
+          "b82f86d7d2": "Rich Markdown Spellcheck",
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -6242,7 +6380,7 @@
           "2227ce47b6": "Failed to save target",
           "f602009125": "Target added",
           "b4ba0ce33d": "Target updated",
-          "3879cbaa52": "Relay grace period must be between 60 and {{value0}} seconds, or choose keep alive until reset",
+          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "Port must be between 1 and 65535",
           "0e5aa04161": "Host or SSH config alias is required",
           "f1fc50dad2": "Failed to load SSH targets",
@@ -6264,6 +6402,8 @@
           "106bd57f4a": "SSH Password"
         },
         "SshTargetCard": {
+          "a883f5a00f": "terminal timeout: {{value0}}",
+          "8ce71262f4": "terminals until reset",
           "ec6543cee9": "Connect",
           "0e53e9f8e8": "Test",
           "1810b51482": "Connecting",
@@ -6289,11 +6429,13 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "Cancel",
-          "1b19b00e93": "(7 days).",
-          "137e88ce8d": "How long the relay keeps terminals alive after disconnect. Default: 10800 (3 hours). Maximum:",
-          "b574994adc": "Remote terminals stay available until you end them or reset the relay.",
-          "71fc546097": "Keep alive until reset",
-          "92f80edbfd": "Relay Grace Period (seconds)",
+          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
+          "7c13f58c91": "Until reset",
+          "55c56cf2c7": "Timeout after disconnect (seconds)",
+          "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
+          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
+          "71fc546097": "Keep terminals alive until reset",
+          "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "Optional. Equivalent to ProxyJump / ssh -J.",
           "11bcb4507a": "bastion.example.com",
           "b2ab248ded": "Jump Host",
@@ -6313,7 +6455,11 @@
           "9518545cb6": "Add Target",
           "a62b4cb39a": "Save Changes",
           "29af933cd5": "New SSH Target",
-          "f2331ce599": "Edit SSH Target"
+          "f2331ce599": "Edit SSH Target",
+          "4a342f44c1": "Advanced Connection",
+          "e9609ddca6": "Proxy, jump host, and connection reuse",
+          "8c922dffba": "Reuse SSH connection for faster setup",
+          "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions."
         },
         "TasksPane": {
           "3a72b9745e": "Choose which task providers appear in the Tasks page and sidebar shortcuts.",
@@ -6700,7 +6846,9 @@
             "bdbd1e668e": "windows",
             "593720c17f": "location",
             "b84a5b0c8a": "Choose whether provider accounts are inspected and added on this device or in WSL.",
-            "d09fb5ca92": "Account Location"
+            "d09fb5ca92": "Account Location",
+            "733f9e2a93": "MiniMax Usage",
+            "f8374c3151": "Paste your platform.minimax.io session cookie for local rate-limit fetching."
           }
         },
         "advanced": {
@@ -6872,6 +7020,11 @@
             "40e5c3c285": "kimi",
             "c927a155d5": "Show Kimi subscription usage in the status bar.",
             "3a6c028ea8": "Kimi Usage",
+            "25e51b62ee": "rate limit",
+            "d9e7cef86f": "cookie",
+            "d16378a88f": "minimax",
+            "e46178eb1b": "Show MiniMax subscription usage in the status bar.",
+            "0f08f6b483": "MiniMax Usage",
             "edbf0f63a0": "cost",
             "afbb6a3767": "tokens",
             "d77537b580": "opencode-go",
@@ -7358,7 +7511,9 @@
             "161a86a9da": "Confirm before closing pinned tabs",
             "8e593f04fc": "Show a confirmation dialog before a pinned tab is closed.",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "d2d2d929c0": "Rich Markdown Spellcheck",
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
         },
         "git": {
@@ -8554,6 +8709,71 @@
           "notificationPlayground": "Notification playground",
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
           "devOnly": "Dev only"
+        },
+        "EphemeralVmRecipeRow": {
+          "useInWorkspace": "Use in workspace"
+        },
+        "EphemeralVmRuntimesSection": {
+          "cleanupFailed": "Cleanup failed",
+          "cleanupRunning": "Cleanup running",
+          "cleanupDisabled": "Cleanup disabled",
+          "running": "Running",
+          "failed": "Failed",
+          "loadFailed": "Couldn’t load temporary VM runtimes.",
+          "cleanupFailedToast": "Couldn’t clean up temporary VM runtime.",
+          "markedCleaned": "Marked temporary VM runtime as cleaned.",
+          "cleaned": "Cleaned up temporary VM runtime.",
+          "copiedCleanupCommand": "Copied cleanup command.",
+          "copiedCleanupPayload": "Copied cleanup payload.",
+          "copyCleanupFailed": "Couldn’t copy cleanup command.",
+          "title": "Temporary VM runtimes",
+          "description": "Recipe-created runtimes are workspace-owned. Clean up stale entries after crashes, failed creates, or manual recovery.",
+          "refresh": "Refresh temporary VM runtimes",
+          "loading": "Checking temporary VM runtimes…",
+          "empty": "No temporary VM runtimes need cleanup.",
+          "copyCleanup": "Copy command",
+          "retry": "Retry cleanup",
+          "cleanup": "Cleanup"
+        },
+        "ephemeralVms": {
+          "search": {
+            "title": "Per-Workspace Environments",
+            "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment."
+          }
+        },
+        "EphemeralVmsPane": {
+          "loadError": "Could not load recipes.",
+          "copyError": "Could not copy the prompt.",
+          "skillTitle": "Per-Workspace Environments skill",
+          "skillDescription": "Sets up, builds, authenticates, and validates repo-owned environment recipes.",
+          "whatTitle": "What the skill does, with you",
+          "whatScaffold": "Writes the recipe & scripts for your provider — connected over an Orca server or SSH.",
+          "whatBuild": "Builds a reusable base image and signs your agent in.",
+          "whatValidate": "Validates it so you can create a workspace on it.",
+          "promptHint": "In any workspace, ask your agent:",
+          "copy": "Copy",
+          "copied": "Copied",
+          "recipes": "Recipes",
+          "recipesHelp": "Recipes your agent adds to orca.yaml show up here, ready to launch a workspace on.",
+          "refresh": "Refresh ephemeral VM recipes",
+          "checking": "Checking recipes...",
+          "none": "No recipes found yet."
+        },
+        "ephemeralVmsExperimentalSetting": {
+          "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
+          "toggleLabel": "Toggle per-workspace environments"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -8672,7 +8892,8 @@
             "98a79948b3": "Copy",
             "b234ab25b4": "Could not copy the file to the clipboard",
             "f9d7ca753d": "Copy Paths",
-            "3161c4e425": "folder"
+            "3161c4e425": "folder",
+            "e887fa4b2e": "Open in Terminal"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -9019,7 +9240,8 @@
             "b715ef615b": "{{value0}} commits ahead of {{value1}}",
             "c1a8f3e204": "1 commit behind {{value0}}",
             "d2b9g4f315": "{{value0}} commits behind {{value1}}",
-            "e9c2a5d416": "Even with {{value0}}"
+            "e9c2a5d416": "Even with {{value0}}",
+            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -9050,7 +9272,8 @@
             "c7ff8cef11": "Detecting agents...",
             "b0da3a4d3e": "Launch recipe already saved",
             "bff4795a6d": "Change the agent, arguments, or prompt template to update the saved recipe.",
-            "5c75b24735": "Customize what the agent receives before Orca starts it."
+            "5c75b24735": "Customize what the agent receives before Orca starts it.",
+            "repoAgentOverrideNote": "This repository overrides your global default ({{global}}) and currently runs {{effective}}. Save to this repository to change what runs here."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Save as global default",
@@ -9419,7 +9642,9 @@
             "worktreeUnavailable": "Worktree is no longer available.",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "sessionHostMismatchUnsupported": "This session belongs to a different host. Open a workspace on the same host to resume it.",
+            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9448,7 +9673,9 @@
             "globalScope": "Global",
             "projectScope": "Project",
             "currentProjectLower": "current project",
-            "project": "Project"
+            "project": "Project",
+            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "host": "Host"
           },
           "AiVaultSessionDetails": {
             "originalAsk": "Original ask",
@@ -9636,10 +9863,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {
@@ -10061,8 +10284,8 @@
           "title": "Custom network address",
           "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
           "label": "Address",
-          "placeholder": "my-mac.ts.net or 192.168.1.50",
-          "hint": "Enter an IP address or a Tailscale hostname (ends in .ts.net).",
+          "placeholder": "my-mac.ts.net, home.example.com, or 192.168.1.50",
+          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.",
           "cancel": "Cancel",
           "use": "Use address"
         },
@@ -11555,7 +11778,8 @@
             "4bb7424d6b": "Canceled",
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "Open",
-            "09a9489aa5": "Show"
+            "09a9489aa5": "Show",
+            "2a4c4b8e1f": "Copy"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
@@ -12224,7 +12448,8 @@
         "title": "Allow {{value0}}?",
         "allow": "Allow",
         "deny": "Deny"
-      }
+      },
+      "launchPromptNotDelivered": "Not delivered — check the terminal"
     },
     "tab": {
       "bar": {

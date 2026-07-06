@@ -1,10 +1,11 @@
 /* eslint-disable max-lines -- Why: these tests cover one reconciliation boundary
  * across ready, pending, split, and batched session snapshots. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { posix as pathPosix } from 'path'
+import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -142,6 +143,65 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabType: null
     })
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
+  })
+
+  it('ignores remote snapshots for the local floating workspace', () => {
+    const floatingTab: TerminalTab = {
+      id: 'floating-tab-1',
+      ptyId: 'pty-floating-1',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      title: 'VPS tmux',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const floatingUnifiedTab: Tab = {
+      id: floatingTab.id,
+      entityId: floatingTab.id,
+      groupId: 'floating-group',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'terminal',
+      label: floatingTab.title,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false
+    }
+    const state = makeState({
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
+      ptyIdsByTabId: { [floatingTab.id]: ['pty-floating-1'] },
+      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingUnifiedTab] },
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: floatingTab.id,
+            tabOrder: [floatingTab.id],
+            recentTabIds: [floatingTab.id]
+          }
+        ]
+      },
+      activeTabId: floatingTab.id,
+      activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: floatingTab.id }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([], {
+        worktree: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: null,
+        activeTabType: null
+      }),
+      ENV,
+      NOW
+    )
+
+    expect(patch).toBe(state)
   })
 
   it('suppresses a tab the client is closing until the host confirms removal (no close flash)', () => {
@@ -688,6 +748,7 @@ describe('applyWebSessionTabsSnapshot', () => {
           leafId: LEAF_ID,
           isActive: true,
           launchAgent: 'codex',
+          startupCwd: '/worktree/packages/web',
           status: 'ready',
           terminal: 'terminal-1'
         }
@@ -705,6 +766,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         id: mirroredId,
         ptyId: 'remote:web-env-1@@terminal-1',
         launchAgent: 'codex',
+        startupCwd: '/worktree/packages/web',
         title: 'host shell',
         worktreeId: WT
       }
@@ -765,6 +827,48 @@ describe('applyWebSessionTabsSnapshot', () => {
       title: 'zsh'
     })
     expect(patch.tabsByWorktree?.[WT]?.[0]?.launchAgent).toBeUndefined()
+  })
+
+  it('drops mirrored startup cwd when a later host snapshot omits it', () => {
+    const existingTab: TerminalTab = {
+      id: toWebTerminalSurfaceTabId('host-tab-1'),
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'zsh',
+      defaultTitle: 'zsh',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      startupCwd: '/worktree/packages/web'
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [existingTab.id]: ['remote:web-env-1@@terminal-1'] }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'zsh',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: existingTab.id,
+      title: 'zsh'
+    })
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.startupCwd).toBeUndefined()
   })
 
   it('adopts host viewMode when this client has no prior tab', () => {

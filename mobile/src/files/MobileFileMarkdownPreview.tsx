@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Code, Pencil } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
@@ -14,10 +14,20 @@ type Props = {
   content: string
   truncated: boolean
   byteLength: number
+  initialLine?: number
 }
 
-export function MobileFileMarkdownPreview({ relativePath, content, truncated, byteLength }: Props) {
-  const [mode, setMode] = useState<'preview' | 'source'>('preview')
+export function MobileFileMarkdownPreview({
+  relativePath,
+  content,
+  truncated,
+  byteLength,
+  initialLine
+}: Props) {
+  const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
+  useEffect(() => {
+    setMode(initialLine ? 'source' : 'preview')
+  }, [initialLine, relativePath])
   const previewSelected = mode === 'preview'
   const sourceSelected = mode === 'source'
 
@@ -62,6 +72,7 @@ export function MobileFileMarkdownPreview({ relativePath, content, truncated, by
           content={content}
           truncated={truncated}
           byteLength={byteLength}
+          initialLine={initialLine}
         />
       )}
     </View>

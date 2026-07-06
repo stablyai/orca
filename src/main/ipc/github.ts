@@ -3,7 +3,7 @@ the repo-path validation, preference-threading, and stats wiring patterns are
 reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
 import { ipcMain, webContents } from 'electron'
-import { resolve } from 'path'
+import { resolve } from 'node:path'
 import type {
   Repo,
   GitHubCreateIssueFields,
@@ -278,19 +278,27 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         linkedPRNumber?: number | null
         fallbackPRNumber?: number | null
         acceptMergedFallbackPR?: boolean
+        currentHeadOid?: string | null
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       const localGitOptions = localGitOptionArgs(store, repo)[0]
       const hostedReviewOptionArgs: [] | [{ localGitExecOptions: { wslDistro?: string } }] =
         localGitOptions ? [{ localGitExecOptions: localGitOptions }] : []
+      const currentHeadOid =
+        typeof args.currentHeadOid === 'string' && args.currentHeadOid.trim().length > 0
+          ? args.currentHeadOid.trim()
+          : null
       const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptionArgs[0]
         ? { ...hostedReviewOptionArgs[0] }
-        : args.acceptMergedFallbackPR === true
+        : args.acceptMergedFallbackPR === true || currentHeadOid !== null
           ? {}
           : undefined
       if (lookupOptions && args.acceptMergedFallbackPR === true) {
         lookupOptions.acceptMergedFallbackPR = true
+      }
+      if (lookupOptions && currentHeadOid !== null) {
+        lookupOptions.currentHeadOid = currentHeadOid
       }
       const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
         ? [lookupOptions]

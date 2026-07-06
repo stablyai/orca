@@ -205,11 +205,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     return team.paneOrder
       .map((paneId) => {
         const pane = team.panes.get(paneId)!
-        return renderTmuxFormat(
-          tmuxValue(parsed, '-F'),
-          formatContext(team, pane),
-          pane.fakePaneId
-        )
+        return renderTmuxFormat(tmuxValue(parsed, '-F'), formatContext(team, pane), pane.fakePaneId)
       })
       .join('\n')
       .concat('\n')
@@ -275,7 +271,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     team.paneOrder = team.paneOrder.filter((id) => id !== pane.fakePaneId)
     if (team.mainVertical?.lastColumnPane === pane.fakePaneId) {
       team.mainVertical.lastColumnPane =
-        [...team.paneOrder].reverse().find((id) => id !== team.leaderPane) ?? null
+        [...team.paneOrder].toReversed().find((id) => id !== team.leaderPane) ?? null
     }
     return ''
   }

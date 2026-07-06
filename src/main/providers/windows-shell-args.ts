@@ -1,4 +1,4 @@
-import { win32 as pathWin32 } from 'path'
+import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {

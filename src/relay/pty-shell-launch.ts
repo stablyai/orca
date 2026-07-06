@@ -1,6 +1,6 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   getZshFinalZdotdirRestoreBlock,
@@ -187,6 +187,11 @@ __orca_normalize_prompt_command() {
     done
     PROMPT_COMMAND="$__orca_joined"
   fi
+  # Why: RHEL-family /etc/bashrc can leave an inherited PROMPT_COMMAND ending in
+  # a ";"/whitespace separator; trim it so Orca's prepend/append never form ";;".
+  while [[ "\${PROMPT_COMMAND:-}" == *[[:space:]\\;] ]]; do
+    PROMPT_COMMAND="\${PROMPT_COMMAND%?}"
+  done
 }
 __orca_prepend_prompt_command() {
   __orca_normalize_prompt_command
