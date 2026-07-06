@@ -622,7 +622,6 @@ async function performQuitAndInstall(): Promise<void> {
 
 async function runBeforeUpdateQuitCleanup(): Promise<void> {
   if (!onBeforeQuitCleanup) {
-    recordUpdaterLifecycle('pre_quit_cleanup_skipped', { reason: 'no-callback' })
     return
   }
 

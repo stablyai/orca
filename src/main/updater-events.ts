@@ -91,15 +91,9 @@ export function registerAutoUpdaterHandlers({
   if (process.platform === 'darwin') {
     nativeUpdater.on('update-downloaded', () => {
       const hasNewerVersion = hasNewerDownloadedVersion()
-      recordUpdaterLifecycle('macos_squirrel_ready', {
-        hasNewerDownloadedVersion: hasNewerVersion
-      })
       handleMacInstallerReady(hasNewerVersion, performQuitAndInstall, () => {
         // If we were holding the 'downloaded' status, send it now — but only
         // when the staged version is actually newer than what's running.
-        recordUpdaterLifecycle('macos_downloaded_status_released', {
-          version: getPendingInstallVersion()
-        })
         sendStatus({
           state: 'downloaded',
           version: getPendingInstallVersion(),
@@ -115,7 +109,6 @@ export function registerAutoUpdaterHandlers({
       return
     }
     if (isMacQuitAndInstallInFlight()) {
-      recordUpdaterLifecycle('macos_before_quit_install_in_flight')
       return
     }
 

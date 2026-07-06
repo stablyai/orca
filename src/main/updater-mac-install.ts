@@ -35,9 +35,6 @@ export function resetMacInstallState(): void {
 export function beginMacUpdateDownload(): void {
   resetMacInstallState()
   squirrelReady = false
-  if (process.platform === 'darwin') {
-    recordUpdaterLifecycle('macos_download_started')
-  }
 }
 
 export function markMacQuitAndInstallInFlight(): void {
@@ -45,9 +42,6 @@ export function markMacQuitAndInstallInFlight(): void {
   quitAndInstallInFlight = true
   bypassMacInstallGuardOnce = false
   clearPendingInstallTimeout()
-  if (process.platform === 'darwin') {
-    recordUpdaterLifecycle('macos_quit_and_install_in_flight')
-  }
 }
 
 export function consumeMacInstallGuardBypass(): boolean {
@@ -91,9 +85,6 @@ export function deferMacQuitUntilInstallerReady(
   }
 
   installRequestedAfterSquirrelReady = true
-  recordUpdaterLifecycle('macos_install_waiting_for_squirrel', {
-    version: getPendingInstallVersion()
-  })
   sendStatus({ state: 'downloading', percent: 100, version: getPendingInstallVersion() })
 
   if (pendingInstallTimeout) {
