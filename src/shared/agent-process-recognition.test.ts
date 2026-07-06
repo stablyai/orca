@@ -93,6 +93,32 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('ante-obsidian', 'ante')).toBe(false)
   })
 
+  it('recognizes Gajae Code without classifying gjc-prefixed path fragments as the agent', () => {
+    expect(recognizeAgentProcess('gjc')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.bun/bin/gjc')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.bun/bin/gjc', 'gjc')).toBe(true)
+    expect(isRecognizedAgentType('gjc')).toBe(true)
+    expect(recognizeAgentProcess('gjc-worker')).toBeNull()
+  })
+
+  it('does not recognize Gajae Code headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('gjc -p "summarize this diff"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('gjc --print "review this for security issues"')
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('gjc --print=text "review"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('gjc --resume ses_123')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+  })
+
   it('does not recognize Ante headless one-shot commands as interactive agents', () => {
     expect(recognizeAgentProcessFromCommandLine('ante -p "summarize this diff"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('ante -psummarize')).toBeNull()

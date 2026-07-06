@@ -1,6 +1,7 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
+import gajaeCodeLogoUrl from '../../../../resources/gajae-code-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
@@ -102,6 +103,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'ante',
     faviconDomain: 'antigma.ai',
     homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
+  },
+  {
+    id: 'gjc',
+    label: translate('auto.lib.agent.catalog.gjc_label', 'Gajae Code'),
+    cmd: 'gjc',
+    iconUrl: gajaeCodeLogoUrl,
+    homepageUrl: 'https://gajae-code.com'
   },
   {
     id: 'pi',

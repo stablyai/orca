@@ -113,6 +113,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // the composed prompt after startup to keep the hosted session alive.
     promptInjectionMode: 'stdin-after-start'
   },
+  gjc: {
+    detectCmd: 'gjc',
+    launchCmd: 'gjc',
+    expectedProcess: 'gjc',
+    // Why: `gjc "<prompt>"` seeds the interactive TUI with the message as the
+    // first submitted turn (its `-p`/`--print` flag is the headless one-shot
+    // mode, which we deliberately avoid so the hosted session stays alive).
+    promptInjectionMode: 'argv'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',

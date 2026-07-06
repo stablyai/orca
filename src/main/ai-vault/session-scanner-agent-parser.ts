@@ -2,6 +2,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseDroidSessionFile } from './session-scanner-droid-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
+import { parseGjcSessionFile } from './session-scanner-gjc-parser'
 import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
@@ -70,5 +71,7 @@ export async function parseAgentSessionFile(
       return parseDevinSessionFile(candidate.file, platform)
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform)
+    case 'gjc':
+      return parseGjcSessionFile(candidate.file, platform)
   }
 }

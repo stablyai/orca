@@ -680,6 +680,43 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    // gjc: <sessions>/<encoded-cwd>/<id>.jsonl — first line is the session
+    // header (cwd/title/timestamp), then append-only message entries.
+    await mkdir(join(roots.gjcSessionsDir, '-tmp-gjc'), { recursive: true })
+    await writeFile(
+      join(roots.gjcSessionsDir, '-tmp-gjc', 'gjc-session.jsonl'),
+      jsonLines([
+        {
+          type: 'session',
+          version: 3,
+          id: 'gjc-session',
+          title: 'Gjc vault title',
+          titleSource: 'user',
+          timestamp: '2026-05-01T10:12:00.000Z',
+          cwd: '/tmp/gjc'
+        },
+        {
+          type: 'message',
+          id: 'm1',
+          parentId: null,
+          timestamp: '2026-05-01T10:12:01.000Z',
+          message: { role: 'user', content: 'Gjc vault title' }
+        },
+        {
+          type: 'message',
+          id: 'm2',
+          parentId: 'm1',
+          timestamp: '2026-05-01T10:12:02.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Gjc reply' }],
+            model: 'anthropic/claude-x',
+            usage: { input: 3, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 8 }
+          }
+        }
+      ])
+    )
+
     const result = await scanAiVaultSessions({
       ...roots,
       platform: 'darwin',
@@ -724,6 +761,7 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )
+    expect(commandByAgent.get('gjc')).toBe("cd '/tmp/gjc' && gjc --resume 'gjc-session'")
   })
 
   it('strips newline-heavy Grok user_query envelopes without regex matching', async () => {

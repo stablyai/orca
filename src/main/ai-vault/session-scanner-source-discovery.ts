@@ -34,6 +34,26 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   'transcripts'
 )
 
+// Why: gjc stores JSONL transcripts under <agentDir>/sessions. The agent dir
+// resolves from GJC_CODING_AGENT_DIR (legacy PI_CODING_AGENT_DIR), else the XDG
+// data home on Linux ($XDG_DATA_HOME/gjc, flattening the agent/ prefix), else
+// ~/<config-dir>/agent where the config dir defaults to .gjc.
+function defaultGjcSessionsDir(): string {
+  const agentDirOverride =
+    process.env.GJC_CODING_AGENT_DIR?.trim() || process.env.PI_CODING_AGENT_DIR?.trim()
+  if (agentDirOverride) {
+    return join(agentDirOverride, 'sessions')
+  }
+  const xdgDataHome = process.platform === 'linux' ? process.env.XDG_DATA_HOME?.trim() : undefined
+  if (xdgDataHome) {
+    return join(xdgDataHome, 'gjc', 'sessions')
+  }
+  const configDirName =
+    process.env.GJC_CONFIG_DIR?.trim() || process.env.PI_CONFIG_DIR?.trim() || '.gjc'
+  return join(homedir(), configDirName, 'agent', 'sessions')
+}
+const GJC_SESSIONS_DIR = defaultGjcSessionsDir()
+
 export async function discoverAiVaultSessionSources(args: {
   options: AiVaultScanOptions
   limitPerAgent: number
@@ -62,8 +82,23 @@ export async function discoverAiVaultSessionSources(args: {
     ...standardDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     openClawDiscovery(options, wslHomeDirs, limitPerAgent, issues),
     ...droidDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
-    ...kimiDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
+    ...kimiDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...gjcDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
   ])
+}
+
+function gjcDiscoveries(
+  options: AiVaultScanOptions,
+  wslHomeDirs: readonly string[],
+  limit: number,
+  issues: AiVaultScanIssue[]
+): Promise<SessionFileDiscovery>[] {
+  return [
+    options.gjcSessionsDir ?? GJC_SESSIONS_DIR,
+    ...wslHomeDirs.map((homeDir) => join(homeDir, '.gjc', 'agent', 'sessions'))
+  ].map((rootDir) =>
+    discoverFiles({ rootDir, limit, agent: 'gjc', issues, extensions: ['.jsonl'] })
+  )
 }
 
 function claudeDiscoveries(
