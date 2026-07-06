@@ -683,6 +683,11 @@ export function FontAutocomplete({
   const focusInput = (): void => {
     inputRef.current?.focus()
   }
+  const popoverAvailableHeightStyle = {
+    // Why: tailwind-merge rewrites this arbitrary max-height class on the
+    // ScrollArea root, so keep the Radix available-height clamp as inline style.
+    maxHeight: 'var(--radix-popover-content-available-height)'
+  } as React.CSSProperties
 
   return (
     <div ref={setRootNode} className="relative max-w-sm">
@@ -825,7 +830,11 @@ export function FontAutocomplete({
             }
           }}
         >
-          <ScrollArea className={visibleSuggestions.length > 8 ? 'h-64' : undefined}>
+          <ScrollArea
+            className={visibleSuggestions.length > 8 ? 'h-64' : undefined}
+            style={popoverAvailableHeightStyle}
+            viewportProps={{ style: popoverAvailableHeightStyle }}
+          >
             <div id={listboxId} role="listbox" className="p-1">
               {visibleSuggestions.length > 0 ? (
                 visibleSuggestions.map((font, index) => (
