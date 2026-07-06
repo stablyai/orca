@@ -67,6 +67,12 @@ export function scheduleTerminalRevealWebglAtlasRecovery(): void {
   // Why: tab reveal is a discrete user action whose repaint must not wait out
   // an output-driven recovery cooldown — a just-revealed pane showing stale
   // pixels for seconds reads as a rendering bug.
+  if (terminalOutputRecoveryPhase === 'burst') {
+    // The in-flight burst's pending resets repaint the revealed pane too:
+    // resets enumerate live pane managers at execution time, and the phase
+    // only leaves 'burst' after its final reset has run.
+    return
+  }
   scheduleAtlasRecoveryBurst()
 }
 

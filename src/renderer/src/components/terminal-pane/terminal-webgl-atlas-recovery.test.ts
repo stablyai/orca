@@ -225,6 +225,28 @@ describe('terminal WebGL atlas recovery', () => {
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
   })
 
+  it('skips tab-reveal recovery while an output burst is already in flight', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
+    const manager = registerManager()
+
+    scheduleTerminalWebglAtlasRecovery()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+
+    // The burst's pending resets already repaint a pane revealed mid-burst.
+    scheduleTerminalRevealWebglAtlasRecovery()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(500)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+  })
+
   it('lets tab-reveal recovery bypass the terminal-output cooldown', () => {
     vi.useFakeTimers()
     vi.stubGlobal(
