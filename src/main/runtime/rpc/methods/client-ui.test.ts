@@ -117,6 +117,24 @@ describe('client UI RPC methods', () => {
     })
   })
 
+  it('normalizes manual bot-author overrides before persisting', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => ({}))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        prBotAuthorOverrides: [' GretelFlux ', 'gretelflux', 42, '', 'another-bot']
+      })
+    )
+
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      prBotAuthorOverrides: ['another-bot', 'gretelflux']
+    })
+  })
+
   it('returns the runtime host persisted UI state', async () => {
     const ui: PersistedUIState = {
       ...getDefaultUIState(),

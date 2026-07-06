@@ -297,6 +297,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     diffDefaultView: 'inline',
     diffWordWrap: false,
     combinedDiffFileTreeVisibleByDefault: false,
+    prBotAuthorOverrides: [],
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],

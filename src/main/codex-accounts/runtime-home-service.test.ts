@@ -97,6 +97,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     floatingTerminalTriggerLocation: 'floating-button',
     diffDefaultView: 'inline',
     combinedDiffFileTreeVisibleByDefault: false,
+    prBotAuthorOverrides: [],
     notifications: {
       enabled: true,
       agentTaskComplete: true,

@@ -14,6 +14,7 @@ import {
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
+import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
@@ -89,6 +90,7 @@ export function MobilePRSidebar({
     refetch
   })
   const triage = useMobilePrAiTriage({ client, connState, worktreeId })
+  const botAuthorOverrides = usePRBotAuthorOverrides(client, connState)
 
   return (
     <ScrollView
@@ -111,6 +113,7 @@ export function MobilePRSidebar({
         commentActions={commentActions}
         titleAction={titleAction}
         triage={triage}
+        botAuthorOverrides={botAuthorOverrides}
       />
     </ScrollView>
   )
@@ -129,7 +132,8 @@ function PrSidebarContent({
   actions,
   commentActions,
   titleAction,
-  triage
+  triage,
+  botAuthorOverrides
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
@@ -144,6 +148,7 @@ function PrSidebarContent({
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
+  botAuthorOverrides: ReadonlySet<string>
 }) {
   if (branch === 'loading') {
     return (
@@ -209,6 +214,7 @@ function PrSidebarContent({
         titleAction={titleAction}
         triage={triage}
         refetch={refetch}
+        botAuthorOverrides={botAuthorOverrides}
       />
     )
   }
@@ -223,7 +229,8 @@ function PrSidebarSections({
   commentActions,
   titleAction,
   triage,
-  refetch
+  refetch,
+  botAuthorOverrides
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
@@ -233,6 +240,7 @@ function PrSidebarSections({
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
   refetch: () => void
+  botAuthorOverrides: ReadonlySet<string>
 }) {
   const pr = data.pr
   // Bind the triage launchers to this PR's data; the prompt builders are pure so
@@ -294,6 +302,7 @@ function PrSidebarSections({
         prState={data.pr.state}
         prRepo={data.pr.prRepo ?? null}
         actions={commentActions}
+        botAuthorOverrides={botAuthorOverrides}
       />
     </>
   )

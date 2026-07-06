@@ -800,6 +800,7 @@ type RuntimeStore = {
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
+    prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
@@ -2407,6 +2408,7 @@ export class OrcaRuntimeService {
     | 'compactWorktreeCards'
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
+    | 'prBotAuthorOverrides'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -2428,7 +2430,8 @@ export class OrcaRuntimeService {
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
-      minimaxUsageModels: settings.minimaxUsageModels ?? 'general'
+      minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
+      prBotAuthorOverrides: settings.prBotAuthorOverrides ?? []
     }
   }
 
@@ -2450,6 +2453,7 @@ export class OrcaRuntimeService {
       | 'compactWorktreeCards'
       | 'minimaxGroupId'
       | 'minimaxUsageModels'
+      | 'prBotAuthorOverrides'
     >
   ): Pick<
     GlobalSettings,
@@ -2469,6 +2473,7 @@ export class OrcaRuntimeService {
     | 'compactWorktreeCards'
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
+    | 'prBotAuthorOverrides'
   > {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')

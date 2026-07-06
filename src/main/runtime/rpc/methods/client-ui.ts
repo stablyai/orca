@@ -11,6 +11,7 @@ import {
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-overrides'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
 import type { PersistedUIState, TaskProvider } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
@@ -154,7 +155,11 @@ const SettingsUpdate = z
     compactWorktreeCards: z.boolean().optional(),
     minimaxGroupId: z.string().optional(),
     minimaxUsageModels: z.string().optional(),
-    githubProjects: GitHubProjectSettings.optional()
+    githubProjects: GitHubProjectSettings.optional(),
+    prBotAuthorOverrides: z
+      .unknown()
+      .transform((value) => normalizePRBotAuthorOverrides(value))
+      .optional()
   })
   .strict()
   .default({})

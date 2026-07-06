@@ -20,6 +20,7 @@ import {
   Sparkles,
   RefreshCw,
   AlertTriangle,
+  Bot,
   MoreHorizontal,
   Pencil,
   SlidersHorizontal,
@@ -59,9 +60,11 @@ import {
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
   isBotPRComment,
+  normalizePRCommentAuthorLogin,
   getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
+import { setPRBotAuthorOverride, usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   getPRCommentGroupId,
   getPRCommentGroupRoot,
@@ -1487,11 +1490,17 @@ function CommentMoreMenu({
   onDelete?: () => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element | null {
+  const botAuthorOverrides = usePRBotAuthorOverrides()
+  const authorLogin = normalizePRCommentAuthorLogin(comment.author)
+  const isOverriddenBot = authorLogin.length > 0 && botAuthorOverrides.has(authorLogin)
+  // Why: the override is an escape hatch for bots the heuristics miss, so hide
+  // the action when the author is already detected as a bot without it.
+  const hasMarkAsBot = authorLogin.length > 0 && (isOverriddenBot || !isBotPRComment(comment))
   const hasGoToComment = Boolean(comment.url)
   const hasEdit = Boolean(onStartEdit)
   const hasDelete = Boolean(onDelete)
   const hasQueue = Boolean(onQueueForAgent)
-  if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue) {
+  if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue && !hasMarkAsBot) {
     return null
   }
 
@@ -1548,6 +1557,25 @@ function CommentMoreMenu({
             <Trash />
             {translate('auto.components.right.sidebar.checks.panel.content.6cc6eace26', 'Delete')}
           </DropdownMenuItem>
+        ) : null}
+        {hasMarkAsBot ? (
+          <>
+            {(hasQueue || hasGoToComment || hasEdit || hasDelete) && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              onSelect={() => setPRBotAuthorOverride(comment.author, !isOverriddenBot)}
+            >
+              <Bot />
+              {isOverriddenBot
+                ? translate(
+                    'auto.components.right.sidebar.checks.panel.content.b3195cba33',
+                    'Unmark author as bot'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.f588b46a6c',
+                    'Mark author as bot'
+                  )}
+            </DropdownMenuItem>
+          </>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1656,7 +1684,8 @@ function CommentRow({
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
-  const automated = isBotPRComment(comment)
+  const botAuthorOverrides = usePRBotAuthorOverrides()
+  const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.body)
@@ -2207,7 +2236,11 @@ export function PRCommentsList({
   const [isAddingComment, setIsAddingComment] = useState(false)
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
   const shouldScrollAddCommentRef = useRef(false)
-  const commentCounts = React.useMemo(() => getPRCommentAudienceCounts(comments), [comments])
+  const botAuthorOverrides = usePRBotAuthorOverrides()
+  const commentCounts = React.useMemo(
+    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
+    [botAuthorOverrides, comments]
+  )
   const {
     isSelectingForAI,
     selectedGroupIds,
@@ -2219,8 +2252,8 @@ export function PRCommentsList({
     toggleGroupSelection
   } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
   const visibleComments = React.useMemo(
-    () => filterPRCommentsByAudience(comments, commentFilter),
-    [commentFilter, comments]
+    () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
+    [botAuthorOverrides, commentFilter, comments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const triageGroups = React.useMemo(() => partitionPRCommentGroupsForTriage(groups), [groups])
