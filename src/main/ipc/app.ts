@@ -1,6 +1,5 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
@@ -24,12 +23,14 @@ import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
-const MAC_HITOOLBOX_PREFERENCES_PATH = path.join(
-  homedir(),
-  'Library',
-  'Preferences',
-  `${MAC_HITOOLBOX_DOMAIN}.plist`
-)
+// Why: macOS 15's `plutil -extract <key> json` aborts on the (pure-string)
+// input-source array and the on-disk plist lags cfprefsd; read live prefs via
+// `defaults export`, extract as xml1 (dodges the json bug), then convert to JSON.
+const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
+  `defaults export ${MAC_HITOOLBOX_DOMAIN} -`,
+  'plutil -extract AppleSelectedInputSources xml1 -o - -',
+  'plutil -convert json -o - -'
+].join(' | ')
 
 type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -196,8 +197,8 @@ function readSelectedInputSourceIdFromJson(stdout: string): string | null {
 async function readSelectedKeyboardInputSourceId(): Promise<string | null> {
   try {
     const stdout = await readCommandStdout(
-      '/usr/bin/plutil',
-      ['-extract', 'AppleSelectedInputSources', 'json', '-o', '-', MAC_HITOOLBOX_PREFERENCES_PATH],
+      '/bin/sh',
+      ['-c', MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND],
       'Selected keyboard input source probe timed out'
     )
     return readSelectedInputSourceIdFromJson(stdout)

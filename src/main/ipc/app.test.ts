@@ -197,9 +197,17 @@ describe('registerAppHandlers', () => {
       'com.apple.inputmethod.SCIM.ITABC'
     )
     expect(execFileMock).toHaveBeenCalledTimes(1)
+    // Why: macOS 15's `plutil -extract <key> json` aborts on the input-source
+    // array, so the probe reads live cfprefsd via `defaults export` and dodges
+    // the bug with an xml1 extract before converting the clean subtree to JSON.
     expect(execFileMock).toHaveBeenCalledWith(
-      '/usr/bin/plutil',
-      expect.arrayContaining(['AppleSelectedInputSources']),
+      '/bin/sh',
+      [
+        '-c',
+        expect.stringMatching(
+          /^defaults export com\.apple\.HIToolbox - \| plutil -extract AppleSelectedInputSources xml1 .+ \| plutil -convert json/
+        )
+      ],
       expect.any(Object),
       expect.any(Function)
     )
