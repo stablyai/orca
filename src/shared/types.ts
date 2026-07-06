@@ -3492,6 +3492,10 @@ export type PersistedState = {
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  /** Daemon session ids of live local Claude launches. Seeds the Claude
+   *  live-PTY gate on startup so an early OAuth refresh cannot rotate the
+   *  single-use refresh token out from under a still-running daemon CLI. */
+  claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]
