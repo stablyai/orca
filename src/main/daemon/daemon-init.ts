@@ -36,6 +36,7 @@ import {
   isDaemonStaleForCurrentBundle,
   killStaleDaemon
 } from './daemon-health'
+import { getRelocatedDaemonHostExecPath } from './daemon-host-relocation'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import {
   getLocalPtyProvider,
@@ -260,6 +261,11 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     await killStaleDaemon(runtimeDir, socketPath, tokenPath)
 
     const userDataPath = app.getPath('userData')
+    // Why: on Windows a relocated node.exe in userData hosts the daemon so its
+    // process image escapes the install-dir the NSIS updater force-closes; when
+    // absent (dev, non-win32, pre-relocation builds) fall back to the install-dir
+    // Electron host run as plain Node via ELECTRON_RUN_AS_NODE.
+    const relocatedHostExecPath = getRelocatedDaemonHostExecPath()
     const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
       // Why: detached daemons can outlive dev worktrees. Starting from
       // userData keeps process.cwd() valid after a repo/worktree is deleted.
@@ -269,13 +275,17 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       // open, which would prevent Electron from exiting cleanly.
       detached: true,
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-      // Why: ELECTRON_RUN_AS_NODE makes the forked process run as a plain
-      // Node.js process instead of an Electron renderer/main process. Without
-      // it, Electron's GPU/display initialization can interfere with native
-      // module operations like node-pty's posix_spawn of the spawn-helper.
+      // Why: a standalone node.exe is already plain Node; reset execArgv so the
+      // Electron main process's node flags don't leak into it.
+      ...(relocatedHostExecPath ? { execPath: relocatedHostExecPath, execArgv: [] } : {}),
       env: {
         ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
+        // Why: ELECTRON_RUN_AS_NODE makes the forked Electron binary run as a
+        // plain Node.js process instead of an Electron main process. Without it,
+        // Electron's GPU/display initialization can interfere with native module
+        // operations like node-pty's posix_spawn of the spawn-helper. A relocated
+        // node.exe is already plain Node, so the var is omitted there.
+        ...(relocatedHostExecPath ? {} : { ELECTRON_RUN_AS_NODE: '1' }),
         // Why: the detached daemon is plain Node and cannot call Electron's
         // app.getPath(), but shell-ready rcfiles must live outside swept tmp.
         ORCA_USER_DATA_PATH: userDataPath

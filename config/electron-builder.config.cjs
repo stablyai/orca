@@ -7,6 +7,7 @@ const {
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+const { ensurePackagedDaemonHostNode } = require('./daemon-host-node-runtime.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
@@ -128,6 +129,10 @@ module.exports = {
       return
     }
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
+    // Why: stage the standalone node.exe that hosts the terminal daemon outside
+    // the install-dir kill zone the NSIS updater sweeps (win32 only; no-ops
+    // elsewhere). See src/main/daemon/daemon-host-relocation.ts.
+    ensurePackagedDaemonHostNode(resourcesDir, context.electronPlatformName)
     verifyPackagedMainRuntimeDeps(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)

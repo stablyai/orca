@@ -878,6 +878,14 @@ jobs:
             }
             Get-Item -LiteralPath $file
           }
+          # The standalone node.exe that hosts the terminal daemon outside the
+          # install-dir kill zone the NSIS updater sweeps. See
+          # src/main/daemon/daemon-host-relocation.ts.
+          $daemonHostNode = 'dist/win-unpacked/resources/daemon-host/node.exe'
+          if (-not (Test-Path -LiteralPath $daemonHostNode -PathType Leaf)) {
+            throw "Missing Windows daemon-host runtime file: $daemonHostNode"
+          }
+          Get-Item -LiteralPath $daemonHostNode
 
       - name: Install SignPath PowerShell module
         if: matrix.platform == 'win'

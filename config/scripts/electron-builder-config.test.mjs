@@ -17,6 +17,22 @@ const {
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 } = require('../packaged-runtime-node-modules.cjs')
+const { ensurePackagedDaemonHostNode } = require('../daemon-host-node-runtime.cjs')
+
+// process.execPath is read-only in the types; point it at a fixture node.exe.
+function withStubbedExecPath(value, fn) {
+  const original = process.execPath
+  Object.defineProperty(process, 'execPath', { value, configurable: true, writable: true })
+  try {
+    return fn()
+  } finally {
+    Object.defineProperty(process, 'execPath', {
+      value: original,
+      configurable: true,
+      writable: true
+    })
+  }
+}
 
 describe('electron-builder config', () => {
   it('excludes repo-only source trees from app.asar', () => {
@@ -204,6 +220,52 @@ describe('electron-builder config', () => {
       } finally {
         await rm(resourcesDir, { recursive: true, force: true })
       }
+    }
+  })
+
+  it('stages the build host node.exe into resources/daemon-host for Windows', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-daemon-host-node-'))
+    try {
+      const fakeHostDir = join(root, 'host')
+      await mkdir(fakeHostDir, { recursive: true })
+      const fakeNodeExe = join(fakeHostDir, 'node.exe')
+      await writeFile(fakeNodeExe, 'fake-node-binary', 'utf8')
+      const resourcesDir = join(root, 'resources')
+      await mkdir(resourcesDir, { recursive: true })
+
+      withStubbedExecPath(fakeNodeExe, () => ensurePackagedDaemonHostNode(resourcesDir, 'win32'))
+
+      await expect(readFile(join(resourcesDir, 'daemon-host', 'node.exe'), 'utf8')).resolves.toBe(
+        'fake-node-binary'
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('does not stage a daemon-host node.exe on non-Windows platforms', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-daemon-host-node-skip-'))
+    try {
+      ensurePackagedDaemonHostNode(resourcesDir, 'linux')
+      await expect(readdir(resourcesDir)).resolves.toEqual([])
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('fails the Windows build when the host binary is not a node.exe', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-daemon-host-node-bad-'))
+    try {
+      const notNode = join(root, 'electron.exe')
+      await writeFile(notNode, 'not-node', 'utf8')
+      const resourcesDir = join(root, 'resources')
+      await mkdir(resourcesDir, { recursive: true })
+
+      expect(() =>
+        withStubbedExecPath(notNode, () => ensurePackagedDaemonHostNode(resourcesDir, 'win32'))
+      ).toThrow(/not a node\.exe/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
     }
   })
 

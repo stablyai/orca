@@ -1,16 +1,8 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
-import { parseDaemonPidFile, startTimeMatches } from '../daemon/daemon-health'
+import { ensureRelocatedRuntime } from './install-dir-runtime-relocation'
 
 /**
  * Relocates node-pty's Windows native runtime (conpty.node, conpty.dll,
@@ -26,8 +18,6 @@ import { parseDaemonPidFile, startTimeMatches } from '../daemon/daemon-health'
  */
 export const NODE_PTY_NATIVE_DIR_ENV_VAR = 'ORCA_NODE_PTY_NATIVE_DIR'
 
-const RELOCATION_COMPLETE_MARKER = '.relocation-complete'
-
 export function resolveNodePtyNativeSourceDir(nodePtyPackageDir: string): string | null {
   // Packaged builds carry the rebuilt binding in build/Release; dev installs
   // (and the forced-relocation test path) load from prebuilds.
@@ -41,124 +31,6 @@ export function resolveNodePtyNativeSourceDir(nodePtyPackageDir: string): string
     }
   }
   return null
-}
-
-function copyRuntimeTree(sourceDir: string, destDir: string): void {
-  mkdirSync(destDir, { recursive: true })
-  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
-    const sourcePath = join(sourceDir, entry.name)
-    const destPath = join(destDir, entry.name)
-    if (entry.isDirectory()) {
-      copyRuntimeTree(sourcePath, destPath)
-    } else if (entry.isFile() && !/\.pdb$/i.test(entry.name)) {
-      copyFileSync(sourcePath, destPath)
-    }
-  }
-}
-
-type IsDaemonPidAlive = (pid: number, startedAtMs: number | null) => boolean
-
-function isDaemonPidAliveDefault(pid: number, startedAtMs: number | null): boolean {
-  try {
-    process.kill(pid, 0)
-  } catch {
-    return false
-  }
-  return startTimeMatches(pid, startedAtMs)
-}
-
-/**
- * Runtime version dirs still claimed by a live daemon, read from the daemon
- * pid files under `daemonRuntimeDir` (`daemon-v<N>.pid`).
- *
- * Why: a daemon deliberately survives app updates, and it was forked with
- * ORCA_NODE_PTY_NATIVE_DIR pinned to its own app-version runtime dir — which
- * it reloads conpty.dll from on every new spawn. Each pid file records that
- * `appVersion`, so a live daemon's version dir must never be reclaimed.
- */
-export function collectInUseRuntimeVersions(
-  daemonRuntimeDir: string,
-  isPidAlive: IsDaemonPidAlive = isDaemonPidAliveDefault
-): Set<string> {
-  const inUse = new Set<string>()
-  let entries
-  try {
-    entries = readdirSync(daemonRuntimeDir, { withFileTypes: true })
-  } catch {
-    return inUse
-  }
-  for (const entry of entries) {
-    if (!entry.isFile() || !/^daemon-v\d+\.pid$/.test(entry.name)) {
-      continue
-    }
-    let parsed
-    try {
-      parsed = parseDaemonPidFile(readFileSync(join(daemonRuntimeDir, entry.name), 'utf8'))
-    } catch {
-      continue
-    }
-    // appVersion null => a pre-relocation daemon that loads from the install
-    // dir and thus pins no version dir here.
-    if (parsed && parsed.appVersion !== null && isPidAlive(parsed.pid, parsed.startedAtMs)) {
-      inUse.add(parsed.appVersion)
-    }
-  }
-  return inUse
-}
-
-function removeStaleRuntimeVersions(
-  destRoot: string,
-  keepVersion: string,
-  inUseVersions: ReadonlySet<string>
-): void {
-  let entries
-  try {
-    entries = readdirSync(destRoot, { withFileTypes: true })
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === keepVersion || inUseVersions.has(entry.name)) {
-      continue
-    }
-    // Why: Windows maps the daemon's conpty.dll/OpenConsole.exe with
-    // FILE_SHARE_DELETE, so a rename/delete succeeds even while a surviving
-    // daemon still needs them — the old rename heuristic deleted in-use dirs
-    // and stranded the daemon (new spawn -> conpty.dll ERROR_PATH_NOT_FOUND).
-    // Only dirs no live daemon claims via its pid file are safe to remove.
-    try {
-      rmSync(join(destRoot, entry.name), { recursive: true, force: true })
-    } catch {
-      // Still locked or already gone — retry on a future launch.
-    }
-  }
-}
-
-export function ensureRelocatedNodePtyNativeRuntime(options: {
-  sourceDir: string
-  destRoot: string
-  version: string
-  daemonRuntimeDir: string
-  isDaemonPidAlive?: IsDaemonPidAlive
-}): string | null {
-  const { sourceDir, destRoot, version, daemonRuntimeDir, isDaemonPidAlive } = options
-  const destDir = join(destRoot, version)
-  try {
-    // Why: the marker is written only after a full copy, so a crash mid-copy
-    // leaves no marker and the next launch redoes the copy from scratch.
-    if (!existsSync(join(destDir, RELOCATION_COMPLETE_MARKER))) {
-      rmSync(destDir, { recursive: true, force: true })
-      copyRuntimeTree(sourceDir, destDir)
-      writeFileSync(join(destDir, RELOCATION_COMPLETE_MARKER), '')
-    }
-    const inUseVersions = collectInUseRuntimeVersions(daemonRuntimeDir, isDaemonPidAlive)
-    removeStaleRuntimeVersions(destRoot, version, inUseVersions)
-    return destDir
-  } catch {
-    // Fail open: node-pty keeps loading from the install dir, which is the
-    // pre-relocation behavior (sessions then don't survive updates).
-    return null
-  }
 }
 
 export function installRelocatedNodePtyNativeRuntime(): void {
@@ -184,7 +56,7 @@ export function installRelocatedNodePtyNativeRuntime(): void {
     return
   }
   const userData = app.getPath('userData')
-  const destDir = ensureRelocatedNodePtyNativeRuntime({
+  const destDir = ensureRelocatedRuntime({
     sourceDir,
     destRoot: join(userData, 'node-pty-runtime'),
     version: app.getVersion(),
