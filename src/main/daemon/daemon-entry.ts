@@ -6,6 +6,9 @@
  * Signals readiness to parent via IPC: { type: 'ready' }
  * Shuts down cleanly on SIGTERM.
  */
+// Why first: patches child_process defaults (windowsHide) before any other
+// module captures bindings like promisify(execFile) at its own import time.
+import './windows-hidden-console-children'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'

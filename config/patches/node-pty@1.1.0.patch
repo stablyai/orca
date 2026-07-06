@@ -18,7 +18,7 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
 +++ b/deps/winpty/src/winpty.gyp
 @@ -10,7 +10,7 @@
      #    make -j4 CXX=i686-w64-mingw32-g++ LDFLAGS="-static -static-libgcc -static-libstdc++"
-
+ 
      'variables': {
 -        'WINPTY_COMMIT_HASH%': '<!(cmd /c "cd shared && GetCommitHash.bat")',
 +        'WINPTY_COMMIT_HASH%': '<!(cmd /c "cd shared && .\\GetCommitHash.bat")',
@@ -54,8 +54,29 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
              'msvs_settings': {
                  # Specify this setting here to override a setting from somewhere
                  # else, such as node's common.gypi.
+diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
+index 8c4fca9022a6d6f015bca87f61625cde2278f428..201fc1d70a907e31b5a2b33b19a9db20803bc652 100644
+--- a/lib/conpty_console_list_agent.js
++++ b/lib/conpty_console_list_agent.js
+@@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ var utils_1 = require("./utils");
+ var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
+ var shellPid = parseInt(process.argv[2], 10);
+-var consoleProcessList = getConsoleProcessList(shellPid);
++var consoleProcessList;
++try {
++    consoleProcessList = getConsoleProcessList(shellPid);
++}
++catch (_a) {
++    // Why: AttachConsole can fail after the shell exits; parent already has this fallback.
++    consoleProcessList = [shellPid];
++}
+ process.send({ consoleProcessList: consoleProcessList });
+ process.exit(0);
+ //# sourceMappingURL=conpty_console_list_agent.js.map
+\ No newline at end of file
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..3c4ae8e7818379a4f6f09ee740959292a2c3515f 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -73,31 +94,52 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
-diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
-index ccc111c9e03a4a661ccfd5d8e8f0ee699571b5dd..f92c6bef7d46dc35c941c87ef186aa46d8ed9c44 100644
---- a/lib/conpty_console_list_agent.js
-+++ b/lib/conpty_console_list_agent.js
-@@ -9,7 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
- var utils_1 = require("./utils");
- var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
- var shellPid = parseInt(process.argv[2], 10);
--var consoleProcessList = getConsoleProcessList(shellPid);
-+var consoleProcessList;
-+try {
-+    consoleProcessList = getConsoleProcessList(shellPid);
-+}
-+catch (_a) {
-+    // Why: AttachConsole can fail after the shell exits; parent already has this fallback.
-+    consoleProcessList = [shellPid];
-+}
- process.send({ consoleProcessList: consoleProcessList });
- process.exit(0);
- //# sourceMappingURL=conpty_console_list_agent.js.map
+diff --git a/lib/utils.js b/lib/utils.js
+index af7918b6902a105a7c49813bc0bb4d687d87a7d4..fd989104227bb4dff8caebef65f2eba2c3bbd7d2 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -20,6 +20,19 @@ function loadNativeModule(name) {
+     // Check relative to the parent dir for unbundled and then the current dir for bundled
+     var relative = ['..', '.'];
+     var lastError;
++    // Why (Orca): the Windows updater force-closes every process whose image
++    // lives under the app install dir; this env var relocates the native
++    // binaries (conpty.dll spawns OpenConsole.exe from beside itself) so PTY
++    // console hosts run outside it and survive updates.
++    var overrideDir = process.env.ORCA_NODE_PTY_NATIVE_DIR;
++    if (overrideDir) {
++        try {
++            return { dir: overrideDir, module: require(overrideDir + "/" + name + ".node") };
++        }
++        catch (e) {
++            lastError = e;
++        }
++    }
+     for (var _i = 0, dirs_1 = dirs; _i < dirs_1.length; _i++) {
+         var d = dirs_1[_i];
+         for (var _a = 0, relative_1 = relative; _a < relative_1.length; _a++) {
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index a358ffb177357e177661033c1b092f9c9d0e5f5a..087c807dce19553970aaa0f81603e4da2043b91a 100644
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -181,7 +181,10 @@ var WindowsPtyAgent = /** @class */ (function () {
+     WindowsPtyAgent.prototype._getConsoleProcessList = function () {
+         var _this = this;
+         return new Promise(function (resolve) {
+-            var agent = child_process_1.fork(path.join(__dirname, 'conpty_console_list_agent'), [_this._innerPid.toString()]);
++            // Why (Orca): the terminal daemon can run under a console-subsystem
++            // node.exe host; without windowsHide this fork flashes a visible
++            // console window on every session kill.
++            var agent = child_process_1.fork(path.join(__dirname, 'conpty_console_list_agent'), [_this._innerPid.toString()], { windowsHide: true });
+             agent.on('message', function (message) {
+                 clearTimeout(timeout);
+                 resolve(message.consoleProcessList);
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
-index f6a653893e0b9b548c514db29d75599538ee1acb..1d5400489f200ef0161ca687e672e1cc02d29c95 100644
+index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..24519545c34e0f9a4438a814dd1feb9fd18517d1 100644
 --- a/src/conpty_console_list_agent.ts
 +++ b/src/conpty_console_list_agent.ts
-@@ -11,5 +11,11 @@ import { loadNativeModule } from './utils';
+@@ -10,6 +10,12 @@ import { loadNativeModule } from './utils';
+ 
  const getConsoleProcessList = loadNativeModule('conpty_console_list').module.getConsoleProcessList;
  const shellPid = parseInt(process.argv[2], 10);
 -const consoleProcessList = getConsoleProcessList(shellPid);
@@ -111,7 +153,7 @@ index f6a653893e0b9b548c514db29d75599538ee1acb..1d5400489f200ef0161ca687e672e1cc
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca850564e6368d9 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5c28e6465a6fd506cbc6b548b6d9cb918d3be0da 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -122,11 +164,11 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
  #include <unistd.h>
 +#include <string>
  #include <thread>
-
+ 
  #include <sys/types.h>
 @@ -237,13 +239,23 @@ pty_getproc(int, char *);
  #endif
-
+ 
  #if defined(__APPLE__) || defined(__OpenBSD__)
 +struct pty_spawn_error {
 +  const char* step;
@@ -147,12 +189,12 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 -                int* err);
 +                pty_spawn_error* err);
  #endif
-
+ 
  struct DelBuf {
 @@ -367,10 +379,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
-
+ 
 -  int err = -1;
 -  pty_posix_spawn(argv, env, term, &winp, &master, &pid, &err);
 -  if (err != 0) {
@@ -167,7 +209,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
 @@ -684,15 +697,73 @@ pty_getproc(int fd, char *tty) {
  #endif
-
+ 
  #if defined(__APPLE__)
 +static const char*
 +pty_errno_name(int errnum) {
@@ -238,7 +280,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +  bool acts_initialized = false;
 +  posix_spawnattr_t attrs;
 +  bool attrs_initialized = false;
-
+ 
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
 @@ -706,80 +777,118 @@ pty_posix_spawn(char** argv, char** env,
@@ -255,7 +297,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "grantpt", errno);
 +    goto done;
    }
-
+ 
 -  int res = grantpt(*master) || unlockpt(*master);
 +  res = unlockpt(*master);
    if (res == -1) {
@@ -263,7 +305,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "unlockpt", errno);
 +    goto done;
    }
-
+ 
    // Use TIOCPTYGNAME instead of ptsname() to avoid threading problems.
 -  int slave;
    char slave_pty_name[128];
@@ -273,14 +315,14 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "ioctl_TIOCPTYGNAME", errno);
 +    goto done;
    }
-
+ 
    slave = open(slave_pty_name, O_RDWR | O_NOCTTY);
    if (slave == -1) {
 -    return;
 +    pty_set_spawn_error(err, "open_slave", errno, "slave", slave_pty_name);
 +    goto done;
    }
-
+ 
    if (termp) {
      res = tcsetattr(slave, TCSANOW, termp);
      if (res == -1) {
@@ -289,7 +331,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +      goto done;
      };
    }
-
+ 
    if (winp) {
      res = ioctl(slave, TIOCSWINSZ, winp);
      if (res == -1) {
@@ -298,7 +340,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +      goto done;
      }
    }
-
+ 
 -  posix_spawn_file_actions_t acts;
 -  posix_spawn_file_actions_init(&acts);
 +  res = posix_spawn_file_actions_init(&acts);
@@ -312,7 +354,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
    posix_spawn_file_actions_adddup2(&acts, slave, STDERR_FILENO);
    posix_spawn_file_actions_addclose(&acts, slave);
    posix_spawn_file_actions_addclose(&acts, *master);
-
+ 
 -  posix_spawnattr_t attrs;
 -  posix_spawnattr_init(&attrs);
 -  *err = posix_spawnattr_setflags(&attrs, flags);
@@ -328,7 +370,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setflags", res);
      goto done;
    }
-
+ 
    sigset_t signal_set;
    /* Reset all signal the child to their default behavior */
    sigfillset(&signal_set);
@@ -339,7 +381,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setsigdefault", res);
      goto done;
    }
-
+ 
    /* Reset the signal mask for all signals */
    sigemptyset(&signal_set);
 -  *err = posix_spawnattr_setsigmask(&attrs, &signal_set);
@@ -349,7 +391,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    pty_set_spawn_error(err, "posix_spawnattr_setsigmask", res);
      goto done;
    }
-
+ 
    do
 -    *err = posix_spawn(pid, argv[0], &acts, &attrs, argv, env);
 -  while (*err == EINTR);
@@ -374,7 +416,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 +    close(*master);
 +    *master = -1;
 +  }
-
+ 
 -  for (; count > 0; count--) {
 -    close(low_fds[count]);
 +  for (size_t i = 0; i <= count && i < 3; i++) {
@@ -384,27 +426,19 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
    }
  }
  #endif
-diff --git a/lib/utils.js b/lib/utils.js
---- a/lib/utils.js
-+++ b/lib/utils.js
-@@ -19,7 +19,20 @@ function loadNativeModule(name) {
-     var dirs = ['build/Release', 'build/Debug', "prebuilds/" + process.platform + "-" + process.arch];
-     // Check relative to the parent dir for unbundled and then the current dir for bundled
-     var relative = ['..', '.'];
-     var lastError;
-+    // Why (Orca): the Windows updater force-closes every process whose image
-+    // lives under the app install dir; this env var relocates the native
-+    // binaries (conpty.dll spawns OpenConsole.exe from beside itself) so PTY
-+    // console hosts run outside it and survive updates.
-+    var overrideDir = process.env.ORCA_NODE_PTY_NATIVE_DIR;
-+    if (overrideDir) {
-+        try {
-+            return { dir: overrideDir, module: require(overrideDir + "/" + name + ".node") };
-+        }
-+        catch (e) {
-+            lastError = e;
-+        }
-+    }
-     for (var _i = 0, dirs_1 = dirs; _i < dirs_1.length; _i++) {
-         var d = dirs_1[_i];
-         for (var _a = 0, relative_1 = relative; _a < relative_1.length; _a++) {
+diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
+index d7054449516f0c9a62af351c2caa17331206d530..d6f0892f614d36b42f32547e81d93cabb268c601 100644
+--- a/src/windowsPtyAgent.ts
++++ b/src/windowsPtyAgent.ts
+@@ -184,7 +184,10 @@ export class WindowsPtyAgent {
+ 
+   private _getConsoleProcessList(): Promise<number[]> {
+     return new Promise<number[]>(resolve => {
+-      const agent = fork(path.join(__dirname, 'conpty_console_list_agent'), [ this._innerPid.toString() ]);
++      // Why (Orca): the terminal daemon can run under a console-subsystem
++      // node.exe host; without windowsHide this fork flashes a visible
++      // console window on every session kill.
++      const agent = fork(path.join(__dirname, 'conpty_console_list_agent'), [ this._innerPid.toString() ], { windowsHide: true });
+       agent.on('message', message => {
+         clearTimeout(timeout);
+         resolve(message.consoleProcessList);
