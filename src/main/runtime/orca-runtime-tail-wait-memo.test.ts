@@ -158,6 +158,42 @@ describe('onPtyData tail wait memoization', () => {
     expect(memoized.at(-1)).not.toBeNull()
   })
 
+  it('recomputes correctly after a transcript prune empties the tail (prune-then-resume)', () => {
+    // pruneDisconnectedPtyTranscript empties the tail AND clears tailWaitState;
+    // model that here and assert the memoized stamping still tracks a fresh
+    // recompute across the reset (a stale cache would desync the first resumed
+    // chunk, since the pre-prune tail held a blocked prompt).
+    const prune = (sim: TailSim): void => {
+      sim.tailBuffer = []
+      sim.tailPartialLine = ''
+      sim.tailRedrawCursor = null
+      sim.preview = ''
+      sim.waitBlockedAt = null
+      sim.tailWaitState = undefined
+    }
+    const memoSim = newSim()
+    const refSim = newSim()
+    const memoOut: (number | null)[] = []
+    const refOut: (number | null)[] = []
+    let at = 0
+    const feed = (chunk: string): void => {
+      at += 1
+      stepMemoized(memoSim, chunk, at, computeTerminalTailWaitState)
+      stepReference(refSim, chunk, at, computeTerminalTailWaitState)
+      memoOut.push(memoSim.waitBlockedAt)
+      refOut.push(refSim.waitBlockedAt)
+    }
+    // Pre-prune: leave a stale blocked prompt in the tail.
+    ;['building\n', 'Update available! Press Enter to continue.\n', 'more log\n'].forEach(feed)
+    prune(memoSim)
+    prune(refSim)
+    // Resume: a fresh blocked prompt must be stamped, not masked by stale cache.
+    ;['fresh start\n', 'Update available! Press Enter to continue.\n', 'after\n'].forEach(feed)
+
+    expect(memoOut).toEqual(refOut)
+    expect(memoSim.waitBlockedAt).not.toBeNull()
+  })
+
   it('does roughly half the full-tail wait scans of the recompute reference', () => {
     const chunks: string[] = []
     for (let i = 0; i < 500; i += 1) {

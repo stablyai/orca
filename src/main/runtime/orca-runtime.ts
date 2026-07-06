@@ -18194,6 +18194,10 @@ export class OrcaRuntimeService {
     pty.tailTruncated = false
     pty.tailLinesTotal = 0
     pty.waitBlockedAt = null
+    // Why: the tail is now empty, so the memoized wait scan must not be reused as
+    // the next chunk's "previous" state — clear it so onPtyData recomputes from
+    // the reset tail if this record resumes output (adoption/reattach).
+    pty.tailWaitState = undefined
   }
 
   private pruneDisconnectedPtyRecords(): void {
