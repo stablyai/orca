@@ -23021,8 +23021,9 @@ export function computeTerminalTailWaitState(
   }
 }
 
-// Why: equivalent to nextTailHasNewerBlockedReason but consumes precomputed wait
-// states so the full-tail scans are not repeated per chunk.
+// Why: decides whether the appended chunk introduced a newer actionable blocked
+// prompt, consuming precomputed wait states so the full-tail scans are not
+// repeated per chunk (replaces the former inline double full-tail scan).
 export function tailGainedNewerBlockedReason(
   previous: TerminalTailWaitState,
   next: TerminalTailWaitState,
