@@ -168,6 +168,23 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('launches Gajae Code as an argv agent that submits the prompt as the first turn', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'gjc',
+      prompt: 'fix the failing tests',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'gjc',
+      launchCommand: "gjc 'fix the failing tests'",
+      expectedProcess: 'gjc',
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'gjc', agentArgs: '', agentEnv: {} }
+    })
+  })
+
   it('launches Mistral Vibe through the installed vibe executable', () => {
     const plan = buildAgentStartupPlan({
       agent: 'mistral-vibe',

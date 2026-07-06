@@ -1,3 +1,4 @@
+import { isGjcHeadlessOneShotCommand } from './gjc-headless-command'
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
 import { isClaudeHeadlessOneShotCommand } from './claude-headless-command'
 import type { TuiAgent } from './types'
@@ -6,7 +7,10 @@ export function isHeadlessOneShotAgentCommand(agent: TuiAgent, tokens: readonly 
   if (agent === 'claude') {
     return isClaudeHeadlessOneShotCommand(tokens)
   }
-  return agent === 'ante' && isAnteHeadlessOneShotCommand(tokens)
+  if (agent === 'ante') {
+    return isAnteHeadlessOneShotCommand(tokens)
+  }
+  return agent === 'gjc' && isGjcHeadlessOneShotCommand(tokens)
 }
 
 type AgentCommandRecognition = { agent: TuiAgent } | null

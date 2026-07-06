@@ -21,7 +21,8 @@ export const AI_VAULT_AGENTS = [
   'openclaw',
   'devin',
   'droid',
-  'kimi'
+  'kimi',
+  'gjc'
 ] as const satisfies readonly TuiAgent[]
 
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
@@ -43,7 +44,8 @@ export const AI_VAULT_AGENT_LABELS = {
   openclaw: 'OpenClaw',
   devin: 'Devin',
   droid: 'Droid',
-  kimi: 'Kimi'
+  kimi: 'Kimi',
+  gjc: 'Gajae Code'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -222,6 +224,7 @@ function buildAgentResumeInvocation(
     case 'devin':
     case 'openclaw':
     case 'droid':
+    case 'gjc':
       return `${baseCommand} --resume ${sessionArg}`
   }
 }
