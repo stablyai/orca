@@ -375,7 +375,21 @@ describe('registerPtyHandlers', () => {
   afterEach(() => {
     _resetWslCachesForTests()
     vi.useRealTimers()
-    unregisterSshPtyProvider('ssh-1')
+    // Why: sshProviders is module-level state; any id left registered leaks
+    // into later tests (pty:listSessions sweeps every registered provider).
+    for (const leakedConnectionId of [
+      'ssh-1',
+      'ssh-a',
+      'ssh-b',
+      'ssh-expired-runtime',
+      'ssh-fresh-fail',
+      'ssh-reattach-1',
+      'ssh-reattach-fail',
+      'ssh-reattach-ok',
+      'ssh-runtime-env'
+    ]) {
+      unregisterSshPtyProvider(leakedConnectionId)
+    }
     setLocalPtyProvider(new LocalPtyProvider())
     if (savedProcessPlatform) {
       Object.defineProperty(process, 'platform', savedProcessPlatform)
@@ -7245,6 +7259,106 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('caps per-PTY pending output while the renderer is starved and heals via a droppedOutput sentinel', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the renderer in-flight window (512 KB) with no ACKs — the
+      // frozen/starved-renderer shape from the field reports.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+
+      // Keep flooding well past the 2 MB per-PTY pending cap. Main must not
+      // buffer this unboundedly (previously: unbounded string concat).
+      mockProc.emitData('y'.repeat(3 * 1024 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+
+      // Later output while dropped must stay O(1), not start re-accumulating.
+      mockProc.emitData('z'.repeat(64 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+
+      // Renderer recovers and ACKs: the flush must deliver the droppedOutput
+      // sentinel so the pane repaints from the main-owned snapshot.
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawn.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: '',
+        droppedOutput: true
+      })
+
+      // Fresh output after the sentinel flows normally again.
+      mainWindow.webContents.send.mockClear()
+      mockProc.emitData('back to normal')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: 'back to normal'
+      })
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('scales the pending-output cap with the scrollback setting', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      // 50k-row scrollback ⇒ 6 MB pending cap instead of the 2 MB floor.
+      registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+        terminalScrollbackRows: 50_000
+      })) as never)
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, cwd: '/tmp' })
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the in-flight window with no ACKs, then buffer 3 MB — over
+      // the floor, under the scaled cap: it must be retained, not dropped.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      mockProc.emitData('y'.repeat(3 * 1024 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot().pendingChars).toBeGreaterThan(3 * 1024 * 1024)
+
+      // The scaled cap still bounds a runaway flood.
+      mockProc.emitData('z'.repeat(4 * 1024 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   it('forwards only actually in-flight bytes to provider ACK backpressure', async () => {
     vi.useFakeTimers()
     const acknowledgeDataEvent = vi.fn()
@@ -7683,6 +7797,34 @@ describe('registerPtyHandlers', () => {
     expect(writeAccepted(mainWindowIpcEvent, { id: result.id, data: 1 })).toBe(false)
     expect(writeAccepted(foreignWindowIpcEvent, { id: result.id, data: 'x' })).toBe(false)
     expect(mockProc.proc.write).not.toHaveBeenCalled()
+  })
+
+  it('silently drops writes to a live PTY after ownership loss until pty:listSessions rebuilds it (frozen-terminal repro)', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const write = getPtyWriteListener()
+
+    write(mainWindowIpcEvent, { id: result.id, data: 'alive' })
+    expect(mockProc.proc.write).toHaveBeenCalledWith('alive')
+
+    // Field failure shape (Discord #performance / #2836): a pane can keep
+    // rendering with a ptyId whose ownership entry is gone while the provider
+    // still holds the live PTY — every keystroke then vanishes with no error,
+    // no log, and no signal back to the renderer.
+    deletePtyOwnership(result.id)
+    write(mainWindowIpcEvent, { id: result.id, data: 'dropped' })
+    expect(mockProc.proc.write).not.toHaveBeenCalledWith('dropped')
+
+    // pty:listSessions rebuilds ownership from provider sessions — the
+    // revival lever the frozen-pane e2e probes depend on.
+    await handlers.get('pty:listSessions')!(null, undefined)
+    write(mainWindowIpcEvent, { id: result.id, data: 'revived' })
+    expect(mockProc.proc.write).toHaveBeenCalledWith('revived')
   })
 
   it('chunks large acknowledged pty writes before provider writes', async () => {

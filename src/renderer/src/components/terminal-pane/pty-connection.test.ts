@@ -192,7 +192,10 @@ type StoreState = {
 }
 
 type ConnectCallbacks = {
-  onData?: (data: string, meta?: { seq?: number; rawLength?: number; background?: boolean }) => void
+  onData?: (
+    data: string,
+    meta?: { seq?: number; rawLength?: number; background?: boolean; droppedOutput?: boolean }
+  ) => void
   onReplayData?: (data: string, meta?: { clearBeforeReplay?: boolean }) => void
   onError?: (msg: string) => void
 }
@@ -7619,6 +7622,53 @@ describe('connectPanePty', () => {
 
       expect(pane.terminal.write).toHaveBeenCalledWith('hello', expect.any(Function))
       expect(pane.terminal.write).not.toHaveBeenCalledWith('ello', expect.any(Function))
+    } finally {
+      binding.dispose()
+    }
+  })
+
+  it('repaints from the main-owned snapshot when main drops pending output at the cap', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'healed from snapshot\r\n',
+      cols: 100,
+      rows: 30
+    })
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({ isVisibleRef: { current: true } }) as never
+    )
+    try {
+      await flushAsyncTicks(6)
+      getMainBufferSnapshot.mockClear()
+
+      // Main hit the per-PTY pending cap while the renderer was starved and
+      // sent the droppedOutput sentinel: the stream has a gap, so the pane
+      // must repaint from the authoritative main-owned buffer.
+      capturedDataCallback.current?.('', { droppedOutput: true })
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalled()
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining('healed from snapshot'),
+        expect.any(Function)
+      )
     } finally {
       binding.dispose()
     }

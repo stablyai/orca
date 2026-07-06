@@ -897,6 +897,7 @@ const api = {
         seq?: number
         rawLength?: number
         background?: boolean
+        droppedOutput?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
@@ -907,6 +908,7 @@ const api = {
           seq?: number
           rawLength?: number
           background?: boolean
+          droppedOutput?: boolean
         }
       ) => callback(data)
       ipcRenderer.on('pty:data', listener)

@@ -10,6 +10,7 @@ import {
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from './layout-serialization'
+import { guardParserHandler } from './terminal-parser-handler-guard'
 import { captureScrollState, restoreScrollState, safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import {
   normalizeTerminalFastScrollSensitivity,
@@ -55,50 +56,56 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
   // continue processing the same sequence, so compound sequences like
   // `CSI ?25;2031h` still update cursor visibility correctly.
   return [
-    deps.parser.registerCsiHandler({ prefix: '?', final: 'h' }, (params) => {
-      if (hasMode2031(params)) {
-        // Why: a restored xterm buffer may contain `CSI ?2031h` emitted by
-        // the previous session's TUI (e.g. Claude Code). Replaying that
-        // buffer runs this handler, and without the guard we'd push
-        // `CSI ?997;1n` via transport.sendInput into a fresh shell that has
-        // no TUI consuming it — zsh then echoes the literal escape sequence
-        // onto the prompt. The replay guard in pty-connection.ts only covers
-        // xterm's own onData auto-replies, not handler-triggered sends, so
-        // gate explicitly here. We also skip recording the subscribe bit:
-        // the fresh shell is not actually subscribed, so a later theme flip
-        // must not push either. A real TUI that starts up after restore will
-        // re-emit `?2031h` itself and register normally.
-        //
-        // Why this broad guard is safe across all replay sources: the only
-        // replay path that can carry raw `?2031h` is cold-restore scrollback
-        // (pty-connection.ts), which is disk-replayed PTY output against a
-        // fresh shell — the case this guard targets. Daemon snapshot payloads
-        // (`rehydrateSequences + SerializeAddon.serialize()`) and persisted
-        // scrollback (`SerializeAddon.serialize()`) never contain `?2031`:
-        // SerializeAddon's _serializeModes whitelists only ?1h/?66h/?2004h/
-        // [4h/?6h/?45h/?1004h/?7l/mouse modes/?25l, and buildRehydrateSequences
-        // emits only ?1049h/?2004h/?1h/mouse reporting modes. If xterm ever
-        // adds ?2031 to that whitelist, this guard would start suppressing
-        // legitimate subscribes during snapshot reattach — revisit then.
-        if (deps.isReplaying()) {
-          return false
+    deps.parser.registerCsiHandler(
+      { prefix: '?', final: 'h' },
+      guardParserHandler('csi-mode2031-subscribe', (params) => {
+        if (hasMode2031(params)) {
+          // Why: a restored xterm buffer may contain `CSI ?2031h` emitted by
+          // the previous session's TUI (e.g. Claude Code). Replaying that
+          // buffer runs this handler, and without the guard we'd push
+          // `CSI ?997;1n` via transport.sendInput into a fresh shell that has
+          // no TUI consuming it — zsh then echoes the literal escape sequence
+          // onto the prompt. The replay guard in pty-connection.ts only covers
+          // xterm's own onData auto-replies, not handler-triggered sends, so
+          // gate explicitly here. We also skip recording the subscribe bit:
+          // the fresh shell is not actually subscribed, so a later theme flip
+          // must not push either. A real TUI that starts up after restore will
+          // re-emit `?2031h` itself and register normally.
+          //
+          // Why this broad guard is safe across all replay sources: the only
+          // replay path that can carry raw `?2031h` is cold-restore scrollback
+          // (pty-connection.ts), which is disk-replayed PTY output against a
+          // fresh shell — the case this guard targets. Daemon snapshot payloads
+          // (`rehydrateSequences + SerializeAddon.serialize()`) and persisted
+          // scrollback (`SerializeAddon.serialize()`) never contain `?2031`:
+          // SerializeAddon's _serializeModes whitelists only ?1h/?66h/?2004h/
+          // [4h/?6h/?45h/?1004h/?7l/mouse modes/?25l, and buildRehydrateSequences
+          // emits only ?1049h/?2004h/?1h/mouse reporting modes. If xterm ever
+          // adds ?2031 to that whitelist, this guard would start suppressing
+          // legitimate subscribes during snapshot reattach — revisit then.
+          if (deps.isReplaying()) {
+            return false
+          }
+          deps.paneMode2031.set(deps.paneId, true)
+          deps.onSubscribe()
         }
-        deps.paneMode2031.set(deps.paneId, true)
-        deps.onSubscribe()
-      }
-      return false
-    }),
+        return false
+      })
+    ),
     // Why no replay guard on the unsubscribe branch: clearing stale bookkeeping
     // is harmless. We only push CSI 997 on subscribe, never on unsubscribe, so
     // even if a cold-restore replay carries `?2031l`, this handler just deletes
     // map entries that a later real `?2031h` will re-populate normally.
-    deps.parser.registerCsiHandler({ prefix: '?', final: 'l' }, (params) => {
-      if (hasMode2031(params)) {
-        deps.paneMode2031.delete(deps.paneId)
-        deps.paneLastThemeMode.delete(deps.paneId)
-      }
-      return false
-    })
+    deps.parser.registerCsiHandler(
+      { prefix: '?', final: 'l' },
+      guardParserHandler('csi-mode2031-unsubscribe', (params) => {
+        if (hasMode2031(params)) {
+          deps.paneMode2031.delete(deps.paneId)
+          deps.paneLastThemeMode.delete(deps.paneId)
+        }
+        return false
+      })
+    )
   ]
 }
 

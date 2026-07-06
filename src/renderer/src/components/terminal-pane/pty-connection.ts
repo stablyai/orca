@@ -5163,6 +5163,13 @@ export function connectPanePty(
       }
       observeStartupDraftPasteReadiness(data)
       resetHiddenOutputRestoreIfPtyChanged()
+      if (meta?.droppedOutput === true) {
+        // Why: main dropped this PTY's buffered output at the pending cap
+        // (renderer was not receiving). The stream has a gap, so repaint the
+        // pane from the main-owned buffer snapshot instead of writing on.
+        markHiddenOutputRestoreNeeded()
+        return
+      }
       respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {
