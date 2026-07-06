@@ -5,7 +5,7 @@ import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-connection'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { SshRelaySession } from '../ssh/ssh-relay-session'
+import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type {
   DetectedPort,
@@ -122,6 +122,23 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
 // (multiplexer, providers, abort controller, state machine). Eliminates the
 // scattered Maps/Sets that previously tracked this state independently.
 const activeSessions = new Map<string, SshRelaySession>()
+
+export function getActiveSshAiVaultHostInfo(targetId: string): SshRelayAiVaultHostInfo | null {
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    return null
+  }
+  return activeSessions.get(targetId)?.getAiVaultHostInfo() ?? null
+}
+
+export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
+  return [...activeSessions.values()].flatMap((session) => {
+    if (isRuntimeOwnedSshTargetId(session.targetId)) {
+      return []
+    }
+    const info = session.getAiVaultHostInfo()
+    return info ? [info] : []
+  })
+}
 
 async function detachActiveSshSession(targetId: string): Promise<void> {
   await teardownActiveSshSession(targetId, (session) => session.detach())

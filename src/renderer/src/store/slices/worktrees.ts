@@ -72,7 +72,10 @@ const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
 const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
-const WORKTREE_REFRESH_CONCURRENCY = 5
+// Why: each repo's `git worktree list` is an independent main-process child, so
+// a higher ceiling cuts startup scan batches (#7225) while staying bounded so
+// one UI moment can't launch every git probe at once.
+export const WORKTREE_REFRESH_CONCURRENCY = 8
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
@@ -1900,6 +1903,25 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return changed ? out : obj
   }
+  // Pane-scoped maps are keyed by `${tabId}:${leafId}` (stable-pane-id); tabId
+  // never contains ":", so the segment before the first ":" is the owning tab.
+  const omitByPaneKeyTabPrefix = <T>(obj: Record<string, T>): Record<string, T> => {
+    // Null-tolerant like omitByTabId: some worktree-isolation callers omit these
+    // slices entirely, and the production store always initializes them to {}.
+    if (!obj) {
+      return obj
+    }
+    let changed = false
+    const out = { ...obj }
+    for (const paneKey of Object.keys(obj)) {
+      const sep = paneKey.indexOf(':')
+      if (sep > 0 && doomedTabIds.has(paneKey.slice(0, sep))) {
+        delete out[paneKey]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
   const omitByBrowserWorkspaceId = <T>(obj: Record<string, T>): Record<string, T> => {
     let changed = false
     const out = { ...obj }
@@ -1969,6 +1991,26 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
+    nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
+    // Why: these tab/pane-scoped agent-status, unread, and input maps are only
+    // cleared on the single removeWorktree path (via shutdownWorktreeTerminals /
+    // dropAgentStatusByWorktree / clearPaneForegroundAgentByWorktree, which read
+    // tabsByWorktree while it is still populated). The bulk reconcile / remove-
+    // project / hydration-stale paths that reach this reducer never run terminal
+    // teardown, so without this they orphan an entry per agent pane of every
+    // externally-removed worktree for the session (plus a phantom unread dock
+    // badge). retainedAgentsByPaneKey and runtimeAgentOrchestrationByPaneKey are
+    // intentionally omitted here — both self-heal (pruneRetainedAgents on a
+    // worktreesByRepo change; the runtime map is replaced wholesale each sync).
+    agentStatusByPaneKey: omitByPaneKeyTabPrefix(s.agentStatusByPaneKey),
+    agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey),
+    acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
+    paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
+    sleepingAgentSessionsByPaneKey: omitByPaneKeyTabPrefix(s.sleepingAgentSessionsByPaneKey),
+    unreadTerminalTabs: omitByTabId(s.unreadTerminalTabs),
+    unreadTerminalPanes: omitByPaneKeyTabPrefix(s.unreadTerminalPanes),
+    unreadAgentCompletionPanes: omitByPaneKeyTabPrefix(s.unreadAgentCompletionPanes),
+    lastTerminalInputAtByPaneKey: omitByPaneKeyTabPrefix(s.lastTerminalInputAtByPaneKey),
     // Delete state
     deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
@@ -3055,11 +3097,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextAutomaticAgentResumeClaimsByTabId = {
           ...s.automaticAgentResumeClaimsByTabId
         }
+        const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
         for (const tabId of tabIds) {
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
           delete nextRuntimePaneTitlesByTabId[tabId]
           delete nextAutomaticAgentResumeClaimsByTabId[tabId]
+          delete nextNativeChatLaunchPromptByTabId[tabId]
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
@@ -3205,6 +3249,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
           automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
+          nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
           baseStatusByWorktreeId: (() => {

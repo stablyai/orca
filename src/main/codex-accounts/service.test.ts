@@ -66,7 +66,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
-    terminalTuiScrollSensitivity: 3,
+    terminalTuiScrollSensitivity: 1,
     terminalGpuAcceleration: 'auto',
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
@@ -131,6 +131,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
+    minimaxGroupId: '',
+    minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
@@ -275,6 +277,49 @@ describe('CodexAccountService config sync', () => {
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"managed"}\n'
     )
+  })
+
+  it('rewrites relative path config values when syncing into managed homes', async () => {
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    writeFileSync(
+      canonicalConfigPath,
+      'model_instructions_file = "instructions.md"\nsandbox_mode = "danger-full-access"\n',
+      'utf-8'
+    )
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      'approval_policy = "on-request"\n',
+      '{"account":"managed"}\n'
+    )
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
+
+    const managedConfig = readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')
+    expect(managedConfig).toContain(
+      `model_instructions_file = '${join(testState.fakeHomeDir, '.codex', 'instructions.md')}'`
+    )
+    expect(managedConfig).toContain('sandbox_mode = "danger-full-access"')
   })
 
   it('does not rewrite managed configs that already match canonical config', async () => {
@@ -706,7 +751,11 @@ describe('CodexAccountService config sync', () => {
     const wslManagedHomePath = join(testState.userDataDir, 'wsl-managed-home')
     const wslConfigPath = join(testState.userDataDir, 'wsl-config.toml')
     const wslLinuxHomePath = '/home/alice/.local/share/orca/codex-accounts/account-id-for-test/home'
-    writeFileSync(wslConfigPath, 'sandbox_mode = "danger-full-access"\n', 'utf-8')
+    writeFileSync(
+      wslConfigPath,
+      'sandbox_mode = "danger-full-access"\nmodel_instructions_file = "instructions.md"\n',
+      'utf-8'
+    )
 
     const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
@@ -731,8 +780,11 @@ describe('CodexAccountService config sync', () => {
         '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
+      // Why: codex login runs inside WSL, so the rewritten path must be the
+      // Linux-side ~/.codex, not a Windows UNC path.
       expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
-        'sandbox_mode = "danger-full-access"\n'
+        'sandbox_mode = "danger-full-access"\n' +
+          "model_instructions_file = '/home/alice/.codex/instructions.md'\n"
       )
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough

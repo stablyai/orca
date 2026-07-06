@@ -619,6 +619,45 @@ describe('createBrowserSlice runtime guard', () => {
     expect(tab.sessionProfileId).toBe('remote-default')
   })
 
+  it('stores a runtime-resolved browser partition without a renderer profile mirror', () => {
+    const store = createTestStore()
+    store.setState({ browserSessionProfiles: [] })
+
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      sessionProfileId: 'profile-isolated',
+      sessionPartition: 'persist:orca-browser-session-profile-isolated'
+    })
+
+    expect(tab.sessionProfileId).toBe('profile-isolated')
+    expect(tab.sessionPartition).toBe('persist:orca-browser-session-profile-isolated')
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]?.sessionPartition).toBe(
+      'persist:orca-browser-session-profile-isolated'
+    )
+  })
+
+  it('stores a runtime-resolved partition when switching browser tab profiles', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      sessionProfileId: null,
+      sessionPartition: 'persist:orca-browser'
+    })
+
+    store
+      .getState()
+      .switchBrowserTabProfile(
+        tab.id,
+        'profile-isolated',
+        'persist:orca-browser-session-profile-isolated'
+      )
+
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toEqual(
+      expect.objectContaining({
+        sessionProfileId: 'profile-isolated',
+        sessionPartition: 'persist:orca-browser-session-profile-isolated'
+      })
+    )
+  })
+
   it('creates new browser tabs through the owning runtime for desktop remote worktrees', async () => {
     const store = createTestStore()
     store.setState({

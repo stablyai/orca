@@ -17,6 +17,7 @@ vi.mock('./transcript-reader', async (importOriginal) => {
   }
 })
 
+import { isTextBlock } from '../../shared/native-chat-types'
 import {
   clearNativeChatTranscriptCache,
   readNativeChatTranscriptCached
@@ -88,5 +89,63 @@ describe('readNativeChatTranscriptCached', () => {
     await seedSession('present', 1)
     const result = await readNativeChatTranscriptCached('claude', 'absent')
     expect('error' in result && result.error).toBeTruthy()
+  })
+
+  // Why: two worktrees can present the SAME (agent, sessionId) via different
+  // transcript files — e.g. the same session resumed into a second worktree,
+  // which writes a new transcript file. Keying the cache by sessionId let one
+  // worktree's cached parse be served to the other whenever their file mtimes
+  // coincided, leaking A's chat transcript into C's panel (#7326).
+  it('never serves one file’s parse for a different file that shares a sessionId', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-xwt-'))
+    tempRoots.push(root)
+    const fileA = join(root, 'worktree-a.jsonl')
+    const fileC = join(root, 'worktree-c.jsonl')
+    await writeFile(
+      fileA,
+      jsonLines([
+        {
+          type: 'user',
+          uuid: 'a0',
+          timestamp: '2026-06-01T10:00:00.000Z',
+          message: { role: 'user', content: 'from-worktree-A' }
+        }
+      ])
+    )
+    await writeFile(
+      fileC,
+      jsonLines([
+        {
+          type: 'user',
+          uuid: 'c0',
+          timestamp: '2026-06-01T10:00:00.000Z',
+          message: { role: 'user', content: 'from-worktree-C' }
+        }
+      ])
+    )
+    // Force IDENTICAL mtimes so a sessionId-only key's mtime guard cannot rescue
+    // the collision — this is the intermittent, activity-driven case.
+    const when = new Date('2026-06-01T10:00:00.000Z')
+    await utimes(fileA, when, when)
+    await utimes(fileC, when, when)
+
+    const readText = (result: Awaited<ReturnType<typeof readNativeChatTranscriptCached>>): string =>
+      'messages' in result
+        ? result.messages
+            .flatMap((message) => message.blocks)
+            .filter(isTextBlock)
+            .map((block) => block.text)
+            .join(' ')
+        : ''
+
+    // Same sessionId, different transcript files (worktree A resumed into C).
+    const a = await readNativeChatTranscriptCached('claude', 'shared-session', fileA)
+    const c = await readNativeChatTranscriptCached('claude', 'shared-session', fileC)
+
+    expect(readText(a)).toContain('from-worktree-A')
+    expect(readText(c)).toContain('from-worktree-C')
+    expect(readText(c)).not.toContain('from-worktree-A')
+    // Distinct files must not share a cached parse object.
+    expect(c).not.toBe(a)
   })
 })

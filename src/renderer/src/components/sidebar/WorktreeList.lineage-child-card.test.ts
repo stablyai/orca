@@ -10,6 +10,7 @@ import type {
   WorktreeLineage
 } from '../../../../shared/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>
@@ -508,7 +509,7 @@ function setPinnedDuplicateFixtureState(): void {
 }
 
 function setLineageFixtureState(
-  groupBy: 'none' | 'repo' = 'none',
+  groupBy: 'none' | 'repo' | 'workspace-status' = 'none',
   options: {
     childWorktreeOverrides?: Partial<Worktree>
     deletingWorktreeIds?: string[]
@@ -631,7 +632,7 @@ function setLineageFixtureState(
     // Why: multi-host added a host scope filter; 'all' (the store default)
     // bypasses it so the fixture's worktrees aren't dropped before rendering.
     workspaceHostScope: 'all',
-    workspaceStatuses: [],
+    workspaceStatuses: groupBy === 'workspace-status' ? cloneDefaultWorkspaceStatuses() : [],
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {
       [child.id]: makeLineage(child, parent),
@@ -882,6 +883,16 @@ describe('WorktreeList lineage child card renderer', () => {
     const markup = await renderWorktreeListMarkup()
 
     expect(markup).not.toContain('data-repo-header-collapse-affordance=""')
+  })
+
+  it('renders a collapse chevron on status group headers with worktrees', async () => {
+    setLineageFixtureState('workspace-status')
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('In progress')
+    expect(markup).toContain('data-workspace-status-drop-target=""')
+    expect(markup).toContain('data-repo-header-collapse-affordance=""')
+    expect(markup).toContain('aria-expanded="true"')
   })
 
   it('renders a collapse chevron on grouped repo headers with worktrees', async () => {

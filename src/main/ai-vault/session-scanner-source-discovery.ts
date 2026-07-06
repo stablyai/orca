@@ -76,7 +76,17 @@ function claudeDiscoveries(
     options.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
     ...wslHomeDirs.map((homeDir) => join(homeDir, '.claude', 'projects'))
   ].map((rootDir) =>
-    discoverFiles({ rootDir, limit, agent: 'claude', issues, extensions: ['.jsonl'] })
+    discoverFiles({
+      rootDir,
+      limit,
+      agent: 'claude',
+      issues,
+      extensions: ['.jsonl'],
+      // Why: Task subagent transcripts under `<session>/subagents/` share the parent
+      // sessionId and aren't independently resumable, so they'd just duplicate the
+      // parent as untitled rows; prune the subtree instead of indexing it.
+      directoryPredicate: (name) => name !== 'subagents'
+    })
   )
 }
 

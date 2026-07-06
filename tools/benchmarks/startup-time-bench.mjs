@@ -12,8 +12,16 @@
  *   node tools/benchmarks/startup-time-bench.mjs --label baseline
  *     [--iterations 5] [--files 28000] [--fixture-dir <path>]
  *     [--state-profile none|restored-local-tabs] [--session-tabs 200]
+ *     [--github-repos 3] [--gh-hang-ms 30000]
  *     [--wait-for-event renderer-startup-hydration-done]
  *     [--exe <path-to-packaged-Orca>] [--timeout-ms 240000]
+ *
+ * Issue #7225 freeze reproduction: `--github-repos N` seeds N git repos with
+ * GitHub remotes and no configured username, so repo hydration reaches the
+ * `gh` login probe; `--gh-hang-ms` puts a fake `gh` on PATH that hangs like a
+ * blackholed api.github.com. The child it spawns survives the probe's timeout
+ * kill while holding the inherited stdio pipe — the exact mechanism that
+ * turns a 2.5s execSync timeout into a minutes-long main-thread stall.
  *
  * Prereq (when not using --exe): `pnpm build:electron-vite` so out/ exists.
  * Results: tools/benchmarks/results/startup-<label>-<timestamp>.json
@@ -29,7 +37,7 @@ import {
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
-import { join, resolve } from 'node:path'
+import { delimiter, join, resolve } from 'node:path'
 
 const scriptDir = import.meta.dirname
 const repoRoot = resolve(scriptDir, '..', '..')
@@ -45,6 +53,8 @@ function parseArgs(argv) {
     timeoutMs: 240000,
     stateProfile: 'none',
     sessionTabs: 0,
+    githubRepos: 0,
+    ghHangMs: 0,
     waitForEvent: 'did-finish-load',
     // How long the app stays alive after did-finish-load before the harness
     // kills it. Raise to let background work (e.g. the async win32 ACL grant)
@@ -78,6 +88,12 @@ function parseArgs(argv) {
       case '--session-tabs':
         args.sessionTabs = Number(next())
         break
+      case '--github-repos':
+        args.githubRepos = Number(next())
+        break
+      case '--gh-hang-ms':
+        args.ghHangMs = Number(next())
+        break
       case '--wait-for-event':
         args.waitForEvent = next()
         break
@@ -97,7 +113,7 @@ function parseArgs(argv) {
  * tiny. Layout mirrors Chromium cache dirs plus a few Orca-owned dirs.
  */
 function ensureFixture(fixtureDir, options) {
-  const { fileCount, stateProfile, sessionTabs } = options
+  const { fileCount, stateProfile, sessionTabs, githubRepos } = options
   const manifestPath = join(fixtureDir, 'bench-fixture-manifest.json')
   if (existsSync(manifestPath)) {
     try {
@@ -105,7 +121,8 @@ function ensureFixture(fixtureDir, options) {
       if (
         manifest.files === fileCount &&
         manifest.stateProfile === stateProfile &&
-        manifest.sessionTabs === sessionTabs
+        manifest.sessionTabs === sessionTabs &&
+        (manifest.githubRepos ?? 0) === githubRepos
       ) {
         console.log(`[fixture] reusing ${fixtureDir} (${fileCount} files, state=${stateProfile})`)
         return
@@ -139,7 +156,8 @@ function ensureFixture(fixtureDir, options) {
   }
   const persistedStateBytes = writePersistedStateFixture(fixtureDir, {
     stateProfile,
-    sessionTabs
+    sessionTabs,
+    githubRepos
   })
   writeFileSync(
     manifestPath,
@@ -147,6 +165,7 @@ function ensureFixture(fixtureDir, options) {
       files: fileCount,
       stateProfile,
       sessionTabs,
+      githubRepos,
       persistedStateBytes,
       createdAt: Date.now()
     })
@@ -154,9 +173,57 @@ function ensureFixture(fixtureDir, options) {
   console.log(`[fixture] done in ${((Date.now() - started) / 1000).toFixed(1)}s`)
 }
 
-function writePersistedStateFixture(fixtureDir, { stateProfile, sessionTabs }) {
+function initFixtureGitRepo(repoDir) {
+  mkdirSync(repoDir, { recursive: true })
+  if (!existsSync(join(repoDir, '.git'))) {
+    const init = spawnSync('git', ['init', repoDir], { stdio: 'ignore' })
+    if (init.status !== 0) {
+      throw new Error(`Failed to create git repo fixture at ${repoDir}`)
+    }
+  }
+  return realpathSync(repoDir)
+}
+
+/**
+ * Seed repos whose hydration reaches the `gh` login probe: a GitHub `origin`
+ * remote and no github.user/user.username config (the bench also points
+ * GIT_CONFIG_GLOBAL away from the developer's real config at launch).
+ */
+function buildGithubRepoFixtures(fixtureDir, githubRepos) {
+  const repos = []
+  for (let i = 0; i < githubRepos; i++) {
+    const repoPath = initFixtureGitRepo(join(fixtureDir, `bench-gh-repo-${i}`))
+    const remote = spawnSync(
+      'git',
+      [
+        '-C',
+        repoPath,
+        'remote',
+        'add',
+        'origin',
+        `https://github.com/orca-bench/bench-gh-repo-${i}.git`
+      ],
+      { stdio: 'ignore' }
+    )
+    // Exit 3 (remote exists) is fine on fixture reuse; anything else is not.
+    if (remote.status !== 0 && remote.status !== 3) {
+      throw new Error(`Failed to add GitHub remote to ${repoPath}`)
+    }
+    repos.push({
+      id: `bench-gh-repo-${i}`,
+      path: repoPath,
+      displayName: `Bench GH Repo ${i}`,
+      badgeColor: '#000000',
+      addedAt: 1,
+      externalWorktreeVisibility: 'show'
+    })
+  }
+  return repos
+}
+
+function writePersistedStateFixture(fixtureDir, { stateProfile, sessionTabs, githubRepos }) {
   const dataPath = join(fixtureDir, 'orca-data.json')
-  if (stateProfile === 'none') {
+  if (stateProfile === 'none' && githubRepos === 0) {
     try {
       unlinkSync(dataPath)
     } catch {
@@ -164,19 +231,29 @@ function writePersistedStateFixture(fixtureDir, { stateProfile, sessionTabs }) {
     }
     return 0
   }
-  if (stateProfile !== 'restored-local-tabs') {
+  if (!['none', 'restored-local-tabs'].includes(stateProfile)) {
     throw new Error(`Unknown state profile: ${stateProfile}`)
   }
 
-  const repoDir = join(fixtureDir, 'bench-repo')
-  mkdirSync(repoDir, { recursive: true })
-  if (!existsSync(join(repoDir, '.git'))) {
-    const init = spawnSync('git', ['init', repoDir], { stdio: 'ignore' })
-    if (init.status !== 0) {
-      throw new Error('Failed to create git repo for restored-local-tabs fixture')
+  const githubRepoEntries = buildGithubRepoFixtures(fixtureDir, githubRepos)
+  if (stateProfile === 'none') {
+    const state = {
+      schemaVersion: 1,
+      repos: githubRepoEntries,
+      settings: {
+        telemetry: {
+          installId: 'startup-bench',
+          optedIn: false,
+          existedBeforeTelemetryRelease: true
+        }
+      }
     }
+    const json = JSON.stringify(state, null, 2)
+    writeFileSync(dataPath, json, 'utf-8')
+    return Buffer.byteLength(json)
   }
-  const repoPath = realpathSync(repoDir)
+
+  const repoPath = initFixtureGitRepo(join(fixtureDir, 'bench-repo'))
   const repoId = 'bench-repo'
   const worktreeId = `${repoId}::${repoPath}`
   const tabCount = Math.max(1, sessionTabs)
@@ -213,7 +290,8 @@ function writePersistedStateFixture(fixtureDir, { stateProfile, sessionTabs }) {
         badgeColor: '#000000',
         addedAt: 1,
         externalWorktreeVisibility: 'show'
-      }
+      },
+      ...githubRepoEntries
     ],
     settings: {
       telemetry: {
@@ -244,6 +322,57 @@ function writePersistedStateFixture(fixtureDir, { stateProfile, sessionTabs }) {
   const json = JSON.stringify(state, null, 2)
   writeFileSync(dataPath, json, 'utf-8')
   return Buffer.byteLength(json)
+}
+
+/**
+ * Fake `gh` that hangs like a blackholed api.github.com. The hang lives in a
+ * child process (ping/sleep) that inherits the probe's stdio pipes, so even
+ * after a probe timeout kills the shim itself, the child keeps the pipe open —
+ * reproducing the mechanism that lets a hung real gh outlive execSync's
+ * timeout on the Electron main thread.
+ */
+function writeGhShim(fixtureDir, ghHangMs) {
+  if (!ghHangMs) {
+    return null
+  }
+  const shimDir = join(fixtureDir, 'gh-shim')
+  mkdirSync(shimDir, { recursive: true })
+  const hangSeconds = Math.max(1, Math.ceil(ghHangMs / 1000))
+  if (process.platform === 'win32') {
+    // ping -n K waits K-1 seconds between K probes of localhost.
+    writeFileSync(
+      join(shimDir, 'gh.cmd'),
+      `@echo off\r\nping -n ${hangSeconds + 1} 127.0.0.1\r\nexit /b 1\r\n`
+    )
+  } else {
+    const shimPath = join(shimDir, 'gh')
+    writeFileSync(shimPath, `#!/bin/sh\nsleep ${hangSeconds}\nexit 1\n`)
+    spawnSync('chmod', ['+x', shimPath], { stdio: 'ignore' })
+  }
+  return shimDir
+}
+
+function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
+  const env = {
+    ...process.env,
+    ORCA_STARTUP_DIAGNOSTICS: '1',
+    ORCA_E2E_USER_DATA_DIR: fixtureDir,
+    ORCA_E2E_HEADLESS: '1'
+  }
+  if (ghShimDir) {
+    env.PATH = `${ghShimDir}${delimiter}${env.PATH ?? ''}`
+  }
+  if (githubRepos > 0) {
+    // Keep the developer's real github.user/user.username out of the run so
+    // repo hydration deterministically falls through to the gh probe.
+    const emptyGitConfig = join(fixtureDir, 'bench-empty-gitconfig')
+    if (!existsSync(emptyGitConfig)) {
+      writeFileSync(emptyGitConfig, '')
+    }
+    env.GIT_CONFIG_GLOBAL = emptyGitConfig
+    env.GIT_CONFIG_NOSYSTEM = '1'
+  }
+  return env
 }
 
 function killProcessTree(proc) {
@@ -284,7 +413,7 @@ function parseStartupLine(line) {
   return { event: match[1], details }
 }
 
-function runIteration({ exe, fixtureDir, timeoutMs, lingerMs, waitForEvent }) {
+function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
   return new Promise((resolvePromise) => {
     // Why: npm's `electron` package exposes the platform-specific executable;
     // hardcoding electron.exe made this benchmark unusable on macOS/Linux.
@@ -293,12 +422,7 @@ function runIteration({ exe, fixtureDir, timeoutMs, lingerMs, waitForEvent }) {
     const events = []
     const startedAt = process.hrtime.bigint()
     const child = spawn(command, commandArgs, {
-      env: {
-        ...process.env,
-        ORCA_STARTUP_DIAGNOSTICS: '1',
-        ORCA_E2E_USER_DATA_DIR: fixtureDir,
-        ORCA_E2E_HEADLESS: '1'
-      },
+      env: launchEnv,
       stdio: ['ignore', 'ignore', 'pipe']
     })
     let finished = false
@@ -369,6 +493,7 @@ function derivePhases(events) {
     i18nToOpenWindow: delta(events, 'i18n-ready', 'open-main-window-start'),
     daemonInitMs: delta(events, 'daemon-init-start', 'daemon-init-done'),
     aclGrantMs: aclStart !== null && aclDone !== null ? aclDone - aclStart : null,
+    windowCreatedToLoadStart: delta(events, 'window-created', 'load-start'),
     windowCreatedToLoaded: delta(events, 'window-created', 'did-finish-load'),
     totalToWindowCreated: eventTime(events, 'window-created', 'harness'),
     totalToDidFinishLoad: eventTime(events, 'did-finish-load', 'harness'),
@@ -384,8 +509,25 @@ function derivePhases(events) {
         events,
         'renderer-first-window-services-await-done',
         'renderer-reconnect-terminals-done'
-      )
+      ),
+    // Worst single main-thread stall observed by the event-loop probe — the
+    // direct measurement of issue #7225's "Not Responding" freeze.
+    maxEventLoopStallMs: maxEventDetailsNumber(events, 'event-loop-stall', 'maxGapMs')
   }
+}
+
+function maxEventDetailsNumber(events, name, key) {
+  let max = null
+  for (const event of events) {
+    if (event.event !== name) {
+      continue
+    }
+    const value = event.details[key]
+    if (typeof value === 'number' && (max === null || value > max)) {
+      max = value
+    }
+  }
+  return max
 }
 
 function eventDetailsNumber(events, name, key) {
@@ -408,6 +550,15 @@ function median(values) {
   return usable.length % 2 ? usable[mid] : (usable[mid - 1] + usable[mid]) / 2
 }
 
+// Results are committed as PR evidence — keep home-anchored paths out of them.
+function sanitizeLocalPath(value) {
+  if (typeof value !== 'string') {
+    return value
+  }
+  const home = os.homedir()
+  return value.startsWith(home) ? `~${value.slice(home.length)}` : value
+}
+
 function formatMs(value) {
   if (value === null) {
     return 'n/a'
@@ -425,14 +576,21 @@ async function main() {
       join(
         os.tmpdir(),
         'orca-startup-bench',
-        `userdata-${args.files}-${args.stateProfile}-${args.sessionTabs}`
+        `userdata-${args.files}-${args.stateProfile}-${args.sessionTabs}-gh${args.githubRepos}`
       )
   )
   mkdirSync(fixtureDir, { recursive: true })
   ensureFixture(fixtureDir, {
     fileCount: args.files,
     stateProfile: args.stateProfile,
-    sessionTabs: args.sessionTabs
+    sessionTabs: args.sessionTabs,
+    githubRepos: args.githubRepos
+  })
+  const ghShimDir = writeGhShim(fixtureDir, args.ghHangMs)
+  const launchEnv = buildLaunchEnvironment({
+    fixtureDir,
+    githubRepos: args.githubRepos,
+    ghShimDir
   })
 
   if (!args.exe && !existsSync(join(repoRoot, 'out', 'main', 'index.js'))) {
@@ -444,15 +602,15 @@ async function main() {
     process.stdout.write(`[bench] iteration ${i + 1}/${args.iterations}… `)
     const result = await runIteration({
       exe: args.exe,
-      fixtureDir,
       timeoutMs: args.timeoutMs,
       lingerMs: args.lingerMs,
-      waitForEvent: args.waitForEvent
+      waitForEvent: args.waitForEvent,
+      launchEnv
     })
     const phases = derivePhases(result.events)
     iterations.push({ ...result, phases })
     console.log(
-      `${result.outcome} total=${formatMs(phases.totalToDidFinishLoad)} acl=${formatMs(phases.aclGrantMs)}`
+      `${result.outcome} total=${formatMs(phases.totalToDidFinishLoad)} acl=${formatMs(phases.aclGrantMs)} maxStall=${formatMs(phases.maxEventLoopStallMs)}`
     )
     // Let the OS settle between launches (process teardown, file handles).
     await new Promise((resolveSleep) => setTimeout(resolveSleep, 1500))
@@ -476,12 +634,14 @@ async function main() {
         platform: process.platform,
         arch: process.arch,
         cpus: os.cpus()[0]?.model,
-        fixtureDir,
+        fixtureDir: sanitizeLocalPath(fixtureDir),
         fixtureFiles: args.files,
         stateProfile: args.stateProfile,
         sessionTabs: args.sessionTabs,
+        githubRepos: args.githubRepos,
+        ghHangMs: args.ghHangMs,
         waitForEvent: args.waitForEvent,
-        exe: args.exe,
+        exe: sanitizeLocalPath(args.exe),
         iterations,
         summaryMedianMs: summary
       },

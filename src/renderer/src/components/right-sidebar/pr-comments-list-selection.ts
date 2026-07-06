@@ -65,7 +65,7 @@ export function usePRCommentsListSelection(
   selectionContextKey: string | undefined,
   clearRequest?: PRCommentsListSelectionClearRequest | null
 ): PRCommentsListSelection {
-  const lastClearRequestTokenRef = useRef<number | null>(clearRequest?.token ?? null)
+  const lastClearRequestTokenRef = useRef<number | null>(null)
   const [selectionState, setSelectionState] = useState<PRCommentsListSelectionState>(() =>
     createSelectionState(selectionContextKey)
   )
@@ -77,13 +77,14 @@ export function usePRCommentsListSelection(
   }, [selectionContextKey])
 
   useEffect(() => {
-    if (!clearRequest || clearRequest.token === lastClearRequestTokenRef.current) {
+    if (
+      !clearRequest ||
+      clearRequest.contextKey !== selectionContextKey ||
+      clearRequest.token === lastClearRequestTokenRef.current
+    ) {
       return
     }
     lastClearRequestTokenRef.current = clearRequest.token
-    if (clearRequest.contextKey !== selectionContextKey) {
-      return
-    }
     const next = {
       contextKey: selectionContextKey,
       isSelectingForAI: false,

@@ -855,21 +855,55 @@ function App(): React.JSX.Element {
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why: these three reads are main-side store/file reads with no
+        // dependency on anything fetched below, so start them now and await
+        // them at their original positions — the round-trips overlap the
+        // repo/worktree scans instead of queuing after them. Browser session
+        // profiles are deliberately NOT started early: on a remote runtime
+        // they route through a runtime RPC that may not be connected this
+        // early, and a failed fetch clears the profile list. The floating
+        // .catch marks the rejection handled if an earlier awaited step
+        // throws first; each await still rethrows its own failure.
+        const uiGetPromise = timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        uiGetPromise.catch(() => {})
+        const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
+          actions.fetchKeybindings()
+        )
+        keybindingsPromise.catch(() => {})
+        const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
+          window.api.onboarding.get()
+        )
+        onboardingPromise.catch(() => {})
         // Why: load local + every configured runtime environment (not just the
         // active one) so a cold start that restored a remote workspace doesn't
         // hide local repos. The sidebar "All hosts" scope then shows them all.
         await timeRendererStartupStep('fetch-repos', () => actions.fetchReposForAllHosts())
-        await timeRendererStartupStep('fetch-project-groups', () =>
-          actions.fetchProjectGroupsForAllHosts()
-        )
-        await timeRendererStartupStep('fetch-folder-workspaces', () =>
-          actions.fetchFolderWorkspacesForAllHosts()
-        )
-        await timeRendererStartupStep('fetch-worktrees', () => actions.fetchAllWorktrees())
-        await timeRendererStartupStep('fetch-worktree-lineage', () =>
-          actions.fetchWorktreeLineage()
-        )
-        const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        // Why: project-groups/folder-workspaces read neither the repos store nor
+        // worktrees, so once repos land they can overlap the per-repo
+        // `git worktree list` fan-out (#7225) instead of queuing ahead of it — a
+        // slow remote host's 15s scope RPCs no longer block the scan. folders
+        // still follow project-groups (they read projectGroups); all settle
+        // before the hydrate steps below.
+        const projectScopeChain = (async () => {
+          await timeRendererStartupStep('fetch-project-groups', () =>
+            actions.fetchProjectGroupsForAllHosts()
+          )
+          await timeRendererStartupStep('fetch-folder-workspaces', () =>
+            actions.fetchFolderWorkspacesForAllHosts()
+          )
+        })()
+        // Why: worktrees + lineage both fan out `git worktree list` per repo on
+        // the main process. Running them concurrently lets it share one
+        // in-flight scan per repo instead of paying the process-spawn fan-out
+        // twice back-to-back — the dominant renderer-chain cost on Windows
+        // (issue #7225). Lineage only reads settings + its own slice, so it
+        // does not depend on the worktrees fetch having landed.
+        await Promise.all([
+          projectScopeChain,
+          timeRendererStartupStep('fetch-worktrees', () => actions.fetchAllWorktrees()),
+          timeRendererStartupStep('fetch-worktree-lineage', () => actions.fetchWorktreeLineage())
+        ])
+        const persistedUI = await uiGetPromise
         uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
           hydratePersistedUIAfterStartupRead({
             persistedUI,
@@ -884,7 +918,7 @@ function App(): React.JSX.Element {
         const session = await timeRendererStartupStep('session-get', () =>
           fetchWorkspaceSessionFromHosts(window.api.session, useAppStore.getState().repos)
         )
-        await timeRendererStartupStep('fetch-keybindings', () => actions.fetchKeybindings())
+        await keybindingsPromise
         if (!cancelled) {
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
             actions.hydrateWorkspaceSession(session)
@@ -907,9 +941,7 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('fetch-browser-session-profiles', () =>
             actions.fetchBrowserSessionProfiles()
           )
-          const onboardingState = await timeRendererStartupStep('onboarding-get', () =>
-            window.api.onboarding.get()
-          )
+          const onboardingState = await onboardingPromise
           if (!cancelled) {
             setOnboarding(onboardingState)
             setOnboardingLoaded(true)

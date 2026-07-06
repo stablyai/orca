@@ -33,6 +33,7 @@ import {
 import { spawnSystemSshPortForward } from './system-ssh-forward-process'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
+import type { SystemSshResolvedConfig } from './ssh-control-socket'
 
 const SYSTEM_SSH_PATH =
   process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
@@ -50,6 +51,28 @@ function createTarget(overrides?: Partial<SshTarget>): SshTarget {
     username: 'deploy',
     ...overrides
   }
+}
+
+function createResolvedConfig(
+  overrides?: Partial<SystemSshResolvedConfig>
+): SystemSshResolvedConfig {
+  return {
+    hostname: 'example.com',
+    port: 22,
+    identityFile: [],
+    forwardAgent: false,
+    identitiesOnly: false,
+    proxyUseFdpass: false,
+    controlMaster: 'no',
+    controlPersist: 'no',
+    ...overrides
+  }
+}
+
+function expectNoOrcaControlMasterArgs(args: string[]): void {
+  expect(args).not.toContain('ControlMaster=auto')
+  expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(false)
+  expect(args).not.toContain('ControlPersist=300')
 }
 
 type EventedProcess = EventEmitter & {
@@ -243,6 +266,123 @@ describe('spawnSystemSsh', () => {
     expect(args).not.toContain('ProxyCommand=ignored')
   })
 
+  it('passes explicit options for manual targets with implicit configHost', () => {
+    const args = buildSshArgs(
+      createTarget({
+        source: 'manual',
+        configHost: '127.0.0.1',
+        host: '127.0.0.1',
+        port: 2222,
+        identityFile: '/tmp/orca-docker-key',
+        identitiesOnly: true
+      })
+    )
+
+    expect(args).toEqual(expect.arrayContaining(['-p', '2222', '-i', '/tmp/orca-docker-key']))
+    expect(args).toContain('IdentitiesOnly=yes')
+    expect(args).toContain('deploy@127.0.0.1')
+  })
+
+  it('does not inject Orca ControlMaster flags when ssh config already owns muxing', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }), {
+      resolvedConfig: createResolvedConfig({
+        controlMaster: 'auto',
+        controlPath: '/Users/me/.ssh/cm/%r@%h:%p',
+        controlPersist: '10m'
+      })
+    })
+
+    expectNoOrcaControlMasterArgs(args)
+    expect(args).not.toContain('-S')
+    expect(args).toContain('deploy@workbox')
+  })
+
+  it('injects Orca ControlMaster flags when ssh config only sets ControlPersist', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }), {
+      resolvedConfig: createResolvedConfig({
+        controlMaster: 'no',
+        controlPersist: '10m'
+      })
+    })
+
+    expect(args).toContain('ControlMaster=auto')
+    expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
+    expect(args).toContain('ControlPersist=300')
+    expect(args).not.toContain('-S')
+  })
+
+  it('injects Orca ControlMaster flags when ssh config only sets ControlPath', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }), {
+      resolvedConfig: createResolvedConfig({
+        controlMaster: 'no',
+        controlPath: '/Users/me/.ssh/cm/%r@%h:%p'
+      })
+    })
+
+    expect(args).toContain('ControlMaster=auto')
+    expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
+    expect(args).toContain('ControlPersist=300')
+    expect(args).not.toContain('-S')
+  })
+
+  it('injects Orca ControlMaster flags when ssh config omits ControlPath', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }), {
+      resolvedConfig: createResolvedConfig({
+        controlMaster: 'auto'
+      })
+    })
+
+    expect(args).toContain('ControlMaster=auto')
+    expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
+    expect(args).toContain('ControlPersist=300')
+    expect(args).not.toContain('-S')
+  })
+
+  it('does not inject Orca ControlMaster flags for unresolved ssh-config targets', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }))
+
+    expectNoOrcaControlMasterArgs(args)
+    expect(args).not.toContain('-S')
+    expect(args).toContain('deploy@workbox')
+  })
+
+  it('does not inject Orca ControlMaster flags for unresolved legacy config aliases', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'workbox', host: 'resolved.example.com' }))
+
+    expectNoOrcaControlMasterArgs(args)
+    expect(args).not.toContain('-S')
+    expect(args).toContain('deploy@workbox')
+  })
+
+  it('can inject Orca ControlMaster flags for ssh-config targets with resolved config', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }), {
+      resolvedConfig: createResolvedConfig()
+    })
+
+    expect(args).toContain('ControlMaster=auto')
+    expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
+    expect(args).toContain('ControlPersist=300')
+    expect(args).not.toContain('-S')
+  })
+
+  it('forces standalone SSH when target connection reuse is disabled', () => {
+    const args = buildSshArgs(createTarget({ systemSshConnectionReuse: false }))
+    const standaloneControlIdx = args.indexOf('-S')
+
+    expect(standaloneControlIdx).toBeGreaterThan(-1)
+    expect(args[standaloneControlIdx + 1]).toBe('none')
+    expectNoOrcaControlMasterArgs(args)
+  })
+
+  it('adds keepalive options to Orca-owned ControlMaster connections', () => {
+    const args = buildSshArgs(createTarget(), { resolvedConfig: createResolvedConfig() })
+
+    expect(args).toContain('ControlMaster=auto')
+    expect(args).toContain('ControlPersist=300')
+    expect(args).toContain('ServerAliveInterval=15')
+    expect(args).toContain('ServerAliveCountMax=3')
+  })
+
   it('spawns a remote command through the system ssh target', () => {
     spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello')
 
@@ -256,20 +396,29 @@ describe('spawnSystemSsh', () => {
   it('spawns port forwards before the ssh destination terminator', () => {
     spawnSystemSshPortForward(createTarget({ configHost: 'fdpass-host' }), 5173, '127.0.0.1', 3000)
 
+    const args = spawnMock.mock.calls[0][1] as string[]
+    const terminatorIdx = args.indexOf('--')
+    const forwardFlagIdx = args.indexOf('-N')
+    const localForwardIdx = args.indexOf('-L')
+    const exitOnForwardFailureIdx = args.indexOf('ExitOnForwardFailure=yes')
+    const standaloneControlIdx = args.indexOf('-S')
+
+    expect(terminatorIdx).toBeGreaterThan(-1)
+    expect(forwardFlagIdx).toBeGreaterThan(-1)
+    expect(localForwardIdx).toBeGreaterThan(-1)
+    expect(exitOnForwardFailureIdx).toBeGreaterThan(-1)
+    // Why: -N and -L must appear before -- or OpenSSH treats them as remote command args.
+    expect(forwardFlagIdx).toBeLessThan(terminatorIdx)
+    expect(localForwardIdx).toBeLessThan(terminatorIdx)
+    expect(args[exitOnForwardFailureIdx - 1]).toBe('-o')
+    expect(exitOnForwardFailureIdx).toBeLessThan(terminatorIdx)
+    expect(standaloneControlIdx).toBe(-1)
+    expectNoOrcaControlMasterArgs(args)
+    expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
+    expect(args[terminatorIdx + 1]).toBe('deploy@fdpass-host')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
-      [
-        '-o',
-        'BatchMode=no',
-        '-T',
-        '-N',
-        '-o',
-        'ExitOnForwardFailure=yes',
-        '-L',
-        '127.0.0.1:5173:127.0.0.1:3000',
-        '--',
-        'deploy@fdpass-host'
-      ],
+      expect.any(Array),
       expect.objectContaining({ stdio: ['ignore', 'ignore', 'pipe'] })
     )
   })
@@ -325,6 +474,22 @@ describe('spawnSystemSsh', () => {
     expect(proc.stderr.listenerCount('data')).toBe(0)
   })
 
+  it('forces standalone SSH for POSIX file writes when requested', async () => {
+    const proc = createEventedProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const promise = writeFileViaSystemSsh(createTarget(), '/tmp/file', 'contents', {
+      disableControlMaster: true
+    })
+    proc.emit('close', 0, null)
+
+    await expect(promise).resolves.toBeUndefined()
+    const args = spawnMock.mock.calls[0][1] as string[]
+    const standaloneControlIdx = args.indexOf('-S')
+    expect(standaloneControlIdx).toBeGreaterThan(-1)
+    expect(args[standaloneControlIdx + 1]).toBe('none')
+  })
+
   it('writes files to Windows system SSH targets with PowerShell stdin bytes', async () => {
     const proc = createEventedProcess()
     spawnMock.mockReturnValue(proc)
@@ -344,6 +509,26 @@ describe('spawnSystemSsh', () => {
     expect(remoteCommand).toContain('powershell.exe')
     expect(remoteCommand).not.toContain('/bin/sh')
     expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('0.1.0', 'utf-8'))
+  })
+
+  it('forces standalone SSH for Windows file writes when requested', async () => {
+    const proc = createEventedProcess()
+    spawnMock.mockReturnValue(proc)
+    const hostPlatform = getRemoteHostPlatform('win32-x64')
+
+    const promise = writeFileViaSystemSsh(
+      createTarget(),
+      'C:/Users/me/.orca-remote/relay/.version',
+      '0.1.0',
+      { hostPlatform, disableControlMaster: true }
+    )
+    proc.emit('close', 0, null)
+
+    await expect(promise).resolves.toBeUndefined()
+    const args = spawnMock.mock.calls[0][1] as string[]
+    const standaloneControlIdx = args.indexOf('-S')
+    expect(standaloneControlIdx).toBeGreaterThan(-1)
+    expect(args[standaloneControlIdx + 1]).toBe('none')
   })
 
   it('uploads directories to Windows system SSH targets in one PowerShell batch', async () => {
@@ -388,6 +573,32 @@ describe('spawnSystemSsh', () => {
         }
       ])
     )
+  })
+
+  it('forces standalone SSH for Windows upload packages when requested', async () => {
+    const localDir = mkdtempSync(join(tmpdir(), 'orca-system-ssh-upload-'))
+    writeFileSync(join(localDir, 'relay.js'), 'console.log("relay")')
+    spawnMock.mockImplementation(() => {
+      const proc = createEventedProcess()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc
+    })
+
+    try {
+      await uploadDirectoryViaSystemSsh(
+        createTarget(),
+        localDir,
+        'C:/Users/me/.orca-remote/relay',
+        { hostPlatform: getRemoteHostPlatform('win32-x64'), disableControlMaster: true }
+      )
+    } finally {
+      rmSync(localDir, { recursive: true, force: true })
+    }
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    const standaloneControlIdx = args.indexOf('-S')
+    expect(standaloneControlIdx).toBeGreaterThan(-1)
+    expect(args[standaloneControlIdx + 1]).toBe('none')
   })
 
   it('throws when no system ssh is found', () => {

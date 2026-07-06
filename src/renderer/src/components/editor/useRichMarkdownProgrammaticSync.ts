@@ -4,7 +4,7 @@ import type { Editor } from '@tiptap/react'
 import type { MarkdownDocument } from '../../../../shared/types'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { syncDocLinkMenu, type DocLinkMenuState } from './rich-markdown-commands'
-import { normalizeSoftBreaks } from './rich-markdown-normalize'
+import { normalizeEmptyListItems } from './rich-markdown-normalize'
 import { syncSlashMenu, type SlashMenuState } from './rich-markdown-slash-commands'
 import {
   createRichMarkdownImageResolverContext,
@@ -133,7 +133,9 @@ function applyExternalRichMarkdownContent(
       contentType: 'markdown',
       emitUpdate: false
     })
-    normalizeSoftBreaks(editor)
+    // Why: normalizeEmptyListItems avoids splitting hard-wrapped paragraphs from
+    // external content, matching onCreate's single-paragraph reflow behavior.
+    normalizeEmptyListItems(editor)
     lastCommittedMarkdownRef.current = content
     if (hadFocus) {
       const docSize = editor.state.doc.content.size

@@ -344,6 +344,30 @@ Self-hosted-git
   it('returns empty list for output with no hosts', () => {
     expect(parseGlabAuthStatusHosts('Not logged in.')).toEqual([])
   })
+
+  it('captures a non-default port on "Logged in to" lines', () => {
+    const out = '✓ Logged in to gitlab.example.com:8080 as user (token)'
+    expect(parseGlabAuthStatusHosts(out)).toEqual(['gitlab.example.com:8080'])
+  })
+
+  it('captures a non-default port on header-style lines', () => {
+    const out = `
+gitlab.example.com:8080:
+  ✓ Logged in as user
+    `
+    expect(parseGlabAuthStatusHosts(out)).toContain('gitlab.example.com:8080')
+  })
+
+  it('keeps two services on the same host distinct by port', () => {
+    const out = `
+✓ Logged in to gitlab.example.com:8443 as user (token)
+✓ Logged in to gitlab.example.com:3030 as user (token)
+    `
+    expect(parseGlabAuthStatusHosts(out).sort()).toEqual([
+      'gitlab.example.com:3030',
+      'gitlab.example.com:8443'
+    ])
+  })
 })
 
 describe('parseGlabApiResponse', () => {
@@ -427,5 +451,53 @@ describe('getGlabKnownHosts', () => {
     await getGlabKnownHosts()
     await getGlabKnownHosts()
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('recognizes a self-hosted host on a non-default port', async () => {
+    glabExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '✓ Logged in to gitlab.example.com:8080 as user\n',
+      stderr: ''
+    })
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.example.com:8080'])
+  })
+
+  it('caches per connection — the local probe does not satisfy a connection probe', async () => {
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '✓ Logged in to gitlab.com as user\n', stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: '✓ Logged in to gitlab.example.com:8080 as user\n',
+        stderr: ''
+      })
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
+      'gitlab.com',
+      'gitlab.example.com:8080'
+    ])
+    // A second probe for the same connection is served from cache.
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
+      'gitlab.com',
+      'gitlab.example.com:8080'
+    ])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not permanently cache the failure fallback — a later probe can re-discover hosts', async () => {
+    glabExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
+      .mockResolvedValueOnce({
+        stdout: '✓ Logged in to gitlab.example.com:8080 as user\n',
+        stderr: ''
+      })
+
+    // First probe fails → canonical default, NOT cached.
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com'])
+    // Re-probe (e.g. after tunnel comes up) discovers the real host.
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
+      'gitlab.com',
+      'gitlab.example.com:8080'
+    ])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 })

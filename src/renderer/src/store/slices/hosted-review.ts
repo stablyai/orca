@@ -100,9 +100,10 @@ function isStaleMergedGitHubReviewForHead(
   cached: CacheEntry<HostedReviewInfo> | undefined,
   currentHeadOid: string | null | undefined
 ): boolean {
-  // Why: a merged GitHub PR is only shown when the worktree sits on its head.
-  // The cache key is branch-scoped, so a worktree that advanced off the merged
-  // head must not reuse (or, on failure, preserve) the now-stale merged review.
+  // Why: a merged GitHub PR is only shown when the worktree sits on its head
+  // or on a commit confirmed to be part of the PR. The cache key is
+  // branch-scoped, so a worktree that advanced off the merged line of work
+  // must not reuse (or, on failure, preserve) the now-stale merged review.
   const head = typeof currentHeadOid === 'string' ? currentHeadOid.trim() : ''
   if (head.length === 0) {
     return false
@@ -113,7 +114,8 @@ function isStaleMergedGitHubReviewForHead(
     data.state === 'merged' &&
     typeof data.headSha === 'string' &&
     data.headSha.length > 0 &&
-    data.headSha !== head
+    data.headSha !== head &&
+    data.confirmedContainedHeadOid !== head
   )
 }
 

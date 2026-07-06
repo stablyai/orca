@@ -17,6 +17,7 @@ import {
   convertEmptyNestedOrderedItemToContinuation,
   exitTrailingEmptyOrderedListItem
 } from './rich-markdown-list-continuation'
+import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-delete'
 
 export type KeyHandlerContext = {
   isMac: boolean
@@ -162,7 +163,20 @@ export function createRichMarkdownKeyHandler(
         ed &&
         !isComposingMarkdownInput(event, ed) &&
         (convertEmptyNestedOrderedItemToContinuation(ed) ||
-          collapseEmptyListContinuationParagraph(ed))
+          collapseEmptyListContinuationParagraph(ed) ||
+          deleteAdjacentEmptyParagraph(ed, 'backward'))
+      ) {
+        event.preventDefault()
+        return true
+      }
+    }
+
+    if (event.key === 'Delete') {
+      const ed = ctx.editorRef.current
+      if (
+        ed &&
+        !isComposingMarkdownInput(event, ed) &&
+        deleteAdjacentEmptyParagraph(ed, 'forward')
       ) {
         event.preventDefault()
         return true

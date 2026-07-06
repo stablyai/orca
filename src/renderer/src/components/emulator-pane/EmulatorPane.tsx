@@ -80,6 +80,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             deviceName={displayName}
             loading={loading}
             isLive={isLive}
+            isActive={isActive}
             onTap={(x, y) => void sendTap(x, y)}
             onGesture={(points) => void sendGesture(points)}
           />

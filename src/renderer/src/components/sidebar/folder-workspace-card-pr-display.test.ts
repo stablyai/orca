@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type {
   CheckStatus,
+  PRInfo,
   Repo,
   Worktree,
   WorktreeLineage,
@@ -15,6 +16,12 @@ const repo: Repo = {
   displayName: 'repo',
   badgeColor: '#999999',
   addedAt: 1
+}
+
+class LookupOnlyRepoMap extends Map<string, Repo> {
+  override values(): MapIterator<Repo> {
+    throw new Error('Folder card PR display should use repo lookup instead of repo enumeration')
+  }
 }
 
 function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
@@ -68,6 +75,24 @@ function makeWorktreeLineage(child: Worktree, parent: Worktree): WorktreeLineage
 }
 
 describe('getFolderWorkspaceCardPrDisplay', () => {
+  it('uses the existing repo lookup without enumerating all repos', () => {
+    const worktree = makeWorktree({ id: 'lookup-only', linkedPR: 8 })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new LookupOnlyRepoMap([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: {
+        'repo-1::lookup-only': makePrEntry(8, 'success')
+      }
+    })
+
+    expect(display).toMatchObject({ number: 8, status: 'success' })
+  })
+
   it('uses failing attached PR status ahead of pending and passing PRs', () => {
     const passing = makeWorktree({ id: 'passing', linkedPR: 1 })
     const pending = makeWorktree({ id: 'pending', linkedPR: 2 })
@@ -89,9 +114,9 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       repoMap: new Map([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: {
-        'repo-1::passing': { data: makePr(1, 'success') },
-        'repo-1::pending': { data: makePr(2, 'pending') },
-        'repo-1::failing': { data: makePr(3, 'failure') }
+        'repo-1::passing': makePrEntry(1, 'success'),
+        'repo-1::pending': makePrEntry(2, 'pending'),
+        'repo-1::failing': makePrEntry(3, 'failure')
       }
     })
 
@@ -116,8 +141,8 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       repoMap: new Map([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: {
-        'repo-1::passing': { data: makePr(1, 'success') },
-        'repo-1::pending': { data: makePr(2, 'pending') }
+        'repo-1::passing': makePrEntry(1, 'success'),
+        'repo-1::pending': makePrEntry(2, 'pending')
       }
     })
 
@@ -139,15 +164,75 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
       repoMap: new Map([[repo.id, repo]]),
       hostedReviewCache: null,
       prCache: {
-        'repo-1::nested': { data: makePr(4, 'success') }
+        'repo-1::nested': makePrEntry(4, 'success')
       }
     })
 
     expect(display).toMatchObject({ number: 4, status: 'success' })
   })
+
+  it('uses branch-discovered PR cache for unlinked attached worktrees', () => {
+    const worktree = makeWorktree({ id: 'branch-discovered', linkedPR: null })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: {
+        'repo-1::branch-discovered': { data: makePr(9, 'success'), fetchedAt: 2 }
+      }
+    })
+
+    expect(display).toMatchObject({ number: 9, status: 'success' })
+  })
+
+  it('uses the right-sidebar classified status for conflicting PRs', () => {
+    const worktree = makeWorktree({ id: 'conflicting-pr', linkedPR: null })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: {
+        'repo-1::conflicting-pr': {
+          data: { ...makePr(11, 'success'), mergeable: 'CONFLICTING' },
+          fetchedAt: 2
+        }
+      }
+    })
+
+    expect(display).toMatchObject({ number: 11, status: 'failure' })
+  })
+
+  it('does not use stale merged branch PR cache after the worktree advances', () => {
+    const worktree = makeWorktree({ id: 'advanced-after-merge', linkedPR: null, head: 'new-head' })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: {
+        'repo-1::advanced-after-merge': {
+          data: { ...makePr(10, 'success'), state: 'merged', headSha: 'merged-head' },
+          fetchedAt: 2
+        }
+      }
+    })
+
+    expect(display).toBeNull()
+  })
 })
 
-function makePr(number: number, checksStatus: CheckStatus) {
+function makePr(number: number, checksStatus: CheckStatus): PRInfo {
   return {
     number,
     title: `PR ${number}`,
@@ -157,4 +242,11 @@ function makePr(number: number, checksStatus: CheckStatus) {
     updatedAt: '2026-01-01T00:00:00.000Z',
     mergeable: 'UNKNOWN'
   }
+}
+
+function makePrEntry(
+  number: number,
+  checksStatus: CheckStatus
+): { data: PRInfo; fetchedAt: number } {
+  return { data: makePr(number, checksStatus), fetchedAt: 2 }
 }

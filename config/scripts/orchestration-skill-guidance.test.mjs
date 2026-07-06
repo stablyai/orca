@@ -116,4 +116,16 @@ describe('orchestration skill guidance', () => {
     expect(skill).toContain('post-review corrections and PR prep belong to that named owner')
     expect(skill).toContain('the named owner edits files and creates the PR')
   })
+
+  it('keeps worker_done post-completion guidance idle instead of polling', () => {
+    const skill = readSkill()
+    const agentGuidance = getSection(skill, 'Agent Guidance')
+
+    expect(agentGuidance).toContain('After sending `worker_done`, end your turn')
+    expect(agentGuidance).toContain('idle at the agent prompt')
+    expect(agentGuidance).toContain('Do not poll or keep calling `orca orchestration check`')
+    expect(agentGuidance).toContain('fresh preamble + TASK block delivered as new terminal input')
+    expect(skill).not.toContain('post-completion polling messages')
+    expect(skill).not.toContain('every 2 minutes')
+  })
 })

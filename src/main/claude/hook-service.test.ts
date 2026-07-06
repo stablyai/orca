@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
 }))
 
 import type { SFTPWrapper } from 'ssh2'
+import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 import { ClaudeHookService } from './hook-service'
 import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
@@ -23,6 +24,8 @@ const OPENCLAUDE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+const isClaudeManagedCommand = createManagedCommandMatcher(CLAUDE_SCRIPT_FILE_NAME)
+const isOpenClaudeManagedCommand = createManagedCommandMatcher(OPENCLAUDE_SCRIPT_FILE_NAME)
 
 type FakeFs = {
   files: Map<string, string>
@@ -162,23 +165,13 @@ describe('ClaudeHookService.install', () => {
           definition.hooks.map((hook) => hook.command)
       )
       expect(legacyCommands).toContain('/usr/local/bin/user-hook')
-      expect(
-        legacyCommands.some((command: string) =>
-          process.platform === 'win32'
-            ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
-            : command.includes(CLAUDE_SCRIPT_FILE_NAME)
-        )
-      ).toBe(true)
+      expect(legacyCommands.some((command: string) => isClaudeManagedCommand(command))).toBe(true)
       expect(
         legacyCommands.some((command: string) =>
           command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
         )
       ).toBe(false)
-      expect(legacy.hooks.StopFailure[0].hooks[0].command).toMatch(
-        process.platform === 'win32'
-          ? WINDOWS_POWERSHELL_LAUNCHER
-          : new RegExp(CLAUDE_SCRIPT_FILE_NAME)
-      )
+      expect(isClaudeManagedCommand(legacy.hooks.StopFailure[0].hooks[0].command)).toBe(true)
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('DEVIN_PROJECT_DIR')
@@ -276,6 +269,12 @@ describe('ClaudeHookService.installRemote', () => {
     const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
     expect(script).toContain('#!/bin/sh')
     expect(script).toContain('DEVIN_PROJECT_DIR')
+    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+    // on the curl command line (EDR oversized-command-line false positive),
+    // matching the Windows curl.exe hook post.
+    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
   })
 
@@ -351,10 +350,8 @@ describe('OpenClaudeHookService-compatible install', () => {
       const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
       for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
         const command = parsed.hooks[event][0].hooks[0].command as string
-        if (process.platform === 'win32') {
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-        } else {
-          expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
+        expect(isOpenClaudeManagedCommand(command)).toBe(true)
+        if (process.platform !== 'win32') {
           expect(command).toMatch(/^if \[ -x /)
         }
       }
