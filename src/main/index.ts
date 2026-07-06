@@ -578,9 +578,6 @@ if (hasSingleInstanceLock) {
   initOpenCodeUsagePath()
   // Why: must run before anything loads node-pty (first PTY spawn) so main
   // and the daemon it forks both pick up ORCA_NODE_PTY_NATIVE_DIR.
-  // (The daemon-host node.exe relocation deliberately does NOT run here: its
-  // ~70MB copy would sit on the first-paint path. daemon-init stages it at
-  // fork time instead.)
   installRelocatedNodePtyNativeRuntime()
   crashReports = CrashReportStore.fromUserData()
   recordCrashBreadcrumb('app_started', {
