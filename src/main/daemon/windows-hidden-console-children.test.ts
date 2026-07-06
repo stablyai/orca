@@ -54,9 +54,10 @@ describe('wrapChildProcessApi', () => {
 
   it('injects windowsHide through util.promisify (the rc.6 bypass)', async () => {
     let seen: unknown[] = []
-    const original = (..._args: unknown[]): void => {}
-    Object.defineProperty(original, promisify.custom, {
-      value: (...args: unknown[]) => {
+    // Model a real exec/execFile: a function carrying a promisify.custom impl,
+    // typed statically so promisify routes through the custom (like production).
+    const original = Object.assign((..._args: unknown[]): void => {}, {
+      [promisify.custom]: (...args: unknown[]): Promise<string> => {
         seen = args
         return Promise.resolve('done')
       }

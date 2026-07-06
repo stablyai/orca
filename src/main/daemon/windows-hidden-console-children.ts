@@ -63,6 +63,10 @@ export function installHiddenConsoleChildDefaults(): void {
   }
 }
 
+// Preserve the wrapped function's type: the returned function copies the same
+// call signature and symbols (incl. util.promisify.custom), so `promisify(wrapped)`
+// resolves through the same overload as `promisify(original)`.
+export function wrapChildProcessApi<T extends (...args: never[]) => unknown>(original: T): T
 export function wrapChildProcessApi(
   original: (...args: unknown[]) => unknown
 ): (...args: unknown[]) => unknown {
