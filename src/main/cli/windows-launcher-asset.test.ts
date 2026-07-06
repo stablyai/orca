@@ -9,5 +9,8 @@ describe('packaged Windows CLI launcher asset', () => {
 
     expect(launcher).toContain('for %%I in ("%RESOURCES_DIR%\\..") do set "APP_DIR=%%~fI"')
     expect(launcher).not.toContain('for %%I in ("%RESOURCES_DIR%..") do set "APP_DIR=%%~fI"')
+    expect(launcher).toContain('set "CLI=%RESOURCES_DIR%\\app.asar.unpacked\\out\\cli\\index.js"')
+    expect(launcher).toContain('set ELECTRON_RUN_AS_NODE=1')
+    expect(launcher).toContain('"%ELECTRON%" "%CLI%" %*')
   })
 })

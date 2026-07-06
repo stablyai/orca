@@ -120,6 +120,10 @@ import type {
   WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
+import type {
+  DiagnosticBundleExportArgs,
+  DiagnosticBundleExportResult
+} from '../../shared/diagnostic-bundle-export-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
@@ -330,6 +334,7 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
+import { exportDiagnosticBundle } from '../diagnostics/diagnostic-bundle-export'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
@@ -2365,6 +2370,15 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     return collectMemorySnapshot(this.store)
+  }
+
+  createDiagnosticBundle(
+    args: DiagnosticBundleExportArgs = {}
+  ): Promise<DiagnosticBundleExportResult> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    return exportDiagnosticBundle({ ...args, store: this.store })
   }
 
   getUIState(): PersistedUIState {

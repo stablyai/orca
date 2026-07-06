@@ -15,7 +15,9 @@ const builderConfig = require('../../../config/electron-builder.config.cjs') as 
   linux?: { extraResources?: { from?: string; to?: string }[] }
   win?: { extraResources?: { from?: string; to?: string }[] }
 }
+const darwinLauncherAsset = new URL('../../../resources/darwin/bin/orca', import.meta.url)
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
+const diagnosticsHelpArgs = ['diagnostics', 'bundle', '--help']
 
 describe('packaged CLI assets', () => {
   it('copies runtime dependencies used before Electron asar integration is available', () => {
@@ -79,11 +81,13 @@ printf 'arg=%s\\n' "$@"
           { encoding: 'utf8', mode: 0o755 }
         )
 
-        const direct = await execFileAsync(launcherPath, ['--help'])
+        const direct = await execFileAsync(launcherPath, diagnosticsHelpArgs)
         expect(direct.stdout).toContain(`electron=${electronPath}`)
         expect(direct.stdout).toContain('run_as_node=1')
         expect(direct.stdout).toContain(`arg=${cliPath}`)
-        expect(direct.stdout).toContain('arg=--help')
+        for (const arg of diagnosticsHelpArgs) {
+          expect(direct.stdout).toContain(`arg=${arg}`)
+        }
 
         const homeDir = join(root, 'home')
         const commandDir = join(homeDir, '.local', 'bin')
@@ -92,18 +96,62 @@ printf 'arg=%s\\n' "$@"
         await mkdir(join(homeDir, 'orca'), { recursive: true })
         await symlink(launcherPath, commandPath)
 
-        const symlinked = await execFileAsync(commandPath, ['--help'], {
+        const symlinked = await execFileAsync(commandPath, diagnosticsHelpArgs, {
           env: { ...process.env, HOME: homeDir }
         })
         expect(symlinked.stdout).toContain(`electron=${electronPath}`)
         expect(symlinked.stdout).toContain('run_as_node=1')
         expect(symlinked.stdout).toContain(`arg=${cliPath}`)
-        expect(symlinked.stdout).toContain('arg=--help')
+        for (const arg of diagnosticsHelpArgs) {
+          expect(symlinked.stdout).toContain(`arg=${arg}`)
+        }
       } finally {
         await rm(root, { recursive: true, force: true })
       }
     }
   )
+
+  itRunsUnixShell('runs the macOS launcher from its packaged app path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-macos-cli-'))
+    try {
+      const appDir = join(root, 'Orca.app')
+      const contentsDir = join(appDir, 'Contents')
+      const resourcesDir = join(contentsDir, 'Resources')
+      const launcherDir = join(resourcesDir, 'bin')
+      const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+      const macosDir = join(contentsDir, 'MacOS')
+      const launcherPath = join(launcherDir, 'orca')
+      const electronPath = join(macosDir, 'Orca')
+      const cliPath = join(cliDir, 'index.js')
+
+      await mkdir(launcherDir, { recursive: true })
+      await mkdir(cliDir, { recursive: true })
+      await mkdir(macosDir, { recursive: true })
+      await copyFile(darwinLauncherAsset, launcherPath)
+      expect((await stat(launcherPath)).mode & 0o111).not.toBe(0)
+      await writeFile(cliPath, '', 'utf8')
+      await writeFile(
+        electronPath,
+        `#!/usr/bin/env bash
+printf 'electron=%s\\n' "$0"
+printf 'run_as_node=%s\\n' "\${ELECTRON_RUN_AS_NODE-}"
+printf 'arg=%s\\n' "$@"
+`,
+        { encoding: 'utf8', mode: 0o755 }
+      )
+
+      const result = await execFileAsync(launcherPath, diagnosticsHelpArgs)
+
+      expect(result.stdout).toContain(`electron=${electronPath}`)
+      expect(result.stdout).toContain('run_as_node=1')
+      expect(result.stdout).toContain(`arg=${cliPath}`)
+      for (const arg of diagnosticsHelpArgs) {
+        expect(result.stdout).toContain(`arg=${arg}`)
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 
   itRunsUnixShell('runs the AppImage CLI wrapper through APPDIR at runtime', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-'))

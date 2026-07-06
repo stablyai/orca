@@ -22,7 +22,13 @@ vi.mock('electron', () => ({
 
 vi.mock('child_process', () => ({
   exec: (cmd: string, opts: unknown, cb: (err: Error | null, out: { stdout: string }) => void) =>
-    execMock(cmd, opts, cb)
+    execMock(cmd, opts, cb),
+  execFile: (
+    cmd: string,
+    args: string[],
+    opts: unknown,
+    cb: (err: Error | null, stdout: string, stderr: string) => void
+  ) => execMock([cmd, ...args].join(' '), opts, cb)
 }))
 
 vi.mock('./pty-registry', () => ({
@@ -99,6 +105,47 @@ describe('parsePsOutput', () => {
       { pid: 11, ppid: 10, cpu: 0, memory: 128 * 1024 }
     ])
     expect(usedUnboundedSplit).toBe(false)
+  })
+})
+
+describe('parseWindowsProcessWorkingSetJson', () => {
+  it('parses array JSON from Get-CimInstance', async () => {
+    const { parseWindowsProcessWorkingSetJson } = await import('./windows-process-working-set')
+
+    const rows = parseWindowsProcessWorkingSetJson(
+      JSON.stringify([
+        { ProcessId: 100, ParentProcessId: 1, WorkingSetSize: 2048 },
+        { ProcessId: '200', ParentProcessId: '100', WorkingSetSize: '1024' }
+      ])
+    )
+
+    expect(rows).toEqual([
+      { pid: 100, ppid: 1, cpu: 0, memory: 2048 },
+      { pid: 200, ppid: 100, cpu: 0, memory: 1024 }
+    ])
+  })
+
+  it('parses singleton JSON from Get-CimInstance', async () => {
+    const { parseWindowsProcessWorkingSetJson } = await import('./windows-process-working-set')
+
+    const rows = parseWindowsProcessWorkingSetJson(
+      JSON.stringify({ ProcessId: 100, ParentProcessId: 1, WorkingSetSize: 512 })
+    )
+
+    expect(rows).toEqual([{ pid: 100, ppid: 1, cpu: 0, memory: 512 }])
+  })
+
+  it('drops rows missing a process id or parent id', async () => {
+    const { parseWindowsProcessWorkingSetJson } = await import('./windows-process-working-set')
+
+    const rows = parseWindowsProcessWorkingSetJson(
+      JSON.stringify([
+        { WorkingSetSize: 2048 },
+        { ProcessId: 100, ParentProcessId: 1, WorkingSetSize: 512 }
+      ])
+    )
+
+    expect(rows).toEqual([{ pid: 100, ppid: 1, cpu: 0, memory: 512 }])
   })
 })
 
@@ -217,27 +264,28 @@ describe('collectMemorySnapshot', () => {
   })
 
   function mockPsResponse(stdout: string) {
-    const processStdout = process.platform === 'win32' ? psFixtureToWmic(stdout) : stdout
+    const processStdout = process.platform === 'win32' ? psFixtureToCimJson(stdout) : stdout
     execMock.mockImplementation((_cmd, _opts, cb) =>
       cb(null, { stdout: processStdout, stderr: '' })
     )
   }
 
-  function psFixtureToWmic(stdout: string): string {
-    return stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
-        const memory = Number.parseInt(rssKb ?? '', 10)
-        return [
-          `ParentProcessId=${ppid ?? ''}`,
-          `ProcessId=${pid ?? ''}`,
-          `WorkingSetSize=${Number.isFinite(memory) && memory > 0 ? memory * 1024 : 0}`
-        ].join('\r\n')
-      })
-      .join('\r\n\r\n')
+  function psFixtureToCimJson(stdout: string): string {
+    return JSON.stringify(
+      stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
+          const memory = Number.parseInt(rssKb ?? '', 10)
+          return {
+            ParentProcessId: Number.parseInt(ppid ?? '', 10),
+            ProcessId: Number.parseInt(pid ?? '', 10),
+            WorkingSetSize: Number.isFinite(memory) && memory > 0 ? memory * 1024 : 0
+          }
+        })
+    )
   }
 
   it('coalesces concurrent callers onto a single in-flight sweep', async () => {

@@ -87,6 +87,23 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('label')).toBe(`Bug${REPEATED_FLAG_SEPARATOR}Regression`)
   })
 
+  it('preserves repeated diagnostics bundle category filters', () => {
+    const parsed = parseArgs([
+      'diagnostics',
+      'bundle',
+      '--include',
+      'app',
+      '--include=memory',
+      '--exclude',
+      'native-minidumps',
+      '--open'
+    ])
+
+    expect(parsed.flags.get('include')).toBe(`app${REPEATED_FLAG_SEPARATOR}memory`)
+    expect(parsed.flags.get('exclude')).toBe('native-minidumps')
+    expect(parsed.flags.get('open')).toBe(true)
+  })
+
   it('does not apply repeated flag encoding to ordinary string flags', () => {
     const parsed = parseArgs(['linear', 'list', '--workspace', 'old', '--workspace', 'new'])
 

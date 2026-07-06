@@ -12,6 +12,7 @@ Startup:
   status                    Show app/runtime/graph readiness
 
 Diagnostics:
+  diagnostics bundle        Export a local diagnostics ZIP with crash, memory, and system context
   diagnostics memory        Collect a memory snapshot for Orca and managed terminals
 
 Environments:
@@ -191,6 +192,7 @@ Common Commands:
   orca open [--json]
   orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
+  orca diagnostics bundle [--output <filename-or-subpath>] [--lookback <duration>] [--include <category>] [--exclude <category>] [--open] [--json]
   orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
@@ -297,6 +299,7 @@ Browser Options:
 Examples:
   $ orca open
   $ orca status --json
+  $ orca diagnostics bundle --json
   $ orca diagnostics memory --json
   $ orca repo list
   $ orca worktree create --name agent-task --agent codex --prompt "hi"
@@ -476,8 +479,10 @@ export function formatFlagHelp(flag: string): string {
     'from-x': '--from-x <x>           Source window-local x coordinate',
     'from-y': '--from-y <y>           Source window-local y coordinate',
     help: '--help                 Show this help message',
+    include: '--include <category>  Include a diagnostics bundle category; repeatable',
     interrupt: '--interrupt            Send as an interrupt-style input when supported',
     id: '--id <id>             Identifier for a target item or permission',
+    exclude: '--exclude <category>  Exclude a diagnostics bundle category; repeatable',
     issue: '--issue <number|null>  Linked GitHub issue number',
     'linear-issue':
       '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
@@ -493,6 +498,9 @@ export function formatFlagHelp(flag: string): string {
     'parent-worktree':
       '--parent-worktree <selector> Parent worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     path: '--path <path>          Path argument for the command',
+    output: '--output <filename-or-subpath>  ZIP filename/subpath under Orca logs/diagnostics',
+    lookback: '--lookback <duration> Minutes to include, or use m/h/d suffix',
+    open: '--open                 Reveal the exported diagnostics bundle',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
