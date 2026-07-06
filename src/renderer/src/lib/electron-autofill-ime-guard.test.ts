@@ -140,6 +140,46 @@ describe('installElectronAutofillImeGuard', () => {
     expect(input.value).toBe('、')
   })
 
+  it('leaves a genuine trailing zero-width space alone on input and focusout', () => {
+    // Pasted content can legitimately end with a zero-width space; the guard
+    // never armed this field, so it owns nothing to strip.
+    input.value = `pasted${SENT}`
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    vi.runAllTimers()
+    expect(input.value).toBe(`pasted${SENT}`)
+
+    input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    expect(input.value).toBe(`pasted${SENT}`)
+  })
+
+  it('preserves a genuine trailing zero-width space across a guarded composition', () => {
+    input.value = `real${SENT}`
+    input.setSelectionRange(5, 5)
+
+    imeProcessKeydown(input)
+    expect(input.value).toBe(`real${SENT}${SENT}`)
+
+    composition(input, 'compositionstart')
+    // Preedit lands at the caret, between the real character and the sentinel.
+    input.value = `real${SENT}あ${SENT}`
+    composition(input, 'compositionend')
+    vi.runAllTimers()
+
+    expect(input.value).toBe(`real${SENT}あ`)
+  })
+
+  it('does not eat a real character when the value was replaced while armed', () => {
+    imeProcessKeydown(input)
+    expect(input.value).toBe(SENT)
+
+    // Controlled components can rewrite the whole value while the guard is
+    // armed; the sentinel is gone, so strip must not slice anything.
+    input.value = 'reset'
+    input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+
+    expect(input.value).toBe('reset')
+  })
+
   it('strips immediately on focusout', () => {
     imeProcessKeydown(input)
     expect(input.value).toBe(SENT)

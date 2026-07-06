@@ -69,9 +69,12 @@ export function installElectronAutofillImeGuard(
   root: Document | HTMLElement = document
 ): ElectronAutofillImeGuard {
   let composing = false
+  // Why: field content can legitimately end with a zero-width space (pasted
+  // text); track guard-owned sentinels so strip() never eats user data.
+  const armedFields = new WeakSet<GuardableField>()
 
   const arm = (field: GuardableField): void => {
-    if (field.value.endsWith(AUTOFILL_IME_GUARD_SENTINEL)) {
+    if (armedFields.has(field) && field.value.endsWith(AUTOFILL_IME_GUARD_SENTINEL)) {
       return
     }
     const start = field.selectionStart ?? field.value.length
@@ -80,6 +83,7 @@ export function installElectronAutofillImeGuard(
     // invisible to application code while it exists; React resyncs from the
     // user's next real input event, and strip() emits the corrective event.
     field.value = field.value + AUTOFILL_IME_GUARD_SENTINEL
+    armedFields.add(field)
     const max = field.value.length - 1
     try {
       field.setSelectionRange(clampSelection(start, max), clampSelection(end, max))
@@ -89,6 +93,13 @@ export function installElectronAutofillImeGuard(
   }
 
   const strip = (field: GuardableField): void => {
+    if (!armedFields.has(field)) {
+      return
+    }
+    armedFields.delete(field)
+    // Why: application code may have rewritten the value while armed
+    // (controlled re-render, programmatic clear); the sentinel is gone then
+    // and slicing would eat a real character.
     if (!field.value.endsWith(AUTOFILL_IME_GUARD_SENTINEL)) {
       return
     }
@@ -152,7 +163,7 @@ export function installElectronAutofillImeGuard(
     const field = resolveAutofillGuardableField(event.target)
     // Why: IME direct commits (e.g. 、。 without a preedit) arm on keydown 229
     // but never fire compositionend; clear their leftover sentinel here.
-    if (field && field.value.endsWith(AUTOFILL_IME_GUARD_SENTINEL)) {
+    if (field && armedFields.has(field)) {
       stripSoon(field)
     }
   }
