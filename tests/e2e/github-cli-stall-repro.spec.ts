@@ -124,9 +124,8 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
   })
   await expect(detailHeading).toBeVisible({ timeout: 10_000 })
 
-  // Why: bounded gh timeout makes the detail fetch reject instead of hanging,
-  // so this terminal error text is the stable proof the stall recovered (it
-  // replaces the conversation body, so its presence also means no spinner).
+  // Why: the bounded gh timeout rejects instead of hanging, so this terminal
+  // error text (replacing the body, not a spinner) proves the stall recovered.
   await expect(orcaPage.getByText('Unable to load details for this GitHub item.')).toBeVisible({
     timeout: 5_000
   })
