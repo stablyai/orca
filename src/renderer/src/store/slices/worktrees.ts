@@ -1992,6 +1992,10 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
     nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
+    // Why: bulk/hydration purge must drop the per-tab pane-expand flags too;
+    // this path never runs terminal teardown, so nothing else evicts them.
+    expandedPaneByTabId: omitByTabId(s.expandedPaneByTabId),
+    canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),
     // Why: these tab/pane-scoped agent-status, unread, and input maps are only
     // cleared on the single removeWorktree path (via shutdownWorktreeTerminals /
     // dropAgentStatusByWorktree / clearPaneForegroundAgentByWorktree, which read
@@ -3098,12 +3102,19 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ...s.automaticAgentResumeClaimsByTabId
         }
         const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
+        // Why: closeTab deletes these two per-tab maps but removeWorktree missed
+        // them, so a split pane's expand flags outlived its deleted worktree for
+        // the renderer's whole session. Purge them here to match closeTab.
+        const nextExpandedPaneByTabId = { ...s.expandedPaneByTabId }
+        const nextCanExpandPaneByTabId = { ...s.canExpandPaneByTabId }
         for (const tabId of tabIds) {
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
           delete nextRuntimePaneTitlesByTabId[tabId]
           delete nextAutomaticAgentResumeClaimsByTabId[tabId]
           delete nextNativeChatLaunchPromptByTabId[tabId]
+          delete nextExpandedPaneByTabId[tabId]
+          delete nextCanExpandPaneByTabId[tabId]
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
@@ -3251,6 +3262,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
           nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
           terminalLayoutsByTabId: nextLayouts,
+          expandedPaneByTabId: nextExpandedPaneByTabId,
+          canExpandPaneByTabId: nextCanExpandPaneByTabId,
           deleteStateByWorktreeId: nextDeleteState,
           baseStatusByWorktreeId: (() => {
             const nextStatus = { ...s.baseStatusByWorktreeId }

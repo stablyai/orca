@@ -3241,6 +3241,29 @@ describe('removeWorktree state cleanup', () => {
     expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
   })
 
+  it('cleans up expandedPaneByTabId/canExpandPaneByTabId for removed worktree tabs', async () => {
+    const store = createTestStore()
+    const removed = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const surviving = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [removed, surviving] },
+      tabsByWorktree: {
+        [removed.id]: [makeTerminalTab({ id: 'removed-tab', worktreeId: removed.id })],
+        [surviving.id]: [makeTerminalTab({ id: 'surviving-tab', worktreeId: surviving.id })]
+      },
+      // Split panes write these even when false; only closeTab deleted them
+      // before, so removeWorktree used to strand them for the whole session.
+      expandedPaneByTabId: { 'removed-tab': true, 'surviving-tab': false },
+      canExpandPaneByTabId: { 'removed-tab': false, 'surviving-tab': true }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree(removed.id)
+
+    expect(store.getState().expandedPaneByTabId).toEqual({ 'surviving-tab': false })
+    expect(store.getState().canExpandPaneByTabId).toEqual({ 'surviving-tab': true })
+  })
+
   it('cleans up automatic agent resume claims for removed worktree tabs', async () => {
     const store = createTestStore()
     const removed = makeWorktree({
@@ -5849,6 +5872,8 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         'tab-3': { panes: [] }
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-2': ['pty-2'], 'tab-3': ['pty-3'] },
+      expandedPaneByTabId: { 'tab-1': true, 'tab-2': false, 'tab-3': true },
+      canExpandPaneByTabId: { 'tab-1': true, 'tab-2': true, 'tab-3': false },
       runtimePaneTitlesByTabId: { 'tab-1': 'claude', 'tab-3': 'bash' },
       automaticAgentResumeClaimsByTabId: {
         'tab-1': {
@@ -5914,6 +5939,8 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     })
     expect(s.terminalLayoutsByTabId).toEqual({ 'tab-3': { panes: [] } })
     expect(s.ptyIdsByTabId).toEqual({ 'tab-3': ['pty-3'] })
+    expect(s.expandedPaneByTabId).toEqual({ 'tab-3': true })
+    expect(s.canExpandPaneByTabId).toEqual({ 'tab-3': false })
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
     expect(s.automaticAgentResumeClaimsByTabId).toEqual({
       'tab-3': {
