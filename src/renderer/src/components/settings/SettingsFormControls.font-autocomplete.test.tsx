@@ -34,7 +34,9 @@ describe('FontAutocomplete', () => {
   }
 
   function getOptionLabels(): string[] {
-    return Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).map(
+    // Why: the dropdown portals to document.body so it can escape the settings
+    // section; options are intentionally not descendants of the container.
+    return Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).map(
       (option) => option.textContent?.trim() ?? ''
     )
   }
@@ -76,7 +78,7 @@ describe('FontAutocomplete', () => {
     })
 
     expect(
-      container
+      document
         .querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')
         ?.textContent?.trim()
     ).toBe('JetBrains Mono')
