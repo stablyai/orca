@@ -1,7 +1,8 @@
 import { isGeminiTerminalTitle } from '@/lib/agent-status'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { GlobalSettings } from '../../../../shared/types'
 
-export type TerminalGpuAccelerationMode = 'auto' | 'on' | 'off'
+export type TerminalGpuAccelerationMode = GlobalSettings['terminalGpuAcceleration']
 
 /**
  * The resolved renderer decision for a pane. `gpuEnabled` is the content-compat

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolvePaneDisplayTitle,
-  resolvePaneTitleDecision,
-  resolveTerminalTitleEvidence
-} from './terminal-title-evidence'
+import { resolvePaneDisplayTitle, resolvePaneTitleDecision } from './terminal-title-evidence'
 
 describe('resolvePaneDisplayTitle', () => {
   it('normalizes a Pi-compatible title to the resolved OMP owner', () => {
@@ -12,31 +8,6 @@ describe('resolvePaneDisplayTitle', () => {
 
   it('passes an unowned title through unchanged', () => {
     expect(resolvePaneDisplayTitle('bash', undefined)).toBe('bash')
-  })
-})
-
-describe('resolveTerminalTitleEvidence', () => {
-  it('carries pane/leaf/pty provenance for the frame', () => {
-    const evidence = resolveTerminalTitleEvidence({
-      rawTitle: '✦ Gemini CLI',
-      displayTitle: '✦ Gemini CLI',
-      source: 'osc',
-      observedAt: 1234,
-      tabId: 'tab-1',
-      leafId: 'leaf-9',
-      ptyId: 'pty-1',
-      ptyGeneration: 'gen-2'
-    })
-    expect(evidence).toEqual({
-      rawTitle: '✦ Gemini CLI',
-      displayTitle: '✦ Gemini CLI',
-      source: 'osc',
-      observedAt: 1234,
-      tabId: 'tab-1',
-      leafId: 'leaf-9',
-      ptyId: 'pty-1',
-      ptyGeneration: 'gen-2'
-    })
   })
 })
 
