@@ -4076,7 +4076,8 @@
           "hostAuthNeeded": "認証が必要です",
           "hostDisconnected": "切断済み",
           "failedNestWorkspace": "ワークスペースをネストできませんでした",
-          "sidebarRowMissing": "対象はもう存在しません"
+          "sidebarRowMissing": "対象はもう存在しません",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
