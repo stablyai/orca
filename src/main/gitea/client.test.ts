@@ -1,11 +1,54 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, readProjectGiteaConfigMock, envGiteaAuthFn } = vi.hoisted(() => {
+  function envValue(name: string): string | null {
+    const value = process.env[name]?.trim() ?? ''
+    return value.length > 0 ? value : null
+  }
+  function envGiteaAuthFn(): { apiBaseUrl: string | null; token: string | null } {
+    const raw = envValue('ORCA_GITEA_API_BASE_URL')
+    const trimmed = raw?.trim().replace(/\/+$/, '') ?? null
+    const apiBaseUrl = trimmed
+      ? /\/api\/v1$/i.test(trimmed)
+        ? trimmed
+        : `${trimmed}/api/v1`
+      : null
+    return { apiBaseUrl, token: envValue('ORCA_GITEA_TOKEN') }
+  }
+  return {
+    gitExecFileAsyncMock: vi.fn(),
+    readProjectGiteaConfigMock: vi.fn(),
+    envGiteaAuthFn
+  }
+})
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('./project-config', () => ({
+  getEnvGiteaAuth: () => envGiteaAuthFn(),
+  readProjectGiteaConfig: readProjectGiteaConfigMock,
+  resolveGiteaAuth: async (repoPath?: string) => {
+    if (repoPath) {
+      const config = await readProjectGiteaConfigMock(repoPath)
+      if (config) {
+        const envAuth = envGiteaAuthFn()
+        if (config.apiBaseUrl) {
+          const trimmed = config.apiBaseUrl.trim().replace(/\/+$/, '')
+          return {
+            apiBaseUrl: /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`,
+            token: config.token ?? null
+          }
+        }
+        return {
+          apiBaseUrl: envAuth.apiBaseUrl,
+          token: config.token ?? envAuth.token
+        }
+      }
+    }
+    return envGiteaAuthFn()
+  }
 }))
 
 import {
@@ -39,6 +82,8 @@ describe('Gitea client', () => {
     process.env.ORCA_GITEA_TOKEN = 'gitea-token'
     delete process.env.ORCA_GITEA_API_BASE_URL
     gitExecFileAsyncMock.mockReset()
+    readProjectGiteaConfigMock.mockReset()
+    readProjectGiteaConfigMock.mockResolvedValue(null)
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'https://git.example.com/team/repo.git\n',
       stderr: ''
@@ -155,5 +200,43 @@ describe('Gitea client', () => {
       tokenConfigured: true
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://git.example.com/api/v1/user')
+  })
+
+  it('uses per-project config token when .orca/gitea.json exists', async () => {
+    delete process.env.ORCA_GITEA_TOKEN
+    readProjectGiteaConfigMock.mockResolvedValue({ token: 'project-token' })
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (String(url).includes('/commits/abc123/status')) {
+        return Response.json({ state: 'success' })
+      }
+      expect((init!.headers as Record<string, string>).Authorization).toBe('token project-token')
+      return Response.json([giteaPr()])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 7
+    })
+  })
+
+  it('resolves auth status from per-project config when repoPath is provided', async () => {
+    delete process.env.ORCA_GITEA_TOKEN
+    delete process.env.ORCA_GITEA_API_BASE_URL
+    readProjectGiteaConfigMock.mockResolvedValue({
+      token: 'project-token',
+      apiBaseUrl: 'https://project.example.com'
+    })
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      Response.json({ login: 'project-user' })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaAuthStatus('/project-repo')).resolves.toEqual({
+      configured: true,
+      authenticated: true,
+      account: 'project-user',
+      baseUrl: 'https://project.example.com/api/v1',
+      tokenConfigured: true
+    })
   })
 })

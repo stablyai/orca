@@ -230,7 +230,7 @@ describe('createHostedReview', () => {
       url: 'https://git.example.com/acme/orca/pulls/19'
     })
     isAzureDevOpsReviewCreationAuthenticatedMock.mockReturnValue(true)
-    isGiteaReviewCreationAuthenticatedMock.mockReturnValue(true)
+    isGiteaReviewCreationAuthenticatedMock.mockResolvedValue(true)
   })
 
   it('revalidates ahead commits before creating a GitHub pull request', async () => {
@@ -553,7 +553,7 @@ describe('getHostedReviewCreationEligibility', () => {
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'Feature title\n', stderr: '' })
     isAzureDevOpsReviewCreationAuthenticatedMock.mockReturnValue(true)
-    isGiteaReviewCreationAuthenticatedMock.mockReturnValue(true)
+    isGiteaReviewCreationAuthenticatedMock.mockResolvedValue(true)
   })
 
   it('treats short remote base refs as the default branch name', async () => {

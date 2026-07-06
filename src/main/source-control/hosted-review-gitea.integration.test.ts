@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _resetGiteaRepoRefCache } from '../gitea/repository-ref'
+import { _resetProjectConfigCache } from '../gitea/project-config'
 import { getHostedReviewForBranch } from './hosted-review'
 
 const execFileAsync = promisify(execFile)
@@ -27,11 +28,13 @@ describe('Gitea hosted review integration', () => {
     process.env = { ...OLD_ENV, ORCA_GITEA_TOKEN: 'local-token' }
     delete process.env.ORCA_GITEA_API_BASE_URL
     _resetGiteaRepoRefCache()
+    _resetProjectConfigCache()
   })
 
   afterEach(() => {
     process.env = OLD_ENV
     _resetGiteaRepoRefCache()
+    _resetProjectConfigCache()
   })
 
   it('resolves a Gitea PR through real git remote parsing and HTTP API calls', async () => {

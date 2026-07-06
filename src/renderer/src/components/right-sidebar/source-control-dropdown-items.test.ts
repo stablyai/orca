@@ -680,7 +680,7 @@ describe('resolveDropdownItems', () => {
 
   it.each([
     ['azure-devops', 'Set ORCA_AZURE_DEVOPS_TOKEN in this environment'],
-    ['gitea', 'Set ORCA_GITEA_TOKEN in this environment']
+    ['gitea', 'Set ORCA_GITEA_TOKEN or add .orca/gitea.json in this environment']
   ] as const)('uses token auth copy when %s PR creation needs authentication', (provider, hint) => {
     const items = resolveDropdownItems(
       inputs({

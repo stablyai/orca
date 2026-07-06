@@ -10,15 +10,11 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { getEnvGiteaAuth, resolveGiteaAuth, type GiteaAuthConfig } from './project-config'
 
 const REQUEST_TIMEOUT_MS = 5000
 const PULL_REQUEST_PAGE_LIMIT = 50
 const MAX_PULL_REQUEST_PAGES = 5
-
-type GiteaAuthConfig = {
-  apiBaseUrl: string | null
-  token: string | null
-}
 
 export type GiteaAuthStatus = {
   configured: boolean
@@ -31,11 +27,7 @@ export type GiteaAuthStatus = {
 type RequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
-}
-
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
+  auth?: GiteaAuthConfig
 }
 
 export function normalizeGiteaApiBaseUrl(value: string): string {
@@ -43,20 +35,12 @@ export function normalizeGiteaApiBaseUrl(value: string): string {
   return /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`
 }
 
-function getAuthConfig(): GiteaAuthConfig {
-  const apiBaseUrl = envValue('ORCA_GITEA_API_BASE_URL')
-  return {
-    apiBaseUrl: apiBaseUrl ? normalizeGiteaApiBaseUrl(apiBaseUrl) : null,
-    token: envValue('ORCA_GITEA_TOKEN')
-  }
-}
-
 function authHeaders(config: Pick<GiteaAuthConfig, 'token'>): Record<string, string> {
   return config.token ? { Authorization: `token ${config.token}` } : {}
 }
 
-function configuredApiBaseUrl(repo: GiteaRepoRef): string {
-  return getAuthConfig().apiBaseUrl ?? repo.apiBaseUrl
+function configuredApiBaseUrl(repo: GiteaRepoRef, auth: GiteaAuthConfig): string {
+  return auth.apiBaseUrl ?? repo.apiBaseUrl
 }
 
 function apiUrl(baseUrl: string, path: string, searchParams?: RequestOptions['searchParams']): URL {
@@ -74,14 +58,14 @@ async function requestJsonAtBase<T>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T | null> {
-  const config = getAuthConfig()
+  const auth = options.auth ?? getEnvGiteaAuth()
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS)
   try {
     const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
       headers: {
         Accept: 'application/json',
-        ...authHeaders(config)
+        ...authHeaders(auth)
       },
       signal: controller.signal
     })
@@ -101,7 +85,8 @@ function requestJson<T>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T | null> {
-  return requestJsonAtBase(configuredApiBaseUrl(repo), path, options)
+  const auth = options.auth ?? getEnvGiteaAuth()
+  return requestJsonAtBase(configuredApiBaseUrl(repo, auth), path, options)
 }
 
 function encodedRepoPath(repo: GiteaRepoRef): string {
@@ -110,23 +95,26 @@ function encodedRepoPath(repo: GiteaRepoRef): string {
 
 async function getCommitStatus(
   repo: GiteaRepoRef,
-  headSha: string | undefined
+  headSha: string | undefined,
+  auth?: GiteaAuthConfig
 ): Promise<ReturnType<typeof deriveGiteaCommitStatus>> {
   if (!headSha) {
     return 'neutral'
   }
   const data = await requestJson<RawGiteaCombinedStatus>(
     repo,
-    `/repos/${encodedRepoPath(repo)}/commits/${encodeURIComponent(headSha)}/status`
+    `/repos/${encodedRepoPath(repo)}/commits/${encodeURIComponent(headSha)}/status`,
+    auth ? { auth } : {}
   )
   return deriveGiteaCommitStatus(data)
 }
 
 async function normalizePullRequest(
   repo: GiteaRepoRef,
-  raw: RawGiteaPullRequest
+  raw: RawGiteaPullRequest,
+  auth?: GiteaAuthConfig
 ): Promise<GiteaPullRequestInfo | null> {
-  const status = await getCommitStatus(repo, raw.head?.sha?.trim())
+  const status = await getCommitStatus(repo, raw.head?.sha?.trim(), auth)
   return mapGiteaPullRequest(raw, status)
 }
 
@@ -139,8 +127,8 @@ function matchesBranch(raw: RawGiteaPullRequest, branchName: string): boolean {
   return label === branchName || label?.endsWith(`:${branchName}`) === true
 }
 
-export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
-  const config = getAuthConfig()
+export async function getGiteaAuthStatus(repoPath?: string): Promise<GiteaAuthStatus> {
+  const config = repoPath ? await resolveGiteaAuth(repoPath) : getEnvGiteaAuth()
   const tokenConfigured = config.token !== null
   if (!config.apiBaseUrl && !tokenConfigured) {
     return {
@@ -163,7 +151,8 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
 
   if (!tokenConfigured) {
     const version = await requestJsonAtBase<{ version?: string }>(config.apiBaseUrl, '/version', {
-      timeoutMs: 4000
+      timeoutMs: 4000,
+      auth: config
     })
     return {
       configured: version !== null,
@@ -178,7 +167,7 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
     login?: string | null
     username?: string | null
     full_name?: string | null
-  }>(config.apiBaseUrl, '/user', { timeoutMs: 4000 })
+  }>(config.apiBaseUrl, '/user', { timeoutMs: 4000, auth: config })
   return {
     configured: true,
     authenticated: user !== null,
@@ -202,11 +191,13 @@ export async function getGiteaPullRequest(
   if (!repo) {
     return null
   }
+  const auth = await resolveGiteaAuth(repoPath)
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
-    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(prNumber))}`
+    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(prNumber))}`,
+    { auth }
   )
-  return raw ? normalizePullRequest(repo, raw) : null
+  return raw ? normalizePullRequest(repo, raw, auth) : null
 }
 
 export async function getGiteaPullRequestForBranch(
@@ -230,6 +221,8 @@ export async function getGiteaPullRequestForBranch(
     return null
   }
 
+  const auth = await resolveGiteaAuth(repoPath)
+
   if (branchName) {
     for (let page = 1; page <= MAX_PULL_REQUEST_PAGES; page++) {
       const list = await requestJson<RawGiteaPullRequest[]>(
@@ -241,12 +234,13 @@ export async function getGiteaPullRequestForBranch(
             sort: 'recentupdate',
             page,
             limit: PULL_REQUEST_PAGE_LIMIT
-          }
+          },
+          auth
         }
       )
       const raw = list?.find((item) => matchesBranch(item, branchName))
       if (raw) {
-        return normalizePullRequest(repo, raw)
+        return normalizePullRequest(repo, raw, auth)
       }
       if (!list || list.length < PULL_REQUEST_PAGE_LIMIT) {
         break
@@ -259,9 +253,10 @@ export async function getGiteaPullRequestForBranch(
   }
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
-    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`
+    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
+    { auth }
   )
-  return raw ? normalizePullRequest(repo, raw) : null
+  return raw ? normalizePullRequest(repo, raw, auth) : null
 }
 
 export async function getGiteaRepoSlug(
