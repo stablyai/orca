@@ -5,6 +5,7 @@ import {
   acquire,
   clearToken,
   getClients,
+  getPublicFileUrlClient,
   getStatus,
   isAuthError,
   release,
@@ -192,7 +193,8 @@ async function readIssueWorkspace(
   identifier: string
 ): Promise<ResolvedIssue | null> {
   const response = await withLinearRead(entry, async () => {
-    const raw = await entry.client.client.rawRequest<RawIssueResponse, Record<string, unknown>>(
+    const client = getPublicFileUrlClient(entry)
+    const raw = await client.client.rawRequest<RawIssueResponse, Record<string, unknown>>(
       ISSUE_QUERY,
       { id: identifier }
     )

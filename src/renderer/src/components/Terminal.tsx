@@ -1137,7 +1137,7 @@ function Terminal(): React.JSX.Element | null {
       }
       const state = useAppStore.getState()
       const currentOrder = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
-      const index = currentOrder.findIndex((id) => id === tabId)
+      const index = currentOrder.indexOf(tabId)
       if (index === -1) {
         return
       }

@@ -1000,7 +1000,7 @@ export class PtyHandler {
       // revived PTY.
       const match = entry.id.match(/^pty-(\d+)$/)
       if (match) {
-        const revivedNum = parseInt(match[1], 10)
+        const revivedNum = Number.parseInt(match[1], 10)
         if (revivedNum >= this.nextId) {
           this.nextId = revivedNum + 1
         }

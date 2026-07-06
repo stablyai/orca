@@ -19,6 +19,28 @@ function getSection(markdown, heading) {
 }
 
 describe('orchestration skill guidance', () => {
+  it('requires Orca runtime state before claiming a worker was orchestrated', () => {
+    const skill = readSkill()
+    const toolBoundary = getSection(skill, 'Tool Boundary')
+
+    expect(toolBoundary).toContain(
+      'must create Orca runtime state with `orca orchestration task-create` and `orca orchestration dispatch --inject`'
+    )
+    expect(toolBoundary).toContain('or `orca orchestration run`')
+    expect(toolBoundary).toContain(
+      'Do not substitute non-Orca subagent tools, generic agent-spawn APIs, or chat-only parallel worker features'
+    )
+    expect(toolBoundary).toContain('do not create Orca task/dispatch provenance')
+    expect(toolBoundary).toContain('injected lifecycle preambles')
+    expect(toolBoundary).toContain('`worker_done` authority')
+    expect(toolBoundary).toContain('decision gates')
+    expect(toolBoundary).toContain('orca orchestration task-list --json')
+    expect(toolBoundary).toContain('orca orchestration dispatch-show --task <task_id> --json')
+    expect(toolBoundary).toContain(
+      'do not retroactively describe the external worker as orchestrated'
+    )
+  })
+
   it('treats long-running worker waits as liveness checkpoints, not failures', () => {
     const skill = readSkill()
 
@@ -54,6 +76,17 @@ describe('orchestration skill guidance', () => {
     expect(skill).toContain(
       'orca worktree create --name <task-name> --no-parent --agent codex --prompt'
     )
+    expect(fullHandoffs).toContain(
+      'Before creating a new worktree from an active feature branch, decide and state whether the desired Orca lineage is child or top-level'
+    )
+    expect(fullHandoffs).toContain(
+      'Use child worktree lineage only when the new work is conceptually stacked under or dependent on the active worktree'
+    )
+    expect(fullHandoffs).toContain(
+      'For independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks, create a top-level worktree with `--no-parent`'
+    )
+    expect(fullHandoffs).toContain('If the work should start from the repo default base')
+    expect(fullHandoffs).toContain('omit `--base-branch`')
   })
 
   it('classifies handoff wording as ownership transfer unless supervision is explicit', () => {
@@ -99,6 +132,33 @@ describe('orchestration skill guidance', () => {
       'Wait only for `tui-idle` when needed to avoid losing the prompt.'
     )
     expect(fullHandoffs).toContain('Do not monitor task completion.')
+  })
+
+  it('clarifies sidebar lineage for same-worktree orchestrated workers', () => {
+    const skill = readSkill()
+    const workerTerminals = getSection(skill, 'Worker Terminals')
+
+    expect(workerTerminals).toContain(
+      'Sidebar lineage and orchestration lifecycle are related but not identical.'
+    )
+    expect(workerTerminals).toContain(
+      'A same-worktree worker created with `orca terminal create --worktree active` may appear as a peer terminal/agent'
+    )
+    expect(workerTerminals).toContain(
+      'even though it is a child dispatch in Orca orchestration state'
+    )
+    expect(workerTerminals).toContain(
+      'A visible parent/child worktree relationship requires creating a child worktree'
+    )
+    expect(workerTerminals).toContain(
+      'only when the task can safely run from an isolated checkout and does not need uncommitted artifacts from the current working tree'
+    )
+    expect(workerTerminals).toContain(
+      'For supervised new-worktree workers, decide the desired Orca lineage before creation'
+    )
+    expect(workerTerminals).toContain(
+      'use `--no-parent` for independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks'
+    )
   })
 
   it('keeps review-only completions and named next-owner fixes in their lanes', () => {

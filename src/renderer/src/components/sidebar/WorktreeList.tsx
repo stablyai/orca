@@ -1252,7 +1252,7 @@ function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
 }
 
 function getVirtualRowIndex(element: Element): number | null {
-  const index = parseInt(element.getAttribute('data-index') ?? '', 10)
+  const index = Number.parseInt(element.getAttribute('data-index') ?? '', 10)
   return Number.isNaN(index) ? null : index
 }
 

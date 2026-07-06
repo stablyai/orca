@@ -149,17 +149,16 @@ import {
   getRuntimeEnvironmentIdForWorktree
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
+  type ResumableTuiAgent,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import {
@@ -373,9 +372,7 @@ type FreshSpawnOptions = {
 }
 
 type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
-  // TuiAgent (not just ResumableTuiAgent): the fresh-launch fallback can spawn any
-  // agent the terminal previously ran, including ones without resume support.
-  agent: TuiAgent
+  agent: ResumableTuiAgent
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
   launchToken: string
   useLiveEntry: boolean
@@ -1129,34 +1126,32 @@ export function connectPanePty(
         )
       }
     )
-    const legacyProviderSessionKeys = legacyMatches.map(([, record]) => {
-      const providerSession = normalizeAgentProviderSession(record.providerSession)
-      return providerSession
-        ? [record.worktreeId, record.agent, providerSession.key, providerSession.id].join('\0')
-        : null
-    })
     const exactLegacyMatch = legacyMatches.find(([paneKey]) => {
       const legacy = parseLegacyNumericPaneKey(paneKey)
       return legacy?.numericPaneId === String(pane.id)
     })
     const providerSessionKeys = new Set(
-      legacyProviderSessionKeys.filter((key): key is string => key !== null)
+      legacyMatches.map(([, record]) =>
+        [
+          record.worktreeId,
+          record.agent,
+          record.providerSession.key,
+          record.providerSession.id
+        ].join('\0')
+      )
     )
     const oldestLegacyMatch = legacyMatches
       .slice()
       .sort(([, a], [, b]) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)[0]
     // Why: duplicate legacy aliases can point at one provider session; consume
     // the oldest capture as canonical and clear its aliases after resume.
-    const allLegacyMatchesHaveProviderSession = legacyProviderSessionKeys.every(
-      (key) => key !== null
-    )
     const selectedLegacyMatch =
       exactLegacyMatch ??
-      (legacyMatches.length === 1
-        ? legacyMatches[0]
-        : allLegacyMatchesHaveProviderSession && providerSessionKeys.size === 1
-          ? oldestLegacyMatch
-          : null)
+      (providerSessionKeys.size === 1
+        ? legacyMatches.length === 1
+          ? legacyMatches[0]
+          : oldestLegacyMatch
+        : null)
     if (!selectedLegacyMatch) {
       return null
     }
@@ -1168,19 +1163,13 @@ export function connectPanePty(
     consumed: { paneKey: string; record: SleepingAgentSessionRecord }
   ): void => {
     state.clearSleepingAgentSession(consumed.paneKey)
-    const consumedSession = normalizeAgentProviderSession(consumed.record.providerSession)
-    // No provider session (e.g. a fresh-launch fallback record) means there is no
-    // shared session to alias, so there is nothing else to clear.
-    if (!consumedSession) {
-      return
-    }
     for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
       if (
         paneKey !== consumed.paneKey &&
         record.worktreeId === consumed.record.worktreeId &&
         record.agent === consumed.record.agent &&
-        record.providerSession?.key === consumedSession.key &&
-        record.providerSession?.id === consumedSession.id
+        record.providerSession.key === consumed.record.providerSession.key &&
+        record.providerSession.id === consumed.record.providerSession.id
       ) {
         // Why: legacy pane aliases can leave multiple sleeping rows for one
         // provider session; once this pane resumes it, every alias is stale.
@@ -3495,10 +3484,6 @@ export function connectPanePty(
       if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
         return 'linux'
       }
-      const sshRemotePlatform = getTerminalPasteSshRemotePlatform(connectionId)
-      if (sshRemotePlatform) {
-        return sshRemotePlatform
-      }
       if (connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
         return 'linux'
       }
@@ -3512,123 +3497,27 @@ export function connectPanePty(
       const entry = state.agentStatusByPaneKey[cacheKey]
       const sleepingRecordEntry = getSleepingRecordForPane(state)
       const sleepingRecord = sleepingRecordEntry?.record
-      const liveEntry = entry && entry.state !== 'done' ? entry : null
-      const useLiveEntry = Boolean(liveEntry)
-
-      // When the provider session can't be resumed, an agent terminal should still
-      // come back as its agent (or the default), not a blank shell (#4557). A plain
-      // shell - no agent ever ran here - stays blank (buildFreshFallback returns null).
-      const buildFreshFallback = (): ColdRestoreAgentResumeStartup | null => {
-        const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
-          (candidate) => candidate.id === deps.tabId
-        )
-        const liveAgent =
-          liveEntry && isTuiAgent(liveEntry.agentType) ? liveEntry.agentType : undefined
-        const priorAgent =
-          liveAgent ?? sleepingRecord?.agent ?? tab?.launchAgent ?? paneStartup?.launchAgent
-        const defaultPref = state.settings?.defaultTuiAgent
-        const defaultAgent =
-          defaultPref &&
-          defaultPref !== 'blank' &&
-          isTuiAgentEnabled(defaultPref, state.settings?.disabledTuiAgents)
-            ? defaultPref
-            : undefined
-        // Fall back to the default agent only when this was an active/sleeping
-        // agent terminal whose specific agent is unrecoverable - never for a
-        // genuine plain shell or a stale completed live row.
-        const fallbackAgent = priorAgent ?? (liveEntry || sleepingRecord ? defaultAgent : undefined)
-        if (!fallbackAgent) {
-          return null
-        }
-        const liveLaunchConfig =
-          liveEntry && liveAgent === fallbackAgent
-            ? state.getAgentLaunchConfigForStatusEntry(liveEntry)
-            : undefined
-        const fallbackLaunchConfig =
-          liveLaunchConfig ??
-          (sleepingRecord?.agent === fallbackAgent ? sleepingRecord.launchConfig : undefined) ??
-          (paneStartup?.launchAgent === fallbackAgent ? paneStartup.launchConfig : undefined)
-        if (fallbackLaunchConfig?.agentCommand?.trim()) {
-          const freshLaunchToken = createBrowserUuid()
-          return {
-            agent: fallbackAgent,
-            command: fallbackLaunchConfig.agentCommand.trim(),
-            env: {
-              ...fallbackLaunchConfig.agentEnv,
-              ORCA_AGENT_LAUNCH_TOKEN: freshLaunchToken
-            },
-            launchConfig: {
-              agentCommand: fallbackLaunchConfig.agentCommand.trim(),
-              agentArgs: fallbackLaunchConfig.agentArgs,
-              agentEnv: { ...fallbackLaunchConfig.agentEnv }
-            },
-            launchToken: freshLaunchToken,
-            useLiveEntry,
-            // A fresh launch is a new session, not a restored one, so no
-            // "restored" banner; the stale sleeping record is still cleared
-            // after the spawn.
-            hasSleepingRecord: false,
-            sleepingRecordEntry
-          }
-        }
-        const freshPlan = buildAgentStartupPlan({
-          agent: fallbackAgent,
-          prompt: '',
-          cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-          agentArgs:
-            fallbackLaunchConfig !== undefined
-              ? fallbackLaunchConfig.agentArgs
-              : resolveTuiAgentLaunchArgs(fallbackAgent, state.settings?.agentDefaultArgs),
-          agentEnv:
-            fallbackLaunchConfig !== undefined
-              ? fallbackLaunchConfig.agentEnv
-              : resolveTuiAgentLaunchEnv(fallbackAgent, state.settings?.agentDefaultEnv),
-          platform: getColdRestoreAgentResumePlatform(),
-          allowEmptyPromptLaunch: true
-        })
-        if (!freshPlan) {
-          return null
-        }
-        const freshLaunchToken = createBrowserUuid()
-        return {
-          agent: fallbackAgent,
-          command: freshPlan.launchCommand,
-          env: {
-            ...freshPlan.env,
-            ORCA_AGENT_LAUNCH_TOKEN: freshLaunchToken
-          },
-          launchConfig: freshPlan.launchConfig,
-          launchToken: freshLaunchToken,
-          useLiveEntry,
-          // A fresh launch is a new session, not a restored one, so no
-          // "restored" banner; the stale sleeping record is still cleared after
-          // the spawn.
-          hasSleepingRecord: false,
-          sleepingRecordEntry
-        }
-      }
-
-      const agent = liveEntry ? liveEntry.agentType : sleepingRecord?.agent
+      const useLiveEntry = entry && entry.state !== 'done'
+      const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
       if (!agent || !isResumableTuiAgent(agent)) {
-        return buildFreshFallback()
+        return null
       }
       const providerSession = normalizeAgentProviderSession(
-        liveEntry ? liveEntry.providerSession : sleepingRecord?.providerSession
+        useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
       )
       if (!providerSession) {
-        return buildFreshFallback()
+        return null
       }
-      const sleepingProviderSession = normalizeAgentProviderSession(sleepingRecord?.providerSession)
       const matchingSleepingLaunchConfig =
         sleepingRecord?.launchConfig &&
         (!useLiveEntry ||
           (sleepingRecord.agent === agent &&
-            sleepingProviderSession?.key === providerSession.key &&
-            sleepingProviderSession?.id === providerSession.id))
+            sleepingRecord.providerSession.key === providerSession.key &&
+            sleepingRecord.providerSession.id === providerSession.id))
           ? sleepingRecord.launchConfig
           : undefined
       const launchConfig =
-        (liveEntry ? state.getAgentLaunchConfigForStatusEntry(liveEntry) : undefined) ??
+        (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
         matchingSleepingLaunchConfig
       const resumePlatform = getColdRestoreAgentResumePlatform()
       const startupPlan = buildAgentResumeStartupPlan({
@@ -3647,7 +3536,7 @@ export function connectPanePty(
         platform: resumePlatform
       })
       if (!startupPlan) {
-        return buildFreshFallback()
+        return null
       }
       const coldRestoreLaunchToken = createBrowserUuid()
       // Why: cold restore means the PTY process is gone but the agent provider

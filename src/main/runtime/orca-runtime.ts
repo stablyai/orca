@@ -21520,7 +21520,7 @@ export class OrcaRuntimeService {
   }
 
   private defaultLinearAttachmentTitle(url: URL): string {
-    const tail = url.pathname.split('/').filter(Boolean).at(-1)
+    const tail = url.pathname.split('/').findLast(Boolean)
     return tail ? `${url.host}/${tail}` : url.host
   }
 
