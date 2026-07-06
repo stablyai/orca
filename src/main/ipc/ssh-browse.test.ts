@@ -108,7 +108,9 @@ describe('registerSshBrowseHandler', () => {
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })
-    windowsChannel.emit('data', Buffer.from('C:\\Users\\alice\nDesktop/\nnotes.txt\n'))
+    // Windows OpenSSH exec emits CRLF; the parser must strip \r so directories
+    // aren't misclassified as files with a stray carriage return in the name.
+    windowsChannel.emit('data', Buffer.from('C:\\Users\\alice\r\nDesktop/\r\nnotes.txt\r\n'))
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
 

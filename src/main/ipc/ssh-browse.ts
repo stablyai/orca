@@ -178,7 +178,11 @@ async function runBrowseCommand(
         return
       }
 
-      const lines = stdout.trim().split('\n')
+      // Why: Windows OpenSSH exec emits CRLF, so split on \r?\n — otherwise a
+      // trailing \r defeats the endsWith('/') dir check and leaves a stray CR
+      // in every name. Splitting on the CR too preserves POSIX filenames whose
+      // names contain legitimate leading/trailing spaces.
+      const lines = stdout.trim().split(/\r?\n/)
       if (lines.length === 0) {
         rejectOnce(new Error('Empty response from remote'))
         return
