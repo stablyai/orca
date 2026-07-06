@@ -12,10 +12,7 @@ export type ImeNativeTextKeyEvent = {
   metaKey: boolean
   ctrlKey: boolean
   altKey: boolean
-  shiftKey?: boolean
-  repeat?: boolean
   isComposing?: boolean
-  defaultPrevented?: boolean
 }
 
 const CJK_DIRECT_PUNCTUATION_KEYS = new Set<string>([

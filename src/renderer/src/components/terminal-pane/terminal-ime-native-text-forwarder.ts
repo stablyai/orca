@@ -9,9 +9,6 @@ import {
   type ImeNativeTextKeyEvent
 } from './terminal-ime-native-text-candidates'
 
-export { isImeNativeTextKeydownCandidate } from './terminal-ime-native-text-candidates'
-export type { ImeNativeTextKeyEvent } from './terminal-ime-native-text-candidates'
-
 // Why: some macOS input sources and synthetic Unicode injectors commit native
 // text through a plain `insertText` event after a printable keydown. Xterm's
 // kitty keyboard protocol can encode and cancel that keydown before Chromium
@@ -97,11 +94,13 @@ export function installTerminalImeNativeTextForwarder(args: {
 
   const claimKeyEvent = (event: ImeNativeTextKeyEvent): boolean => {
     if (event.type === 'keydown') {
-      const compositionActive = args.isComposing()
-      const features =
-        args.getInputSourceFeatures?.() ?? DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
-      const candidate = isImeNativeTextKeydownCandidate(event, compositionActive, features)
-      if (!candidate) {
+      if (
+        !isImeNativeTextKeydownCandidate(
+          event,
+          args.isComposing(),
+          args.getInputSourceFeatures?.() ?? DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
+        )
+      ) {
         return false
       }
       // Arm forwarding so the upcoming input event is sent to the PTY.
@@ -153,7 +152,9 @@ export function installTerminalImeNativeTextForwarder(args: {
     event.stopImmediatePropagation()
     // The glyph only landed in xterm's helper textarea because we let the
     // keydown reach the native pipeline; clear it back to its empty resting
-    // state so it cannot accumulate across keystrokes.
+    // state so it cannot accumulate across keystrokes. This clear can zero a
+    // pending CompositionHelper textarea diff, but only synthetic injectors
+    // can interleave two commits inside one macrotask.
     if (event.target instanceof HTMLTextAreaElement) {
       event.target.value = ''
     }
@@ -165,15 +166,14 @@ export function installTerminalImeNativeTextForwarder(args: {
   }
 
   terminalElement.addEventListener('input', forwardCommittedText, true)
-  const cancelPendingOnBlur = (): void => cancelPending()
-  terminalElement.addEventListener('blur', cancelPendingOnBlur, true)
+  terminalElement.addEventListener('blur', cancelPending, true)
 
   return {
     claimKeyEvent,
     dispose: () => {
       cancelPending()
       terminalElement.removeEventListener('input', forwardCommittedText, true)
-      terminalElement.removeEventListener('blur', cancelPendingOnBlur, true)
+      terminalElement.removeEventListener('blur', cancelPending, true)
     }
   }
 }

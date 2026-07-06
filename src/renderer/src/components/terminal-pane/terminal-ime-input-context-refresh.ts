@@ -11,7 +11,7 @@ function isMacUserAgent(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 }
 
-function scheduleNextFrame(callback: () => void): void {
+export function scheduleNextFrame(callback: () => void): void {
   if (typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(callback)
   } else {
@@ -19,7 +19,10 @@ function scheduleNextFrame(callback: () => void): void {
   }
 }
 
-function isDocumentBodyOrNull(activeElement: Element | null, ownerDocument: Document): boolean {
+export function isDocumentBodyOrNull(
+  activeElement: Element | null,
+  ownerDocument: Document
+): boolean {
   return activeElement === null || activeElement === ownerDocument.body
 }
 

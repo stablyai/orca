@@ -168,6 +168,7 @@ import {
   resyncTerminalFocusForWindowFocus,
   setRegularTerminalInputFocusAttribute
 } from './regular-terminal-focus-ownership'
+import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
 
 type TerminalPaneProps = {
   tabId: string
@@ -1747,8 +1748,15 @@ export default function TerminalPane({
       window.api.ui.setTerminalInputFocused?.(focused)
     }
     const onFocusIn = (event: FocusEvent): void => {
-      if (isXtermHelperTextarea(event.target)) {
-        syncFocused(true)
+      if (!isXtermHelperTextarea(event.target)) {
+        return
+      }
+      syncFocused(true)
+      // Why: helper→helper pane handoffs skip window blur and can leave a stale
+      // macOS NSTextInputContext; the refresh's refocus arrives with a
+      // non-helper relatedTarget, so this cannot recurse.
+      if (isXtermHelperTextarea(event.relatedTarget) && event.relatedTarget !== event.target) {
+        refreshTerminalImeInputContext(event.target, {})
       }
     }
     const onFocusOut = (event: FocusEvent): void => {

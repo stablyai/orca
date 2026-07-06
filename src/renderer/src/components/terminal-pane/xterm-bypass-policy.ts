@@ -34,8 +34,10 @@ export type XtermBypassOptions = {
 }
 
 export type XtermImeKeyboardOptions = {
-  compositionActive?: boolean
-  isMac?: boolean
+  compositionActive: boolean
+  // Required so no caller silently falls back to non-mac 229 suppression,
+  // which re-swallows the first key after a macOS IME input-source switch.
+  isMac: boolean
 }
 
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
@@ -70,21 +72,16 @@ function isXtermHandledKeyEvent(type: string): boolean {
 
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
-  options: XtermImeKeyboardOptions = {}
+  options: XtermImeKeyboardOptions
 ): boolean {
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }
-  const compositionActive = options.compositionActive === true
-  const isMac = options.isMac === true
-  // Why: IMEs own Process-key / composing keystrokes. Letting xterm translate
-  // Backspace/Enter/etc. into PTY bytes makes TUIs delete committed CJK text
-  // while the user is only editing the preedit candidate.
-  //
-  // A bare macOS keydown 229 outside active composition must still reach
-  // xterm's CompositionHelper. It diffs the helper textarea after Chromium
-  // commits native text, which is how macOS IMEs deliver the first ASCII key
-  // after an input-mode switch. Other platforms keep suppressing Process keys.
+  const { compositionActive, isMac } = options
+  // Why: IMEs own Process-key / composing keystrokes — letting xterm translate
+  // them corrupts committed CJK text. Bare macOS keydown 229 is exempt: it must
+  // reach xterm's CompositionHelper or the first key after an input-source
+  // switch is swallowed.
   return (
     event.isComposing === true ||
     (event.keyCode === 229 && (event.type !== 'keydown' || compositionActive || !isMac)) ||

@@ -164,12 +164,14 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
 })
 
 describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
-  const macImeOpts = { isMac: true }
+  const idle = { isMac: true, compositionActive: false }
+  const composing = { isMac: true, compositionActive: true }
 
   it('suppresses keyboard events while Chromium reports active IME composition', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
-        event({ key: 'Backspace', code: 'Backspace', isComposing: true })
+        event({ key: 'Backspace', code: 'Backspace', isComposing: true }),
+        idle
       )
     ).toBe(true)
   })
@@ -178,7 +180,7 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
         event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
-        macImeOpts
+        idle
       )
     ).toBe(false)
   })
@@ -187,7 +189,7 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
         event({ type: 'keyup', key: 'Process', code: 'KeyN', keyCode: 229 }),
-        macImeOpts
+        idle
       )
     ).toBe(true)
   })
@@ -196,42 +198,43 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
         event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
-        { ...macImeOpts, compositionActive: true }
+        composing
       )
     ).toBe(true)
   })
 
   it('does not suppress ordinary Backspace outside IME composition', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }))
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), idle)
     ).toBe(false)
   })
 
   it('suppresses IME-owned editing keys while composition is active', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace' }),
+        composing
+      )
     ).toBe(true)
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'ArrowDown', code: 'ArrowDown' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'ArrowDown', code: 'ArrowDown' }),
+        composing
+      )
     ).toBe(true)
   })
 
   it('does not suppress ordinary text keys solely because composition is active', () => {
     expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), {
-        compositionActive: true
-      })
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), composing)
     ).toBe(false)
   })
 
   it('does not suppress keypress events because they carry committed text', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
-        event({ type: 'keypress', key: '中', code: '', isComposing: true })
+        event({ type: 'keypress', key: '中', code: '', isComposing: true }),
+        idle
       )
     ).toBe(false)
   })

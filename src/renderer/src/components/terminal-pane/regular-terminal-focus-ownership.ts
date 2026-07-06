@@ -1,23 +1,13 @@
 import {
+  isDocumentBodyOrNull,
   refreshTerminalImeInputContext,
+  scheduleNextFrame,
   type TerminalImeInputContextRefocusScheduler
-} from '@/lib/terminal-ime-input-context-refresh'
+} from './terminal-ime-input-context-refresh'
 
 export type TerminalInputFocusSync = (focused: boolean) => void
 export type RefocusScheduler = TerminalImeInputContextRefocusScheduler
 export const REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE = 'data-regular-terminal-input-focused'
-
-function isMacUserAgent(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-}
-
-function scheduleNextFrame(callback: () => void): void {
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(callback)
-  } else {
-    setTimeout(callback, 0)
-  }
-}
 
 export function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -38,10 +28,6 @@ export function getPaneOwnedActiveHelperTextarea(
     return null
   }
   return activeElement
-}
-
-function isDocumentBodyOrNull(activeElement: Element | null, ownerDocument: Document): boolean {
-  return activeElement === null || activeElement === ownerDocument.body
 }
 
 export function releaseTerminalFocusForOutsidePointerDown(args: {
@@ -119,7 +105,6 @@ export function resyncTerminalFocusForWindowFocus(args: {
   args.syncFocused(true)
 
   const reclaimedHelper = helper
-  const isMac = args.isMac ?? isMacUserAgent()
 
   // Why: defer the reclaim refocus to the next frame and only take focus if
   // nothing newer grabbed it — so a click into the sidebar/dialog/rename input
@@ -129,6 +114,9 @@ export function resyncTerminalFocusForWindowFocus(args: {
   if (needsProgrammaticFocus) {
     const schedule = args.scheduleRefocus ?? scheduleNextFrame
     schedule(() => {
+      if (!reclaimedHelper.isConnected) {
+        return
+      }
       const active = reclaimedHelper.ownerDocument.activeElement
       if (
         active === reclaimedHelper ||
@@ -140,17 +128,12 @@ export function resyncTerminalFocusForWindowFocus(args: {
     return true
   }
 
-  // Why: on macOS, reactivating the app leaves Chromium's NSTextInputContext
-  // stale on the still-focused helper textarea, so the IME is stranded in ASCII
-  // with no way to switch back to CJK (electron#32307/#34952). Forcing a
-  // blur → next-frame refocus rebuilds the input context so the IME works again.
-  // Other platforms don't hit this and shouldn't pay the flicker cost.
-  if (isMac) {
-    refreshTerminalImeInputContext(reclaimedHelper, {
-      isMac,
-      scheduleRefocus: args.scheduleRefocus
-    })
-  }
+  // Why: macOS app reactivation leaves a stale NSTextInputContext on the
+  // still-focused helper (electron#32307/#34952); non-mac returns false inside.
+  refreshTerminalImeInputContext(reclaimedHelper, {
+    isMac: args.isMac,
+    scheduleRefocus: args.scheduleRefocus
+  })
 
   return true
 }

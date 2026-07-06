@@ -836,9 +836,6 @@ export function useTerminalPaneLifecycle({
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
         imeCompositionDisposablesRef.current.set(pane.id, imeCompositionTracker)
-        const getImeInputSourceFeatures = () =>
-          macNativeTextInputSourceTracker?.getFeatures() ??
-          DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
         // Why: only known macOS native text paths need xterm keydown bypass.
         // Source gates cover physical CJK/Vietnamese IME rewrites; synthetic
         // Unicode key events are detected by missing physical key identity.
@@ -847,7 +844,9 @@ export function useTerminalPaneLifecycle({
               terminalElement: pane.terminal.element,
               isComposing: () => imeCompositionTracker.isActive(),
               sendInput: (data) => pane.terminal.input(data),
-              getInputSourceFeatures: getImeInputSourceFeatures
+              getInputSourceFeatures: () =>
+                macNativeTextInputSourceTracker?.getFeatures() ??
+                DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
             })
           : {
               claimKeyEvent: () => false,
@@ -855,12 +854,12 @@ export function useTerminalPaneLifecycle({
             }
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
-          const compositionActive = imeCompositionTracker.isActive()
-          const suppressImeKey = shouldSuppressTerminalImeKeyboardEvent(e, {
-            compositionActive,
-            isMac
-          })
-          if (suppressImeKey) {
+          if (
+            shouldSuppressTerminalImeKeyboardEvent(e, {
+              compositionActive: imeCompositionTracker.isActive(),
+              isMac
+            })
+          ) {
             return false
           }
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
@@ -914,8 +913,7 @@ export function useTerminalPaneLifecycle({
             }
           }
 
-          const imeNativeTextClaimed = imeNativeTextForwarder.claimKeyEvent(e)
-          if (imeNativeTextClaimed) {
+          if (imeNativeTextForwarder.claimKeyEvent(e)) {
             // Why: bypass xterm's kitty encoder for native text keydowns so the
             // committed glyph survives via the input event.
             return false
