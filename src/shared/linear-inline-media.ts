@@ -94,7 +94,7 @@ function fileNameFromUrl(url: string): string | null {
   }
   try {
     const parsed = new URL(url)
-    const last = parsed.pathname.split('/').filter(Boolean).pop()
+    const last = parsed.pathname.split('/').findLast(Boolean)
     return last ? decodeURIComponent(last) : null
   } catch {
     return null
