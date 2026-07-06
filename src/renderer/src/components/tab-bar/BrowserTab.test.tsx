@@ -163,6 +163,7 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
   return module.default({
     tab,
     isActive: true,
+    isSelected: false,
     isPinned: false,
     hasTabsToRight: false,
     onActivate: () => {},

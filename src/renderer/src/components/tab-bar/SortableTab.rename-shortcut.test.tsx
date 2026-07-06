@@ -194,6 +194,7 @@ vi.mock('../sidebar/WorktreeCardHelpers', () => ({
 vi.mock('./drop-indicator', () => ({
   ACTIVE_TAB_INDICATOR_CLASSES: 'active-tab-indicator',
   getDropIndicatorClasses: () => '',
+  getTabSelectionClasses: () => '',
   getTabStripBorderClasses: () => '',
   getTabRootStateClasses: () => ''
 }))
@@ -246,6 +247,7 @@ async function renderSortableTab({
     tabCount: 1,
     hasTabsToRight: false,
     isActive: true,
+    isSelected: false,
     isPinned: false,
     isExpanded: false,
     onActivate: vi.fn(),

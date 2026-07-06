@@ -5,13 +5,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
-function pointerDownEvent(clientX: number, clientY: number, button = 0): React.PointerEvent {
-  return { button, clientX, clientY } as unknown as React.PointerEvent
+function pointerDownEvent(
+  clientX: number,
+  clientY: number,
+  button = 0,
+  modifiers: Partial<Pick<React.PointerEvent, 'shiftKey' | 'metaKey' | 'ctrlKey'>> = {}
+): React.PointerEvent {
+  return { button, clientX, clientY, ...modifiers } as unknown as React.PointerEvent
 }
 
-function firePointer(type: string, clientX: number, clientY: number): void {
+function firePointer(
+  type: string,
+  clientX: number,
+  clientY: number,
+  modifiers: Partial<Pick<PointerEvent, 'shiftKey' | 'metaKey' | 'ctrlKey'>> = {}
+): void {
   act(() => {
-    window.dispatchEvent(new PointerEvent(type, { clientX, clientY, bubbles: true }))
+    window.dispatchEvent(new PointerEvent(type, { clientX, clientY, bubbles: true, ...modifiers }))
+  })
+}
+
+function fireClick(
+  click: (event: React.MouseEvent) => void,
+  modifiers: Partial<Pick<MouseEvent, 'shiftKey' | 'metaKey' | 'ctrlKey'>> = {}
+): void {
+  act(() => {
+    click(new MouseEvent('click', { bubbles: true, ...modifiers }) as unknown as React.MouseEvent)
   })
 }
 
@@ -33,7 +52,95 @@ describe('useTabStripPointerActivation', () => {
 
     // Release within the threshold -> click -> activate.
     firePointer('pointerup', 12, 11)
-    expect(onActivate).toHaveBeenCalledTimes(1)
+    expect(onActivate).not.toHaveBeenCalled()
+    fireClick(result.current.onClick)
+    expect(onActivate).toHaveBeenCalledWith({
+      shiftKey: false,
+      metaKey: false,
+      ctrlKey: false
+    })
+  })
+
+  it('passes release-time modifier keys to activation', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    firePointer('pointerup', 10, 10, { shiftKey: true, metaKey: true })
+    fireClick(result.current.onClick)
+
+    expect(onActivate).toHaveBeenCalledWith({
+      shiftKey: true,
+      metaKey: true,
+      ctrlKey: false
+    })
+  })
+
+  it('preserves press-time modifier keys when release loses them', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10, 0, { shiftKey: true })))
+    firePointer('pointerup', 10, 10)
+    fireClick(result.current.onClick)
+
+    expect(onActivate).toHaveBeenCalledWith({
+      shiftKey: true,
+      metaKey: false,
+      ctrlKey: false
+    })
+  })
+
+  it('uses click-time modifier keys when available', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    firePointer('pointerup', 10, 10)
+    fireClick(result.current.onClick, { shiftKey: true, metaKey: true })
+
+    expect(onActivate).toHaveBeenCalledWith({
+      shiftKey: true,
+      metaKey: true,
+      ctrlKey: false
+    })
+  })
+
+  it('uses held keyboard modifiers when pointer and click events omit them', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { shiftKey: true, bubbles: true }))
+    })
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    firePointer('pointerup', 10, 10)
+    fireClick(result.current.onClick)
+
+    expect(onActivate).toHaveBeenCalledWith({
+      shiftKey: true,
+      metaKey: false,
+      ctrlKey: false
+    })
+  })
+
+  it('uses a recent modifier keydown when focus churn clears held modifier state', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true }))
+      window.dispatchEvent(new Event('blur'))
+    })
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    firePointer('pointerup', 10, 10)
+    fireClick(result.current.onClick)
+
+    expect(onActivate).toHaveBeenCalledWith({
+      shiftKey: true,
+      metaKey: false,
+      ctrlKey: false
+    })
   })
 
   it('suppresses activation when the pointer travels past the drag threshold', () => {
@@ -42,6 +149,7 @@ describe('useTabStripPointerActivation', () => {
 
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
     firePointer('pointerup', 10 + TAB_DRAG_ACTIVATION_DISTANCE_PX + 5, 10)
+    fireClick(result.current.onClick)
 
     expect(onActivate).not.toHaveBeenCalled()
   })
@@ -55,6 +163,7 @@ describe('useTabStripPointerActivation', () => {
     // after pointerdown; the release position is the click/drag authority.
     firePointer('pointermove', 200, 200)
     firePointer('pointerup', 11, 11)
+    fireClick(result.current.onClick)
 
     expect(onActivate).toHaveBeenCalledTimes(1)
   })
@@ -66,6 +175,7 @@ describe('useTabStripPointerActivation', () => {
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
     firePointer('pointercancel', 10, 10)
     firePointer('pointerup', 10, 10)
+    fireClick(result.current.onClick)
 
     expect(onActivate).not.toHaveBeenCalled()
   })
@@ -82,6 +192,7 @@ describe('useTabStripPointerActivation', () => {
     // Right-click: ignored.
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10, 2), dragListener))
     firePointer('pointerup', 10, 10)
+    fireClick(result.current.onClick)
     expect(onActivate).not.toHaveBeenCalled()
     expect(dragListener).not.toHaveBeenCalled()
 
@@ -89,6 +200,7 @@ describe('useTabStripPointerActivation', () => {
     rerender({ disabled: true })
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10), dragListener))
     firePointer('pointerup', 10, 10)
+    fireClick(result.current.onClick)
     expect(onActivate).not.toHaveBeenCalled()
     expect(dragListener).not.toHaveBeenCalled()
   })
@@ -101,11 +213,13 @@ describe('useTabStripPointerActivation', () => {
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
     firePointer('pointermove', 300, 10)
     firePointer('pointerup', 300, 10)
+    fireClick(result.current.onClick)
     expect(onActivate).not.toHaveBeenCalled()
 
     // Second gesture: a plain click. Must activate.
     act(() => result.current.onPointerDown(pointerDownEvent(400, 10)))
     firePointer('pointerup', 400, 10)
+    fireClick(result.current.onClick)
     expect(onActivate).toHaveBeenCalledTimes(1)
   })
 
@@ -116,6 +230,7 @@ describe('useTabStripPointerActivation', () => {
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
     act(() => window.dispatchEvent(new Event('focus')))
     firePointer('pointerup', 10, 10)
+    fireClick(result.current.onClick)
 
     expect(onActivate).not.toHaveBeenCalled()
   })

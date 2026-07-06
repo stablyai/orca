@@ -18,6 +18,7 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
+  getTabSelectionClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
   type DropIndicator
@@ -27,6 +28,7 @@ import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import type { TabStripSelectionModifiers } from './tab-strip-selection'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -104,6 +106,7 @@ function BrowserTabFavicon({
 export default function BrowserTab({
   tab,
   isActive,
+  isSelected,
   isPinned,
   hasTabsToRight,
   onActivate,
@@ -117,9 +120,10 @@ export default function BrowserTab({
 }: {
   tab: BrowserTabState
   isActive: boolean
+  isSelected: boolean
   isPinned: boolean
   hasTabsToRight: boolean
-  onActivate: () => void
+  onActivate: (modifiers: TabStripSelectionModifiers) => void
   onClose: () => void
   onCloseToRight: () => void
   onDuplicate: () => void
@@ -170,24 +174,27 @@ export default function BrowserTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
-  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
-  // another pane / split) does not switch the active tab mid-gesture.
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
+  // Why: defer activation to click after pointer movement is classified, so
+  // drag gestures do not switch tabs and manual modifier-clicks keep modifiers.
+  const { onPointerDown: onTabPointerDown, onClick: onTabClick } =
+    useTabStripPointerActivation({ onActivate })
 
   const tabRoot = (
     <div
       ref={setNodeRef}
       data-tab-id={tab.id}
       data-pinned={isPinned ? 'true' : 'false'}
+      data-selected={isSelected ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)} ${getTabSelectionClasses(isSelected, isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
           listeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
       }}
+      onClick={onTabClick}
       onMouseDown={(e) => {
         if (e.button === 1) {
           e.preventDefault()

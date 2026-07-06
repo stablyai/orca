@@ -34,6 +34,16 @@ export function getTabRootStateClasses(isActive: boolean): string {
     : 'bg-card text-muted-foreground hover:text-foreground'
 }
 
+export function getTabSelectionClasses(isSelected: boolean, isActive: boolean): string {
+  if (!isSelected) {
+    return ''
+  }
+  if (isActive) {
+    return ''
+  }
+  return 'bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))] text-foreground shadow-[inset_0_-2px_0_0_color-mix(in_srgb,var(--foreground)_60%,var(--card))]'
+}
+
 export function getTabStripBorderClasses(
   hasTabsToRight: boolean,
   options?: { includeTopBorder?: boolean }
