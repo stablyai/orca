@@ -8,7 +8,11 @@ import {
   RELATIONS_QUERY
 } from './issue-context-raw'
 
+// The signed public-file-url client is what body reads must use so Linear
+// rewrites inline uploads.linear.app URLs into temporary signed URLs. The plain
+// entry client is a distinct spy so a regression back to it fails these tests.
 const rawRequest = vi.fn()
+const plainRawRequest = vi.fn()
 
 vi.mock('./issue-context-client', () => ({
   getRequiredEntry: () => ({
@@ -19,9 +23,13 @@ vi.mock('./issue-context-client', () => ({
       displayName: 'Brennan',
       email: 'brennan@example.com'
     },
-    client: { client: { rawRequest } }
+    client: { client: { rawRequest: plainRawRequest } }
   }),
   withLinearRead: async (_entry: unknown, read: () => Promise<unknown>) => read()
+}))
+
+vi.mock('./client', () => ({
+  getPublicFileUrlClient: () => ({ client: { rawRequest } })
 }))
 
 function rawChild(index: number) {
@@ -191,6 +199,69 @@ describe('Linear issue context includes', () => {
       first: 50,
       after: 'comment-cursor-1'
     })
+  })
+
+  it('extracts comment media past the body truncation cap', async () => {
+    const url = 'https://uploads.linear.app/w/file/late?sig=1'
+    const body = `${'x'.repeat(20_001)}\n![late](${url})`
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          comments: {
+            nodes: [{ id: 'comment-1', body }],
+            pageInfo: { hasNextPage: false }
+          }
+        }
+      }
+    })
+    const { readOptionalIncludes } = await import('./issue-context-includes')
+    const output = result()
+
+    await readOptionalIncludes(
+      resolvedIssue(),
+      requestWithComments(),
+      output,
+      [],
+      output.meta.sections
+    )
+
+    expect(output.comments?.[0]?.bodyTruncated).toBe(true)
+    expect(output.comments?.[0]?.body).not.toContain(url)
+    expect(output.comments?.[0]?.inlineMedia).toEqual([
+      {
+        source: 'comment',
+        sourceId: 'comment-1',
+        url,
+        altText: 'late',
+        fileName: 'late',
+        linearUpload: true
+      }
+    ])
+  })
+
+  it('reads comment and child bodies through the signed public-file-url client', async () => {
+    // Guards STA-1246: reverting to the plain entry client would return unsigned
+    // uploads.linear.app URLs that 401 for agents.
+    rawRequest.mockResolvedValue({
+      data: {
+        issue: {
+          comments: { nodes: [rawComment(1)], pageInfo: { hasNextPage: false } }
+        }
+      }
+    })
+    const { readOptionalIncludes } = await import('./issue-context-includes')
+    const output = result()
+
+    await readOptionalIncludes(
+      resolvedIssue(),
+      requestWithComments(),
+      output,
+      [],
+      output.meta.sections
+    )
+
+    expect(rawRequest).toHaveBeenCalled()
+    expect(plainRawRequest).not.toHaveBeenCalled()
   })
 
   it('marks section metadata when children are truncated by requested depth', async () => {

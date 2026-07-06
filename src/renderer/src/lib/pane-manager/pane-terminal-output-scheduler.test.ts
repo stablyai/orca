@@ -898,10 +898,66 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(0)
-    expect(terminal.write).toHaveBeenCalledTimes(16)
+    expect(terminal.write).toHaveBeenCalledTimes(2)
 
-    vi.advanceTimersByTime(1)
-    expect(terminal.write).toHaveBeenCalledTimes(32)
+    vi.advanceTimersByTime(4)
+    expect(terminal.write).toHaveBeenCalledTimes(4)
+  })
+
+  it('yields high-priority backlog drains when writes spend the frame budget', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(16 * 1024)
+    let now = 0
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now)
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      now += 9
+      callback?.()
+    })
+
+    try {
+      for (let i = 0; i < 64; i++) {
+        writeTerminalOutput(terminal, chunk, { foreground: false })
+      }
+
+      vi.advanceTimersByTime(0)
+      expect(terminal.write).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(4)
+      expect(terminal.write).toHaveBeenCalledTimes(2)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('uses Date.now for drain budgeting when performance is unavailable', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('performance', undefined)
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(16 * 1024)
+    let now = 0
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      now += 9
+      callback?.()
+    })
+
+    try {
+      for (let i = 0; i < 64; i++) {
+        writeTerminalOutput(terminal, chunk, { foreground: false })
+      }
+
+      vi.advanceTimersByTime(0)
+      expect(terminal.write).toHaveBeenCalledTimes(1)
+      expect(nowSpy).toHaveBeenCalled()
+
+      vi.advanceTimersByTime(4)
+      expect(terminal.write).toHaveBeenCalledTimes(2)
+    } finally {
+      nowSpy.mockRestore()
+    }
   })
 
   it('caps hidden backlog memory and writes a warning instead of retaining all output', async () => {

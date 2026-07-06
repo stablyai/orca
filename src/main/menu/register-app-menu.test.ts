@@ -139,7 +139,7 @@ describe('registerAppMenu', () => {
     expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 102 })
   })
 
-  it('includes prereleases when Check for Updates is clicked with shift held', () => {
+  it('routes Check for Updates modifier clicks to prerelease and perf checks', () => {
     const options = buildMenuOptions()
     registerAppMenu(options)
 
@@ -152,19 +152,42 @@ describe('registerAppMenu', () => {
     )
 
     item?.click?.({} as never, undefined as never, { shiftKey: true } as Electron.KeyboardEvent)
+    item?.click?.({} as never, undefined as never, {} as Electron.KeyboardEvent)
     item?.click?.(
       {} as never,
       undefined as never,
-      { metaKey: true, shiftKey: true } as Electron.KeyboardEvent
+      {
+        shiftKey: true,
+        ...(isMac ? { metaKey: true } : { ctrlKey: true })
+      } as Electron.KeyboardEvent
     )
-    item?.click?.({} as never, undefined as never, {} as Electron.KeyboardEvent)
-    item?.click?.({} as never, undefined as never, { metaKey: true } as Electron.KeyboardEvent)
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      (isMac ? { metaKey: true } : { ctrlKey: true }) as Electron.KeyboardEvent
+    )
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      (isMac ? { ctrlKey: true } : { metaKey: true }) as Electron.KeyboardEvent
+    )
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      {
+        triggeredByAccelerator: true,
+        shiftKey: true,
+        ...(isMac ? { metaKey: true } : { ctrlKey: true })
+      } as Electron.KeyboardEvent
+    )
 
     expect(options.onCheckForUpdates.mock.calls).toEqual([
-      [{ includePrerelease: true }],
-      [{ includePrerelease: true }],
-      [{ includePrerelease: false }],
-      [{ includePrerelease: false }]
+      [{ includePrerelease: true, includePerfPrerelease: false }],
+      [{ includePrerelease: false, includePerfPrerelease: false }],
+      [{ includePrerelease: true, includePerfPrerelease: true }],
+      [{ includePrerelease: false, includePerfPrerelease: true }],
+      [{ includePrerelease: false, includePerfPrerelease: false }],
+      [{ includePrerelease: false, includePerfPrerelease: false }]
     ])
   })
 

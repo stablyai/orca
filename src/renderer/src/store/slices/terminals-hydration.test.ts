@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: hydration regressions share store setup and session invariants that are easier to audit together. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

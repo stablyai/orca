@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS, buildAiVaultResumeCommand } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
+import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
 
@@ -12,34 +13,6 @@ afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
-
-function isolatedScanRoots(root: string) {
-  return {
-    claudeProjectsDir: join(root, 'claude-projects'),
-    codexSessionsDir: join(root, 'codex-sessions'),
-    geminiSessionsDir: join(root, 'gemini-sessions'),
-    copilotSessionsDir: join(root, 'copilot-sessions'),
-    cursorProjectsDir: join(root, 'cursor-projects'),
-    opencodeStorageDir: join(root, 'opencode-storage'),
-    // Why: prevent the SQLite scanner from picking up the real
-    // ~/.local/share/opencode/opencode.db during tests.
-    opencodeDbPaths: [] as readonly string[],
-    grokSessionsDir: join(root, 'grok-sessions'),
-    devinTranscriptsDir: join(root, 'devin-transcripts'),
-    hermesSessionsDir: join(root, 'hermes-sessions'),
-    rovoSessionsDir: join(root, 'rovo-sessions'),
-    openclawStateDir: join(root, 'openclaw-state'),
-    openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
-    piSessionsDir: join(root, 'pi-sessions'),
-    droidSessionsDir: join(root, 'droid-sessions'),
-    droidProjectsDir: join(root, 'droid-projects'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
-  }
-}
-
-function jsonLines(records: unknown[]): string {
-  return records.map((record) => JSON.stringify(record)).join('\n')
-}
 
 describe('scanAiVaultSessions', () => {
   it('indexes Claude and Codex transcripts with resume commands', async () => {

@@ -325,7 +325,6 @@ describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
     runtimeWorktreePath: '/workspaces/orca-owned',
     repo,
     runtimeRepoPath: repo.path,
-    knownOrcaLayouts: [],
     registeredWorktrees: [makeGitWorktree(repo.path, true)]
   }
 
@@ -376,7 +375,6 @@ describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
       canCleanupUnregisteredOrcaLeftoverDirectory({
         ...baseArgs,
         meta: undefined,
-        knownOrcaLayouts: [{ path: '/workspaces', nestWorkspaces: false }],
         statPath: makeStatPath([], ['/workspaces/orca-owned']),
         isGitRepository
       })

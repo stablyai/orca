@@ -868,6 +868,27 @@ function App(): React.JSX.Element {
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why: keybindings + onboarding are main-side reads with no dependency
+        // on the catalog/session steps below, so start them now and await them
+        // at their original positions — the round-trips overlap the local
+        // catalog scans instead of queuing after them. Browser session profiles
+        // are deliberately NOT started early: on a remote runtime they route
+        // through a runtime RPC that may not be connected this early, and a
+        // failed fetch clears the profile list. The floating .catch marks the
+        // rejection handled if an earlier awaited step throws first; each await
+        // still rethrows its own failure.
+        const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
+          actions.fetchKeybindings()
+        )
+        keybindingsPromise.catch(() => {})
+        const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
+          window.api.onboarding.get()
+        )
+        onboardingPromise.catch(() => {})
+        // Why: hydrate persisted UI immediately after ui.get() so first paint
+        // reflects saved view settings before the catalog scans below. ui.get()
+        // is awaited (not overlapped) because the hydrate must land before the
+        // local-first catalog/session steps run.
         const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
         uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
           hydratePersistedUIAfterStartupRead({
@@ -906,7 +927,7 @@ function App(): React.JSX.Element {
             startupRuntimeHostIds
           )
         )
-        await timeRendererStartupStep('fetch-keybindings', () => actions.fetchKeybindings())
+        await keybindingsPromise
         if (!cancelled) {
           const sessionHydrationOptions = {
             additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
@@ -935,9 +956,7 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('fetch-browser-session-profiles', () =>
             actions.fetchBrowserSessionProfiles()
           )
-          const onboardingState = await timeRendererStartupStep('onboarding-get', () =>
-            window.api.onboarding.get()
-          )
+          const onboardingState = await onboardingPromise
           if (!cancelled) {
             setOnboarding(onboardingState)
             setOnboardingLoaded(true)

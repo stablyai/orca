@@ -16,7 +16,7 @@ describe('classifyWorkspaceCreateError', () => {
   })
 
   it('buckets a branch-already-exists throw as path_collision', () => {
-    const err = new Error('Branch "feature/foo" already exists. Pick a different worktree name.')
+    const err = new Error('Branch "feature/foo" already exists. Pick a different branch name.')
     expect(classifyWorkspaceCreateError(err)).toBe('path_collision')
   })
 
@@ -29,15 +29,13 @@ describe('classifyWorkspaceCreateError', () => {
 
   it('buckets a branch-already-exists-locally throw as path_collision', () => {
     const err = new Error(
-      'Branch "feature/foo" already exists locally. Pick a different worktree name.'
+      'Branch "feature/foo" already exists locally. Pick a different branch name.'
     )
     expect(classifyWorkspaceCreateError(err)).toBe('path_collision')
   })
 
   it('buckets an existing-PR collision throw as path_collision', () => {
-    const err = new Error(
-      'Branch "feature/foo" already has PR #42. Pick a different worktree name.'
-    )
+    const err = new Error('Branch "feature/foo" already has PR #42. Pick a different branch name.')
     expect(classifyWorkspaceCreateError(err)).toBe('path_collision')
   })
 

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: WSL fallback, retry safety, and glab parity share mocks. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from '../wsl'
 

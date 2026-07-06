@@ -326,6 +326,13 @@ class BrowserSessionRegistry {
     return this.profiles.get(profileId)?.partition ?? ORCA_BROWSER_PARTITION
   }
 
+  resolveKnownPartition(profileId: string | null | undefined): string | null {
+    if (!profileId) {
+      return ORCA_BROWSER_PARTITION
+    }
+    return this.profiles.get(profileId)?.partition ?? null
+  }
+
   createProfile(scope: BrowserSessionProfileScope, label: string): BrowserSessionProfile | null {
     // Why: only the constructor may create the default profile. Allowing the
     // renderer to pass scope:'default' would create a second profile sharing

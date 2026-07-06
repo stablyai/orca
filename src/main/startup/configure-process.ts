@@ -307,6 +307,12 @@ export function enableMainProcessGpuFeatures(): void {
     return
   }
 
+  // Why: Blink force-loses the oldest WebGL context past 16 per renderer, and
+  // each attached terminal pane holds one — a busy worktree (tabs × splits)
+  // can exceed that, silently downgrading evicted panes to the DOM renderer.
+  // 128 covers real layouts while keeping a bound so context leaks surface.
+  app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
+
   const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
   const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
   const isLinuxX11Override =

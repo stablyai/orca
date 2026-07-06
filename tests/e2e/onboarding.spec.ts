@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: onboarding E2E coverage shares one first-launch wizard fixture and step helpers; splitting this file would make the linear flow harder to audit. */
 /**
  * E2E tests for the first-launch Onboarding flow.
  *
@@ -241,12 +240,17 @@ test.describe('Onboarding flow', () => {
       .toBe(oppositeTheme)
 
     await continueOnboarding(orcaPage)
+    // Why: the theme Continue persists step 2, then persists *through* any
+    // skipped optional steps (integrations is skipped when gh is installed,
+    // windows_terminal off macOS), so lastCompletedStep can land at 2, 3, or 4.
+    // Key off the settled "theme step committed" lower bound rather than a fixed
+    // window that assumed integrations always renders.
     await expect
-      .poll(async () => [2, 3].includes((await getOnboardingState(orcaPage)).lastCompletedStep), {
+      .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
         timeout: 5_000,
-        message: 'lastCompletedStep did not advance after second Continue'
+        message: 'lastCompletedStep did not advance past the theme step after second Continue'
       })
-      .toBe(true)
+      .toBeGreaterThanOrEqual(2)
     await expect
       .poll(async () => (await getSettings(orcaPage)).theme, { timeout: 5_000 })
       .toBe(oppositeTheme)
@@ -414,7 +418,53 @@ test.describe('Onboarding flow', () => {
       timeout: 15_000
     })
     await orcaPage.evaluate(async () => {
-      await window.__store?.getState().updateSettings({ activeRuntimeEnvironmentId: 'env-e2e' })
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      // Why: after #5071 the server-path add step gates on the registered
+      // runtime-environment list (store.runtimeEnvironments), not just the
+      // activeRuntimeEnvironmentId setting. Seed a redacted environment so the
+      // host option exists and the "on host" add UI renders.
+      const now = Date.now()
+      store.getState().setRuntimeEnvironments([
+        {
+          id: 'env-e2e',
+          name: 'E2E Server',
+          createdAt: now,
+          updatedAt: now,
+          lastUsedAt: null,
+          runtimeId: null,
+          source: 'manual',
+          endpoints: [
+            {
+              id: 'ws-env-e2e',
+              kind: 'websocket',
+              label: 'WebSocket',
+              endpoint: 'wss://e2e.invalid/ws'
+            }
+          ],
+          preferredEndpointId: 'ws-env-e2e'
+        }
+      ])
+      // Why: a runtime host is only auto-selectable (health 'available') when it
+      // has a live, protocol-compatible status; without one it reads
+      // 'disconnected' and the Add Project dialog falls back to Local Mac.
+      // runtimeProtocolVersion 3 clears MIN_COMPATIBLE_RUNTIME_SERVER_VERSION.
+      store.getState().setRuntimeEnvironmentStatus('env-e2e', {
+        status: {
+          runtimeId: 'env-e2e-runtime',
+          rendererGraphEpoch: 0,
+          graphStatus: 'ready',
+          authoritativeWindowId: null,
+          liveTabCount: 0,
+          liveLeafCount: 0,
+          runtimeProtocolVersion: 3,
+          minCompatibleRuntimeClientVersion: 1
+        },
+        checkedAt: now
+      })
+      await store.getState().updateSettings({ activeRuntimeEnvironmentId: 'env-e2e' })
     })
     await expect
       .poll(async () => (await getSettings(orcaPage)).activeRuntimeEnvironmentId, {
@@ -425,10 +475,12 @@ test.describe('Onboarding flow', () => {
     await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
     await expectAddProjectDialog(orcaPage)
-    await expect(orcaPage.getByRole('button', { name: /Browse server/i })).toBeVisible()
+    // The runtime env is selected as the Add Project host and the browse action
+    // is host-scoped, proving the server project-setup UI is preserved on skip.
+    await expect(orcaPage.getByText('Existing Git repository or folder on this host')).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: /Browse folder/i })).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: /Clone from URL/i })).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: /Create on server/i })).toBeVisible()
-    await expect(orcaPage.getByText(/Or enter a server path manually/i)).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: /Create new project/i })).toBeVisible()
     await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
     expect((await getOnboardingState(orcaPage)).closedAt).not.toBeNull()
   })

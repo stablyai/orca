@@ -15,8 +15,7 @@ import {
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
 import { gitExecFileAsync } from '../git/runner'
-import { getGitUsername } from '../git/repo'
-import { getSshGitUsername } from '../git/git-username'
+import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   branchHasUpstream,
@@ -256,7 +255,7 @@ async function runAutoRename(
 
   const username = provider
     ? (await getSshGitUsername(provider, repo.path)) || null
-    : getGitUsername(repo.path) || null
+    : (await resolveLocalGitUsername(repo.path)) || null
   // The model is told not to add a prefix, but sometimes echoes the configured
   // one (e.g. `tmchow/...`); strip it so it doesn't double-prefix the branch or
   // leak into the display name.

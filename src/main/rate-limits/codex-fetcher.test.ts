@@ -33,6 +33,7 @@ vi.mock('./codex-auth-presence', () => ({
 
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { codexAuthExists } from './codex-auth-presence'
+import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -50,6 +51,25 @@ function makeRpcChild() {
   child.stdin = { write: vi.fn() }
   child.kill = vi.fn()
   return child
+}
+
+function makePtyTerm() {
+  let dataHandler: ((data: string) => void) | null = null
+  let exitHandler: (() => void) | null = null
+  return {
+    onData: vi.fn((callback: (data: string) => void) => {
+      dataHandler = callback
+      return makeDisposable()
+    }),
+    onExit: vi.fn((callback: () => void) => {
+      exitHandler = callback
+      return makeDisposable()
+    }),
+    write: vi.fn(),
+    kill: vi.fn(),
+    emitData: (data: string) => dataHandler?.(data),
+    emitExit: () => exitHandler?.()
+  }
 }
 
 describe('fetchCodexRateLimits', () => {
@@ -106,6 +126,83 @@ describe('fetchCodexRateLimits', () => {
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
       killMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('spawns the RPC rate-limit reader in a bounded non-root cwd', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+
+    const spawnCwd = childSpawnMock.mock.calls[0]?.[2]?.cwd as string
+    expect(spawnCwd).toContain('rate-limit-pty-cwd')
+    expect(spawnCwd).not.toBe('/')
+    expect(spawnCwd).not.toMatch(/^[A-Za-z]:\\?$/)
+
+    rpcChild.emit('close')
+    await resultPromise
+  })
+
+  it('spawns the PTY fallback in a bounded non-root cwd', async () => {
+    const term = makePtyTerm()
+    childSpawnMock.mockImplementation(() => {
+      throw new Error('rpc unavailable')
+    })
+    ptySpawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(0)
+
+    const spawnCwd = ptySpawnMock.mock.calls[0]?.[2]?.cwd as string
+    expect(spawnCwd).toContain('rate-limit-pty-cwd')
+    expect(spawnCwd).not.toBe('/')
+    expect(spawnCwd).not.toMatch(/^[A-Za-z]:\\?$/)
+
+    term.emitExit()
+    await resultPromise
+  })
+
+  it('kills the RPC child and skips PTY fallback when the fetch signal aborts', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    const controller = new AbortController()
+
+    const resultPromise = fetchCodexRateLimits({ signal: controller.signal })
+
+    controller.abort()
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      status: 'error',
+      error: 'Rate-limit fetch aborted'
+    })
+    expect(rpcChild.kill).toHaveBeenCalledTimes(1)
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('kills and unregisters the PTY fallback when the fetch signal aborts', async () => {
+    const term = makePtyTerm()
+    childSpawnMock.mockImplementation(() => {
+      throw new Error('rpc unavailable')
+    })
+    ptySpawnMock.mockReturnValue(term)
+    const controller = new AbortController()
+    const killMock = term.kill
+
+    const resultPromise = fetchCodexRateLimits({ signal: controller.signal })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(1)
+
+    controller.abort()
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      status: 'error',
+      error: 'Rate-limit fetch aborted'
+    })
+    expect(killMock).toHaveBeenCalledTimes(1)
+    expect(getActiveHiddenRateLimitPtyCount()).toBe(0)
   })
 
   it('falls back to the PTY status reader when RPC exits before returning usage', async () => {
@@ -437,17 +534,18 @@ describe('fetchCodexRateLimits', () => {
       await vi.advanceTimersByTimeAsync(1)
       await resultPromise
 
-      expect(childSpawnMock).toHaveBeenCalledWith(
-        'wsl.exe',
-        [
-          '-d',
-          'Ubuntu',
-          '--',
-          'bash',
-          '-lc',
-          "export CODEX_HOME='/home/alice/.local/share/orca/account/home'; exec codex '-s' 'read-only' '-a' 'untrusted' 'app-server'"
-        ],
+      const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
+      expect(spawnFile).toBe('wsl.exe')
+      const bashCommand = spawnArgs.at(-1) as string
+      expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
+      expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
+      expect(bashCommand).toContain(
+        "export CODEX_HOME='/home/alice/.local/share/orca/account/home'"
+      )
+      expect(bashCommand).toContain("exec codex '-s' 'read-only' '-a' 'untrusted' 'app-server'")
+      expect(spawnOptions).toEqual(
         expect.objectContaining({
+          cwd: expect.stringContaining('rate-limit-pty-cwd'),
           env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
         })
       )
@@ -488,17 +586,18 @@ describe('fetchCodexRateLimits', () => {
       rpcChild.emit('close')
       await vi.advanceTimersByTimeAsync(0)
 
-      expect(ptySpawnMock).toHaveBeenCalledWith(
-        'wsl.exe',
-        [
-          '-d',
-          'Ubuntu',
-          '--',
-          'bash',
-          '-lc',
-          "export CODEX_HOME='/home/alice/.local/share/orca/account/home'; exec codex "
-        ],
+      const [spawnFile, spawnArgs, spawnOptions] = ptySpawnMock.mock.calls[0]
+      expect(spawnFile).toBe('wsl.exe')
+      const bashCommand = spawnArgs.at(-1) as string
+      expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
+      expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
+      expect(bashCommand).toContain(
+        "export CODEX_HOME='/home/alice/.local/share/orca/account/home'"
+      )
+      expect(bashCommand).toContain('exec codex ')
+      expect(spawnOptions).toEqual(
         expect.objectContaining({
+          cwd: expect.stringContaining('rate-limit-pty-cwd'),
           env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
         })
       )

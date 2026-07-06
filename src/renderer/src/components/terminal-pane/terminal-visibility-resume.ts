@@ -7,7 +7,7 @@ import {
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
-import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
+import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -62,7 +62,10 @@ export function resumeTerminalVisibility({
       // overlay's delayed geometry fit. Still request hidden-output recovery:
       // agent TUIs can suppress hidden bytes until the pane is foregrounded.
       requestLightTabBacklogRecovery(manager)
-      scheduleTerminalWebglAtlasRecovery()
+      // Why: reveal recovery must be immediate, not the terminal-output debounce
+      // — a background agent streaming in another pane must not defer this tab's
+      // atlas rebuild.
+      scheduleTabRevealWebglAtlasRecovery()
       if (isActive) {
         focusActivePane(manager)
       }
@@ -75,6 +78,10 @@ export function resumeTerminalVisibility({
       // terminals; refresh after reset so rebuilt atlases repaint from xterm.
       resetAndRefreshAllTerminalWebglAtlases()
     }
+    // Why: the synchronous recovery above can fire before the revealed pane is
+    // attached and laid out, where the WebGL renderer drops redraw requests
+    // without retry. Follow up with a settled-frame, pane-scoped repaint.
+    manager.scheduleRevealRepaint()
   })
 }
 
@@ -93,9 +100,8 @@ export function hideTerminalVisibility({
     captureViewportPositions(false)
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
-    // Suspend WebGL when going hidden. xterm.write() continues to land in
-    // the (now DOM-renderer-fallback or paused-canvas) terminal; the
-    // suspend is purely a GPU resource decision.
+    // Suspend WebGL when going hidden. xterm.write() continues to land in the
+    // DOM-renderer fallback terminal; the suspend is purely a GPU resource decision.
     manager.suspendRendering()
     return { hiddenReason: 'surface', renderingSuspended: true }
   }
@@ -133,6 +139,7 @@ export function recoverVisibleTerminalWindowWake({
   }
   enforceTerminalViewportIntents(manager)
   resetAndRefreshAllTerminalWebglAtlases()
+  manager.scheduleRevealRepaint()
 }
 
 function requestLightTabBacklogRecovery(manager: PaneManager): void {

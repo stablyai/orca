@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: runtime GitHub RPC methods share one dispatcher suite so repo-scoped and Project-scoped contract coverage cannot drift. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'

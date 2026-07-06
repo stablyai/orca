@@ -1,15 +1,23 @@
 import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
 
 const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
+const HTTP_URL_PREFIX_RE = /^https?:\/\//i
 
 export type RepoSlug = {
   owner: string
   repo: string
 }
 
+export type GitHubIssueOrPRLink = {
+  slug: RepoSlug
+  number: number
+  type: 'issue' | 'pr'
+}
+
 export type GitHubLinkQuery = {
   query: string
   directNumber: number | null
+  directLink?: GitHubIssueOrPRLink
   tooLarge?: boolean
 }
 
@@ -67,11 +75,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
  * Parses an owner/repo slug plus issue/PR number from a GitHub URL. Returns
  * null for anything that isn't a recognizable GitHub-shaped issue or pull URL.
  */
-export function parseGitHubIssueOrPRLink(input: string): {
-  slug: RepoSlug
-  number: number
-  type: 'issue' | 'pr'
-} | null {
+export function parseGitHubIssueOrPRLink(input: string): GitHubIssueOrPRLink | null {
   const trimmed = input.trim()
   if (!trimmed) {
     return null
@@ -118,7 +122,7 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
   }
 
   const direct = parseGitHubIssueOrPRNumber(trimmed)
-  if (direct !== null && !trimmed.startsWith('http')) {
+  if (direct !== null && !HTTP_URL_PREFIX_RE.test(trimmed)) {
     return { query: trimmed, directNumber: direct }
   }
 
@@ -132,6 +136,7 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
   // slug differs from the origin remote.
   return {
     query: trimmed,
-    directNumber: link.number
+    directNumber: link.number,
+    directLink: link
   }
 }

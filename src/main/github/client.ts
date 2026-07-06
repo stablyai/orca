@@ -62,6 +62,10 @@ import {
   type LocalGitExecOptions,
   type OwnerRepo
 } from './gh-utils'
+import {
+  isCommitPartOfMergedPR,
+  type MergedPRCommitMembership
+} from './merged-pr-commit-membership'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   hasHostedReviewLocalGitOptions,
@@ -1394,7 +1398,7 @@ async function countWorkItemsForQuery(
     ],
     ghOptions
   )
-  return parseInt(stdout.trim(), 10) || 0
+  return Number.parseInt(stdout.trim(), 10) || 0
 }
 
 function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): boolean {
@@ -2770,6 +2774,15 @@ export async function getPRForBranch(
   return outcome.kind === 'found' ? outcome.pr : null
 }
 
+// Why: the exact-linked fallback (`gh pr view` with no resolved repo candidates)
+// returns dataRepo=null, which would leave the merged-PR membership probe unable
+// to run. Derive the PR's own repo from its web URL so a diverged merged linked
+// PR can still be confirmed and cleared. Host-agnostic to cover GitHub Enterprise.
+function ownerRepoFromPullRequestUrl(url: string): OwnerRepo | null {
+  const match = url.match(/^https?:\/\/[^/\s]+\/([^/\s]+)\/([^/\s]+)\/pull\/\d+/)
+  return match ? { owner: match[1], repo: match[2] } : null
+}
+
 export async function getPRForBranchOutcome(
   repoPath: string,
   branch: string,
@@ -2808,7 +2821,55 @@ export async function getPRForBranchOutcome(
       typeof options.currentHeadOid === 'string' && options.currentHeadOid.trim().length > 0
         ? options.currentHeadOid.trim()
         : null
-    const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
+    let confirmedContainedHeadOid: string | null = null
+    let headDivergedFromMergedPRAtOid: string | null = null
+    const mergedPRContainsHead = async (
+      candidate: PullRequestLookupData,
+      candidateRepo: OwnerRepo | null,
+      headOid: string | null
+    ): Promise<MergedPRCommitMembership> => {
+      if (!candidateRepo || !headOid) {
+        return 'unknown'
+      }
+      const membership = await isCommitPartOfMergedPR({
+        ownerRepo: candidateRepo,
+        prNumber: candidate.number,
+        commitOid: headOid,
+        ghOptions
+      })
+      if (membership === 'contained') {
+        confirmedContainedHeadOid = headOid
+      }
+      return membership
+    }
+    const recordLinkedMergedPRDivergence = async (
+      candidate: PullRequestLookupData | null,
+      candidateRepo: OwnerRepo | null
+    ): Promise<void> => {
+      if (
+        typeof linkedPRNumber !== 'number' ||
+        !candidate ||
+        mapPRState(candidate.state, candidate.isDraft) !== 'merged' ||
+        explicitCurrentHeadOid === null ||
+        candidate.headRefOid === explicitCurrentHeadOid
+      ) {
+        return
+      }
+      const membership = await mergedPRContainsHead(
+        candidate,
+        candidateRepo ?? ownerRepoFromPullRequestUrl(candidate.url),
+        explicitCurrentHeadOid
+      )
+      if (membership === 'not-contained') {
+        // explicitCurrentHeadOid is non-null here (guarded above); record the
+        // exact head so consumers only clear the worktree that actually diverged.
+        headDivergedFromMergedPRAtOid = explicitCurrentHeadOid
+      }
+    }
+    const hideMergedImplicitPR = async (
+      candidate: PullRequestLookupData | null,
+      candidateRepo: OwnerRepo | null
+    ) => {
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
@@ -2819,7 +2880,17 @@ export async function getPRForBranchOutcome(
         explicitCurrentHeadOid !== null
           ? explicitCurrentHeadOid
           : await getCurrentHeadOid(repoPath, connectionId, localGitOptions)
-      return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
+      if (!shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)) {
+        return false
+      }
+      // Why: a worktree can sit behind its own PR's final head (update-branch
+      // merges, web-committed suggestions). A head that is one of the PR's own
+      // commits is the same line of work, not a reused branch name — keep the
+      // merged PR visible instead of offering "create a pull request".
+      return (
+        (await mergedPRContainsHead(candidate, candidateRepo, currentHeadOidForMergedImplicit)) !==
+        'contained'
+      )
     }
 
     if (typeof linkedPRNumber === 'number') {
@@ -2886,7 +2957,7 @@ export async function getPRForBranchOutcome(
       }
     }
     let mergedBranchLookupNumber: number | null = null
-    if (await hideMergedImplicitPR(data)) {
+    if (await hideMergedImplicitPR(data, dataRepo)) {
       mergedBranchLookupNumber = data?.number ?? null
       data = null
       dataRepo = null
@@ -2907,20 +2978,26 @@ export async function getPRForBranchOutcome(
       }
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
+    await recordLinkedMergedPRDivergence(data, dataRepo)
     const fallbackConfirmedMergedBranch =
       typeof fallbackPRNumber === 'number' &&
       mergedBranchLookupNumber === fallbackPRNumber &&
       data.number === fallbackPRNumber
     const explicitHeadHidesMergedImplicitPR =
       explicitCurrentHeadOid !== null &&
-      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid)
+      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid) &&
+      (await mergedPRContainsHead(data, dataRepo, explicitCurrentHeadOid)) !== 'contained'
+    // Why no lazy-HEAD re-check on preservation: fallback numbers come from
+    // callers that already gated them on head equality or confirmed
+    // containment; re-hiding against the main-repo HEAD would blank
+    // deleted-head merged PRs that are deliberately kept visible.
     const shouldPreserveMergedFallback =
       !explicitHeadHidesMergedImplicitPR &&
       (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
     // Why: a currently visible PR can be merged outside Orca; when the caller
     // marks the fallback as visible review state, keep its lifecycle fresh even
     // if GitHub no longer reports it by branch (for example deleted heads).
-    if ((await hideMergedImplicitPR(data)) && !shouldPreserveMergedFallback) {
+    if ((await hideMergedImplicitPR(data, dataRepo)) && !shouldPreserveMergedFallback) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
@@ -2962,6 +3039,8 @@ export async function getPRForBranchOutcome(
           : {}),
         ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
         headSha: data.headRefOid,
+        ...(confirmedContainedHeadOid ? { confirmedContainedHeadOid } : {}),
+        ...(headDivergedFromMergedPRAtOid ? { headDivergedFromMergedPRAtOid } : {}),
         ...(data.baseRefName ? { baseRefName: data.baseRefName } : {}),
         prRepo: dataRepo ?? undefined,
         headRepo: dataHeadRepo ?? undefined,

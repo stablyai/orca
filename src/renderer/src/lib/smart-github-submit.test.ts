@@ -299,4 +299,26 @@ describe('getSmartGitHubSubmitResolution', () => {
     expect(resolution.linkedIssueNumber).toBe(2050)
     expect(resolution.linkedPR).toBeNull()
   })
+
+  it('uses the URL path to normalize stale PR-typed issue results', () => {
+    expect(
+      getSmartGitHubSubmitResolution({
+        type: 'pr',
+        number: 6933,
+        title: 'The board columns are displayed backwards',
+        url: 'https://github.com/stablyai/orca/issues/6933'
+      })
+    ).toEqual({
+      workspaceName: 'the-board-columns-are-displayed-backwards',
+      displayName: 'The board columns are displayed backwards',
+      linkedWorkItem: {
+        type: 'issue',
+        number: 6933,
+        title: 'The board columns are displayed backwards',
+        url: 'https://github.com/stablyai/orca/issues/6933'
+      },
+      linkedIssueNumber: 6933,
+      linkedPR: null
+    })
+  })
 })

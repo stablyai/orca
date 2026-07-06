@@ -36,8 +36,7 @@ import type {
   Worktree,
   Repo,
   IssueInfo,
-  LinearIssue,
-  PRInfo
+  LinearIssue
 } from '../../../../shared/types'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import {
@@ -48,7 +47,10 @@ import {
 } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
-import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
+import {
+  getWorktreeCardPrDisplay,
+  isCachedMergedBranchPRCurrentForWorktree
+} from './worktree-card-pr-display'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import {
   coerceWorktreeCardVisibleTitle,
@@ -151,20 +153,6 @@ function formatSparseDirectoryPreview(directories: string[]): string {
 
 function isWebClient(): boolean {
   return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
-}
-
-function isCachedMergedBranchPRCurrentForWorktree(
-  cachedPR: PRInfo | null | undefined,
-  worktree: Worktree
-): boolean {
-  return (
-    cachedPR?.state === 'merged' &&
-    typeof cachedPR.headSha === 'string' &&
-    cachedPR.headSha.length > 0 &&
-    typeof worktree.head === 'string' &&
-    worktree.head.length > 0 &&
-    cachedPR.headSha === worktree.head
-  )
 }
 
 function getDirectoryName(folderPath: string): string {
@@ -354,6 +342,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
     return state?.status ?? 'disconnected'
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
+  // Why: a terminal view already carries its own in-pane reconnect overlay, so
+  // the blocking dialog would just duplicate it there; reserve the dialog for
+  // views without an in-context prompt. Default to terminal (suppress) for the
+  // ambiguous case so we err toward non-blocking.
+  const activeViewIsTerminal = useAppStore(
+    (s) => (s.activeTabTypeByWorktree?.[worktree.id] ?? 'terminal') === 'terminal'
+  )
 
   // Why: runtime ("Orca server") hosts get the same disconnected treatment as
   // SSH — when the host's runtime environment has no live status, its worktrees
@@ -365,23 +360,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
     }
     return !s.runtimeStatusByEnvironmentId.get(parsed.environmentId)?.status
   })
+  // Why: the reconnect dialog is blocking, so it is never auto-shown for a
+  // disconnected worktree just because it is the active/restored card — that
+  // would steal focus app-wide while the user works elsewhere. The card chip,
+  // status bar, and terminal overlay carry the non-blocking disconnected state;
+  // the dialog only opens on deliberate focus (see handleClick).
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
-  const sshDisconnectedPromptKey = isActive && isSshDisconnected ? worktree.id : null
-  const [lastSshDisconnectedPromptKey, setLastSshDisconnectedPromptKey] = useState<string | null>(
-    null
-  )
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
-
-  // Why: on restart the previously-active worktree is auto-restored without a
-  // click, so the dialog never opens. Auto-show it for the active card when SSH
-  // is disconnected, but keep dismissals sticky until that prompt key changes.
-  if (sshDisconnectedPromptKey !== lastSshDisconnectedPromptKey) {
-    setLastSshDisconnectedPromptKey(sshDisconnectedPromptKey)
-    if (sshDisconnectedPromptKey) {
-      setShowDisconnectedDialog(true)
-    }
-  }
   // Why: read the target label from the store (populated during hydration in
   // useIpcEvents.ts) instead of calling listTargets IPC per card instance.
   const sshTargetLabel = useAppStore((s) =>
@@ -874,7 +860,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
       })
       onImmediateActivate?.(worktree.id, activationRowKey)
       void activateWorktreeFromSidebar(worktree.id)
-      if (isSshDisconnected) {
+      // Why: clicking the card is a deliberate focus of this project, so the
+      // blocking reconnect prompt is appropriate here (unlike auto-restore) —
+      // but skip it when a terminal is active, since that pane already shows the
+      // in-context reconnect overlay and a second prompt would just duplicate it.
+      if (isSshDisconnected && !activeViewIsTerminal) {
         setShowDisconnectedDialog(true)
       }
       onActivate?.()
@@ -887,6 +877,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       isDeleting,
       activationRowKey,
       isSshDisconnected,
+      activeViewIsTerminal,
       onActivate,
       onImmediateActivate,
       onSelectionGesture
@@ -1816,11 +1807,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
         automationHostId={worktree.hostId}
         branchName={hoverBranchName}
         workspaceTitle={hoverWorkspaceTitle}
+        workspaceTitleRenameDisabled={isDeleting || affiliateListMode}
         detailsAfter={
           workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
         }
         openDelay={100}
         hoverControl={detailsHoverControl}
+        onRenameWorkspaceTitle={affiliateListMode ? undefined : handleRenameTitle}
         onEditIssue={affiliateListMode ? undefined : handleEditIssue}
         onEditComment={affiliateListMode ? undefined : handleEditComment}
         onOpenGitHubIssueInOrca={

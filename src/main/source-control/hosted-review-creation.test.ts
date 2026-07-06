@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: hosted review creation permutations share large mocks; splitting would hide branch-specific expectations. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

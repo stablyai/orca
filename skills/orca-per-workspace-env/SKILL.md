@@ -6,7 +6,7 @@ description: >-
   for each workspace. Covers first-time setup (provider prerequisites, the
   reusable base snapshot, the coding-agent auth snapshot, credentials, and
   state), not just the per-workspace lifecycle scripts. Use to stand up
-  per-workspace environments, fix a `environmentRecipes` entry in `orca.yaml`, scaffold
+  per-workspace environments, fix an `environmentRecipes` entry in `orca.yaml`, scaffold
   provider lifecycle scripts, or resolve an `orca vm recipe doctor` failure.
 ---
 
@@ -34,6 +34,11 @@ them in order:
 4. **State** — thread snapshot id / scope / project / port between phases via a state file (§6).
 
 Then the **per-workspace contract** (create/suspend/resume/destroy) runs fast (§8).
+
+**The one branch that shapes everything — connection mode:** **Orca-server** (`create` runs `orca serve`
+in the env and emits a `pairingCode`; §7c/§7f) vs **SSH** (`create` runs no server and emits a
+`connection.type:"ssh"` block Orca dials into; §7g/§7h). Settle this first — it changes the `create`
+output shape and half the templates.
 
 **Quick-start (happy path):** interview the user (connection mode Orca-server vs SSH, provider, agent CLI,
 git auth — §1.2) + read the provider's CLI docs → scaffold `scripts/orca-vm/` from §7 → run the
@@ -70,7 +75,13 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
 4. **Scaffold scripts + state file** from §7 (worked Vercel example: §7f; SSH host: §7g; Docker SSH:
    §7h; Windows: §7i), filling in the provider's real commands. Make them executable.
 5. **[CHECKPOINT] Build the base snapshot (§3)** — paid, slow.
-6. **[CHECKPOINT] Authenticate the agent (§4)** — interactive; the user follows a URL/code.
+6. **[CHECKPOINT] Authenticate the agent (§4)** — interactive; the user follows a URL/code. **You cannot
+   drive this step** — you run commands non-interactively, so there's no TTY for `docker exec -it` /
+   `ssh -t` to prompt against. The **user** runs the Phase-3 login in their own terminal (or via the
+   Claude Code harness bang-prefix — `! <cmd>`, with the required space after `!`); you scaffold and drive
+   the non-interactive phases around it. After kicking it off, **ask the user to report back once the login
+   finishes** — you can't observe it completing, and you need that confirmation before resuming the
+   non-interactive steps (base/auth commit, doctor, provision).
 7. **Wire the recipe** so `orca.yaml` points create/suspend/resume/destroy at the scripts (§8). The
    workspace composer reads `environmentRecipes` from the project's primary checkout of `orca.yaml`, **not** from
    a feature branch or worktree. So a recipe added only on a branch won't appear as a "Run on" option
@@ -127,11 +138,23 @@ The base snapshot has the agent CLI installed but **not logged in**, and per-wor
 ephemeral — so authenticate once and bake it into a second snapshot layer. Script shape is §7b:
 
 1. Boot a sandbox from the base `snapshotId` (from state).
-2. Run the agent's device/OAuth login **interactively** (`--interactive --tty`); the user completes the
-   URL/code in their browser.
-3. Verify login; **refuse to snapshot an unauthenticated VM.**
+2. Run the agent's login **interactively** (`--interactive --tty`); the user completes the URL/code in
+   their browser. On a **headless VM this must be the device-auth flow** (e.g. `codex login --device-auth`),
+   **not** plain `codex login`: the default OAuth login starts a loopback callback server on a container
+   port the host browser can't reach, so it hangs. Device-auth instead prints a URL + code the user opens
+   on the **host**.
+3. Verify login; **refuse to snapshot an unauthenticated VM.** Prefer the status command's **exit code**
+   (most agent CLIs exit non-zero when unauthenticated). If you grep instead, agent status often goes to
+   **stderr** (e.g. `codex login status` prints "Logged in using ChatGPT" there), so **fold stderr first**
+   (`... 2>&1 | grep …`) and match the agent's **exact success line** — never `grep -qi 'logged in'`, which
+   also matches "**not** logged in" and would commit an unauthenticated image.
 4. Re-snapshot, parse the new id, and overwrite `snapshotId` in state to the authenticated image
    (recording `authSourceSnapshotId`). Remove the auth sandbox.
+
+**You can't drive step 2 yourself** (you run commands non-interactively — no TTY). The **user** runs it in
+their own terminal, or via the Claude Code harness bang-prefix (`! <cmd>`, with the required space after
+`!`). You scaffold/boot the sandbox and run steps 3–4, but **you cannot observe the interactive login
+finishing** — so **ask the user to tell you when it's done** before you verify and re-snapshot.
 
 If the agent's credentials are short-lived, warn that the snapshot may need periodic re-auth (§10).
 
@@ -148,7 +171,10 @@ inside the disposable runtime and snapshot/commit that runtime layer.
 - **Git token:** read from env (`GH_TOKEN`/`GITHUB_TOKEN`), falling back to `gh auth token`. Pass to the
   VM only via the provider's ephemeral `--env`. Inside the VM, use a `GIT_ASKPASS` helper with
   `x-access-token` (not the token in the clone URL) and `GIT_TERMINAL_PROMPT=0` so a missing token fails
-  fast instead of hanging.
+  fast instead of hanging. When you write the helper from inside `bash -lc` under `set -u`, escape the
+  positional arg and the token (`\$1`, `\$GH_TOKEN`) so they land **literally** and resolve at git-runtime
+  — an unescaped `$1` aborts with "unbound variable", and a literal `$GH_TOKEN` keeps the real token out of
+  the written file. `rm -f` the helper after the clone/fetch.
 - **Provider auth:** rely on the provider CLI's logged-in session, not checked-in keys.
 - **Agent auth:** lives in the authenticated snapshot (Phase 3) — never a file you write or commit.
 - State holds only **non-secret** wiring (snapshot ids, scope, project, port, repo url/ref).
@@ -220,8 +246,14 @@ repo URL/ref, and a git token (`GH_TOKEN`); later runs read them back from state
 set -euo pipefail
 # read source snapshot from state.snapshotId (fail if absent); auth_name="${base_name}-auth"
 # 1. boot sandbox from source snapshot; trap: remove on error
-# 2. INTERACTIVE/TTY remote exec: agent device/oauth login — user completes URL/code
-# 3. verify login status; refuse to snapshot if not logged in
+# 2. INTERACTIVE/TTY remote exec: agent login — user completes URL/code. Headless VM: MUST use the
+#    device-auth flow (e.g. `codex login --device-auth`) — plain OAuth login binds a loopback callback
+#    port the host can't reach and hangs. User runs this themselves (you have no interactive TTY); ask
+#    them to report back when it's done before continuing.
+# 3. verify login, then refuse to snapshot if not logged in. Prefer the status command's EXIT CODE (most
+#    agent CLIs exit non-zero when unauthenticated) over string-matching. If you must grep, fold stderr
+#    first (`status 2>&1 | grep …` — many agents print the success line there) and match the agent's exact
+#    success line; never `grep -qi 'logged in'`, which also matches "not logged in". Codex example: §7f.
 # 4. snapshot; parse new id
 # 5. merge { snapshotId:<new>, authSourceSnapshotId:<source> } into state; remove auth sandbox
 # print only the state JSON to stdout
@@ -300,8 +332,10 @@ These ground §7a (base snapshot) and §7b (auth), which are otherwise generic s
 # provision a fresh build sandbox (retain a couple of snapshots); trap-remove on error
 vercel sandbox create --name "$base" --runtime node24 --timeout 30m --vcpus 4 --publish-port "$port" \
   --snapshot-expiration 30d --keep-last-snapshots 2 "${vercel_args[@]}" >&2
-# remote build (long timeout): install pkgs+gh+pnpm+agent CLI, clone with GIT_ASKPASS, write the
-# headless main-only build config (drop the renderer), dev setup, build CLI + headless main, smoke-check
+# remote build (long timeout): install pkgs+gh+pnpm+agent CLI, clone with GIT_ASKPASS (write the helper
+# with LITERAL \$1/\$GH_TOKEN so they resolve at git-runtime, not write-time — see §5/§7f create — then
+# `rm -f /tmp/askpass.sh`), write the headless main-only build config (drop the renderer), dev setup,
+# build CLI + headless main, smoke-check
 vercel sandbox exec "$base" "${vercel_args[@]}" --timeout 25m --env "GH_TOKEN=$gh_token" … -- bash -lc '…build…' >&2
 # snapshot the STOPPED sandbox and parse the id from CLI output (fail if unparseable)
 out="$(vercel sandbox snapshot "$base" --stop --expiration 30d "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$out" >&2
@@ -314,10 +348,12 @@ snapshot_id="$(printf '%s\n' "$out" | sed -nE 's/.*(snap_[A-Za-z0-9]+).*/\1/p' |
 
 ```bash
 vercel sandbox create --name "$auth" --snapshot "$snapshot_id" --timeout 30m --publish-port "$port" "${vercel_args[@]}" >&2
-# INTERACTIVE: the user completes the device-auth URL/code in their browser
+# INTERACTIVE — the USER runs this in their own terminal (you have no interactive TTY) and completes the
+# URL/code on the HOST. --device-auth is MANDATORY on a headless VM: plain `codex login` binds a loopback
+# callback port the host browser can't reach and hangs. Ask the user to report back when login finishes.
 vercel sandbox exec --interactive --tty "$auth" "${vercel_args[@]}" -- bash -lc 'codex login --device-auth'
-# refuse to snapshot an unauthenticated VM
-vercel sandbox exec "$auth" "${vercel_args[@]}" --timeout 30s -- bash -lc 'codex login status' | grep -qi 'logged in' \
+# refuse to snapshot an unauthenticated VM — fold stderr, match codex's exact success line (§4)
+vercel sandbox exec "$auth" "${vercel_args[@]}" --timeout 30s -- bash -lc 'codex login status 2>&1' | grep -Eqi 'Logged in using ChatGPT|Logged in via device' \
   || { echo "agent not logged in; not snapshotting" >&2; exit 1; }
 out="$(vercel sandbox snapshot "$auth" --stop --expiration 30d "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$out" >&2
 new_id="$(printf '%s\n' "$out" | sed -nE 's/.*(snap_[A-Za-z0-9]+).*/\1/p' | tail -1)"
@@ -352,12 +388,15 @@ vercel sandbox exec "$name" "${vercel_args[@]}" --timeout 20m \
   --env "GH_TOKEN=$gh_token" --env "ORCA_PROJECT_ROOT=$project_root" \
   --env "ORCA_REPO_URL=$repo_url" --env "ORCA_REPO_REF=$repo_ref" \
   -- bash -lc 'set -euo pipefail; cd "$ORCA_PROJECT_ROOT"; \
-    # Re-establish git auth for the private-repo fetch (same as §5); without this it hangs on a prompt.
+    # Re-establish git auth for the private-repo fetch (why + full rationale: §5); else it hangs on a prompt.
+    # Load-bearing escaping: \$1 and \$GH_TOKEN must land LITERALLY and resolve at git-runtime. Test after
+    # any edit here — reformatting the nested printf/node quoting silently breaks the fetch or leaks the token.
     if [ -n "${GH_TOKEN:-}" ]; then \
-      printf "%s\n" "#!/usr/bin/env bash" "case \"\$1\" in *Username*) echo x-access-token;; *Password*) echo \"$GH_TOKEN\";; esac" > /tmp/askpass.sh; \
+      printf "%s\n" "#!/usr/bin/env bash" "case \"\$1\" in *Username*) echo x-access-token;; *Password*) echo \"\$GH_TOKEN\";; esac" > /tmp/askpass.sh; \
       chmod 700 /tmp/askpass.sh; export GIT_ASKPASS=/tmp/askpass.sh GIT_TERMINAL_PROMPT=0; fi; \
     git fetch origin "$ORCA_REPO_REF"; \
     git checkout -B "$ORCA_REPO_REF" FETCH_HEAD; \
+    rm -f /tmp/askpass.sh; \
     c="$(git rev-parse HEAD)"; [ -f .orca-built ] && [ "$(cat .orca-built)" = "$c" ] || { \
       pnpm install --prefer-offline && pnpm run build:cli && \
       node config/scripts/run-electron-vite-build.mjs --config config/electron-vite.vm-serve.config.ts && \
@@ -486,8 +525,14 @@ Key points:
   `connection.type:"ssh"` with `host:"127.0.0.1"`, that port, `username`, `identityFile`, and
   `identitiesOnly:true`.
 - Generate a repo-local SSH key if needed, but gitignore the private/public key files.
-- The auth image is the Docker equivalent of Phase 3: let the user run `codex login`, configure proxy
-  env/config, approve hooks, and verify the agent **inside** the container, then commit it.
+- **Bake SSH host keys into the base image** (`ssh-keygen -A` at **build** time; at runtime only generate
+  if absent). Ephemeral containers all present the **same** host key, so `known_hosts` on `127.0.0.1`
+  doesn't churn as the published port rotates across workspaces (otherwise every container's freshly
+  generated key collides on `localhost` and trips host-key-changed warnings).
+- The auth image is the Docker equivalent of Phase 3: the **user** runs the agent login **inside** the
+  container (you can't drive it — you have no interactive TTY), configures proxy env/config, approves
+  hooks, and you commit once they report it's done. On a headless container use the **device-auth** flow
+  (§4). Verify login before committing — exit code, or fold stderr and match the exact success line (§4).
 - Do not bind-mount or copy the host's full agent home into the image. Let each container have writable
   agent state; only the committed auth image should carry reusable authenticated state.
 - If committing from an interactive shell, force the runtime entrypoint back to `sshd`:
@@ -506,6 +551,10 @@ ssh -i "$key" -p "$port" -o IdentitiesOnly=yes user@127.0.0.1 'codex --version'
 
 If the container exits immediately, inspect logs before the cleanup trap removes it; a committed
 interactive image with `ENTRYPOINT ["bash"]` is a common cause.
+
+Also confirm the **host key is stable** across containers: the SSH `ssh -i … 127.0.0.1` dial should not
+trigger a host-key-changed warning when a second container reuses the port. If it does, the host keys
+weren't baked into the base image (see the `ssh-keygen -A` point above).
 
 ### 7i. Windows local-side scripts
 
@@ -640,6 +689,20 @@ startup-only `docker run` before the full clone/install path.
 - **Build exceeds plan RAM.** Build the **headless main only** (drop the renderer) — the biggest fitter.
 - **Private-repo clone hangs/fails.** Wrong/missing token. Use `GIT_ASKPASS` + `GIT_TERMINAL_PROMPT=0`
   so it fails fast instead of prompting.
+- **`GIT_ASKPASS` helper aborts the clone with "`$1: unbound variable`".** The `printf`/heredoc that writes
+  the helper inside `bash -lc` under `set -u` expanded `$1`/`$GH_TOKEN` at **write** time. Escape them
+  (`\$1`, `\$GH_TOKEN`) so they land literally and resolve at git-runtime; this also keeps the real token
+  out of the file. `rm -f` the helper afterward (§5, §7f).
+- **Agent verified as "not logged in" despite a good login.** `codex login status` (and similar) print
+  "Logged in …" to **stderr**; an stdout-only `grep` misses it. Prefer the status **exit code**; if you
+  grep, fold stderr first (`status 2>&1 | grep …`) and match the exact success line — not `grep -qi
+  'logged in'`, which also matches "not logged in".
+- **Headless agent login hangs.** Plain OAuth `login` starts a loopback callback server on a VM/container
+  port the host browser can't reach. Use the **device-auth** flow (`login --device-auth`) — it prints a
+  URL + code the user opens on the host.
+- **`known_hosts` host-key churn on local Docker.** Each ephemeral container regenerating its SSH host key
+  collides on `127.0.0.1` as the published port rotates. Bake host keys into the base image at build time
+  (`ssh-keygen -A`; runtime generates only if absent) so all containers share one stable key (§7h).
 - **Snapshot expired/evicted.** If `create` hits an unknown snapshot id, rerun Phases 2–3 and update
   `snapshotId`.
 - **Agent auth didn't persist.** Confirm `snapshotId` points at the **authenticated** snapshot; re-run

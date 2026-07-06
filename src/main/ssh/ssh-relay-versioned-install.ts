@@ -36,6 +36,7 @@ import {
   type RemotePathFlavor
 } from './ssh-remote-platform'
 import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
+import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 // Why: the GC pass and the version-dir parser must agree on what counts as a
 // relay install dir. Single source of truth for both. The pattern matches the
@@ -64,12 +65,21 @@ const INSTALL_LOCK_TIMEOUT_MS = 120_000
 const INSTALL_LOCK_STALE_MS = 120_000
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
+type RelayInstalledProbeOptions = {
+  rethrowSessionLimitErrors?: boolean
+  signal?: AbortSignal
+}
+
 function execHostCommand(
   conn: SshConnection,
   host: RemoteHostPlatform,
-  command: string
+  command: string,
+  options?: { signal?: AbortSignal }
 ): Promise<string> {
-  return execCommand(conn, command, { wrapCommand: host.commandDialect !== 'powershell' })
+  return execCommand(conn, command, {
+    wrapCommand: host.commandDialect !== 'powershell',
+    signal: options?.signal
+  })
 }
 
 /**
@@ -124,16 +134,21 @@ export function computeRemoteRelayDir(
 export async function isRelayAlreadyInstalled(
   conn: SshConnection,
   remoteRelayDir: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: RelayInstalledProbeOptions
 ): Promise<boolean> {
   try {
     const probe = await execHostCommand(
       conn,
       host,
-      probeRelayInstalledCommand(host, remoteRelayDir)
+      probeRelayInstalledCommand(host, remoteRelayDir),
+      { signal: options?.signal }
     )
     return probe.trim() === 'OK'
-  } catch {
+  } catch (err) {
+    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
+      throw err
+    }
     return false
   }
 }
@@ -208,7 +223,7 @@ async function isLockStale(
     // We try GNU first, then BSD; both produce a Unix epoch in seconds on
     // stdout. If both fail we conservatively treat the lock as not stale.
     const out = await execHostCommand(conn, host, lockMtimeEpochCommand(host, lockDir))
-    const mtimeSec = parseInt(out.trim(), 10)
+    const mtimeSec = Number.parseInt(out.trim(), 10)
     if (!Number.isFinite(mtimeSec)) {
       return false
     }

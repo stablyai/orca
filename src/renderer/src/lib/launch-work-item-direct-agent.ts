@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
   buildAgentDraftLaunchPlan,
@@ -144,7 +144,7 @@ export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
   forcePaste?: boolean
 }): Promise<void> {
   const { primaryTabId, startupPlan, content, submit = false, forcePaste = false } = args
-  await pasteDraftWhenAgentReady({
+  await deliverLaunchPromptToAgentTab({
     tabId: primaryTabId,
     content,
     agent: startupPlan.agent,

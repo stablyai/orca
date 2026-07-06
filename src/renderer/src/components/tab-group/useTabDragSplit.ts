@@ -5,7 +5,6 @@ import { useCallback, useRef, useState, type RefObject } from 'react'
 import {
   closestCenter,
   pointerWithin,
-  PointerSensor,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
@@ -34,6 +33,7 @@ import {
 } from './tab-drag-preview-activation'
 import { resolveDragPreviewTabId, resolveSourceGroupRestoreOnDrop } from './tab-drag-preview-target'
 import { getDragPointer } from './tab-drag-pointer'
+import { TabDragPointerSensor } from './tab-drag-pointer-sensor'
 import {
   captureTabGroupPanelGeometrySnapshot,
   resolveActivePaneColumnSplitTarget,
@@ -195,7 +195,7 @@ export function useTabDragSplit({
   // useSensors(ptr) / useSensors(), because dnd-kit internally spreads
   // the sensors array into a useEffect dependency list — changing its
   // length between renders violates React's rules of hooks.
-  const pointerSensor = useSensor(PointerSensor, {
+  const pointerSensor = useSensor(TabDragPointerSensor, {
     activationConstraint: { distance: getTabDragActivationDistance(enabled) }
   })
   const sensors = useSensors(pointerSensor)
@@ -233,6 +233,7 @@ export function useTabDragSplit({
     window.addEventListener('pointerup', clearIfDndMissedEnd)
     window.addEventListener('pointercancel', clearIfDndMissedEnd)
     window.addEventListener('blur', clearIfDndMissedEnd)
+    window.addEventListener('focus', clearIfDndMissedEnd)
     releaseMissedEndFallbackRef.current = () => {
       if (cleanupTimer !== null) {
         window.clearTimeout(cleanupTimer)
@@ -240,6 +241,7 @@ export function useTabDragSplit({
       window.removeEventListener('pointerup', clearIfDndMissedEnd)
       window.removeEventListener('pointercancel', clearIfDndMissedEnd)
       window.removeEventListener('blur', clearIfDndMissedEnd)
+      window.removeEventListener('focus', clearIfDndMissedEnd)
     }
   }, [releaseMissedEndFallback])
 

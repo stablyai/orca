@@ -6,6 +6,7 @@ import type {
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
+import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
 import {
   getLeftmostLeafId,
   normalizeTerminalLayoutSnapshot,
@@ -58,26 +59,31 @@ export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KIT
 export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
-// full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
-// rely on mouse or bracketed-paste modes. Four exceptions are safe to reset:
+// full POST_REPLAY_MODE_RESET bundle there. The default still clears the two
+// stale mode bits most harmful to a plain shell after a TUI exits badly:
 //
 //   0 q  — DECSCUSR cursor style/blink reset: raw replay can contain a stale
 //          steady cursor override, while SerializeAddon does not preserve an
 //          authoritative current cursor style. Reset to the user's configured
 //          xterm cursor; the post-reattach SIGWINCH lets live TUIs repaint if
 //          they need a different cursor.
-//   25   — DECTCEM cursor visibility: SerializeAddon bakes `?25l` into the
-//          snapshot when the cursor was hidden at capture time. Without `?25h`
-//          here the cursor stays invisible after reattach. If a TUI is still
-//          running and wants the cursor hidden, the SIGWINCH sent immediately
-//          after restore triggers a repaint that re-hides it — a brief flash
-//          that is far less harmful than a permanently invisible cursor.
-//   1004 — focus event reporting: preserving `?1004h` makes restored shells
-//          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
-//          as unbound key input).
+//   25   — DECTCEM cursor visibility: snapshots can preserve hidden cursor
+//          state from a no-longer-running TUI; reset by default so shells do
+//          not inherit a permanently invisible cursor.
+//   1004 — focus event reporting: snapshots can preserve focus reporting from
+//          a no-longer-running TUI; reset by default so shells do not receive
+//          stray focus-in/focus-out bytes.
 //   <99u/=0u — Kitty keyboard mode is renderer-side xterm state; stale copies
 //              can make the next Ctrl+C encode as CSI-u after reattach.
 export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1004l`
+
+// Why: a live agent TUI legitimately owns focus reporting; resetting `?1004h`
+// would suppress the post-reattach focus-in the agent needs to move its real
+// cursor back to the input caret (the IME anchor). Cursor visibility is still
+// reset: agent detection can false-positive on a dead TUI's leftovers, and a
+// permanently invisible shell cursor is far worse than the brief flash a live
+// agent re-hides on its post-reattach SIGWINCH repaint.
+export const POST_REPLAY_LIVE_AGENT_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h`
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are
@@ -156,8 +162,8 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
   // We read the computed flex-grow values to derive the first-child proportion.
   let ratio: number | undefined
   if (first && second) {
-    const firstGrow = parseFloat(first.style.flex) || 1
-    const secondGrow = parseFloat(second.style.flex) || 1
+    const firstGrow = Number.parseFloat(first.style.flex) || 1
+    const secondGrow = Number.parseFloat(second.style.flex) || 1
     const total = firstGrow + secondGrow
     if (total > 0) {
       const r = firstGrow / total
@@ -206,7 +212,8 @@ export function restoreScrollbackBuffers(
   manager: PaneManager,
   savedBuffers: Record<string, string> | undefined,
   restoredPaneByLeafId: Map<string, number>,
-  replayingPanesRef: ReplayingPanesRef
+  replayingPanesRef: ReplayingPanesRef,
+  restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
 ): void {
   if (!savedBuffers) {
     return
@@ -244,6 +251,9 @@ export function restoreScrollbackBuffers(
         // The shell underneath is fresh and has no TUI consuming these modes.
         // See POST_REPLAY_MODE_RESET comment.
         replayIntoTerminal(pane, replayingPanesRef, POST_REPLAY_MODE_RESET)
+        // Why: connection resolution happens after layout replay; only the
+        // fresh-shell paths should move these visible rows into scrollback.
+        restoredViewportBlankingPanesRef?.current.add(pane.id)
       }
     } catch {
       // If restore fails, continue with blank terminal.

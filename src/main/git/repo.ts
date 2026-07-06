@@ -1,5 +1,4 @@
 /* oxlint-disable max-lines */
-import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
@@ -8,14 +7,7 @@ import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-outp
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
-import {
-  buildHostedRemoteCommitUrl,
-  buildHostedRemoteFileUrl,
-  parseHostedRemote
-} from './hosted-remote-url'
-import { normalizeGitUsername } from './git-username'
-
-const GH_LOGIN_TIMEOUT_MS = 2500
+import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
 
 type LocalGitExecOptions = {
   wslDistro?: string
@@ -464,183 +456,6 @@ function getRemoteUrlByName(path: string, remote: string): string {
   }).trim()
 }
 
-function listRemoteNamesSync(path: string): string[] {
-  try {
-    return gitExecFileSync(['remote'], { cwd: path })
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
-function getConfiguredBranchRemote(path: string, branch: string | null): string {
-  if (!branch) {
-    return ''
-  }
-  const remote = getGitConfigValue(path, `branch.${branch}.remote`)
-  return remote === '.' ? '' : remote
-}
-
-function getCurrentBranchName(path: string): string {
-  try {
-    return gitExecFileSync(['branch', '--show-current'], { cwd: path }).trim()
-  } catch {
-    return ''
-  }
-}
-
-function getRemoteNameFromRef(shortRef: string, remotes: readonly string[]): string {
-  const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
-  return sortedRemotes.find((remote) => shortRef.startsWith(`${remote}/`)) ?? ''
-}
-
-function getDefaultBranchName(shortRef: string, remoteName: string): string {
-  if (!shortRef.includes('/')) {
-    return shortRef
-  }
-  return remoteName ? shortRef.slice(remoteName.length + 1) : shortRef.split('/').slice(1).join('/')
-}
-
-function getGitConfigValue(path: string, key: string): string {
-  try {
-    return gitExecFileSync(['config', '--get', key], {
-      cwd: path
-    }).trim()
-  } catch {
-    return ''
-  }
-}
-
-let cachedGhLogin: string | undefined
-
-function isGhProbeTimeout(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false
-  }
-
-  const err = error as { code?: unknown; message?: unknown }
-  return (
-    err.code === 'ETIMEDOUT' ||
-    (typeof err.message === 'string' && /\bETIMEDOUT\b|timed out/i.test(err.message))
-  )
-}
-
-function getGhLogin(): string {
-  if (cachedGhLogin !== undefined) {
-    return cachedGhLogin
-  }
-
-  try {
-    const apiLogin = execSync('gh api user -q .login', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: GH_LOGIN_TIMEOUT_MS
-    }).trim()
-    if (apiLogin) {
-      cachedGhLogin = normalizeGitUsername(apiLogin)
-      return cachedGhLogin
-    }
-  } catch (err) {
-    if (isGhProbeTimeout(err)) {
-      // Why: if `gh api user` timed out, `gh auth status` is likely to hit the
-      // same stuck keychain/network path. Keep repo creation bounded to one probe.
-      cachedGhLogin = ''
-      return ''
-    }
-    // Fall through to auth status parsing
-  }
-
-  try {
-    // Why: gh auth status writes to stderr; redirect via shell so we can capture it.
-    // Use platform-appropriate shell — /bin/bash does not exist on Windows.
-    const output = execSync('gh auth status 2>&1', {
-      encoding: 'utf-8',
-      shell: process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : '/bin/bash',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: GH_LOGIN_TIMEOUT_MS
-    })
-
-    const activeAccountMatch = output.match(
-      /Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/
-    )
-    if (activeAccountMatch?.[1]) {
-      cachedGhLogin = normalizeGitUsername(activeAccountMatch[1])
-      return cachedGhLogin
-    }
-
-    const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
-    const login = normalizeGitUsername(accountMatch?.[1] ?? '')
-    if (login) {
-      cachedGhLogin = login
-    }
-    return login
-  } catch {
-    // Why: broken tokens/keychains can block the Electron main process.
-    // Keep the fallback best-effort for this app session.
-    cachedGhLogin = ''
-    return ''
-  }
-}
-
-function getGhLoginForGitHubRemote(path: string): string {
-  const remoteUrl = getGitHubRemoteUrlForGhLogin(path)
-  if (!remoteUrl) {
-    return ''
-  }
-  return getGhLogin()
-}
-
-function getGitHubRemoteUrlForGhLogin(path: string): string {
-  const remotes = listRemoteNamesSync(path)
-  const defaultBaseRef = getDefaultBaseRef(path)
-  const defaultBaseRemote = defaultBaseRef ? getRemoteNameFromRef(defaultBaseRef, remotes) : ''
-  const defaultBranch = defaultBaseRef
-    ? getDefaultBranchName(defaultBaseRef, defaultBaseRemote)
-    : null
-
-  const candidateRemotes = [
-    getConfiguredBranchRemote(path, getCurrentBranchName(path)),
-    getConfiguredBranchRemote(path, defaultBranch),
-    defaultBaseRemote,
-    'origin',
-    remotes.length === 1 ? remotes[0] : ''
-  ]
-
-  const seen = new Set<string>()
-  for (const remote of candidateRemotes) {
-    if (!remote || seen.has(remote)) {
-      continue
-    }
-    seen.add(remote)
-    try {
-      const remoteUrl = getRemoteUrlByName(path, remote)
-      if (parseHostedRemote(remoteUrl)?.provider === 'github') {
-        return remoteUrl
-      }
-    } catch {
-      // Missing candidate remotes are expected; try the next repo-level fallback.
-    }
-  }
-  // Why: `gh` reports a GitHub account. For GitLab/Bitbucket/self-hosted
-  // repos, using that identity would create the wrong provider prefix.
-  return ''
-}
-
-/**
- * Get the GitHub/explicit username-style branch prefix for the repo.
- */
-export function getGitUsername(path: string): string {
-  // Why: this backs the "Git Username" branch-prefix setting. Commit author
-  // email/name are not hosted-account usernames, so keep them out of this path.
-  return normalizeGitUsername(
-    getGitConfigValue(path, 'github.user') ||
-      getGitConfigValue(path, 'user.username') ||
-      getGhLoginForGitHubRemote(path)
-  )
-}
-
 function hasGitRef(path: string, ref: string): boolean {
   try {
     gitExecFileSync(['rev-parse', '--verify', ref], {
@@ -649,6 +464,24 @@ function hasGitRef(path: string, ref: string): boolean {
     return true
   } catch {
     return false
+  }
+}
+
+function gitRefToDefaultBaseRef(ref: string): string {
+  return ref.replace(/^refs\/remotes\//, '')
+}
+
+function getVerifiedOriginHeadBaseRef(path: string): string | null {
+  try {
+    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
+      cwd: path
+    }).trim()
+
+    // Why: origin/HEAD may survive a default-branch rename while pointing at a
+    // deleted ref; verify before trusting it over the probe list.
+    return ref && hasGitRef(path, ref) ? gitRefToDefaultBaseRef(ref) : null
+  } catch {
+    return null
   }
 }
 
@@ -663,16 +496,9 @@ function hasGitRef(path: string, ref: string): boolean {
  * degrade gracefully for non-creation uses (e.g. hosted URL building).
  */
 export function getDefaultBaseRef(path: string): string | null {
-  try {
-    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
-      cwd: path
-    }).trim()
-
-    if (ref) {
-      return ref.replace(/^refs\/remotes\//, '')
-    }
-  } catch {
-    // Fall through to explicit remote branch probes.
+  const originHeadBaseRef = getVerifiedOriginHeadBaseRef(path)
+  if (originHeadBaseRef) {
+    return originHeadBaseRef
   }
 
   // Why: walk the shared DEFAULT_BASE_REF_PROBES list so the sync path and the
@@ -780,6 +606,28 @@ export async function getRemoteCount(path: string): Promise<number> {
 /** Callback shape for a git exec function that yields stdout. */
 export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
 
+async function hasGitRefViaExec(exec: GitExec, ref: string): Promise<boolean> {
+  try {
+    await exec(['rev-parse', '--verify', '--quiet', ref])
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function resolveVerifiedOriginHeadBaseRefViaExec(exec: GitExec): Promise<string | null> {
+  try {
+    const { stdout } = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
+    const ref = stdout.trim()
+    if (!ref || !(await hasGitRefViaExec(exec, ref))) {
+      return null
+    }
+    return gitRefToDefaultBaseRef(ref)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Resolve the default base ref given a git exec callback. Prefers
  * origin/HEAD's symbolic-ref target; falls back to DEFAULT_BASE_REF_PROBES.
@@ -794,24 +642,11 @@ export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
  * from a genuine transport failure.
  */
 export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<string | null> {
-  try {
-    const { stdout } = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
-    const ref = stdout.trim()
-    if (ref) {
-      return ref.replace(/^refs\/remotes\//, '')
-    }
-  } catch {
-    // symbolic-ref returns non-zero when origin/HEAD is unset — expected.
-    // Fall through to probes.
+  const originHeadBaseRef = await resolveVerifiedOriginHeadBaseRefViaExec(exec)
+  if (originHeadBaseRef) {
+    return originHeadBaseRef
   }
-  return resolveDefaultBaseRefFromProbes(async (ref) => {
-    try {
-      await exec(['rev-parse', '--verify', '--quiet', ref])
-      return true
-    } catch {
-      return false
-    }
-  })
+  return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
 }
 
 async function getDefaultBaseRefAsync(

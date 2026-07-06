@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: dispatcher behavior is stateful across
-   primary, socket, timeout, and cancellation paths; keeping fixtures shared
-   makes regression tests easier to audit. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 import {

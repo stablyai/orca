@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Localhost SSH E2E covers setup, remote PTY, hook relay, and interrupt inference in one expensive app boot. */
 import os from 'node:os'
 
 import type { Page } from '@stablyai/playwright-test'

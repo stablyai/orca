@@ -1,17 +1,27 @@
 import type { Terminal } from '@xterm/xterm'
+import {
+  createTerminalTuiMouseWheelDistanceState,
+  normalizeTerminalTuiMouseWheelMultiplier,
+  resolveTerminalTuiMouseWheelReportCount,
+  resolveTerminalWheelDirection
+} from './pane-terminal-tui-wheel-reports'
+import type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
+
+export {
+  TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
+  TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MAX,
+  TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MIN,
+  createTerminalTuiMouseWheelDistanceState,
+  normalizeTerminalTuiMouseWheelMultiplier,
+  resolveTerminalTuiMouseWheelReportCount
+} from './pane-terminal-tui-wheel-reports'
+export type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
 
 const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
-const DOM_DELTA_PIXEL = 0
 const DOM_DELTA_LINE = 1
-const DISCRETE_PIXEL_WHEEL_DELTA_MIN = 50
-const LEGACY_MOUSE_WHEEL_DELTA_MIN = 100
 
-export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER = 1
-export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MIN = 1
-export const TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MAX = 10
-
-type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element'>
+type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'>
 
 type TerminalMouseWheelMultiplierOptions = {
   getTuiMouseWheelMultiplier?: () => number | undefined
@@ -21,9 +31,24 @@ type ReplayedWheelEvent = WheelEvent & {
   [REPLAYED_WHEEL_EVENT_PROPERTY]?: boolean
 }
 
-type WheelEventWithLegacyDelta = WheelEvent & {
-  wheelDelta?: number
-  wheelDeltaY?: number
+type TerminalTuiMouseWheelReplayState = {
+  distance: TerminalTuiMouseWheelDistanceState
+  drainScheduled: boolean
+  pendingDirection: -1 | 0 | 1
+  pendingEvent: WheelEvent | null
+  pendingReports: number
+  pendingTarget: EventTarget | null
+}
+
+function createTerminalTuiMouseWheelReplayState(): TerminalTuiMouseWheelReplayState {
+  return {
+    distance: createTerminalTuiMouseWheelDistanceState(),
+    drainScheduled: false,
+    pendingDirection: 0,
+    pendingEvent: null,
+    pendingReports: 0,
+    pendingTarget: null
+  }
 }
 
 function isReplayedWheelEvent(event: WheelEvent): boolean {
@@ -35,30 +60,6 @@ function markReplayedWheelEvent(event: WheelEvent): void {
     configurable: true,
     value: true
   })
-}
-
-function legacyVerticalWheelDelta(event: WheelEvent): number | null {
-  const wheelEvent = event as WheelEventWithLegacyDelta
-  if (typeof wheelEvent.wheelDeltaY === 'number' && Number.isFinite(wheelEvent.wheelDeltaY)) {
-    return wheelEvent.wheelDeltaY
-  }
-  if (typeof wheelEvent.wheelDelta === 'number' && Number.isFinite(wheelEvent.wheelDelta)) {
-    return wheelEvent.wheelDelta
-  }
-  return null
-}
-
-function isDiscreteWheelEvent(event: WheelEvent): boolean {
-  if (event.deltaMode !== DOM_DELTA_PIXEL) {
-    return true
-  }
-
-  if (Math.abs(event.deltaY) >= DISCRETE_PIXEL_WHEEL_DELTA_MIN) {
-    return true
-  }
-
-  const legacyDelta = legacyVerticalWheelDelta(event)
-  return legacyDelta !== null && Math.abs(legacyDelta) >= LEGACY_MOUSE_WHEEL_DELTA_MIN
 }
 
 function cloneWheelReportEvent(event: WheelEvent): WheelEvent {
@@ -88,6 +89,18 @@ function cloneWheelReportEvent(event: WheelEvent): WheelEvent {
   return clone
 }
 
+function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number | undefined {
+  if (typeof terminal.element?.querySelector !== 'function') {
+    return undefined
+  }
+  const screen = terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+  const rect = screen?.getBoundingClientRect()
+  if (!rect || rect.height <= 0 || terminal.rows <= 0) {
+    return undefined
+  }
+  return rect.height / terminal.rows
+}
+
 export function shouldMultiplyTerminalMouseWheel(
   event: WheelEvent,
   terminalElement: HTMLElement | null | undefined
@@ -96,8 +109,7 @@ export function shouldMultiplyTerminalMouseWheel(
     isReplayedWheelEvent(event) ||
     !terminalElement?.classList.contains(XTERM_MOUSE_REPORTING_CLASS) ||
     event.deltaY === 0 ||
-    event.shiftKey ||
-    !isDiscreteWheelEvent(event)
+    event.shiftKey
   ) {
     return false
   }
@@ -105,22 +117,62 @@ export function shouldMultiplyTerminalMouseWheel(
   return true
 }
 
-export function normalizeTerminalTuiMouseWheelMultiplier(value: number | undefined): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER
+function drainTerminalTuiWheelReports(state: TerminalTuiMouseWheelReplayState): void {
+  const target = state.pendingTarget
+  const event = state.pendingEvent
+  if (!target || !event || state.pendingReports <= 0) {
+    state.drainScheduled = false
+    return
   }
-  return Math.round(
-    Math.min(
-      TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MAX,
-      Math.max(TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER_MIN, value)
-    )
-  )
+
+  const reportsToDispatch = state.pendingReports
+  for (let i = 0; i < reportsToDispatch; i += 1) {
+    target.dispatchEvent(cloneWheelReportEvent(event))
+  }
+  state.pendingReports = 0
+  state.drainScheduled = false
+  state.pendingDirection = 0
+  state.pendingEvent = null
+  state.pendingTarget = null
+}
+
+function queueTerminalTuiWheelReports(
+  state: TerminalTuiMouseWheelReplayState,
+  target: EventTarget,
+  event: WheelEvent,
+  reportCount: number
+): void {
+  if (reportCount <= 0) {
+    return
+  }
+
+  const direction = resolveTerminalWheelDirection(event)
+  if (state.pendingDirection !== 0 && state.pendingDirection !== direction) {
+    state.pendingReports = 0
+  }
+
+  state.pendingDirection = direction
+  state.pendingEvent = event
+  state.pendingTarget = target
+  state.pendingReports += reportCount
+
+  if (state.drainScheduled) {
+    return
+  }
+
+  state.drainScheduled = true
+  // Why: dispatch after xterm returns from the original wheel handler, but do
+  // not frame-cap reports; fullscreen TUIs need the full wheel distance.
+  queueMicrotask(() => {
+    drainTerminalTuiWheelReports(state)
+  })
 }
 
 export function attachTerminalMouseWheelMultiplier(
   terminal: TerminalWheelTarget,
   options: TerminalMouseWheelMultiplierOptions = {}
 ): void {
+  const replayState = createTerminalTuiMouseWheelReplayState()
   terminal.attachCustomWheelEventHandler((event) => {
     if (!shouldMultiplyTerminalMouseWheel(event, terminal.element)) {
       return true
@@ -133,15 +185,17 @@ export function attachTerminalMouseWheelMultiplier(
     }
 
     // Why: xterm dampens small pixel deltas before emitting mouse reports;
-    // line-mode replays make each notched wheel tick produce immediate reports.
-    queueMicrotask(() => {
-      const multiplier = normalizeTerminalTuiMouseWheelMultiplier(
-        options.getTuiMouseWheelMultiplier?.()
-      )
-      for (let i = 0; i < multiplier; i++) {
-        target.dispatchEvent(cloneWheelReportEvent(event))
+    // line-mode replays let fullscreen TUIs receive one report per resolved row.
+    const reportCount = resolveTerminalTuiMouseWheelReportCount(
+      event,
+      normalizeTerminalTuiMouseWheelMultiplier(options.getTuiMouseWheelMultiplier?.()),
+      replayState.distance,
+      {
+        cellHeight: resolveTerminalWheelCellHeight(terminal),
+        rows: terminal.rows
       }
-    })
+    )
+    queueTerminalTuiWheelReports(replayState, target, event, reportCount)
 
     return false
   })

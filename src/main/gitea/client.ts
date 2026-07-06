@@ -75,15 +75,13 @@ async function requestJsonAtBase<T>(
   options: RequestOptions = {}
 ): Promise<T | null> {
   const config = getAuthConfig()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS)
   try {
     const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
       headers: {
         Accept: 'application/json',
         ...authHeaders(config)
       },
-      signal: controller.signal
+      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
       return null
@@ -91,8 +89,6 @@ async function requestJsonAtBase<T>(
     return (await response.json()) as T
   } catch {
     return null
-  } finally {
-    clearTimeout(timeout)
   }
 }
 

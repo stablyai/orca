@@ -1459,6 +1459,64 @@ describe('createEditorSlice markdown view state', () => {
       })
     ])
   })
+
+  it('drops markdown visibility for a preview replaced by a diff', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
+
+    store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
+      preview: true
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('keeps markdown visibility when another preview still references a replaced source', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
+
+    store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
+      preview: true
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({
+      '/repo/docs/README.md': true
+    })
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({
+      '/repo/docs/README.md': true
+    })
+  })
 })
 
 describe('createEditorSlice editor view mode', () => {
@@ -1625,6 +1683,79 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
     store.getState().closeAllFiles()
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+})
+
+describe('createEditorSlice markdown table of contents visibility', () => {
+  it('stores visible=true as an explicit entry keyed by fileId', () => {
+    const store = createEditorStore()
+
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({ '/repo/notes.md': true })
+  })
+
+  it('deletes the entry when visibility resets to hidden', () => {
+    const store = createEditorStore()
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('drops the visibility flag when replacing a preview tab', () => {
+    const store = createEditorStore()
+    store.getState().openFile(
+      {
+        filePath: '/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('keeps the visibility flag while a preview tab still references the source file', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().closeFile('/repo/notes.md')
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({ '/repo/notes.md': true })
+
+    store.getState().closeFile('markdown-preview::/repo/notes.md')
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
   })
 })
 

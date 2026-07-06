@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   ensureRemoteDetectedAgents: vi.fn(),
   updateWorktreeMeta: vi.fn(),
   setSidebarOpen: vi.fn(),
+  seedNativeChatLaunchPrompt: vi.fn(),
+  markNativeChatLaunchPromptFailed: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
   pasteDraftWhenAgentReady: vi.fn(),
   openModalFallback: vi.fn(),
@@ -21,6 +23,8 @@ const mocks = vi.hoisted(() => ({
     createWorktree: ReturnType<typeof vi.fn>
     updateWorktreeMeta: ReturnType<typeof vi.fn>
     setSidebarOpen: ReturnType<typeof vi.fn>
+    seedNativeChatLaunchPrompt: ReturnType<typeof vi.fn>
+    markNativeChatLaunchPromptFailed: ReturnType<typeof vi.fn>
   }
 }))
 
@@ -185,7 +189,9 @@ describe('launchWorkItemDirect', () => {
       ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents,
       createWorktree: mocks.createWorktree,
       updateWorktreeMeta: mocks.updateWorktreeMeta,
-      setSidebarOpen: mocks.setSidebarOpen
+      setSidebarOpen: mocks.setSidebarOpen,
+      seedNativeChatLaunchPrompt: mocks.seedNativeChatLaunchPrompt,
+      markNativeChatLaunchPromptFailed: mocks.markNativeChatLaunchPromptFailed
     } as typeof mocks.store
     // @ts-expect-error -- test shim
     globalThis.window = { api: mockApi }
@@ -229,9 +235,9 @@ describe('launchWorkItemDirect', () => {
       openModalFallback: vi.fn(),
       item: {
         type: 'pr',
-        number: 42,
+        number: 6934,
         title: 'Fix the bug',
-        url: 'https://github.com/acme/repo/pull/42',
+        url: 'https://github.com/stablyai/orca/pull/6934',
         branchName: 'feature/fix',
         baseRefName: 'main',
         isCrossRepository: true
@@ -240,21 +246,21 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.resolvePrBase).toHaveBeenCalledWith({
       repoId: 'repo-1',
-      prNumber: 42,
+      prNumber: 6934,
       headRefName: 'feature/fix',
       baseRefName: 'main',
       isCrossRepository: true
     })
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       'repo-1',
-      'review-pr-42',
+      'review-pr-6934',
       'abc123',
       'inherit',
       undefined,
       'sidebar',
-      'Review PR 42',
+      'Review PR 6934',
       undefined,
-      42,
+      6934,
       { remoteName: 'origin', branchName: 'feature/fix' },
       undefined,
       undefined,
@@ -272,6 +278,41 @@ describe('launchWorkItemDirect', () => {
       undefined,
       'refs/remotes/origin/main'
     )
+  })
+
+  it('treats a PR-typed GitHub issue URL as an issue without resolving a PR head', async () => {
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+    const openModalFallback = vi.fn()
+
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        openModalFallback,
+        item: {
+          type: 'pr',
+          number: 6933,
+          title: 'The board columns are displayed backwards',
+          url: 'https://github.com/stablyai/orca/issues/6933',
+          branchName: 'fix-issue-6933',
+          baseRefName: 'main',
+          isCrossRepository: true
+        }
+      })
+    ).resolves.toBe(true)
+
+    expect(mocks.resolvePrBase).not.toHaveBeenCalled()
+    expect(openModalFallback).not.toHaveBeenCalled()
+    const createArgs = mocks.createWorktree.mock.calls[0]
+    expect(createArgs?.[1]).toBe('issue-6933')
+    expect(createArgs?.[2]).toBeUndefined()
+    expect(createArgs?.[6]).toBe('Issue 6933')
+    expect(createArgs?.[7]).toBe(6933)
+    expect(createArgs?.[8]).toBeUndefined()
+    expect(createArgs?.[9]).toBeUndefined()
+    expect(createArgs?.[12]).toBeUndefined()
+    expect(createArgs?.[24]).toBeUndefined()
   })
 
   it('uses the Linear identifier in direct-launch workspace names', async () => {
@@ -414,13 +455,21 @@ describe('launchWorkItemDirect', () => {
     ).resolves.toBe(true)
 
     expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
-    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith({
+    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        content: 'Use this explicit user prompt.',
+        agent: 'claude',
+        submit: true,
+        forcePaste: true,
+        onTimeout: expect.any(Function)
+      })
+    )
+    expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalledWith({
       tabId: 'tab-1',
-      content: 'Use this explicit user prompt.',
       agent: 'claude',
-      submit: true,
-      forcePaste: true,
-      onTimeout: expect.any(Function)
+      text: 'Use this explicit user prompt.',
+      createdAt: expect.any(Number)
     })
   })
 

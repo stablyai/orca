@@ -362,8 +362,8 @@ export default function Landing(): React.JSX.Element {
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />
-              {translate('auto.components.Landing.76a95f7f47', 'Create')}
-              {createTargetLabel}
+              {translate('auto.components.Landing.76a95f7f47', 'Create')}{' '}
+              {createTargetLabel.toLowerCase()}
             </button>
           </div>
 

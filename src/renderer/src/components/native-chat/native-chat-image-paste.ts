@@ -50,6 +50,6 @@ export function isNativeChatImageAttachmentPath(path: string): boolean {
  *  Those names are noise in the UI, so the composer shows a friendly label
  *  instead of the basename. */
 export function isNativeChatPastedImagePath(path: string): boolean {
-  const base = path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
+  const base = path.split(/[\\/]/).findLast(Boolean) ?? path
   return /^orca-paste-.+\.png$/i.test(base)
 }

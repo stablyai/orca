@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: OpenCode scanner tests cover multiple DB schema generations and attribution boundaries together so parser regressions stay auditable. */
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

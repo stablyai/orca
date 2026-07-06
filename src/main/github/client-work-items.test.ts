@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: work-items coverage stays in one file so
-the fan-out mock plumbing (issue + PR gh calls, allSettled handling) does
-not drift across split files. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

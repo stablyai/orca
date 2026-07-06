@@ -34,7 +34,7 @@ type PRRefreshOutcomeObserver = (
 
 type PRBranchLookupCandidate = Pick<
   GitHubPRRefreshCandidate,
-  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource'
+  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'currentHeadOid'
 >
 
 function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
@@ -54,6 +54,9 @@ function hostedReviewOptionArgs(
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
+  }
+  if (typeof candidate.currentHeadOid === 'string' && candidate.currentHeadOid.trim().length > 0) {
+    options.currentHeadOid = candidate.currentHeadOid.trim()
   }
   return Object.keys(options).length > 0 ? [options] : []
 }
@@ -185,7 +188,11 @@ export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
           ...entry.candidate,
           cacheKey: replacementAlias.cacheKey,
           branch: replacementAlias.branch,
-          worktreeId: replacementAlias.worktreeId
+          worktreeId: replacementAlias.worktreeId,
+          // Why: the probe now represents the replacement worktree, so it must
+          // use that worktree's head — otherwise divergence is stamped for the
+          // removed worktree's head and the survivor's link is never cleared.
+          currentHeadOid: replacementAlias.currentHeadOid ?? null
         }
       }
     }
@@ -318,6 +325,7 @@ function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefres
     branch: candidate.branch,
     worktreeId: candidate.worktreeId,
     connectionId: candidate.connectionId ?? null,
+    currentHeadOid: candidate.currentHeadOid ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
     fallbackPRNumber:
       candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
@@ -390,6 +398,10 @@ function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefres
       cacheKey: replacementAlias.cacheKey,
       branch: replacementAlias.branch,
       worktreeId: replacementAlias.worktreeId,
+      // Why: the probe now represents the replacement worktree, so it must use
+      // that worktree's head — otherwise divergence is stamped for the pruned
+      // candidate's head and the survivor's link is never cleared.
+      currentHeadOid: replacementAlias.currentHeadOid ?? null,
       isArchived: false,
       isBare: false
     }
@@ -806,6 +818,18 @@ export function enqueuePRRefresh(
       existing.activeDelayNotified = false
       existing.candidate = candidate
       existing.windowId = windowId ?? existing.windowId
+    } else if (existing.candidate.worktreeId === candidate.worktreeId) {
+      // Why: a non-promoting coalesce (e.g. visible→visible) keeps the existing
+      // representative, but the representative drives the probe head. If its own
+      // worktree moved head/branch, refresh those probe inputs so divergence is
+      // stamped for the current head — otherwise the head-scoped clear never
+      // matches and a merged linked PR lingers after a branch switch.
+      existing.candidate = {
+        ...existing.candidate,
+        cacheKey: candidate.cacheKey,
+        branch: candidate.branch,
+        currentHeadOid: candidate.currentHeadOid ?? null
+      }
     }
   } else {
     diagnosticsCounters.enqueued += 1

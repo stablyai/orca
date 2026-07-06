@@ -25,6 +25,7 @@
         "geminiToggleDescription": "アクティブなワークスペースの Gemini トークンとコストの使用状況を表示します。",
         "opencodeGoToggleDescription": "アクティブなワークスペースの OpenCode Go トークンと使用コストを表示します。",
         "kimiToggleDescription": "Kimi サブスクリプション",
+        "minimaxToggleDescription": "アクティブなワークスペースの MiniMax サブスクリプション使用状況を表示します。",
         "sshToggleDescription": "設定済み SSH ホストとリモート Orca ホストがある場合に表示します。",
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。これをクリックすると、CPU、メモリ、セッション、デーモン コントロール、およびワークスペース ディスク スキャンが行われます。",
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。"
@@ -57,7 +58,7 @@
     "openWorktreePalette": "ワークツリーパレットを開く",
     "window": "ウィンドウ",
     "help": "ヘルプ",
-    "paste": "Paste"
+    "paste": "貼り付け"
   },
   "tray": {
     "openOrca": "Orcaを開く",
@@ -652,7 +653,7 @@
         "devDescription": "Dev-only tools for exercising UI states.",
         "devBadge": "Dev",
         "devSearchNotificationPlayground": "Notification playground",
-        "devSearchNotificationPlaygroundDescription": "Trigger representative toast and notification UI states.",
+        "devSearchNotificationPlaygroundDescription": "代表的なトーストと通知の UI 状態をトリガーします。",
         "devSearchKeywordDev": "dev",
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
@@ -876,7 +877,7 @@
           "moved": "moved this",
           "from": "from",
           "to": "to",
-          "activity": "Activity",
+          "activity": "アクティビティ",
           "noActivity": "No activity yet."
         },
         "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
@@ -1170,7 +1171,9 @@
         "ephemeralVm": "ワークスペースごとの環境",
         "chooseRunTarget": "ターゲットを選択",
         "noRunTargets": "このプロジェクトには実行ターゲットが準備されていません。",
-        "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする"
+        "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする",
+        "branchName": "ブランチ名",
+        "branchNamePlaceholder": "feature/my-branch"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "ワークツリーを作成する",
@@ -2012,7 +2015,7 @@
           "13b3ac0a84": "状態",
           "79c54552f7": "フィルター",
           "8a2ffbf9b3": "{{value0}} フィルターを削除します",
-          "19bb6f115f": "reviewed-by"
+          "19bb6f115f": "レビュー済"
         },
         "PRFilterPickers": {
           "fdf387297c": "クリア （",
@@ -2586,7 +2589,9 @@
             "openLocalWorkspace": "セッションを再開する前にローカルワークスペースを開いてください。",
             "sessionQueued": "セッションをキューに追加しました",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースにドロップしてください。",
+            "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。同じホスト上のワークスペースにドロップしてください。"
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "新しい分割"
@@ -2691,7 +2696,7 @@
             "39676a184c": "任意のファイル、URL、agent などを開きます..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "クイックコマンドを追加…",
+            "a2c7a33831": "コマンド",
             "20bbd75896": "コマンドはありません",
             "b82e237a4b": "よりクイックなコマンド",
             "85482c57bc": "クイックコマンドを実行する",
@@ -2841,10 +2846,7 @@
             "41ae4fa725": "終了中…",
             "138b99bd80": "このセッション",
             "888dad8c55": "読み込み中…",
-            "56b6888304": "ランタイム サーバーではローカル リソースの使用量が非表示になります。",
-            "14ff448686": "ランタイムサーバーでは使用できません",
             "6d9793d4bc": "リソースマネージャー - Terminals",
-            "6a822b06a7": "リソースマネージャー",
             "ca95d077db": "デーモンに到達できません",
             "a82253b458": "ワークスペースを削除します。",
             "946724a70a": "メインワークスペースは削除できません。",
@@ -2903,7 +2905,9 @@
             "c35af53b73": "サインイン",
             "f19a63e7cd": "サインインして使用状況を確認する",
             "5c938d39ac": "%週",
+            "54e8d6bb2d": "% Fable",
             "d79c3362c4": "% 5時間",
+            "a79c64f87e": "Fable",
             "8295903d17": "切り替え後に古い会話を続ける前に、ライブ Claude terminals を再起動します。",
             "c98ea88392": "他のアカウントはありません",
             "9332ba8684": "に切り替えます",
@@ -2932,7 +2936,9 @@
             "972a1ff497": "Codex の制限をリセットしますか？",
             "6d1042aa6f": "アクティブなアカウントの Codex レート制限リセット枠を 1 回使用し、対象の使用量ウィンドウを直ちにリセットします。",
             "f077f586db": "今後表示しない",
-            "c0e972d726": "キャンセル"
+            "c0e972d726": "キャンセル",
+            "06741a2f3d": "MiniMax の使用量詳細を開く",
+            "3bbf140864": "MiniMax 使用量"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3067,6 +3073,7 @@
             "6d6df77f41": "利用可能なデータがありません",
             "7f7f208060": "毎月",
             "252c096536": "毎週",
+            "a79c64f87e": "Fable",
             "94038ad2fa": "セッション",
             "2c35eca8d4": "使用状況を取得できません",
             "1292d4f2ee": "利用不可",
@@ -3485,7 +3492,9 @@
           "8401a7a0d0": "1 個の repos",
           "d4f1df62ef": "{{value0}} 個の repos",
           "b4263a2ac4": "{{value1}} で {{value0}} が見つかりました。",
-          "24eda6c8b2": "スキャン中... {{value0}}"
+          "24eda6c8b2": "スキャン中... {{value0}}",
+          "6149d5203f": "選択されている repos がありません。代わりに親フォルダーを開くと、Git 機能なしでエディター、terminal、検索を利用できます。",
+          "e52454b7f6": "フォルダーとして開く"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "スキャンの停止",
@@ -4073,7 +4082,8 @@
           "hostAuthNeeded": "認証が必要です",
           "hostDisconnected": "切断済み",
           "failedNestWorkspace": "ワークスペースをネストできませんでした",
-          "sidebarRowMissing": "対象はもう存在しません"
+          "sidebarRowMissing": "対象はもう存在しません",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -4229,7 +4239,7 @@
             "6c1efa2cf8": "レビュー中",
             "6b8285b8dd": "完了",
             "93ac840dcb": "ブロック中",
-            "2c19d1db33": "Play",
+            "2c19d1db33": "再生",
             "111db162bf": "一時停止中",
             "642da473f2": "アラート",
             "6380517b10": "フラグ",
@@ -4387,7 +4397,7 @@
           "5e6f7a8b9c": "This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.",
           "6f7a8b9c0d": "キャンセル",
           "7a8b9c0d1e": "Open settings",
-          "8b9c0d1e2f": "Remove host"
+          "8b9c0d1e2f": "ホストを削除"
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Rename host",
@@ -4409,7 +4419,7 @@
           "63f36455cc": "Reconnect",
           "59b553e2aa": "切断",
           "2d3e4f5a6b": "Check connection",
-          "3c4d5e6f7a": "Manage host…",
+          "3c4d5e6f7a": "ホストを管理…",
           "6e7f8a9b0c": "Remove host…"
         },
         "WorkspaceKanbanDrawer": {
@@ -4547,6 +4557,7 @@
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "opencode.ai にログインした後、URL でこれを見つけます (例:",
           "b398b834c9": "クリア",
+          "316ca4e610": "Cookie を削除",
           "a122332371": "wrk_… (自動検索の場合は空白のままにします)",
           "dbdb0b0bd8": "ワークスペースIDのオーバーライド",
           "d70a5287a4": "自動検索が失敗した場合は、オプションのワークスペース ID をオーバーライドします。",
@@ -4612,7 +4623,47 @@
           "75ca9b718e": "Codex は、アクティブなアカウントには新たにサインインする必要があると報告しました。新規 Codex セッションを開始する前に、再認証してください。",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "現在の {{value0}} Claude ログインを使用します。"
+          "e05d0ff737": "現在の {{value0}} Claude ログインを使用します。",
+          "2f24f244a4": "MiniMax Cookie が必要です。",
+          "8e6f0cb1d8": "MiniMax Cookie は保存されませんでした。",
+          "8d61637a77": "MiniMax Cookie を保存しました。",
+          "b43e761fe5": "MiniMax Cookie の更新に失敗しました。",
+          "5d63bbfbec": "MiniMax",
+          "15e831350e": "platform.minimax.io から MiniMax の使用量追跡を設定します。",
+          "21d6eb141e": "MiniMax セッション Cookie",
+          "33bba5ad83": "ローカルのレート制限取得用に MiniMax セッション Cookie を貼り付けます。",
+          "73ea15f24b": "保存済み",
+          "23afe8f226": "未保存",
+          "566d9a99ab": "_token=…; minimax_group_id_v2=…",
+          "f38b9cc4bd": "置き換え",
+          "590a3130f9": "保存",
+          "79418c782a": "ブラウザで platform.minimax.io/console/usage を開き、サインインして、DevTools(ネットワーク→remains のリクエスト→Cookie)から Cookie リクエストヘッダーをコピーしてください。",
+          "9dd50d3f75": "詳細設定",
+          "174fb408f9": "MiniMax の使用量更新が誤ったワークスペースやモデルを指す場合のみ、これらの既定値を変更してください。",
+          "bf160bb6c0": "グループ ID の上書き",
+          "b1e2743313": "任意。空白にすると Cookie の minimax_group_id_v2 が使われます。",
+          "0747d6391a": "Cookie からグループ ID を使用",
+          "4ff2af7524": "使用モデルの名前",
+          "5cf4b0f85f": "任意のコンマ区切りのモデル名。MiniMax がモデル固有のエラーを返す場合を除き、general のままにしてください。",
+          "3c92b0d31c": "general",
+          "0d8e77bc40": "コンソールを開く",
+          "0b8c1c7e02": "ローカルに保存済み",
+          "1fd1b1b6b4": "Cookie は未設定です",
+          "5e08b0fe57": "ローカルに保存され、使用量の更新のために platform.minimax.io のみに送信されます。",
+          "43d7a45b97": "コピー方法",
+          "b8a4f21c3e": "DevTools から Cookie ヘッダーを貼り付け",
+          "53f7b8c7a2": "最終更新: {{value0}}",
+          "31d24a4e87": "ブラウザでサインアウトすると Cookie は無効になります。",
+          "3a30aaf526": "たった今",
+          "f5d8d2a6a1": "ブラウザで platform.minimax.io/console/usage を開き、サインインします。",
+          "24560fe830": "DevTools を開きます。",
+          "4cab0fa42d": "ネットワークタブを開き、Preserve log を有効にします。",
+          "bee4e63e1c": "ページを再読み込みします。",
+          "87f814af6f": "remains でフィルタリングし、coding_plan/remains のリクエストを選択します。",
+          "435df0ee51": "リクエストヘッダーの Cookie の値をコピーします。",
+          "7492fb3bba": "ここに貼り付けて保存をクリックします。",
+          "9fec52de4b": "Cookie のコピー方法",
+          "4e32e030b2": "ローカルに保存されます。Orca は使用量の更新のために platform.minimax.io のみに送信します。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -4860,7 +4911,8 @@
           "d420c43729": "{{value0}} Cookie を {{value1}}{{value2}} から {{value3}} にインポートしました。",
           "b4c167764d": "ファイルから {{value0}} 個の Cookie を {{value1}} にインポートしました。",
           "a3f8c2d1e0b4": "{{value1}} ({{value2}}) から {{value0}} 件の Cookie を {{value3}} にインポートしました。",
-          "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。"
+          "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。",
+          "c5a273a809": "{{value0}} から"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -4884,7 +4936,7 @@
           "be6df68384": "ファイルから…",
           "e44c5d681e": "から",
           "67d9a53f47": "個別のログインのプロファイルを管理する",
-          "112f70adc4": "最後にインポートされたのは",
+          "112f70adc4": "{{value0}} から最後にインポート",
           "72d4815523": "既存のログインを Orca に取り込み、agents が認証されたページにアクセスできるようにします。デフォルトのプロファイルにインポートします。",
           "2eb906706c": "ブラウザの Cookie をインポートする",
           "af8c83ed61": "Chrome、Edge、またはその他のブラウザから Cookie をインポートすると、agents がログインを再利用できるようになります。",
@@ -4906,7 +4958,8 @@
           "ad8cb0ee22": "パスを修正する",
           "0289434ed6": "有効",
           "8b3054dac7": "登録中...",
-          "8f2675c2f3": "ファイルから {{value0}} 個の Cookie をインポートしました。"
+          "8f2675c2f3": "ファイルから {{value0}} 個の Cookie をインポートしました。",
+          "5301857d88": "{{value0}} から"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "agents が Orca のブラウザでページに移動して確認できるようにします。",
@@ -5144,7 +5197,9 @@
           "8f1afdfbd8": "差分ワードラップ",
           "4aa4d9fb73": "水平スクロールを必要とせずに、差分エディターで長い行を折り返します。",
           "bf16ef0af2": "オフ",
-          "3f6892f307": "オン"
+          "3f6892f307": "オン",
+          "b82f86d7d2": "Rich Markdown Spellcheck",
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
@@ -5878,13 +5933,13 @@
           "hostSetupStateNotSetUp": "Not set up",
           "hostSetupStateSettingUp": "Setting up",
           "hostSetupStateError": "Error",
-          "hostSetupStateUnsupported": "Unsupported",
+          "hostSetupStateUnsupported": "未対応",
           "setupPathPending": "Path pending",
           "openSetup": "オープン",
           "removeSetup": "削除",
           "hostSetupBlockedVersion": "Orca server version is incompatible",
           "hostSetupMissingCapability": "Update Orca on this host to set up projects",
-          "setupProjectOnHost": "Set up on another host",
+          "setupProjectOnHost": "別のホストで設定",
           "setupProjectOnHostHelp": "Choose a host, then import an existing checkout, clone the repository there, or track a setup that will be provisioned later.",
           "setupExistingFolder": "既存フォルダをインポート",
           "setupExistingFolderHelp": "Make this project available on another host by linking a checkout that already exists there.",
@@ -5913,7 +5968,7 @@
           "cloneFromUrl": "Clone from URL",
           "cloneFromUrlHelp": "Clone this repository onto the selected host.",
           "addPlannedHost": "Add host placeholder",
-          "addPlannedHostHelp": "Remember this host and finish adding the project later.",
+          "addPlannedHostHelp": "このホストを記憶し、後でプロジェクトの追加を完了します。",
           "existingFolder": "Existing folder",
           "addPlannedHostToHost": "Add {{host}}",
           "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
@@ -6385,7 +6440,11 @@
           "29af933cd5": "新規 SSH ターゲット",
           "f2331ce599": "SSH ターゲットの編集",
           "7c13f58c91": "リセットまで",
-          "55c56cf2c7": "切断後のタイムアウト（秒）"
+          "55c56cf2c7": "切断後のタイムアウト（秒）",
+          "4a342f44c1": "詳細接続",
+          "e9609ddca6": "プロキシ、ジャンプホスト、接続の再利用",
+          "8c922dffba": "より速いセットアップのため SSH 接続を再利用",
+          "53e9aabfc0": "利用可能な場合は OpenSSH の多重化を使用します。独自の SSH 制限があるホストではオフにしてください。"
         },
         "TasksPane": {
           "3a72b9745e": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。",
@@ -6534,7 +6593,7 @@
           "ab20575a8a": "オフ",
           "ab3a1f9068": "wsl.exe",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-          "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+          "ask_before_closing_running_terminals_description": "実行中のコマンドやエージェントがあるターミナルを閉じる前に確認を表示します。",
           "scrollSpeed": {
             "title": "スクロール速度",
             "description": "通常のターミナルスクロールバック、修飾キーでの高速スクロール、全画面 TUI のホイール速度を調整します。",
@@ -6772,7 +6831,9 @@
             "bdbd1e668e": "窓",
             "593720c17f": "場所",
             "b84a5b0c8a": "プロバイダー アカウントをこのデバイスまたは WSL で検査および追加するかどうかを選択します。",
-            "d09fb5ca92": "アカウントの場所"
+            "d09fb5ca92": "アカウントの場所",
+            "733f9e2a93": "MiniMax 使用量",
+            "f8374c3151": "ローカルのレート制限取得用に platform.minimax.io のセッション Cookie を貼り付けます。"
           }
         },
         "advanced": {
@@ -6942,6 +7003,11 @@
             "40e5c3c285": "kimi",
             "c927a155d5": "ステータス バーに Kimi サブスクリプションの使用状況を表示します。",
             "3a6c028ea8": "Kimi 使用量",
+            "25e51b62ee": "レート制限",
+            "d9e7cef86f": "Cookie",
+            "d16378a88f": "minimax",
+            "e46178eb1b": "ステータスバーに MiniMax サブスクリプションの使用状況を表示します。",
+            "0f08f6b483": "MiniMax 使用量",
             "edbf0f63a0": "料金",
             "afbb6a3767": "トークン",
             "d77537b580": "opencode-go",
@@ -7430,7 +7496,9 @@
             "161a86a9da": "ピン留めしたタブを閉じる前に確認",
             "8e593f04fc": "ピン留めしたタブを閉じる前に確認ダイアログを表示します。",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "d2d2d929c0": "Rich Markdown Spellcheck",
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
         },
         "git": {
@@ -8212,7 +8280,7 @@
             "0fe0073f0c": "新規ペインとライブ アップデートのデフォルトの terminal フォント サイズ。",
             "5930244899": "フォントサイズ",
             "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
-            "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
+            "ask_before_closing_running_terminals_description": "実行中のコマンドやエージェントがあるターミナルを閉じる前に確認を表示します。",
             "scrollSpeed": {
               "title": "スクロール速度",
               "description": "通常のターミナルスクロールバック、修飾キーでの高速スクロール、全画面 TUI のホイール速度を調整します。"
@@ -8343,7 +8411,7 @@
               "integration": {
                 "cards": {
                   "d5b3be8ecd": "Re-check",
-                  "8cbc39f862": "Learn more",
+                  "8cbc39f862": "詳しく見る",
                   "707180d09c": "glab auth login",
                   "4be0616873": "The GitLab CLI is installed but not authenticated. Run this command in a terminal:",
                   "54a640af7a": "Install GitLab CLI",
@@ -8375,7 +8443,7 @@
                 "8c20e76308": "Each connected Jira site has one token stored by the active runtime.",
                 "c24e56c532": "Test",
                 "3e7c10d286": "Testing...",
-                "a2c0015fb8": "Verified",
+                "a2c0015fb8": "確認済み",
                 "e2ff968276": "Connect Jira",
                 "60996beda6": "Add Jira site",
                 "7ca5ffffdb": "Browse, create, and start work from Jira Cloud issues.",
@@ -8400,7 +8468,7 @@
               "integration": {
                 "cards": {
                   "793a06e899": "Re-check",
-                  "1a9475dace": "Learn more",
+                  "1a9475dace": "詳しく見る",
                   "19fb419c12": "Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.",
                   "60708f23da": "only when Orca cannot derive the API URL from the remote.",
                   "709057ad91": "ORCA_GITEA_API_BASE_URL",
@@ -8558,12 +8626,12 @@
           "07939d084e": "Reset {{value0}} to default",
           "9b02917027": "Reset to default",
           "a799f90f82": "Disable {{value0}}",
-          "25e6e76618": "Disable shortcut",
-          "035a822ef0": "Add shortcut",
+          "25e6e76618": "ショートカットを無効にする",
+          "035a822ef0": "ショートカットを追加",
           "a0e2ef0e61": "Add another shortcut for {{value0}}",
-          "245c83af24": "Add another shortcut",
+          "245c83af24": "別のショートカットを追加",
           "482a60225d": "Enable {{value0}}",
-          "6287677c37": "Enable",
+          "6287677c37": "有効にする",
           "01481b964c": "Add shortcut for {{value0}}"
         },
         "ShortcutRecorderButton": {
@@ -8571,10 +8639,10 @@
           "3732775d74": "Add shortcut for {{value0}}",
           "88764af2c1": "Change shortcut for {{value0}}",
           "30feb099d6": "Change shortcut {{value0}} of {{value1}} for {{value2}}",
-          "5d982a2a1f": "Listening for shortcut",
-          "152e0bcd64": "Add shortcut",
-          "5bd56445da": "Change shortcut",
-          "f5ed5dcbf6": "Press keys…"
+          "5d982a2a1f": "ショートカットを待機中",
+          "152e0bcd64": "ショートカットを追加",
+          "5bd56445da": "ショートカットを変更",
+          "f5ed5dcbf6": "キーを押してください…"
         },
         "ShortcutRemoveButton": {
           "9e29aff18b": "{{value0}} ショートカット {{value1}} を削除",
@@ -8623,21 +8691,21 @@
           "forceDeleteClicked": "Force Delete clicked",
           "devOnlyCallback": "Dev-only callback.",
           "infoToast": "Info toast",
-          "infoToastDescription": "Long informational copy with no explicit action.",
+          "infoToastDescription": "明示的なアクションのない長い情報コピー。",
           "localCanaryBehind": "Local canary is behind origin/canary",
           "successToast": "Success toast",
-          "successToastDescription": "Short confirmation state.",
+          "successToastDescription": "短い確認状態。",
           "settingsSaved": "Settings saved",
-          "shortSuccessCopy": "Short success copy.",
+          "shortSuccessCopy": "短い成功コピー。",
           "errorToast": "Error toast",
-          "errorToastDescription": "Long error copy without recovery actions.",
+          "errorToastDescription": "復元アクションのない長いエラーコピー。",
           "failedToSyncWorkspaceMetadata": "Failed to sync workspace metadata",
           "nativeActionToast": "Native action toast",
-          "nativeActionToastDescription": "Uses Sonner action and cancel slots.",
+          "nativeActionToastDescription": "Sonner アクションとキャンセルスロットを使用。",
           "deleteFailureToast": "Delete failure toast",
-          "deleteFailureToastDescription": "Custom footer with View and Force Delete.",
+          "deleteFailureToastDescription": "表示と強制削除を含むカスタムフッター。",
           "behindBaseRefToast": "Behind base ref toast",
-          "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
+          "behindBaseRefToastDescription": "インラインの設定リンクとフッターアクション付きの永続プロンプト。",
           "notificationPlayground": "Notification playground",
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
           "devOnly": "Dev only"
@@ -8694,6 +8762,18 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "repo が所有するオンデマンド環境のセットアップ コントロールとワークスペース実行ターゲットを示します。",
           "toggleLabel": "ワークスペースごとの環境を切り替える"
+        },
+        "SourceControlActionRepoOverrideNote": {
+          "agent": "Agent",
+          "agentArgs": "CLI arguments",
+          "commandTemplate": "Command template",
+          "more": "+{{count}} more",
+          "plural": "Global saves won't change {{count}} repositories with their own recipes.",
+          "recipe": "Recipe",
+          "review": "Review",
+          "reviewFirst": "Review first",
+          "singular": "Global saves won't change 1 repository with its own recipe.",
+          "tooltipTitle": "Repository overrides"
         }
       },
       "right": {
@@ -8812,7 +8892,9 @@
             "98a79948b3": "コピー",
             "b234ab25b4": "ファイルをクリップボードにコピーできませんでした",
             "f9d7ca753d": "パスのコピー",
-            "3161c4e425": "フォルダ"
+            "3161c4e425": "フォルダ",
+            "e887fa4b2e": "ターミナルで開く",
+            "1d8e182c32": "ファイルを表示"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git で無視されたファイルを表示",
@@ -9159,7 +9241,9 @@
             "b715ef615b": "{{value1}}より{{value0}}commits 進んでいます",
             "c1a8f3e204": "{{value0}}より1commit 遅れています",
             "d2b9g4f315": "{{value1}}より{{value0}}commits 遅れています",
-            "e9c2a5d416": "{{value0}}と同じ状態"
+            "e9c2a5d416": "{{value0}}と同じ状態",
+            "4b4a7de138": "Open review page in browser",
+            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -9190,7 +9274,8 @@
             "ea4788705e": "キャンセル",
             "b0da3a4d3e": "起動レシピはすでに保存されています",
             "bff4795a6d": "保存済みのレシピを更新するには、agent、引数、またはプロンプトテンプレートを変更してください。",
-            "5c75b24735": "Orca が起動する前に agent が受け取る内容をカスタマイズします。"
+            "5c75b24735": "Orca が起動する前に agent が受け取る内容をカスタマイズします。",
+            "repoAgentOverrideNote": "This repository overrides your global default ({{global}}) and currently runs {{effective}}. Save to this repository to change what runs here."
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "グローバルデフォルトとして保存",
@@ -9289,7 +9374,7 @@
                 "f5bc5c4cf1": "The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.",
                 "5bc9bda2af": "Run from this worktree",
                 "e87fb3d929": "Copy mergeability refresh commands",
-                "1e53e45072": "Copied",
+                "1e53e45072": "コピーしました",
                 "084c516efb": "Copy commands",
                 "5dc3af25c0": "コメントを選択",
                 "d7a2f9c401": "Send unresolved {{value0}} comments",
@@ -9304,10 +9389,10 @@
                 "e8b4c1a903": "Resolved · {{value0}}",
                 "c3a8e5d710": "Needs review · {{value0}}",
                 "a7f0c7e8d1": "Queue",
-                "8a621a2c4f": "Grouped",
-                "b13f85d75c": "Timeline",
+                "8a621a2c4f": "グループ化",
+                "b13f85d75c": "タイムライン",
                 "f5cf324efa": "Comment display options",
-                "5e6e5a13fa": "View",
+                "5e6e5a13fa": "表示",
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
               },
               "empty": {
@@ -9485,7 +9570,7 @@
                   "d8a4c0e369": "Authenticate before creating a {{value0}}.",
                   "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
-                  "8f9a0b1c2d": "Nothing to commit. Branch is up to date.",
+                  "8f9a0b1c2d": "コミットするものがありません。ブランチは最新です。",
                   "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
               }
@@ -9559,7 +9644,9 @@
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
+            "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9569,14 +9656,14 @@
             "allSessionsLower": "all sessions",
             "thisScope": "This",
             "allScope": "All",
-            "scope": "Scope",
+            "scope": "スコープ",
             "currentWorkspace": "Current workspace",
             "allSessions": "All sessions",
             "viewOptionsAriaLabel": "Session History view options",
-            "viewOptions": "View options",
+            "viewOptions": "表示オプション",
             "agents": "エージェント",
-            "sort": "Sort",
-            "lastUpdated": "Last updated",
+            "sort": "並び替え",
+            "lastUpdated": "最終更新",
             "created": "Created",
             "group": "Group",
             "folder": "フォルダ",
@@ -9588,7 +9675,9 @@
             "globalScope": "グローバル",
             "projectScope": "プロジェクト",
             "currentProjectLower": "現在のプロジェクト",
-            "project": "プロジェクト"
+            "project": "プロジェクト",
+            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "host": "Host"
           },
           "AiVaultSessionDetails": {
             "updated": "更新日時",
@@ -9776,10 +9865,6 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "クラウディーノ"
           }
-        },
-        "PetOverlay": {
-          "de932b0e8f": "@keyframes ペットボブ { 0%,100% { 変換:translateY(0); } 50% { 変換:translateY(-4px); } }",
-          "4712d196c6": "@keyframes pet-{{value0}} { from { 背景位置: {{value1}}px {{value2}}px; } から { 背景位置: {{value3}}px {{value4}}px; } }"
         }
       },
       "onboarding": {
@@ -10201,8 +10286,8 @@
           "title": "カスタムネットワークアドレス",
           "description": "同じ Wi-Fi に接続していないときにスマートフォンから到達できるアドレスを指定します。たとえば Tailscale のホスト名や静的 IP です。",
           "label": "アドレス",
-          "placeholder": "my-mac.ts.net または 192.168.1.50",
-          "hint": "IP アドレスまたは Tailscale のホスト名（.ts.net で終わる）を入力してください。",
+          "placeholder": "my-mac.ts.net、home.example.com、または 192.168.1.50",
+          "hint": "IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :ポート を付けられます。",
           "cancel": "キャンセル",
           "use": "アドレスを使用"
         },
@@ -11695,7 +11780,8 @@
             "4bb7424d6b": "Canceled",
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "開く",
-            "09a9489aa5": "Show"
+            "09a9489aa5": "表示",
+            "2a4c4b8e1f": "コピー"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",
@@ -11781,7 +11867,7 @@
           "51a470b966": "ssh",
           "b09b2384fd": "一時停止中",
           "eaa02014f8": "有効",
-          "29baf8f4c2": "Source"
+          "29baf8f4c2": "ソース"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
@@ -12051,7 +12137,7 @@
         },
         "AutomationSetupDecisionField": {
           "5a7863909c": "新しいワークスペースごとにセットアップを実行",
-          "18f000ad4e": "Advanced",
+          "18f000ad4e": "詳細設定",
           "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
         }
       },
@@ -12364,7 +12450,8 @@
         "title": "{{value0}} を許可しますか?",
         "allow": "許可する",
         "deny": "拒否"
-      }
+      },
+      "launchPromptNotDelivered": "Not delivered — check the terminal"
     },
     "tab": {
       "bar": {

@@ -135,6 +135,8 @@ function renderCard(
         canReuseSelectedBranch={false}
         reuseSelectedBranch={false}
         onReuseSelectedBranchChange={() => {}}
+        branchNameOverride=""
+        onBranchNameOverrideChange={() => {}}
         forkPushWarning={null}
         detectedAgentIds={null}
         onOpenAgentSettings={() => {}}
@@ -172,6 +174,25 @@ function renderCard(
     )
   })
   return { container, root }
+}
+
+function findInputByLabel(container: HTMLElement, labelText: string): HTMLInputElement | null {
+  const label = [...container.querySelectorAll('label')].find(
+    (candidate) => candidate.textContent?.trim() === labelText
+  )
+  const labelledId = label?.getAttribute('for')
+  if (labelledId) {
+    return document.getElementById(labelledId) as HTMLInputElement | null
+  }
+  return label?.parentElement?.querySelector<HTMLInputElement>('input') ?? null
+}
+
+function changeInputValue(input: HTMLInputElement, value: string): void {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  act(() => {
+    valueSetter?.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
 }
 
 let current: { container: HTMLDivElement; root: Root } | null = null
@@ -318,6 +339,64 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(waitSwitch).toBeTruthy()
     act(() => waitSwitch?.click())
     expect(changes).toEqual(['wait-for-setup'])
+  })
+
+  it('shows a git-only branch name field in Advanced and emits manual edits', () => {
+    const changes: (string | undefined)[] = []
+    current = renderCard({
+      advancedOpen: false,
+      branchesEnabled: true,
+      branchNameOverride: 'feature/initial',
+      onBranchNameOverrideChange: (next) => changes.push(next)
+    })
+
+    const branchInput = findInputByLabel(current.container, 'Branch name')
+    expect(branchInput).toBeTruthy()
+    expect(branchInput?.value).toBe('feature/initial')
+
+    changeInputValue(branchInput as HTMLInputElement, 'feature/manual')
+
+    expect(changes).toEqual(['feature/manual'])
+  })
+
+  it('omits the branch name field for non-git projects', () => {
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      selectedRepoIsGit: false,
+      branchNameOverride: 'feature/manual',
+      onBranchNameOverrideChange: vi.fn()
+    })
+
+    expect(findInputByLabel(current.container, 'Branch name')).toBeNull()
+  })
+
+  it('omits the branch name field when a tracked work item is the source', () => {
+    // Why: a PR/issue/MR/Linear source derives the branch itself (and a linked
+    // GitHub PR re-resolves it at submit), so a manual override would be a
+    // silently ignored control — the field is only for typed-name/base-branch.
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      branchNameOverride: 'feature/manual',
+      smartNameSelection: { kind: 'github-pr', label: '#42 Fix', url: 'https://example.com/pr/42' },
+      onBranchNameOverrideChange: vi.fn()
+    })
+
+    expect(findInputByLabel(current.container, 'Branch name')).toBeNull()
+  })
+
+  it('keeps the branch name field when creating from a base branch', () => {
+    // Why: choosing a base branch still lets the user name their new branch.
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      branchNameOverride: 'feature/manual',
+      smartNameSelection: { kind: 'branch', label: 'main' },
+      onBranchNameOverrideChange: vi.fn()
+    })
+
+    expect(findInputByLabel(current.container, 'Branch name')).toBeTruthy()
   })
 
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {

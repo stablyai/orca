@@ -1265,6 +1265,8 @@ export type RepoSlice = {
   folderWorkspaces: FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
+  // Monotonic sequence so an overlapping fetchRepos can drop its own stale result (#7020).
+  reposFetchGeneration: number
   fetchRepos: () => Promise<void>
   fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
@@ -1383,8 +1385,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   folderWorkspaces: [],
   folderWorkspacePathStatuses: {},
   activeRepoId: null,
+  reposFetchGeneration: 0,
 
   fetchRepos: async () => {
+    // Why: overlapping repos:changed fetches can resolve out of order; an earlier
+    // one must not overwrite a newer result and resurrect deleted projects (#7020).
+    let generation = 0
+    set((s) => {
+      generation = s.reposFetchGeneration + 1
+      return { reposFetchGeneration: generation }
+    })
     try {
       const target = getActiveRuntimeTarget(get().settings)
       const {
@@ -1392,6 +1402,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         projectCompatibility,
         hostId
       } = await fetchReposForTarget(target, get().repos)
+      // A newer fetchRepos superseded us while we awaited — drop this stale result.
+      if (get().reposFetchGeneration !== generation) {
+        return
+      }
       set((s) => {
         const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({

@@ -43,14 +43,26 @@ export function getChecksPanelEmptyStateCopy(
   }
 
   const blockedReason = input.hostedReviewBlockedReason
-  // Why: hosted-review metadata with missing PR cache data is ambiguous, so
-  // avoid showing "no PR" or publish guidance until GitHub status is refreshed.
-  if (
-    input.hasAmbiguousGitHubHostedReview === true &&
-    (input.prRefreshStatus === 'paused' ||
-      input.prRefreshStatus === 'skipped' ||
-      input.prRefreshStatus === undefined)
-  ) {
+  // Why: a GitHub hosted-review card with no cached PR is ambiguous. Resolve the
+  // whole empty state here so the copy stays stable across a background PR
+  // refresh's lifecycle (idle/queued/in-flight/paused/skipped). Previously only
+  // the idle statuses were handled and active ones fell through to the
+  // publish-branch branch, so the panel flip-flopped between "Branch not
+  // published" and "Pull request status unavailable" as refreshes cycled. Only a
+  // hard refresh error still surfaces a distinct — but equally stable — message.
+  if (input.hasAmbiguousGitHubHostedReview === true) {
+    if (input.prRefreshStatus === 'error') {
+      return {
+        title: translate(
+          'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
+          'Could not refresh pull request'
+        ),
+        description: translate(
+          'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
+          'GitHub status could not be refreshed. Existing cached data was preserved.'
+        )
+      }
+    }
     return {
       title: translate(
         'auto.components.right.sidebar.checks.panel.empty.state.3322603418',

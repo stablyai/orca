@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Play, Plus } from 'lucide-react'
+import { ChevronDown, Play } from 'lucide-react'
 import {
   Command,
   CommandEmpty,
@@ -390,10 +390,10 @@ export function TabBarQuickCommandsMenu({
                 }}
                 className="flex w-full items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <Plus className="size-3.5" />
+                <Play className="size-3.5" />
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Add Quick Command…'
+                  'Command'
                 )}
               </button>
             </div>

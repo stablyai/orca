@@ -5,6 +5,7 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../../../shared/hosted-review-refs'
 import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types'
+import { summarizeCommitFailure } from './commit-failure-summary'
 import { getStageAllPaths } from './discard-all-sequence'
 
 export type CreatePrIntentRemoteStep = 'publish' | 'push' | 'force_push' | 'blocked' | 'none'
@@ -144,4 +145,24 @@ export function resolveCreatePrIntentRemoteStep({
   }
 
   return 'none'
+}
+
+export function getCreatePrIntentCommitFailureNoticeMessage(
+  commitError: string | null | undefined,
+  copy: {
+    fallback: string
+    withSummary: (summary: string) => string
+  } = {
+    fallback: 'Could not commit changes. Fix the issue, then retry Create PR.',
+    withSummary: (summary: string) =>
+      `Commit blocked: ${summary} Fix the issue, then retry Create PR.`
+  }
+): string {
+  const summary = commitError ? summarizeCommitFailure(commitError) : null
+
+  if (!summary) {
+    return copy.fallback
+  }
+
+  return copy.withSummary(summary)
 }

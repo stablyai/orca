@@ -1,5 +1,3 @@
-/* oxlint-disable max-lines -- Why: this test keeps split layout replay fixtures together so
- * stable leaf-id migration regressions are visible in one focused suite. */
 import { describe, expect, it, beforeAll, vi } from 'vitest'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 
@@ -36,6 +34,8 @@ beforeAll(() => {
 
 import {
   buildFontFamily,
+  POST_REPLAY_MODE_RESET,
+  restoreScrollbackBuffers,
   serializePaneTree,
   serializeTerminalLayout,
   replayTerminalLayout,
@@ -419,6 +419,38 @@ describe('replayTerminalLayout', () => {
 
     expect(manager.createInitialPane).toHaveBeenCalledWith({ focus: false, leafId: undefined })
     expect(restored.get(LEAF_4)).toBe(1)
+  })
+})
+
+describe('restoreScrollbackBuffers', () => {
+  it('marks panes with restored scrollback for fresh-shell viewport blanking', () => {
+    const writes: string[] = []
+    const pane = {
+      id: 1,
+      terminal: {
+        write: vi.fn((data: string, callback?: () => void) => {
+          writes.push(data)
+          callback?.()
+        })
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane])
+    }
+    const replayingPanesRef = { current: new Map<number, number>() }
+    const restoredViewportBlankingPanesRef = { current: new Set<number>() }
+
+    restoreScrollbackBuffers(
+      manager as unknown as Parameters<typeof restoreScrollbackBuffers>[0],
+      { [LEAF_1]: 'restored output' },
+      new Map([[LEAF_1, 1]]),
+      replayingPanesRef,
+      restoredViewportBlankingPanesRef
+    )
+
+    expect(writes).toEqual(['restored output', '\r\n', POST_REPLAY_MODE_RESET])
+    expect(restoredViewportBlankingPanesRef.current.has(1)).toBe(true)
+    expect(replayingPanesRef.current.size).toBe(0)
   })
 })
 

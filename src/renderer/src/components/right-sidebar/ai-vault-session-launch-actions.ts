@@ -12,8 +12,9 @@ import {
 } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import {
-  getAiVaultResumeWorkspaceTargetStatus,
-  isSupportedAiVaultResumeTargetStatus
+  canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
+  getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { Worktree } from '../../../../shared/types'
@@ -78,6 +79,8 @@ export function useAiVaultSessionLaunchActions({
   const handleResume = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
       const targetId = resolveAiVaultSessionLaunchTarget({
+        sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         targetWorktreeId,
         targetState
@@ -93,17 +96,7 @@ export function useAiVaultSessionLaunchActions({
       }
 
       if (targetId.status === 'unsupported') {
-        toast.error(
-          targetId.targetStatus === 'runtime'
-            ? translate(
-                'auto.components.right.sidebar.AiVaultPanel.runtimeWorkspacesUnsupported',
-                'Resume from history is not available in runtime-hosted workspaces.'
-              )
-            : translate(
-                'auto.components.right.sidebar.AiVaultPanel.openSupportedWorkspace',
-                'Open a local or SSH workspace before resuming a session.'
-              )
-        )
+        toast.error(aiVaultResumeUnsupportedMessage(targetId.targetStatus))
         return
       }
 
@@ -138,6 +131,8 @@ export type AiVaultSessionLaunchTarget =
   | { status: 'ready'; worktreeId: string }
 
 export function resolveAiVaultSessionLaunchTarget(args: {
+  sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   activeWorktreeId: string | null
   targetWorktreeId?: string
   targetState: AiVaultSessionResumeTargetState
@@ -151,11 +146,45 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   }
 
   const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, targetWorktreeId)
-  if (!isSupportedAiVaultResumeTargetStatus(targetStatus)) {
+  const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
+    args.targetState,
+    targetWorktreeId
+  )
+  if (
+    !canResumeAiVaultSessionOnTarget({
+      sessionFilePath: args.sessionFilePath,
+      sessionExecutionHostId: args.sessionExecutionHostId,
+      targetStatus,
+      targetExecutionHostId
+    })
+  ) {
     return { status: 'unsupported', targetStatus }
   }
 
   return { status: 'ready', worktreeId: targetWorktreeId }
+}
+
+function aiVaultResumeUnsupportedMessage(
+  targetStatus: ReturnType<typeof getAiVaultResumeWorkspaceTargetStatus>
+): string {
+  if (targetStatus === 'runtime') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultPanel.runtimeWorkspacesUnsupported',
+      'Resume from history is not available in runtime-hosted workspaces.'
+    )
+  }
+  // Why: local and SSH targets can both be valid generally; this branch means
+  // the session's recorded host does not match the selected workspace.
+  if (targetStatus === 'ssh' || targetStatus === 'local') {
+    return translate(
+      'auto.components.right.sidebar.AiVaultPanel.sessionHostMismatchUnsupported',
+      'This session belongs to a different host. Open a workspace on the same host to resume it.'
+    )
+  }
+  return translate(
+    'auto.components.right.sidebar.AiVaultPanel.openSupportedWorkspace',
+    'Open a local or SSH workspace before resuming a session.'
+  )
 }
 
 function activateAiVaultResumeWorkspace(workspaceId: string): void {
