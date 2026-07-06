@@ -50,6 +50,11 @@ export function installRelocatedDaemonHost(): void {
   if (!app.isPackaged && process.env.ORCA_FORCE_DAEMON_HOST_RELOCATION !== '1') {
     return
   }
+  // Why: fail-open contract — this must never throw. resourcesPath is unset
+  // outside a real Electron process (tests, node-hosted tooling).
+  if (typeof process.resourcesPath !== 'string') {
+    return
+  }
   const sourceDir = resolveDaemonHostSourceDir(process.resourcesPath)
   if (!sourceDir) {
     return

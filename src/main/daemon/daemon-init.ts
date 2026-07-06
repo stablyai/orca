@@ -36,7 +36,11 @@ import {
   isDaemonStaleForCurrentBundle,
   killStaleDaemon
 } from './daemon-health'
-import { getRelocatedDaemonHostExecPath } from './daemon-host-relocation'
+import {
+  getRelocatedDaemonHostExecPath,
+  installRelocatedDaemonHost
+} from './daemon-host-relocation'
+import { startSpan } from '../observability/tracer'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import {
   getLocalPtyProvider,
@@ -154,6 +158,16 @@ function createPreservedDaemonHandle(
   protocolVersion = PROTOCOL_VERSION,
   mode?: 'degraded-new-pty-fallback'
 ): DaemonProcessHandle {
+  // Why: the trace file is the only artifact available in field
+  // investigations of update-survival incidents; adopt-vs-fresh-fork is the
+  // first question every one of them asks.
+  const adoptSpan = startSpan('daemon.adopt', {
+    attributes: {
+      'daemon.protocol_version': protocolVersion,
+      ...(mode ? { 'daemon.mode': mode } : {})
+    }
+  })
+  adoptSpan.end()
   const handle: DaemonProcessHandle = {
     shutdown: async () => {
       await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
@@ -261,11 +275,25 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     await killStaleDaemon(runtimeDir, socketPath, tokenPath)
 
     const userDataPath = app.getPath('userData')
+    // Why: staged here instead of app startup so the ~70MB node.exe copy stays
+    // off the first-paint path, and is skipped entirely on launches that adopt
+    // a live daemon (no fork). Latched — repeat calls are free.
+    installRelocatedDaemonHost()
     // Why: on Windows a relocated node.exe in userData hosts the daemon so its
     // process image escapes the install-dir the NSIS updater force-closes; when
     // absent (dev, non-win32, pre-relocation builds) fall back to the install-dir
     // Electron host run as plain Node via ELECTRON_RUN_AS_NODE.
     const relocatedHostExecPath = getRelocatedDaemonHostExecPath()
+    // Why: without this span a silent fallback to the install-dir host (back
+    // inside the updater kill zone) is indistinguishable from the fixed path
+    // in field trace files.
+    const forkSpan = startSpan('daemon.fork', {
+      attributes: {
+        'daemon.host': relocatedHostExecPath ? 'relocated-node' : 'install-dir-electron',
+        ...(relocatedHostExecPath ? { 'daemon.host_exec_path': relocatedHostExecPath } : {}),
+        'app.version': app.getVersion()
+      }
+    })
     const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
       // Why: detached daemons can outlive dev worktrees. Starting from
       // userData keeps process.cwd() valid after a repo/worktree is deleted.
@@ -317,6 +345,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
             // Already dead
           }
         }
+        forkSpan.fail(error)
         reject(error)
       }
       function onReadyMessage(msg: unknown): void {
@@ -328,6 +357,10 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           // Why: the daemon process is detached after readiness; leaving
           // startup listeners attached retains this launch promise closure.
           cleanupStartupListeners()
+          if (child.pid !== undefined) {
+            forkSpan.setAttribute('daemon.pid', child.pid)
+          }
+          forkSpan.end()
           if (child.pid) {
             // Why: JSON pid file carries pid + process start time so later
             // killStaleDaemon() can verify the pid still belongs to the daemon
