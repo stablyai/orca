@@ -1748,7 +1748,11 @@ export function registerWorktreeHandlers(
         // Why: the linked set unions per-repo `symlinkPaths` with the repo's
         // `.worktreeinclude` matches, so both the clean-check ignore list and the
         // removal below cover every path materialized into the worktree.
-        const linkedPaths = await resolveWorktreeLinkedPaths(repo.path, repo.symlinkPaths ?? [])
+        const linkedPaths = await resolveWorktreeLinkedPaths(
+          repo.path,
+          repo.symlinkPaths ?? [],
+          localWorktreeGitOptions
+        )
         const ignoredLinkedPaths = args.force
           ? []
           : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)

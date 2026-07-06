@@ -2454,7 +2454,11 @@ export async function createLocalWorktree(
   // Why: link user-configured shared paths plus the repo's `.worktreeinclude`
   // matches (e.g. `node_modules`, `.env`) before setup runs so setup scripts
   // see them in place.
-  const linkedPaths = await resolveWorktreeLinkedPaths(repo.path, repo.symlinkPaths ?? [])
+  const linkedPaths = await resolveWorktreeLinkedPaths(
+    repo.path,
+    repo.symlinkPaths ?? [],
+    localWorktreeGitOptions
+  )
   if (linkedPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
       await createWorktreeLinkedPaths(repo.path, created.path, linkedPaths)

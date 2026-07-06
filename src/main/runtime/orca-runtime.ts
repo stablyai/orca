@@ -18826,7 +18826,11 @@ export class OrcaRuntimeService {
 
     // Why: link the union of per-repo `symlinkPaths` and the repo's
     // `.worktreeinclude` matches into the new worktree.
-    const linkedPaths = await resolveWorktreeLinkedPaths(repo.path, repo.symlinkPaths ?? [])
+    const linkedPaths = await resolveWorktreeLinkedPaths(
+      repo.path,
+      repo.symlinkPaths ?? [],
+      localWorktreeGitOptions
+    )
     if (linkedPaths.length > 0) {
       await createWorktreeLinkedPaths(repo.path, created.path, linkedPaths)
     }
@@ -20840,7 +20844,11 @@ export class OrcaRuntimeService {
       // Why: the linked set unions per-repo `symlinkPaths` with the repo's
       // `.worktreeinclude` matches, so both the clean-check ignore list and the
       // removal below cover every path materialized into the worktree.
-      const linkedPaths = await resolveWorktreeLinkedPaths(repo.path, repo.symlinkPaths ?? [])
+      const linkedPaths = await resolveWorktreeLinkedPaths(
+        repo.path,
+        repo.symlinkPaths ?? [],
+        localWorktreeGitOptions
+      )
       const ignoredLinkedPaths = force
         ? []
         : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
