@@ -20,7 +20,6 @@ import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
 import { killAllPty } from './ipc/pty'
-import { installRelocatedNodePtyNativeRuntime } from './pty/node-pty-runtime-relocation'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
@@ -576,12 +575,6 @@ if (hasSingleInstanceLock) {
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
-  // Why: must run before anything loads node-pty (first PTY spawn) so main
-  // and the daemon it forks both pick up ORCA_NODE_PTY_NATIVE_DIR.
-  // (The daemon-host node.exe relocation deliberately does NOT run here: its
-  // ~70MB copy would sit on the first-paint path. daemon-init stages it at
-  // fork time instead.)
-  installRelocatedNodePtyNativeRuntime()
   crashReports = CrashReportStore.fromUserData()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,

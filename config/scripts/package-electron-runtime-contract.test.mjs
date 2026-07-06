@@ -178,9 +178,6 @@ describe('Electron runtime package contract', () => {
       'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
     )
     expect(steps[verifyNodePtyIndex].run).toContain('conpty/conpty.dll')
-    // The daemon-host node.exe must be staged alongside the node-pty runtime so
-    // the terminal daemon can be forked from outside the install-dir kill zone.
-    expect(steps[verifyNodePtyIndex].run).toContain('resources/daemon-host/node.exe')
 
     const uploadThroughDownloadScript = steps
       .slice(uploadIndex, downloadIndex + 1)
