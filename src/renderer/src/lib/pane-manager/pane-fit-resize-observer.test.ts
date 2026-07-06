@@ -44,7 +44,8 @@ function createPane(
     stablePaneId: leafId,
     terminal: {
       cols: 79,
-      rows: 24
+      rows: 24,
+      refresh: vi.fn()
     } as never,
     container: { dataset: {} } as never,
     xtermContainer: {
@@ -122,6 +123,30 @@ describe('attachPaneFitResizeObserver', () => {
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
 
+  it('repaints the terminal after a stable observed fit', () => {
+    const webglAddon = { clearTextureAtlas: vi.fn() }
+    const pane = createPane()
+    pane.webglAddon = webglAddon as never
+
+    attachPaneFitResizeObserver(pane)
+    mockResizeObservers[0]?.trigger()
+    flushAnimationFrames()
+
+    expect(webglAddon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('refreshes DOM-rendered terminals after a stable observed fit', () => {
+    const pane = createPane()
+
+    attachPaneFitResizeObserver(pane)
+    mockResizeObservers[0]?.trigger()
+    flushAnimationFrames()
+
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
   it('waits through a transient grid wobble before fitting', () => {
     const proposed = [
       { cols: 80, rows: 24 },
@@ -172,6 +197,7 @@ describe('attachPaneFitResizeObserver', () => {
 
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
     expect(onSettled).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
   })
 
   it('skips observer fits while the terminal has no visible geometry', () => {

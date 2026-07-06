@@ -1,5 +1,5 @@
 import { WebglAddon } from '@xterm/addon-webgl'
-import type { ManagedPaneInternal } from './pane-manager-types'
+import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import {
   getTerminalWebglAutoDecision,
   resetTerminalWebglAutoDecision
@@ -24,6 +24,9 @@ type XtermWebglAddonInternals = {
     _canvas?: HTMLCanvasElement
   }
 }
+
+type TerminalRepaintPane = ManagedPane &
+  Partial<Pick<ManagedPaneInternal, 'webglAddon' | 'webglDisabledAfterContextLoss'>>
 
 export function resetTerminalWebglSuggestion(): void {
   // Why: toggling GPU settings should let "auto" retry WebGL after an earlier
@@ -117,7 +120,7 @@ export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
   pane.hasComplexScriptOutput = true
 }
 
-export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
+export function resetWebglTextureAtlas(pane: TerminalRepaintPane): void {
   if (pane.webglDisabledAfterContextLoss) {
     return
   }

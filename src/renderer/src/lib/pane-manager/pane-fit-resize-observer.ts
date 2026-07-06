@@ -1,5 +1,6 @@
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
+import { resetWebglTextureAtlas } from './pane-webgl-renderer'
 
 type ProposedDimensions = {
   cols: number
@@ -78,6 +79,11 @@ function finishStableFit(pane: StableFitPane, shouldFit: boolean): void {
   setPendingObservedFitRafId(pane, null)
   if (shouldFit) {
     safeFit(pane)
+    // Why: a stable ResizeObserver fit can resize the terminal without going
+    // through tab/window reveal recovery. Repaint from the buffer after fit so
+    // WebGL and DOM renderers do not keep compositing stale cells or blank
+    // canvas regions until the next user-driven redraw.
+    resetWebglTextureAtlas(pane)
   }
   flushStableFitCallbacks(pane)
 }
