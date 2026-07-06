@@ -122,7 +122,7 @@ import {
   _resetMergeQueueCacheForTests,
   __resetTrackedUpstreamBranchCacheForTests
 } from './client'
-import { __resetPRConflictSummaryGitCapabilityCacheForTests } from './conflict-summary'
+import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 
 describe('checkOrcaStarred', () => {
@@ -194,7 +194,7 @@ describe('getPRForBranch', () => {
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
     __resetTrackedUpstreamBranchCacheForTests()
-    __resetPRConflictSummaryGitCapabilityCacheForTests()
+    __resetPRConflictSummaryCachesForTests()
     resetMergedPRCommitMembershipCacheForTest()
   })
 
@@ -2987,11 +2987,16 @@ describe('getPRForBranch', () => {
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
+    // Why a second head OID: identical inputs now hit the summary result
+    // cache outright; a pushed head re-derives and must still skip the
+    // unsupported --merge-base retry via the capability cache.
+    const pushedBranchLookup = { ...branchLookup, head: { ref: 'feature/test', sha: 'head-oid-2' } }
+    const pushedExactLookup = { ...exactLookup, headRefOid: 'head-oid-2' }
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify([branchLookup]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify(exactLookup) })
-      .mockResolvedValueOnce({ stdout: JSON.stringify([branchLookup]) })
-      .mockResolvedValueOnce({ stdout: JSON.stringify(exactLookup) })
+      .mockResolvedValueOnce({ stdout: JSON.stringify([pushedBranchLookup]) })
+      .mockResolvedValueOnce({ stdout: JSON.stringify(pushedExactLookup) })
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: '' })
       .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
@@ -2999,8 +3004,6 @@ describe('getPRForBranch', () => {
       .mockResolvedValueOnce({ stdout: '2\n' })
       .mockRejectedValueOnce({ stderr: "error: unknown option `merge-base'" })
       .mockRejectedValueOnce({ stdout: 'result-tree-oid\u0000src/conflict.ts\u0000' })
-      .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
       .mockResolvedValueOnce({ stdout: '2\n' })
       .mockRejectedValueOnce({ stdout: 'result-tree-oid\u0000src/conflict.ts\u0000' })
@@ -3567,6 +3570,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
     acquireMock.mockResolvedValue(undefined)
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
+    __resetPRConflictSummaryCachesForTests()
   })
 
   it('skips PR review-thread GraphQL fetch while preserving REST comments', async () => {

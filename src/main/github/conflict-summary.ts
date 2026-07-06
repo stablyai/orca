@@ -1,5 +1,15 @@
 import type { PRConflictSummary } from '../../shared/types'
 import { gitExecFileAsync } from '../git/runner'
+import {
+  __resetPRConflictSummaryDerivationCachesForTests,
+  dedupeBaseOidResolve,
+  dedupeSummaryDerivation,
+  getConflictSummaryGitRuntimeKey,
+  readCachedSummary,
+  readFreshBaseOid,
+  storeBaseOid,
+  storeCachedSummary
+} from './conflict-summary-cache'
 
 type LocalGitExecOptions = {
   wslDistro?: string
@@ -7,8 +17,9 @@ type LocalGitExecOptions = {
 
 const mergeTreeMergeBaseUnsupportedRuntimes = new Set<string>()
 
-export function __resetPRConflictSummaryGitCapabilityCacheForTests(): void {
+export function __resetPRConflictSummaryCachesForTests(): void {
   mergeTreeMergeBaseUnsupportedRuntimes.clear()
+  __resetPRConflictSummaryDerivationCachesForTests()
 }
 
 export async function getPRConflictSummary(
@@ -18,37 +29,93 @@ export async function getPRConflictSummary(
   headRefOid: string,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRConflictSummary | undefined> {
+  const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
+  // Why: PR-refresh ticks and event-driven kicks overlap for the same PR;
+  // concurrent identical requests must share one subprocess chain.
+  const derivationKey = `${runtimeKey}|${repoPath}|${baseRefName}|${baseRefOid}|${headRefOid}`
+  return dedupeSummaryDerivation(derivationKey, () =>
+    derivePRConflictSummary(repoPath, baseRefName, baseRefOid, headRefOid, localGitOptions)
+  )
+}
+
+async function derivePRConflictSummary(
+  repoPath: string,
+  baseRefName: string,
+  baseRefOid: string,
+  headRefOid: string,
+  localGitOptions: LocalGitExecOptions
+): Promise<PRConflictSummary | undefined> {
+  // Why: the renderer only needs a read-only merge-conflict snapshot. We
+  // derive it from local git state so the PR card can show GitHub-style
+  // detail without spending additional gh API calls on every refresh. We use
+  // GitHub's head OID directly because the registered repo path may not have
+  // a matching local branch name for the PR head. For the base side, prefer a
+  // freshly-fetched remote-tracking ref so Orca matches GitHub's portal,
+  // which compares against the latest base branch tip rather than the PR's
+  // older pinned baseRefOid snapshot.
+  const latestBaseOid = await resolveLatestBaseOidThrottled(
+    repoPath,
+    baseRefName,
+    baseRefOid,
+    localGitOptions
+  )
+  // Why: the summary is a pure function of the two commit OIDs, so a key hit
+  // can skip the whole merge-base/rev-list/merge-tree subprocess chain.
+  const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
+  const summaryKey = `${runtimeKey}|${repoPath}|${baseRefName}|${headRefOid}|${latestBaseOid}`
+  const cached = readCachedSummary(summaryKey)
+  if (cached) {
+    return cached.value
+  }
+
   try {
-    // Why: the renderer only needs a read-only merge-conflict snapshot. We
-    // derive it from local git state so the PR card can show GitHub-style
-    // detail without spending additional gh API calls on every refresh. We use
-    // GitHub's head OID directly because the registered repo path may not have
-    // a matching local branch name for the PR head. For the base side, prefer a
-    // freshly-fetched remote-tracking ref so Orca matches GitHub's portal,
-    // which compares against the latest base branch tip rather than the PR's
-    // older pinned baseRefOid snapshot.
-    const latestBaseOid = await resolveLatestBaseOid(
-      repoPath,
-      baseRefName,
-      baseRefOid,
-      localGitOptions
-    )
     const mergeBase = await resolveMergeBase(repoPath, headRefOid, latestBaseOid, localGitOptions)
     const [commitsBehind, files] = await Promise.all([
       countCommits(repoPath, `${headRefOid}..${latestBaseOid}`, localGitOptions),
       loadConflictingFiles(repoPath, mergeBase, headRefOid, latestBaseOid, localGitOptions)
     ])
 
-    return {
+    const summary = {
       baseRef: baseRefName,
       baseCommit: latestBaseOid.slice(0, 7),
       commitsBehind,
       files,
       ...(files.length === 0 ? { localMergeState: 'clean' as const } : {})
     }
+    storeCachedSummary(summaryKey, summary)
+    return summary
   } catch {
+    storeCachedSummary(summaryKey, undefined)
     return undefined
   }
+}
+
+async function resolveLatestBaseOidThrottled(
+  repoPath: string,
+  baseRefName: string,
+  fallbackBaseOid: string,
+  localGitOptions: LocalGitExecOptions
+): Promise<string> {
+  const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
+  const baseKey = `${runtimeKey}|${repoPath}|${baseRefName}`
+  const cachedOid = readFreshBaseOid(baseKey)
+  if (cachedOid) {
+    return cachedOid
+  }
+  return dedupeBaseOidResolve(baseKey, async () => {
+    // Why re-check inside the dedupe slot: a sibling caller may have finished
+    // resolving between our cache read and this factory starting.
+    const freshOid = readFreshBaseOid(baseKey)
+    if (freshOid) {
+      return freshOid
+    }
+    const oid = await resolveLatestBaseOid(repoPath, baseRefName, fallbackBaseOid, localGitOptions)
+    // Why cache even the fallback OID: the fetch attempt (up to its 10s
+    // timeout) is the expensive part; offline machines especially must not
+    // retry it on every refresh tick.
+    storeBaseOid(baseKey, oid)
+    return oid
+  })
 }
 
 async function resolveLatestBaseOid(
@@ -123,7 +190,7 @@ async function loadConflictingFiles(
   baseOid: string,
   localGitOptions: LocalGitExecOptions
 ): Promise<string[]> {
-  const capabilityKey = getMergeTreeCapabilityKey(localGitOptions)
+  const capabilityKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
   const modernArgs = [
     'merge-tree',
     '--write-tree',
@@ -191,10 +258,6 @@ async function loadConflictingFilesWithLegacyMergeTree(
     }
     throw fallbackError
   }
-}
-
-function getMergeTreeCapabilityKey(localGitOptions: LocalGitExecOptions): string {
-  return localGitOptions.wslDistro ? `wsl:${localGitOptions.wslDistro}` : 'local:host'
 }
 
 function parseMergeTreeNameOnlyOutput(stdout: string): string[] {
