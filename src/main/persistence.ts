@@ -2185,8 +2185,12 @@ function normalizeClaudeLivePtySessionIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
+  // Why: scan newest-first so the cap keeps the most recent ids, matching
+  // addClaudeLivePtySessionId's eviction policy while bounding the work done
+  // on an oversized/corrupt list.
   const ids: string[] = []
-  for (const entry of value) {
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    const entry = value[index]
     if (typeof entry !== 'string' || entry.length === 0 || entry.length > 512) {
       continue
     }
@@ -2197,7 +2201,7 @@ function normalizeClaudeLivePtySessionIds(value: unknown): string[] {
       break
     }
   }
-  return ids
+  return ids.toReversed()
 }
 
 function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {

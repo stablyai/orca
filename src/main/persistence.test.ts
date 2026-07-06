@@ -8482,6 +8482,20 @@ describe('Store', () => {
       expect(store.getClaudeLivePtySessionIds()).toEqual(['valid-id'])
     })
 
+    it('keeps the newest ids when an oversized persisted list is loaded', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        claudeLivePtySessionIds: Array.from({ length: 205 }, (_, index) => `claude-${index}`)
+      })
+
+      const store = await createStore()
+
+      const ids = store.getClaudeLivePtySessionIds()
+      expect(ids).toHaveLength(200)
+      expect(ids[0]).toBe('claude-5')
+      expect(ids[199]).toBe('claude-204')
+    })
+
     it('caps the persisted id list', async () => {
       const store = await createStore()
       for (let index = 0; index < 205; index += 1) {
