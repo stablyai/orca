@@ -28,10 +28,6 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['EPHEMERAL_VMS_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
-    'src/renderer/src/components/settings/CliAgentSkillSetup.tsx',
-    ['ORCA_CLI_SKILL_UPDATE_COMMAND', 'installedCommand={cliSkillUpdateCommand}']
-  ],
-  [
     'src/renderer/src/components/settings/CliSection.tsx',
     ['ORCA_CLI_SKILL_UPDATE_COMMAND', 'installedCommand={cliSkillUpdateCommand}']
   ],
