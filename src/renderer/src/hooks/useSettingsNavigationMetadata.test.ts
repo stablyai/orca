@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/types'
@@ -13,18 +12,21 @@ const repo = {
   addedAt: 0
 } satisfies Repo
 
-function ids(args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean } = {}): string[] {
+function ids(
+  args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean; isDev?: boolean } = {}
+): string[] {
   return buildSettingsNavigationMetadata({
     isMac: args.isMac ?? false,
     isWindows: args.isWindows ?? false,
     isWebClient: args.isWebClient ?? false,
+    isDev: args.isDev ?? false,
     repos: [repo]
   }).map((section) => section.id)
 }
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 9)).toEqual([
+    expect(ids().slice(0, 10)).toEqual([
       'agents',
       'accounts',
       'orchestration',
@@ -33,8 +35,20 @@ describe('settings navigation metadata', () => {
       'setup-guide',
       'general',
       'integrations',
+      'mobile',
       'git'
     ])
+  })
+
+  it('places Mobile under Set Up instead of its own sidebar group', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
@@ -72,6 +86,23 @@ describe('settings navigation metadata', () => {
 
     expect(sections.find((section) => section.id === 'computer-use')?.badge).toBeUndefined()
     expect(sections.find((section) => section.id === 'voice')?.badge).toBeUndefined()
+  })
+
+  it('places per-workspace environments under Experimental instead of as a beta sidebar item', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const experimental = sections.find((section) => section.id === 'experimental')
+    const entry = experimental?.searchEntries.find(
+      (searchEntry) => searchEntry.title === 'Per-Workspace Environments'
+    )
+
+    expect(sections.map((section) => section.id)).not.toContain('ephemeral-vms')
+    expect(experimental?.group).toBe('experimental')
+    expect(entry?.targetSectionId).toBe('ephemeral-vms')
   })
 
   it('omits Windows project runtime search entries when the active host is unsupported', () => {
@@ -137,13 +168,24 @@ describe('settings navigation metadata', () => {
     expect(desktopIds.indexOf('privacy')).toBeLessThan(desktopIds.indexOf('advanced'))
   })
 
+  // Note: this exercises the isDev parameter and isWebClient branches only.
+  // Production safety rests on the hard `import.meta.env.DEV` term in the
+  // builder, which is compile-time-inlined per build and cannot be flipped from
+  // a test (vitest always runs with DEV=true) — don't mistake this for full
+  // prod-gate coverage. The bundle exclusion is what guarantees prod safety.
+  it('shows Dev tools only in desktop development metadata', () => {
+    expect(ids()).not.toContain('dev')
+    expect(ids({ isDev: true })).toContain('dev')
+    expect(ids({ isDev: true, isWebClient: true })).not.toContain('dev')
+  })
+
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')
   })
 
   it('does not import Settings page or pane UI modules from the metadata hook', () => {
-    const testDir = dirname(fileURLToPath(import.meta.url))
+    const testDir = import.meta.dirname
     const hookSource = readFileSync(resolve(testDir, 'useSettingsNavigationMetadata.ts'), 'utf8')
     const importLines = hookSource
       .split('\n')
@@ -156,7 +198,7 @@ describe('settings navigation metadata', () => {
   })
 
   it('does not import Settings page or pane UI modules from the quick action registry', () => {
-    const testDir = dirname(fileURLToPath(import.meta.url))
+    const testDir = import.meta.dirname
     const registrySource = readFileSync(
       resolve(testDir, '../components/cmd-j/quick-actions.ts'),
       'utf8'

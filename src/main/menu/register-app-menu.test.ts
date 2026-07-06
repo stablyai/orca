@@ -139,7 +139,7 @@ describe('registerAppMenu', () => {
     expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 102 })
   })
 
-  it('includes prereleases when Check for Updates is clicked with shift held', () => {
+  it('routes Check for Updates modifier clicks to prerelease and perf checks', () => {
     const options = buildMenuOptions()
     registerAppMenu(options)
 
@@ -152,19 +152,42 @@ describe('registerAppMenu', () => {
     )
 
     item?.click?.({} as never, undefined as never, { shiftKey: true } as Electron.KeyboardEvent)
+    item?.click?.({} as never, undefined as never, {} as Electron.KeyboardEvent)
     item?.click?.(
       {} as never,
       undefined as never,
-      { metaKey: true, shiftKey: true } as Electron.KeyboardEvent
+      {
+        shiftKey: true,
+        ...(isMac ? { metaKey: true } : { ctrlKey: true })
+      } as Electron.KeyboardEvent
     )
-    item?.click?.({} as never, undefined as never, {} as Electron.KeyboardEvent)
-    item?.click?.({} as never, undefined as never, { metaKey: true } as Electron.KeyboardEvent)
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      (isMac ? { metaKey: true } : { ctrlKey: true }) as Electron.KeyboardEvent
+    )
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      (isMac ? { ctrlKey: true } : { metaKey: true }) as Electron.KeyboardEvent
+    )
+    item?.click?.(
+      {} as never,
+      undefined as never,
+      {
+        triggeredByAccelerator: true,
+        shiftKey: true,
+        ...(isMac ? { metaKey: true } : { ctrlKey: true })
+      } as Electron.KeyboardEvent
+    )
 
     expect(options.onCheckForUpdates.mock.calls).toEqual([
-      [{ includePrerelease: true }],
-      [{ includePrerelease: true }],
-      [{ includePrerelease: false }],
-      [{ includePrerelease: false }]
+      [{ includePrerelease: true, includePerfPrerelease: false }],
+      [{ includePrerelease: false, includePerfPrerelease: false }],
+      [{ includePrerelease: true, includePerfPrerelease: true }],
+      [{ includePrerelease: false, includePerfPrerelease: true }],
+      [{ includePrerelease: false, includePerfPrerelease: false }],
+      [{ includePrerelease: false, includePerfPrerelease: false }]
     ])
   })
 
@@ -179,17 +202,21 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
-  it('keeps Edit > Paste on the native Electron paste role in this split', () => {
+  it('routes Edit > Paste through Orca coordinated paste ownership', () => {
     const send = vi.fn()
     getFocusedWindowMock.mockReturnValue({ webContents: { send } })
     registerAppMenu(buildMenuOptions())
 
     const editSubmenu = getSubmenu(getTemplate(), 'Edit')
-    const pasteItem = editSubmenu.find((item) => item.role === 'paste')
+    const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
 
     expect(pasteItem).toBeDefined()
-    expect(pasteItem?.click).toBeUndefined()
-    expect(send).not.toHaveBeenCalled()
+    expect(pasteItem?.role).toBeUndefined()
+    expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
+
+    pasteItem?.click?.({} as never, {} as never, {} as never)
+
+    expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
   })
 
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {

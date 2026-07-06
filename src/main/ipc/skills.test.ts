@@ -83,6 +83,14 @@ describe('registerSkillsHandlers', () => {
     expect(getWslHomeMock).not.toHaveBeenCalled()
   })
 
+  it('scopes host skill discovery to the active workspace cwd when provided', async () => {
+    const handler = getDiscoverHandler()
+
+    await handler(null, { cwd: '/repo/worktree' })
+
+    expect(discoverSkillsMock).toHaveBeenCalledWith({ repos: [], cwd: '/repo/worktree' })
+  })
+
   it('uses the selected project WSL distro for skill discovery', async () => {
     const handler = getDiscoverHandler()
 

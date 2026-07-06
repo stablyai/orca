@@ -24,7 +24,8 @@ const {
   clipboardWriteBufferMock,
   nativeImageCreateFromBufferMock,
   randomUUIDMock,
-  getSshFilesystemProviderMock
+  getSshFilesystemProviderMock,
+  callRuntimeEnvironmentMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
@@ -54,7 +55,8 @@ const {
   clipboardWriteBufferMock: vi.fn(),
   nativeImageCreateFromBufferMock: vi.fn(),
   randomUUIDMock: vi.fn(() => '00000000-0000-4000-8000-000000000000'),
-  getSshFilesystemProviderMock: vi.fn()
+  getSshFilesystemProviderMock: vi.fn(),
+  callRuntimeEnvironmentMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -114,6 +116,10 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
     }
     return provider
   }
+}))
+
+vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+  callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 
 import {
@@ -191,6 +197,7 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReset()
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     getSshFilesystemProviderMock.mockReset()
+    callRuntimeEnvironmentMock.mockReset()
     setTrustedClipboardRendererWebContentsId(null)
   })
 
@@ -536,6 +543,129 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toBe(expectedPath)
     expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('saves clipboard images through the selected remote runtime host', async () => {
+    const png = Buffer.alloc(512 * 1024)
+    const contentBase64 = png.toString('base64')
+    clipboardReadImageMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
+      isEmpty: () => false,
+      toPNG: () => png
+    })
+    callRuntimeEnvironmentMock.mockImplementation(async (_userDataPath, _runtimeId, method) => {
+      if (method === 'clipboard.startImageUpload') {
+        return { ok: true, result: { uploadId: 'upload-1' }, _meta: { runtimeId: 'runtime-1' } }
+      }
+      if (method === 'clipboard.appendImageUploadChunk') {
+        return {
+          ok: true,
+          result: { receivedBase64Length: contentBase64.length },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      if (method === 'clipboard.commitImageUpload') {
+        return {
+          ok: true,
+          result: '/tmp/orca-paste-remote.png',
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      throw new Error(`unexpected method: ${method}`)
+    })
+
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
+        runtimeEnvironmentId: 'remote-host-1'
+      })
+    ).resolves.toBe('/tmp/orca-paste-remote.png')
+    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
+      1,
+      '/tmp',
+      'remote-host-1',
+      'clipboard.startImageUpload',
+      { expectedBase64Length: contentBase64.length, connectionId: null },
+      30_000
+    )
+    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
+      2,
+      '/tmp',
+      'remote-host-1',
+      'clipboard.appendImageUploadChunk',
+      {
+        uploadId: 'upload-1',
+        offset: 0,
+        contentBase64: contentBase64.slice(0, 512 * 1024)
+      },
+      30_000
+    )
+    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
+      3,
+      '/tmp',
+      'remote-host-1',
+      'clipboard.appendImageUploadChunk',
+      {
+        uploadId: 'upload-1',
+        offset: 512 * 1024,
+        contentBase64: contentBase64.slice(512 * 1024, 1024 * 1024)
+      },
+      30_000
+    )
+    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
+      4,
+      '/tmp',
+      'remote-host-1',
+      'clipboard.commitImageUpload',
+      { uploadId: 'upload-1' },
+      30_000
+    )
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
+    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('aborts remote runtime clipboard image uploads when a chunk fails', async () => {
+    const png = Buffer.alloc(512 * 1024)
+    clipboardReadImageMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
+      isEmpty: () => false,
+      toPNG: () => png
+    })
+    callRuntimeEnvironmentMock.mockImplementation(async (_userDataPath, _runtimeId, method) => {
+      if (method === 'clipboard.startImageUpload') {
+        return { ok: true, result: { uploadId: 'upload-1' }, _meta: { runtimeId: 'runtime-1' } }
+      }
+      if (method === 'clipboard.appendImageUploadChunk') {
+        return {
+          ok: false,
+          error: { code: 'runtime_error', message: 'append failed' },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      if (method === 'clipboard.abortImageUpload') {
+        return { ok: true, result: { aborted: true }, _meta: { runtimeId: 'runtime-1' } }
+      }
+      throw new Error(`unexpected method: ${method}`)
+    })
+
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
+        runtimeEnvironmentId: 'remote-host-1'
+      })
+    ).rejects.toThrow('append failed')
+    expect(callRuntimeEnvironmentMock).toHaveBeenLastCalledWith(
+      '/tmp',
+      'remote-host-1',
+      'clipboard.abortImageUpload',
+      { uploadId: 'upload-1' },
+      30_000
+    )
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 
   it('uploads clipboard images to the SSH host when a connection is provided', async () => {

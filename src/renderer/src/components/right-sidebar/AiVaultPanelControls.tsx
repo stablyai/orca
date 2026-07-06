@@ -7,7 +7,8 @@ import {
   FolderOpen,
   ListFilter,
   LoaderCircle,
-  PanelsTopLeft
+  PanelsTopLeft,
+  Server
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,6 +32,12 @@ import {
   type AiVaultScope,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  getExecutionHostLabel,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host'
 import { agentLabel, type AiVaultSessionGroup } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
 
@@ -76,7 +83,7 @@ export function SessionLoadingState(): React.JSX.Element {
   return (
     <div className="px-3 py-3" aria-busy="true">
       <div className="mb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <LoaderCircle className="size-3.5 animate-spin" />
+        <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
         <span>
           {translate(
             'auto.components.right.sidebar.AiVaultPanelControls.scanningSessions',
@@ -172,6 +179,59 @@ export function VaultScopeSwitch({
         {allLabel}
       </ToggleGroupItem>
     </ToggleGroup>
+  )
+}
+
+export function VaultHostScopeMenu({
+  executionHostScope,
+  activeSshExecutionHostScope,
+  onExecutionHostScopeChange
+}: {
+  executionHostScope: ExecutionHostScope
+  activeSshExecutionHostScope: ExecutionHostScope | null
+  onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
+}): React.JSX.Element {
+  const hostOptions = [
+    LOCAL_EXECUTION_HOST_ID,
+    ...(activeSshExecutionHostScope ? [activeSshExecutionHostScope] : []),
+    ALL_EXECUTION_HOSTS_SCOPE
+  ] as const
+  const label = getExecutionHostLabel(executionHostScope)
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 max-w-24 shrink-0 gap-1 px-1.5 text-[11px] font-medium text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground @max-[340px]/ai-vault:w-6 @max-[340px]/ai-vault:px-0"
+          aria-label={translate(
+            'auto.components.right.sidebar.AiVaultPanelControls.hostScopeAriaLabel',
+            'Session History host: {{value0}}',
+            { value0: label }
+          )}
+        >
+          <Server className="size-3 shrink-0" />
+          <span className="min-w-0 truncate @max-[340px]/ai-vault:hidden">{label}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={6} className="w-44">
+        <DropdownMenuLabel>
+          {translate('auto.components.right.sidebar.AiVaultPanelControls.host', 'Host')}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={executionHostScope}
+          onValueChange={(value) => onExecutionHostScopeChange(value as ExecutionHostScope)}
+        >
+          {hostOptions.map((scope) => (
+            <DropdownMenuRadioItem key={scope} value={scope}>
+              {getExecutionHostLabel(scope)}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

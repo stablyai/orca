@@ -1,112 +1,122 @@
-/**
- * @vitest-environment happy-dom
- */
-import { act, useRef, useState } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+// @vitest-environment happy-dom
+
+import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { TabDragProvider } from '../tab-group/tab-drag-context'
+import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
-function Probe({ onActivate }: { onActivate: () => void }): React.JSX.Element {
-  const [dragActive, setDragActive] = useState(false)
-  const dragActiveRef = useRef(false)
-  dragActiveRef.current = dragActive
-
-  return (
-    <TabDragProvider isTabDragActive={dragActive} isTabDragActiveRef={dragActiveRef}>
-      <ProbeButton onActivate={onActivate} onDragActiveChange={setDragActive} />
-    </TabDragProvider>
-  )
+function pointerDownEvent(clientX: number, clientY: number, button = 0): React.PointerEvent {
+  return { button, clientX, clientY } as unknown as React.PointerEvent
 }
 
-function ProbeButton({
-  onActivate,
-  onDragActiveChange
-}: {
-  onActivate: () => void
-  onDragActiveChange: (active: boolean) => void
-}): React.JSX.Element {
-  const { isPressed, onPointerDown } = useTabStripPointerActivation({ onActivate })
-  return (
-    <>
-      <button
-        type="button"
-        data-pressed={isPressed ? 'true' : 'false'}
-        onPointerDown={(event) => onPointerDown(event)}
-      >
-        Tab
-      </button>
-      <button type="button" onClick={() => onDragActiveChange(true)}>
-        Start drag
-      </button>
-    </>
-  )
-}
-
-let root: Root | null = null
-let container: HTMLDivElement | null = null
-
-function renderProbe(onActivate = vi.fn()): {
-  onActivate: ReturnType<typeof vi.fn>
-  tabButton: HTMLButtonElement
-  dragButton: HTMLButtonElement
-} {
-  container = document.createElement('div')
-  document.body.appendChild(container)
-  root = createRoot(container)
+function firePointer(type: string, clientX: number, clientY: number): void {
   act(() => {
-    root?.render(<Probe onActivate={onActivate} />)
+    window.dispatchEvent(new PointerEvent(type, { clientX, clientY, bubbles: true }))
   })
-  const buttons = container.querySelectorAll('button')
-  return {
-    onActivate,
-    tabButton: buttons[0] as HTMLButtonElement,
-    dragButton: buttons[1] as HTMLButtonElement
-  }
-}
-
-function dispatchPointer(target: EventTarget, type: string): void {
-  target.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }))
 }
 
 afterEach(() => {
-  act(() => root?.unmount())
-  container?.remove()
-  root = null
-  container = null
+  vi.clearAllMocks()
 })
 
 describe('useTabStripPointerActivation', () => {
-  it('defers activation until pointerup', () => {
-    const { onActivate, tabButton } = renderProbe()
+  it('activates on a release that never crossed the drag threshold (a click)', () => {
+    const onActivate = vi.fn()
+    const dragListener = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
-    act(() => dispatchPointer(tabButton, 'pointerdown'))
-    expect(tabButton.dataset.pressed).toBe('true')
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10), dragListener))
+    // Why: the dnd-kit gesture must start on pointerdown even though activation
+    // is deferred.
+    expect(dragListener).toHaveBeenCalledTimes(1)
     expect(onActivate).not.toHaveBeenCalled()
 
-    act(() => dispatchPointer(window, 'pointerup'))
-    expect(tabButton.dataset.pressed).toBe('false')
+    // Release within the threshold -> click -> activate.
+    firePointer('pointerup', 12, 11)
     expect(onActivate).toHaveBeenCalledTimes(1)
   })
 
-  it('cancels pending activation on pointercancel', () => {
-    const { onActivate, tabButton } = renderProbe()
+  it('suppresses activation when the pointer travels past the drag threshold', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
-    act(() => dispatchPointer(tabButton, 'pointerdown'))
-    act(() => dispatchPointer(window, 'pointercancel'))
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    firePointer('pointerup', 10 + TAB_DRAG_ACTIVATION_DISTANCE_PX + 5, 10)
 
-    expect(tabButton.dataset.pressed).toBe('false')
     expect(onActivate).not.toHaveBeenCalled()
   })
 
-  it('clears pending activation when a drag starts', () => {
-    const { onActivate, tabButton, dragButton } = renderProbe()
+  it('activates a stationary click after a single stale over-threshold move', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
-    act(() => dispatchPointer(tabButton, 'pointerdown'))
-    act(() => dragButton.click())
-    act(() => dispatchPointer(window, 'pointerup'))
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    // Why: packaged Chromium can deliver one stale/coalesced move immediately
+    // after pointerdown; the release position is the click/drag authority.
+    firePointer('pointermove', 200, 200)
+    firePointer('pointerup', 11, 11)
 
-    expect(tabButton.dataset.pressed).toBe('false')
+    expect(onActivate).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not activate when the press is cancelled', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    firePointer('pointercancel', 10, 10)
+    firePointer('pointerup', 10, 10)
+
+    expect(onActivate).not.toHaveBeenCalled()
+  })
+
+  it('ignores non-left buttons and disabled presses', () => {
+    const onActivate = vi.fn()
+    const dragListener = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ disabled }: { disabled: boolean }) =>
+        useTabStripPointerActivation({ onActivate, disabled }),
+      { initialProps: { disabled: false } }
+    )
+
+    // Right-click: ignored.
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10, 2), dragListener))
+    firePointer('pointerup', 10, 10)
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(dragListener).not.toHaveBeenCalled()
+
+    // Disabled: ignored.
+    rerender({ disabled: true })
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10), dragListener))
+    firePointer('pointerup', 10, 10)
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(dragListener).not.toHaveBeenCalled()
+  })
+
+  it('activates a click that lands after a prior drag gesture (regression #6395)', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    // First gesture: a drag (reorder). No activation.
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    firePointer('pointermove', 300, 10)
+    firePointer('pointerup', 300, 10)
+    expect(onActivate).not.toHaveBeenCalled()
+
+    // Second gesture: a plain click. Must activate.
+    act(() => result.current.onPointerDown(pointerDownEvent(400, 10)))
+    firePointer('pointerup', 400, 10)
+    expect(onActivate).toHaveBeenCalledTimes(1)
+  })
+
+  it('flushes a pending press on window focus', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    act(() => window.dispatchEvent(new Event('focus')))
+    firePointer('pointerup', 10, 10)
+
     expect(onActivate).not.toHaveBeenCalled()
   })
 })

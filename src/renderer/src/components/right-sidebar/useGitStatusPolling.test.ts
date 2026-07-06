@@ -46,6 +46,7 @@ async function usePollingOnce(
     sshStatus?: string
     enabled?: boolean
     expectStatusCall?: boolean
+    stateOverrides?: Partial<PollState>
   } = {}
 ): Promise<{ state: PollState; gitStatus: ReturnType<typeof vi.fn> }> {
   vi.resetModules()
@@ -67,6 +68,7 @@ async function usePollingOnce(
     rightSidebarTab: 'source-control',
     openFiles: []
   }
+  Object.assign(state, options.stateOverrides)
   const mockedRepo = { ...repo, connectionId: options.connectionId ?? null }
   const gitStatus = vi.fn().mockResolvedValue(status)
 
@@ -112,6 +114,9 @@ async function usePollingOnce(
         watchWorktree: vi.fn().mockResolvedValue(undefined),
         unwatchWorktree: vi.fn().mockResolvedValue(undefined),
         onFsChanged: vi.fn(() => vi.fn())
+      },
+      worktrees: {
+        onChanged: vi.fn(() => vi.fn())
       }
     },
     addEventListener: vi.fn(),
@@ -226,6 +231,27 @@ describe('useGitStatusPolling', () => {
 
     expect(gitStatus).not.toHaveBeenCalled()
     expect(state.setGitStatus).not.toHaveBeenCalled()
+    expect(globalThis.setInterval).not.toHaveBeenCalled()
+  })
+
+  it('uses a slower git status cadence when only terminal branch detection needs polling', async () => {
+    const { gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      {
+        stateOverrides: {
+          rightSidebarOpen: false,
+          openFiles: []
+        }
+      }
+    )
+
+    expect(gitStatus).toHaveBeenCalledTimes(1)
+    expect(globalThis.setInterval).toHaveBeenCalledWith(expect.any(Function), 30_000)
   })
 
   it('does not install the visible git status poll while disabled', async () => {
@@ -339,6 +365,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -376,9 +405,9 @@ describe('useGitStatusPolling', () => {
       events: [{ kind: 'update', absolutePath: '/other/c.ts' }]
     })
 
-    await vi.advanceTimersByTimeAsync(124)
+    await vi.advanceTimersByTimeAsync(125)
     expect(gitStatus).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
     expect(window.api.fs.watchWorktree).not.toHaveBeenCalled()
     expect(window.api.fs.unwatchWorktree).not.toHaveBeenCalled()
@@ -448,6 +477,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -569,6 +601,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn((type: string, listener: EventListener) => {
@@ -612,6 +647,8 @@ describe('useGitStatusPolling', () => {
     const callsBeforeDebounceFires = gitStatus.mock.calls.length
 
     await vi.advanceTimersByTimeAsync(65)
+    expect(gitStatus).toHaveBeenCalledTimes(callsBeforeDebounceFires)
+    await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(callsBeforeDebounceFires + 1))
 
     vi.useRealTimers()
@@ -619,6 +656,7 @@ describe('useGitStatusPolling', () => {
 
   it('does not overlap slow visible git status polls and runs one trailing refresh', async () => {
     vi.resetModules()
+    vi.useFakeTimers()
     let intervalCallback: (() => void) | null = null
     let resolveFirst!: (value: GitStatusResult) => void
     const firstStatus = new Promise<GitStatusResult>((resolve) => {
@@ -681,6 +719,9 @@ describe('useGitStatusPolling', () => {
           watchWorktree: vi.fn().mockResolvedValue(undefined),
           unwatchWorktree: vi.fn().mockResolvedValue(undefined),
           onFsChanged: vi.fn(() => vi.fn())
+        },
+        worktrees: {
+          onChanged: vi.fn(() => vi.fn())
         }
       },
       addEventListener: vi.fn(),
@@ -712,7 +753,10 @@ describe('useGitStatusPolling', () => {
     expect(gitStatus).toHaveBeenCalledTimes(1)
 
     resolveFirst(status)
+    await vi.waitFor(() => expect(state.setGitStatus).toHaveBeenCalledTimes(1))
+    await vi.advanceTimersByTimeAsync(3000)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(state.setGitStatus).toHaveBeenCalledTimes(2))
+    vi.useRealTimers()
   })
 })

@@ -15,6 +15,7 @@ import type {
 } from '../../shared/types'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
+import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
@@ -45,6 +46,13 @@ type ResolvedCodexIdentity = {
   providerAccountId: string | null
   workspaceLabel: string | null
   workspaceAccountId: string | null
+}
+
+type CanonicalCodexConfig = {
+  contents: string
+  /** Home the config was read from, in the path style Codex sees at runtime
+   *  (Linux-side for WSL); relative path-valued settings resolve against it. */
+  sourceHomePath: string
 }
 
 export type CodexAccountAddTarget = {
@@ -452,25 +460,31 @@ export class CodexAccountService {
     // Why: Orca account switching is meant to swap Codex credentials and quota
     // identity, not silently fork the user's sandbox/config defaults. Syncing
     // one canonical config into every managed home keeps auth isolated per
-    // account while preserving consistent Codex behavior.
-    this.writeManagedConfig(trustedManagedHomePath, canonicalConfig)
+    // account while preserving consistent Codex behavior. Managed homes are
+    // real CODEX_HOMEs for `codex login`, so relative path-valued settings
+    // must keep resolving against the home the config was read from.
+    this.writeManagedConfig(
+      trustedManagedHomePath,
+      rewriteRelativePathConfigValues(canonicalConfig.contents, canonicalConfig.sourceHomePath)
+    )
   }
 
-  private readCanonicalConfig(): string | null {
-    const primaryConfigPath = join(homedir(), '.codex', 'config.toml')
+  private readCanonicalConfig(): CanonicalCodexConfig | null {
+    const sourceHomePath = join(homedir(), '.codex')
+    const primaryConfigPath = join(sourceHomePath, 'config.toml')
     if (!existsSync(primaryConfigPath)) {
       return null
     }
 
     try {
-      return readFileSync(primaryConfigPath, 'utf-8')
+      return { contents: readFileSync(primaryConfigPath, 'utf-8'), sourceHomePath }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
       return null
     }
   }
 
-  private readCanonicalConfigForManagedHome(managedHomePath: string): string | null {
+  private readCanonicalConfigForManagedHome(managedHomePath: string): CanonicalCodexConfig | null {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (!wslInfo) {
       return this.readCanonicalConfig()
@@ -488,7 +502,9 @@ export class CodexAccountService {
     }
 
     try {
-      return readFileSync(configPath, 'utf-8')
+      // Why: the config is read over UNC but consumed by Codex inside WSL, so
+      // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
+      return { contents: readFileSync(configPath, 'utf-8'), sourceHomePath: `${wslHome}/.codex` }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
       return null

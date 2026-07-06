@@ -1,5 +1,5 @@
 import React from 'react'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import type { GitBranchCompareSummary, GitUpstreamStatus } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -60,16 +60,40 @@ function ContextStat({
   )
 }
 
+function ManualReviewLinkButton({
+  url
+}: {
+  url: string | null | undefined
+}): React.JSX.Element | null {
+  if (!url) {
+    return null
+  }
+  return (
+    <SourceControlHeaderIconButton
+      icon={ExternalLink}
+      label={translate(
+        'auto.components.right.sidebar.SourceControl.4b4a7de138',
+        'Open review page in browser'
+      )}
+      onClick={() => {
+        void window.api.shell.openUrl(url)
+      }}
+    />
+  )
+}
+
 export function SourceControlBranchContextRow({
   summary,
   compareBaseRef,
   upstreamStatus,
+  manualReviewUrl,
   onChangeBaseRef,
   onRetry
 }: {
   summary: GitBranchCompareSummary | null
   compareBaseRef: string | null
   upstreamStatus?: GitUpstreamStatus
+  manualReviewUrl?: string | null
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element | null {
@@ -97,6 +121,7 @@ export function SourceControlBranchContextRow({
             title={changeBaseTitle}
           />
         </span>
+        <ManualReviewLinkButton url={manualReviewUrl} />
       </div>
     )
   }
@@ -118,6 +143,7 @@ export function SourceControlBranchContextRow({
               'Branch compare unavailable'
             )}
         </span>
+        <ManualReviewLinkButton url={manualReviewUrl} />
         <SourceControlHeaderIconButton
           icon={RefreshCw}
           label={translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
@@ -154,6 +180,7 @@ export function SourceControlBranchContextRow({
           ))}
         </span>
       ) : null}
+      <ManualReviewLinkButton url={manualReviewUrl} />
     </div>
   )
 }

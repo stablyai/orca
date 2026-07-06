@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
@@ -22,7 +23,7 @@ import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
-import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
   type RequestActiveTerminalPaneSplitDetail
@@ -30,6 +31,7 @@ import {
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import {
+  copyAgentSessionContextFromPane,
   prepareAgentSessionForkFromPane,
   type PreparedAgentSessionFork
 } from './terminal-agent-session-fork'
@@ -65,6 +67,7 @@ type UseTerminalPaneContextMenuDeps = {
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
+  onClearPaneTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
   forceBracketedMultilineTextPaste: boolean
@@ -90,9 +93,12 @@ type TerminalMenuState = {
   onClosePane: () => void
   onClearScreen: () => void
   onForkAgentSession: () => Promise<void>
+  onCopyAgentSessionContext: () => Promise<void>
   onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  onClearPaneTitle: () => void
+  runForPane: <Result>(paneId: number, action: () => Result) => Result
 }
 
 export function useTerminalPaneContextMenu({
@@ -108,6 +114,7 @@ export function useTerminalPaneContextMenu({
   onRequestClosePane,
   onClearPaneScrollback,
   onSetTitle,
+  onClearPaneTitle,
   onPasteError,
   onAgentSessionForkReady,
   forceBracketedMultilineTextPaste,
@@ -286,10 +293,15 @@ export function useTerminalPaneContextMenu({
       return
     }
     const connectionId = getConnectionId(worktreeId) ?? null
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+      useAppStore.getState(),
+      worktreeId
+    )
     const result = await pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
+      runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,
       pasteText: (text, options) => executeMenuPasteText(pane, source, text, options),
       onTextPasteError: () =>
@@ -388,6 +400,17 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  // Why: the captured session transcript is often wanted on its own — to paste
+  // into another tool — so copy the bounded transcript directly, without the
+  // fork prompt's framing or the fork dialog detour (issue #5020).
+  const onCopyAgentSessionContext = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    await copyAgentSessionContextFromPane(pane)
+  }
+
   const onQuickCommand = (command: TerminalQuickCommand): void => {
     if (isTerminalAgentQuickCommand(command)) {
       runQuickCommandInNewTab({ command, worktreeId, groupId })
@@ -413,10 +436,29 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  /** Routes title edits through the resolved menu pane instead of active pane. */
   const handleSetTitle = (): void => {
     const pane = resolveMenuPane()
     if (pane) {
       onSetTitle(pane.id)
+    }
+  }
+
+  /** Clears the title for the pane that opened the context menu. */
+  const handleClearPaneTitle = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      onClearPaneTitle(pane.id)
+    }
+  }
+
+  const runForPane = <Result>(paneId: number, action: () => Result): Result => {
+    const previousPaneId = contextPaneIdRef.current
+    contextPaneIdRef.current = paneId
+    try {
+      return action()
+    } finally {
+      contextPaneIdRef.current = previousPaneId
     }
   }
 
@@ -514,9 +556,12 @@ export function useTerminalPaneContextMenu({
     onClosePane,
     onClearScreen,
     onForkAgentSession,
+    onCopyAgentSessionContext,
     onQuickCommand,
     onToggleExpand,
-    onSetTitle: handleSetTitle
+    onSetTitle: handleSetTitle,
+    onClearPaneTitle: handleClearPaneTitle,
+    runForPane
   }
 }
 

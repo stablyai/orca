@@ -16,7 +16,9 @@ import {
   resolveWorkspaceSpaceTreemapZoomWorktreeId,
   sortWorkspaceSpaceRows
 } from './workspace-space-presentation'
+import { getWorkspaceDecisionDetails } from './WorkspaceSpaceManagerPanel'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { Repo, Worktree } from '../../../../shared/types'
 
 function row(overrides: Partial<WorkspaceSpaceWorktree>): WorkspaceSpaceWorktree {
   return {
@@ -70,6 +72,69 @@ function activeAgent(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntr
     stateStartedAt: 1_000,
     paneKey: 'tab-1:00000000-0000-4000-8000-000000000001',
     stateHistory: [],
+    ...overrides
+  }
+}
+
+function repo(overrides: Partial<Repo> = {}): Repo {
+  return {
+    id: 'repo',
+    path: '/repo',
+    displayName: 'Repo',
+    badgeColor: '#999999',
+    addedAt: 1,
+    ...overrides
+  }
+}
+
+function worktreeRecord(overrides: Partial<Worktree> = {}): Worktree {
+  return {
+    id: 'wt',
+    repoId: 'repo',
+    path: '/workspace',
+    displayName: 'workspace',
+    branch: 'refs/heads/feature/local',
+    head: 'abc123',
+    isBare: false,
+    isMainWorktree: false,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1,
+    ...overrides
+  }
+}
+
+function decisionInputs(
+  overrides: Partial<Parameters<typeof getWorkspaceDecisionDetails>[1]> = {}
+): Parameters<typeof getWorkspaceDecisionDetails>[1] {
+  const defaultRepo = repo()
+  const defaultWorktree = worktreeRecord()
+  return {
+    repoMap: new Map([[defaultRepo.id, defaultRepo]]),
+    worktreeMap: new Map([[defaultWorktree.id, defaultWorktree]]),
+    tabsByWorktree: {},
+    ptyIdsByTabId: {},
+    agentStatusByPaneKey: {},
+    migrationUnsupportedByPtyId: {},
+    runtimePaneTitlesByTabId: {},
+    retainedAgentsByPaneKey: {},
+    openFiles: [],
+    editorDrafts: {},
+    browserTabsByWorktree: {},
+    gitStatusByWorktree: {},
+    remoteStatusesByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    settings: null,
+    activeWorktreeId: null,
+    now: 1_000,
     ...overrides
   }
 }
@@ -236,6 +301,37 @@ describe('workspace space presentation helpers', () => {
         now: 60 * 60 * 1_000
       })
     ).toBe(0)
+  })
+
+  it('reads review and issue details from local owner cache while a runtime is focused', () => {
+    const details = getWorkspaceDecisionDetails(
+      row({ branch: 'refs/heads/feature/local' }),
+      decisionInputs({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        hostedReviewCache: {
+          'local::repo::feature/local': {
+            data: { number: 12, state: 'open', status: 'success', title: 'Local owner PR' }
+          },
+          'runtime:env-1::repo::feature/local': {
+            data: { number: 99, state: 'open', status: 'failure', title: 'Runtime fallback PR' }
+          }
+        },
+        issueCache: {
+          'repo::123': {
+            data: { number: 123, title: 'Local owner issue', state: 'open' }
+          },
+          'runtime:env-1::repo::123': {
+            data: { number: 123, title: 'Runtime fallback issue', state: 'closed' }
+          }
+        },
+        worktreeMap: new Map([
+          ['wt', worktreeRecord({ branch: 'refs/heads/feature/local', linkedIssue: 123 })]
+        ])
+      })
+    )
+
+    expect(details.reviewLabel).toBe('PR #12 Open, success')
+    expect(details.issueLabel).toBe('#123 open: Local owner issue')
   })
 
   it('counts migration-unsupported agent entries by worktree id', () => {

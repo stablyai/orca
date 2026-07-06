@@ -35,6 +35,8 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slic
 import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import { translate } from '@/i18n/i18n'
 import { getExecutionHostLabel, getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 
 export { branchName }
 
@@ -81,6 +83,18 @@ export type ImportedWorktreesCardRow = {
   placement: 'repo-group' | 'pinned-fallback'
 }
 
+export type NewExternalWorktreesInboxCandidate = {
+  repo: Repo
+  inboxWorktrees: DetectedWorktree[]
+}
+
+export type NewExternalWorktreesInboxRow = {
+  type: 'new-external-worktrees-inbox'
+  key: string
+  repo: Repo
+  inboxWorktrees: DetectedWorktree[]
+}
+
 export type PendingCreationRow = {
   type: 'pending-creation'
   key: string
@@ -107,6 +121,7 @@ export type Row =
   | GroupHeaderRow
   | WorktreeRow
   | ImportedWorktreesCardRow
+  | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow
 
@@ -139,16 +154,28 @@ type WorktreeGroupEntry = {
 type ProjectGroupingIndex = {
   projectById: Map<string, Project>
   setupByRepoId: Map<string, ProjectHostSetup>
-  // Why: `${projectId}::${hostId}` pairs that back more than one setup — i.e. the
-  // same project checked out multiple times on one host (independent clones or
-  // worktrees). Those setups must not collapse into a single project group.
-  multiSetupProjectHostKeys: Set<string>
+  projectIdsRequiringSetupGroups: Set<string>
 }
 
 const projectGroupingIndexCache = new WeakMap<ProjectGroupingModel, ProjectGroupingIndex | null>()
 
-function projectHostKey(projectId: string, hostId: string): string {
-  return `${projectId}::${hostId}`
+// Why: `provisioned` setups are ephemeral recipe-created runtime copies that
+// nest under the project header; every other method is a real user checkout. See #5374.
+function isDistinctUserCheckout(setup: ProjectHostSetup): boolean {
+  return setup.setupMethod !== 'provisioned'
+}
+
+function getProjectSetupSurfaceKey(setup: ProjectHostSetup): string {
+  const wslPath = parseWslUncPath(setup.path)
+  if (wslPath) {
+    // Why: Windows host and WSL on one machine are separate execution surfaces;
+    // only duplicate checkouts within one surface make project grouping ambiguous.
+    return `${setup.projectId}::${setup.hostId}::wsl:${wslPath.distro.toLowerCase()}`
+  }
+  if (isWindowsAbsolutePathLike(setup.path)) {
+    return `${setup.projectId}::${setup.hostId}::windows-host`
+  }
+  return `${setup.projectId}::${setup.hostId}::default`
 }
 
 function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupingIndex | null {
@@ -165,21 +192,31 @@ function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupin
     projectGroupingIndexCache.set(model, null)
     return null
   }
-  const setupCountByProjectHost = new Map<string, number>()
+  // Count real user checkouts per host surface (provisioned copies excluded so
+  // they keep nesting); more than one on a surface makes that project ambiguous.
+  const checkoutsByProjectSurface = new Map<string, { projectId: string; count: number }>()
   for (const setup of projectHostSetups) {
-    const key = projectHostKey(setup.projectId, setup.hostId)
-    setupCountByProjectHost.set(key, (setupCountByProjectHost.get(key) ?? 0) + 1)
+    if (!isDistinctUserCheckout(setup)) {
+      continue
+    }
+    const key = getProjectSetupSurfaceKey(setup)
+    const existing = checkoutsByProjectSurface.get(key)
+    if (existing) {
+      existing.count += 1
+    } else {
+      checkoutsByProjectSurface.set(key, { projectId: setup.projectId, count: 1 })
+    }
   }
-  const multiSetupProjectHostKeys = new Set<string>()
-  for (const [key, count] of setupCountByProjectHost) {
+  const projectIdsRequiringSetupGroups = new Set<string>()
+  for (const { projectId, count } of checkoutsByProjectSurface.values()) {
     if (count > 1) {
-      multiSetupProjectHostKeys.add(key)
+      projectIdsRequiringSetupGroups.add(projectId)
     }
   }
   const index = {
     projectById: new Map(projects.map((project) => [project.id, project])),
     setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup])),
-    multiSetupProjectHostKeys
+    projectIdsRequiringSetupGroups
   }
   projectGroupingIndexCache.set(model, index)
   return index
@@ -207,10 +244,12 @@ function getProjectGroupingForRepo(
       repo
     }
   }
-  if (projectIndex?.multiSetupProjectHostKeys.has(projectHostKey(setup.projectId, setup.hostId))) {
-    // Why: this project is set up more than once on this host, so each checkout
-    // keeps its own group (labelled by its folder) instead of collapsing into a
-    // single project header named after whichever folder was added first.
+  if (
+    projectIndex?.projectIdsRequiringSetupGroups.has(setup.projectId) &&
+    isDistinctUserCheckout(setup)
+  ) {
+    // Why: independent user checkouts of one project on the same host surface
+    // can't be safely merged, so each keeps its own sidebar entry. See #5374.
     return {
       key: `project:${project.id}::setup:${repoId}`,
       label: repo?.displayName ?? setup.displayName,
@@ -218,6 +257,8 @@ function getProjectGroupingForRepo(
       projectId: project.id
     }
   }
+  // Why: provisioned runtime copies and non-ambiguous checkouts follow project
+  // identity rather than path-scoped setup identity, so they stay in one project.
   return {
     key: `project:${project.id}`,
     label: project.displayName,
@@ -355,11 +396,11 @@ export function getPRGroupKey(
           branch,
           settings,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
-  const canUseLegacyPRCache =
-    repo !== undefined && !settings?.activeRuntimeEnvironmentId?.trim() && !repo.connectionId
+  const canUseLegacyPRCache = repo !== undefined && !repo.connectionId && !repo.executionHostId
   const legacyRepoScopedCacheKey =
     canUseLegacyPRCache && branch ? getLegacyGitHubPRCacheKey(repo.path, repo.id, branch) : ''
   const legacyPathScopedCacheKey =
@@ -462,6 +503,17 @@ function buildImportedWorktreesCardRow(
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
     placement
+  }
+}
+
+function buildNewExternalWorktreesInboxRow(
+  candidate: NewExternalWorktreesInboxCandidate
+): NewExternalWorktreesInboxRow {
+  return {
+    type: 'new-external-worktrees-inbox',
+    key: `new-external-worktrees-inbox:${candidate.repo.id}`,
+    repo: candidate.repo,
+    inboxWorktrees: candidate.inboxWorktrees
   }
 }
 
@@ -795,6 +847,10 @@ export function buildRows(
   projectGroups: readonly ProjectGroup[] = [],
   placeholderRepoIds: ReadonlySet<string> = new Set(),
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map(),
+  newExternalWorktreesInboxByRepo: ReadonlyMap<
+    string,
+    NewExternalWorktreesInboxCandidate
+  > = new Map(),
   pendingCreations: readonly PendingCreationRef[] = [],
   projectGrouping?: ProjectGroupingModel,
   folderWorkspaces: readonly FolderWorkspace[] = [],
@@ -907,6 +963,22 @@ export function buildRows(
   }
   if (groupBy === 'repo') {
     for (const [repoId, candidate] of importedWorktreesByRepo) {
+      const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
+      const key = grouping.key
+      if (!grouped.has(key) && !visiblePinnedRepoIds.has(repoId)) {
+        grouped.set(key, {
+          label: grouping.label,
+          items: [],
+          repo: grouping.repo ?? candidate.repo,
+          repoIds: new Set([repoId])
+        })
+      } else if (grouped.has(key)) {
+        addRepoIdToGroup(grouped.get(key)!, repoId)
+      }
+    }
+  }
+  if (groupBy === 'repo') {
+    for (const [repoId, candidate] of newExternalWorktreesInboxByRepo) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
       const key = grouping.key
       if (!grouped.has(key) && !visiblePinnedRepoIds.has(repoId)) {
@@ -1044,6 +1116,12 @@ export function buildRows(
               result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
             }
           }
+          for (const repoId of repoIds) {
+            const candidate = newExternalWorktreesInboxByRepo.get(repoId)
+            if (candidate) {
+              result.push(buildNewExternalWorktreesInboxRow(candidate))
+            }
+          }
           // Why: surface in-progress creates at the top of their own repo so the
           // new workspace appears where it will land, not flashed to the very top
           // of the sidebar.
@@ -1058,13 +1136,23 @@ export function buildRows(
           groupBy === 'repo'
             ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
             : undefined
-        appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
-          nestLineage,
-          collapsedGroups,
-          groupDepth: projectGroupDepth,
-          sectionKey: key,
-          hostContextLabelByRepoId
-        })
+        if (groupBy === 'repo') {
+          appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
+            nestLineage,
+            collapsedGroups,
+            groupDepth: projectGroupDepth,
+            sectionKey: key,
+            hostContextLabelByRepoId
+          })
+        } else {
+          appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
+            nestLineage,
+            collapsedGroups,
+            groupDepth: projectGroupDepth,
+            sectionKey: key,
+            hostContextLabelByRepoId
+          })
+        }
       }
     }
   }

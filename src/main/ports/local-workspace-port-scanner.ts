@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: the platform-specific scan paths share parsing,
 attribution, and normalization rules that must stay in lockstep. */
-import { execFile } from 'child_process'
-import { readFile, readdir, readlink } from 'fs/promises'
-import path from 'path'
+import { execFile } from 'node:child_process'
+import { readFile, readdir, readlink } from 'node:fs/promises'
+import path from 'node:path'
 import type {
   WorkspacePort,
   WorkspacePortOwner,

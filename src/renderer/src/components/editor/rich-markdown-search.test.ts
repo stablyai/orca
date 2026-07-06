@@ -19,6 +19,15 @@ describe('findRichMarkdownSearchMatches', () => {
     ])
   })
 
+  it('forwards match-case and whole-word options to the range finder', () => {
+    expect(
+      findRichMarkdownSearchMatches(docFromText('Beta beta betas', 10), 'beta', {
+        matchCase: true,
+        wholeWord: true
+      })
+    ).toEqual([{ from: 15, to: 19 }])
+  })
+
   it('does not walk the document for oversized pasted search text', () => {
     const doc = {
       descendants() {

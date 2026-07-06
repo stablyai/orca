@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -29,6 +29,8 @@ const CURSOR_EVENTS = [
 ]
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
+const WINDOWS_POWERSHELL_LAUNCHER =
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
 describe('CursorHookService', () => {
   let homeDir: string
@@ -59,9 +61,7 @@ describe('CursorHookService', () => {
     for (const eventName of CURSOR_EVENTS) {
       const definition = config.hooks[eventName]?.[0]
       expect(definition?.command).toMatch(
-        process.platform === 'win32'
-          ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-          : /cursor-hook/
+        process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /cursor-hook/
       )
       if (process.platform !== 'win32') {
         expect(definition?.command).toContain(join(homeDir, '.orca'))
@@ -75,9 +75,14 @@ describe('CursorHookService', () => {
     )
     expect(script).toContain('/hook/cursor')
     if (process.platform === 'win32') {
-      expect(script).toContain('powershell -NoProfile')
+      expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
     } else {
+      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+      // on the curl command line (EDR oversized-command-line false positive).
       expect(script).toContain('payload=$(cat)')
+      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('--data-urlencode "payload@-"')
+      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     }
   })
 
@@ -100,9 +105,7 @@ describe('CursorHookService', () => {
 
         for (const eventName of ['beforeSubmitPrompt', 'stop']) {
           const command = config.hooks[eventName]?.[0]?.command
-          expect(command).toMatch(
-            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-          )
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
@@ -144,7 +147,7 @@ describe('CursorHookService', () => {
     expect(
       promptCommands.filter((command) =>
         process.platform === 'win32'
-          ? command?.startsWith('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ')
+          ? command !== undefined && WINDOWS_POWERSHELL_LAUNCHER.test(command)
           : command?.includes(CURSOR_SCRIPT_FILE_NAME)
       )
     ).toHaveLength(1)

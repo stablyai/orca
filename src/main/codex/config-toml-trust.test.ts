@@ -8,9 +8,9 @@ import {
   realpathSync,
   rmSync,
   writeFileSync
-} from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { escapeRegex } from '../../shared/string-utils'
 import {
   computeTrustKey,
@@ -150,6 +150,46 @@ describe('computeTrustedHash', () => {
     expect(a).not.toBe(b)
   })
 
+  it('drops the matcher on user_prompt_submit/stop like matcher_pattern_for_event', () => {
+    // Why: Codex ignores matchers on these two events and hashes the
+    // identity WITHOUT the matcher field. A definition carrying
+    // `"matcher": ""` (common in third-party installers) must therefore
+    // hash identically to one without a matcher, or the system-trust
+    // mirror misses and the stale-entry sweep deletes the trust Codex
+    // wrote — re-prompting the user on every launch.
+    for (const eventLabel of ['user_prompt_submit', 'stop'] as const) {
+      const base: CodexTrustEntry = {
+        sourcePath: '/x/hooks.json',
+        eventLabel,
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'foo'
+      }
+      const bare = computeTrustedHash(base)
+      expect(computeTrustedHash({ ...base, matcher: '' })).toBe(bare)
+      expect(computeTrustedHash({ ...base, matcher: 'anything' })).toBe(bare)
+    }
+  })
+
+  it('pins the matcher-omitted hash for a Stop entry that carries an empty matcher', () => {
+    // Why: regression pin for the shape observed in the wild (a real
+    // Codex 0.140 config.toml, path anonymized): Codex stores the
+    // matcher-omitted hash for Stop even when hooks.json carries
+    // `"matcher": ""`, so we must never fold the matcher into this
+    // identity. If serialization or normalization drifts, this constant
+    // fails loudly.
+    expect(
+      computeTrustedHash({
+        sourcePath: '/home/user/.codex/hooks.json',
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: '/home/user/.tma1/hooks/agent-hook.sh',
+        matcher: ''
+      })
+    ).toBe('sha256:f8b48c31eabfba63f117b8570b839a5f6efc1d67867512d661775b5312df946f')
+  })
+
   it('produces a different hash when statusMessage is set', () => {
     const a = computeTrustedHash({
       sourcePath: '/x/hooks.json',
@@ -245,13 +285,12 @@ describe('computeTrustKey', () => {
         handlerIndex: 0,
         command: 'irrelevant'
       })
-    ).toBe(`${realpathSync.native(hooksPath).replace(/\\/g, '/')}:user_prompt_submit:0:0`)
+    ).toBe(`${realpathSync.native(hooksPath)}:user_prompt_submit:0:0`)
   })
 
-  it('normalizes Windows backslashes to forward slashes in the trust key', () => {
-    // Why: getCodexCanonicalTrustPath must return a forward-slash key even when
-    // the path uses native Windows separators, preventing separator mismatch
-    // against Codex-written literal-string keys.
+  it('uses native Windows backslashes in the trust key Codex looks up', () => {
+    // Why: Codex 0.140 writes approved Windows hook trust keys as raw native
+    // paths under [hooks.state].
     const winPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const key = computeTrustKey({
       sourcePath: winPath,
@@ -260,8 +299,8 @@ describe('computeTrustKey', () => {
       handlerIndex: 0,
       command: 'echo'
     })
-    expect(key).not.toContain('\\')
-    expect(key.startsWith('C:/Users/Rod/AppData/Roaming/orca/hooks.json:')).toBe(true)
+    expect(key).toContain('\\')
+    expect(key.startsWith('C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:')).toBe(true)
   })
 
   it('preserves literal backslashes in non-Windows-style fallback paths', () => {
@@ -399,12 +438,9 @@ describe('upsertHookTrustEntries', () => {
     }
     upsertHookTrustEntries(configPath, [entry])
 
-    // Why: after normalization Orca writes the forward-slash form; the fixture's
-    // backslash form is matched via normalizeHookTrustKeyForLookup and collapsed.
-    const normalizedKey = key.replace(/\\/g, '/')
     const written = readFileSync(configPath, 'utf-8')
     const duplicateKeyOccurrences = written.match(
-      new RegExp(`\\[hooks\\.state\\."${escapeRegex(normalizedKey)}"\\]`, 'g')
+      new RegExp(`\\[hooks\\.state\\.'${escapeRegex(key)}'\\]`, 'g')
     )
     expect(duplicateKeyOccurrences).toHaveLength(1)
     // The unrelated key was not upserted and stays in its original escaped form.
@@ -416,7 +452,7 @@ describe('upsertHookTrustEntries', () => {
     expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
   })
 
-  it('collapses a literal-string hook table before writing the canonical basic-string table', () => {
+  it('collapses a literal-string hook table before writing the canonical Codex literal table', () => {
     const sourcePath = 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
     const key = `${sourcePath}:session_start:0:0`
     const original = [
@@ -436,12 +472,10 @@ describe('upsertHookTrustEntries', () => {
     }
     upsertHookTrustEntries(configPath, [entry])
 
-    // Why: Orca writes the normalized forward-slash key form after replacement.
-    const normalizedKey = key.replace(/\\/g, '/')
     const written = readFileSync(configPath, 'utf-8')
-    expect(written).not.toContain(`[hooks.state.'${key}']`)
-    expect(written.match(/\[hooks\.state\./g)).toHaveLength(1)
-    expect(written).toContain(`[hooks.state."${normalizedKey}"]`)
+    expect(written.match(/\[hooks\.state\./g)).toHaveLength(2)
+    expect(written).toContain(`[hooks.state.'${key}']`)
+    expect(written).toContain(`[hooks.state.'${key.replace(/\\/g, '/')}']`)
     expect(written).toContain('enabled = false')
     expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
   })
@@ -856,15 +890,13 @@ describe('upsertHookTrustEntries', () => {
     expect(written).not.toContain('sha256:OLD')
   })
 
-  it('finds and replaces a Codex literal-string backslash block when Orca upserts with forward-slash key', () => {
-    // Why: Codex writes literal-string keys with raw backslashes; Orca builds
-    // keys with forward slashes after getCodexCanonicalTrustPath normalization.
-    // normalizeHookTrustKeyForLookup must bridge that separator gap so upsert replaces
-    // rather than appends.
+  it('finds and replaces a legacy forward-slash block when Orca upserts with native backslash key', () => {
+    // Why: Codex 0.140 can expose Windows trust keys with either separator
+    // shape depending on startup cwd, so Orca replaces stale blocks with both.
     const backslashPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
-    const literalKey = `${backslashPath}:session_start:0:0`
+    const legacyKey = `${backslashPath.replace(/\\/g, '/')}:session_start:0:0`
     const original = [
-      `[hooks.state.'${literalKey}']`,
+      `[hooks.state."${legacyKey}"]`,
       'enabled = true',
       'trusted_hash = "sha256:CODEX-WRITTEN"',
       ''
@@ -881,12 +913,14 @@ describe('upsertHookTrustEntries', () => {
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
-    expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(1)
+    expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(2)
+    expect(written).toContain(`[hooks.state.'${backslashPath}:session_start:0:0']`)
+    expect(written).toContain(`[hooks.state.'${legacyKey}']`)
     expect(written).not.toContain('sha256:CODEX-WRITTEN')
     expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
   })
 
-  it('produces exactly one [hooks.state.*] header after two consecutive upserts on Windows path', () => {
+  it('produces exactly one Windows separator pair after two consecutive upserts', () => {
     // Why: idempotency guard — repeated auto-install on app start must not
     // accumulate duplicate trust blocks and produce invalid TOML.
     const entry: CodexTrustEntry = {
@@ -900,7 +934,31 @@ describe('upsertHookTrustEntries', () => {
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
-    expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(1)
+    expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(2)
+    expect((written.match(/session_start:0:0/g) ?? []).length).toBe(2)
+  })
+
+  it('falls back to TOML basic-string headers when a Windows path contains an apostrophe', () => {
+    // Why: TOML literal-string table keys cannot contain apostrophes, but
+    // Windows user/profile paths can.
+    const entry: CodexTrustEntry = {
+      sourcePath: "C:\\Users\\O'Connor\\AppData\\Roaming\\orca\\hooks.json",
+      eventLabel: 'session_start',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo session'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect((written.match(/\[hooks\.state\."/g) ?? []).length).toBe(2)
+    expect(written).toContain(
+      `[hooks.state."C:\\\\Users\\\\O'Connor\\\\AppData\\\\Roaming\\\\orca\\\\hooks.json:session_start:0:0"]`
+    )
+    expect(written).toContain(
+      `[hooks.state."C:/Users/O'Connor/AppData/Roaming/orca/hooks.json:session_start:0:0"]`
+    )
+    expect(written).not.toContain(`[hooks.state.'C:\\Users\\O'Connor`)
   })
 
   it.skipIf(process.platform !== 'win32')(
@@ -931,7 +989,7 @@ describe('upsertHookTrustEntries', () => {
       upsertHookTrustEntries(configPath, [entry])
 
       const written = readFileSync(configPath, 'utf-8')
-      expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(1)
+      expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(2)
       expect(written).not.toContain('sha256:LOWERCASE')
       expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
     }
@@ -951,9 +1009,8 @@ describe('upsertProjectTrustLevel', () => {
     mkdirSync(nestedDir)
     mkdirSync(projectDir)
     const aliasedProjectPath = join(nestedDir, '..', 'project')
-    // Why: getCodexCanonicalTrustPath normalizes separators to forward slashes.
-    const trustedPath = realpathSync.native(aliasedProjectPath).replace(/\\/g, '/')
-    const trustedTomlPath = trustedPath.replaceAll('"', '\\"')
+    const trustedPath = realpathSync.native(aliasedProjectPath)
+    const trustedTomlPath = escapeTomlString(trustedPath)
 
     expect(upsertProjectTrustLevelInContent('', aliasedProjectPath, 'trusted')).toBe(
       [`[projects."${trustedTomlPath}"]`, 'trust_level = "trusted"', ''].join('\n')
@@ -1000,22 +1057,22 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).toContain('[other]\nvalue = 1')
   })
 
-  it('preserves CRLF endings and normalizes Windows path separators in the header', () => {
-    // Why: getCodexCanonicalTrustPath normalizes backslashes to forward slashes;
-    // the project path header uses forward slashes even on Windows input.
+  it('preserves CRLF endings and writes native Windows path separators in the header', () => {
+    // Why: local project trust still follows Codex's realpath display, while
+    // remote project trust preserves the SSH provider's canonical path string.
     const original = ['[profiles.default]', 'model = "gpt-5"', ''].join('\r\n')
 
     const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
 
     expect(updated).toContain(
-      ['[projects."C:/Users/nw/repo"]', 'trust_level = "trusted"', ''].join('\r\n')
+      ['[projects."C:\\\\Users\\\\nw\\\\repo"]', 'trust_level = "trusted"', ''].join('\r\n')
     )
     expect(updated).toContain('[profiles.default]\r\nmodel = "gpt-5"')
   })
 
   it('updates an existing Windows backslash project block after separator normalization', () => {
-    // Why: forward-slash writes must not strand an older backslash-form
-    // project table and append a duplicate project trust block.
+    // Why: hook trust now writes paired Windows variants, but project trust
+    // must still repair an existing single project table in place.
     const original = [
       '[projects."C:\\\\Users\\\\nw\\\\repo"]',
       'notes = "keep"',
@@ -1030,6 +1087,37 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).toContain('notes = "keep"')
     expect(updated).toContain('trust_level = "trusted"')
     expect(updated).not.toContain('trust_level = "untrusted"')
+  })
+
+  it('updates an existing legacy Windows forward-slash project block', () => {
+    // Why: older Orca builds normalized Windows project paths to forward
+    // slashes; native-backslash hook fixes must not duplicate those blocks.
+    const original = [
+      '[projects."C:/Users/nw/repo"]',
+      'notes = "keep"',
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain('[projects."C:/Users/nw/repo"]')
+    expect(updated).toContain('notes = "keep"')
+    expect(updated).toContain('trust_level = "trusted"')
+    expect(updated).not.toContain('trust_level = "untrusted"')
+  })
+
+  it('preserves an already-canonical remote Windows project path', () => {
+    // Why: SSH project paths are resolved on the remote; local realpath would
+    // canonicalize the wrong machine if the same path happens to exist locally.
+    const updated = upsertProjectTrustLevelInContent('', 'C:/Users/nw/repo', 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated).toBe(
+      ['[projects."C:/Users/nw/repo"]', 'trust_level = "trusted"', ''].join('\n')
+    )
   })
 
   it('writes config.toml and avoids rewriting an already-trusted project', () => {

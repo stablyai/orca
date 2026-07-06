@@ -42,6 +42,18 @@ vi.mock('./simulator-app-visibility', () => ({
   hideNativeSimulatorApp: hideNativeSimulatorAppMock
 }))
 
+// Keep the Android backend inert in these iOS-focused tests (no host SDK, no adb I/O).
+vi.mock('./android/android-sdk-host-discovery', () => ({
+  discoverAndroidSdkFromHost: () => null,
+  setConfiguredAndroidSdkPath: () => {}
+}))
+
+// These tests exercise the iOS backend, which is gated to macOS.
+vi.mock('os', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return { ...actual, platform: () => 'darwin' }
+})
+
 import { EmulatorBridge } from './emulator-bridge'
 import { RuntimeEmulatorCommands } from '../runtime/orca-runtime-emulator'
 
@@ -50,7 +62,9 @@ function session(deviceUdid: string): EmulatorSessionInfo {
     deviceUdid,
     streamUrl: `http://127.0.0.1:3100/${deviceUdid}`,
     wsUrl: `ws://127.0.0.1:3100/${deviceUdid}`,
-    helperPid: 1234
+    helperPid: 1234,
+    // iOS serve-sim sessions round-trip through the registry as mjpeg.
+    streamCodec: 'mjpeg'
   }
 }
 
@@ -166,6 +180,14 @@ describe('EmulatorBridge helper ownership', () => {
     expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-managed')
     expect(bridge.getActiveForWorktree('wt-managed')).toBeNull()
     expect(bridge.getActiveForWorktree('wt-external')).toBeNull()
+  })
+
+  it('rejects a capability the resolved backend does not support', async () => {
+    const bridge = new EmulatorBridge()
+    // device-1 resolves to the iOS backend, which advertises no explicit-verb caps.
+    await expect(
+      bridge.runCapability('install', { device: 'device-1' }, async () => 'unused')
+    ).rejects.toMatchObject({ code: 'emulator_unsupported' })
   })
 
   it('kills the helper and shuts down the selected simulator', async () => {

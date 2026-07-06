@@ -1,5 +1,5 @@
-import { readdir, stat } from 'fs/promises'
-import { basename, delimiter, extname, join } from 'path'
+import { readdir, stat } from 'node:fs/promises'
+import { basename, delimiter, extname, join } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
@@ -11,10 +11,12 @@ export async function discoverFiles(args: {
   issues: AiVaultScanIssue[]
   extensions: string[]
   filePredicate?: (path: string) => boolean
+  directoryPredicate?: (name: string) => boolean
 }): Promise<SessionFileDiscovery> {
   const paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
     extensions: new Set(args.extensions),
-    filePredicate: args.filePredicate
+    filePredicate: args.filePredicate,
+    directoryPredicate: args.directoryPredicate
   })
   const files: FileWithMtime[] = []
   for (const path of paths) {
@@ -67,6 +69,7 @@ export async function walkSessionFiles(
   options: {
     extensions: Set<string>
     filePredicate?: (path: string) => boolean
+    directoryPredicate?: (name: string) => boolean
   }
 ): Promise<string[]> {
   let entries
@@ -80,7 +83,11 @@ export async function walkSessionFiles(
   for (const entry of entries) {
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
-      files.push(...(await walkSessionFiles(fullPath, agent, issues, options)))
+      // Skip whole subtrees an agent never wants (e.g. subagent transcripts),
+      // avoiding the readdir cost of descending into them.
+      if (options.directoryPredicate?.(entry.name) ?? true) {
+        files.push(...(await walkSessionFiles(fullPath, agent, issues, options)))
+      }
       continue
     }
     if (

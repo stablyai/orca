@@ -3,6 +3,9 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   canResolveFolderSmartGitHubSubmit,
+  getInitialAutoManagedWorkspaceName,
+  isExplicitWorkspaceNameInput,
+  resolveSmartGitHubCreateNames,
   resolveInitialWorkspaceRunSeed
 } from './useComposerState'
 
@@ -17,6 +20,71 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('useComposerState host-context boundaries', () => {
+  it('treats typed workspace names as user-authored, not auto-managed', () => {
+    expect(isExplicitWorkspaceNameInput({ name: 'keep-my-name', lastAutoName: '' })).toBe(true)
+    expect(
+      isExplicitWorkspaceNameInput({
+        name: 'keep-my-name',
+        lastAutoName: 'keep-my-name'
+      })
+    ).toBe(false)
+    expect(isExplicitWorkspaceNameInput({ name: '#1234', lastAutoName: '' })).toBe(false)
+    expect(
+      isExplicitWorkspaceNameInput({
+        name: 'https://github.com/stablyai/orca/pull/1234',
+        lastAutoName: ''
+      })
+    ).toBe(false)
+  })
+
+  it('does not auto-own arbitrary prefilled names', () => {
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: 'keep-my-name',
+        initialLinkedWorkItem: null
+      })
+    ).toBe('')
+  })
+
+  it('preserves explicit names when a linked PR start point resolves at submit time', () => {
+    expect(
+      resolveSmartGitHubCreateNames({
+        resolutionKind: 'pr-start-point',
+        smartWorkspaceName: 'title-derived-name',
+        smartDisplayName: 'Title derived name',
+        fallbackWorkspaceName: 'edited workspace',
+        nameIsAutoManaged: false
+      })
+    ).toEqual({ workspaceName: 'edited workspace', displayName: undefined })
+  })
+
+  it('keeps smart GitHub names for auto-managed PR start-point submissions', () => {
+    expect(
+      resolveSmartGitHubCreateNames({
+        resolutionKind: 'pr-start-point',
+        smartWorkspaceName: 'title-derived-name',
+        smartDisplayName: 'Title derived name',
+        fallbackWorkspaceName: 'https://github.com/stablyai/orca/pull/6772',
+        nameIsAutoManaged: true
+      })
+    ).toEqual({ workspaceName: 'title-derived-name', displayName: 'Title derived name' })
+  })
+
+  it('auto-owns linked-item generated prefilled names', () => {
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: 'fix-workspace-name',
+        initialLinkedWorkItem: {
+          type: 'issue',
+          provider: 'github',
+          number: 1234,
+          title: 'Fix workspace name',
+          url: 'https://github.com/stablyai/orca/issues/1234'
+        }
+      })
+    ).toBe('fix-workspace-name')
+  })
+
   it('resolves GitHub PR bases against the selected run repo, not the source item repo', () => {
     const section = sourceBetween(
       HOOK_SOURCE,
@@ -28,6 +96,10 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('resolveGitHubPrStartPointForRepo')
     expect(section).toContain('repoId: runRepo.id')
     expect(section).toContain('settings: itemRepoSettings')
+    expect(section).toContain('smartGitHubPrStartPointSelectionRef.current = startPointSelection')
+    expect(section).toContain(
+      'if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection)'
+    )
     expect(section).not.toContain('repoId: repoForItem.id')
     expect(section).not.toContain('repo: repoForItem.id')
   })
@@ -45,6 +117,11 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('worktree.resolveMrBase')
     expect(section).toContain('repo: runRepo.id')
     expect(section).not.toContain('repoId: repoForItem.id')
+    // Why (#6263): an unresolved MR base must surface a toast and clear stale
+    // state instead of silently dropping the worktree onto origin/master.
+    expect(section).toContain('toast.error(result.error)')
+    expect(section).toContain("'Failed to resolve MR base.'")
+    expect(section).toMatch(/\.catch\(\(error: unknown\) =>/)
   })
 
   it('does not use local SSH gates for runtime-owned folder targets', () => {
@@ -132,6 +209,8 @@ describe('useComposerState host-context boundaries', () => {
       'const applyLinkedWorkItem = useCallback'
     )
     expect(directLookup).toContain('sourceContext: selectedRepoGitHubSourceContext')
+    expect(directLookup).toContain('lookupGitHubWorkItemByOwnerRepoForSource')
+    expect(directLookup).toContain('type: normalizedLinkQuery.directLink.type')
 
     const submitLookup = sourceBetween(
       HOOK_SOURCE,
@@ -153,6 +232,21 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitLookup).toContain("kind: 'metadata-only'")
     expect(submitLookup).toContain('baseBranch: prStartPoint.baseBranch')
     expect(submitLookup).toContain('branchNameOverride: prStartPoint.branchNameOverride')
+    const selectedPrSubmitLookup = sourceBetween(
+      submitLookup,
+      'if (linkedWorkItem) {',
+      'const intent = getSmartGitHubSubmitIntent(name)'
+    )
+    expect(selectedPrSubmitLookup).toContain('smartGitHubPrStartPointSelectionRef.current')
+    expect(selectedPrSubmitLookup).toContain("linkedWorkItemIdentity?.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain("startPointIdentity?.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain(
+      'startPointIdentity.number === linkedWorkItemIdentity.number'
+    )
+    expect(selectedPrSubmitLookup).toContain('resolveGitHubPrStartPointForRepo')
+    expect(selectedPrSubmitLookup.indexOf('resolveGitHubPrStartPointForRepo')).toBeLessThan(
+      selectedPrSubmitLookup.indexOf("return { kind: 'none' }")
+    )
 
     const fullSubmit = sourceBetween(
       HOOK_SOURCE,
@@ -187,6 +281,36 @@ describe('useComposerState host-context boundaries', () => {
     )
   })
 
+  it('saves setup startup policy before creating a workspace', () => {
+    const persistSection = sourceBetween(
+      HOOK_SOURCE,
+      'const persistSetupAgentStartupPolicy = useCallback',
+      'const handleSetupAgentStartupPolicyChange'
+    )
+    expect(persistSection).toContain('setupAgentStartupPolicySaveRef.current')
+    expect(persistSection).toContain('pendingSave?.repoId === currentRepo.id')
+    expect(persistSection).toContain('pendingSave.policy === policy')
+    expect(persistSection).toContain('await pendingSave.promise')
+    expect(persistSection).toContain('continue')
+    expect(HOOK_SOURCE).toContain('setupAgentStartupPolicyDraftRef.current')
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    const fullPolicySave = fullSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const fullCreate = fullSubmit.indexOf('const result = await createWorktree(')
+    expect(fullPolicySave).toBeGreaterThanOrEqual(0)
+    expect(fullCreate).toBeGreaterThan(fullPolicySave)
+
+    const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
+    const quickPolicySave = quickSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const quickCreate = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
+    expect(quickPolicySave).toBeGreaterThanOrEqual(0)
+    expect(quickCreate).toBeGreaterThan(quickPolicySave)
+  })
+
   it('resolves submit-time GitHub smart input when folder child repos exist', () => {
     expect(
       canResolveFolderSmartGitHubSubmit({
@@ -219,6 +343,19 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('? await resolvePendingSmartGitHubSubmit()')
     expect(section).toContain(': null')
     expect(section).not.toContain('folderSourceRequiresConnection')
+  })
+
+  it('clears branch reuse state when manually editing the branch name', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleBranchNameOverrideChange = useCallback',
+      'const addComposerAttachments = useCallback'
+    )
+
+    expect(section).toContain('resolveComposerManualBranchNameChange')
+    expect(section).toContain('setReuseEligibleBranch(null)')
+    expect(section).toContain('setReuseSelectedBranch(false)')
+    expect(section).toContain("branchAutoNameRef.current = ''")
   })
 
   it('forces repo-scoped source reset when returning from folder target to a repo with the same id', () => {
@@ -290,8 +427,12 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(projectGroupSmartHandlers).toContain('setLinkedGitLabIssue(null)')
     expect(projectGroupSmartHandlers).toContain('setLinkedGitLabMR(null)')
-    expect(projectGroupSmartHandlers).toContain("setLinkedIssue('')")
-    expect(projectGroupSmartHandlers).toContain('setLinkedPR(null)')
+    expect(projectGroupSmartHandlers).toContain(
+      "setLinkedIssue(identity.type === 'issue' ? String(identity.number) : '')"
+    )
+    expect(projectGroupSmartHandlers).toContain(
+      "setLinkedPR(identity.type === 'pr' ? identity.number : null)"
+    )
   })
 
   it('disables repo-backed folder smart lookup when a folder target has no source repos', () => {
@@ -371,8 +512,8 @@ describe('useComposerState host-context boundaries', () => {
 
     expect(section).toContain('resolveWorktreeCreateBaseBranch')
     expect(section).toContain('explicitBaseBranch: smartSubmitBaseBranch')
-    expect(section).toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
-    expect(section).toContain('getRuntimeRepoBaseRefDefault')
+    expect(section).not.toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
+    expect(section).not.toContain('getRuntimeRepoBaseRefDefault')
   })
 
   it('plans new workspace agent startup from the selected repo runtime', () => {
@@ -448,5 +589,32 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
     expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
+  })
+
+  it('gates per-workspace environment recipe discovery behind the experimental setting', () => {
+    const recipeLoadSection = sourceBetween(
+      HOOK_SOURCE,
+      'const ephemeralVmsEnabled',
+      'const selectedRepoConnectionId'
+    )
+    expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
+    expect(recipeLoadSection).toContain('!ephemeralVmsEnabled')
+    expect(recipeLoadSection).toContain('window.api.ephemeralVm')
+
+    const submitSection = sourceBetween(
+      HOOK_SOURCE,
+      'let ephemeralVmRecipe',
+      'const request: WorktreeCreationRequest'
+    )
+    expect(submitSection).toContain(
+      'const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null'
+    )
+    expect(submitSection).toContain('recipeId: activeEphemeralVmRecipeId')
+
+    const cardPropsSection = sourceBetween(HOOK_SOURCE, 'const cardProps', 'return {')
+    expect(cardPropsSection).toContain('ephemeralVmRecipes:')
+    expect(cardPropsSection).toContain('!ephemeralVmsEnabled')
+    expect(cardPropsSection).toContain('selectedEphemeralVmRecipeId:')
+    expect(cardPropsSection).toContain('ephemeralVmRecipeError:')
   })
 })

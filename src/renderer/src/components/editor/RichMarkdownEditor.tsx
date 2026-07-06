@@ -9,7 +9,9 @@ import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { registerPendingEditorFlush } from './editor-pending-flush'
-import { buildMarkdownTableOfContents, type MarkdownTocItem } from './markdown-table-of-contents'
+import type { MarkdownTocItem } from './markdown-table-of-contents'
+import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
+import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
@@ -20,6 +22,7 @@ import {
   isRichMarkdownContextCommandTarget,
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
+import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -71,6 +74,7 @@ export default function RichMarkdownEditor({
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
+  const richMarkdownSpellcheckEnabled = settings?.richMarkdownSpellcheckEnabled ?? true
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
@@ -110,12 +114,12 @@ export default function RichMarkdownEditor({
   const editorRef = useRef<Editor | null>(null)
   const cancelAutoFocusRef = useRef<(() => void) | null>(null)
   const serializeTimerRef = useRef<number | null>(null)
-  // Why: normalizeSoftBreaks dispatches a ProseMirror transaction inside onCreate
+  // Why: empty-list repair dispatches a ProseMirror transaction inside onCreate
   // which triggers onUpdate. Without this guard the editor immediately marks the
   // file dirty before the user has typed anything.
   const isInitializingRef = useRef(true)
   // Why: internal maintenance paths can dispatch transactions after mount
-  // (external reloads, soft-break normalization, image-path refresh). Those
+  // (external reloads, empty-list repair, image-path refresh). Those
   // are not user edits, so onUpdate must ignore them or split panes can flip a
   // shared file dirty without any real content change.
   const isApplyingProgrammaticUpdateRef = useRef(false)
@@ -138,7 +142,14 @@ export default function RichMarkdownEditor({
     worktreeId,
     worktreeRoot
   })
-  const tableOfContentsItems = useMemo(() => buildMarkdownTableOfContents(content), [content])
+  // Why: building the table of contents runs a full-document remark parse on
+  // every content change. The result is only used while the panel is open
+  // (closed by default), so gate the parse on visibility; including
+  // showTableOfContents in deps rebuilds the outline the moment it opens.
+  const tableOfContentsItems = useMemo(
+    () => selectMarkdownTableOfContents(showTableOfContents, content),
+    [content, showTableOfContents]
+  )
   const flatTableOfContentsItems = useMemo(
     () => flattenMarkdownTocItems(tableOfContentsItems),
     [tableOfContentsItems]
@@ -201,6 +212,7 @@ export default function RichMarkdownEditor({
     worktreeRoot,
     runtimeEnvironmentId,
     isMac,
+    richMarkdownSpellcheckEnabled,
     settings,
     activateMarkdownLink,
     rootRef,
@@ -238,6 +250,7 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+  useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
   // flush runs before useEditor's cleanup destroys the editor instance on tab
@@ -310,17 +323,7 @@ export default function RichMarkdownEditor({
     })
   }, [handleLocalImagePick, toggleLinkFromToolbar])
 
-  const {
-    activeMatchIndex,
-    closeSearch,
-    isSearchOpen,
-    matchCount,
-    moveToMatch,
-    openSearch,
-    searchInputRef,
-    searchQuery,
-    setSearchQuery
-  } = useRichMarkdownSearch({
+  const { openSearch, searchState, searchActions } = useRichMarkdownSearch({
     editor,
     rootRef,
     scrollContainerRef
@@ -329,18 +332,11 @@ export default function RichMarkdownEditor({
 
   const navigateToTableOfContentsItem = useCallback(
     (id: string): void => {
-      const target = flatTableOfContentsItems.find((item) => item.id === id)
       const container = scrollContainerRef.current
-      if (!target || !container) {
+      if (!container) {
         return
       }
-      const sameTitleIndex = flatTableOfContentsItems
-        .filter((item) => item.title === target.title)
-        .findIndex((item) => item.id === target.id)
-      const matchingHeadings = Array.from(
-        container.querySelectorAll<HTMLElement>('h1, h2, h3')
-      ).filter((candidate) => candidate.textContent?.trim() === target.title)
-      const heading = matchingHeadings.at(Math.max(0, sameTitleIndex))
+      const heading = findRichMarkdownTocHeadingTarget(container, flatTableOfContentsItems, id)
       heading?.scrollIntoView({ block: 'center' })
     },
     [flatTableOfContentsItems]
@@ -381,18 +377,8 @@ export default function RichMarkdownEditor({
       markdownSourceLineOffset={markdownSourceLineOffset}
       tableOfContentsItems={tableOfContentsItems}
       showTableOfContents={showTableOfContents}
-      searchState={{
-        activeMatchIndex,
-        isSearchOpen,
-        matchCount,
-        searchQuery,
-        searchInputRef
-      }}
-      searchActions={{
-        closeSearch,
-        moveToMatch,
-        setSearchQuery
-      }}
+      searchState={searchState}
+      searchActions={searchActions}
       linkBubbleActions={{
         handleLinkSave,
         handleLinkRemove,

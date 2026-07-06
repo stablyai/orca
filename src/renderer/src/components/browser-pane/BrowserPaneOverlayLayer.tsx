@@ -1,4 +1,5 @@
 import { memo, useCallback, useMemo } from 'react'
+import { registerBrowserOverlaySlotViewport } from './browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../shared/types'
@@ -53,6 +54,14 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   onFocusOwningGroup,
   isWorktreeActive
 }: BrowserOverlaySlotProps): React.JSX.Element {
+  // Why: persistent page viewports (webview guests) live under this root so they
+  // survive BrowserPane chrome unmounts on worktree switch without reparenting.
+  const setSlotViewportRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      registerBrowserOverlaySlotViewport(browserTab.id, node)
+    },
+    [browserTab.id]
+  )
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const browserPageIds =
     browserTab.pageIds && browserTab.pageIds.length > 0
@@ -108,10 +117,12 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   return (
     <div
       style={style}
+      className="relative flex min-h-0 flex-1 flex-col"
       data-browser-overlay-tab-id={browserTab.id}
       onPointerDown={handleFocus}
       onFocusCapture={handleFocus}
     >
+      <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
       {/* Why: moving an Electron webview between DOM parents destroys the guest
           document in some Electron builds. Visible worktree browsers stay in
           stable overlay slots; hidden worktrees park the heavy pane subtree. */}

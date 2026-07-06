@@ -79,6 +79,7 @@ function virtualRowsElement(nodes: TreeNode[]): React.JSX.Element {
     onDuplicate: vi.fn(),
     onAddFolderAsProject: vi.fn(),
     canAddFolderAsProject: () => false,
+    onOpenInTerminal: vi.fn(),
     onRequestDelete: vi.fn(),
     onCollapseFolderSubtree: vi.fn(),
     onFindInFolder: vi.fn(),
@@ -113,6 +114,7 @@ let capturedHandlers: ReturnType<typeof useFileExplorerHandlers> | null = null
 function HandlersProbe({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | null> }): null {
   capturedHandlers = useFileExplorerHandlers({
     activeWorktreeId: 'wt-1',
+    runtimeEnvironmentId: null,
     openFile: vi.fn(),
     makePreviewFilePermanent: vi.fn(),
     toggleDir: vi.fn(),

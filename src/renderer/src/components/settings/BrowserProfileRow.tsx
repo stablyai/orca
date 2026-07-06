@@ -174,8 +174,11 @@ export function BrowserProfileRow({
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
                   <DropdownMenuSubTrigger>
-                    {translate('auto.components.settings.BrowserProfileRow.7df818977e', 'From')}
-                    {browser.label}
+                    {translate(
+                      'auto.components.settings.BrowserProfileRow.c5a273a809',
+                      'From {{value0}}',
+                      { value0: browser.label }
+                    )}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent>
@@ -197,8 +200,11 @@ export function BrowserProfileRow({
                   key={browser.family}
                   onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  {translate('auto.components.settings.BrowserProfileRow.7df818977e', 'From')}
-                  {browser.label}
+                  {translate(
+                    'auto.components.settings.BrowserProfileRow.c5a273a809',
+                    'From {{value0}}',
+                    { value0: browser.label }
+                  )}
                 </DropdownMenuItem>
               )
             )}

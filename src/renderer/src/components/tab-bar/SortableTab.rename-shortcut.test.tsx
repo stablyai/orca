@@ -71,13 +71,6 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 
-vi.mock('./tab-strip-pointer-activation', () => ({
-  useTabStripPointerActivation: () => ({
-    isPressed: false,
-    onPointerDown: vi.fn()
-  })
-}))
-
 vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
@@ -178,8 +171,7 @@ vi.mock('./drop-indicator', () => ({
   ACTIVE_TAB_INDICATOR_CLASSES: 'active-tab-indicator',
   getDropIndicatorClasses: () => '',
   getTabStripBorderClasses: () => '',
-  getTabRootStateClasses: () => '',
-  showsTabSelectionChrome: () => true
+  getTabRootStateClasses: () => ''
 }))
 
 vi.mock('./middle-button-default-guard', () => ({
@@ -216,7 +208,11 @@ function makeTerminalTab() {
   }
 }
 
-async function renderSortableTab(): Promise<unknown> {
+async function renderSortableTab({
+  onSetCustomTitle = vi.fn()
+}: {
+  onSetCustomTitle?: (tabId: string, title: string | null) => void
+} = {}): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./SortableTab')
   return module.default({
@@ -232,7 +228,7 @@ async function renderSortableTab(): Promise<unknown> {
     onClose: vi.fn(),
     onCloseOthers: vi.fn(),
     onCloseToRight: vi.fn(),
-    onSetCustomTitle: vi.fn(),
+    onSetCustomTitle,
     onSetTabColor: vi.fn(),
     onTogglePin: vi.fn(),
     onToggleExpand: vi.fn(),
@@ -290,6 +286,25 @@ function findElementsByType(node: unknown, typeName: string): ReactElementLike[]
   return results
 }
 
+function pressInputKey(
+  input: ReactElementLike,
+  key: string,
+  options?: { isComposing?: boolean; keyCode?: number }
+): {
+  preventDefault: ReturnType<typeof vi.fn>
+} {
+  const event = {
+    key,
+    nativeEvent: {
+      isComposing: options?.isComposing ?? false,
+      keyCode: options?.keyCode ?? 13
+    },
+    preventDefault: vi.fn()
+  }
+  ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+  return event
+}
+
 describe('SortableTab rename shortcut signal', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -319,5 +334,27 @@ describe('SortableTab rename shortcut signal', () => {
     expect(inputs).toHaveLength(1)
     expect(inputs[0].props.value).toBe('Runtime terminal title')
     expect(inputs[0].props['data-tab-rename-input']).toBe('true')
+  })
+
+  it('ignores IME composition Enter before committing the custom tab title', async () => {
+    const onSetCustomTitle = vi.fn()
+
+    await renderSortableTab({ onSetCustomTitle })
+    let rerender = expandNode(await renderSortableTab({ onSetCustomTitle }))
+    let input = findElementsByType(rerender, 'input')[0]
+    ;(input.props.onChange as (event: { target: { value: string } }) => void)({
+      target: { value: '日本語 terminal' }
+    })
+    rerender = expandNode(await renderSortableTab({ onSetCustomTitle }))
+    input = findElementsByType(rerender, 'input')[0]
+
+    const composingEvent = pressInputKey(input, 'Enter', { isComposing: true })
+
+    expect(composingEvent.preventDefault).not.toHaveBeenCalled()
+    expect(onSetCustomTitle).not.toHaveBeenCalled()
+
+    pressInputKey(input, 'Enter')
+
+    expect(onSetCustomTitle).toHaveBeenCalledWith('terminal-tab-1', '日本語 terminal')
   })
 })

@@ -1,5 +1,5 @@
-import { homedir } from 'os'
-import { basename, join } from 'path'
+import { homedir } from 'node:os'
+import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
@@ -76,7 +76,17 @@ function claudeDiscoveries(
     options.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
     ...wslHomeDirs.map((homeDir) => join(homeDir, '.claude', 'projects'))
   ].map((rootDir) =>
-    discoverFiles({ rootDir, limit, agent: 'claude', issues, extensions: ['.jsonl'] })
+    discoverFiles({
+      rootDir,
+      limit,
+      agent: 'claude',
+      issues,
+      extensions: ['.jsonl'],
+      // Why: Task subagent transcripts under `<session>/subagents/` share the parent
+      // sessionId and aren't independently resumable, so they'd just duplicate the
+      // parent as untitled rows; prune the subtree instead of indexing it.
+      directoryPredicate: (name) => name !== 'subagents'
+    })
   )
 }
 

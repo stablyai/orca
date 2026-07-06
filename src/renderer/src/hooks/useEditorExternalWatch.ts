@@ -10,6 +10,7 @@ import { normalizeRuntimePathForComparison } from '../../../shared/cross-platfor
 import {
   getOpenFilesForExternalFileChange,
   isExternalReloadableEditorTab,
+  isWorkingTreeCombinedDiffTab,
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
 import {
@@ -32,7 +33,7 @@ import { isGitRepoKind } from '../../../shared/repo-kind'
 // VSCode) land as a short burst of `update` events — or `delete + create` on
 // renamers — within a few milliseconds for the same path. Dispatching an
 // `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT` per raw event fan-outs into N full
-// `setContent` + `normalizeSoftBreaks` doc rebuilds per mounted EditorPanel,
+// `setContent` + document-repair rebuilds per mounted EditorPanel,
 // which under split-pane + large markdown is enough to wedge the renderer
 // and black out the window (issue #826). Coalescing per (worktreeId + path)
 // on a short debounce collapses that burst into one reload notification.
@@ -608,6 +609,16 @@ export function createExternalWatchEventHandler(
     // `useFileExplorerHandlers`. Read `openFiles` once per payload to avoid
     // N store reads for large batched events.
     const openFilesSnapshot = useAppStore.getState().openFiles
+    // Why: a combined "Changes" tab matches no single path but renders every
+    // changed file's working-tree diff. This is per-worktree, not per-path, so
+    // compute it once instead of rescanning openFiles for each changed file in
+    // a large batched payload (e.g. a branch switch touching hundreds of files).
+    const hasCombinedDiffConsumer = openFilesSnapshot.some(
+      (f) =>
+        f.worktreeId === target.worktreeId &&
+        openFileRuntimeOwner(f) === target.runtimeEnvironmentId &&
+        isWorkingTreeCombinedDiffTab(f)
+    )
     for (const relativePath of changedFiles) {
       const notification = {
         worktreeId: target.worktreeId,
@@ -617,9 +628,19 @@ export function createExternalWatchEventHandler(
       }
       const matching = getOpenFilesForExternalFileChange(openFilesSnapshot, notification)
       if (matching.length === 0) {
+        // Why: notify the combined-diff tab so its section reloads. Its own
+        // dirty/section guards make a blanket reload safe, and there is no
+        // in-memory editor content to clobber, so self-write suppression is
+        // unnecessary here.
+        if (hasCombinedDiffConsumer) {
+          scheduleDebouncedExternalReload(notification)
+        }
         continue
       }
       if (matching.some((f) => f.isDirty)) {
+        if (hasCombinedDiffConsumer) {
+          scheduleDebouncedExternalReload(notification)
+        }
         continue
       }
       const absolutePath = joinPath(notification.worktreePath, notification.relativePath)

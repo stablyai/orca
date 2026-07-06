@@ -43,12 +43,21 @@ type ReleaseFeedTag = {
   version: string
 }
 
-async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+export function isPerfPrereleaseTag(tag: string): boolean {
+  const version = normalizeTagToVersion(tag)
+  const match = version.match(/^\d+\.\d+\.\d+-([0-9A-Za-z-.]+)(?:\+[0-9A-Za-z-.]+)?$/)
+  const identifiers = match?.[1]?.split('.') ?? []
+  return (
+    identifiers.length === 3 &&
+    identifiers[0] === 'rc' &&
+    /^\d+$/.test(identifiers[1]) &&
+    identifiers[2] === 'perf'
+  )
+}
 
+async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
   try {
-    const res = await net.fetch(ATOM_FEED_URL, { signal: controller.signal })
+    const res = await net.fetch(ATOM_FEED_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!res.ok) {
       return null
     }
@@ -67,8 +76,6 @@ async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
     return tags
   } catch {
     return null
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
@@ -97,32 +104,27 @@ function getManifestAssetNames(manifestText: string): string[] {
 }
 
 async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<boolean> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-
   try {
     const assetUrl = assetName.startsWith('http')
       ? assetName
-      : getReleaseAssetUrl(tag, assetName.split('/').filter(Boolean).at(-1) ?? assetName)
-    const res = await net.fetch(assetUrl, { method: 'HEAD', signal: controller.signal })
+      : getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
+    const res = await net.fetch(assetUrl, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+    })
     return res.ok
   } catch {
     return false
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
 async function hasReadyPlatformManifest(tag: string): Promise<boolean> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-
   try {
     // Why: cancelled/draft releases can appear in GitHub's atom feed before
     // they have updater manifests or the ZIP/exe/AppImage assets referenced by
     // those manifests. Pinning to those tags makes download clicks 404.
     const manifestUrl = getReleaseManifestUrl(tag)
-    const res = await net.fetch(manifestUrl, { signal: controller.signal })
+    const res = await net.fetch(manifestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!res.ok) {
       return false
     }
@@ -136,8 +138,6 @@ async function hasReadyPlatformManifest(tag: string): Promise<boolean> {
     return assetResults.every(Boolean)
   } catch {
     return false
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
@@ -156,6 +156,7 @@ async function hasReadyPlatformManifest(tag: string): Promise<boolean> {
  */
 type FetchNewerReleaseTagOptions = {
   includePrerelease?: boolean
+  releaseFilter?: 'perf'
 }
 
 export type FetchNewerReleaseTagsResult = {
@@ -190,9 +191,14 @@ export async function fetchNewerReleaseTagsWithReadiness(
     return { tags: [], state: 'unavailable' }
   }
 
-  const candidates = includePrerelease
-    ? tags
-    : tags.filter(({ version }) => !isPrereleaseVersion(version))
+  // Why: perf builds are explicit opt-in; regular prerelease checks should
+  // stay on the main RC/stable series even though perf tags are semver-newer.
+  const candidates =
+    options.releaseFilter === 'perf'
+      ? tags.filter(({ tag }) => isPerfPrereleaseTag(tag))
+      : includePrerelease
+        ? tags.filter(({ tag }) => !isPerfPrereleaseTag(tag))
+        : tags.filter(({ version }) => !isPrereleaseVersion(version))
   const newestNewerIndex = candidates.findIndex(
     ({ version }) => compareVersions(version, currentVersion) > 0
   )

@@ -14,9 +14,13 @@ import { codexAuthExists } from './codex-auth-presence'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
-import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
+import { cleanupHiddenRateLimitPty, registerHiddenRateLimitPty } from './hidden-pty-cleanup'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { extractCodexAuthError, isCodexAuthError } from '../../shared/codex-auth-errors'
+import {
+  getHiddenRateLimitWslCwdSetupCommands,
+  resolveHiddenRateLimitPtyCwd
+} from './hidden-rate-limit-pty-cwd'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -26,6 +30,7 @@ const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 export type FetchCodexRateLimitsOptions = {
   codexHomePath?: string | null
   allowPtyFallback?: boolean
+  signal?: AbortSignal
 }
 
 // ---------------------------------------------------------------------------
@@ -117,9 +122,10 @@ function buildWslCodexCommand(
     return null
   }
   const script = [
+    ...getHiddenRateLimitWslCwdSetupCommands(),
     `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}`,
     `exec codex ${args.map(shellQuote).join(' ')}`
-  ].join('; ')
+  ].join(' && ')
   return {
     command: 'wsl.exe',
     args: ['-d', wslInfo.distro, '--', 'bash', '-lc', script]
@@ -159,6 +165,17 @@ function parseCreditTimestamp(value: number | string | null | undefined): number
 
 function normalizeCreditStatus(status: string | undefined): string {
   return status?.toLowerCase() ?? 'unknown'
+}
+
+function abortedCodexRateLimitResult(): ProviderRateLimits {
+  return {
+    provider: 'codex',
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error: 'Rate-limit fetch aborted',
+    status: 'error'
+  }
 }
 
 function getNextAvailableCreditExpiry(
@@ -228,6 +245,9 @@ function mapBackendRateLimitResetCredits(
 async function getCodexBackendAuthHeaders(
   options?: FetchCodexRateLimitsOptions
 ): Promise<CodexBackendAuthHeaders | null> {
+  if (options?.signal?.aborted) {
+    return null
+  }
   const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')
   const auth = JSON.parse(await readFile(authPath, 'utf8')) as CodexAuthFile
   const accessToken = auth.tokens?.access_token
@@ -250,16 +270,22 @@ async function getCodexBackendAuthHeaders(
 async function fetchBackendRateLimitResetCredits(
   options?: FetchCodexRateLimitsOptions
 ): Promise<RateLimitResetCredits | null> {
+  if (options?.signal?.aborted) {
+    return null
+  }
   const auth = await getCodexBackendAuthHeaders(options)
   if (!auth) {
     return null
   }
+  if (options?.signal?.aborted) {
+    return null
+  }
   // Why: published Codex 0.140 can read windows through app-server but strips
   // reset-credit metadata that the backend already returns.
-  const response = await fetch(
-    'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
-    auth
-  )
+  const response = await fetch('https://chatgpt.com/backend-api/wham/rate-limit-reset-credits', {
+    ...auth,
+    signal: options?.signal
+  })
   if (!response.ok) {
     return null
   }
@@ -272,6 +298,7 @@ async function withBackendRateLimitResetCredits(
   options?: FetchCodexRateLimitsOptions
 ): Promise<ProviderRateLimits> {
   if (
+    options?.signal?.aborted ||
     limits.provider !== 'codex' ||
     (limits.rateLimitResetCredits?.nextExpiresAt !== undefined &&
       limits.rateLimitResetCredits.nextExpiresAt !== null)
@@ -344,7 +371,7 @@ function mapRpcWindow(
   if (raw.resetsAt) {
     // Why: Codex returns resetsAt as Unix seconds, not milliseconds.
     const date = new Date(raw.resetsAt * 1000)
-    if (!isNaN(date.getTime())) {
+    if (!Number.isNaN(date.getTime())) {
       resetsAt = date.getTime()
       const now = new Date()
       const isToday = date.toDateString() === now.toDateString()
@@ -373,6 +400,9 @@ function mapRpcWindow(
 // ---------------------------------------------------------------------------
 
 async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   return new Promise<ProviderRateLimits>((resolve) => {
     let buffer = ''
     let stderr = ''
@@ -396,6 +426,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       : getSpawnArgsForWindows(codexCommand, codexArgs)
     const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: resolveHiddenRateLimitPtyCwd(),
       // Why: the selected Codex rate-limit account must only affect this fetch
       // subprocess. Never mutate process.env globally or other Codex features
       // would inherit the managed account unintentionally.
@@ -416,6 +447,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
         clearTimeout(timeout)
         timeout = null
       }
+      options?.signal?.removeEventListener('abort', onAbort)
       child.stdout.off('data', onStdoutData)
       child.stderr.off('data', onStderrData)
       child.off('error', onError)
@@ -432,6 +464,18 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
         child.kill()
       }
       resolve(result)
+    }
+
+    function onAbort(): void {
+      settle(abortedCodexRateLimitResult(), { kill: true })
+    }
+
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        onAbort()
+        return
+      }
+      options.signal.addEventListener('abort', onAbort, { once: true })
     }
 
     timeout = setTimeout(() => {
@@ -606,7 +650,7 @@ function parsePtyStatus(output: string): {
 
   const session: RateLimitWindow | null = fiveMatch
     ? {
-        usedPercent: Math.min(100, parseInt(fiveMatch[1], 10)),
+        usedPercent: Math.min(100, Number.parseInt(fiveMatch[1], 10)),
         windowMinutes: 300,
         resetsAt: null,
         resetDescription: null
@@ -615,7 +659,7 @@ function parsePtyStatus(output: string): {
 
   const weekly: RateLimitWindow | null = weeklyMatch
     ? {
-        usedPercent: Math.min(100, parseInt(weeklyMatch[1], 10)),
+        usedPercent: Math.min(100, Number.parseInt(weeklyMatch[1], 10)),
         windowMinutes: 10080,
         resetsAt: null,
         resetDescription: null
@@ -632,7 +676,13 @@ function parsePtyStatus(output: string): {
 }
 
 async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   const pty = await import('node-pty')
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   const wslCodex = options?.codexHomePath ? buildWslCodexCommand(options.codexHomePath, []) : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
 
@@ -652,20 +702,50 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let resolved = false
     let sentStatus = false
     let settleTimer: ReturnType<typeof setTimeout> | null = null
+    let timeout: ReturnType<typeof setTimeout> | null = null
 
     const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,
+      cwd: resolveHiddenRateLimitPtyCwd(),
       env: {
         ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
         TERM: 'xterm-256color',
         ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
       }
     })
-    const termDisposables: { dispose: () => void }[] = []
+    const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
 
-    const timeout = setTimeout(() => {
+    function settleAborted(): void {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
+      if (settleTimer) {
+        clearTimeout(settleTimer)
+        settleTimer = null
+      }
+      cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
+      resolve(abortedCodexRateLimitResult())
+    }
+
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        settleAborted()
+        return
+      }
+      options.signal.addEventListener('abort', settleAborted, { once: true })
+      termDisposables.push({
+        dispose: () => options.signal?.removeEventListener('abort', settleAborted)
+      })
+    }
+
+    timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
         if (settleTimer) {
@@ -709,7 +789,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
             return
           }
           resolved = true
-          clearTimeout(timeout)
+          if (timeout) {
+            clearTimeout(timeout)
+            timeout = null
+          }
           cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
           // eslint-disable-next-line no-control-regex
@@ -742,7 +825,10 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
       if (!resolved) {
         resolved = true
-        clearTimeout(timeout)
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
         // eslint-disable-next-line no-control-regex
         const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
         const { session, weekly } = parsePtyStatus(clean)
@@ -773,6 +859,9 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 export async function fetchCodexRateLimits(
   options?: FetchCodexRateLimitsOptions
 ): Promise<ProviderRateLimits> {
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   // Why: never spawn the `codex` binary unless the user has signed in. Without
   // auth the RPC/PTY paths can only error, and spawning them shows up as an
   // unexpected background Codex process for users who don't use Codex.
@@ -790,8 +879,12 @@ export async function fetchCodexRateLimits(
   // Path A: try RPC first
   try {
     const rpcResult = await fetchViaRpc(options)
+    if (options?.signal?.aborted) {
+      return abortedCodexRateLimitResult()
+    }
     if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
-      return await withBackendRateLimitResetCredits(rpcResult, options)
+      const withResetCredits = await withBackendRateLimitResetCredits(rpcResult, options)
+      return options?.signal?.aborted ? abortedCodexRateLimitResult() : withResetCredits
     }
     if (isCodexAuthError(rpcResult.error)) {
       return rpcResult
@@ -802,6 +895,9 @@ export async function fetchCodexRateLimits(
     // Why: app-server can fail independently of the interactive CLI. Keep the
     // status-bar useful by trying the older /status PTY reader on RPC errors.
   } catch {
+    if (options?.signal?.aborted) {
+      return abortedCodexRateLimitResult()
+    }
     if (options?.allowPtyFallback === false) {
       return {
         provider: 'codex',
@@ -817,8 +913,19 @@ export async function fetchCodexRateLimits(
 
   // Path B: PTY fallback
   try {
-    return await withBackendRateLimitResetCredits(await fetchViaPty(options), options)
+    if (options?.signal?.aborted) {
+      return abortedCodexRateLimitResult()
+    }
+    const ptyResult = await fetchViaPty(options)
+    if (options?.signal?.aborted) {
+      return abortedCodexRateLimitResult()
+    }
+    const withResetCredits = await withBackendRateLimitResetCredits(ptyResult, options)
+    return options?.signal?.aborted ? abortedCodexRateLimitResult() : withResetCredits
   } catch (err) {
+    if (options?.signal?.aborted) {
+      return abortedCodexRateLimitResult()
+    }
     const message = err instanceof Error ? err.message : 'Unknown error'
     const isNotInstalled = message.includes('ENOENT')
     return {

@@ -67,6 +67,8 @@ function buildMarkdownMenuTemplate(
         markdownCommandItem('Heading 1', 'heading-1', webContents, point),
         markdownCommandItem('Heading 2', 'heading-2', webContents, point),
         markdownCommandItem('Heading 3', 'heading-3', webContents, point),
+        markdownCommandItem('Heading 4', 'heading-4', webContents, point),
+        markdownCommandItem('Heading 5', 'heading-5', webContents, point),
         { type: 'separator' },
         markdownCommandItem('Bullet list', 'bullet-list', webContents, point),
         markdownCommandItem('Numbered list', 'ordered-list', webContents, point),

@@ -8,6 +8,7 @@
  */
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
+import { warmWindowsConptyOnce } from './windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pwsh'
 
 export function parseArgs(argv: string[]): { socketPath: string; tokenPath: string } {
@@ -84,6 +85,8 @@ async function main(): Promise<void> {
   if (process.send) {
     process.send({ type: 'ready' })
   }
+
+  warmWindowsConptyOnce()
 }
 
 // Only auto-run when executed directly (not imported for testing)

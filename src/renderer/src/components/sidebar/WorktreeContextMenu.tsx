@@ -32,6 +32,7 @@ import {
   FolderTree
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
@@ -58,7 +59,6 @@ type Props = {
   worktree: Worktree
   children: React.ReactNode
   contentClassName?: string
-  newCardStyle?: boolean
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onOpenChange?: (open: boolean) => void
@@ -70,6 +70,27 @@ const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
 const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
 const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
+
+// Why: stable empty sentinels let closed menu wrappers subscribe to a referentially
+// stable value instead of the high-churn maps that delete teardown replaces. The
+// selector returns these when the menu is closed, so the wrapper stays inert to
+// teardown set() churn. Module-level (one allocation, never recreated per render) so
+// the reference is constant and Zustand's Object.is equality short-circuits.
+const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
+const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
+const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
+const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}
+const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
+const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
+
+// Why: the gating decision for the menu-only store subscriptions. When the menu is
+// closed we MUST return the same `empty` reference every render so Zustand's Object.is
+// equality short-circuits the subscription and the closed wrapper stays inert to delete
+// teardown's high-churn set()s. When open we return the live map so menu items see real
+// data. Extracted as a pure function so the stable-reference contract is unit-testable.
+export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
+  return menuOpen ? live : empty
+}
 
 function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
   const maybeElement = target as {
@@ -123,10 +144,6 @@ function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
-}
-
-function shouldShowReadToggleContextMenuItem(args: { newCardStyle: boolean }): boolean {
-  return !args.newCardStyle
 }
 
 function getWorktreeParentPickerAnchor(
@@ -249,7 +266,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
-  newCardStyle = false,
   selectedWorktrees,
   onContextMenuSelect,
   onOpenChange
@@ -286,13 +302,35 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const allWorktrees = useAllWorktrees()
-  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
+  // Why: these maps feed only items rendered inside the OPEN dropdown, yet delete
+  // teardown replaces them on every set(). Gate them behind menuOpen via stable
+  // empty sentinels so the (common) closed wrapper stays inert to that churn. The
+  // conditional lives INSIDE the selector so useAppStore is always called; the
+  // inline arrow (not a useCallback) re-reads the live map synchronously on the
+  // render where menuOpen flips true, so dependent useMemos recompute with real data.
+  const worktreeLineageById = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.worktreeLineageById, EMPTY_WORKTREE_LINEAGE_BY_ID)
+  )
+  const workspaceLineageByChildKey = useAppStore((s) =>
+    selectMenuScopedMap(
+      menuOpen,
+      s.workspaceLineageByChildKey,
+      EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY
+    )
+  )
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
-  const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const tabsByWorktree = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.tabsByWorktree, EMPTY_TABS_BY_WORKTREE)
+  )
+  const ptyIdsByTabId = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.ptyIdsByTabId, EMPTY_PTY_IDS_BY_TAB_ID)
+  )
+  const browserTabsByWorktree = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.browserTabsByWorktree, EMPTY_BROWSER_TABS_BY_WORKTREE)
+  )
+  const deleteStateByWorktreeId = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.deleteStateByWorktreeId, EMPTY_DELETE_STATE_BY_WORKTREE_ID)
+  )
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
@@ -351,7 +389,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     (item) =>
       worktreeLineageById[item.id] || workspaceLineageByChildKey[worktreeWorkspaceKey(item.id)]
   )
-  const showReadToggle = shouldShowReadToggleContextMenuItem({ newCardStyle })
   const eligibleParentCount = useMemo(
     () =>
       getEligibleWorktreeParents({
@@ -713,24 +750,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
-              {showReadToggle && (
-                <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-                  {worktree.isUnread ? (
-                    <BellOff className="size-3.5" />
-                  ) : (
-                    <Bell className="size-3.5" />
-                  )}
-                  {worktree.isUnread
-                    ? translate(
-                        'auto.components.sidebar.WorktreeContextMenu.8dacff1fe0',
-                        'Mark Read'
-                      )
-                    : translate(
-                        'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
-                        'Mark Unread'
-                      )}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
+                {worktree.isUnread ? (
+                  <BellOff className="size-3.5" />
+                ) : (
+                  <Bell className="size-3.5" />
+                )}
+                {worktree.isUnread
+                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
+                  : translate(
+                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
+                      'Mark Unread'
+                    )}
+              </DropdownMenuItem>
               {repo ? (
                 <>
                   <DropdownMenuSeparator />
@@ -842,6 +874,30 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   )}
             </TooltipContent>
           </Tooltip>
+          {/* Why: primary checkout rows can't be git-worktree-removed, so keep a
+             disabled Delete Worktree for parity with non-primary cards and pair
+             it with the enabled Remove Project action below. */}
+          {!isMultiContext && removesProject ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <DropdownMenuItem variant="destructive" disabled>
+                    <Trash2 className="size-3.5" />
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.deleteWorktree',
+                      'Delete Worktree'
+                    )}
+                  </DropdownMenuItem>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
+                  "Primary worktree — can't be deleted. Remove the project instead."
+                )}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           {/* Why: primary checkout rows remove the project from Orca instead of
              invoking git worktree deletion. Radix forwards unknown props to the
              DOM element, so `title` works directly without a wrapper span —
@@ -922,7 +978,6 @@ export {
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled,
   shouldRemoveProjectFromContextMenu,
-  shouldShowReadToggleContextMenuItem,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope

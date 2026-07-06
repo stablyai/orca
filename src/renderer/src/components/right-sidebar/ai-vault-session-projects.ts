@@ -1,4 +1,9 @@
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
@@ -14,7 +19,7 @@ export type AiVaultSessionProject = {
   label: string
   projectId?: string
   repoId?: string
-  hostKey?: string
+  hostKey?: ExecutionHostId
 }
 
 export type AiVaultProjectContext = {
@@ -27,7 +32,7 @@ export type AiVaultProjectContext = {
 type SessionProjectCandidate = {
   source: 'worktree' | 'setup'
   normalizedPath: string
-  hostKey: string
+  hostKey: ExecutionHostId
   projectId: string | null
   repoId: string | null
 }
@@ -63,7 +68,7 @@ export function buildAiVaultProjectContext({
   for (const session of sessions) {
     sessionProjectById.set(
       session.id,
-      resolveSessionProject(session.cwd, candidates, projectLabelByKey)
+      resolveSessionProject(session, candidates, projectLabelByKey)
     )
   }
 
@@ -147,10 +152,11 @@ function buildProjectCandidates(
     candidates.push({
       source: 'worktree',
       normalizedPath: normalizeRuntimePathForComparison(worktree.path),
-      hostKey:
-        worktree.hostId ??
-        setup?.hostId ??
-        (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID),
+      hostKey: resolveCandidateHostId(
+        worktree.hostId,
+        setup?.hostId,
+        repo ? getRepoExecutionHostId(repo) : null
+      ),
       projectId: worktree.projectId ?? setup?.projectId ?? null,
       repoId: worktree.repoId
     })
@@ -168,7 +174,7 @@ function buildProjectCandidates(
     candidates.push({
       source: 'setup',
       normalizedPath: normalizeRuntimePathForComparison(setup.path),
-      hostKey: setup.hostId || getRepoExecutionHostId(setup),
+      hostKey: resolveCandidateHostId(setup.hostId, getRepoExecutionHostId(setup)),
       projectId: setup.projectId,
       repoId: setup.repoId || null
     })
@@ -193,15 +199,28 @@ function buildProjectCandidates(
   return candidates
 }
 
+function resolveCandidateHostId(
+  ...values: readonly (string | null | undefined)[]
+): ExecutionHostId {
+  for (const value of values) {
+    const hostId = normalizeExecutionHostId(value)
+    if (hostId) {
+      return hostId
+    }
+  }
+  return LOCAL_EXECUTION_HOST_ID
+}
+
 function hasCandidatePath(pathValue: string): boolean {
   return pathValue.trim().length > 0
 }
 
 function resolveSessionProject(
-  cwd: string | null,
+  session: AiVaultSession,
   candidates: readonly SessionProjectCandidate[],
   projectLabelByKey: ReadonlyMap<string, string>
 ): AiVaultSessionProject {
+  const cwd = session.cwd
   if (!cwd) {
     return { kind: 'unknown', key: 'unknown', label: '' }
   }
@@ -209,14 +228,22 @@ function resolveSessionProject(
   const matches = candidates.filter((candidate) =>
     isPathInsideOrEqual(candidate.normalizedPath, cwd)
   )
-  const hostBuckets = new Set(matches.map((candidate) => candidate.hostKey))
-  if (hostBuckets.size > 1) {
-    // Why: session rows do not carry host ids yet, so overlapping local/SSH
-    // paths must stay visible without being attributed to the wrong project.
+  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
+  const hostMatches = sessionHostId
+    ? matches.filter((candidate) => candidate.hostKey === sessionHostId)
+    : matches
+  if (sessionHostId && matches.length > 0 && hostMatches.length === 0) {
+    // Why: same-path projects can exist on several hosts; a tagged transcript
+    // should never be attributed to a project on a different machine.
     return folderProject(cwd)
   }
 
-  const bestCandidate = matches.sort(compareCandidates)[0]
+  const hostBuckets = new Set(hostMatches.map((candidate) => candidate.hostKey))
+  if (!sessionHostId && hostBuckets.size > 1) {
+    return folderProject(cwd)
+  }
+
+  const bestCandidate = hostMatches.sort(compareCandidates)[0]
   if (!bestCandidate) {
     return folderProject(cwd)
   }

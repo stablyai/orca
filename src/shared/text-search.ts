@@ -19,7 +19,7 @@
  * large repos. Centralizing the policy prevents future drift. Both call
  * sites must use this module; see filesystem.ts and relay/fs-handler.ts.
  */
-import { posix, win32 } from 'path'
+import { posix, win32 } from 'node:path'
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
 import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'

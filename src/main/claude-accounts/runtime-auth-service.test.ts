@@ -1081,6 +1081,53 @@ describe('ClaudeRuntimeAuthService', () => {
     }
   })
 
+  it('rematerializes managed credentials over a wiped runtime blob while a Claude terminal is live', async () => {
+    setPlatform('win32')
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original', 'org-a')
+    // Why: Claude CLI wipes tokens in place (keeps identity fields) after an
+    // invalid_grant refresh — the exact blob shape this regression guards.
+    const parsedOriginal = JSON.parse(originalCredentials) as {
+      claudeAiOauth: Record<string, unknown>
+    }
+    const wipedCredentials = `${JSON.stringify({
+      claudeAiOauth: {
+        ...parsedOriginal.claudeAiOauth,
+        accessToken: '',
+        refreshToken: '',
+        expiresAt: 0
+      }
+    })}\n`
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      originalCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, { organizationUuid: 'org-a' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const { markClaudePtyExited, markClaudePtySpawned } = await import('./live-pty-gate')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    markClaudePtySpawned('live-claude-pty')
+    try {
+      writeFileSync(runtimeCredentialsPath, wipedCredentials, 'utf-8')
+      await service.syncForCurrentSelection()
+
+      expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(originalCredentials)
+      expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(originalCredentials)
+    } finally {
+      markClaudePtyExited('live-claude-pty')
+    }
+  })
+
   it('rejects unverifiable refreshed runtime credentials', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const originalCredentials = createClaudeCredentialsWithoutEmail('original')

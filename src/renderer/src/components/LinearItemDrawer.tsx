@@ -223,7 +223,7 @@ export function LinearIssueEditSection({
 
   const handlePriorityChange = useCallback(
     (value: string) => {
-      const priority = parseInt(value, 10)
+      const priority = Number.parseInt(value, 10)
       const prevPriority = localPriority
       run('priority', {
         mutate: () =>

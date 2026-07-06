@@ -53,7 +53,7 @@ import {
   formatResetCreditExpiry,
   getProviderUsageStatusLabel
 } from './tooltip'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
@@ -901,59 +901,69 @@ function MiniBar({ leftPct }: { leftPct: number }): React.JSX.Element {
 // Inline usage bars (compact bars for inactive accounts in the switcher)
 // ---------------------------------------------------------------------------
 
-function InlineUsageBars({
+export function InlineUsageBars({
   limits,
   isFetching
 }: {
   limits: ProviderRateLimits
   isFetching: boolean
 }): React.JSX.Element {
-  const sessionLeft = limits.session
-    ? Math.max(0, Math.round(100 - limits.session.usedPercent))
-    : null
-  const weeklyLeft = limits.weekly ? Math.max(0, Math.round(100 - limits.weekly.usedPercent)) : null
+  const usageWindows = [
+    limits.session
+      ? {
+          key: 'session',
+          left: Math.max(0, Math.round(100 - limits.session.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.d79c3362c4', '% 5h')
+        }
+      : null,
+    limits.weekly
+      ? {
+          key: 'weekly',
+          left: Math.max(0, Math.round(100 - limits.weekly.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', '% wk')
+        }
+      : null,
+    limits.fableWeekly
+      ? {
+          key: 'fableWeekly',
+          left: Math.max(0, Math.round(100 - limits.fableWeekly.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', '% Fable')
+        }
+      : null
+  ].filter((window): window is { key: string; left: number; label: string } => window !== null)
 
   return (
-    <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
-      {sessionLeft !== null && (
-        <div className="flex flex-1 items-center gap-1">
-          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+    <div
+      className={`grid w-full items-center gap-1.5 ${isFetching ? 'animate-pulse' : ''}`}
+      style={{
+        gridTemplateColumns: `repeat(${Math.max(1, usageWindows.length)}, minmax(0, 1fr))`
+      }}
+    >
+      {usageWindows.map((window) => (
+        <div key={window.key} className="flex min-w-0 items-center gap-1">
+          <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className={`h-full rounded-full ${barColor(sessionLeft)}`}
-              style={{ width: `${sessionLeft}%` }}
+              className={`h-full rounded-full ${barColor(window.left)}`}
+              style={{ width: `${window.left}%` }}
             />
           </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {sessionLeft}
-            {translate('auto.components.status.bar.StatusBar.d79c3362c4', '% 5h')}
+          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+            {window.left}
+            {window.label}
           </span>
         </div>
-      )}
-      {weeklyLeft !== null && (
-        <div className="flex flex-1 items-center gap-1">
-          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full rounded-full ${barColor(weeklyLeft)}`}
-              style={{ width: `${weeklyLeft}%` }}
-            />
-          </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {weeklyLeft}
-            {translate('auto.components.status.bar.StatusBar.5c938d39ac', '% wk')}
-          </span>
-        </div>
-      )}
-      {limits.status === 'error' && !limits.session && !limits.weekly && (
+      ))}
+      {usageWindows.length === 0 && limits.status === 'error' ? (
         <span className="text-[10px] text-muted-foreground">
           {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
         </span>
-      )}
+      ) : null}
     </div>
   )
 }
 
 function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return limits?.status === 'error' && !limits.session && !limits.weekly
+  return limits?.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly
 }
 
 function InlineUsageSignInAction({
@@ -1053,7 +1063,7 @@ function ProviderSegment({
   }
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !p.session && !p.weekly) {
+  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1072,7 +1082,7 @@ function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !p.session && !p.weekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1109,15 +1119,40 @@ function ProviderSegment({
     )
   }
 
+  const visibleWindows = [
+    p.session
+      ? {
+          key: 'session',
+          window: p.session,
+          label: formatWindowLabel(p.session.windowMinutes)
+        }
+      : null,
+    p.weekly
+      ? {
+          key: 'weekly',
+          window: p.weekly,
+          label: formatWindowLabel(p.weekly.windowMinutes)
+        }
+      : null,
+    p.fableWeekly
+      ? {
+          key: 'fableWeekly',
+          window: p.fableWeekly,
+          label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
+        }
+      : null
+  ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
+
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
-      {p.session && (
-        <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
-      )}
-      {p.session && p.weekly && <span className="text-muted-foreground">·</span>}
-      {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
+      {visibleWindows.map((window, index) => (
+        <React.Fragment key={window.key}>
+          {index > 0 && <span className="text-muted-foreground">·</span>}
+          <WindowLabel w={window.window} label={window.label} />
+        </React.Fragment>
+      ))}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -1643,7 +1678,7 @@ export function ProviderDetailsMenu({
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
                 {provider.provider === 'claude'
@@ -1654,7 +1689,9 @@ export function ProviderDetailsMenu({
                       ? 'O'
                       : provider.provider === 'kimi'
                         ? 'K'
-                        : 'X'}
+                        : provider.provider === 'minimax'
+                          ? 'M'
+                          : 'X'}
               </span>
             </span>
           ) : (
@@ -1796,17 +1833,21 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, minimax } = rateLimits
 
   // Why: a provider earns a bar from either a usable live snapshot or durable
   // setup in Settings. The durable path keeps account switchers visible while
   // usage snapshots hydrate, fail, or temporarily report unavailable.
   // Detection-gating (see status-bar-agent-gating) additionally hides per-CLI
   // bars when the agent isn't installed on PATH.
-  const visibleClaude = getVisibleUsageProvider('claude', claude, settings)
-  const visibleCodex = getVisibleUsageProvider('codex', codex, settings)
-  const visibleGemini = getVisibleUsageProvider('gemini', gemini, settings)
-  const visibleKimi = getVisibleUsageProvider('kimi', kimi, settings)
+  // Why: thread the cookie durability flag from RateLimitState so the
+  // MiniMax bar stays visible after a reload and between snapshot refreshes.
+  const usageSettings = { ...settings, minimaxCookieConfigured: rateLimits.minimaxCookieConfigured }
+  const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
+  const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
+  const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
+  const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
+  const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -1823,9 +1864,12 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
+  // Why: MiniMax is a cookie-auth provider, not a CLI on PATH, so detection-gating
+  // doesn't apply (same rationale as OpenCode Go below).
+  const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
-  const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, settings)
+  const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
@@ -1833,12 +1877,21 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible =
-    showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
+    showClaude ||
+    showCodex ||
+    showGemini ||
+    showOpencodeGo ||
+    showKimi ||
+    showMiniMax ||
+    showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. Settings are
   // included because managed accounts are durable even when live usage
   // snapshots are still hydrating or unavailable after an update.
-  const isEmptyUsageState = isUsageEmptyState({ claude, codex, gemini, opencodeGo, kimi }, settings)
+  const isEmptyUsageState = isUsageEmptyState(
+    { claude, codex, gemini, opencodeGo, kimi, minimax },
+    usageSettings
+  )
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
   // hidden even after providers are disconnected again.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
@@ -1847,7 +1900,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     codex?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching'
+    kimi?.status === 'fetching' ||
+    minimax?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -1919,6 +1973,17 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.fda8146810',
                   'Open Kimi usage details'
+                )}
+              />
+            )}
+            {showMiniMax && (
+              <ProviderDetailsMenu
+                provider={visibleMiniMax}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.06741a2f3d',
+                  'Open MiniMax usage details'
                 )}
               />
             )}
@@ -2052,6 +2117,16 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               {translate('auto.components.status.bar.StatusBar.5e59007df4', 'Kimi Usage')}
             </DropdownMenuCheckboxItem>
           )}
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('minimax')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('minimax')
+            }}
+          >
+            <MiniMaxIcon size={14} />
+            {translate('auto.components.status.bar.StatusBar.3bbf140864', 'MiniMax Usage')}
+          </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => {

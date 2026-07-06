@@ -1,8 +1,9 @@
-import { createReadStream } from 'fs'
-import { readFile, readdir } from 'fs/promises'
-import { join } from 'path'
-import { createInterface } from 'readline'
+import { createReadStream } from 'node:fs'
+import { readFile, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {
   addPreviewContent,
@@ -29,21 +30,49 @@ import {
   tokenTotal
 } from './session-scanner-values'
 
+type ParserSessionOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
+
 export async function parseCopilotSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'copilot',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
   const lines = createInterface({
     input: createReadStream(file.path, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
+  return parseCopilotSessionLines({ file, lines, platform })
+}
 
-  for await (const line of lines) {
+export async function parseCopilotSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {}
+): Promise<AiVaultSession | null> {
+  return parseCopilotSessionLines({
+    file,
+    lines: content.split(/\r?\n/),
+    platform,
+    options
+  })
+}
+
+async function parseCopilotSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  options?: ParserSessionOptions
+}): Promise<AiVaultSession | null> {
+  const accumulator = createAccumulator({
+    agent: 'copilot',
+    file: args.file,
+    sessionId: sessionIdFromFileName(args.file.path)
+  })
+
+  for await (const line of args.lines) {
     const record = parseJsonObject(line)
     if (!record) {
       continue
@@ -94,24 +123,47 @@ export async function parseCopilotSessionFile(
     }
   }
 
-  return finalizeSession(accumulator, platform)
+  return finalizeSession(accumulator, args.platform, args.options)
 }
 
 export async function parseCursorSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'cursor',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
   const lines = createInterface({
     input: createReadStream(file.path, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
+  return parseCursorSessionLines({ file, lines, platform })
+}
 
-  for await (const line of lines) {
+export async function parseCursorSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {}
+): Promise<AiVaultSession | null> {
+  return parseCursorSessionLines({
+    file,
+    lines: content.split(/\r?\n/),
+    platform,
+    options
+  })
+}
+
+async function parseCursorSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  options?: ParserSessionOptions
+}): Promise<AiVaultSession | null> {
+  const accumulator = createAccumulator({
+    agent: 'cursor',
+    file: args.file,
+    sessionId: sessionIdFromFileName(args.file.path)
+  })
+
+  for await (const line of args.lines) {
     const record = parseJsonObject(line)
     if (!record) {
       continue
@@ -132,7 +184,7 @@ export async function parseCursorSessionFile(
       )
     }
   }
-  return finalizeSession(accumulator, platform)
+  return finalizeSession(accumulator, args.platform, args.options)
 }
 
 export async function parseOpenCodeSessionFile(
@@ -207,7 +259,16 @@ export async function parseHermesSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  return parseHermesSessionContent(file, await readFile(file.path, 'utf-8'), platform)
+}
+
+export async function parseHermesSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {}
+): Promise<AiVaultSession | null> {
+  const record = asRecord(JSON.parse(content) as unknown)
   if (!record) {
     return null
   }
@@ -234,5 +295,5 @@ export async function parseHermesSessionFile(
   if (accumulator.messageCount === 0) {
     accumulator.messageCount = numberValue(record.message_count)
   }
-  return finalizeSession(accumulator, platform)
+  return finalizeSession(accumulator, platform, options)
 }

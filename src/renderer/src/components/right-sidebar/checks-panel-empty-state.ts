@@ -11,6 +11,7 @@ type ChecksPanelEmptyStateInput = {
   hasCurrentBranch?: boolean
   reviewLabel?: 'pull request' | 'merge request'
   reviewShortLabel?: 'PR' | 'MR'
+  hasAmbiguousGitHubHostedReview?: boolean
 }
 
 type ChecksPanelEmptyStateCopy = {
@@ -18,6 +19,9 @@ type ChecksPanelEmptyStateCopy = {
   description: string
 }
 
+/**
+ * Chooses neutral empty-state copy when GitHub review status is still ambiguous.
+ */
 export function getChecksPanelEmptyStateCopy(
   input: ChecksPanelEmptyStateInput
 ): ChecksPanelEmptyStateCopy {
@@ -39,6 +43,38 @@ export function getChecksPanelEmptyStateCopy(
   }
 
   const blockedReason = input.hostedReviewBlockedReason
+  // Why: a GitHub hosted-review card with no cached PR is ambiguous. Resolve the
+  // whole empty state here so the copy stays stable across a background PR
+  // refresh's lifecycle (idle/queued/in-flight/paused/skipped). Previously only
+  // the idle statuses were handled and active ones fell through to the
+  // publish-branch branch, so the panel flip-flopped between "Branch not
+  // published" and "Pull request status unavailable" as refreshes cycled. Only a
+  // hard refresh error still surfaces a distinct — but equally stable — message.
+  if (input.hasAmbiguousGitHubHostedReview === true) {
+    if (input.prRefreshStatus === 'error') {
+      return {
+        title: translate(
+          'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
+          'Could not refresh pull request'
+        ),
+        description: translate(
+          'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
+          'GitHub status could not be refreshed. Existing cached data was preserved.'
+        )
+      }
+    }
+    return {
+      title: translate(
+        'auto.components.right.sidebar.checks.panel.empty.state.3322603418',
+        'Pull request status unavailable'
+      ),
+      description: translate(
+        'auto.components.right.sidebar.checks.panel.empty.state.b597440265',
+        'Refresh GitHub status for this branch to load checks and review.'
+      )
+    }
+  }
+
   if (
     shouldShowChecksPanelPublishBranchAction({
       hostedReviewBlockedReason: blockedReason,
@@ -137,6 +173,9 @@ export function getChecksPanelEmptyStateCopy(
   }
 }
 
+/**
+ * Separates local-only branch guidance from hosted-review refresh uncertainty.
+ */
 export function shouldShowChecksPanelPublishBranchAction(input: {
   hostedReviewBlockedReason: HostedReviewCreationBlockedReason | undefined
   hasUpstream: boolean | undefined

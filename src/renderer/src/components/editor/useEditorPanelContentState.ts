@@ -3,7 +3,11 @@
    make the hook coordination harder to audit. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
-import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
+import {
+  getConnectionId,
+  getConnectionIdForFile,
+  isWorktreeConnectionResolved
+} from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
@@ -14,7 +18,11 @@ import {
   getRuntimeGitDiff,
   getRuntimeGitScope
 } from '@/runtime/runtime-git-client'
-import type { DiffContent, FileContent } from './editor-panel-content-types'
+import {
+  WORKTREE_OWNER_NOT_READY_ERROR,
+  type DiffContent,
+  type FileContent
+} from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import {
   isReloadableSingleFileDiffTab,
@@ -105,13 +113,24 @@ export function useEditorPanelContentState({
       fileReadGenerationCounterRef.current = generation
       fileReadGenerationRef.current[id] = generation
       try {
-        const connectionId = getConnectionIdForFile(worktreeId ?? null, filePath) ?? undefined
+        const resolvedConnectionId = getConnectionIdForFile(worktreeId ?? null, filePath)
+        const connectionId = resolvedConnectionId ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
         const activeSettings = useAppStore.getState().settings
         const readSettings = settingsForRuntimeOwner(
           activeSettings,
           restoredOpenFile?.runtimeEnvironmentId
         )
+        if (
+          resolvedConnectionId === undefined &&
+          !readSettings?.activeRuntimeEnvironmentId?.trim() &&
+          !isWorktreeConnectionResolved(worktreeId ?? null)
+        ) {
+          // Why: the backing repo hasn't hydrated yet (SSH still connecting), so
+          // we can't tell local from remote. Reading locally would deny a remote
+          // path with a terminal "access denied" (#6648); fail retryably instead.
+          throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
+        }
         if (restoredOpenFile?.filePath === filePath && restoredOpenFile.relativePath === filePath) {
           if (readSettings?.activeRuntimeEnvironmentId?.trim() || connectionId) {
             // Why: restored external-file tabs contain client-local absolute

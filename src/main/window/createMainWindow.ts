@@ -9,7 +9,7 @@ import {
   screen,
   shell
 } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
 import { getAppIconPath } from '../app-icon'
@@ -20,10 +20,17 @@ import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
+import {
+  DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
+  DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
+  RendererRecoveryCircuitBreaker
+} from '../crash-reporting/renderer-recovery-circuit-breaker'
 import {
   getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
+  nativeZoomCommandMatchesKeybindings,
   resolveWindowShortcutAction,
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
@@ -33,7 +40,6 @@ import {
   toModifierDoubleTapEvent
 } from '../../shared/modifier-double-tap-detector'
 import {
-  keybindingMatchesAction,
   normalizeTerminalShortcutPolicy,
   type KeybindingMatchOptions,
   type KeybindingOverrides
@@ -41,6 +47,7 @@ import {
 import { getMainE2EConfig } from '../e2e-config'
 import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
+import { resolveWindowCloseAction } from './window-close-decision'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -59,35 +66,15 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
-function nativeZoomCommandMatchesKeybindings(
-  direction: 'in' | 'out',
-  platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides,
-  options: KeybindingMatchOptions = {}
-): boolean {
-  const primary =
-    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
-  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
-  const candidates =
-    direction === 'in'
-      ? [
-          { key: '=', code: 'Equal', shift: false },
-          { key: '+', code: 'Equal', shift: true },
-          { key: 'Add', code: 'NumpadAdd', shift: false }
-        ]
-      : [
-          { key: '-', code: 'Minus', shift: false },
-          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
-        ]
-
-  return candidates.some((candidate) =>
-    keybindingMatchesAction(
-      actionId,
-      { ...primary, alt: false, ...candidate },
-      platform,
-      keybindings,
-      options
-    )
+function isMacAppPasteInput(input: Electron.Input): boolean {
+  return (
+    process.platform === 'darwin' &&
+    input.type === 'keyDown' &&
+    input.meta &&
+    !input.control &&
+    !input.alt &&
+    !input.shift &&
+    (input.code === 'KeyV' || input.key.toLowerCase() === 'v')
   )
 }
 
@@ -137,12 +124,25 @@ type CreateMainWindowOptions = {
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => boolean
+  /** Called when consecutive auto-recoveries hit the circuit-breaker limit, so
+   *  the host can record diagnostics and surface a recovery prompt instead of
+   *  letting Orca crash-loop. */
+  onRendererRecoveryExhausted?: (info: {
+    details: Electron.RenderProcessGoneDetails
+    webContentsId: number
+    recentRecoveryCount: number
+  }) => void
   /** Why: main-process startup must register IPC handlers before the renderer
    *  begins booting, or eager renderer calls can race into missing channels. */
   deferLoad?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
+  /** Why: the in-place renderer-recovery reload re-fires did-finish-load, whose
+   *  local-PTY orphan sweep would kill live sessions across the single window
+   *  before session restore re-attaches them (#5787). This callback lets the host
+   *  mark that one reload so the sweep can be skipped for it. */
+  onBeforeRecoveryReload?: (webContentsId: number) => void
 }
 
 export function loadMainWindow(mainWindow: BrowserWindow): void {
@@ -329,11 +329,34 @@ export function createMainWindow(
   // handler re-runs maximize() from the persisted savedMaximized flag, snapping
   // the window back to full-screen after the user already resized it (#591).
   let handledInitialReadyToShow = false
-  mainWindow.on('ready-to-show', () => {
+  let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
+    process.platform === 'win32'
+      ? setTimeout(() => {
+          // Why: GPU/driver failures on Windows can prevent ready-to-show forever,
+          // leaving the only app window hidden while the main process stays alive.
+          initialRevealFallbackTimer = null
+          revealInitialWindow()
+        }, 10_000)
+      : null
+  initialRevealFallbackTimer?.unref?.()
+
+  const clearInitialRevealFallbackTimer = (): void => {
+    if (initialRevealFallbackTimer) {
+      clearTimeout(initialRevealFallbackTimer)
+      initialRevealFallbackTimer = null
+    }
+  }
+
+  const revealInitialWindow = (): void => {
+    if (mainWindow.isDestroyed()) {
+      clearInitialRevealFallbackTimer()
+      return
+    }
     if (handledInitialReadyToShow) {
       return
     }
     handledInitialReadyToShow = true
+    clearInitialRevealFallbackTimer()
 
     // Why: in E2E headless mode, the window stays hidden to avoid stealing
     // focus and screen real estate during test runs. Playwright interacts
@@ -346,7 +369,8 @@ export function createMainWindow(
       mainWindow.maximize()
     }
     mainWindow.show()
-  })
+  }
+  mainWindow.on('ready-to-show', revealInitialWindow)
 
   // Why: persist window bounds so the app restores to the user's last
   // position/size instead of maximizing on every launch. Debounce to avoid
@@ -485,6 +509,9 @@ export function createMainWindow(
     webPreferences.allowRunningInsecureContent = false
     webPreferences.contextIsolation = true
     webPreferences.sandbox = true
+    // Why: keep renderer-created webviews aligned with the browser guest policy
+    // even if the host markup omits or misspells a preference.
+    Object.assign(webPreferences, ORCA_BROWSER_GUEST_WEB_PREFERENCES)
     // Why: preserve the registry-validated partition instead of forcing the
     // legacy constant. This lets imported/isolated session profiles use their
     // own cookie/storage partition while keeping all other hardening intact.
@@ -608,6 +635,14 @@ export function createMainWindow(
   }
   let rendererProcessGone = false
   let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: stop a deterministic per-load renderer fault (bad GPU driver, corrupt
+  // chunk, AV interference) from auto-reloading every ~0.25-1.3s forever
+  // (Windows crash-loop clusters). The breaker opens after too many recoveries
+  // inside a rolling window and hands off to the host's recovery surface.
+  const rendererRecoveryCircuitBreaker = new RendererRecoveryCircuitBreaker({
+    windowMs: DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
+    maxRecoveries: DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES
+  })
   const clearRendererRecoveryTimer = (): void => {
     if (rendererRecoveryTimer) {
       clearTimeout(rendererRecoveryTimer)
@@ -636,9 +671,23 @@ export function createMainWindow(
       ) {
         return
       }
+      const recovery = rendererRecoveryCircuitBreaker.registerRecoveryAttempt(Date.now())
+      if (!recovery.allowed) {
+        // Why: too many reloads in the window means reloading again will just
+        // crash again. Stop the loop and let the host surface a recovery prompt.
+        opts?.onRendererRecoveryExhausted?.({
+          details,
+          webContentsId: rendererWebContentsId,
+          recentRecoveryCount: recovery.recentRecoveryCount
+        })
+        return
+      }
       // Why: a transient Network Service / renderer loss can leave Chromium
       // showing a blank shell. Reload the app document once so the user gets
       // back to a usable window instead of needing a full relaunch.
+      // Why: mark this one in-place reload so the did-finish-load orphan sweep
+      // spares live local PTYs until session restore re-attaches them (#5787).
+      opts?.onBeforeRecoveryReload?.(mainWindow.webContents.id)
       loadMainWindow(mainWindow)
     }, 250)
   }
@@ -716,6 +765,9 @@ export function createMainWindow(
       case 'openQuickOpen':
         mainWindow.webContents.send('ui:openQuickOpen')
         return
+      case 'toggleQuickCommandsMenu':
+        mainWindow.webContents.send('ui:toggleQuickCommandsMenu')
+        return
       case 'openNewWorkspace':
         mainWindow.webContents.send('ui:openNewWorkspace')
         return
@@ -790,6 +842,11 @@ export function createMainWindow(
       return true
     }
 
+    if (action.type === 'toggleQuickCommandsMenu' && isAutoRepeat) {
+      event.preventDefault()
+      return true
+    }
+
     event.preventDefault()
     if (capturedTerminalActionId) {
       mainWindow.webContents.send('ui:terminalShortcutCaptured', {
@@ -813,6 +870,14 @@ export function createMainWindow(
       } else {
         mainWindow.webContents.openDevTools({ mode: 'undocked' })
       }
+      return
+    }
+
+    if (isMacAppPasteInput(input)) {
+      // Why: native chat/terminal panes can own focus without being native
+      // editable controls, so route Cmd+V through Orca's paste ownership first.
+      event.preventDefault()
+      mainWindow.webContents.send('ui:appMenuPaste')
       return
     }
 
@@ -996,24 +1061,28 @@ export function createMainWindow(
       return
     }
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
-    if (windowCloseConfirmed) {
-      windowCloseConfirmed = false
+    // Why: a hung-but-ALIVE renderer (neither gone nor crashed) must still hit
+    // the renderer's save/running-process confirmation; only a genuinely gone or
+    // crashed renderer — which cannot answer window:close-requested — may bypass
+    // it. Routing this through the pure decision locks that invariant (#5787).
+    const closeAction = resolveWindowCloseAction({
+      windowCloseConfirmed,
+      rendererProcessGone,
+      isRendererCrashed
+    })
+    if (closeAction !== 'request-confirmation') {
+      // allow-confirmed: the renderer already replied and re-entered close().
+      // bypass-gone: after a native renderer crash the renderer cannot answer
+      // window:close-requested, so let Cmd+Q / OS close complete instead of
+      // trapping the user in a blank, unquittable window.
+      if (closeAction === 'allow-confirmed') {
+        windowCloseConfirmed = false
+      }
       // Why: past this point Electron/OS may emit resize/move/unmaximize as
       // the window is destroyed. Freeze bounds persistence so those
       // teardown events can't clobber the user's saved window size — which
       // would otherwise make the post-update relaunch come up at minWidth ×
       // minHeight (issue surfaced in v1.3.26-rc2).
-      windowClosing = true
-      if (boundsTimer) {
-        clearTimeout(boundsTimer)
-        boundsTimer = null
-      }
-      return
-    }
-    if (rendererProcessGone || isRendererCrashed) {
-      // Why: after a native renderer crash the renderer cannot answer
-      // window:close-requested. Let Cmd+Q / OS close complete instead of
-      // trapping the user in a blank, unquittable window.
       windowClosing = true
       if (boundsTimer) {
         clearTimeout(boundsTimer)
@@ -1113,6 +1182,7 @@ export function createMainWindow(
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
+    clearInitialRevealFallbackTimer()
     // Why: default-deny the Cmd+B carve-out after the window is gone so a
     // stale-true flag can't leak past subsequent state transitions. Paired
     // with the webContents lifecycle resets above.

@@ -2,6 +2,8 @@ import type { Terminal, IDisposable } from '@xterm/xterm'
 
 type TerminalCommandLifecycleOptions = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
+  /** OSC 133;C — the shell exec'd a command; the pane's foreground changed. */
+  onCommandStarted?: () => void
 }
 
 type OscTerminator = {
@@ -54,6 +56,10 @@ export function createTerminalCommandLifecycle(options: TerminalCommandLifecycle
 
   const handleOsc133 = (payload: string): void => {
     const [sequence, exitCode] = payload.split(';')
+    if (sequence === 'C') {
+      options.onCommandStarted?.()
+      return
+    }
     if (sequence === 'D') {
       options.onCommandFinished(parseBestEffortExitCode(exitCode))
     }

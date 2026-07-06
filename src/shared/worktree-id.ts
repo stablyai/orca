@@ -48,6 +48,6 @@ export function getWorktreePathBasenameFromId(worktreeId: string): string | null
   if (!normalizedPath) {
     return null
   }
-  const basename = normalizedPath.split(/[\\/]/).filter(Boolean).at(-1)?.trim()
+  const basename = normalizedPath.split(/[\\/]/).findLast(Boolean)?.trim()
   return basename || null
 }

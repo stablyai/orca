@@ -1,8 +1,18 @@
 /* eslint-disable max-lines -- Why: this file centralizes cross-platform CLI install state, launcher resolution, and PATH registration so the public shell command stays consistent across packaged and development builds. */
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { lstat, mkdir, readFile, readlink, symlink, unlink, writeFile } from 'node:fs/promises'
+import { constants, existsSync } from 'node:fs'
+import {
+  access,
+  lstat,
+  mkdir,
+  readFile,
+  readlink,
+  stat,
+  symlink,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -104,8 +114,8 @@ export class CliInstaller {
   }
 
   async getStatus(): Promise<CliInstallStatus> {
-    const spec = this.resolveInstallSpec()
-    if (!spec) {
+    const defaultSpec = this.resolveInstallSpec()
+    if (!defaultSpec) {
       return {
         platform: this.platform,
         commandName: this.commandName,
@@ -133,11 +143,11 @@ export class CliInstaller {
       return {
         platform: this.platform,
         commandName: this.commandName,
-        commandPath: spec.commandPath,
-        pathDirectory: dirname(spec.commandPath),
+        commandPath: defaultSpec.commandPath,
+        pathDirectory: dirname(defaultSpec.commandPath),
         pathConfigured: false,
         launcherPath: null,
-        installMethod: spec.installMethod,
+        installMethod: defaultSpec.installMethod,
         supported: false,
         state: 'unsupported',
         currentTarget: null,
@@ -146,6 +156,7 @@ export class CliInstaller {
       }
     }
 
+    const spec = await this.resolveActiveInstallSpec(defaultSpec, launcherPath)
     const baseStatus =
       spec.installMethod === 'symlink'
         ? await this.inspectSymlink(spec.commandPath, launcherPath)
@@ -249,6 +260,66 @@ export class CliInstaller {
     }
 
     return null
+  }
+
+  private async resolveActiveInstallSpec(
+    defaultSpec: InstallSpec,
+    launcherPath: string
+  ): Promise<InstallSpec> {
+    if (
+      this.commandPathOverride ||
+      this.platform !== 'darwin' ||
+      defaultSpec.installMethod !== 'symlink'
+    ) {
+      return defaultSpec
+    }
+
+    const activeCommandPath = await this.findActivePathCommand(
+      launcherPath,
+      defaultSpec.commandPath
+    )
+    return activeCommandPath
+      ? {
+          commandPath: activeCommandPath,
+          installMethod: defaultSpec.installMethod
+        }
+      : defaultSpec
+  }
+
+  private async findActivePathCommand(
+    launcherPath: string,
+    defaultCommandPath: string
+  ): Promise<string | null> {
+    let reachedDefaultCommandPath = false
+    for (const commandPath of this.getPathCommandCandidates(defaultCommandPath)) {
+      const isDefaultCommandPath = samePathEntry(this.platform, commandPath, defaultCommandPath)
+      reachedDefaultCommandPath ||= isDefaultCommandPath
+
+      if (!(await isExecutableFile(commandPath))) {
+        continue
+      }
+
+      const status = await this.inspectSymlink(commandPath, launcherPath)
+      if (status.state !== 'not_installed') {
+        if (reachedDefaultCommandPath && !isDefaultCommandPath && status.state === 'conflict') {
+          // Why: a non-Orca command after an empty/default install slot can be
+          // shadowed safely by installing there; no user file needs replacing.
+          continue
+        }
+        // Why: PATH lookup is first-match-wins; use the executable command the
+        // shell will actually run, while preserving conflicts that shadow Orca.
+        return commandPath
+      }
+    }
+    return null
+  }
+
+  private getPathCommandCandidates(defaultCommandPath: string): string[] {
+    const commandName = basename(defaultCommandPath)
+    const pathCandidates = splitPathEntries(this.platform, this.processPathEnv ?? '').map((entry) =>
+      join(entry, commandName)
+    )
+    return uniquePathEntries(this.platform, pathCandidates)
   }
 
   private resolveCommandPath(): string | null {
@@ -906,6 +977,20 @@ function splitPathEntries(platform: NodeJS.Platform, value: string | null): stri
     .filter(Boolean)
 }
 
+function uniquePathEntries(platform: NodeJS.Platform, entries: string[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const entry of entries) {
+    const key = platform === 'win32' ? normalizeWindowsPath(entry) : entry
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    result.push(entry)
+  }
+  return result
+}
+
 function samePathEntry(platform: NodeJS.Platform, left: string, right: string): boolean {
   return platform === 'win32'
     ? normalizeWindowsPath(left) === normalizeWindowsPath(right)
@@ -915,6 +1000,19 @@ function samePathEntry(platform: NodeJS.Platform, left: string, right: string): 
 function isPathInsideOrEqual(parentPath: string, childPath: string): boolean {
   const childRelative = relative(parentPath, childPath)
   return childRelative === '' || (!childRelative.startsWith('..') && !isAbsolute(childRelative))
+}
+
+async function isExecutableFile(commandPath: string): Promise<boolean> {
+  try {
+    const stats = await stat(commandPath)
+    if (!stats.isFile()) {
+      return false
+    }
+    await access(commandPath, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function normalizeWindowsPath(value: string): string {

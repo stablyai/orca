@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { shouldBypassXtermKeyboardEvent, type XtermBypassEvent } from './xterm-bypass-policy'
+import {
+  shouldBypassXtermKeyboardEvent,
+  shouldSuppressTerminalImeKeyboardEvent,
+  type XtermBypassEvent
+} from './xterm-bypass-policy'
 
 function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
   return {
@@ -152,6 +156,65 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
   it('does not bubble Cmd chords on non-Mac (Super+C has no clipboard meaning there)', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
+    ).toBe(false)
+  })
+})
+
+describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
+  const idle = { isMac: false, compositionActive: false }
+  const composing = { isMac: false, compositionActive: true }
+
+  it('suppresses keyboard events while Chromium reports active IME composition', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace', isComposing: true }),
+        idle
+      )
+    ).toBe(true)
+  })
+
+  it('suppresses Windows IME Process keys', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        idle
+      )
+    ).toBe(true)
+  })
+
+  it('does not suppress ordinary Backspace outside IME composition', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Backspace', code: 'Backspace' }), idle)
+    ).toBe(false)
+  })
+
+  it('suppresses IME-owned editing keys while composition is active', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Backspace', code: 'Backspace' }),
+        composing
+      )
+    ).toBe(true)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'ArrowDown', code: 'ArrowDown' }),
+        composing
+      )
+    ).toBe(true)
+  })
+
+  it('does not suppress ordinary text keys solely because composition is active', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), composing)
+    ).toBe(false)
+  })
+
+  it('does not suppress keypress events because they carry committed text', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keypress', key: '中', code: '', isComposing: true }),
+        idle
+      )
     ).toBe(false)
   })
 })

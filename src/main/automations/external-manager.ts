@@ -1,10 +1,10 @@
 /* eslint-disable max-lines -- Why: external automation discovery, pagination,
  * and lifecycle routing share provider/target validation and remote relay fallbacks. */
-import { execFile } from 'child_process'
-import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
-import { homedir } from 'os'
-import { join } from 'path'
+import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type {
   ExternalAutomationAction,
   ExternalAutomationActionInput,
@@ -18,6 +18,7 @@ import type {
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer } from '../ipc/ssh'
+import { isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
 import { mapHermesJobs, mapOpenClawJobs } from './external-job-mappers'
 import {
   clearHermesCronOutputRunCountCache,
@@ -305,6 +306,9 @@ export async function listExternalAutomationManagers(
     Promise.all(
       store
         .getSshTargets()
+        // Why: runtime-owned hidden targets are excluded from SSH/run-target
+        // surfaces; don't probe them for external automations either.
+        .filter((target) => !isRuntimeOwnedSshTarget(target))
         .flatMap((target) => [listRemoteHermesManager(target), listRemoteOpenClawManager(target)])
     )
   ])

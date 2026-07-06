@@ -7,10 +7,15 @@ import type {
   SourceControlAiSettings
 } from '../../../../shared/source-control-ai-types'
 import {
+  SOURCE_CONTROL_ACTION_IDS,
+  type SourceControlActionId
+} from '../../../../shared/source-control-ai-actions'
+import {
   createRepoAiDraftState,
   dropRepoLegacyInstructionForAction,
   resolveRepoAiDraftState
 } from './RepositorySourceControlAiSection'
+import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
 import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAiEnablement'
 
 describe('RepositorySourceControlAiSection draft state', () => {
@@ -95,6 +100,53 @@ describe('RepositorySourceControlAiEnablement', () => {
     expect(markup).toContain('separate features follows those features&#x27; settings')
     expect(markup).toContain('Show')
     expect(markup).not.toContain('Source Control AI enabled')
+  })
+})
+
+describe('RepositorySourceControlAiActionRows', () => {
+  it('renders save controls on dirty repository action recipes', () => {
+    const actionDirtyById = Object.fromEntries(
+      SOURCE_CONTROL_ACTION_IDS.map((actionId) => [actionId, actionId === 'fixCommitFailure'])
+    ) as Record<SourceControlActionId, boolean>
+    const source = {
+      enabled: true,
+      agentId: null,
+      selectedModelByAgent: {},
+      selectedThinkingByModel: {},
+      customAgentCommand: '',
+      instructionsByOperation: {}
+    } as SourceControlAiSettings
+
+    const markup = renderToStaticMarkup(
+      React.createElement(RepositorySourceControlAiActionRows, {
+        repoId: 'repo-1',
+        repoAi: {
+          actionOverrides: {
+            fixCommitFailure: {
+              agentId: null,
+              commandInputTemplate: '{basePrompt}\n\nrepo'
+            }
+          }
+        },
+        source,
+        defaultTuiAgent: 'codex',
+        isSaving: false,
+        actionDirtyById,
+        onActionModeChange: () => {},
+        onActionAgentChange: () => {},
+        onActionTemplateChange: () => {},
+        onActionAgentArgsChange: () => {},
+        onAppendVariable: () => {},
+        onActionDiscard: () => {},
+        onActionSave: () => {}
+      })
+    )
+
+    expect(markup).toContain('Commit failure fixes')
+    expect(markup).toContain('Unsaved changes')
+    expect(markup).toContain('Discard')
+    expect(markup).toContain('Save')
+    expect(markup).toContain('repo-repo-1-source-control-ai-fixCommitFailure')
   })
 })
 

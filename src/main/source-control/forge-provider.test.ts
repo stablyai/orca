@@ -10,7 +10,7 @@ const {
   getGiteaRepoSlugMock,
   getMergeRequestForBranchMock,
   getProjectSlugMock,
-  getPRForBranchMock,
+  getPRForBranchOutcomeMock,
   getRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
@@ -22,7 +22,7 @@ const {
   getGiteaRepoSlugMock: vi.fn(),
   getMergeRequestForBranchMock: vi.fn(),
   getProjectSlugMock: vi.fn(),
-  getPRForBranchMock: vi.fn(),
+  getPRForBranchOutcomeMock: vi.fn(),
   getRepoSlugMock: vi.fn()
 }))
 
@@ -39,7 +39,7 @@ vi.mock('../gitlab/merge-request-creation', () => ({
 vi.mock('../github/client', () => ({
   createGitHubPullRequest: createGitHubPullRequestMock,
   getRepoSlug: getRepoSlugMock,
-  getPRForBranch: getPRForBranchMock
+  getPRForBranchOutcome: getPRForBranchOutcomeMock
 }))
 
 vi.mock('../bitbucket/client', () => ({
@@ -86,7 +86,7 @@ describe('forge provider interface', () => {
     getGiteaRepoSlugMock.mockReset()
     getMergeRequestForBranchMock.mockReset()
     getProjectSlugMock.mockReset()
-    getPRForBranchMock.mockReset()
+    getPRForBranchOutcomeMock.mockReset()
     getRepoSlugMock.mockReset()
   })
 
@@ -247,14 +247,18 @@ describe('forge provider interface', () => {
   })
 
   it('adapts GitHub branch lookup through the shared provider contract', async () => {
-    getPRForBranchMock.mockResolvedValue({
-      number: 7,
-      title: 'Provider branch',
-      state: 'open',
-      url: 'https://github.com/team/orca/pull/7',
-      checksStatus: 'success',
-      updatedAt: '2026-05-29T00:00:00.000Z',
-      mergeable: 'MERGEABLE'
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'found',
+      fetchedAt: 1,
+      pr: {
+        number: 7,
+        title: 'Provider branch',
+        state: 'open',
+        url: 'https://github.com/team/orca/pull/7',
+        checksStatus: 'success',
+        updatedAt: '2026-05-29T00:00:00.000Z',
+        mergeable: 'MERGEABLE'
+      }
     })
 
     await expect(
@@ -269,8 +273,53 @@ describe('forge provider interface', () => {
       number: 7,
       status: 'success'
     })
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', '', null, 'ssh-1', 7, {
-      acceptMergedFallbackPR: true
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', '', null, 'ssh-1', 7, {
+      acceptMergedFallbackPR: true,
+      currentHeadOid: null
     })
+  })
+
+  it('passes the worktree HEAD oid through to the GitHub lookup', async () => {
+    getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 1 })
+
+    await getForgeProviderById('github').getReviewForBranch({
+      repoPath: '/repo',
+      connectionId: null,
+      branch: 'feature/x',
+      githubCurrentHeadOid: 'abc1234'
+    })
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature/x', null, null, null, {
+      currentHeadOid: 'abc1234'
+    })
+  })
+
+  it('returns null for a confirmed GitHub no-pr lookup', async () => {
+    getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 1 })
+
+    await expect(
+      getForgeProviderById('github').getReviewForBranch({
+        repoPath: '/repo',
+        connectionId: null,
+        branch: 'feature/x'
+      })
+    ).resolves.toBeNull()
+  })
+
+  it('throws on a GitHub upstream error instead of reporting no review', async () => {
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'network',
+      message: 'connection reset',
+      fetchedAt: 1
+    })
+
+    await expect(
+      getForgeProviderById('github').getReviewForBranch({
+        repoPath: '/repo',
+        connectionId: null,
+        branch: 'feature/x'
+      })
+    ).rejects.toThrow(/network/)
   })
 })

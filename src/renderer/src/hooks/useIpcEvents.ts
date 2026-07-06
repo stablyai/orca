@@ -32,6 +32,7 @@ import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import type {
   RuntimeBrowserDriverState,
+  RuntimeTerminalPresentation,
   RuntimeTerminalDriverState
 } from '../../../shared/runtime-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
@@ -62,6 +63,7 @@ import {
 } from '../../../shared/agent-status-identity'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
@@ -111,12 +113,14 @@ import {
   resetAgentHookCompletionNotificationCoordinators,
   syncAgentHookCompletionNotificationSettings
 } from './agent-hook-completion-notifications'
+import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -131,6 +135,19 @@ function getShortcutPlatform(): NodeJS.Platform {
 const BROWSER_AUTOMATION_BOOTSTRAP_LEASE_MS = 10_000
 const RUNTIME_PROJECT_REFRESH_CONCURRENCY = 5
 const browserAutomationBootstrapLeaseByPageId = new Map<string, { token: string; timer: number }>()
+
+function resolveTerminalPresentation(data: {
+  presentation?: RuntimeTerminalPresentation
+  activate?: boolean
+}): RuntimeTerminalPresentation | undefined {
+  if (data.presentation) {
+    return data.presentation
+  }
+  if (data.activate === true) {
+    return 'focused'
+  }
+  return undefined
+}
 
 function isPinnedSessionTab(store: AppState, worktreeId: string, visibleId: string): boolean {
   return (store.unifiedTabsByWorktree?.[worktreeId] ?? []).some(
@@ -252,6 +269,12 @@ function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<stri
   return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
 }
 
+function focusTerminalInitiatedTab(tabId: string, leafId?: string | null): void {
+  if (!focusRuntimeTerminalSurface(tabId, leafId)) {
+    focusTerminalTabSurface(tabId, leafId)
+  }
+}
+
 function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
   store.setActiveView('terminal')
   store.setActiveWorktree(worktreeId)
@@ -260,12 +283,6 @@ function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string):
   store.markWorktreeVisited(worktreeId)
   if (!store.isNavigatingHistory) {
     store.recordWorktreeVisit(worktreeId)
-  }
-}
-
-function focusTerminalInitiatedTab(tabId: string, leafId?: string | null): void {
-  if (!focusRuntimeTerminalSurface(tabId, leafId)) {
-    focusTerminalTabSurface(tabId, leafId)
   }
 }
 
@@ -1215,6 +1232,12 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onToggleQuickCommandsMenu(() => {
+        window.dispatchEvent(new CustomEvent(TOGGLE_QUICK_COMMANDS_MENU_EVENT))
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onOpenNewWorkspace(() => {
         const store = useAppStore.getState()
         openNewWorkspaceFromShortcut(store)
@@ -1328,6 +1351,7 @@ export function useIpcEvents(): void {
           requestId,
           worktreeId,
           command,
+          cwd,
           env,
           launchConfig,
           launchToken,
@@ -1335,6 +1359,7 @@ export function useIpcEvents(): void {
           title,
           ptyId,
           activate,
+          presentation,
           tabId,
           leafId,
           splitFromLeafId,
@@ -1355,12 +1380,15 @@ export function useIpcEvents(): void {
               return
             }
             const store = useAppStore.getState()
-            const shouldActivate = activate !== false
+            const terminalPresentation = resolveTerminalPresentation({ presentation, activate })
+            const shouldActivate = terminalPresentation === 'focused'
+            const shouldSurfaceOwner = terminalPresentation !== 'background'
             if (shouldActivate) {
               activateTerminalInitiatedWorktree(store, worktreeId)
             }
+            const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
             const existingTab = ptyId
-              ? (store.tabsByWorktree[worktreeId] ?? []).find(
+              ? worktreeTabs.find(
                   (candidate) =>
                     candidate.ptyId === ptyId ||
                     (store.ptyIdsByTabId[candidate.id] ?? []).includes(ptyId)
@@ -1368,24 +1396,59 @@ export function useIpcEvents(): void {
               : undefined
             const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
             const splitTargetTab = isSplitReveal
-              ? (store.tabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === tabId)
+              ? worktreeTabs.find((candidate) => candidate.id === tabId)
               : undefined
             if (isSplitReveal && !splitTargetTab) {
               throw new Error(`Terminal tab ${tabId} not found`)
             }
-            const reusedTab = existingTab ?? splitTargetTab
+            const hintedPendingTab =
+              ptyId && tabId && !isSplitReveal
+                ? worktreeTabs.find((candidate) => {
+                    if (candidate.id !== tabId) {
+                      return false
+                    }
+                    const candidatePtyIds = store.ptyIdsByTabId[candidate.id] ?? []
+                    return candidate.ptyId == null && candidatePtyIds.length === 0
+                  })
+                : undefined
+            // Why: runtime fallback can reveal a PTY for a renderer-created
+            // pending tab; that id collision is adoption only until another
+            // PTY is already associated with the hinted tab.
+            const reusedTab = existingTab ?? splitTargetTab ?? hintedPendingTab
             const tab =
               reusedTab ??
               (ptyId
                 ? store.createTab(worktreeId, undefined, undefined, {
                     initialPtyId: ptyId,
                     activate: shouldActivate,
+                    ...(launchAgent
+                      ? {
+                          launchAgent,
+                          ...initialAgentTabViewModeProps(store.settings, {
+                            agent: launchAgent
+                          })
+                        }
+                      : {}),
+                    ...(cwd ? { startupCwd: cwd } : {}),
                     // Why: tabId hint comes from CLI-spawned PTYs whose env
                     // already has the pane key baked in. Adopting the tab under
                     // the same id keeps hook-event attribution working.
                     ...(tabId !== undefined ? { id: tabId } : {})
                   })
-                : store.createTab(worktreeId))
+                : store.createTab(
+                    worktreeId,
+                    undefined,
+                    undefined,
+                    shouldActivate
+                      ? cwd
+                        ? { startupCwd: cwd }
+                        : undefined
+                      : {
+                          activate: false,
+                          recordInteraction: false,
+                          ...(cwd ? { startupCwd: cwd } : {})
+                        }
+                  ))
             // Why: when an existing tab already owns this ptyId, we reuse it instead of
             // minting a new one — but the PTY env already carries a paneKey from main.
             // If the existing tab id doesn't match the hint, hook attribution degrades
@@ -1398,6 +1461,8 @@ export function useIpcEvents(): void {
             if (shouldActivate) {
               store.setActiveTabType('terminal')
               store.setActiveTab(tab.id)
+            }
+            if (shouldSurfaceOwner) {
               store.revealWorktreeInSidebar(worktreeId)
               focusTerminalInitiatedTab(tab.id, leafId)
             }
@@ -1510,7 +1575,9 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTerminalCreate((data) => {
         try {
-          if (isRuntimeEnvironmentActive()) {
+          // Why: runtime-session requests are host-owned tabs materialized by this
+          // renderer, not ordinary local creates that bypass remote runtime mode.
+          if (isRuntimeEnvironmentActive() && data.source !== 'runtime-session') {
             window.api.ui.replyTerminalCreate({
               requestId: data.requestId,
               error: translate(
@@ -1529,7 +1596,9 @@ export function useIpcEvents(): void {
             })
             return
           }
-          const shouldActivate = data.activate !== false
+          const terminalPresentation = resolveTerminalPresentation(data)
+          const shouldActivate = terminalPresentation === 'focused'
+          const shouldSurfaceOwner = terminalPresentation !== 'background'
           if (shouldActivate) {
             activateTerminalInitiatedWorktree(store, worktreeId)
           } else {
@@ -1541,12 +1610,25 @@ export function useIpcEvents(): void {
               })
             )
           }
-          const tab = store.createTab(
-            worktreeId,
-            data.targetGroupId,
-            undefined,
-            shouldActivate ? undefined : { activate: false, recordInteraction: false }
-          )
+          const tabOptions = data.launchAgent
+            ? {
+                ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
+                launchAgent: data.launchAgent,
+                ...initialAgentTabViewModeProps(store.settings, {
+                  agent: data.launchAgent
+                }),
+                ...(data.cwd ? { startupCwd: data.cwd } : {})
+              }
+            : shouldActivate
+              ? data.cwd
+                ? { startupCwd: data.cwd }
+                : undefined
+              : {
+                  activate: false,
+                  recordInteraction: false,
+                  ...(data.cwd ? { startupCwd: data.cwd } : {})
+                }
+          const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
           if (data.afterTabId) {
             const createdUnifiedTab = useAppStore
               .getState()
@@ -1577,6 +1659,8 @@ export function useIpcEvents(): void {
           if (shouldActivate) {
             store.setActiveTabType('terminal')
             store.setActiveTab(tab.id)
+          }
+          if (shouldSurfaceOwner) {
             store.revealWorktreeInSidebar(worktreeId)
             focusTerminalInitiatedTab(tab.id)
           }
@@ -2081,6 +2165,7 @@ export function useIpcEvents(): void {
             title: data.url,
             targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
+            sessionPartition: data.sessionPartition,
             activate: data.activate === true
           })
           // Why: registerGuest fires with the page ID (not workspace ID) as
@@ -2143,7 +2228,7 @@ export function useIpcEvents(): void {
           } else {
             destroyPersistentWebview(data.browserPageId)
           }
-          store.switchBrowserTabProfile(owningWorkspace.id, data.profileId)
+          store.switchBrowserTabProfile(owningWorkspace.id, data.profileId, data.sessionPartition)
           window.api.ui.replyTabSetProfile({ requestId: data.requestId })
         } catch (err) {
           window.api.ui.replyTabSetProfile({
@@ -2393,16 +2478,25 @@ export function useIpcEvents(): void {
       })
     )
 
-    // Hydrate initial rate limit state then subscribe to push updates
-    window.api.rateLimits.get().then((state) => {
-      useAppStore.getState().setRateLimitsFromPush(state as RateLimitState)
-    })
-
+    let initialRateLimitsSnapshotPending = true
+    let receivedRateLimitsPushBeforeInitialSnapshot = false
     unsubs.push(
       window.api.rateLimits.onUpdate((state) => {
+        if (initialRateLimitsSnapshotPending) {
+          receivedRateLimitsPushBeforeInitialSnapshot = true
+        }
         useAppStore.getState().setRateLimitsFromPush(state as RateLimitState)
       })
     )
+    // Why: the startup get is a fallback; a live push may already include
+    // system-default account snapshots that an older get result lacks.
+    window.api.rateLimits.get().then((state) => {
+      initialRateLimitsSnapshotPending = false
+      if (receivedRateLimitsPushBeforeInitialSnapshot) {
+        return
+      }
+      useAppStore.getState().setRateLimitsFromPush(state as RateLimitState)
+    })
 
     const unsubscribeWorkspaceSpaceProgress = window.api.workspaceSpace?.onProgress?.(
       (progress) => {
@@ -2749,6 +2843,9 @@ export function useIpcEvents(): void {
         agentType: data.agentType,
         toolName: data.toolName,
         toolInput: data.toolInput,
+        // Why: the live AskUserQuestion prompt rides this IPC field; omitting it
+        // here silently dropped the native question card on web/mobile clients.
+        interactivePrompt: data.interactivePrompt,
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted
       })
@@ -2854,6 +2951,20 @@ export function useIpcEvents(): void {
       ) {
         // Why: renderer may receive an old/stale main-process child completion.
         // Keep the defensive store guard and completion notification path in sync.
+        return 'dropped'
+      }
+      if (
+        shouldSuppressCodexAutoApprovalStatus(statusPayload, {
+          paneKey: data.paneKey,
+          tabId: data.tabId,
+          terminalHandle: data.terminalHandle,
+          launchToken: data.launchToken,
+          providerSession: data.providerSession,
+          existingProviderSession: existingStatus?.providerSession
+        })
+      ) {
+        // Why: Codex yolo permission hooks are not user-actionable, and must
+        // not drive status, synthetic titles, unread badges, or notifications.
         return 'dropped'
       }
       const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)

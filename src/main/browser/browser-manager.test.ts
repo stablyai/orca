@@ -1435,9 +1435,9 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    const beforeInputHandler = guestOnMock.mock.calls
-      .filter(([event]) => event === 'before-input-event')
-      .at(-1)?.[1] as
+    const beforeInputHandler = guestOnMock.mock.calls.findLast(
+      ([event]) => event === 'before-input-event'
+    )?.[1] as
       | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
       | undefined
 
@@ -1528,9 +1528,9 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    const beforeInputHandler = guestOnMock.mock.calls
-      .filter(([event]) => event === 'before-input-event')
-      .at(-1)?.[1] as
+    const beforeInputHandler = guestOnMock.mock.calls.findLast(
+      ([event]) => event === 'before-input-event'
+    )?.[1] as
       | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
       | undefined
 
@@ -1675,9 +1675,9 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    const beforeInputHandler = guestOnMock.mock.calls
-      .filter(([event]) => event === 'before-input-event')
-      .at(-1)?.[1] as
+    const beforeInputHandler = guestOnMock.mock.calls.findLast(
+      ([event]) => event === 'before-input-event'
+    )?.[1] as
       | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
       | undefined
 
@@ -1773,9 +1773,9 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    const beforeInputHandler = guestOnMock.mock.calls
-      .filter(([event]) => event === 'before-input-event')
-      .at(-1)?.[1] as
+    const beforeInputHandler = guestOnMock.mock.calls.findLast(
+      ([event]) => event === 'before-input-event'
+    )?.[1] as
       | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
       | undefined
 
@@ -1849,9 +1849,9 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    const beforeInputHandler = guestOnMock.mock.calls
-      .filter(([event]) => event === 'before-input-event')
-      .at(-1)?.[1] as
+    const beforeInputHandler = guestOnMock.mock.calls.findLast(
+      ([event]) => event === 'before-input-event'
+    )?.[1] as
       | ((event: { preventDefault: () => void }, input: Record<string, unknown>) => void)
       | undefined
 

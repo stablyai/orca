@@ -36,6 +36,7 @@ describe('mobile session startup', () => {
     )
 
     expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
+    expect(startupEffect).toContain('notifyClients: false')
     expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
     expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
       startupEffect.indexOf('await fetchSessionTabs()')
@@ -58,10 +59,20 @@ describe('mobile session startup', () => {
     expect(pendingActivationEffect).toContain("sendRequest('session.tabs.activate'")
     expect(pendingActivationEffect).toContain('tabId: activePendingTerminalTab.id')
     expect(pendingActivationEffect).toContain('leafId: activePendingTerminalTab.leafId')
+    expect(pendingActivationEffect).toContain('notifyClients: false')
     expect(pendingActivationEffect).toContain(
       'applySessionTabs((response as RpcSuccess).result as SessionTabsResult)'
     )
     expect(pendingActivationEffect).toContain('scheduleDelayedAction(() => void fetchSessionTabs()')
+  })
+
+  it('keeps mobile session tab activation local to the phone', () => {
+    const activationRequests = source.split("sendRequest('session.tabs.activate'").slice(1)
+
+    expect(activationRequests).toHaveLength(4)
+    for (const request of activationRequests) {
+      expect(request.slice(0, request.indexOf('})'))).toContain('notifyClients: false')
+    }
   })
 
   it('keeps dynamic agent rows above fixed New Tab actions', () => {

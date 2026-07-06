@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readFreshGitStatus } from './mobile-open-pr-prefill'
+import { getMobilePrEligibilityReadiness, readFreshGitStatus } from './mobile-open-pr-prefill'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
 const fallback = { branch: 'old', entries: [] } as unknown as MobileGitStatusResult
@@ -31,5 +31,25 @@ describe('readFreshGitStatus', () => {
     })
     const out = await readFreshGitStatus('w', fallback, send as never)
     expect(out).toBe(fallback)
+  })
+})
+
+describe('getMobilePrEligibilityReadiness', () => {
+  it('keeps readiness fields absent when git status is unknown', () => {
+    expect(getMobilePrEligibilityReadiness(null)).toEqual({})
+  })
+
+  it('derives dirty and upstream readiness from git status', () => {
+    const status = {
+      entries: [{ path: 'a.ts' }],
+      upstreamStatus: { hasUpstream: true, ahead: 2, behind: 1 }
+    } as unknown as MobileGitStatusResult
+
+    expect(getMobilePrEligibilityReadiness(status)).toEqual({
+      hasUncommittedChanges: true,
+      hasUpstream: true,
+      ahead: 2,
+      behind: 1
+    })
   })
 })

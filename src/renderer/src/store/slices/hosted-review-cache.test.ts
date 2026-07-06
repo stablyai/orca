@@ -139,7 +139,15 @@ describe('hosted review cache revalidation', () => {
     ).resolves.toEqual(review)
 
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/pr')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/pr',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
     expect(store.getState().hostedReviewCache[cacheKey]?.data).toEqual(review)
 
     resolveRefresh(updatedReview)
@@ -192,11 +200,14 @@ describe('hosted review cache revalidation', () => {
     }
 
     expect(
-      store.getState().hostedReviewCache[getHostedReviewCacheKey('/repo', 'feature/cache-0')]
+      store.getState().hostedReviewCache[
+        getHostedReviewCacheKey('/repo', 'feature/cache-0', null, 'repo-1', null, null, true)
+      ]
     ).toBeUndefined()
     expect(
-      store.getState().hostedReviewCache[getHostedReviewCacheKey('/repo', 'feature/cache-500')]
-        ?.data
+      store.getState().hostedReviewCache[
+        getHostedReviewCacheKey('/repo', 'feature/cache-500', null, 'repo-1', null, null, true)
+      ]?.data
     ).toMatchObject({ title: 'feature/cache-500' })
     expect(Object.keys(store.getState().hostedReviewCache)).toHaveLength(500)
     expect(_getHostedReviewRequestGenerationCountForTest()).toBe(0)

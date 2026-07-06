@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this file keeps git worktree create/remove behavior together so local cleanup and creation invariants stay in one place. */
-import { stat } from 'fs/promises'
-import { join, posix, win32 } from 'path'
+import { stat } from 'node:fs/promises'
+import { join, posix, win32 } from 'node:path'
 import {
   branchHasNoUnmergedChangesOnAnyTarget,
   getBranchCleanupTargetRefs,
@@ -14,6 +14,7 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -29,6 +30,7 @@ type SparseWorktreeCreateError = Error & {
 
 export type GitWorktreeExecOptions = {
   wslDistro?: string
+  signal?: AbortSignal
 }
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
@@ -66,11 +68,21 @@ type LocalBaseRefRefreshability =
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
+// Why: bound `git worktree add` so a OneDrive cloud-placeholder base path can't
+// stall its checkout writes for minutes (STA-1292) — a stuck create then fails
+// fast instead of spinning forever. Generous enough not to kill a legit large
+// checkout (mirrors the SYNC runner's cloud-placeholder floor, #7225).
+export const WORKTREE_ADD_TIMEOUT_MS = 180_000
+
 function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
-): { cwd: string; wslDistro?: string } {
-  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+): { cwd: string; wslDistro?: string; signal?: AbortSignal } {
+  return {
+    cwd,
+    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+    ...(options.signal ? { signal: options.signal } : {})
+  }
 }
 
 function getErrorCode(error: unknown): string | undefined {
@@ -98,7 +110,17 @@ function isNotGitRepositoryError(error: unknown): boolean {
 }
 
 function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+  // `-z` is this command's only flag older Git (<2.36) lacks, so its usage
+  // exit 129 signals the rejection in any locale; stderr match is a fallback.
+  if (getErrorCode(error) === '129') {
+    return true
+  }
+
+  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(getErrorText(error))
+}
+
+function isUnsupportedRevParsePathFormatError(error: unknown): boolean {
+  return /(?:unknown|invalid|unrecognized).*(?:--path-format|path-format)/i.test(
     getErrorText(error)
   )
 }
@@ -348,6 +370,103 @@ function looksLikeWindowsPath(pathValue: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
 }
 
+function resolveRevParsePath(repoPath: string, value: string): string {
+  if (posix.isAbsolute(value) || win32.isAbsolute(value)) {
+    return value
+  }
+  // Old git ignores `--path-format=absolute`, so a relative toplevel/git-dir
+  // must be resolved against the scanned repo path.
+  return looksLikeWindowsPath(repoPath)
+    ? win32.resolve(repoPath, value)
+    : posix.resolve(repoPath, value)
+}
+
+type RepoLocation = { topLevel: string; commonDir: string }
+
+function parseRepoLocation(repoPath: string, output: string): RepoLocation | undefined {
+  // Old git (pre `--path-format`) echoes the unrecognized flag to stdout and
+  // exits 0 rather than erroring, so drop any echoed `-`-prefixed lines and
+  // read the two trailing path lines (toplevel, then git-common-dir). Strip only
+  // the trailing CR, not surrounding spaces — git paths may legitimately start
+  // or end with a space.
+  const lines = output
+    .split('\n')
+    .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
+    .filter((line) => line.length > 0 && !line.startsWith('-'))
+  if (lines.length < 2) {
+    return undefined
+  }
+  const [topLevel, commonDir] = lines.slice(-2)
+  return {
+    topLevel: resolveRevParsePath(repoPath, topLevel),
+    commonDir: resolveRevParsePath(repoPath, commonDir)
+  }
+}
+
+async function readRepoLocation(
+  repoPath: string,
+  resolveBasePath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<RepoLocation | undefined> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+      gitExecOptions(repoPath, options)
+    )
+    return parseRepoLocation(resolveBasePath, stdout)
+  } catch (error) {
+    if (!isUnsupportedRevParsePathFormatError(error)) {
+      return undefined
+    }
+  }
+
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '--show-toplevel', '--git-common-dir'],
+      gitExecOptions(repoPath, options)
+    )
+    return parseRepoLocation(resolveBasePath, stdout)
+  } catch {
+    return undefined
+  }
+}
+
+async function normalizeMainWorktreePath(
+  repoPath: string,
+  worktrees: GitWorktreeInfo[],
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  const mainIndex = worktrees.findIndex((worktree) => worktree.isMainWorktree)
+  const mainWorktree = worktrees[mainIndex]
+  // Compare in the Git-output space: under WSL the porcelain/rev-parse paths are
+  // Linux while repoPath is a UNC path, so without translating, a UNC repoPath
+  // never matches the early-return and fires a needless rev-parse on every poll.
+  // Use the platform-independent UNC parser so the comparison holds regardless
+  // of host OS; the runner still receives the original repoPath for WSL routing.
+  const wslRepo = parseWslUncPath(repoPath)
+  const comparablePath = wslRepo ? wslRepo.linuxPath : repoPath
+  if (!mainWorktree || areWorktreePathsEqual(mainWorktree.path, comparablePath)) {
+    return worktrees
+  }
+
+  const location = await readRepoLocation(repoPath, comparablePath, options)
+  if (!location) {
+    return worktrees
+  }
+
+  // Why: only a separate-git-dir/submodule main worktree reports the Git
+  // directory as the main entry — i.e. the main entry equals git-common-dir.
+  // A linked worktree's main entry is a real working root, so gating on this
+  // equality avoids overwriting it with the linked worktree's own toplevel.
+  if (!areWorktreePathsEqual(mainWorktree.path, location.commonDir)) {
+    return worktrees
+  }
+
+  const normalized = [...worktrees]
+  normalized[mainIndex] = { ...mainWorktree, path: location.topLevel }
+  return normalized
+}
+
 /**
  * Parse the porcelain output of `git worktree list --porcelain`.
  */
@@ -441,7 +560,11 @@ async function readWorktreeList(
       cwd: repoPath,
       ...options
     })
-    return parseWorktreeList(stdout, { nulDelimited: true })
+    return normalizeMainWorktreePath(
+      repoPath,
+      parseWorktreeList(stdout, { nulDelimited: true }),
+      options
+    )
   } catch (error) {
     if (!isUnsupportedWorktreeListZError(error)) {
       throw error
@@ -454,21 +577,94 @@ async function readWorktreeList(
     cwd: repoPath,
     ...options
   })
-  return parseWorktreeList(stdout)
+  return normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout), options)
 }
 
-/**
- * List all worktrees for a git repo at the given path.
- */
-export async function listWorktrees(
+async function readTranslatedWorktreeGraph(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return (await readWorktreeList(repoPath, options)).map((worktree) => {
+    const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+    return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
+  })
+}
+
+export async function listWorktreeGraph(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   try {
-    const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
-      const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
-      return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
-    })
+    return await readTranslatedWorktreeGraph(repoPath, options)
+  } catch (err) {
+    if (getErrorCode(err) === 'ENOENT') {
+      try {
+        await stat(repoPath)
+      } catch (statErr) {
+        if (getErrorCode(statErr) === 'ENOENT') {
+          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+          return []
+        }
+      }
+    }
+    if (isNotGitRepositoryError(err)) {
+      return []
+    }
+    console.warn(`[git/worktree] listWorktreeGraph failed for ${repoPath}:`, err)
+    return []
+  }
+}
+
+// Why: a cold start lists every repo's worktrees from several independent
+// paths (renderer worktrees fetch, lineage resolution, boot pty-registry
+// hydration), and each `git worktree list` is a full process spawn —
+// expensive on Windows (issue #7225). Sharing the in-flight promise collapses
+// concurrent duplicate scans; nothing is served after a scan settles.
+const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
+
+// Why: a caller listing AFTER a mutation completed must observe it, so it may
+// not join a scan that started before the mutation. Bumping the generation on
+// mutation completion retires older in-flight scans from sharing (they still
+// settle for their original callers).
+const worktreeScanGenerations = new Map<string, number>()
+
+function bumpWorktreeScanGeneration(repoPath: string): void {
+  worktreeScanGenerations.set(repoPath, (worktreeScanGenerations.get(repoPath) ?? 0) + 1)
+}
+
+/**
+ * List all worktrees for a git repo at the given path. Concurrent calls for
+ * the same repo share one scan (unless the caller passes an AbortSignal,
+ * which must only cancel its own scan).
+ */
+export function listWorktrees(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  if (options.signal) {
+    return listWorktreesUnshared(repoPath, options)
+  }
+  const generation = worktreeScanGenerations.get(repoPath) ?? 0
+  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${generation}`
+  const inFlight = inFlightWorktreeScans.get(key)
+  if (inFlight) {
+    return inFlight
+  }
+  const scan = listWorktreesUnshared(repoPath, options).finally(() => {
+    if (inFlightWorktreeScans.get(key) === scan) {
+      inFlightWorktreeScans.delete(key)
+    }
+  })
+  inFlightWorktreeScans.set(key, scan)
+  return scan
+}
+
+async function listWorktreesUnshared(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  try {
+    const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
     return annotateSparseCheckoutStatus(worktrees)
   } catch (err) {
     if (getErrorCode(err) === 'ENOENT') {
@@ -619,6 +815,30 @@ export async function addWorktree(
   noCheckout = false,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
+  try {
+    return await performAddWorktree(
+      repoPath,
+      worktreePath,
+      branch,
+      baseBranch,
+      refreshLocalBaseRef,
+      noCheckout,
+      options
+    )
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
+}
+
+async function performAddWorktree(
+  repoPath: string,
+  worktreePath: string,
+  branch: string,
+  baseBranch?: string,
+  refreshLocalBaseRef = false,
+  noCheckout = false,
+  options: AddWorktreeOptions = {}
+): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   const args = ['worktree', 'add']
@@ -664,7 +884,12 @@ export async function addWorktree(
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, gitExecOptions(repoPath, options))
+  await gitExecFileAsync(args, {
+    ...gitExecOptions(repoPath, options),
+    // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292)
+    // fails fast rather than hanging worktree creation indefinitely.
+    timeout: WORKTREE_ADD_TIMEOUT_MS
+  })
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}
@@ -808,7 +1033,11 @@ export async function moveWorktree(
   oldPath: string,
   newPath: string
 ): Promise<void> {
-  await gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+  try {
+    await gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
 }
 
 /**
@@ -822,6 +1051,19 @@ export async function removeWorktree(
   // (e.g. rollback of a failed creation) where the fresh branch has no user work
   // and must be removed outright. User-initiated deletes leave it false so unmerged
   // commits are preserved.
+  options: RemoveWorktreeOptions = {}
+): Promise<RemoveWorktreeResult> {
+  try {
+    return await performRemoveWorktree(repoPath, worktreePath, force, options)
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
+}
+
+async function performRemoveWorktree(
+  repoPath: string,
+  worktreePath: string,
+  force = false,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   const removedWorktree =

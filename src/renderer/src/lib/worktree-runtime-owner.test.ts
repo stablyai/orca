@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getExecutionHostIdForWorktree,
@@ -47,6 +48,13 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
     })
   })
 
+  it('keeps the synthetic floating workspace local while a runtime is focused', () => {
+    expect(getSettingsForWorktreeRuntimeOwner(state, FLOATING_TERMINAL_WORKTREE_ID)).toEqual({
+      activeRuntimeEnvironmentId: null
+    })
+    expect(getExecutionHostIdForWorktree(state, FLOATING_TERMINAL_WORKTREE_ID)).toBe('local')
+  })
+
   it('routes folder workspaces to their project group runtime owner', () => {
     expect(getSettingsForWorktreeRuntimeOwner(state, 'folder:runtime-folder')).toEqual({
       activeRuntimeEnvironmentId: 'folder-env'
@@ -59,6 +67,41 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
       activeRuntimeEnvironmentId: null
     })
     expect(getExecutionHostIdForWorktree(state, 'folder:local-folder')).toBe('local')
+  })
+
+  it('keeps folder workspaces with their own SSH target off the focused runtime', () => {
+    const folderConnectionState: WorktreeRuntimeOwnerState = {
+      ...state,
+      projectGroups: [{ id: 'folder-group', connectionId: null, executionHostId: null }],
+      folderWorkspaces: [
+        { id: 'folder-ssh', projectGroupId: 'folder-group', connectionId: 'folder-remote' }
+      ]
+    }
+
+    expect(getSettingsForWorktreeRuntimeOwner(folderConnectionState, 'folder:folder-ssh')).toEqual({
+      activeRuntimeEnvironmentId: null
+    })
+    expect(getExecutionHostIdForWorktree(folderConnectionState, 'folder:folder-ssh')).toBe(
+      'ssh:folder-remote'
+    )
+  })
+
+  it('prefers project group runtime ownership over stale folder SSH targets', () => {
+    const staleFolderConnectionState: WorktreeRuntimeOwnerState = {
+      ...state,
+      folderWorkspaces: [
+        { id: 'runtime-folder', projectGroupId: 'runtime-group', connectionId: 'old-ssh' }
+      ]
+    }
+
+    expect(
+      getSettingsForWorktreeRuntimeOwner(staleFolderConnectionState, 'folder:runtime-folder')
+    ).toEqual({
+      activeRuntimeEnvironmentId: 'folder-env'
+    })
+    expect(getExecutionHostIdForWorktree(staleFolderConnectionState, 'folder:runtime-folder')).toBe(
+      'runtime:folder-env'
+    )
   })
 })
 

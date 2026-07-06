@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
+import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -43,7 +44,7 @@ describe('SshPtyProvider', () => {
         cols: 80,
         rows: 24,
         cwd: undefined,
-        env: undefined
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
       })
       expect(result).toEqual({ id: scopedPty1 })
     })
@@ -62,7 +63,104 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: '/home/user',
-        env: { FOO: 'bar' }
+        env: { FOO: 'bar', [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
+      })
+    })
+
+    it('forwards pane identity as relay metadata on fresh spawn', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-2' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        paneKey: 'tab-a:leaf-a',
+        tabId: 'tab-a'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        paneKey: 'tab-a:leaf-a',
+        tabId: 'tab-a'
+      })
+    })
+
+    it('forwards explicit shellOverride and terminalWindowsWslDistro to the relay mux', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-2' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        shellOverride: 'powershell.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        shellOverride: 'powershell.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+    })
+
+    it('preserves an explicit remote Powerlevel10k wizard env value', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-2' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set' }
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set' }
+      })
+    })
+
+    it('honors requests to delete the remote Powerlevel10k wizard env value', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-2' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set' },
+        envToDelete: [POWERLEVEL10K_WIZARD_DISABLE_ENV]
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: {}
+      })
+    })
+
+    it('forwards provider command delivery to the relay', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-provider-command' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        command: 'echo from-runtime',
+        commandDelivery: 'provider',
+        startupCommandDelivery: 'shell-ready'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        command: 'echo from-runtime',
+        commandDelivery: 'provider',
+        startupCommandDelivery: 'shell-ready'
       })
     })
 
@@ -88,6 +186,7 @@ describe('SshPtyProvider', () => {
         env: {
           PATH: '/home/user/.orca-relay/bin:/usr/bin',
           ORCA_TERMINAL_HANDLE: 'term_ssh',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
           ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
           ORCA_RELAY_NODE_PATH: '/usr/bin/node',
@@ -117,6 +216,7 @@ describe('SshPtyProvider', () => {
         cwd: undefined,
         env: {
           ORCA_TERMINAL_HANDLE: 'term_ssh',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
           ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
           ORCA_RELAY_NODE_PATH: '/usr/bin/node',
@@ -147,6 +247,7 @@ describe('SshPtyProvider', () => {
         cwd: undefined,
         env: {
           Path: 'C:/Users/me/.orca-relay/bin;C:/Windows/System32;C:/Tools',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin',
           ORCA_RELAY_DIR: 'C:/Users/me/.orca-remote/relay-v1',
           ORCA_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
@@ -195,6 +296,27 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('reattaches with explicit pane identity when hook env was stripped', async () => {
+      mux.request.mockResolvedValue({ replay: 'buffered-output' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'pty-old',
+        paneKey: 'tab-a:leaf-a',
+        tabId: 'tab-a'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.attach', {
+        id: 'pty-old',
+        cols: 80,
+        rows: 24,
+        suppressReplayNotification: true,
+        expectedPaneKey: 'tab-a:leaf-a',
+        expectedTabId: 'tab-a'
+      })
+    })
+
     it('does not fresh-spawn over an expired reattach session', async () => {
       mux.request.mockRejectedValueOnce(new Error('PTY "pty-old" not found'))
 
@@ -236,6 +358,20 @@ describe('SshPtyProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('pty.attach', {
       id: 'pty-1',
       suppressReplayNotification: true
+    })
+  })
+
+  it('attachForReconnect forwards expected identity when provided', async () => {
+    await provider.attachForReconnect(scopedPty1, {
+      paneKey: 'tab-a:leaf-a',
+      tabId: 'tab-a'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith('pty.attach', {
+      id: 'pty-1',
+      suppressReplayNotification: true,
+      expectedPaneKey: 'tab-a:leaf-a',
+      expectedTabId: 'tab-a'
     })
   })
 

@@ -15,10 +15,10 @@ import {
   type Page,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { execSync } from 'child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
+import { execSync } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
@@ -35,6 +35,29 @@ type RestartSession = {
   close: (app: ElectronApplication) => Promise<void>
   /** Remove the shared userDataDir after the test is done. */
   dispose: () => Promise<void>
+}
+
+async function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(resolve, ms)
+    timeout.unref?.()
+  })
+}
+
+async function removeProfileDir(userDataDir: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      rmSync(userDataDir, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (attempt === 4) {
+        throw error
+      }
+      // Why: on Windows, taskkill can return before Electron/PTY handles are
+      // fully released, making immediate temp-profile deletion flaky.
+      await delay(250)
+    }
+  }
 }
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
@@ -90,7 +113,7 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
   const dispose = async (): Promise<void> => {
     await cleanupE2EDaemons(userDataDir)
     if (existsSync(userDataDir)) {
-      rmSync(userDataDir, { recursive: true, force: true })
+      await removeProfileDir(userDataDir)
     }
   }
 
@@ -183,11 +206,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     // without depending on boolean fields on the worktree record.
     const primary =
       allWorktrees.find(
-        (worktree) =>
-          worktree.path
-            .split(/[\\/]+/)
-            .filter(Boolean)
-            .pop() === repoBasename
+        (worktree) => worktree.path.split(/[\\/]+/).findLast(Boolean) === repoBasename
       ) ?? allWorktrees[0]
     if (!primary) {
       return null

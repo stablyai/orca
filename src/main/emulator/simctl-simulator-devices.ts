@@ -1,6 +1,6 @@
-import { execFile } from 'child_process'
-import type { ExecFileException } from 'child_process'
-import { platform } from 'os'
+import { execFile } from 'node:child_process'
+import type { ExecFileException } from 'node:child_process'
+import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
 import { execServeSimCommand, type ServeSimExecutable } from './serve-sim-execution'
 
@@ -191,8 +191,10 @@ export async function shutdownSimulatorDevice(udid: string): Promise<void> {
           resolve()
           return
         }
-        const message = error.message.toLowerCase()
-        if (message.includes('shutdown') || message.includes('current state')) {
+        // Why: execFile's message echoes the command line, so only the actual
+        // already-off state is idempotent; other current states are real failures.
+        const message = `${error.message}\n${stderr?.toString() ?? ''}`.toLowerCase()
+        if (/\bcurrent state:\s*shutdown\b/.test(message)) {
           resolve()
           return
         }

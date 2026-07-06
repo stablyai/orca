@@ -22,22 +22,21 @@ export function getTaskPageGitHubWorkItemStateLabel(item: GitHubWorkItemStatusIt
     : translate('auto.components.TaskPage.606a85c774', 'Open')
 }
 
-// Why: mirror GitHub Primer StateLabel tones — draft is neutral gray, open is
-// green, merged purple, closed red. No custom amber/dashed treatment.
-// Note: Draft uses a different pattern (muted-foreground bg on border bg) because
-// it's a non-actionable "meta" state, while other states use solid color fills.
+// Why: use the same muted pill tones as merge/check badges — light washes with
+// readable foreground text in both themes. Draft stays neutral gray because
+// it's a non-actionable meta state.
 export function getTaskPageGitHubWorkItemStateTone(item: GitHubWorkItemStatusItem): string {
   if (item.type === 'pr') {
     if (item.state === 'merged') {
-      return 'border-purple-600/20 bg-purple-600 text-purple-50 dark:border-purple-400/20 dark:bg-purple-500 dark:text-white'
+      return 'border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300'
     }
     if (item.state === 'draft') {
       return 'border-border/60 bg-muted-foreground/70 text-background dark:bg-muted-foreground/60 dark:text-foreground'
     }
     if (item.state === 'closed') {
-      return 'border-rose-600/20 bg-rose-600 text-rose-50 dark:border-rose-400/20 dark:bg-rose-500 dark:text-white'
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
     }
-    return 'border-emerald-600/20 bg-emerald-600 text-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-500 dark:text-white'
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
   }
 
   if (item.state === 'closed') {

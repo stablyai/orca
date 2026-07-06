@@ -16,8 +16,10 @@ import {
   LINEAR_RELATIONS_CAP,
   clampLinearIssueDepth
 } from '../../shared/linear-agent-access'
+import { extractLinearInlineMedia } from '../../shared/linear-inline-media'
 import type { ResolvedIssue } from './issue-context-client'
 import { getRequiredEntry, withLinearRead } from './issue-context-client'
+import { getPublicFileUrlClient } from './client'
 import { includeErrorCode } from './issue-context-errors'
 import { readConnectionPages } from './issue-context-pagination'
 import {
@@ -118,20 +120,25 @@ async function readComments(resolved: ResolvedIssue): Promise<{
   const entry = getRequiredEntry(resolved.workspace.id)
   const response = await readConnectionPages(LINEAR_COMMENTS_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
-      const raw = await entry.client.client.rawRequest<
-        RawCommentsResponse,
-        Record<string, unknown>
-      >(COMMENTS_QUERY, { id: resolved.issue.id, ...page })
+      const client = getPublicFileUrlClient(entry)
+      const raw = await client.client.rawRequest<RawCommentsResponse, Record<string, unknown>>(
+        COMMENTS_QUERY,
+        { id: resolved.issue.id, ...page }
+      )
       return raw.data?.issue?.comments ?? null
     })
   })
   const nodes = response.nodes
   const items = nodes.slice(0, LINEAR_COMMENTS_CAP).map((comment) => {
     const body = comment.body ?? ''
+    // Extract media from the full body before truncating so screenshots past
+    // the body cap are still surfaced.
+    const inlineMedia = extractLinearInlineMedia(body, 'comment', comment.id)
     return {
       id: comment.id,
       body: body.slice(0, LINEAR_COMMENT_BODY_CAP),
       bodyTruncated: body.length > LINEAR_COMMENT_BODY_CAP,
+      ...(inlineMedia.length > 0 ? { inlineMedia } : {}),
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
       parentId: comment.parent?.id ?? null,
@@ -164,10 +171,11 @@ async function readChildren(
     const remaining = LINEAR_CHILDREN_NODE_CAP - returned
     const response = await readConnectionPages(remaining, async (page) => {
       return await withLinearRead(entry, async () => {
-        const raw = await entry.client.client.rawRequest<
-          RawChildrenResponse,
-          Record<string, unknown>
-        >(CHILDREN_QUERY, { id: issueId, ...page })
+        const client = getPublicFileUrlClient(entry)
+        const raw = await client.client.rawRequest<RawChildrenResponse, Record<string, unknown>>(
+          CHILDREN_QUERY,
+          { id: issueId, ...page }
+        )
         return raw.data?.issue?.children ?? null
       })
     })

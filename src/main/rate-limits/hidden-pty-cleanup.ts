@@ -7,6 +7,21 @@ type Disposable = {
   dispose: () => void
 }
 
+const activeHiddenRateLimitPtys = new Set<HiddenPty>()
+
+export function registerHiddenRateLimitPty(term: HiddenPty): Disposable {
+  activeHiddenRateLimitPtys.add(term)
+  return {
+    dispose: () => {
+      activeHiddenRateLimitPtys.delete(term)
+    }
+  }
+}
+
+export function getActiveHiddenRateLimitPtyCount(): number {
+  return activeHiddenRateLimitPtys.size
+}
+
 export function cleanupHiddenRateLimitPty(
   term: HiddenPty,
   disposables: Disposable[],

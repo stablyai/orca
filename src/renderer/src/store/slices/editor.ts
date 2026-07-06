@@ -39,6 +39,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
+import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
 import {
   isNonFastForwardRemoteError,
   resolveRemoteOperationErrorMessage
@@ -60,6 +61,7 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
@@ -298,6 +300,19 @@ type GitRuntimeOperationOptions = {
   applyUpstreamStatus?: boolean
 }
 
+function resolveDiffRuntimeEnvironmentId(
+  state: AppState,
+  worktreeId: string,
+  explicitRuntimeEnvironmentId: string | null | undefined
+): string | null | undefined {
+  if (explicitRuntimeEnvironmentId !== undefined) {
+    return explicitRuntimeEnvironmentId
+  }
+  // Why: Source Control callers often know only the worktree. Runtime-host
+  // diffs still need their owner stamped so content loads through runtime RPC.
+  return getRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? undefined
+}
+
 export type PendingEditorReveal = {
   filePath: string
   fileId?: string
@@ -386,7 +401,12 @@ export type EditorSlice = {
   markdownFrontmatterVisible: Record<string, boolean>
   setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
 
-  // Markdown table of contents
+  // Per-file opt-in to keep the markdown table of contents open. Default is
+  // hidden; absent entry means hidden.
+  markdownTableOfContentsVisible: Record<string, boolean>
+  setMarkdownTableOfContentsVisible: (fileId: string, visible: boolean) => void
+
+  // Markdown table of contents panel sizing
   markdownTocPanelWidth: number
   setMarkdownTocPanelWidth: (width: number) => void
 
@@ -657,6 +677,7 @@ export type EditorSlice = {
     requestKey: string,
     result: { summary: GitBranchCompareSummary; entries: GitBranchChangeEntry[] }
   ) => void
+  clearGitBranchCompare: (worktreeId: string) => void
 
   // File search state
   fileSearchStateByWorktree: Record<
@@ -776,33 +797,84 @@ function getReplaceablePreviewFileId(
 function removeEditorStateForReplacedPreview(
   state: Pick<
     EditorSlice,
-    'editorDrafts' | 'editorCursorLine' | 'markdownViewMode' | 'editorViewMode'
+    | 'editorDrafts'
+    | 'editorCursorLine'
+    | 'markdownViewMode'
+    | 'editorViewMode'
+    | 'markdownFrontmatterVisible'
+    | 'markdownTableOfContentsVisible'
+    | 'openFiles'
   >,
-  replacedFileId: string,
+  replacedFile: Pick<OpenFile, 'id' | 'markdownPreviewSourceFileId'>,
   nextFileId: string
-): Pick<EditorSlice, 'editorDrafts' | 'editorCursorLine' | 'markdownViewMode' | 'editorViewMode'> {
-  if (replacedFileId === nextFileId) {
+): Pick<
+  EditorSlice,
+  | 'editorDrafts'
+  | 'editorCursorLine'
+  | 'markdownViewMode'
+  | 'editorViewMode'
+  | 'markdownFrontmatterVisible'
+  | 'markdownTableOfContentsVisible'
+> {
+  const visibilityKeys = [
+    replacedFile.id,
+    ...(replacedFile.markdownPreviewSourceFileId ? [replacedFile.markdownPreviewSourceFileId] : [])
+  ].filter(
+    (key) =>
+      key !== nextFileId &&
+      !state.openFiles.some(
+        (file) =>
+          file.id !== replacedFile.id &&
+          (file.id === key || file.markdownPreviewSourceFileId === key)
+      )
+  )
+  if (replacedFile.id === nextFileId) {
     return {
       editorDrafts: state.editorDrafts,
       editorCursorLine: state.editorCursorLine,
       markdownViewMode: state.markdownViewMode,
-      editorViewMode: state.editorViewMode
+      editorViewMode: state.editorViewMode,
+      markdownFrontmatterVisible: state.markdownFrontmatterVisible,
+      markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
     }
   }
   return {
     editorDrafts: Object.fromEntries(
-      Object.entries(state.editorDrafts).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorDrafts).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     editorCursorLine: Object.fromEntries(
-      Object.entries(state.editorCursorLine).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorCursorLine).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     markdownViewMode: Object.fromEntries(
-      Object.entries(state.markdownViewMode).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.markdownViewMode).filter(([fileId]) => fileId !== replacedFile.id)
     ),
     editorViewMode: Object.fromEntries(
-      Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFileId)
+      Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFile.id)
+    ),
+    markdownFrontmatterVisible: removeMarkdownVisibilityKeys(
+      state.markdownFrontmatterVisible,
+      visibilityKeys
+    ),
+    markdownTableOfContentsVisible: removeMarkdownVisibilityKeys(
+      state.markdownTableOfContentsVisible,
+      visibilityKeys
     )
   }
+}
+
+function removeMarkdownVisibilityKeys(
+  visibility: Record<string, boolean>,
+  keysToRemove: readonly string[]
+): Record<string, boolean> {
+  let next: Record<string, boolean> | null = null
+  for (const key of keysToRemove) {
+    if (!(key in visibility)) {
+      continue
+    }
+    next ??= { ...visibility }
+    delete next[key]
+  }
+  return next ?? visibility
 }
 
 function getGroupActiveTab(group: TabGroup, tabsById: Map<string, Tab>): Tab | null {
@@ -976,6 +1048,12 @@ function matchesEditorMode(
   modes: readonly OpenFile['mode'][] | undefined
 ): boolean {
   return !modes || modes.includes(file.mode)
+}
+
+function getReusableOpenFileModes(mode: OpenFile['mode']): readonly OpenFile['mode'][] {
+  // Why: the same path can be open as both a diff and an editable file; matching
+  // by path alone collapses those distinct visible tabs onto one OpenFile.
+  return [mode]
 }
 
 function resolveEditorFileIdForOwner(
@@ -1309,7 +1387,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
     }),
 
-  // Markdown table of contents
+  // Markdown table of contents visibility
+  markdownTableOfContentsVisible: {},
+  setMarkdownTableOfContentsVisible: (fileId, visible) =>
+    set((s) => {
+      if (!visible) {
+        if (!(fileId in s.markdownTableOfContentsVisible)) {
+          return s
+        }
+        const next = { ...s.markdownTableOfContentsVisible }
+        delete next[fileId]
+        return { markdownTableOfContentsVisible: next }
+      }
+      return {
+        markdownTableOfContentsVisible: {
+          ...s.markdownTableOfContentsVisible,
+          [fileId]: true
+        }
+      }
+    }),
+
+  // Markdown table of contents panel sizing
   markdownTocPanelWidth: 240,
   setMarkdownTocPanelWidth: (width) =>
     set((s) => ({
@@ -1507,11 +1605,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             (options?.suppressActiveRuntimeFallback
               ? null
               : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+      const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
       const existing = s.openFiles.find(
         (f) =>
-          f.filePath === file.filePath && isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
+          f.filePath === file.filePath &&
+          matchesEditorMode(f, reusableOpenFileModes) &&
+          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
       )
-      const id = resolveEditorFileIdForOwner(s, file.filePath, worktreeId, runtimeEnvironmentId)
+      const id = resolveEditorFileIdForOwner(
+        s,
+        file.filePath,
+        worktreeId,
+        runtimeEnvironmentId,
+        reusableOpenFileModes
+      )
       editorItemFileId = id
       const isPreview = options?.preview ?? false
       const recordReplacedPreview = options?.recordReplacedPreview ?? false
@@ -1592,59 +1699,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
         if (existingPreviewIdx !== -1) {
           const replacedPreview = s.openFiles[existingPreviewIdx]
-          const nextEditorDrafts =
-            replacedPreview.id === id
-              ? s.editorDrafts
-              : Object.fromEntries(
-                  Object.entries(s.editorDrafts).filter(([fileId]) => fileId !== replacedPreview.id)
-                )
-          const nextMarkdownViewMode =
-            replacedPreview.id === id
-              ? s.markdownViewMode
-              : Object.fromEntries(
-                  Object.entries(s.markdownViewMode).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
-          const nextEditorViewMode =
-            replacedPreview.id === id
-              ? s.editorViewMode
-              : Object.fromEntries(
-                  Object.entries(s.editorViewMode).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
-          const frontmatterVisibilityKeys = new Set([replacedPreview.id])
-          if (replacedPreview.markdownPreviewSourceFileId) {
-            frontmatterVisibilityKeys.add(replacedPreview.markdownPreviewSourceFileId)
-          }
-          const frontmatterKeysToRemove = [...frontmatterVisibilityKeys].filter(
-            (key) =>
-              key in s.markdownFrontmatterVisible &&
-              !s.openFiles.some(
-                (file, index) =>
-                  index !== existingPreviewIdx &&
-                  (file.id === key || file.markdownPreviewSourceFileId === key)
-              )
-          )
-          const nextMarkdownFrontmatterVisible =
-            replacedPreview.id === id || frontmatterKeysToRemove.length === 0
-              ? s.markdownFrontmatterVisible
-              : Object.fromEntries(
-                  Object.entries(s.markdownFrontmatterVisible).filter(
-                    ([fileId]) => !frontmatterKeysToRemove.includes(fileId)
-                  )
-                )
-          // Why: editorCursorLine entries accumulate per file; clean up the
-          // evicted preview's entry so it does not leak across tab replacements.
-          const nextEditorCursorLine =
-            replacedPreview.id === id
-              ? s.editorCursorLine
-              : Object.fromEntries(
-                  Object.entries(s.editorCursorLine).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
+          // Why: reuse the shared eviction helper (as the four other preview-
+          // replacement paths do) so per-file cursor/draft/visibility cleanup stays
+          // defined in one place instead of a hand-rolled copy that drifts.
+          const {
+            editorDrafts: nextEditorDrafts,
+            editorCursorLine: nextEditorCursorLine,
+            markdownViewMode: nextMarkdownViewMode,
+            editorViewMode: nextEditorViewMode,
+            markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
+            markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible
+          } = removeEditorStateForReplacedPreview(s, replacedPreview, id)
           // Replace in-place to preserve tab position
           newFiles = s.openFiles.map((f, i) =>
             i === existingPreviewIdx
@@ -1690,6 +1755,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             markdownViewMode: nextMarkdownViewMode,
             editorViewMode: nextEditorViewMode,
             markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
+            markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
             ...previewTabBarUpdate,
             ...activeResult
@@ -1931,25 +1997,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       delete newMarkdownViewMode[fileId]
       const newEditorViewMode = { ...s.editorViewMode }
       delete newEditorViewMode[fileId]
-      const frontmatterVisibilityKeys = new Set([fileId])
+      const markdownVisibilityKeys = new Set([fileId])
       if (closedFile?.markdownPreviewSourceFileId) {
-        frontmatterVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
+        markdownVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
       }
-      const keysToRemove = [...frontmatterVisibilityKeys].filter(
+      const visibilityKeysToRemove = [...markdownVisibilityKeys].filter(
         (key) =>
-          key in s.markdownFrontmatterVisible &&
           !newFiles.some((file) => file.id === key || file.markdownPreviewSourceFileId === key)
       )
       const newMarkdownFrontmatterVisible =
-        keysToRemove.length > 0
-          ? (() => {
-              const next = { ...s.markdownFrontmatterVisible }
-              for (const key of keysToRemove) {
-                delete next[key]
-              }
-              return next
-            })()
+        visibilityKeysToRemove.length > 0
+          ? removeMarkdownVisibilityKeys(s.markdownFrontmatterVisible, visibilityKeysToRemove)
           : s.markdownFrontmatterVisible
+      const newMarkdownTableOfContentsVisible =
+        visibilityKeysToRemove.length > 0
+          ? removeMarkdownVisibilityKeys(s.markdownTableOfContentsVisible, visibilityKeysToRemove)
+          : s.markdownTableOfContentsVisible
       // Why: editorCursorLine entries are keyed by fileId and accumulate on
       // every cursor move. Without cleanup they grow without bound across a
       // long session as files are opened and closed.
@@ -2081,6 +2144,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         markdownViewMode: newMarkdownViewMode,
         editorViewMode: newEditorViewMode,
         markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
+        markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingEditorReveal: null,
         recentlyClosedEditorTabsByWorktree: nextRecentlyClosed
@@ -2177,6 +2241,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           markdownViewMode: {},
           editorViewMode: {},
           markdownFrontmatterVisible: {},
+          markdownTableOfContentsVisible: {},
           pendingEditorReveal: null
         }
       }
@@ -2194,6 +2259,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
       const newMarkdownFrontmatterVisible = Object.fromEntries(
         Object.entries(s.markdownFrontmatterVisible).filter(([fileId]) =>
+          remainingFileIds.has(fileId)
+        )
+      )
+      const newMarkdownTableOfContentsVisible = Object.fromEntries(
+        Object.entries(s.markdownTableOfContentsVisible).filter(([fileId]) =>
           remainingFileIds.has(fileId)
         )
       )
@@ -2227,7 +2297,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
       const closingFiles = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
       let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
-      for (const f of [...closingFiles].reverse()) {
+      for (const f of [...closingFiles].toReversed()) {
         // Why: untitled non-dirty files are deleted from disk after close —
         // skip them so the reopen stack doesn't reference vanished paths.
         // Preview tabs are ephemeral views that shouldn't pollute the stack.
@@ -2264,6 +2334,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         markdownViewMode: newMarkdownViewMode,
         editorViewMode: newEditorViewMode,
         markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
+        markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
@@ -2398,10 +2469,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
     const isPreview = options?.preview ?? false
-    const runtimeEnvironmentId = options?.runtimeEnvironmentId
     let editorItemTargetGroupId = options?.targetGroupId
     let editorItemFileId = ''
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
       const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
       editorItemFileId = id
@@ -2442,7 +2517,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         skippedConflicts: undefined,
         conflictReview: undefined,
         isPreview: isPreview || undefined,
-        runtimeEnvironmentId: options?.runtimeEnvironmentId
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2454,7 +2529,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2490,6 +2565,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
@@ -2502,7 +2582,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
-          isPreview: updatedPreview
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -2526,7 +2607,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2538,7 +2620,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2574,6 +2656,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
@@ -2586,7 +2673,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
-          isPreview: updatedPreview
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -2610,7 +2698,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2622,7 +2711,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2691,6 +2780,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             areaFilter
           ] ?? 'All Changes')
         : 'All Changes'
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -2706,7 +2796,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   combinedAreaFilter: areaFilter,
                   skippedConflicts,
                   conflictReview: undefined,
-                  conflict: undefined
+                  conflict: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -2732,7 +2823,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         combinedAreaFilter: areaFilter,
         skippedConflicts,
         conflictReview: undefined,
-        conflict: undefined
+        conflict: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -2820,7 +2912,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             openFiles: s.openFiles.map((file, index) =>
               index === replaceablePreviewIndex ? newFile : file
             ),
-            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex].id, id),
+            ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
             activeFileId: id,
             activeTabType: 'editor',
             activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -3164,6 +3256,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const branchCompare = toBranchCompareSnapshot(compare)
     const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
@@ -3177,7 +3270,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   combinedAlternate: alternate,
                   conflict: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -3201,7 +3295,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         combinedAlternate: alternate,
         conflict: undefined,
         skippedConflicts: undefined,
-        conflictReview: undefined
+        conflictReview: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3227,6 +3322,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       ? `Commit ${commitCompare.compareRef}: ${subject}`
       : `Commit ${commitCompare.compareRef}`
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -3239,7 +3335,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   commitEntriesSnapshot: entries,
                   conflict: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -3263,7 +3360,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         commitEntriesSnapshot: entries,
         conflict: undefined,
         skippedConflicts: undefined,
-        conflictReview: undefined
+        conflictReview: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3530,8 +3628,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
   fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
-      const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
       const status = await getRuntimeGitUpstreamStatus(
         {
           settings: runtimeSettings,
@@ -3552,6 +3650,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // re-publish, clobbering the upstream relationship. If the branch is
       // genuinely newly unpublished, the polling effect will eventually correct
       // the status on success.
+      if (pushTarget) {
+        // Why: an old automatic poll cache entry must not suppress the next
+        // retry after a post-push/fetch refresh fails transiently.
+        invalidateAutomaticPushTargetUpstreamStatusCache({
+          settings: runtimeSettings,
+          worktreeId,
+          worktreePath,
+          connectionId,
+          pushTarget
+        })
+      }
       console.error('fetchUpstreamStatus failed', error)
       return null
     }
@@ -3841,6 +3950,34 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         gitBranchCompareSummaryByWorktree: summaryUnchanged
           ? s.gitBranchCompareSummaryByWorktree
           : { ...s.gitBranchCompareSummaryByWorktree, [worktreeId]: result.summary }
+      }
+    }),
+  // Why: when the compare base resolves to "no base" (e.g. the prefer-upstream
+  // setting is on and the branch has no upstream), drop any stale summary so the
+  // committed-changes section and "vs" row disappear instead of lingering.
+  clearGitBranchCompare: (worktreeId) =>
+    set((s) => {
+      if (
+        s.gitBranchCompareSummaryByWorktree[worktreeId] === undefined &&
+        s.gitBranchChangesByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestKeyByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId] === undefined
+      ) {
+        return s
+      }
+      const nextSummary = { ...s.gitBranchCompareSummaryByWorktree }
+      const nextChanges = { ...s.gitBranchChangesByWorktree }
+      const nextRequestKey = { ...s.gitBranchCompareRequestKeyByWorktree }
+      const nextRequestHead = { ...s.gitBranchCompareRequestStatusHeadByWorktree }
+      delete nextSummary[worktreeId]
+      delete nextChanges[worktreeId]
+      delete nextRequestKey[worktreeId]
+      delete nextRequestHead[worktreeId]
+      return {
+        gitBranchCompareSummaryByWorktree: nextSummary,
+        gitBranchChangesByWorktree: nextChanges,
+        gitBranchCompareRequestKeyByWorktree: nextRequestKey,
+        gitBranchCompareRequestStatusHeadByWorktree: nextRequestHead
       }
     }),
 

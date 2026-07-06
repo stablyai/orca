@@ -1,6 +1,6 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import {
   getProviderDisplayName,
@@ -93,6 +93,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />
   }
+  if (provider === 'minimax') {
+    return <MiniMaxIcon size={13} />
+  }
   return <ClaudeIcon size={13} />
 }
 
@@ -158,6 +161,12 @@ export function getWindowSections(
       window: p.weekly
     }
   ]
+  if (p.fableWeekly !== undefined && p.fableWeekly !== null) {
+    sections.push({
+      label: translate('auto.components.status.bar.tooltip.a79c64f87e', 'Fable'),
+      window: p.fableWeekly
+    })
+  }
   if (p.monthly !== undefined && p.monthly !== null) {
     sections.push({
       label: translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
@@ -229,7 +238,7 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly && !p.monthly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
@@ -324,7 +333,7 @@ export function ProviderPanel({
       {p.error ? (
         <ErrorMessage
           message={p.error}
-          stale={!!(p.session || p.weekly || p.monthly)}
+          stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
           inverted={inverted}
         />
       ) : null}

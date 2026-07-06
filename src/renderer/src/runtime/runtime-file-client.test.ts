@@ -6,6 +6,7 @@ import {
   copyRuntimePath,
   createRuntimePath,
   deleteRuntimePath,
+  downloadRuntimeFile,
   getRuntimeFileReadScope,
   importExternalPathsToRuntime,
   listRuntimeFiles,
@@ -36,6 +37,12 @@ const fsDeletePath = vi.fn()
 const fsStat = vi.fn()
 const fsPathExists = vi.fn()
 const fsSearch = vi.fn()
+const fsDownloadFile = vi.fn()
+const fsSaveDownloadedFile = vi.fn()
+const fsStartDownloadedFile = vi.fn()
+const fsAppendDownloadedFileChunk = vi.fn()
+const fsFinishDownloadedFile = vi.fn()
+const fsCancelDownloadedFile = vi.fn()
 const fsImportExternalPaths = vi.fn()
 const fsStageExternalPathsForRuntimeUpload = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -56,6 +63,12 @@ beforeEach(() => {
   fsStat.mockReset()
   fsPathExists.mockReset()
   fsSearch.mockReset()
+  fsDownloadFile.mockReset()
+  fsSaveDownloadedFile.mockReset()
+  fsStartDownloadedFile.mockReset()
+  fsAppendDownloadedFileChunk.mockReset()
+  fsFinishDownloadedFile.mockReset()
+  fsCancelDownloadedFile.mockReset()
   fsImportExternalPaths.mockReset()
   fsStageExternalPathsForRuntimeUpload.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -89,6 +102,12 @@ beforeEach(() => {
         stat: fsStat,
         pathExists: fsPathExists,
         search: fsSearch,
+        downloadFile: fsDownloadFile,
+        saveDownloadedFile: fsSaveDownloadedFile,
+        startDownloadedFile: fsStartDownloadedFile,
+        appendDownloadedFileChunk: fsAppendDownloadedFileChunk,
+        finishDownloadedFile: fsFinishDownloadedFile,
+        cancelDownloadedFile: fsCancelDownloadedFile,
         importExternalPaths: fsImportExternalPaths,
         stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload
       },
@@ -214,6 +233,141 @@ describe('runtime file client', () => {
         worktreeId: 'wt-1'
       })
     ).rejects.toThrow('Remote file is too large to open in the editor')
+  })
+
+  it('falls back to files.readPreview when a remote binary file is opened', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.resolve({
+          id: 'rpc-read',
+          ok: false,
+          error: { code: 'runtime_error', message: 'binary_file' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: 'rpc-preview',
+        ok: true,
+        result: {
+          content: 'JVBERi0=',
+          isBinary: true,
+          isImage: true,
+          mimeType: 'application/pdf'
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/doc.pdf',
+        relativePath: 'doc.pdf',
+        worktreeId: 'wt-1'
+      })
+    ).resolves.toEqual({
+      content: 'JVBERi0=',
+      isBinary: true,
+      isImage: true,
+      mimeType: 'application/pdf'
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'files.read',
+      params: { worktree: 'id:wt-1', relativePath: 'doc.pdf' },
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'files.readPreview',
+      params: { worktree: 'id:wt-1', relativePath: 'doc.pdf' },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('does not fall back to files.readPreview for non-binary remote read errors', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.resolve({
+          id: 'rpc-read',
+          ok: false,
+          error: { code: 'runtime_error', message: 'permission_denied' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      throw new Error('files.readPreview should not be called')
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/secret.txt',
+        relativePath: 'secret.txt',
+        worktreeId: 'wt-1'
+      })
+    ).rejects.toThrow('permission_denied')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.readPreview' })
+    )
+  })
+
+  it('propagates a files.readPreview failure during the binary fallback', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.resolve({
+          id: 'rpc-read',
+          ok: false,
+          error: { code: 'runtime_error', message: 'binary_file' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: 'rpc-preview',
+        ok: false,
+        error: { code: 'runtime_error', message: 'file_too_large' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/huge.pdf',
+        relativePath: 'huge.pdf',
+        worktreeId: 'wt-1'
+      })
+    ).rejects.toThrow('file_too_large')
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.readPreview' })
+    )
+  })
+
+  it('does not fall back when a non-RPC error merely shares the binary_file message', async () => {
+    // Why: only a typed RuntimeRpcCallError('binary_file') means the server
+    // classified the file as binary. A transport-level failure that happens to
+    // carry the same message text must propagate, not trigger a preview read.
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.reject(new Error('binary_file'))
+      }
+      throw new Error('files.readPreview should not be called')
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/doc.pdf',
+        relativePath: 'doc.pdf',
+        worktreeId: 'wt-1'
+      })
+    ).rejects.toThrow('binary_file')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.readPreview' })
+    )
   })
 
   it('uses the active runtime id as the dedupe scope', () => {
@@ -346,6 +500,96 @@ describe('runtime file client', () => {
 
     expect(fsReadFile).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('downloads remote runtime files in chunks instead of using preview content', async () => {
+    fsStartDownloadedFile.mockResolvedValue({
+      canceled: false,
+      transferId: 'download-1',
+      destinationPath: '/downloads/archive.zip'
+    })
+    fsAppendDownloadedFileChunk.mockResolvedValue({ ok: true })
+    fsFinishDownloadedFile.mockResolvedValue({
+      canceled: false,
+      destinationPath: '/downloads/archive.zip'
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'chunk-1',
+        ok: true,
+        result: { contentBase64: 'YWJj', bytesRead: 3, eof: false },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'chunk-2',
+        ok: true,
+        result: { contentBase64: 'ZA==', bytesRead: 1, eof: true },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+
+    await expect(
+      downloadRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        '/remote/repo/archive.zip',
+        'archive.zip'
+      )
+    ).resolves.toEqual({ canceled: false, destinationPath: '/downloads/archive.zip' })
+
+    expect(fsStartDownloadedFile).toHaveBeenCalledWith({ suggestedName: 'archive.zip' })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-1',
+      method: 'files.readChunk',
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'archive.zip',
+        offset: 0,
+        length: 384 * 1024
+      },
+      timeoutMs: 60_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'files.readChunk',
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'archive.zip',
+        offset: 3,
+        length: 384 * 1024
+      },
+      timeoutMs: 60_000
+    })
+    expect(fsAppendDownloadedFileChunk).toHaveBeenCalledTimes(2)
+    expect(fsFinishDownloadedFile).toHaveBeenCalledWith({ transferId: 'download-1' })
+    expect(fsCancelDownloadedFile).not.toHaveBeenCalled()
+  })
+
+  it('cancels the local temp download when a remote chunk fails', async () => {
+    fsStartDownloadedFile.mockResolvedValue({
+      canceled: false,
+      transferId: 'download-1',
+      destinationPath: '/downloads/archive.zip'
+    })
+    fsCancelDownloadedFile.mockResolvedValue({ ok: true })
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('connection dropped'))
+
+    await expect(
+      downloadRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        '/remote/repo/archive.zip',
+        'archive.zip'
+      )
+    ).rejects.toThrow('connection dropped')
+
+    expect(fsCancelDownloadedFile).toHaveBeenCalledWith({ transferId: 'download-1' })
+    expect(fsFinishDownloadedFile).not.toHaveBeenCalled()
   })
 
   it('routes root directory reads with an empty relative path', async () => {

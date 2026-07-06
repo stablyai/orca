@@ -47,6 +47,9 @@ import {
 const LOGIN_TIMEOUT_MS = 180_000
 const STATUS_TIMEOUT_MS = 20_000
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
+// Claude leaves the login process running after an OAuth denial; fail fast so Settings can clear loading state.
+const CLAUDE_AUTH_DENIED_PATTERN =
+  /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 
 type ClaudeIdentity = {
   email: string | null
@@ -83,6 +86,7 @@ function shellQuote(value: string): string {
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private cancelPendingClaudeLogin: (() => boolean) | null = null
 
   constructor(
     private readonly store: Store,
@@ -116,6 +120,10 @@ export class ClaudeAccountService {
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
     return this.serializeMutation(() => this.doSelectAccount(accountId, target))
+  }
+
+  cancelPendingLogin(): boolean {
+    return this.cancelPendingClaudeLogin?.() ?? false
   }
 
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
@@ -424,12 +432,27 @@ export class ClaudeAccountService {
     }
   ): Promise<CapturedClaudeAuth> {
     const tempConfig = this.createTemporaryClaudeConfigDir(location)
+    const loginAbortController = new AbortController()
+    this.cancelPendingClaudeLogin = () => {
+      if (loginAbortController.signal.aborted) {
+        return false
+      }
+      loginAbortController.abort()
+      return true
+    }
     const previousLegacyKeychain = await readActiveClaudeKeychainCredentials()
     let captured: CapturedClaudeAuth | null = null
     let captureError: unknown = null
     let cleanupError: unknown = null
     try {
-      await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS)
+      if (loginAbortController.signal.aborted) {
+        throw new Error('Claude sign-in was cancelled.')
+      }
+      await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS, {
+        signal: loginAbortController.signal,
+        keepStdinOpen: true
+      })
+      this.cancelPendingClaudeLogin = null
       const status = await this.runClaudeCommand(
         ['auth', 'status', '--json'],
         tempConfig,
@@ -463,6 +486,7 @@ export class ClaudeAccountService {
         }
       }
       this.removeTemporaryClaudeConfigDir(tempConfig)
+      this.cancelPendingClaudeLogin = null
     }
     if (captureError) {
       throw captureError
@@ -862,7 +886,7 @@ export class ClaudeAccountService {
     args: string[],
     configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
     timeoutMs: number,
-    options?: { allowFailure?: boolean }
+    options?: { allowFailure?: boolean; signal?: AbortSignal; keepStdinOpen?: boolean }
   ): Promise<string> {
     return new Promise((resolvePromise, rejectPromise) => {
       const spawnConfig =
@@ -890,10 +914,26 @@ export class ClaudeAccountService {
               shell: process.platform === 'win32'
             }
       const child = spawn(spawnConfig.command, spawnConfig.args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
+        // Why: Claude's browser auth can bind its callback lifetime to stdin.
+        // Keeping stdin open prevents hidden managed-login runs from tearing down
+        // the local callback server before the browser returns.
+        stdio: [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         shell: spawnConfig.shell,
-        env: spawnConfig.env
+        env: spawnConfig.env,
+        // Why: Claude auth can leave browser/login descendants alive after denial.
+        // A process group lets cancellation terminate the whole POSIX login tree.
+        detached: process.platform !== 'win32'
       })
+      const stdout = child.stdout
+      const stderr = child.stderr
+      if (!stdout || !stderr) {
+        if (options?.keepStdinOpen) {
+          child.stdin?.destroy()
+        }
+        child.kill()
+        rejectPromise(new Error('Claude command failed to open output streams.'))
+        return
+      }
 
       let settled = false
       let output = ''
@@ -902,6 +942,12 @@ export class ClaudeAccountService {
         if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
           output = output.slice(-MAX_COMMAND_OUTPUT_CHARS)
         }
+        if (CLAUDE_AUTH_DENIED_PATTERN.test(output)) {
+          // Use killChild (not child.kill) so the whole login/browser tree is torn down on
+          // Windows (taskkill /t) and the detached POSIX group, matching the timeout/abort paths.
+          killChild()
+          settle(() => rejectPromise(new Error('Claude sign-in was denied. Please try again.')))
+        }
       }
       let timeout: ReturnType<typeof setTimeout> | null = null
       const cleanupListeners = (): void => {
@@ -909,10 +955,14 @@ export class ClaudeAccountService {
           clearTimeout(timeout)
           timeout = null
         }
-        child.stdout.off('data', appendOutput)
-        child.stderr.off('data', appendOutput)
+        stdout.off('data', appendOutput)
+        stderr.off('data', appendOutput)
         child.off('error', onError)
         child.off('close', onClose)
+        options?.signal?.removeEventListener('abort', onAbort)
+        if (options?.keepStdinOpen) {
+          child.stdin?.destroy()
+        }
       }
       const settle = (callback: () => void): void => {
         if (settled) {
@@ -923,11 +973,36 @@ export class ClaudeAccountService {
         callback()
       }
       const timeoutError = new Error('Claude sign-in took too long to finish.')
-      timeout = setTimeout(() => {
+      const cancelError = new Error('Claude sign-in was cancelled.')
+      const killChild = (): void => {
+        if (process.platform === 'win32' && child.pid) {
+          const taskkill = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
+            stdio: 'ignore',
+            windowsHide: true
+          })
+          taskkill.on('error', () => {})
+          taskkill.unref()
+          return
+        }
+        if (process.platform !== 'win32' && child.pid) {
+          try {
+            process.kill(-child.pid)
+            return
+          } catch {
+            // Fall back to the direct child if the process group is unavailable.
+          }
+        }
         child.kill()
+      }
+      timeout = setTimeout(() => {
+        killChild()
         settle(() => rejectPromise(timeoutError))
       }, timeoutMs)
 
+      const onAbort = (): void => {
+        killChild()
+        settle(() => rejectPromise(cancelError))
+      }
       const onError = (error: Error): void => {
         settle(() => rejectPromise(error))
       }
@@ -948,10 +1023,15 @@ export class ClaudeAccountService {
         })
       }
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
+      stdout.on('data', appendOutput)
+      stderr.on('data', appendOutput)
       child.on('error', onError)
       child.on('close', onClose)
+      if (options?.signal?.aborted) {
+        onAbort()
+      } else {
+        options?.signal?.addEventListener('abort', onAbort, { once: true })
+      }
     })
   }
 

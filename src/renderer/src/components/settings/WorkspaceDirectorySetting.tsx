@@ -14,6 +14,7 @@ import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   buildHostScopeChoices,
   CLIENT_DEFAULT_SCOPE,
@@ -197,7 +198,9 @@ export function WorkspaceDirectorySetting({
           }}
           onBlur={handleBlur}
           onKeyDown={(e) => {
-            if (isComposingKeyboardEvent(e)) {
+            // Why: an Enter that only confirms a CJK IME candidate must not
+            // commit the rename; wait for a non-composition Enter.
+            if (isImeCompositionKeyDown(e)) {
               return
             }
             if (e.key === 'Enter') {
@@ -269,9 +272,4 @@ export function WorkspaceDirectorySetting({
       )}
     </SearchableSetting>
   )
-}
-
-function isComposingKeyboardEvent(event: React.KeyboardEvent<HTMLInputElement>): boolean {
-  const nativeEvent = event.nativeEvent
-  return nativeEvent.isComposing || nativeEvent.keyCode === 229
 }

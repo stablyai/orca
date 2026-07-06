@@ -5,6 +5,12 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
+const mergeTreeMergeBaseUnsupportedRuntimes = new Set<string>()
+
+export function __resetPRConflictSummaryGitCapabilityCacheForTests(): void {
+  mergeTreeMergeBaseUnsupportedRuntimes.clear()
+}
+
 export async function getPRConflictSummary(
   repoPath: string,
   baseRefName: string,
@@ -117,6 +123,7 @@ async function loadConflictingFiles(
   baseOid: string,
   localGitOptions: LocalGitExecOptions
 ): Promise<string[]> {
+  const capabilityKey = getMergeTreeCapabilityKey(localGitOptions)
   const modernArgs = [
     'merge-tree',
     '--write-tree',
@@ -138,6 +145,10 @@ async function loadConflictingFiles(
     baseOid
   ]
 
+  if (mergeTreeMergeBaseUnsupportedRuntimes.has(capabilityKey)) {
+    return loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions)
+  }
+
   try {
     const result = await gitExecFileAsync(modernArgs, {
       cwd: repoPath,
@@ -157,20 +168,33 @@ async function loadConflictingFiles(
       throw error
     }
 
-    try {
-      const result = await gitExecFileAsync(legacyArgs, {
-        cwd: repoPath,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-      })
-      return parseMergeTreeNameOnlyOutput(result.stdout)
-    } catch (fallbackError) {
-      const fallbackStdout = getGitErrorOutput(fallbackError, 'stdout')
-      if (fallbackStdout) {
-        return parseMergeTreeNameOnlyOutput(fallbackStdout)
-      }
-      throw fallbackError
-    }
+    mergeTreeMergeBaseUnsupportedRuntimes.add(capabilityKey)
+    return loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions)
   }
+}
+
+async function loadConflictingFilesWithLegacyMergeTree(
+  repoPath: string,
+  legacyArgs: string[],
+  localGitOptions: LocalGitExecOptions
+): Promise<string[]> {
+  try {
+    const result = await gitExecFileAsync(legacyArgs, {
+      cwd: repoPath,
+      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+    })
+    return parseMergeTreeNameOnlyOutput(result.stdout)
+  } catch (fallbackError) {
+    const fallbackStdout = getGitErrorOutput(fallbackError, 'stdout')
+    if (fallbackStdout) {
+      return parseMergeTreeNameOnlyOutput(fallbackStdout)
+    }
+    throw fallbackError
+  }
+}
+
+function getMergeTreeCapabilityKey(localGitOptions: LocalGitExecOptions): string {
+  return localGitOptions.wslDistro ? `wsl:${localGitOptions.wslDistro}` : 'local:host'
 }
 
 function parseMergeTreeNameOnlyOutput(stdout: string): string[] {

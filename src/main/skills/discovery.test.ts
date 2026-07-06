@@ -77,6 +77,33 @@ describe('skill discovery', () => {
     expect(skill?.directoryPath).toBe(linkedSkill)
   })
 
+  it('discovers worktree .agents skill symlinks from the requested cwd', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const worktree = join(root, 'worktree')
+    const realSkill = join(root, 'central-skills', 'ref-oss')
+    const linkedSkill = join(worktree, '.agents', 'skills', 'ref-oss')
+    await mkdir(realSkill, { recursive: true })
+    await mkdir(join(worktree, '.agents', 'skills'), { recursive: true })
+    await writeFile(join(realSkill, 'SKILL.md'), '# ref-oss\n\nUse local OSS reference repos.')
+    await symlink(realSkill, linkedSkill, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: worktree,
+      repos: []
+    })
+
+    expect(result.skills.filter((entry) => entry.name === 'ref-oss')).toMatchObject([
+      {
+        sourceKind: 'repo',
+        sourceLabel: 'Repo worktree .agents',
+        directoryPath: linkedSkill,
+        providers: ['agent-skills']
+      }
+    ])
+  })
+
   it('keeps home classification when cwd points at the same directory as home', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')

@@ -3,8 +3,9 @@ import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { ShellIcon } from './shell-icons'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { stripLeadingAgentTitleDecoration } from '@/lib/agent-title-decoration'
+import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { useTabAgent } from '@/lib/use-tab-agent'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -17,15 +18,14 @@ import {
   getDropIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses,
-  showsTabSelectionChrome,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
-import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -47,6 +47,13 @@ type SortableTabProps = {
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
+  /** True when this tab is an agent terminal that can switch to the native chat
+   *  view. Surfaces the "Switch view" item in the tab context menu. */
+  canToggleViewMode?: boolean
+  /** True when the tab is currently showing the native chat view. */
+  isChatView?: boolean
+  /** Toggle the tab between terminal and native chat view. */
+  onToggleViewMode?: () => void
 }
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -70,7 +77,10 @@ export default function SortableTab({
   onToggleExpand,
   dragData,
   dropIndicator,
-  includeTopTabBorder = true
+  includeTopTabBorder = true,
+  canToggleViewMode = false,
+  isChatView = false,
+  onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
   // Why: subscribe to the per-tab boolean directly so only the tab whose unread
   // status actually flipped re-renders. Reading the whole `unreadTerminalTabs`
@@ -85,7 +95,7 @@ export default function SortableTab({
   // Older persisted tabs without this field fall back to the generic icon.
   const shellForIcon = tab.shellOverride
 
-  // Why: foreground process and hook status make the tab icon reflect the
+  // Why: hook status and title evidence make the tab icon reflect the
   // coding harness currently running in the pane, not just the launch command.
   const tabAgent = useTabAgent(tab)
 
@@ -204,11 +214,13 @@ export default function SortableTab({
   const handleActivate = useCallback(() => {
     onActivate(tab.id)
   }, [onActivate, tab.id])
-  const { isPressed, onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+  // Why: defer activation to pointer-up so pressing a tab to drag it (reorder /
+  // move into another pane / split) does not switch the active tab or steal
+  // terminal focus mid-gesture. See tab-strip-pointer-activation.
+  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
     onActivate: handleActivate,
     disabled: isEditing
   })
-  const showsSelectionChrome = showsTabSelectionChrome(isActive, isPressed)
   const closeShortcut = useShortcutKeyDetails('tab.close')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
@@ -224,7 +236,6 @@ export default function SortableTab({
       // pass even if the tab-bar render path had silently broken (the same
       // tautology that let PR #1186's render crash ship past E2E in #1193).
       data-active={isActive ? 'true' : 'false'}
-      data-pressed={isPressed ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
       // Why: on unread activity, tint the whole tab with a subtle amber
@@ -234,7 +245,7 @@ export default function SortableTab({
       // tab still reads as "selected + has activity". The wash is
       // rendered as an absolutely-positioned child below so the ::after
       // pseudo-element stays free for the drop indicator.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive, isPressed)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -272,7 +283,7 @@ export default function SortableTab({
         }
       }}
     >
-      {showsSelectionChrome && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {showActivityAffordance && (
         // Why: amber wash for unread tabs. Rendered as a real DOM child so
         // both drop indicators (::before left / ::after right in
@@ -294,7 +305,7 @@ export default function SortableTab({
         // Why: coding-agent tabs should read as Claude/Codex/etc. while the
         // harness is running; plain shells keep the generic terminal tile.
         <span
-          className={`mr-1 inline-flex shrink-0 ${showsSelectionChrome ? '' : 'opacity-70'}`}
+          className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
           data-agent-icon={tabAgent}
           aria-hidden
         >
@@ -310,7 +321,7 @@ export default function SortableTab({
         // on inactive tabs to match the existing text treatment without
         // desaturating the brand colors beyond recognition.
         <span
-          className={`mr-1 inline-flex shrink-0 ${showsSelectionChrome ? '' : 'opacity-70'}`}
+          className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
           data-shell-icon={shellForIcon ?? 'generic'}
           aria-hidden
         >
@@ -333,6 +344,11 @@ export default function SortableTab({
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={(event) => {
+            // Why: an Enter that only confirms a CJK IME candidate must not
+            // commit the rename; wait for a non-composition Enter.
+            if (isImeCompositionKeyDown(event)) {
+              return
+            }
             if (event.key === 'Enter') {
               event.preventDefault()
               commitRename()
@@ -390,7 +406,7 @@ export default function SortableTab({
       {isExpanded && !isEditing && (
         <button
           className={`mr-1 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-            showsSelectionChrome
+            isActive
               ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
           }`}
@@ -410,7 +426,7 @@ export default function SortableTab({
           <TooltipTrigger asChild>
             <button
               className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-                showsSelectionChrome
+                isActive
                   ? 'text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:text-foreground focus-visible:bg-muted'
                   : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
               }`}
@@ -487,6 +503,9 @@ export default function SortableTab({
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}
+        canToggleViewMode={canToggleViewMode}
+        isChatView={isChatView}
+        onToggleViewMode={onToggleViewMode}
       />
     </>
   )

@@ -1,12 +1,13 @@
 import type { Store } from '../persistence'
 import type { SshTarget } from '../../shared/ssh-types'
+import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
 
 export class SshConnectionStore {
   constructor(private store: Store) {}
 
   listTargets(): SshTarget[] {
-    return this.store.getSshTargets()
+    return this.store.getSshTargets().filter((target) => !isRuntimeOwnedSshTarget(target))
   }
 
   getTarget(id: string): SshTarget | undefined {
@@ -24,6 +25,29 @@ export class SshConnectionStore {
     }
     this.store.addSshTarget(full)
     return full
+  }
+
+  upsertRuntimeOwnedTarget(
+    runtimeId: string,
+    target: Omit<SshTarget, 'id' | 'owner' | 'source' | 'lastRequiredPassphrase'>
+  ): SshTarget {
+    const id = getRuntimeOwnedSshTargetId(runtimeId)
+    const existing = this.store.getSshTarget(id)
+    const next: SshTarget = {
+      ...target,
+      id,
+      configHost: target.configHost ?? target.host,
+      owner: { type: 'on-demand-runtime', runtimeId },
+      source: 'manual',
+      ...(existing?.lastRequiredPassphrase !== undefined
+        ? { lastRequiredPassphrase: existing.lastRequiredPassphrase }
+        : {})
+    }
+    if (existing) {
+      return this.store.updateSshTarget(id, next) ?? next
+    }
+    this.store.addSshTarget(next)
+    return next
   }
 
   updateTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null {
@@ -122,6 +146,14 @@ export class SshConnectionStore {
 
     return changed
   }
+}
+
+export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
+  return `${RUNTIME_OWNED_SSH_TARGET_ID_PREFIX}${runtimeId}`
+}
+
+export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {
+  return target.owner?.type === 'on-demand-runtime'
 }
 
 function isLegacyConfigImportTarget(target: SshTarget): boolean {

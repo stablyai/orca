@@ -17,6 +17,7 @@ export type XtermBypassEvent = {
   key: string
   code?: string
   keyCode?: number
+  isComposing?: boolean
   defaultPrevented?: boolean
   metaKey: boolean
   ctrlKey: boolean
@@ -32,8 +33,29 @@ export type XtermBypassOptions = {
   hasSelection: boolean
 }
 
+export type XtermImeKeyboardOptions = {
+  compositionActive: boolean
+  // Required so no caller silently falls back to non-mac 229 suppression,
+  // which re-swallows the first key after a macOS IME input-source switch.
+  isMac: boolean
+}
+
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
 const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
+const TERMINAL_IME_OWNED_KEYS = new Set([
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'Backspace',
+  'Delete',
+  'End',
+  'Enter',
+  'Escape',
+  'Home',
+  'PageDown',
+  'PageUp'
+])
 
 function isSingleNonAsciiPrintableText(key: string): boolean {
   const chars = Array.from(key)
@@ -46,6 +68,25 @@ function isSingleNonAsciiPrintableText(key: string): boolean {
 
 function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
+}
+
+export function shouldSuppressTerminalImeKeyboardEvent(
+  event: XtermBypassEvent,
+  options: XtermImeKeyboardOptions
+): boolean {
+  if (!isXtermHandledKeyEvent(event.type)) {
+    return false
+  }
+  const { compositionActive, isMac } = options
+  // Why: IMEs own Process-key / composing keystrokes — letting xterm translate
+  // them corrupts committed CJK text. Bare macOS keydown 229 is exempt: it must
+  // reach xterm's CompositionHelper or the first key after an input-source
+  // switch is swallowed.
+  return (
+    event.isComposing === true ||
+    (event.keyCode === 229 && (event.type !== 'keydown' || compositionActive || !isMac)) ||
+    (compositionActive && TERMINAL_IME_OWNED_KEYS.has(event.key))
+  )
 }
 
 function isTerminalInterruptCKey(event: XtermBypassEvent): boolean {

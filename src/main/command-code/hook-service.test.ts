@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawn } from 'child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { createServer } from 'http'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
-import type { AddressInfo } from 'net'
+import { spawn } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import type { AddressInfo } from 'node:net'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -19,6 +19,9 @@ vi.mock('os', async () => {
 })
 
 import { CommandCodeHookService } from './hook-service'
+
+const WINDOWS_POWERSHELL_LAUNCHER =
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
 describe('CommandCodeHookService', () => {
   let homeDir: string
@@ -49,9 +52,7 @@ describe('CommandCodeHookService', () => {
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
     expect(config.hooks.Stop[0].matcher).toBeUndefined()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
-      process.platform === 'win32'
-        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-        : /command-code-hook/
+      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /command-code-hook/
     )
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
@@ -79,9 +80,7 @@ describe('CommandCodeHookService', () => {
         ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
 
         const command = config.hooks.PreToolUse[0].hooks[0].command
-        expect(command).toMatch(
-          /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-        )
+        expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
       }

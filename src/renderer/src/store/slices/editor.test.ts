@@ -456,6 +456,39 @@ describe('createEditorSlice openDiff', () => {
     ])
   })
 
+  it('derives a runtime owner for source-control diffs from the worktree host', () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [{ id: 'repo-1', executionHostId: 'runtime:env-1' }] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'repo-1::/srv/repo/worktree',
+            repoId: 'repo-1',
+            hostId: 'runtime:env-1'
+          }
+        ]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openDiff(
+        'repo-1::/srv/repo/worktree',
+        '/srv/repo/worktree/src/file.ts',
+        'src/file.ts',
+        'typescript',
+        false
+      )
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        id: 'editor-diff:repo-1%3A%3A%2Fsrv%2Frepo%2Fworktree:env-1:unstaged:src%2Ffile.ts',
+        runtimeEnvironmentId: 'env-1'
+      })
+    )
+  })
+
   it('repairs an existing diff tab entry to the correct mode and staged state', () => {
     const store = createEditorStore()
 
@@ -577,6 +610,46 @@ describe('createEditorSlice openDiff', () => {
     expect(diffTab?.groupId).toBe(targetGroupId)
     expect(diffTab?.entityId).toBe('wt-1::diff::unstaged::file.ts')
     expect(store.getState().activeGroupIdByWorktree['wt-1']).toBe(targetGroupId)
+  })
+
+  it('keeps a diff tab selectable after opening its target file tab', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    const diffFileId = 'wt-1::diff::unstaged::file.ts'
+    const diffTab = store
+      .getState()
+      .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'diff')
+    if (!diffTab) {
+      throw new Error('expected diff tab')
+    }
+
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    const stateAfterOpen = store.getState()
+    const editFile = stateAfterOpen.openFiles.find((file) => file.mode === 'edit')
+    expect(stateAfterOpen.openFiles.find((file) => file.id === diffFileId)).toEqual(
+      expect.objectContaining({ mode: 'diff' })
+    )
+    expect(editFile).toEqual(expect.objectContaining({ id: '/repo/file.ts', mode: 'edit' }))
+    expect(
+      stateAfterOpen.unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'editor')
+        ?.entityId
+    ).toBe('/repo/file.ts')
+
+    store.getState().activateTab(diffTab.id)
+    store.getState().setActiveFile(diffFileId)
+
+    const stateAfterReselect = store.getState()
+    expect(stateAfterReselect.groupsByWorktree['wt-1']?.[0]?.activeTabId).toBe(diffTab.id)
+    expect(stateAfterReselect.activeFileId).toBe(diffFileId)
+    expect(stateAfterReselect.openFiles.find((file) => file.id === diffFileId)?.mode).toBe('diff')
   })
 
   it('reuses a preview editor tab when opening a preview diff', () => {
@@ -1386,6 +1459,64 @@ describe('createEditorSlice markdown view state', () => {
       })
     ])
   })
+
+  it('drops markdown visibility for a preview replaced by a diff', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
+
+    store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
+      preview: true
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('keeps markdown visibility when another preview still references a replaced source', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
+
+    store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
+      preview: true
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({
+      '/repo/docs/README.md': true
+    })
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({
+      '/repo/docs/README.md': true
+    })
+  })
 })
 
 describe('createEditorSlice editor view mode', () => {
@@ -1552,6 +1683,79 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
     store.getState().closeAllFiles()
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+})
+
+describe('createEditorSlice markdown table of contents visibility', () => {
+  it('stores visible=true as an explicit entry keyed by fileId', () => {
+    const store = createEditorStore()
+
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({ '/repo/notes.md': true })
+  })
+
+  it('deletes the entry when visibility resets to hidden', () => {
+    const store = createEditorStore()
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('drops the visibility flag when replacing a preview tab', () => {
+    const store = createEditorStore()
+    store.getState().openFile(
+      {
+        filePath: '/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('keeps the visibility flag while a preview tab still references the source file', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().closeFile('/repo/notes.md')
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({ '/repo/notes.md': true })
+
+    store.getState().closeFile('markdown-preview::/repo/notes.md')
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
   })
 })
 
@@ -2724,6 +2928,46 @@ describe('createEditorSlice combined diff exclusions', () => {
           headOid: 'head-oid',
           mergeBase: 'merge-base-oid'
         })
+      })
+    )
+  })
+})
+
+describe('createEditorSlice openBranchDiff', () => {
+  it('derives a runtime owner for branch diffs from the worktree host', () => {
+    const store = createEditorStore()
+    const worktreeId = 'repo-1::/srv/repo/worktree'
+    const branchSummary: GitBranchCompareSummary = {
+      baseRef: 'main',
+      baseOid: 'base-oid',
+      compareRef: 'HEAD',
+      headOid: 'head-oid',
+      mergeBase: 'merge-base-oid',
+      changedFiles: 1,
+      status: 'ready'
+    }
+    store.setState({
+      repos: [{ id: 'repo-1', executionHostId: 'runtime:env-1' }] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [{ id: worktreeId, repoId: 'repo-1', hostId: 'runtime:env-1' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openBranchDiff(
+        worktreeId,
+        '/srv/repo/worktree',
+        { path: 'src/file.ts', status: 'modified' },
+        branchSummary,
+        'typescript'
+      )
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        diffSource: 'branch',
+        filePath: '/srv/repo/worktree/src/file.ts',
+        runtimeEnvironmentId: 'env-1'
       })
     )
   })
