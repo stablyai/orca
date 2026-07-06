@@ -409,12 +409,11 @@ async function fetchViaOAuth(token: string, signal?: AbortSignal): Promise<Provi
     return abortedClaudeRateLimitResult()
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
-  const abortFromExternalSignal = (): void => {
-    controller.abort()
-  }
-  signal?.addEventListener('abort', abortFromExternalSignal, { once: true })
+  // Compose the caller's cancel signal with the request timeout so a timeout
+  // and an external cancel both abort the fetch.
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
+    : AbortSignal.timeout(API_TIMEOUT_MS)
 
   try {
     // Why: net.fetch uses Chromium's networking stack which respects OS proxy
@@ -427,7 +426,7 @@ async function fetchViaOAuth(token: string, signal?: AbortSignal): Promise<Provi
         // matching the CLI user-agent keeps Orca aligned with that contract.
         'User-Agent': CLAUDE_CODE_USER_AGENT
       },
-      signal: controller.signal
+      signal: requestSignal
     })
 
     if (!res.ok) {
@@ -453,9 +452,6 @@ async function fetchViaOAuth(token: string, signal?: AbortSignal): Promise<Provi
       return abortedClaudeRateLimitResult()
     }
     throw err
-  } finally {
-    clearTimeout(timeout)
-    signal?.removeEventListener('abort', abortFromExternalSignal)
   }
 }
 

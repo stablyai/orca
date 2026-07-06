@@ -8,12 +8,9 @@ export type NudgeConfig = {
 }
 
 export async function fetchNudge(): Promise<NudgeConfig | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 5000)
-
   try {
     const res = await net.fetch('https://onorca.dev/whats-new/nudge.json', {
-      signal: controller.signal
+      signal: AbortSignal.timeout(5000)
     })
     if (!res.ok) {
       return null
@@ -60,8 +57,6 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
     }
   } catch {
     return null
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
