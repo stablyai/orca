@@ -209,8 +209,6 @@ function activateReplacementPane(args: CloseManagedPaneArgs): number | null {
   const next = args.panes.values().next().value as ManagedPaneInternal | undefined
   const nextActivePaneId = next?.id ?? null
   args.setActivePaneId(nextActivePaneId)
-  if (next) {
-    next.terminal.focus()
-  }
+  next?.terminal.focus()
   return nextActivePaneId
 }
