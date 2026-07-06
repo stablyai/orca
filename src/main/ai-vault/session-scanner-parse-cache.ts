@@ -170,7 +170,10 @@ async function parseClaudeCandidateWithResume(args: {
 }
 
 // A resume point is only valid if it still sits just past a line break;
-// anything else means the file was rewritten, not appended.
+// anything else means the file was rewritten, not appended. Heuristic: a
+// grown rewrite keeping '\n' at exactly this byte would slip through, but
+// agent transcripts are append-only so that trade is accepted (worst case is
+// a stale vault row until the file is next truncated or the app restarts).
 async function endsWithNewlineAt(path: string, offset: number): Promise<boolean> {
   const handle = await open(path, 'r')
   try {

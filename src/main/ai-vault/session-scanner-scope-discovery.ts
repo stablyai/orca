@@ -29,6 +29,9 @@ export function resetProjectDirCwdCacheForTests(): void {
 async function cachedProjectDirCwd(projectDir: string): Promise<string | null> {
   const cached = projectDirCwdCache.get(projectDir)
   if (cached !== undefined) {
+    // Refresh recency so hot in-scope dirs outlive one-off ones at the cap.
+    projectDirCwdCache.delete(projectDir)
+    projectDirCwdCache.set(projectDir, cached)
     return cached
   }
   const cwd = await readProjectDirCwd(projectDir)
