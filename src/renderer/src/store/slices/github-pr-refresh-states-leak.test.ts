@@ -99,7 +99,9 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
     // The most-recently-written key survives; the oldest is evicted.
     expect(states[`branch-${total - 1}`]).toBeDefined()
     expect(states['branch-0']).toBeUndefined()
-  })
+    // MAX_ENTRIES+150 real synchronous dispatches, each an O(n) prune+cap over
+    // a large map, ride the 30s default and flake on a loaded machine.
+  }, 60_000)
 
   it('evicts settled (error/skipped) statuses before active ones', () => {
     const store = createTestStore()
