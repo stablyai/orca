@@ -196,6 +196,60 @@ describe('registerSshBrowseHandler', () => {
     expect(exec).toHaveBeenCalledTimes(1)
   })
 
+  it('surfaces the PowerShell error when a 9009 Windows fallback also fails', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/missing' })
+    await Promise.resolve()
+    posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
+    posixChannel.emit('exit', 9009)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.stderr.emit('data', Buffer.from('Cannot find path C:/missing'))
+    windowsChannel.emit('exit', 1)
+    windowsChannel.emit('close')
+
+    // 9009 proves the host is Windows, so PowerShell's error is the real cause —
+    // surface it rather than the cmd.exe "exec is not recognized" prose.
+    await expect(resultPromise).rejects.toThrow('Cannot find path')
+  })
+
+  it('surfaces the original POSIX error when a heuristic-matched fallback also fails', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/opt/exec' })
+    await Promise.resolve()
+    // A POSIX error that merely mentions exec/not found matches the string
+    // heuristic (exit code is a plain non-9009), so the fallback is a false start.
+    posixChannel.stderr.emit('data', Buffer.from('exec: command not found'))
+    posixChannel.emit('exit', 127)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.stderr.emit('data', Buffer.from('sh: powershell.exe: not found'))
+    windowsChannel.emit('exit', 127)
+    windowsChannel.emit('close')
+
+    // The original POSIX failure is the real one — don't mask it with the
+    // misleading "powershell.exe: not found" from the doomed retry.
+    await expect(resultPromise).rejects.toThrow('exec: command not found')
+  })
+
   it('rejects and detaches listeners when the browse channel errors', async () => {
     const channel = createMockChannel()
     const exec = vi.fn().mockResolvedValue(channel)

@@ -11,9 +11,11 @@ export type RemoteDirEntry = {
 const SSH_BROWSE_TIMEOUT_MS = 15_000
 
 // Why: cmd.exe returns ERRORLEVEL 9009 for an unrecognized command regardless of
-// OS display language, so it's the locale-independent signal that a Windows host
-// rejected Orca's POSIX `exec` wrapper. Localized stderr text ("no se reconoce",
-// German/French/etc.) is only a fallback heuristic.
+// OS display language, so on the ssh2 transport (which surfaces the remote exit
+// code intact) it's the locale-independent signal that a Windows host rejected
+// Orca's POSIX `exec` wrapper. The system-ssh transport truncates the exit code
+// to 8 bits (9009 -> 49), so localized stderr text ("no se reconoce", etc.)
+// remains the only heuristic there.
 const WINDOWS_COMMAND_NOT_FOUND_EXIT = 9009
 
 // Carries the raw exit code so the Windows-fallback predicate can key off the
@@ -60,11 +62,13 @@ export function registerSshBrowseHandler(
         }
         try {
           return await browseWithWindowsPowerShell(conn, args.dirPath)
-        } catch {
-          // Why: if the PowerShell retry also fails (e.g. the predicate matched a
-          // POSIX error that merely mentioned "exec"/"not found"), surface the
-          // original shell failure — not a misleading "powershell.exe not found".
-          throw error
+        } catch (fallbackError) {
+          // Why: a 9009 exit proves the host is Windows (remote POSIX exits are
+          // 8-bit), so PowerShell genuinely ran and its error is the real cause
+          // (e.g. "Cannot find path"/"Access is denied") — surface it. The string
+          // heuristic can match a POSIX false positive, so there we rethrow the
+          // original shell failure instead of a misleading "powershell.exe not found".
+          throw isWindowsCommandNotFound(error) ? fallbackError : error
         }
       }
     }
@@ -257,11 +261,17 @@ async function runBrowseCommand(
   })
 }
 
+// Why: cmd.exe's 9009 exit is the locale-independent proof that a Windows host
+// rejected Orca's POSIX `exec` wrapper — remote POSIX shells report 8-bit exit
+// codes, so 9009 can only originate from cmd.exe's ERRORLEVEL.
+function isWindowsCommandNotFound(error: unknown): boolean {
+  return error instanceof RemoteBrowseError && error.exitCode === WINDOWS_COMMAND_NOT_FOUND_EXIT
+}
+
 function shouldFallbackToWindowsBrowse(error: unknown): boolean {
-  // Why: cmd.exe's 9009 exit is the locale-independent signal that a Windows
-  // host rejected Orca's POSIX `exec` wrapper — it fires the fallback even on
-  // German/French/Japanese/etc. hosts whose stderr text the heuristics miss.
-  if (error instanceof RemoteBrowseError && error.exitCode === WINDOWS_COMMAND_NOT_FOUND_EXIT) {
+  // Fires the fallback even on German/French/Japanese/etc. hosts whose localized
+  // stderr text the string heuristics below would miss.
+  if (isWindowsCommandNotFound(error)) {
     return true
   }
   const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
