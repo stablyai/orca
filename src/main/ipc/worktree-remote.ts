@@ -95,6 +95,7 @@ import {
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
 import { createWorktreeLinkedPaths } from './worktree-symlinks'
+import { resolveWorktreeLinkedPaths } from './worktree-include'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
@@ -1864,7 +1865,7 @@ export async function createRemoteWorktree(
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
-  // Why: shared/symlink paths are local-only; remote (SSH) support needs a new relay method + auth surface, so configured symlinkPaths are ignored here.
+  // Why: shared/symlink paths are local-only; remote (SSH) support needs a new relay method + auth surface, so configured symlinkPaths (and any `.worktreeinclude` file) are ignored here.
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
@@ -2450,11 +2451,13 @@ export async function createLocalWorktree(
     ...gitWorktrees.map((worktree) => worktree.path)
   ])
 
-  // Why: link user-configured shared paths (e.g. `node_modules`, `.env`) before setup runs so setup scripts see them in place.
-  const symlinkPaths = repo.symlinkPaths ?? []
-  if (symlinkPaths.length > 0) {
+  // Why: link user-configured shared paths plus the repo's `.worktreeinclude`
+  // matches (e.g. `node_modules`, `.env`) before setup runs so setup scripts
+  // see them in place.
+  const linkedPaths = await resolveWorktreeLinkedPaths(repo.path, repo.symlinkPaths ?? [])
+  if (linkedPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
-      await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
+      await createWorktreeLinkedPaths(repo.path, created.path, linkedPaths)
     })
   }
 

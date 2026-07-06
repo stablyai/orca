@@ -279,7 +279,9 @@ export type Repo = {
   externalWorktreeDiscoverySuppressedAt?: number
   /** Paths (relative to the primary checkout) that should be APFS clone-copied
    *  on macOS when possible, otherwise symlinked, into newly created worktrees.
-   *  Undefined/empty means no shared paths are created for this repo. */
+   *  Unioned at link time with the repo's version-controlled `.worktreeinclude`
+   *  patterns (gitignored matches only). Undefined/empty means this list
+   *  contributes nothing, but `.worktreeinclude` may still add paths. */
   symlinkPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
   projectGroupId?: string | null

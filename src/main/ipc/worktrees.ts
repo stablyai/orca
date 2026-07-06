@@ -95,6 +95,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider, getSshPtyProvider } from './pty'
 import { findExistingWorktreeSymlinkPaths, removeWorktreeLinkedPaths } from './worktree-symlinks'
+import { resolveWorktreeLinkedPaths } from './worktree-include'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
@@ -1744,7 +1745,10 @@ export function registerWorktreeHandlers(
           )
         }
 
-        const linkedPaths = repo.symlinkPaths ?? []
+        // Why: the linked set unions per-repo `symlinkPaths` with the repo's
+        // `.worktreeinclude` matches, so both the clean-check ignore list and the
+        // removal below cover every path materialized into the worktree.
+        const linkedPaths = await resolveWorktreeLinkedPaths(repo.path, repo.symlinkPaths ?? [])
         const ignoredLinkedPaths = args.force
           ? []
           : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
