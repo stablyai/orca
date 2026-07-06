@@ -829,7 +829,7 @@ function quitFromSystemTray(): void {
     showMainWindowFromTray()
   }
   // Why: set the quit latch before app.quit() so the window 'close' handler
-  // proceeds to teardown instead of re-hiding to the Windows tray.
+  // proceeds to teardown instead of re-hiding to the system tray.
   isQuitting = true
   app.quit()
 }
@@ -978,8 +978,10 @@ function openMainWindow(): BrowserWindow {
   })
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
-  // Why: Windows Tray construction can synchronously block on Shell_NotifyIcon,
-  // so both desktop status-item platforms defer creation to after first paint.
+  // Why: new Tray() can synchronously talk to the desktop shell, so create it
+  // after first paint. The timer fallback covers windows revealed without
+  // ready-to-show ever firing; those can still be hidden to the tray on close,
+  // so the icon must exist by then.
   let trayCreated = false
   const createSystemTrayDeferred = (): void => {
     if (trayCreated || window.isDestroyed() || isQuitting || !store) {

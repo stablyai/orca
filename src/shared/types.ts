@@ -2623,9 +2623,9 @@ export type GlobalSettings = {
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
-  /** Why: Windows-only. When on, the close (X) button hides the window to the
-   *  system tray instead of quitting Orca; off keeps the default quit-on-close.
-   *  The tray icon itself is always present on Windows regardless of this flag. */
+  /** Why: tray-supported desktop only. When on, the close (X) button hides the
+   *  window to the system tray instead of quitting Orca; off keeps the default quit-on-close.
+   *  The tray icon itself is always present on Windows/Linux regardless of this flag. */
   minimizeToTrayOnClose?: boolean
   /** Why: macOS keeps Orca running after its last window closes, so this
    *  controls the additive menu-bar entry without changing Dock behavior. */
@@ -3430,8 +3430,8 @@ export type PersistedUIState = {
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
-  /** Why: Windows-only. Set once after the window first hides to the system
-   *  tray, so the "Orca is still running" notification shows only on first use. */
+  /** Why: set once after the window first hides to the system tray, so the
+   *  "Orca is still running" notification shows only on first use. */
   trayMinimizeNoticeShown?: boolean
   /** User dismissed the first-run Mobile Emulator intro (Keep, Hide, or close).
    *  Reversible only by re-enabling the feature in Settings. */

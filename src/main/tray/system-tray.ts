@@ -33,8 +33,8 @@ let attentionActive = false
 
 let nativeThemeUpdatedListener: (() => void) | null = null
 
-// Why: on Windows the notification area expects a 16px icon; the app icon PNG
-// is larger, so downscale to avoid a cropped/blurry tray glyph.
+// Why: tray hosts expect a small icon; the app icon PNG is larger, so downscale
+// to avoid a cropped/blurry tray glyph.
 const TRAY_ICON_SIZE = 16
 
 // Why: centralize which image the tray shows so both creation and attention
@@ -151,11 +151,15 @@ function safeMenuAction(action: () => void): () => void {
 }
 
 /**
- * Creates the Windows notification icon or macOS menu bar status item. No-op
- * on Linux. Idempotent: repeated calls never stack duplicate icons.
+ * Creates the Windows/Linux tray icon or macOS menu bar status item.
+ * Idempotent: repeated calls never stack duplicate icons.
  */
 export function createSystemTray(opts: SystemTrayOptions): Tray | null {
-  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+  if (
+    process.platform !== 'win32' &&
+    process.platform !== 'linux' &&
+    process.platform !== 'darwin'
+  ) {
     return null
   }
   if (tray && !tray.isDestroyed()) {
@@ -201,10 +205,10 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
     { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }
   ])
   tray.setContextMenu(menu)
-  if (process.platform === 'win32') {
+  if (process.platform !== 'darwin') {
     tray.setToolTip('Orca')
-    // Why: a left-click on the tray icon is the conventional Windows gesture to
-    // restore a minimized-to-tray app; macOS opens the attached menu instead.
+    // Why: Windows and Linux expose tray clicks as a best-effort restore gesture;
+    // the Open menu item remains the dependable path on Linux tray hosts.
     tray.on(
       'click',
       safeMenuAction(() => opts.onOpen())
@@ -215,7 +219,7 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   return tray
 }
 
-/** Applies the persisted macOS visibility preference without affecting Windows. */
+/** Applies the persisted macOS visibility preference without affecting Windows or Linux. */
 export function setMacMenuBarIconVisible(visible: boolean, opts: SystemTrayOptions): Tray | null {
   if (process.platform !== 'darwin') {
     return null
@@ -231,7 +235,7 @@ export function setMacMenuBarIconVisible(visible: boolean, opts: SystemTrayOptio
  * Shows or hides a red/amber attention dot on the tray icon. Call with `true`
  * when a terminal bell or agent completion fires while the window is
  * minimized/hidden, and `false` once the window is shown again. Safe to call
- * before the tray is created or on Linux where no tray is available.
+ * before the tray is created or on an unsupported platform.
  */
 export function setTrayAttention(active: boolean): void {
   if (attentionActive === active) {
