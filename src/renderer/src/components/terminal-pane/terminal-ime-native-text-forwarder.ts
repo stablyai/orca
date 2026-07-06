@@ -150,11 +150,8 @@ export function installTerminalImeNativeTextForwarder(args: {
       args.sendInput(event.data)
     }
     event.stopImmediatePropagation()
-    // The glyph only landed in xterm's helper textarea because we let the
-    // keydown reach the native pipeline; clear it back to its empty resting
-    // state so it cannot accumulate across keystrokes. This clear can zero a
-    // pending CompositionHelper textarea diff, but only synthetic injectors
-    // can interleave two commits inside one macrotask.
+    // Clear the helper textarea so the native glyph doesn't accumulate;
+    // safe in practice since only synthetic injectors interleave commits.
     if (event.target instanceof HTMLTextAreaElement) {
       event.target.value = ''
     }
