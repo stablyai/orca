@@ -163,8 +163,12 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
   return extractContentText(textParts)
 }
 
+// Agents whose transcripts are append-only message-graph JSONL (session +
+// model_change + message records). OMP is a Pi fork and shares the format.
+export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp'
+
 export async function parseMessageGraphSessionFile(
-  agent: 'openclaw' | 'pi',
+  agent: MessageGraphAgent,
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
@@ -176,7 +180,7 @@ export async function parseMessageGraphSessionFile(
 }
 
 export async function parseMessageGraphSessionContent(
-  agent: 'openclaw' | 'pi',
+  agent: MessageGraphAgent,
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
@@ -206,7 +210,10 @@ function consumeMessageGraphRecordLine(accumulator: SessionAccumulator, line: st
     return
   }
   if (record.type === 'model_change') {
-    accumulator.model = extractString(record.modelId) ?? accumulator.model
+    // Pi writes `modelId`; OMP writes `model`. Prefer either so an in-progress
+    // session shows its model before the first assistant reply lands.
+    accumulator.model =
+      extractString(record.modelId) ?? extractString(record.model) ?? accumulator.model
     return
   }
   if (record.type !== 'message') {
@@ -227,7 +234,7 @@ function consumeMessageGraphRecordLine(accumulator: SessionAccumulator, line: st
 }
 
 export function createMessageGraphSessionResumeState(
-  agent: 'openclaw' | 'pi',
+  agent: MessageGraphAgent,
   file: FileWithMtime
 ): ResumableSessionParseState {
   return accumulatorFoldResumeState(
@@ -237,7 +244,7 @@ export function createMessageGraphSessionResumeState(
 }
 
 async function parseMessageGraphSessionLines(args: {
-  agent: 'openclaw' | 'pi'
+  agent: MessageGraphAgent
   file: FileWithMtime
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform

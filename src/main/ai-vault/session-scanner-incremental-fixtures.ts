@@ -188,6 +188,56 @@ export function piFixture(): IncrementalAgentFixture {
   }
 }
 
+// OMP is a Pi fork sharing the message-graph format, but keys the model on
+// `model` (not Pi's `modelId`); its own fixture exercises the registry's 'omp'
+// branch and that model-key difference. (The session `title` is included for
+// realism only — the parser derives the title from the first user message.)
+export function ompFixture(): IncrementalAgentFixture {
+  return {
+    agent: 'omp',
+    fileName: '2026-05-01T10-00-00-000Z_cccccccc-dddd-4eee-8fff-000000000000.jsonl',
+    seedLines: [
+      JSON.stringify({
+        type: 'session',
+        version: 3,
+        id: 'cccccccc-dddd-4eee-8fff-000000000000',
+        cwd: '/repo/app',
+        title: 'OMP session title',
+        timestamp: '2026-05-01T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'model_change',
+        model: 'gpt-5.4-mini',
+        timestamp: '2026-05-01T10:00:01.000Z'
+      }),
+      JSON.stringify({
+        type: 'message',
+        message: { role: 'user', content: [{ type: 'text', text: 'omp seed question' }] },
+        timestamp: '2026-05-01T10:00:05.000Z'
+      })
+    ],
+    appendLines: [
+      JSON.stringify({
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'omp incremental answer' }],
+          model: 'gpt-5.4-mini',
+          usage: { input: 40, output: 20, totalTokens: 60 }
+        },
+        timestamp: '2026-05-01T10:01:00.000Z'
+      })
+    ],
+    truncatedLines: [
+      JSON.stringify({
+        type: 'session',
+        id: 'cccccccc-dddd-4eee-8fff-000000000000',
+        timestamp: '2026-05-01T10:00:00.000Z'
+      })
+    ]
+  }
+}
+
 export function geminiJsonlFixture(): IncrementalAgentFixture {
   return {
     agent: 'gemini',
@@ -235,6 +285,7 @@ export function allIncrementalAgentFixtures(): IncrementalAgentFixture[] {
     droidFixture(),
     openclawFixture(),
     piFixture(),
+    ompFixture(),
     geminiJsonlFixture()
   ]
 }

@@ -113,6 +113,7 @@ export function finalizeSession(
     resumeCommand: buildAiVaultResumeCommand({
       agent: accumulator.agent,
       sessionId,
+      resumeFilePath: accumulator.filePath,
       cwd: accumulator.cwd,
       platform,
       codexHome: options.codexHome
