@@ -326,6 +326,18 @@ describe('PRCommentsList comment resolution selection', () => {
     expect(container.querySelector('button[role="checkbox"]')).toBeNull()
   })
 
+  it('keeps queued comments selected when clearRequest is null', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    renderList({ comments })
+    clickButton('Queue for agent')
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+
+    renderList({ comments, clearRequest: null })
+
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+  })
+
   it('keeps a clear request pending until its review context is mounted', () => {
     const queuedComments = [
       comment({
