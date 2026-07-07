@@ -170,7 +170,8 @@ import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-sou
 import {
   canUseGitHubRepoContext,
   getGitHubRuntimeRepoId,
-  getGitHubSourceRuntimeHost
+  getGitHubSourceRuntimeHost,
+  resolveGitHubSourceSettings
 } from '@/lib/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
@@ -215,7 +216,6 @@ import type {
 } from '../../../shared/types'
 import {
   getTaskSourceCacheScope,
-  getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
@@ -545,13 +545,7 @@ function PRAssigneesPanel({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const { isPending, run } = useImmediateMutation()
@@ -780,13 +774,7 @@ function PRReviewersPanel({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
@@ -3236,13 +3224,7 @@ function ConversationTab({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
@@ -3841,7 +3823,16 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const sourceSettings = getTaskSourceRuntimeSettings(sourceContext)
+  // Why: merge must route through the repo OWNER host — a runtime-owned repo
+  // viewed from a local GitHub source has a null source runtime id, and routing
+  // by that lands on local gh:mergePR → "Access denied" (#6957/#7590).
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
+    [repoOwnerSettings, sourceContext]
+  )
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
@@ -5540,10 +5531,10 @@ async function runIssueUpdate(args: {
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const targetSettings =
-      args.sourceContext?.provider === 'github'
-        ? getTaskSourceRuntimeSettings(args.sourceContext)
-        : getGitHubMutationSettings(args.repoId)
+    const targetSettings = resolveGitHubSourceSettings(
+      getGitHubMutationSettings(args.repoId),
+      args.sourceContext
+    )
     const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: args.projectOrigin.owner,
@@ -5633,10 +5624,10 @@ async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const targetSettings =
-      args.sourceContext?.provider === 'github'
-        ? getTaskSourceRuntimeSettings(args.sourceContext)
-        : getGitHubMutationSettings(args.item.repoId)
+    const targetSettings = resolveGitHubSourceSettings(
+      getGitHubMutationSettings(args.item.repoId),
+      args.sourceContext
+    )
     const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: targetSlug.owner,
@@ -5692,10 +5683,10 @@ async function runPullRequestStateUpdate(args: {
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const targetSettings =
-      args.sourceContext?.provider === 'github'
-        ? getTaskSourceRuntimeSettings(args.sourceContext)
-        : getGitHubMutationSettings(args.repoId)
+    const targetSettings = resolveGitHubSourceSettings(
+      getGitHubMutationSettings(args.repoId),
+      args.sourceContext
+    )
     const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: args.projectOrigin.owner,
@@ -5811,13 +5802,7 @@ function GHEditSection({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const { isPending, run } = useImmediateMutation()

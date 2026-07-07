@@ -3,37 +3,29 @@ import {
   getSettingsForRepoRuntimeOwner,
   type RepoRuntimeOwnerState
 } from '../lib/repo-runtime-owner'
+import { resolveGitHubSourceSettings } from '../lib/github-source-runtime-context'
 import { getActiveRuntimeTarget } from '../runtime/runtime-rpc-client'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { getTaskSourceRuntimeSettings } from '../../../shared/task-source-context'
 
-// Why: mirrors the merge-routing decision inside GitHubItemDialog's
-// PRActionsPanel so a revert to source-only routing (issue #6957) fails here.
-// A runtime-owned repo whose GitHub source view is local must still merge on
-// the owner runtime, not fall back to local `gh:mergePR`.
+// Why: exercises the shared resolveGitHubSourceSettings helper that both
+// GitHubItemDialog and PullRequestPage merge panels route through, so a revert
+// to bare/unconditional source routing (issue #6957 / follow-up #7623) fails
+// here. A runtime-owned repo whose GitHub source view is local must still merge
+// on the owner runtime, not fall back to local `gh:mergePR`.
 function resolveMergeTarget(
   state: RepoRuntimeOwnerState,
   repoId: string | null,
   sourceContext: TaskSourceContext | null
 ): ReturnType<typeof getActiveRuntimeTarget> {
   const repoOwnerSettings = getSettingsForRepoRuntimeOwner(state, repoId)
-  const sourceSettings =
-    sourceContext?.provider !== 'github'
-      ? repoOwnerSettings
-      : (() => {
-          const sourceRuntimeSettings = getTaskSourceRuntimeSettings(sourceContext)
-          return sourceRuntimeSettings.activeRuntimeEnvironmentId
-            ? { ...repoOwnerSettings, ...sourceRuntimeSettings }
-            : repoOwnerSettings
-        })()
-  return getActiveRuntimeTarget(sourceSettings)
+  return getActiveRuntimeTarget(resolveGitHubSourceSettings(repoOwnerSettings, sourceContext))
 }
 
 function githubSource(hostId: TaskSourceContext['hostId']): TaskSourceContext {
   return { kind: 'task-source', provider: 'github', projectId: 'p', hostId, repoId: 'repo-1' }
 }
 
-describe('GitHubItemDialog PR merge routing', () => {
+describe('GitHub PR merge routing (shared repo-owner-aware resolver)', () => {
   const runtimeOwnedRepo: RepoRuntimeOwnerState = {
     settings: { activeRuntimeEnvironmentId: null },
     repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }]
