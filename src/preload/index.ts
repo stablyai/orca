@@ -29,6 +29,7 @@ import type {
   GitStagingArea,
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
+  GitLineBlameResult,
   GitUpstreamStatus,
   GhosttyImportPreview,
   ListWorkItemsResult,
@@ -2769,6 +2770,12 @@ const api = {
       compareAgainstHead?: boolean
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:diff', args),
+    lineBlame: (args: {
+      worktreePath: string
+      filePath: string
+      line: number
+      connectionId?: string
+    }): Promise<GitLineBlameResult | null> => ipcRenderer.invoke('git:lineBlame', args),
     branchCompare: (args: {
       worktreePath: string
       baseRef: string

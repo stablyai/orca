@@ -28,7 +28,8 @@
         "minimaxToggleDescription": "显示当前工作区的 MiniMax 订阅使用情况。",
         "sshToggleDescription": "当有可用的 SSH 和远程 Orca 主机时显示它们。",
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
-        "portsToggleDescription": "显示实时工作区端口。单击它可获取工作区范围的端口和外部侦听器。"
+        "portsToggleDescription": "显示实时工作区端口。单击它可获取工作区范围的端口和外部侦听器。",
+        "lineBlameToggleDescription": "显示更改光标所在行的最后一次提交的作者和日期。"
       }
     }
   },
@@ -2938,7 +2939,8 @@
             "f077f586db": "不再询问",
             "c0e972d726": "取消",
             "06741a2f3d": "打开 MiniMax 使用量详情",
-            "3bbf140864": "MiniMax 使用量"
+            "3bbf140864": "MiniMax 使用量",
+            "lineBlameMenuLabel": "行作者"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -3101,6 +3103,10 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
+          },
+          "LineBlameStatusSegment": {
+            "uncommitted": "未提交",
+            "uncommittedTooltip": "此行有未提交的更改。"
           }
         }
       },
@@ -7013,7 +7019,13 @@
               "detailed": "详细"
             },
             "9a115966d3": "关闭时最小化到托盘",
-            "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。"
+            "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
+            "lineBlameTitle": "行作者",
+            "lineBlameDescription": "在状态栏中显示最后修改当前行的人。",
+            "lineBlameKeywordGit": "git",
+            "lineBlameKeywordBlame": "blame",
+            "lineBlameKeywordAuthor": "作者",
+            "lineBlameKeywordLine": "行"
           }
         },
         "auto": {

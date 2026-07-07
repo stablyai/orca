@@ -1541,6 +1541,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         compareAgainstHead
       })
     },
+    lineBlame: async ({ worktreePath, filePath, line }) => {
+      const file = await resolveRuntimeFilePath(filePath, worktreePath)
+      return callRuntimeResult('git.lineBlame', {
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
+        filePath: file.relativePath,
+        line
+      })
+    },
     branchCompare: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.branchCompare', {

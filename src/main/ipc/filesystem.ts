@@ -15,6 +15,7 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitLineBlameResult,
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GlobalSettings,
@@ -58,6 +59,7 @@ import {
   getCommitDiff
 } from '../git/status'
 import { getHistory } from '../git/history'
+import { getLineBlame } from '../git/line-blame'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -1190,6 +1192,30 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       return getHistory(worktreePath, { ...options, ...gitOptions })
+    }
+  )
+
+  ipcMain.handle(
+    'git:lineBlame',
+    async (
+      _event,
+      args: { worktreePath: string; filePath: string; line: number; connectionId?: string }
+    ): Promise<GitLineBlameResult | null> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.getLineBlame(args.worktreePath, args.filePath, args.line)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getLineBlame(worktreePath, filePath, args.line, gitOptions)
     }
   )
 

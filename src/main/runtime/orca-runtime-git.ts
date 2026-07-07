@@ -4,6 +4,7 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitLineBlameResult,
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
@@ -49,6 +50,7 @@ import {
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import { getHistory as getGitHistory } from '../git/history'
+import { getLineBlame } from '../git/line-blame'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
@@ -328,6 +330,23 @@ export class RuntimeGitCommands {
       compareAgainstHead,
       localGitOptionsForTarget(target)
     )
+  }
+
+  async getRuntimeGitLineBlame(
+    worktreeSelector: string,
+    filePath: string,
+    line: number
+  ): Promise<GitLineBlameResult | null> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.getLineBlame(target.worktree.path, relativePath, line)
+    }
+    return getLineBlame(target.worktree.path, relativePath, line, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitBranchCompare(

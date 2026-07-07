@@ -28,7 +28,8 @@
         "minimaxToggleDescription": "Show MiniMax subscription usage for the active workspace.",
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
-        "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners."
+        "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
+        "lineBlameToggleDescription": "Show the author and date of the last commit that changed the line at your cursor."
       }
     }
   },
@@ -2938,7 +2939,8 @@
             "f077f586db": "Don't ask again",
             "c0e972d726": "Cancel",
             "06741a2f3d": "Open MiniMax usage details",
-            "3bbf140864": "MiniMax Usage"
+            "3bbf140864": "MiniMax Usage",
+            "lineBlameMenuLabel": "Line Author"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3101,6 +3103,10 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
+          },
+          "LineBlameStatusSegment": {
+            "uncommitted": "Uncommitted",
+            "uncommittedTooltip": "This line has uncommitted changes."
           }
         }
       },
@@ -7065,7 +7071,13 @@
               "cardLayout": "card layout",
               "workspaceOptions": "workspace options",
               "detailed": "detailed"
-            }
+            },
+            "lineBlameTitle": "Line Author",
+            "lineBlameDescription": "Show who last changed the current line in the status bar.",
+            "lineBlameKeywordGit": "git",
+            "lineBlameKeywordBlame": "blame",
+            "lineBlameKeywordAuthor": "author",
+            "lineBlameKeywordLine": "line"
           }
         },
         "auto": {

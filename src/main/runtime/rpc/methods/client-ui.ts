@@ -49,7 +49,8 @@ const StatusBarItem = z.enum([
   'minimax',
   'ssh',
   'resource-usage',
-  'ports'
+  'ports',
+  'line-blame'
 ])
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),

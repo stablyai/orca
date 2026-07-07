@@ -6,6 +6,7 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitLineBlameResult,
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
@@ -287,6 +288,27 @@ export async function getRuntimeGitDiff(
   return callRuntimeRpc<GitDiffResult>(
     target,
     'git.diff',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitLineBlame(
+  context: RuntimeGitContext,
+  args: { filePath: string; line: number }
+): Promise<GitLineBlameResult | null> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.lineBlame({
+      worktreePath: context.worktreePath,
+      filePath: args.filePath,
+      line: args.line,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitLineBlameResult | null>(
+    target,
+    'git.lineBlame',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...args },
     { timeoutMs: 15_000 }
   )

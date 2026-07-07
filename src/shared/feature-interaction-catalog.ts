@@ -38,6 +38,7 @@ export type FeatureInteractionId =
   | 'cookie-import'
   | 'floating-workspace'
   | 'floating-workspace-hidden'
+  | 'line-blame'
   | 'mobile-pairing'
   | 'notifications'
   | 'ports'
@@ -131,6 +132,7 @@ export const FEATURE_INTERACTIONS = [
     id: 'floating-workspace-hidden',
     interaction: 'Floating Workspace explicitly hidden or disabled'
   },
+  { id: 'line-blame', interaction: 'Line Author status-bar segment toggled on' },
   { id: 'mobile-pairing', interaction: 'mobile pairing enabled or QR code generated' },
   { id: 'notifications', interaction: 'desktop notifications enabled or tested' },
   { id: 'ports', interaction: 'Ports popover opened, configured, or port action used' },
