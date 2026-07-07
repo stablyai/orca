@@ -215,7 +215,9 @@ describe('registerSshBrowseHandler', () => {
   // Set-Location, or navigation lands in the drive-relative cwd / errors.
   it.each([
     { dirPath: '/C:/Users', expected: "$dir = 'C:/Users'" },
-    { dirPath: 'C:', expected: "$dir = 'C:/'" }
+    { dirPath: 'C:', expected: "$dir = 'C:/'" },
+    // Combined strip + root, so a future refactor can't break the ordering.
+    { dirPath: '/C:', expected: "$dir = 'C:/'" }
   ])(
     'roots the Windows drive path $dirPath in the PowerShell fallback',
     async ({ dirPath, expected }) => {
