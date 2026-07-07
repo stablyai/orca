@@ -51,10 +51,12 @@ try {
   Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
   try {
     & $OrcaLauncher @ForwardArgs
-    if (-not $?) {
-      $exitCode = 1
-    } elseif ($null -eq $LASTEXITCODE) {
-      $exitCode = 0
+    if ($null -eq $LASTEXITCODE) {
+      if (-not $?) {
+        $exitCode = 1
+      } else {
+        $exitCode = 0
+      }
     } else {
       $exitCode = $LASTEXITCODE
     }

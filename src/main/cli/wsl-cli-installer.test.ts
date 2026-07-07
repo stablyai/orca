@@ -239,6 +239,8 @@ describe('WslCliInstaller', () => {
     expect(bridge).toContain('$env:ORCA_CLI_CWD = $WslCwd')
     expect(bridge).toContain('Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)')
     expect(bridge).toContain('& $OrcaLauncher @ForwardArgs')
+    expect(bridge).toContain('if ($null -eq $LASTEXITCODE)')
+    expect(bridge).toContain('$exitCode = $LASTEXITCODE')
     expect(bridge).toContain('Pop-Location')
     expect(bridge).toContain('if ($previousCliCwdExists) {')
     expect(bridge).toContain('Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue')
