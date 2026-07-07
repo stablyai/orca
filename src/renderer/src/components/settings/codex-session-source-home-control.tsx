@@ -20,6 +20,17 @@ type UpdateSettings = (updates: Partial<GlobalSettings>) => void | Promise<void>
  * Agents pane is showing (host or the selected WSL distro), so it mirrors how
  * detected agents are scoped. History-only: it never touches auth/config.
  */
+// Why: the launch-time resolver matches distro keys case-insensitively, so the
+// UI must resolve to the SAME stored key. Otherwise a casing mismatch would show
+// an empty override for an active value and, on edit, create a duplicate key.
+function findWslSourceHomeKey(
+  wsl: Record<string, string> | undefined,
+  distro: string
+): string | undefined {
+  const normalized = distro.trim().toLowerCase()
+  return Object.keys(wsl ?? {}).find((key) => key.trim().toLowerCase() === normalized)
+}
+
 export function buildCodexSessionSourceHomeControl(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome' | 'localWindowsRuntimeDefault'>,
   updateSettings: UpdateSettings
@@ -30,13 +41,16 @@ export function buildCodexSessionSourceHomeControl(
   // home, so fall back to the host control rather than a null distro key.
   const wslDistro = runtimeScope.kind === 'wsl' ? runtimeScope.distro?.trim() : undefined
   if (wslDistro) {
+    const existingKey = findWslSourceHomeKey(sourceHome?.wsl, wslDistro)
     return {
       runtimeLabel: `${wslDistro}: ~/.codex`,
-      value: sourceHome?.wsl?.[wslDistro] ?? '',
+      value: (existingKey ? sourceHome?.wsl?.[existingKey] : undefined) ?? '',
+      // Save under the existing key when one matches (case-insensitively), so
+      // editing updates it in place instead of adding a differently-cased key.
       onSave: (value: string) =>
         saveCodexSessionSourceHome(settings, updateSettings, {
           runtime: 'wsl',
-          distro: wslDistro,
+          distro: existingKey ?? wslDistro,
           value
         })
     }
@@ -61,10 +75,13 @@ function saveCodexSessionSourceHome(
     return
   }
   const nextWsl = { ...current.wsl }
+  // Why: reuse an existing case-insensitive match so we never leave a stale
+  // duplicate key behind when the caller passes a differently-cased distro.
+  const targetKey = findWslSourceHomeKey(nextWsl, args.distro) ?? args.distro
   if (trimmed) {
-    nextWsl[args.distro] = trimmed
+    nextWsl[targetKey] = trimmed
   } else {
-    delete nextWsl[args.distro]
+    delete nextWsl[targetKey]
   }
   updateSettings({
     codexSessionSourceHome: {
