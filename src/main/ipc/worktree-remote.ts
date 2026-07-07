@@ -8,6 +8,7 @@
 // cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
+import { app } from 'electron'
 import { posix, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -58,6 +59,7 @@ import {
   parseOrcaYaml,
   shouldRunSetupForCreate
 } from '../hooks'
+import { provisionWorktreeServices } from '../worktree-services'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -2582,6 +2584,32 @@ export async function createLocalWorktree(
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
+
+    // Why: provision isolated services before setup terminals spawn so the
+    // resolved service env can be injected into the setup runner. A failed
+    // provision must not abort creation — the worktree stays, retry is offered.
+    let serviceEnv: Record<string, string> = {}
+    const serviceRecipes = createdEffectiveHooks?.services ?? []
+    if (args.provisionServices && serviceRecipes.length > 0) {
+      try {
+        const record = await provisionWorktreeServices({
+          userDataPath: app.getPath('userData'),
+          worktreeId: worktree.id,
+          worktreeName: args.name,
+          worktreePath,
+          repo,
+          services: serviceRecipes,
+          provisionId: args.serviceProvisionId,
+          onEvent: (event) => mainWindow.webContents.send('worktreeServices:provisionEvent', event)
+        })
+        if (record.status === 'ready') {
+          serviceEnv = record.env
+        }
+      } catch (error) {
+        console.error(`[services] provisioning failed for ${worktreePath}:`, error)
+      }
+    }
+
     try {
       defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, args.setupDecision)
     } catch (error) {
@@ -2625,6 +2653,9 @@ export async function createLocalWorktree(
       } catch (error) {
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
       }
+    }
+    if (setup && Object.keys(serviceEnv).length > 0) {
+      setup = { ...setup, envVars: { ...setup.envVars, ...serviceEnv } }
     }
   })
 

@@ -2180,6 +2180,10 @@ export type CreateWorktreeArgs = {
   creationId?: string
   /** Authorizes the host to mint system-owned automation provenance. */
   automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
+  /** Opt-in to provisioning isolated per-worktree services from orca.yaml. */
+  provisionServices?: boolean
+  /** Correlates worktreeServices:provisionEvent streams back to the pending creation. */
+  serviceProvisionId?: string
 }
 
 export type CreateWorktreeResult = {
