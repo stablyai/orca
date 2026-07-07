@@ -150,6 +150,43 @@ describe('registerSshBrowseHandler', () => {
     expect(script).toContain("Write-Output ($resolved -replace '\\\\', '/')")
   })
 
+  it('falls back for a non-English cmd.exe reject (exit 1, localized stderr)', async () => {
+    // Regression: real Windows OpenSSH + cmd.exe forwards exit 1 (not 9009) with
+    // localized stderr. The old 9009/English-string trigger silently missed this,
+    // so German/Japanese/etc. hosts never fell back. Keying off the non-zero exit
+    // of a RemoteBrowseError fixes it regardless of OS display language.
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/Users' })
+    await Promise.resolve()
+    // Japanese cmd.exe "not recognized" text — matches none of the removed English
+    // /Spanish substrings, and exit 1 is not the removed 9009 sentinel.
+    posixChannel.stderr.emit(
+      'data',
+      Buffer.from("'exec' は、内部コマンドとして認識されていません。")
+    )
+    posixChannel.emit('exit', 1)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.emit('data', Buffer.from('C:/Users\r\nAdmin/\r\n'))
+    windowsChannel.emit('exit', 0)
+    windowsChannel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: 'C:/Users',
+      entries: [{ name: 'Admin', isDirectory: true }]
+    })
+    expect(exec).toHaveBeenCalledTimes(2)
+  })
+
   it('escapes single quotes in the PowerShell literal path', async () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
@@ -161,10 +198,11 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: "C:/O'Brien" })
     await Promise.resolve()
-    // cmd.exe returns ERRORLEVEL 9009 for an unrecognized command in every locale;
-    // the fallback must trigger off that even when stderr text isn't English/Spanish.
+    // A cmd.exe reject exits 1 over SSH (its 9009 ERRORLEVEL never crosses the
+    // process boundary) with localized German stderr. The fallback must still fire,
+    // since it keys off the non-zero exit, not the (localized, unmatchable) text.
     posixChannel.stderr.emit('data', Buffer.from('Der Befehl "exec" ist falsch geschrieben'))
-    posixChannel.emit('exit', 9009)
+    posixChannel.emit('exit', 1)
     posixChannel.emit('close')
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
@@ -194,7 +232,7 @@ describe('registerSshBrowseHandler', () => {
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
     await Promise.resolve()
     posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
-    posixChannel.emit('exit', 9009)
+    posixChannel.emit('exit', 1)
     posixChannel.emit('close')
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
@@ -232,7 +270,7 @@ describe('registerSshBrowseHandler', () => {
       const resultPromise = handler(null, { targetId: 'ssh-1', dirPath })
       await Promise.resolve()
       posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
-      posixChannel.emit('exit', 9009)
+      posixChannel.emit('exit', 1)
       posixChannel.emit('close')
       await vi.waitFor(() => {
         expect(windowsChannel.listenerCount('close')).toBe(1)
@@ -247,9 +285,10 @@ describe('registerSshBrowseHandler', () => {
     }
   )
 
-  it('does not retry with PowerShell for an ordinary POSIX browse failure', async () => {
-    const channel = createMockChannel()
-    const exec = vi.fn().mockResolvedValue(channel)
+  it('surfaces the original POSIX failure when the PowerShell retry shows the host is not Windows', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
@@ -257,16 +296,25 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/root/secret' })
     await Promise.resolve()
-    channel.stderr.emit('data', Buffer.from('ls: /root/secret: Permission denied'))
-    channel.emit('exit', 1)
-    channel.emit('close')
+    // A genuine POSIX permission failure exits non-zero; it's indistinguishable
+    // from a Windows shell reject without probing, so the fallback is attempted...
+    posixChannel.stderr.emit('data', Buffer.from('ls: /root/secret: Permission denied'))
+    posixChannel.emit('exit', 1)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    // ...but on a POSIX host the login shell can't find powershell.exe (exit 127),
+    // so the original permission error is surfaced, never masked by the retry.
+    windowsChannel.stderr.emit('data', Buffer.from('bash: powershell.exe: command not found'))
+    windowsChannel.emit('exit', 127)
+    windowsChannel.emit('close')
 
     await expect(resultPromise).rejects.toThrow('Permission denied')
-    // A permission failure must surface directly — no masking PowerShell retry.
-    expect(exec).toHaveBeenCalledTimes(1)
+    expect(exec).toHaveBeenCalledTimes(2)
   })
 
-  it('surfaces the PowerShell error when a 9009 Windows fallback also fails', async () => {
+  it('surfaces the PowerShell error when the Windows fallback runs but fails', async () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
@@ -278,7 +326,7 @@ describe('registerSshBrowseHandler', () => {
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/missing' })
     await Promise.resolve()
     posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
-    posixChannel.emit('exit', 9009)
+    posixChannel.emit('exit', 1)
     posixChannel.emit('close')
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
@@ -287,12 +335,12 @@ describe('registerSshBrowseHandler', () => {
     windowsChannel.emit('exit', 1)
     windowsChannel.emit('close')
 
-    // 9009 proves the host is Windows, so PowerShell's error is the real cause —
-    // surface it rather than the cmd.exe "exec is not recognized" prose.
+    // PowerShell exited non-127, so it genuinely ran on a Windows host — its error
+    // is the real cause. Surface it rather than the cmd.exe "not recognized" prose.
     await expect(resultPromise).rejects.toThrow('Cannot find path')
   })
 
-  it('surfaces the original POSIX error when a heuristic-matched fallback also fails', async () => {
+  it('surfaces the original POSIX error when the fallback shows powershell.exe is missing', async () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
@@ -303,8 +351,7 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/opt/exec' })
     await Promise.resolve()
-    // A POSIX error that merely mentions exec/not found matches the string
-    // heuristic (exit code is a plain non-9009), so the fallback is a false start.
+    // A non-zero POSIX failure triggers the fallback probe on any host...
     posixChannel.stderr.emit('data', Buffer.from('exec: command not found'))
     posixChannel.emit('exit', 127)
     posixChannel.emit('close')
@@ -333,6 +380,9 @@ describe('registerSshBrowseHandler', () => {
     channel.emit('error', new Error('remote disconnected'))
 
     await expect(resultPromise).rejects.toThrow('remote disconnected')
+    // A transport failure is not a RemoteBrowseError, so it must not trigger a
+    // pointless PowerShell retry.
+    expect(exec).toHaveBeenCalledTimes(1)
     expect(channel.listenerCount('data')).toBe(0)
     expect(channel.listenerCount('exit')).toBe(0)
     expect(channel.listenerCount('close')).toBe(0)
