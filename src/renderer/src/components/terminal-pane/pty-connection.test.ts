@@ -5138,6 +5138,61 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('resizes the pane to the snapshot grid before replaying daemon snapshot bytes (bug #7279)', async () => {
+    // Why: the daemon serializes soft-wrapped lines as continuous text. Replaying
+    // that at the pane's current column count rewraps rows one cell early/late.
+    // The reattach path must resize xterm to the snapshot's grid before writing
+    // the snapshot bytes, so a remote pane whose size drifted from the daemon's
+    // grid still repaints the exact host layout.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          snapshot: '\x1b[?1004hrestored snapshot',
+          snapshotCols: 80,
+          snapshotRows: 24
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      }
+    } as StoreState
+
+    // createPane opens the pane at 120x40, deliberately different from the
+    // daemon snapshot's 80x24 grid.
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    // Pane was resized to the snapshot grid before the snapshot bytes landed.
+    expect(pane.terminal.resize).toHaveBeenCalledWith(80, 24)
+    const resizeToSnapshotCall = pane.terminal.resize.mock.invocationCallOrder.find(
+      (_order, index) => {
+        const [cols, rows] = pane.terminal.resize.mock.calls[index]
+        return cols === 80 && rows === 24
+      }
+    )
+    const snapshotWriteCall = pane.terminal.write.mock.invocationCallOrder.find(
+      (_order, index) => pane.terminal.write.mock.calls[index][0] === '\x1b[?1004hrestored snapshot'
+    )
+    expect(resizeToSnapshotCall).toBeDefined()
+    expect(snapshotWriteCall).toBeDefined()
+    expect(resizeToSnapshotCall as number).toBeLessThan(snapshotWriteCall as number)
+  })
+
   it('preserves live modes and injects focus-in after focused agent reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

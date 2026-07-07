@@ -4981,6 +4981,7 @@ export function connectPanePty(
       rows: number
       seq?: number
       alternateScreen?: boolean
+      pendingEscapeTailAnsi?: string
     }): void {
       const scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
       const colsBeforeReplay = pane.terminal.cols
@@ -5415,6 +5416,33 @@ export function connectPanePty(
       // and only the freshest source belongs on screen.
       if (connectResult?.snapshot) {
         rememberReattachPayloadAgentSignal(connectResult.snapshot, { fullScreenReplay: true })
+        // Why: the daemon serializes its grid with soft-wrapped lines as
+        // continuous text. Replaying that at a different column count rewraps
+        // rows one cell early/late (bug #7279). Replay at the snapshot's own
+        // dimensions first; safeFit below fits the pane back and resizes the
+        // remote PTY. Suppress the xterm->PTY forward so this layout-only
+        // resize does not SIGWINCH the live remote TUI. Mirrors
+        // applyMainBufferSnapshot.
+        const snapshotCols = connectResult.snapshotCols
+        const snapshotRows = connectResult.snapshotRows
+        const hasSnapshotDimensions =
+          typeof snapshotCols === 'number' &&
+          typeof snapshotRows === 'number' &&
+          Number.isFinite(snapshotCols) &&
+          Number.isFinite(snapshotRows) &&
+          snapshotCols > 0 &&
+          snapshotRows > 0
+        if (
+          hasSnapshotDimensions &&
+          (pane.terminal.cols !== snapshotCols || pane.terminal.rows !== snapshotRows)
+        ) {
+          suppressSnapshotReplayPtyResize = true
+          try {
+            pane.terminal.resize(snapshotCols, snapshotRows)
+          } finally {
+            suppressSnapshotReplayPtyResize = false
+          }
+        }
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
