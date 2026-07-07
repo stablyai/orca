@@ -333,6 +333,47 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('codex')
   })
 
+  it('keeps OMP launch identity over Pi-compatible wrapper titles after activity', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: true,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: true,
+        title: '⠋ Pi',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
+
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: true,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: true,
+        title: '⠋ Pi',
+        hookAgent: 'pi',
+        hasCompletedHook: false,
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
+
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: true,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: true,
+        title: '⠋ OMP',
+        hookAgent: 'omp',
+        hasCompletedHook: false,
+        launchAgent: 'pi'
+      })
+    ).toBe('pi')
+  })
+
   it('lets shell foreground clear the icon after an agent was observed running', () => {
     expect(
       resolveTabAgentFromSignals({

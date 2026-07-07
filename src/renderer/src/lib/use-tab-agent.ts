@@ -12,6 +12,7 @@ import {
   resolveSiblingTabAgent
 } from './tab-agent'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
+import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
 export { resolveExplicitTerminalTitleAgentType as resolveTabAgentFromTitle } from '../../../shared/terminal-title-agent-type'
@@ -37,6 +38,19 @@ function getTitleForegroundKey(title: string, launchAgent?: TuiAgent): string {
   return `unknown:${stableTitle}`
 }
 
+/**
+ * Resolves wrapper-compatible signal identity against the launch owner.
+ */
+function resolveSignalAgentForLaunchOwner(
+  signalAgent: TuiAgent | null | undefined,
+  launchAgent: TuiAgent | null
+): TuiAgent | null {
+  if (!signalAgent) {
+    return null
+  }
+  return (resolveCompatibleAgentTypeForOwner(signalAgent, launchAgent) ?? signalAgent) as TuiAgent
+}
+
 export function resolveTabAgentFromSignals(args: {
   foreground: TuiAgent | null | undefined
   hasObservedAgentSignal: boolean
@@ -50,11 +64,13 @@ export function resolveTabAgentFromSignals(args: {
   launchAgent?: TuiAgent
 }): TuiAgent | null {
   const launchAgent = args.launchAgent ?? null
-  const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(args.title)
-  // Why: when a pane is reused for a different agent, its launchAgent goes stale.
-  // A live title that explicitly names a *different* agent, once the pane has
-  // shown any activity, overrides that stale launch identity so the tab icon
-  // tracks what is actually running (codex launch reused for claude, etc.).
+  const explicitTitleAgent = resolveSignalAgentForLaunchOwner(
+    resolveExplicitTerminalTitleAgentType(args.title),
+    launchAgent
+  )
+  // Why: explicit titles can override stale launches after activity, but
+  // Pi-compatible wrapper signals first resolve through the launch owner so
+  // OMP-created sessions do not repaint as Pi.
   const titleOverridesLaunch =
     launchAgent !== null &&
     explicitTitleAgent !== null &&
@@ -69,9 +85,14 @@ export function resolveTabAgentFromSignals(args: {
   // Why: remote panes cannot cheaply prove shell foreground after hook exit,
   // so keep the last completed hook identity instead of flashing unknown.
   const completedHookAgent =
-    !args.isRemote && titleLooksShell && args.hasCompletedHook ? null : args.completedHookAgent
-  const focusedHookAgent = args.hookAgent ?? null
-  const fallbackHookAgent = args.siblingHookAgent ?? completedHookAgent ?? null
+    !args.isRemote && titleLooksShell && args.hasCompletedHook
+      ? null
+      : resolveSignalAgentForLaunchOwner(args.completedHookAgent, launchAgent)
+  const focusedHookAgent = resolveSignalAgentForLaunchOwner(args.hookAgent, launchAgent)
+  const fallbackHookAgent = resolveSignalAgentForLaunchOwner(
+    args.siblingHookAgent ?? completedHookAgent,
+    launchAgent
+  )
   const localShellForegroundClearedLaunch =
     !args.isRemote && args.foreground === null && args.shellForegroundAfterAgentSignal
   const remoteCompletedHookAtShellTitle = args.isRemote && titleLooksShell && args.hasCompletedHook
