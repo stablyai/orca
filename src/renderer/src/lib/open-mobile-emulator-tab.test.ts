@@ -194,4 +194,74 @@ describe('openMobileEmulatorTab', () => {
     expect(callRuntimeRpc).not.toHaveBeenCalled()
     expect(ensureSimulatorTab).not.toHaveBeenCalled()
   })
+
+  it('clears manual launch pending state when the simulator tab cannot be created', async () => {
+    vi.mocked(ensureSimulatorTab).mockReturnValue(null)
+
+    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBeNull()
+
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
+  })
+
+  it('clears manual launch pending state when simulator tab creation throws', async () => {
+    vi.mocked(ensureSimulatorTab).mockImplementation(() => {
+      throw new Error('split group missing')
+    })
+
+    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).rejects.toThrow(
+      'split group missing'
+    )
+
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
+  })
+
+  it('allows a successful retry after simulator tab creation returns null', async () => {
+    vi.mocked(ensureSimulatorTab).mockReturnValueOnce(null).mockReturnValueOnce('sim-retry')
+    vi.mocked(callRuntimeRpc).mockResolvedValue(mockAttachResult)
+
+    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBeNull()
+    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBe(
+      'sim-retry'
+    )
+
+    expect(ensureSimulatorTab).toHaveBeenCalledTimes(2)
+    const attachCalls = vi.mocked(callRuntimeRpc).mock.calls.filter(([, method]) =>
+      method === 'emulator.attach'
+    )
+    expect(attachCalls).toHaveLength(1)
+    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
+  })
+
+  it('does not release another in-flight launch when duplicate tab creation throws', async () => {
+    let resolveAttach: (value: typeof mockAttachResult) => void = () => {}
+    vi.mocked(callRuntimeRpc).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveAttach = resolve
+        })
+    )
+    vi.mocked(ensureSimulatorTab)
+      .mockImplementationOnce(() => {
+        mockStoreState.unifiedTabsByWorktree['wt-1'] = [{
+          id: 'sim-1',
+          contentType: 'simulator'
+        }]
+        return 'sim-1'
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('split group missing')
+      })
+
+    const firstLaunch = openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })
+    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).rejects.toThrow(
+      'split group missing'
+    )
+
+    expect(isManualSimulatorLaunchPending('wt-1')).toBe(true)
+    resolveAttach(mockAttachResult)
+    await firstLaunch
+    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
+  })
 })
