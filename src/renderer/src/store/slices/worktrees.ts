@@ -2130,6 +2130,12 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     pendingStartupByTabId: omitByTabId(s.pendingStartupByTabId),
     codexRestartNoticeByPtyId: omitByPtyId(s.codexRestartNoticeByPtyId),
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
+    // Siblings of the two maps above: both are keyed by ptyId and cleared with
+    // codexRestartNoticeByPtyId on the normal pty-exit path, but that teardown
+    // never runs here, so a suppression / pending-restart flag planted just
+    // before a doomed pty's exit strands one entry per removed pty otherwise.
+    suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
+    pendingCodexPaneRestartIds: omitByPtyId(s.pendingCodexPaneRestartIds),
     // Why: these tab/pane-scoped agent-status, unread, and input maps are only
     // cleared on the single removeWorktree path (via shutdownWorktreeTerminals /
     // dropAgentStatusByWorktree / clearPaneForegroundAgentByWorktree, which read

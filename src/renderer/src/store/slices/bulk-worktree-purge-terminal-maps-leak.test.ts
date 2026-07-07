@@ -1,5 +1,5 @@
 /**
- * Memory-leak regression: seven per-tab / per-pty terminal+agent store maps were
+ * Memory-leak regression: nine per-tab / per-pty terminal+agent store maps were
  * evicted on the SINGLE removeWorktree path (via closeTab / shutdownWorktreeTerminals)
  * but NOT on the BULK path — `buildWorktreePurgeState`, reached by removeProject, the
  * external-worktree-removal authoritative-scan reconcile, and the hydration-stale
@@ -12,7 +12,8 @@
  *   lastKnownRelayPtyIdByTabId, pendingInitialCwdByTabId,
  *   pendingIssueCommandSplitByTabId, pendingSetupSplitByTabId, pendingStartupByTabId
  * Pty-keyed (evicted via the doomed-pty set derived from ptyIdsByTabId):
- *   codexRestartNoticeByPtyId, migrationUnsupportedByPtyId
+ *   codexRestartNoticeByPtyId, migrationUnsupportedByPtyId,
+ *   suppressedPtyExitIds, pendingCodexPaneRestartIds
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -92,7 +93,9 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
         source: 'local',
         updatedAt: 2
       }
-    }
+    },
+    suppressedPtyExitIds: { [PTY1]: true, [PTY2]: true },
+    pendingCodexPaneRestartIds: { [PTY1]: true, [PTY2]: true }
   })
 }
 
@@ -114,6 +117,8 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingStartupByTabId[TAB1]).toBeUndefined()
     expect(s.codexRestartNoticeByPtyId[PTY1]).toBeUndefined()
     expect(s.migrationUnsupportedByPtyId[PTY1]).toBeUndefined()
+    expect(s.suppressedPtyExitIds[PTY1]).toBeUndefined()
+    expect(s.pendingCodexPaneRestartIds[PTY1]).toBeUndefined()
 
     // Surviving worktree's tab/pty: every entry retained (no over-eviction).
     expect(s.lastKnownRelayPtyIdByTabId[TAB2]).toBe(PTY2)
@@ -123,5 +128,7 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingStartupByTabId[TAB2]).toEqual({ command: 'start-b' })
     expect(s.codexRestartNoticeByPtyId[PTY2]).toBeDefined()
     expect(s.migrationUnsupportedByPtyId[PTY2]).toBeDefined()
+    expect(s.suppressedPtyExitIds[PTY2]).toBe(true)
+    expect(s.pendingCodexPaneRestartIds[PTY2]).toBe(true)
   })
 })
