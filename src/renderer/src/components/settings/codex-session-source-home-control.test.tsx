@@ -7,7 +7,7 @@ function settingsWith(
 ): Pick<GlobalSettings, 'codexSessionSourceHome' | 'localWindowsRuntimeDefault'> {
   return {
     codexSessionSourceHome: overrides.codexSessionSourceHome,
-    localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault
+    localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' }
   }
 }
 
