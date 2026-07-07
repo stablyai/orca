@@ -2715,6 +2715,24 @@ const api = {
     getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
   } satisfies PreloadApi['ephemeralVm'],
 
+  worktreeServices: {
+    list: () => ipcRenderer.invoke('worktreeServices:list'),
+    retry: (args) => ipcRenderer.invoke('worktreeServices:retry', args),
+    onProvisionEvent: (callback) => {
+      const listener = (
+        _e: Electron.IpcRendererEvent,
+        event: {
+          provisionId: string
+          serviceId: string
+          stream: 'stdout' | 'stderr'
+          chunk: string
+        }
+      ): void => callback(event)
+      ipcRenderer.on('worktreeServices:provisionEvent', listener)
+      return () => ipcRenderer.removeListener('worktreeServices:provisionEvent', listener)
+    }
+  } satisfies PreloadApi['worktreeServices'],
+
   cache: {
     getGitHub: () => ipcRenderer.invoke('cache:getGitHub'),
     setGitHub: (args) => ipcRenderer.invoke('cache:setGitHub', args)
