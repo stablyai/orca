@@ -4743,7 +4743,10 @@
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手動",
-          "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。"
+          "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。",
+          "codexSessionSource": "Codex home to import from",
+          "codexSessionSourceInfo": "About importing Codex history",
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
