@@ -8,6 +8,7 @@ vi.mock('electron', () => ({
 }))
 
 import { CodexHookService } from '../codex/hook-service'
+import { DroidHookService } from '../droid/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
@@ -20,6 +21,24 @@ import { HermesHookService } from '../hermes/hook-service'
 import { DevinHookService } from '../devin/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { ampHookService } from '../amp/hook-service'
+import { antigravityHookService } from '../antigravity/hook-service'
+import { claudeHookService } from '../claude/hook-service'
+import { codexHookService } from '../codex/hook-service'
+import { copilotHookService } from '../copilot/hook-service'
+import { cursorHookService } from '../cursor/hook-service'
+import { droidHookService } from '../droid/hook-service'
+import { commandCodeHookService } from '../command-code/hook-service'
+import { geminiHookService } from '../gemini/hook-service'
+import { devinHookService } from '../devin/hook-service'
+import { grokHookService } from '../grok/hook-service'
+import { hermesHookService } from '../hermes/hook-service'
+import { kimiHookService } from '../kimi/hook-service'
+import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
+import {
+  installRemoteManagedAgentHooks,
+  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+} from './remote-managed-hook-installers'
 
 type FakeFs = {
   files: Map<string, string>
@@ -166,6 +185,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
           install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/droid-hook.sh',
+          install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, '/home/dev')
         }
       ]
 
@@ -580,6 +603,107 @@ describe('remote hook service installers', () => {
     expect(config.disableAllHooks).toBeUndefined()
     expect(fs.files.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
+  })
+
+  // Why: Droid (and Copilot) each shipped a working installRemote but were never
+  // registered in REMOTE_MANAGED_HOOK_INSTALLERS, so their status silently never
+  // appeared over SSH (issue #7253). Guard the whole bug class, not one agent:
+  // every locally-managed hook service that implements installRemote MUST be
+  // wired into the remote installer.
+  it('registers every managed agent that implements installRemote in the remote installer (issue #7253)', () => {
+    const servicesByAgent = new Map<string, { installRemote?: unknown }>([
+      ['claude', claudeHookService],
+      ['openclaude', openClaudeHookService],
+      ['codex', codexHookService],
+      ['gemini', geminiHookService],
+      ['antigravity', antigravityHookService],
+      ['amp', ampHookService],
+      ['cursor', cursorHookService],
+      ['droid', droidHookService],
+      ['command-code', commandCodeHookService],
+      ['grok', grokHookService],
+      ['copilot', copilotHookService],
+      ['hermes', hermesHookService],
+      ['devin', devinHookService],
+      ['kimi', kimiHookService]
+    ])
+
+    // Guard against a service silently missing from the map above as new agents land.
+    for (const [agent] of MANAGED_AGENT_HOOK_INSTALLERS) {
+      expect(servicesByAgent.has(agent)).toBe(true)
+    }
+
+    const registered = new Set<string>(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS)
+    const missing: string[] = []
+    for (const [agent, service] of servicesByAgent) {
+      if (typeof service.installRemote === 'function' && !registered.has(agent)) {
+        missing.push(agent)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
+    const { sftp } = createFakeSftp()
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev')
+    const byAgent = new Map(results.map((r) => [r.agent, r.state]))
+    expect(byAgent.get('droid')).toBe('installed')
+    expect(byAgent.get('copilot')).toBe('installed')
+  })
+
+  it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new DroidHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe('/home/dev/.factory/settings.json')
+    const config = JSON.parse(fs.files.get('/home/dev/.factory/settings.json')!) as {
+      hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
+    }
+    for (const eventName of [
+      'SessionStart',
+      'UserPromptSubmit',
+      'Stop',
+      'SubagentStop',
+      'PreToolUse',
+      'PostToolUse',
+      'PermissionRequest',
+      'Notification'
+    ]) {
+      const definition = config.hooks[eventName]?.[0]
+      const command = definition?.hooks?.[0]?.command
+      expect(command).toContain('/home/dev/.orca/agent-hooks/droid-hook.sh')
+      expect(command).toMatch(/^if \[ -x /)
+    }
+    // Tool/permission events carry a `*` matcher; lifecycle events do not.
+    expect(config.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+    expect(config.hooks.PostToolUse?.[0]?.matcher).toBe('*')
+    expect(config.hooks.PermissionRequest?.[0]?.matcher).toBe('*')
+    expect(config.hooks.Stop?.[0]?.matcher).toBeUndefined()
+    const script = fs.files.get('/home/dev/.orca/agent-hooks/droid-hook.sh')
+    expect(script).toContain('#!/bin/sh')
+    expect(script).toContain('/hook/droid')
+    expect(fs.modes.get('/home/dev/.orca/agent-hooks/droid-hook.sh')).toBe(0o755)
+  })
+
+  it('does not overwrite a malformed remote Factory settings.json', async () => {
+    const original = '{"hooks": }'
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.factory/settings.json': original
+    })
+
+    const status = await new DroidHookService().installRemote(sftp, '/home/dev')
+
+    expect(status).toMatchObject({
+      agent: 'droid',
+      state: 'error',
+      configPath: '/home/dev/.factory/settings.json',
+      managedHooksPresent: false,
+      detail: 'Could not parse remote Factory settings.json'
+    })
+    expect(fs.files.get('/home/dev/.factory/settings.json')).toBe(original)
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/droid-hook.sh')).toBeUndefined()
   })
 
   it('installs remote Hermes plugin files and enables the plugin', async () => {
