@@ -99,6 +99,12 @@ export function activateTabNumberShortcut(index: number): boolean {
     return true
   }
 
+  if (target.contentType === 'tasks') {
+    store.setActiveTab(target.id)
+    store.setActiveTabType('tasks')
+    return true
+  }
+
   store.setActiveFile(target.entityId)
   store.setActiveTabType('editor')
   return true

@@ -318,6 +318,11 @@
           "tab": {
             "372d21d428": "Emulador móvil"
           }
+        },
+        "tasks": {
+          "tab": {
+            "7889c1175d": "Tasks"
+          }
         }
       },
       "fix": {
@@ -1700,7 +1705,15 @@
         "searchIssues": "Buscar issues",
         "useIssueNumber": "Usar issue #{{value0}}",
         "noMatchingIssuesLoaded": "No se cargaron issues coincidentes.",
-        "editReviewersWithCurrent": "Editar revisores: {{value0}}"
+        "editReviewersWithCurrent": "Editar revisores: {{value0}}",
+        "3ef08c8588": "Failed to enable issues: {{value0}}",
+        "ac00881a55": "Enabling…",
+        "faa1abd491": "Enable issues",
+        "fb902585c4": "An upstream remote already exists and points at a different repository.",
+        "4d91839b5d": "No origin remote is configured.",
+        "46a2f4072a": "Failed to add upstream remote: {{value0}}",
+        "8c18355ff8": "Adding…",
+        "9b13066e18": "Add upstream remote"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -2004,7 +2017,9 @@
           "643d7e9496": "upstream",
           "51d1608920": "Origen",
           "cdc9bd64fa": "compacto",
-          "30b2c9df91": "Ascendente"
+          "30b2c9df91": "Ascendente",
+          "9d1ff63799": "Mixto",
+          "b47b195370": "Mostrando issues de origin y upstream combinados"
         },
         "PRFilterDropdowns": {
           "979be3cf6b": "Asignado",
@@ -2686,7 +2701,10 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "No se pudo generar el comando de inicio para {{value0}}.",
             "7a9b4af2af": "Desplazar pestañas a la izquierda",
-            "232e075b07": "Desplazar pestañas a la derecha"
+            "232e075b07": "Desplazar pestañas a la derecha",
+            "46c2430d7f": "Go to Tasks",
+            "1948ff4179": "Open the existing tasks tab.",
+            "1926ee1252": "Tasks"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Crear archivo",
@@ -2756,7 +2774,18 @@
                   "1baeb07c17": "simulador de iOS",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "móvil"
+                  "14965cc123": "móvil",
+                  "f85ebdaa83": "Go to Tasks",
+                  "1d70a382e6": "Tasks",
+                  "799f94c0e3": "tasks",
+                  "829e38f1af": "issues",
+                  "6f9a07b473": "pull requests",
+                  "10cdaa2fb5": "merge requests",
+                  "f8f3e4199d": "work items",
+                  "efd1252f7a": "github",
+                  "3670541c89": "gitlab",
+                  "4a783df1a7": "linear",
+                  "b39c410772": "jira"
                 }
               }
             }
@@ -12368,6 +12397,14 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "Copiar"
+        }
+      },
+      "tasks": {
+        "pane": {
+          "TasksPane": {
+            "a81bfba116": "Tasks unavailable",
+            "36a1cd05e1": "This workspace is not backed by a git repository, so there is no task source to show."
+          }
         }
       }
     },

@@ -199,6 +199,7 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
+import { useTaskPageSurface, type TaskPageEmbedContext } from '@/components/task-page-embed-surface'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import {
@@ -277,7 +278,9 @@ import {
   useRepoLabels,
   useTeamStates,
   useTeamMembers,
-  useTeamLabels
+  useTeamLabels,
+  useRepoViewerPermission,
+  useGitHubViewerLogin
 } from '@/hooks/useIssueMetadata'
 import {
   linearCreateProject,
@@ -1077,6 +1080,23 @@ function GHStatusCell({
   )
   const reqRef = useRef(0)
   const parsedIssueLink = useMemo(() => parseGitHubIssueOrPRLink(item.url), [item.url])
+  // Why: read-tier repos reject state writes with 403s — fall back to the
+  // static badge. Probe the item's URL slug (slug-routed updates win over
+  // repo-path routing); authors keep close/reopen, unknown fails open.
+  const viewerPermission = useRepoViewerPermission(
+    repo?.path ?? null,
+    repo?.id ?? null,
+    parsedIssueLink?.slug
+      ? { owner: parsedIssueLink.slug.owner, repo: parsedIssueLink.slug.repo }
+      : null,
+    sourceSettings
+  )
+  const viewerLogin = useGitHubViewerLogin(sourceSettings)
+  const canMutateStatus =
+    viewerPermission.data !== 'read' ||
+    (viewerLogin !== null &&
+      item.author !== null &&
+      item.author.toLowerCase() === viewerLogin.toLowerCase())
   const filteredDuplicateCandidates = useMemo(
     () =>
       getTaskPageGitHubDuplicateCandidates(duplicateIssueCandidates, item.number, duplicateSearch),
@@ -1266,7 +1286,7 @@ function GHStatusCell({
     }
   }, [])
 
-  if (item.type !== 'issue' || (!repo && !parsedIssueLink?.slug)) {
+  if (item.type !== 'issue' || (!repo && !parsedIssueLink?.slug) || !canMutateStatus) {
     return <TaskPageGitHubWorkItemStateBadge item={item} />
   }
 
@@ -1759,6 +1779,16 @@ function GHAssigneesCell({
     seedLogins,
     sourceSettings
   )
+  // Why: read-tier repos reject assignee writes with 403s — render the plain
+  // avatar stack instead of the popover trigger. The URL slug identifies the
+  // exact repo the slug-routed write targets; unknown permission fails open.
+  const viewerPermission = useRepoViewerPermission(
+    repo?.path ?? null,
+    repo?.id ?? null,
+    owner && repoName ? { owner, repo: repoName } : null,
+    sourceSettings
+  )
+  const canEditAssignees = viewerPermission.data !== 'read'
 
   const toggleAssignee = useCallback(
     async (user: GitHubAssignableUser): Promise<void> => {
@@ -1865,6 +1895,12 @@ function GHAssigneesCell({
     ) : (
       <span className="text-xs text-muted-foreground/60">-</span>
     )
+
+  if (!canEditAssignees) {
+    return (
+      <span className="inline-flex h-6 max-w-full items-center gap-1 px-1.5">{triggerContent}</span>
+    )
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -3011,15 +3047,35 @@ const hasUpstreamCandidateDivergence = (
   !!s.sources.upstreamCandidate &&
   !sameGitHubOwnerRepo(s.sources.originCandidate, s.sources.upstreamCandidate)
 
-export default function TaskPage(): React.JSX.Element {
+// Why: a fork cloned without an `upstream` remote can't resolve upstream
+// issues at all — GitHub knows the parent (repo.upstream metadata) but the
+// source resolution only reads local remotes. Offer adding the remote.
+const isForkMissingUpstreamRemote = (
+  s: TaskPageRepoSourceState,
+  repoUpstream: GitHubOwnerRepo | null | undefined
+): boolean =>
+  !!s.sources?.originCandidate &&
+  !s.sources.upstreamCandidate &&
+  !!repoUpstream &&
+  !sameGitHubOwnerRepo(s.sources.originCandidate, repoUpstream)
+
+export default function TaskPage({
+  embed
+}: {
+  embed?: TaskPageEmbedContext
+} = {}): React.JSX.Element {
   useTranslation()
   const settings = useAppStore((s) => s.settings)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  const taskResumeState = useAppStore((s) => s.taskResumeState)
-  const setTaskResumeState = useAppStore((s) => s.setTaskResumeState)
-  const pageData = useAppStore((s) => s.taskPageData)
-  const openTaskPage = useAppStore((s) => s.openTaskPage)
-  const closeTaskPage = useAppStore((s) => s.closeTaskPage)
+  const {
+    isEmbedded,
+    pageData,
+    openTaskPage,
+    closeTaskPage,
+    patchPageData,
+    taskResumeState,
+    setTaskResumeState
+  } = useTaskPageSurface(embed)
   const activeModal = useAppStore((s) => s.activeModal)
   const repos = useAppStore((s) => s.repos)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -3093,6 +3149,11 @@ export default function TaskPage(): React.JSX.Element {
   // back to "all eligible". An explicit preselection wins so "open tasks for
   // this specific repo" entry points still land on a single-repo view.
   const resolvedInitialSelection = useMemo<ReadonlySet<string>>(() => {
+    // Why: an embedded tasks tab is locked to its worktree's repo — the
+    // persisted defaultRepoSelection and the all-repos fallback must not apply.
+    if (embed) {
+      return new Set([embed.lockedRepoId])
+    }
     const preferred = pageData.preselectedRepoId
     if (preferred && eligibleRepos.some((repo) => repo.id === preferred)) {
       return new Set([preferred])
@@ -3108,7 +3169,7 @@ export default function TaskPage(): React.JSX.Element {
       // an empty selection — see the multi-combobox invariant.
     }
     return getDefaultTaskRepoSelection(eligibleRepos)
-  }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])
+  }, [eligibleRepos, embed, pageData.preselectedRepoId, settings?.defaultRepoSelection])
 
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(resolvedInitialSelection)
   const taskPickerGroups = useMemo(
@@ -3126,6 +3187,11 @@ export default function TaskPage(): React.JSX.Element {
   // the Set every time eligibleRepos changes would churn the fetch effect.
   const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
   useEffect(() => {
+    // Why: embedded tabs pin the selection to the locked repo; pruning and
+    // sticky-all reconciliation only make sense for the pickable global view.
+    if (isEmbedded) {
+      return
+    }
     const prevCount = prevTaskPickerCountRef.current
     prevTaskPickerCountRef.current = taskPickerRepos.length
     const eligibleIds = new Set(eligibleRepos.map((r) => r.id))
@@ -3150,7 +3216,7 @@ export default function TaskPage(): React.JSX.Element {
     if (!areStringSetsEqual(normalized, repoSelection)) {
       setRepoSelection(normalized)
     }
-  }, [eligibleRepos, repoSelection, taskPickerRepos])
+  }, [eligibleRepos, isEmbedded, repoSelection, taskPickerRepos])
 
   const selectedRepos = useMemo(
     () => eligibleRepos.filter((r) => repoSelection.has(r.id)),
@@ -3885,6 +3951,16 @@ export default function TaskPage(): React.JSX.Element {
 
   const openGitHubDetailPage = useCallback(
     (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
+      // Why: detail fetches and dialog mutations resolve the type's primary
+      // source (issues → upstream, PRs → origin), so mixed-list items from
+      // the other remote must open in the browser instead.
+      const dialogWouldResolveWrongRepo =
+        (item.type === 'issue' && item.sourceRemote === 'origin') ||
+        (item.type === 'pr' && item.sourceRemote === 'upstream')
+      if (dialogWouldResolveWrongRepo && item.url) {
+        void window.api.shell.openUrl(item.url)
+        return
+      }
       openTaskPage(
         {
           taskSource: 'github',
@@ -4045,6 +4121,150 @@ export default function TaskPage(): React.JSX.Element {
     setTasksRefreshing(true)
     setTaskRefreshNonce((current) => current + 1)
   }, [])
+  const [addingUpstreamRepoIds, setAddingUpstreamRepoIds] = useState<ReadonlySet<string>>(new Set())
+  // Why: feeds the selector's busy spinner. The flip's nonce bump forces the
+  // shared fetch effect, so "refetch settled" is exactly tasksRefreshing (or
+  // the initial tasksLoading) returning to false.
+  const [switchingSourceRepoIds, setSwitchingSourceRepoIds] = useState<ReadonlySet<string>>(
+    new Set()
+  )
+  useEffect(() => {
+    if (!tasksRefreshing && !tasksLoading) {
+      setSwitchingSourceRepoIds((prev) => (prev.size === 0 ? prev : new Set()))
+    }
+  }, [tasksLoading, tasksRefreshing])
+  const handleSwitchIssueSource = useCallback(
+    (repo: Repo, next: 'upstream' | 'origin' | 'mixed') => {
+      setSwitchingSourceRepoIds((prev) => new Set(prev).add(repo.id))
+      void setIssueSourcePreference(repo.id, repo.path, next)
+    },
+    [setIssueSourcePreference]
+  )
+  const handleAddUpstreamRemote = useCallback(
+    async (repo: Repo): Promise<void> => {
+      if (!repo.upstream || addingUpstreamRepoIds.has(repo.id)) {
+        return
+      }
+      setAddingUpstreamRepoIds((prev) => new Set(prev).add(repo.id))
+      try {
+        const result = await window.api.git.addUpstreamRemote({
+          worktreePath: repo.path,
+          connectionId: repo.connectionId ?? undefined,
+          expectedUpstream: { owner: repo.upstream.owner, repo: repo.upstream.repo }
+        })
+        if (!result.ok) {
+          const reason =
+            result.reason === 'upstream-exists-mismatch'
+              ? translate(
+                  'auto.components.TaskPage.fb902585c4',
+                  'An upstream remote already exists and points at a different repository.'
+                )
+              : result.reason === 'missing-origin'
+                ? translate(
+                    'auto.components.TaskPage.4d91839b5d',
+                    'No origin remote is configured.'
+                  )
+                : (result.message ?? result.reason)
+          toast.error(
+            translate(
+              'auto.components.TaskPage.46a2f4072a',
+              'Failed to add upstream remote: {{value0}}',
+              { value0: reason }
+            )
+          )
+          return
+        }
+        handleRefreshGithubTasks()
+      } catch (error) {
+        toast.error(
+          translate(
+            'auto.components.TaskPage.46a2f4072a',
+            'Failed to add upstream remote: {{value0}}',
+            { value0: error instanceof Error ? error.message : String(error) }
+          )
+        )
+      } finally {
+        setAddingUpstreamRepoIds((prev) => {
+          const next = new Set(prev)
+          next.delete(repo.id)
+          return next
+        })
+      }
+    },
+    [addingUpstreamRepoIds, handleRefreshGithubTasks]
+  )
+  // Why: `issues_disabled` is a repo *setting* (common on fresh forks, which
+  // inherit issues turned off) — offer enabling it alongside Retry. The PATCH
+  // is admin-only, so non-admins recover via Retry once an admin flips it.
+  const [enablingIssuesSourceKeys, setEnablingIssuesSourceKeys] = useState<ReadonlySet<string>>(
+    new Set()
+  )
+  const handleEnableRepoIssues = useCallback(
+    async (state: TaskPageRepoSourceState, source: GitHubOwnerRepo): Promise<void> => {
+      const repo = repoMap.get(state.repoId)
+      if (!repo || enablingIssuesSourceKeys.has(state.sourceKey)) {
+        return
+      }
+      setEnablingIssuesSourceKeys((prev) => new Set(prev).add(state.sourceKey))
+      try {
+        const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+        const repoOwnerSettings = getSettingsForRepoRuntimeOwner(
+          { repos: [repo], settings },
+          repo.id
+        )
+        const targetSettings =
+          sourceContext?.provider === 'github'
+            ? { ...repoOwnerSettings, ...getTaskSourceRuntimeSettings(sourceContext) }
+            : repoOwnerSettings
+        const target = getActiveRuntimeTarget(targetSettings)
+        const result =
+          target.kind === 'environment'
+            ? await callRuntimeRpc<{ ok: true } | { ok: false; error: string }>(
+                target,
+                'github.enableRepoIssues',
+                {
+                  repo: sourceContext?.repoId ?? repo.id,
+                  owner: source.owner,
+                  ownerRepo: source.repo
+                }
+              )
+            : await window.api.gh.enableRepoIssues({
+                repoPath: repo.path,
+                repoId: repo.id,
+                owner: source.owner,
+                repo: source.repo
+              })
+        if (!result.ok) {
+          toast.error(
+            translate(
+              'auto.components.TaskPage.3ef08c8588',
+              'Failed to enable issues: {{value0}}',
+              {
+                value0: result.error
+              }
+            )
+          )
+          return
+        }
+        handleRetryIssuesFetch(state.sourceKey)
+      } catch (error) {
+        // Why: callRuntimeRpc rejects on transport failures/timeouts — without
+        // this the rejection is unhandled and the user gets no feedback.
+        toast.error(
+          translate('auto.components.TaskPage.3ef08c8588', 'Failed to enable issues: {{value0}}', {
+            value0: error instanceof Error ? error.message : String(error)
+          })
+        )
+      } finally {
+        setEnablingIssuesSourceKeys((prev) => {
+          const next = new Set(prev)
+          next.delete(state.sourceKey)
+          return next
+        })
+      }
+    },
+    [enablingIssuesSourceKeys, handleRetryIssuesFetch, repoMap, settings]
+  )
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
@@ -4186,33 +4406,34 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const closeTaskDetailPage = useCallback(() => {
-    const state = useAppStore.getState()
-    const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
-    if (
-      typeof currentEntry === 'object' &&
-      currentEntry.kind === 'task-detail' &&
-      state.worktreeNavHistoryIndex > 0
-    ) {
-      state.goBackWorktree()
-      return
+    // Why: nav-history rewind only applies to the global view — embedded tabs
+    // never write 'task-detail' entries, so rewinding would pop unrelated ones.
+    if (!isEmbedded) {
+      const state = useAppStore.getState()
+      const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
+      if (
+        typeof currentEntry === 'object' &&
+        currentEntry.kind === 'task-detail' &&
+        state.worktreeNavHistoryIndex > 0
+      ) {
+        state.goBackWorktree()
+        return
+      }
     }
     setDialogWorkItem(null)
     clearSelectedLinearIssue()
-    useAppStore.setState((s) => ({
-      taskPageData: {
-        ...s.taskPageData,
-        openGitHubWorkItem: undefined,
-        openGitHubSourceContext: undefined,
-        openGitHubInitialTab: undefined,
-        openGitLabWorkItem: undefined,
-        openGitLabSourceContext: undefined,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: undefined,
-        openJiraSourceContext: undefined
-      }
-    }))
-  }, [clearSelectedLinearIssue, setDialogWorkItem])
+    patchPageData({
+      openGitHubWorkItem: undefined,
+      openGitHubSourceContext: undefined,
+      openGitHubInitialTab: undefined,
+      openGitLabWorkItem: undefined,
+      openGitLabSourceContext: undefined,
+      openLinearIssue: undefined,
+      openLinearSourceContext: undefined,
+      openJiraIssue: undefined,
+      openJiraSourceContext: undefined
+    })
+  }, [clearSelectedLinearIssue, isEmbedded, patchPageData, setDialogWorkItem])
 
   const [selectedJiraIssueKey, setSelectedJiraIssueKey] = useState<string | null>(null)
   const [selectedJiraIssueFallback, setSelectedJiraIssueFallback] = useState<JiraIssue | null>(null)
@@ -6422,6 +6643,11 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   useEffect(() => {
+    // Why: hidden embedded instances must not capture window shortcuts; only
+    // the visible tab may claim Cmd/Ctrl+F.
+    if (isEmbedded && embed?.isActive !== true) {
+      return
+    }
     if (
       taskSource !== 'github' ||
       githubMode !== 'items' ||
@@ -6468,7 +6694,9 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     activeModal,
     dialogWorkItem,
+    embed?.isActive,
     githubMode,
+    isEmbedded,
     newIssueOpen,
     newLinearProjectOpen,
     newLinearIssueOpen,
@@ -6991,6 +7219,12 @@ export default function TaskPage(): React.JSX.Element {
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
 
   useEffect(() => {
+    // Why: embedded tab instances stay mounted while hidden — a window-level
+    // Esc listener from a background tab would close things app-wide. Tabs
+    // close via the tab strip, not Esc.
+    if (isEmbedded) {
+      return
+    }
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       dialogWorkItem ||
@@ -7037,6 +7271,7 @@ export default function TaskPage(): React.JSX.Element {
     activeModal,
     closeTaskPage,
     dialogWorkItem,
+    isEmbedded,
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
@@ -7838,27 +8073,31 @@ export default function TaskPage(): React.JSX.Element {
                     {/* Why: Close is anchored left in the same row as the
                         source icons so the top chrome is one compact band.
                         Left-aligned keeps it clear of the app sidebar on the
-                        right edge. */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 rounded-full"
-                          onClick={closeTaskPage}
-                          aria-label={translate(
-                            'auto.components.TaskPage.1a06219d5c',
-                            'Close tasks'
-                          )}
-                        >
-                          <X className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={6}>
-                        {translate('auto.components.TaskPage.4826fd1ad8', 'Close · Esc')}
-                      </TooltipContent>
-                    </Tooltip>
-                    <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
+                        right edge. Embedded tabs close via the tab strip. */}
+                    {!isEmbedded ? (
+                      <>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 rounded-full"
+                              onClick={closeTaskPage}
+                              aria-label={translate(
+                                'auto.components.TaskPage.1a06219d5c',
+                                'Close tasks'
+                              )}
+                            >
+                              <X className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {translate('auto.components.TaskPage.4826fd1ad8', 'Close · Esc')}
+                          </TooltipContent>
+                        </Tooltip>
+                        <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
+                      </>
+                    ) : null}
                     {visibleSourceOptions.map((source) => {
                       const active = taskSource === source.id
                       const sourceAvailabilityNotice =
@@ -7879,14 +8118,19 @@ export default function TaskPage(): React.JSX.Element {
                                   { taskSource: source.id },
                                   { recordTasksInteraction: false }
                                 )
-                                void updateSettings({ defaultTaskSource: source.id }).catch(() => {
-                                  toast.error(
-                                    translate(
-                                      'auto.components.TaskPage.609532fae7',
-                                      'Failed to save default task source.'
-                                    )
+                                // Why: only the global page updates the app-wide default.
+                                if (!isEmbedded) {
+                                  void updateSettings({ defaultTaskSource: source.id }).catch(
+                                    () => {
+                                      toast.error(
+                                        translate(
+                                          'auto.components.TaskPage.609532fae7',
+                                          'Failed to save default task source.'
+                                        )
+                                      )
+                                    }
                                   )
-                                })
+                                }
                               }}
                               data-task-source={source.id}
                               aria-label={sourceAvailabilityNotice?.label ?? source.label}
@@ -8061,41 +8305,44 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     ) : null}
                     {/* Why: Project rows are now repo-scoped too, so the
-                        selection must stay visible in both GitHub modes. */}
-                    <div className="min-w-0 max-w-[220px] shrink-0">
-                      <TaskProjectSourceCombobox
-                        groups={taskPickerGroups}
-                        selected={repoSelection}
-                        getRepoHostLabel={getTaskPickerRepoHostLabel}
-                        onChange={(next) => {
-                          const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
-                          setRepoSelection(normalized)
-                          void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
-                            () => {
+                        selection must stay visible in both GitHub modes.
+                        Embedded tabs are locked to one repo — no picker. */}
+                    {!isEmbedded ? (
+                      <div className="min-w-0 max-w-[220px] shrink-0">
+                        <TaskProjectSourceCombobox
+                          groups={taskPickerGroups}
+                          selected={repoSelection}
+                          getRepoHostLabel={getTaskPickerRepoHostLabel}
+                          onChange={(next) => {
+                            const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                            setRepoSelection(normalized)
+                            void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                              () => {
+                                toast.error(
+                                  translate(
+                                    'auto.components.TaskPage.dfd72673e7',
+                                    'Failed to save project selection.'
+                                  )
+                                )
+                              }
+                            )
+                          }}
+                          onSelectAll={() => {
+                            const allIds = new Set(taskPickerRepos.map((r) => r.id))
+                            setRepoSelection(allIds)
+                            void updateSettings({ defaultRepoSelection: null }).catch(() => {
                               toast.error(
                                 translate(
                                   'auto.components.TaskPage.dfd72673e7',
                                   'Failed to save project selection.'
                                 )
                               )
-                            }
-                          )
-                        }}
-                        onSelectAll={() => {
-                          const allIds = new Set(taskPickerRepos.map((r) => r.id))
-                          setRepoSelection(allIds)
-                          void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                            toast.error(
-                              translate(
-                                'auto.components.TaskPage.dfd72673e7',
-                                'Failed to save project selection.'
-                              )
-                            )
-                          })
-                        }}
-                        triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                      />
-                    </div>
+                            })
+                          }}
+                          triggerClassName="h-8 w-auto max-w-[220px] rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                        />
+                      </div>
+                    ) : null}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -8306,9 +8553,14 @@ export default function TaskPage(): React.JSX.Element {
                       // + tooltip already announce the source, so the "Issues
                       // from {slug}" chip is only shown when the selector does
                       // not render (no upstream remote — nothing to toggle).
-                      const rows = perRepoSourceState.filter(
-                        (s) => hasUpstreamCandidateDivergence(s) || hasDivergentSources(s)
-                      )
+                      const rows = perRepoSourceState.filter((s) => {
+                        const repo = selectedRepos.find((r) => r.id === s.repoId)
+                        return (
+                          hasUpstreamCandidateDivergence(s) ||
+                          hasDivergentSources(s) ||
+                          isForkMissingUpstreamRemote(s, repo?.upstream)
+                        )
+                      })
                       if (rows.length === 0) {
                         return null
                       }
@@ -8318,6 +8570,49 @@ export default function TaskPage(): React.JSX.Element {
                             const repo = selectedRepos.find((r) => r.id === s.repoId)
                             const showRepoBadgeLabel = selectedRepos.length > 1 && repo
                             const selectorRenderable = hasUpstreamCandidateDivergence(s)
+                            if (
+                              !selectorRenderable &&
+                              repo?.upstream &&
+                              isForkMissingUpstreamRemote(s, repo.upstream)
+                            ) {
+                              const adding = addingUpstreamRepoIds.has(repo.id)
+                              return (
+                                <div key={s.repoId} className={issueSourceChipClass}>
+                                  {showRepoBadgeLabel ? (
+                                    <RepoBadgeLabel
+                                      name={repo.displayName}
+                                      color={repo.badgeColor}
+                                      badgeClassName="size-1.5"
+                                      className="text-[10px] text-muted-foreground"
+                                    />
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    disabled={adding}
+                                    onClick={() => void handleAddUpstreamRemote(repo)}
+                                    className="inline-flex items-center gap-1 rounded border border-border/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {adding ? (
+                                      <>
+                                        <LoaderCircle className="h-3 w-3 animate-spin" />
+                                        {translate(
+                                          'auto.components.TaskPage.8c18355ff8',
+                                          'Adding…'
+                                        )}
+                                      </>
+                                    ) : (
+                                      translate(
+                                        'auto.components.TaskPage.9b13066e18',
+                                        'Add upstream remote'
+                                      )
+                                    )}
+                                  </button>
+                                  <span className="font-mono">
+                                    {repo.upstream.owner}/{repo.upstream.repo}
+                                  </span>
+                                </div>
+                              )
+                            }
                             // Why: the static indicator has its own wrapping
                             // chip styles, so we render it standalone and don't
                             // nest it inside our own chip — nesting would
@@ -8359,8 +8654,10 @@ export default function TaskPage(): React.JSX.Element {
                                   preference={repo.issueSourcePreference}
                                   origin={s.sources.originCandidate}
                                   upstream={s.sources.upstreamCandidate}
+                                  showMixed
+                                  busy={switchingSourceRepoIds.has(repo.id)}
                                   onChange={(next) => {
-                                    void setIssueSourcePreference(repo.id, repo.path, next)
+                                    handleSwitchIssueSource(repo, next)
                                   }}
                                 />
                               </div>
@@ -8771,40 +9068,43 @@ export default function TaskPage(): React.JSX.Element {
                           )
                         })}
                       </div>
-                      <div className="min-w-0 w-full sm:w-[200px]">
-                        <TaskProjectSourceCombobox
-                          groups={taskPickerGroups}
-                          selected={repoSelection}
-                          getRepoHostLabel={getTaskPickerRepoHostLabel}
-                          onChange={(next) => {
-                            const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
-                            setRepoSelection(normalized)
-                            void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
-                              () => {
+                      {/* Why: embedded tabs are locked to one repo — no picker. */}
+                      {!isEmbedded ? (
+                        <div className="min-w-0 w-full sm:w-[200px]">
+                          <TaskProjectSourceCombobox
+                            groups={taskPickerGroups}
+                            selected={repoSelection}
+                            getRepoHostLabel={getTaskPickerRepoHostLabel}
+                            onChange={(next) => {
+                              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                              setRepoSelection(normalized)
+                              void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                                () => {
+                                  toast.error(
+                                    translate(
+                                      'auto.components.TaskPage.dfd72673e7',
+                                      'Failed to save project selection.'
+                                    )
+                                  )
+                                }
+                              )
+                            }}
+                            onSelectAll={() => {
+                              const allIds = new Set(taskPickerRepos.map((r) => r.id))
+                              setRepoSelection(allIds)
+                              void updateSettings({ defaultRepoSelection: null }).catch(() => {
                                 toast.error(
                                   translate(
                                     'auto.components.TaskPage.dfd72673e7',
                                     'Failed to save project selection.'
                                   )
                                 )
-                              }
-                            )
-                          }}
-                          onSelectAll={() => {
-                            const allIds = new Set(taskPickerRepos.map((r) => r.id))
-                            setRepoSelection(allIds)
-                            void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                              toast.error(
-                                translate(
-                                  'auto.components.TaskPage.dfd72673e7',
-                                  'Failed to save project selection.'
-                                )
-                              )
-                            })
-                          }}
-                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                        />
-                      </div>
+                              })
+                            }}
+                            triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                     <div
                       className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm"
@@ -9014,21 +9314,40 @@ export default function TaskPage(): React.JSX.Element {
                           </span>{' '}
                           — {err.message}
                         </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRetryIssuesFetch(s.sourceKey)}
-                          disabled={tasksLoading || retryingSourceKeys.has(s.sourceKey)}
-                        >
-                          {retryingSourceKeys.has(s.sourceKey) ? (
-                            <span className="flex items-center gap-1">
-                              <LoaderCircle className="h-3 w-3 animate-spin" />
-                              {translate('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
-                            </span>
-                          ) : (
-                            translate('auto.components.TaskPage.0bfbf62f75', 'Retry')
-                          )}
-                        </Button>
+                        <span className="flex shrink-0 items-center gap-2">
+                          {err.type === 'issues_disabled' ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void handleEnableRepoIssues(s, err.source)}
+                              disabled={tasksLoading || enablingIssuesSourceKeys.has(s.sourceKey)}
+                            >
+                              {enablingIssuesSourceKeys.has(s.sourceKey) ? (
+                                <span className="flex items-center gap-1">
+                                  <LoaderCircle className="h-3 w-3 animate-spin" />
+                                  {translate('auto.components.TaskPage.ac00881a55', 'Enabling…')}
+                                </span>
+                              ) : (
+                                translate('auto.components.TaskPage.faa1abd491', 'Enable issues')
+                              )}
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRetryIssuesFetch(s.sourceKey)}
+                            disabled={tasksLoading || retryingSourceKeys.has(s.sourceKey)}
+                          >
+                            {retryingSourceKeys.has(s.sourceKey) ? (
+                              <span className="flex items-center gap-1">
+                                <LoaderCircle className="h-3 w-3 animate-spin" />
+                                {translate('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
+                              </span>
+                            ) : (
+                              translate('auto.components.TaskPage.0bfbf62f75', 'Retry')
+                            )}
+                          </Button>
+                        </span>
                       </div>
                     )
                   })}
@@ -10993,7 +11312,7 @@ export default function TaskPage(): React.JSX.Element {
               const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
               return (
                 <DialogDescription>
-                  {translate('auto.components.TaskPage.9f2b4c03a6', 'Filing in')}
+                  {translate('auto.components.TaskPage.9f2b4c03a6', 'Filing in')}{' '}
                   {issuesSlug ?? fallback}
                 </DialogDescription>
               )

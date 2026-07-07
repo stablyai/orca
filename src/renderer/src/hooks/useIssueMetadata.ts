@@ -11,6 +11,7 @@ import {
 } from '@/runtime/runtime-linear-client'
 import type {
   GitHubAssignableUser,
+  GitHubViewerRepoPermission,
   LinearWorkflowState,
   LinearLabel,
   LinearMember
@@ -38,6 +39,144 @@ type GitHubMetadataOptions = {
 
 const ghLabelStore = createMetadataRequestStore<string[]>()
 const ghAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
+const ghViewerPermissionStore = createMetadataRequestStore<GitHubViewerRepoPermission | null>()
+const ghViewerLoginStore = createMetadataRequestStore<string | null>()
+
+/**
+ * Authenticated gh viewer login, local host only. Runtime/SSH targets have no
+ * viewer RPC yet, so callers get `null` there and must treat the author-based
+ * permission exceptions as unknown (gate conservatively).
+ */
+export function useGitHubViewerLogin(options?: GitHubMetadataOptions): string | null {
+  const [login, setLogin] = useState<string | null>(null)
+  const runtimeEnvironmentId =
+    options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+
+  useEffect(() => {
+    if (runtimeEnvironmentId) {
+      setLogin(null)
+      return
+    }
+    const cached = getFreshMetadata(ghViewerLoginStore, 'local')
+    if (cached) {
+      setLogin(cached.data)
+      return
+    }
+    let cancelled = false
+    loadMetadata(ghViewerLoginStore, 'local', () =>
+      window.api.gh.viewer().then((viewer) => {
+        const candidate = viewer as { login?: unknown } | null
+        return typeof candidate?.login === 'string' ? candidate.login : null
+      })
+    )
+      .then((data) => {
+        if (!cancelled) {
+          setLogin(data)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLogin(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [runtimeEnvironmentId])
+
+  return login
+}
+
+/**
+ * Highest permission the viewer holds on the repo that issue mutations for
+ * this repoPath/override would target. `null` data = unknown (fetch failed) —
+ * callers must fail open and keep controls interactive.
+ */
+export function useRepoViewerPermission(
+  repoPath: string | null,
+  repoId?: string | null,
+  overrideOwnerRepo?: { owner: string; repo: string } | null,
+  options?: GitHubMetadataOptions
+): MetadataState<GitHubViewerRepoPermission | null> {
+  const [state, setState] = useState<MetadataState<GitHubViewerRepoPermission | null>>({
+    data: null,
+    loading: false,
+    error: null
+  })
+  const activeKeyRef = useRef<string | null>(null)
+  const overrideOwner = overrideOwnerRepo?.owner ?? null
+  const overrideRepo = overrideOwnerRepo?.repo ?? null
+
+  useEffect(() => {
+    if (!repoPath && !repoId) {
+      return
+    }
+    const runtimeEnvironmentId =
+      options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+    const repoSelector = repoId ?? repoPath ?? ''
+    const overridePart = overrideOwner && overrideRepo ? `@${overrideOwner}/${overrideRepo}` : ''
+    // Why: SSH/runtime metadata must not reuse host-path cache entries; the same
+    // repo id may resolve through a different credential/runtime boundary.
+    const cacheKey = runtimeEnvironmentId
+      ? `runtime:${runtimeEnvironmentId}:${repoSelector}${overridePart}`
+      : `${repoSelector}${overridePart}`
+    const cached = getFreshMetadata(ghViewerPermissionStore, cacheKey)
+    if (cached) {
+      if (activeKeyRef.current !== cacheKey) {
+        setState({ data: cached.data, loading: false, error: null })
+        activeKeyRef.current = cacheKey
+      }
+      return
+    }
+
+    activeKeyRef.current = cacheKey
+    const requestKey = cacheKey
+    setState({ data: null, loading: true, error: null })
+    loadMetadata(ghViewerPermissionStore, cacheKey, () =>
+      (runtimeEnvironmentId
+        ? callRuntimeRpc<{ permission: GitHubViewerRepoPermission } | null>(
+            { kind: 'environment', environmentId: runtimeEnvironmentId },
+            'github.viewerRepoPermission',
+            {
+              repo: repoSelector,
+              ...(overrideOwner && overrideRepo
+                ? { owner: overrideOwner, ownerRepo: overrideRepo }
+                : {})
+            },
+            { timeoutMs: 15_000 }
+          )
+        : window.api.gh.viewerRepoPermission({
+            repoPath: repoPath ?? '',
+            repoId: repoId ?? undefined,
+            ...(overrideOwner && overrideRepo ? { owner: overrideOwner, repo: overrideRepo } : {})
+          })
+      ).then((result) => result?.permission ?? null)
+    )
+      .then((data) => {
+        if (activeKeyRef.current !== requestKey) {
+          return
+        }
+        setState({ data, loading: false, error: null })
+      })
+      .catch(() => {
+        if (activeKeyRef.current !== requestKey) {
+          return
+        }
+        activeKeyRef.current = null
+        // Fail open: unknown permission keeps controls interactive.
+        setState({ data: null, loading: false, error: null })
+      })
+  }, [
+    repoPath,
+    repoId,
+    overrideOwner,
+    overrideRepo,
+    options?.runtimeEnvironmentId,
+    options?.activeRuntimeEnvironmentId
+  ])
+
+  return state
+}
 
 export function useRepoLabels(
   repoPath: string | null,

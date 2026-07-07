@@ -48,7 +48,7 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       worktreeBasePath: OptionalString,
       kind: z.enum(['git', 'folder']).optional(),
       symlinkPaths: z.array(z.string()).optional(),
-      issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
+      issueSourcePreference: z.enum(['auto', 'upstream', 'origin', 'mixed']).optional(),
       forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
       externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
       externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),

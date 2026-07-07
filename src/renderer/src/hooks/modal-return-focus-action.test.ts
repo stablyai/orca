@@ -72,6 +72,21 @@ describe('resolveModalReturnFocusAction', () => {
     ).toEqual({ kind: 'simulator' })
   })
 
+  // Why: tasks panes are self-contained like the simulator — degrading to
+  // 'surface' would focus a hidden xterm/editor textarea instead.
+  it('restores the tasks surface without using the terminal fallback', () => {
+    expect(
+      resolveModalReturnFocusAction({
+        tabType: 'tasks',
+        worktreeId: 'wt-1',
+        browserPageId: null,
+        browserTarget: 'webview',
+        terminalTabId: null,
+        terminalLeafId: null
+      })
+    ).toEqual({ kind: 'tasks' })
+  })
+
   it('returns none when there is no worktree to restore into', () => {
     expect(
       resolveModalReturnFocusAction({

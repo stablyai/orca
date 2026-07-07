@@ -59,6 +59,7 @@ import {
 } from '../shared/git-discard-path-safety'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
+import { addUpstreamRemote } from '../shared/git-upstream-remote'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 
 const execFileAsync = promisify(execFile)
@@ -206,6 +207,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
     this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
+    this.dispatcher.onRequest('git.addUpstreamRemote', (p) => this.addUpstreamRemote(p))
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
     this.dispatcher.onRequest('git.fetchGitLabMergeRequestHead', (p) =>
       this.fetchGitLabMergeRequestHead(p)
@@ -803,6 +805,23 @@ export class GitHandler {
       }
     } finally {
       this.gitDiffReadDedupe.clear()
+    }
+  }
+
+  private async addUpstreamRemote(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const expectedUpstream = validateGitForkSyncExpectedUpstream(params.expectedUpstream, {
+      required: true
+    })
+    try {
+      return await addUpstreamRemote(
+        (args) => this.git(args, worktreePath, { nonInteractive: true }),
+        expectedUpstream
+      )
+    } catch (error) {
+      // Why: match the other mutating remote ops — raw execFile errors leak
+      // local paths/preamble to the renderer.
+      throw new Error(normalizeGitErrorMessage(error, 'upstream'))
     }
   }
 

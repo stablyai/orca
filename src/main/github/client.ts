@@ -86,6 +86,7 @@ export {
   createIssue,
   updateIssue,
   addIssueComment,
+  enableRepoIssues,
   listLabels,
   listAssignableUsers
 } from './issues'
@@ -1320,6 +1321,17 @@ export async function listWorkItems(
       }
     }
   }
+  if (preference === 'mixed') {
+    return listMixedWorkItems(
+      repoPath,
+      limit,
+      query,
+      before,
+      connectionId,
+      noCache,
+      localGitOptions
+    )
+  }
   const [issueResolved, prResolved] = await Promise.all([
     resolveIssueSource(repoPath, preference, connectionId, localGitOptions),
     resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
@@ -1367,6 +1379,92 @@ export async function listWorkItems(
     }
   } finally {
     release()
+  }
+}
+
+/**
+ * 'mixed': list work items from origin and upstream merged. Items are stamped
+ * with their source remote/slug and ids gain a slug suffix (origin #5 and
+ * upstream #5 must not collide on React keys or selection). Without a
+ * distinct upstream this degrades to a single unstamped 'auto' pass.
+ */
+async function listMixedWorkItems(
+  repoPath: string,
+  limit: number,
+  query: string | undefined,
+  before: string | undefined,
+  connectionId: string | null | undefined,
+  noCache: boolean | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<ListWorkItemsResult<MainWorkItem>> {
+  const probe = await resolvePrWorkItemSource(repoPath, 'auto', connectionId, localGitOptions)
+  const origin = probe.originCandidate
+  const upstream = probe.upstreamCandidate
+  if (!origin || !upstream || sameOwnerRepo(origin, upstream)) {
+    return listWorkItems(
+      repoPath,
+      limit,
+      query,
+      before,
+      'auto',
+      connectionId,
+      noCache,
+      localGitOptions
+    )
+  }
+
+  const stamp = (
+    result: ListWorkItemsResult<MainWorkItem>,
+    remote: 'origin' | 'upstream',
+    slug: OwnerRepo
+  ): MainWorkItem[] =>
+    result.items.map((item) => ({
+      ...item,
+      id: `${item.id}@${slug.owner}/${slug.repo}`,
+      sourceRemote: remote,
+      sourceOwnerRepo: slug
+    }))
+
+  const [originResult, upstreamResult] = await Promise.all([
+    listWorkItems(repoPath, limit, query, before, 'origin', connectionId, noCache, localGitOptions),
+    listWorkItems(
+      repoPath,
+      limit,
+      query,
+      before,
+      'upstream',
+      connectionId,
+      noCache,
+      localGitOptions
+    )
+  ])
+
+  const items = [
+    ...stamp(originResult, 'origin', origin),
+    ...stamp(upstreamResult, 'upstream', upstream)
+  ]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, limit)
+
+  // Why: `sources.issues` below reports the auto-primary (upstream) slug,
+  // which is not necessarily the side that failed — the error carries its own.
+  const issuesError = originResult.errors?.issues
+    ? { ...originResult.errors.issues, source: originResult.sources.issues ?? origin }
+    : upstreamResult.errors?.issues
+      ? { ...upstreamResult.errors.issues, source: upstreamResult.sources.issues ?? upstream }
+      : undefined
+  return {
+    items,
+    // Why: report each side's auto-primary source — issues resolve to
+    // upstream, PRs to origin — matching the dialog/detail routing so the
+    // header indicators describe where clicks actually land.
+    sources: {
+      issues: upstreamResult.sources.issues,
+      prs: originResult.sources.prs,
+      originCandidate: origin,
+      upstreamCandidate: upstream
+    },
+    ...(issuesError ? { errors: { issues: issuesError } } : {})
   }
 }
 
@@ -1507,9 +1605,19 @@ export async function countWorkItems(
     return 0
   }
 
+  // Why: mirror listMixedWorkItems — 'mixed' merges the full query from both
+  // remotes, degrading to the single-source paths without two distinct ones.
+  const mixedTargets =
+    preference === 'mixed' &&
+    prResolved.originCandidate &&
+    prResolved.upstreamCandidate &&
+    !sameOwnerRepo(prResolved.originCandidate, prResolved.upstreamCandidate)
+      ? [prResolved.originCandidate, prResolved.upstreamCandidate]
+      : null
+
   await acquire()
   try {
-    if (sameOwnerRepo(issueOwnerRepo, prOwnerRepo)) {
+    if (!mixedTargets && sameOwnerRepo(issueOwnerRepo, prOwnerRepo)) {
       return await countWorkItemsForQuery(
         repoPath,
         ownerRepo,
@@ -1517,6 +1625,23 @@ export async function countWorkItems(
         connectionId,
         localGitOptions
       )
+    }
+
+    if (mixedTargets) {
+      const mixedResults = await Promise.allSettled(
+        mixedTargets.map((target) =>
+          countWorkItemsForQuery(repoPath, target, effectiveQuery, connectionId, localGitOptions)
+        )
+      )
+      let mixedTotal = 0
+      for (const r of mixedResults) {
+        if (r.status === 'fulfilled') {
+          mixedTotal += r.value
+        } else {
+          console.warn('countWorkItems partial failure:', r.reason)
+        }
+      }
+      return mixedTotal
     }
 
     const counts: Promise<number>[] = []

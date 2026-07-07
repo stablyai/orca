@@ -5,6 +5,7 @@ import type {
   GitConflictOperation,
   GitDiffResult,
   GitForkSyncExpectedUpstream,
+  GitAddUpstreamRemoteResult,
   GitForkSyncResult,
   GitPushTarget,
   GitStagingArea,
@@ -51,7 +52,7 @@ import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../sh
 import { getHistory as getGitHistory } from '../git/history'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
-import { gitSyncForkDefaultBranch } from '../git/fork-sync'
+import { gitAddUpstreamRemote, gitSyncForkDefaultBranch } from '../git/fork-sync'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
@@ -405,6 +406,25 @@ export class RuntimeGitCommands {
       return provider.syncForkDefaultBranch(target.worktree.path, expectedUpstream)
     }
     return gitSyncForkDefaultBranch(
+      target.worktree.path,
+      expectedUpstream,
+      localGitOptionsForTarget(target)
+    )
+  }
+
+  async addRuntimeGitUpstreamRemote(
+    worktreeSelector: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitAddUpstreamRemoteResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.addUpstreamRemote(target.worktree.path, expectedUpstream)
+    }
+    return gitAddUpstreamRemote(
       target.worktree.path,
       expectedUpstream,
       localGitOptionsForTarget(target)

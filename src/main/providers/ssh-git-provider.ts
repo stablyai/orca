@@ -4,6 +4,7 @@
    small amount of param plumbing. */
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { GitProviderStatusOptions, IGitProvider } from './types'
+import type { GitAddUpstreamRemoteResult } from '../../shared/git-upstream-remote'
 import type {
   GitStatusResult,
   GitDiffResult,
@@ -534,6 +535,16 @@ export class SshGitProvider implements IGitProvider {
     await this.runWithDiffDedupeClear(async () => {
       await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
     })
+  }
+
+  async addUpstreamRemote(
+    worktreePath: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitAddUpstreamRemoteResult> {
+    return (await this.mux.request('git.addUpstreamRemote', {
+      worktreePath,
+      expectedUpstream
+    })) as GitAddUpstreamRemoteResult
   }
 
   async syncForkDefaultBranch(

@@ -101,6 +101,16 @@ export function useModalReturnFocus(visible: boolean): {
     focusFirstMatchingSurface(['[data-orca-emulator-frame="true"] [tabindex]'])
   }, [focusCapturedElement, focusFirstMatchingSurface])
 
+  const focusTasksSurface = useCallback((): void => {
+    if (focusCapturedElement()) {
+      return
+    }
+    focusFirstMatchingSurface([
+      '[data-orca-tasks-pane="true"] input',
+      '[data-orca-tasks-pane="true"] [tabindex]'
+    ])
+  }, [focusCapturedElement, focusFirstMatchingSurface])
+
   const focusFallbackSurface = useCallback((): void => {
     focusFirstMatchingSurface(['.xterm-helper-textarea', '.monaco-editor textarea'])
   }, [focusFirstMatchingSurface])
@@ -169,6 +179,8 @@ export function useModalReturnFocus(visible: boolean): {
         focusEditorSurface()
       } else if (action.kind === 'simulator') {
         focusSimulatorSurface()
+      } else if (action.kind === 'tasks') {
+        focusTasksSurface()
       } else if (action.kind === 'surface') {
         focusFallbackSurface()
       }
@@ -183,6 +195,7 @@ export function useModalReturnFocus(visible: boolean): {
     focusEditorSurface,
     focusFallbackSurface,
     focusSimulatorSurface,
+    focusTasksSurface,
     requestBrowserFocus
   ])
 

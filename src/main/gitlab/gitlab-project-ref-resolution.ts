@@ -204,6 +204,8 @@ export async function resolveIssueSource(
       fellBack: false
     }
   }
+  // 'auto' and 'mixed' both resolve to the heuristic single source: GitLab
+  // has no merged-list path yet, so 'mixed' degrades to auto here.
   return {
     source: await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions),
     fellBack: false

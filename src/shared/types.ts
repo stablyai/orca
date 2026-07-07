@@ -92,9 +92,13 @@ export type RepoKind = 'git' | 'folder'
  * - `'upstream'`: explicit upstream. Wins over heuristic and future topology
  *   changes. Falls back to origin if `upstream` remote vanishes, with a toast.
  * - `'origin'`: explicit origin. Same precedence.
+ * - `'mixed'`: list work items from origin AND upstream merged. Single-target
+ *   operations (issue creation) resolve like `'auto'` — a new issue cannot be
+ *   filed "in both".
  */
-export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
+export type IssueSourcePreference = 'upstream' | 'origin' | 'auto' | 'mixed'
 export type { ForkSyncMode, GitForkSyncExpectedUpstream, GitForkSyncResult } from './git-fork-sync'
+export type { GitAddUpstreamRemoteResult } from './git-upstream-remote'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
 export type ProjectProviderIdentity = {
@@ -767,8 +771,9 @@ export type TabContentType =
   | 'check-details'
   | 'browser'
   | 'simulator'
+  | 'tasks'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator' | 'tasks'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 export type Tab = {
@@ -1465,6 +1470,13 @@ export type GitHubWorkItem = {
   // The Start-from picker passes this to resolvePrBase so fork heads use
   // refs/pull/<N>/head for creation and a separate PR-head push target.
   isCrossRepository?: boolean
+  /** Set only by the 'mixed' issue-source list merge: which remote of the
+   *  fork the item came from. Absent under single-source preferences. */
+  sourceRemote?: 'origin' | 'upstream'
+  /** The owner/repo slug the item was listed from, set alongside
+   *  `sourceRemote`. Lets rows and detail routing distinguish origin #5
+   *  from upstream #5 without re-parsing `url`. */
+  sourceOwnerRepo?: GitHubOwnerRepo
   /** Why: required because the cross-repo view merges items from every selected
    *  repo — the table row's repo pill and the "open in browser" fallback need
    *  to know which repo an item came from. Stamped by the renderer fetcher
@@ -1890,6 +1902,11 @@ export type GetRateLimitResult =
  * the issues-side fetch failed, but any PR-side items that succeeded are still
  * present in `items`. Consumers should render `items` alongside the error banner.
  */
+/** Highest permission tier the authenticated viewer holds on a repository,
+ *  derived from the REST `permissions` flags. Drives read-only rendering of
+ *  mutation affordances (state/labels/assignees) in the item dialog. */
+export type GitHubViewerRepoPermission = 'admin' | 'maintain' | 'write' | 'triage' | 'read'
+
 export type ListWorkItemsResult<T> = {
   items: T[]
   sources: {
@@ -1908,7 +1925,10 @@ export type ListWorkItemsResult<T> = {
     upstreamCandidate: GitHubOwnerRepo | null
   }
   errors?: {
-    issues?: ClassifiedError
+    /** `source` is the repo whose issues fetch failed. Set in 'mixed' mode,
+     *  where `sources.issues` reports the auto-primary side and may differ
+     *  from the failing side; absent on single-source lists. */
+    issues?: ClassifiedError & { source?: GitHubOwnerRepo }
   }
   /** True when the user's per-repo preference was `'upstream'` but no upstream
    *  remote is configured, so the resolver fell back to origin. Renderer uses

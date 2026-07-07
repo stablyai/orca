@@ -116,6 +116,9 @@ describePosix('OMP shell wrapper node-pty reproduction', () => {
 
     const makeEnv = (captureFile: string, afterPiFile: string): Record<string, string> => ({
       ...process.env,
+      // Why: the assertion matches bash's English "omp is a function" output,
+      // which localized systems (e.g. Spanish) would otherwise translate.
+      LC_ALL: 'C',
       HOME: tempDir,
       PATH: `${binDir}:${process.env.PATH ?? ''}`,
       PI_CODING_AGENT_DIR: '',

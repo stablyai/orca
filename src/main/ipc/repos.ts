@@ -1973,7 +1973,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.issueSourcePreference !== undefined &&
         updates.issueSourcePreference !== 'upstream' &&
         updates.issueSourcePreference !== 'origin' &&
-        updates.issueSourcePreference !== 'auto'
+        updates.issueSourcePreference !== 'auto' &&
+        updates.issueSourcePreference !== 'mixed'
       ) {
         delete updates.issueSourcePreference
       }

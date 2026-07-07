@@ -40,6 +40,7 @@ import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
+import TasksPaneOverlayLayer from './tasks-pane/TasksPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
 import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
@@ -1770,6 +1771,11 @@ function Terminal(): React.JSX.Element | null {
                 ? (useAppStore.getState().getActiveTab(renderedActiveWorktreeId)?.id ?? null)
                 : null
             }
+            activeTasksTabId={
+              activeTabType === 'tasks' && renderedActiveWorktreeId
+                ? (useAppStore.getState().getActiveTab(renderedActiveWorktreeId)?.id ?? null)
+                : null
+            }
             activeTabType={activeTabType}
             onActivateFile={(fileId) => {
               const unifiedTabs =
@@ -1778,6 +1784,11 @@ function Terminal(): React.JSX.Element | null {
               if (unifiedTab?.contentType === 'simulator') {
                 setActiveTab(fileId)
                 setActiveTabType('simulator')
+                return
+              }
+              if (unifiedTab?.contentType === 'tasks') {
+                setActiveTab(fileId)
+                setActiveTabType('tasks')
                 return
               }
               setActiveFile(fileId)
@@ -1866,7 +1877,8 @@ function Terminal(): React.JSX.Element | null {
               // as a fallback until another surface is ready.
               (activeTabType === 'editor' && worktreeFiles.length > 0) ||
               (activeTabType === 'browser' && worktreeBrowserTabs.length > 0) ||
-              activeTabType === 'simulator'
+              activeTabType === 'simulator' ||
+              activeTabType === 'tasks'
                 ? 'hidden'
                 : ''
             }`}
@@ -2158,6 +2170,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       />
       <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+      <TasksPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </div>
   )

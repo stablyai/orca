@@ -7,6 +7,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
+import TasksPane from '@/components/tasks-pane/TasksPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
@@ -278,14 +279,16 @@ export function FloatingTerminalPanel({
     activeTab &&
     activeTab.contentType !== 'terminal' &&
     activeTab.contentType !== 'browser' &&
-    activeTab.contentType !== 'simulator'
+    activeTab.contentType !== 'simulator' &&
+    activeTab.contentType !== 'tasks'
       ? activeTab.id
       : null
   const activeEditorFileId =
     activeTab &&
     activeTab.contentType !== 'terminal' &&
     activeTab.contentType !== 'browser' &&
-    activeTab.contentType !== 'simulator'
+    activeTab.contentType !== 'simulator' &&
+    activeTab.contentType !== 'tasks'
       ? activeTab.entityId
       : null
   const terminalTabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
@@ -339,7 +342,8 @@ export function FloatingTerminalPanel({
           (tab) =>
             tab.contentType !== 'terminal' &&
             tab.contentType !== 'browser' &&
-            tab.contentType !== 'simulator'
+            tab.contentType !== 'simulator' &&
+            tab.contentType !== 'tasks'
         )
         .map((tab) => {
           const file = floatingFiles.find((candidate) => candidate.id === tab.entityId)
@@ -352,15 +356,24 @@ export function FloatingTerminalPanel({
     () => groupTabs.filter((tab) => tab.contentType === 'simulator'),
     [groupTabs]
   )
+  const tasksItems = useMemo(
+    () => groupTabs.filter((tab) => tab.contentType === 'tasks'),
+    [groupTabs]
+  )
   // Why: restored sessions can retain unified tabs whose backing records are
   // gone; the empty landing should follow what the user can see.
   const hasVisibleFloatingTabs =
     terminalItems.length > 0 ||
     browserItems.length > 0 ||
     editorItems.length > 0 ||
-    simulatorItems.length > 0
+    simulatorItems.length > 0 ||
+    tasksItems.length > 0
   const visibleFloatingItemCount =
-    terminalItems.length + browserItems.length + editorItems.length + simulatorItems.length
+    terminalItems.length +
+    browserItems.length +
+    editorItems.length +
+    simulatorItems.length +
+    tasksItems.length
   const activeClosableTab = hasVisibleFloatingTabs ? activeTab : null
   const tabBarOrder = useMemo(
     () =>
@@ -388,9 +401,12 @@ export function FloatingTerminalPanel({
         if (tab.contentType === 'simulator') {
           return simulatorItems.some((item) => item.id === tab.id)
         }
+        if (tab.contentType === 'tasks') {
+          return tasksItems.some((item) => item.id === tab.id)
+        }
         return editorItems.some((item) => item.tabId === tab.id)
       }),
-    [browserItems, editorItems, groupTabs, simulatorItems, tabBarOrder, terminalItems]
+    [browserItems, editorItems, groupTabs, simulatorItems, tabBarOrder, tasksItems, terminalItems]
   )
   const activeBrowserTab = activeBrowserId
     ? (browserTabs.find((tab) => tab.id === activeBrowserId) ?? null)
@@ -405,7 +421,9 @@ export function FloatingTerminalPanel({
         ? 'terminal'
         : activeTab?.contentType === 'simulator'
           ? 'simulator'
-          : 'editor'
+          : activeTab?.contentType === 'tasks'
+            ? 'tasks'
+            : 'editor'
 
   useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
@@ -770,7 +788,7 @@ export function FloatingTerminalPanel({
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
-        } else if (item.contentType === 'simulator') {
+        } else if (item.contentType === 'simulator' || item.contentType === 'tasks') {
           closeUnifiedTab(item.id)
         } else {
           const file = state.openFiles.find((candidate) => candidate.id === item.entityId)
@@ -859,9 +877,10 @@ export function FloatingTerminalPanel({
           (tab) =>
             tab.contentType !== 'terminal' &&
             tab.contentType !== 'browser' &&
-            // Why: simulator tabs are not files; "Close All Files" must leave
-            // the Mobile Emulator open like terminal/browser tabs do.
+            // Why: simulator and tasks tabs are not files; "Close All Files"
+            // must leave them open like terminal/browser tabs.
             tab.contentType !== 'simulator' &&
+            tab.contentType !== 'tasks' &&
             !tab.isPinned
         )
         .map((tab) => tab.id)
@@ -1480,6 +1499,7 @@ export function FloatingTerminalPanel({
               activeFileId={activeEditorUnifiedId}
               activeBrowserTabId={activeBrowserId}
               activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
+              activeTasksTabId={activeTab?.contentType === 'tasks' ? activeTab.id : null}
               activeTabType={activeTabType}
               onActivateFile={activateFloatingItem}
               onCloseFile={closeFloatingItem}
@@ -1565,6 +1585,18 @@ export function FloatingTerminalPanel({
                 aria-hidden={!isActive}
               >
                 <EmulatorPane tab={tab} worktreeId={tab.worktreeId} isActive={open && isActive} />
+              </div>
+            )
+          })}
+          {tasksItems.map((tab) => {
+            const isActive = tab.id === activeTab?.id
+            return (
+              <div
+                key={tab.id}
+                className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
+                aria-hidden={!isActive}
+              >
+                <TasksPane worktreeId={tab.worktreeId} isActive={open && isActive} />
               </div>
             )
           })}

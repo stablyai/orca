@@ -50,6 +50,7 @@ import type {
   GitConflictOperation,
   GitDiffResult,
   GitForkSyncExpectedUpstream,
+  GitAddUpstreamRemoteResult,
   GitForkSyncResult,
   GitPushTarget,
   GitStagingArea,
@@ -62,6 +63,7 @@ import type {
   GitHubPRReviewCommentInput,
   GitHubCommentResult,
   GitHubOwnerRepo,
+  GitHubViewerRepoPermission,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
@@ -1330,6 +1332,18 @@ export type PreloadApi = {
       labels?: string[]
       assignees?: string[]
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    enableRepoIssues: (args: {
+      repoPath: string
+      repoId?: string
+      owner: string
+      repo: string
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    viewerRepoPermission: (args: {
+      repoPath: string
+      repoId?: string
+      owner?: string
+      repo?: string
+    }) => Promise<{ permission: GitHubViewerRepoPermission; source: GitHubOwnerRepo } | null>
     countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
       repoPath: string
@@ -2369,6 +2383,11 @@ export type PreloadApi = {
       connectionId?: string
       expectedUpstream: GitForkSyncExpectedUpstream
     }) => Promise<GitForkSyncResult>
+    addUpstreamRemote: (args: {
+      worktreePath: string
+      connectionId?: string
+      expectedUpstream: GitForkSyncExpectedUpstream
+    }) => Promise<GitAddUpstreamRemoteResult>
     push: (args: {
       worktreePath: string
       publish?: boolean

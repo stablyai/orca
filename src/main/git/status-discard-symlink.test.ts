@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, mkdir, rm, symlink, writeFile, access, readFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, symlink, writeFile, access, readFile } from 'node:fs/promises'
+import { removeGitFixtureDir } from '../../shared/git-fixture-cleanup'
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
 import { bulkDiscardChanges, discardChanges } from './status'
@@ -36,7 +37,7 @@ async function createDirectoryLink(target: string, linkPath: string): Promise<vo
 }
 
 afterEach(async () => {
-  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(tempRoots.splice(0).map((root) => removeGitFixtureDir(root)))
 })
 
 describe('discardChanges symlink safety', () => {

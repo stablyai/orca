@@ -318,6 +318,11 @@
           "tab": {
             "372d21d428": "모바일 에뮬레이터"
           }
+        },
+        "tasks": {
+          "tab": {
+            "7889c1175d": "Tasks"
+          }
         }
       },
       "fix": {
@@ -1700,7 +1705,15 @@
         "searchIssues": "이슈 검색",
         "useIssueNumber": "이슈 #{{value0}} 사용",
         "noMatchingIssuesLoaded": "일치하는 이슈를 불러오지 않았습니다.",
-        "editReviewersWithCurrent": "리뷰어 편집: {{value0}}"
+        "editReviewersWithCurrent": "리뷰어 편집: {{value0}}",
+        "3ef08c8588": "Failed to enable issues: {{value0}}",
+        "ac00881a55": "Enabling…",
+        "faa1abd491": "Enable issues",
+        "fb902585c4": "An upstream remote already exists and points at a different repository.",
+        "4d91839b5d": "No origin remote is configured.",
+        "46a2f4072a": "Failed to add upstream remote: {{value0}}",
+        "8c18355ff8": "Adding…",
+        "9b13066e18": "Add upstream remote"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -2004,7 +2017,9 @@
           "643d7e9496": "upstream",
           "51d1608920": "origin",
           "cdc9bd64fa": "간결하게",
-          "30b2c9df91": "업스트림"
+          "30b2c9df91": "업스트림",
+          "9d1ff63799": "Mixed",
+          "b47b195370": "Showing issues from origin and upstream merged"
         },
         "PRFilterDropdowns": {
           "979be3cf6b": "담당자",
@@ -2686,7 +2701,10 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
             "7a9b4af2af": "탭을 왼쪽으로 스크롤",
-            "232e075b07": "탭을 오른쪽으로 스크롤"
+            "232e075b07": "탭을 오른쪽으로 스크롤",
+            "46c2430d7f": "Go to Tasks",
+            "1948ff4179": "Open the existing tasks tab.",
+            "1926ee1252": "Tasks"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "파일 생성",
@@ -2756,7 +2774,18 @@
                   "1baeb07c17": "iOS 시뮬레이터",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "모바일"
+                  "14965cc123": "모바일",
+                  "f85ebdaa83": "Go to Tasks",
+                  "1d70a382e6": "Tasks",
+                  "799f94c0e3": "tasks",
+                  "829e38f1af": "issues",
+                  "6f9a07b473": "pull requests",
+                  "10cdaa2fb5": "merge requests",
+                  "f8f3e4199d": "work items",
+                  "efd1252f7a": "github",
+                  "3670541c89": "gitlab",
+                  "4a783df1a7": "linear",
+                  "b39c410772": "jira"
                 }
               }
             }
@@ -12368,6 +12397,14 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "복사"
+        }
+      },
+      "tasks": {
+        "pane": {
+          "TasksPane": {
+            "a81bfba116": "Tasks unavailable",
+            "36a1cd05e1": "This workspace is not backed by a git repository, so there is no task source to show."
+          }
         }
       }
     },

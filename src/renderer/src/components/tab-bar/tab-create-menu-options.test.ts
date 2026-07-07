@@ -18,7 +18,9 @@ describe('tab create menu options', () => {
     hasNewMarkdown: true,
     hasOpenMarkdown: true,
     hasSimulator: true,
-    simulatorIsGoTo: false
+    simulatorIsGoTo: false,
+    hasTasks: true,
+    tasksIsGoTo: false
   })
 
   it('matches mobile emulator aliases to the simulator menu action', () => {
@@ -36,12 +38,45 @@ describe('tab create menu options', () => {
       hasNewMarkdown: true,
       hasOpenMarkdown: false,
       hasSimulator: true,
-      simulatorIsGoTo: true
+      simulatorIsGoTo: true,
+      hasTasks: false,
+      tasksIsGoTo: false
     })
 
     expect(
       findMatchingTabCreateMenuOptions('simulator', options).map((option) => option.kind)
     ).toEqual(['go-to-simulator'])
+  })
+
+  // Why: the tasks entry must be reachable by provider names, not only the
+  // literal "tasks", so users searching "github" or "jira" find their work items.
+  it('matches provider aliases to the tasks menu action', () => {
+    expect(
+      findMatchingTabCreateMenuOptions('tasks', defaultOptions).map((option) => option.kind)
+    ).toEqual(['new-tasks'])
+    expect(
+      findMatchingTabCreateMenuOptions('github', defaultOptions).map((option) => option.kind)
+    ).toEqual(['new-tasks'])
+    expect(
+      findMatchingTabCreateMenuOptions('jira', defaultOptions).map((option) => option.kind)
+    ).toEqual(['new-tasks'])
+  })
+
+  it('matches go-to tasks when the workspace already has a tasks tab', () => {
+    const options = buildTabCreateMenuOptions({
+      terminalOnly: false,
+      hasNewBrowser: true,
+      hasNewMarkdown: true,
+      hasOpenMarkdown: false,
+      hasSimulator: false,
+      simulatorIsGoTo: false,
+      hasTasks: true,
+      tasksIsGoTo: true
+    })
+
+    expect(findMatchingTabCreateMenuOptions('tasks', options).map((option) => option.kind)).toEqual(
+      ['go-to-tasks']
+    )
   })
 
   it('matches terminal and browser quick actions', () => {
@@ -61,6 +96,8 @@ describe('tab create menu options', () => {
       hasOpenMarkdown: false,
       hasSimulator: false,
       simulatorIsGoTo: false,
+      hasTasks: false,
+      tasksIsGoTo: false,
       windowsShellEntries: [
         { label: 'PowerShell', shell: 'powershell.exe' },
         { label: 'CMD Prompt', shell: 'cmd.exe' }

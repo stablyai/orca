@@ -425,4 +425,34 @@ describe('parseWorkspaceSession', () => {
       expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('terminal')
     }
   })
+
+  it('preserves a tasks tab across session parse', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'tasks-1',
+            entityId: 'tasks-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'tasks',
+            label: 'Tasks',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0].contentType).toBe('tasks')
+    }
+  })
 })

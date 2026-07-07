@@ -235,6 +235,35 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     expect(state.workItemsInvalidationNonce).toBe(5)
   })
 
+  // Why: repos with project host setups cache under `{scope}::{repoId}::…`
+  // keys — a source flip must stale those too, not only prefix matches.
+  it('evicts host/source-scoped cache entries for the repo', () => {
+    const store = createTestStore()
+    const repoId = 'repo-1'
+    const scopedKey = workItemsCacheKey(
+      repoId,
+      20,
+      'is:issue is:open',
+      'github:local:github%3Aacme%2Forca:proj-1'
+    )
+    const otherRepoScopedKey = workItemsCacheKey(
+      'repo-2',
+      20,
+      '',
+      'github:local:github%3Aacme%2Forca:proj-1'
+    )
+    store.setState({
+      workItemsCache: {
+        [scopedKey]: { data: [], fetchedAt: 1 },
+        [otherRepoScopedKey]: { data: [], fetchedAt: 1 }
+      }
+    })
+
+    store.getState().evictGitHubRepoCaches(repoId, '/repo/one')
+
+    expect(Object.keys(store.getState().workItemsCache)).toEqual([otherRepoScopedKey])
+  })
+
   it('does not bump the work-item invalidation nonce when no work-item entries are evicted', () => {
     const store = createTestStore()
     store.setState({

@@ -145,7 +145,13 @@ import { resolveCommentReplyTarget } from '@/components/comment-reply-target-sta
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
+import {
+  useRepoLabels,
+  useRepoAssignees,
+  useRepoViewerPermission,
+  useGitHubViewerLogin,
+  useImmediateMutation
+} from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import {
   getGitHubPRReviewerRows,
@@ -5856,6 +5862,23 @@ function GHEditSection({
   const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
+  // Why: read-tier repos (typical fork upstreams) reject state/label/assignee
+  // writes with 403s — render the chips read-only. Unknown fails open; author
+  // exceptions gate on viewer login, unavailable on runtime/SSH targets.
+  const viewerPermission = useRepoViewerPermission(
+    repoPath,
+    repoId,
+    projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : null,
+    sourceSettings
+  )
+  const viewerLogin = useGitHubViewerLogin(sourceSettings)
+  const readOnly = viewerPermission.data === 'read'
+  const canMutateState =
+    !readOnly ||
+    (viewerLogin !== null &&
+      item.author !== null &&
+      item.author.toLowerCase() === viewerLogin.toLowerCase())
+
   // Why: sync local assignees when item changes or when the detail fetch
   // resolves with real data — but skip if the user already made an
   // optimistic edit so we don't clobber in-flight changes.
@@ -6086,167 +6109,202 @@ function GHEditSection({
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
       {/* State */}
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              'group/status inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
-              getStateTone({ ...item, state: localState })
-            )}
-          >
-            {getStateLabel({ ...item, state: localState })}
-            <ChevronDown className="size-2.5 opacity-50" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-36 p-1" align="start">
-          <button
-            type="button"
-            onClick={() => handleStateChange('open')}
-            className={cn(
-              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
-              localState === 'open' && 'bg-accent/50'
-            )}
-          >
-            <CircleDot className="size-3 text-emerald-500" />
-            {translate('auto.components.PullRequestPage.7b8f6bf6d8', 'Open')}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleStateChange('closed')}
-            className={cn(
-              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
-              localState === 'closed' && 'bg-accent/50'
-            )}
-          >
-            <CircleDashed className="size-3 text-rose-500" />
-            {translate('auto.components.PullRequestPage.b936cc51a4', 'Closed')}
-          </button>
-        </PopoverContent>
-      </Popover>
+      {!canMutateState ? (
+        <span
+          className={cn(
+            'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+            getStateTone({ ...item, state: localState })
+          )}
+        >
+          {getStateLabel({ ...item, state: localState })}
+        </span>
+      ) : (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'group/status inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
+                getStateTone({ ...item, state: localState })
+              )}
+            >
+              {getStateLabel({ ...item, state: localState })}
+              <ChevronDown className="size-2.5 opacity-50" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-36 p-1" align="start">
+            <button
+              type="button"
+              onClick={() => handleStateChange('open')}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+                localState === 'open' && 'bg-accent/50'
+              )}
+            >
+              <CircleDot className="size-3 text-emerald-500" />
+              {translate('auto.components.PullRequestPage.7b8f6bf6d8', 'Open')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStateChange('closed')}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+                localState === 'closed' && 'bg-accent/50'
+              )}
+            >
+              <CircleDashed className="size-3 text-rose-500" />
+              {translate('auto.components.PullRequestPage.b936cc51a4', 'Closed')}
+            </button>
+          </PopoverContent>
+        </Popover>
+      )}
 
       {/* Labels */}
-      <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            disabled={isPending('labels') || repoLabels.loading}
-            className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
-          >
-            {localLabels.length === 0 ? (
-              <span className="text-muted-foreground">
-                {translate('auto.components.PullRequestPage.bc215fea4d', '+ Label')}
+      {readOnly ? (
+        localLabels.length > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px]">
+            {localLabels.map((name) => (
+              <span key={name} className="text-[10px] text-muted-foreground">
+                {name}
               </span>
-            ) : (
-              localLabels.map((name) => (
-                <span key={name} className="text-[10px] text-muted-foreground">
-                  {name}
+            ))}
+          </span>
+        ) : null
+      ) : (
+        <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={isPending('labels') || repoLabels.loading}
+              className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
+            >
+              {localLabels.length === 0 ? (
+                <span className="text-muted-foreground">
+                  {translate('auto.components.PullRequestPage.bc215fea4d', '+ Label')}
                 </span>
-              ))
-            )}
-            {isPending('labels') ? (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
-            ) : (
-              <ChevronDown className="size-2.5 opacity-50" />
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {repoLabels.error ? (
-            <div className="px-2 py-3 text-center text-[12px] text-destructive">
-              {repoLabels.error}
-            </div>
-          ) : (
-            <div>
-              {repoLabels.data.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => handleLabelToggle(label)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                >
-                  <span
-                    className={cn(
-                      'flex size-3.5 items-center justify-center rounded-sm border',
-                      localLabels.includes(label)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input'
-                    )}
-                  >
-                    {localLabels.includes(label) && checkIcon}
+              ) : (
+                localLabels.map((name) => (
+                  <span key={name} className="text-[10px] text-muted-foreground">
+                    {name}
                   </span>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
+                ))
+              )}
+              {isPending('labels') ? (
+                <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-2.5 opacity-50" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
+            {repoLabels.error ? (
+              <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                {repoLabels.error}
+              </div>
+            ) : (
+              <div>
+                {repoLabels.data.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => handleLabelToggle(label)}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                  >
+                    <span
+                      className={cn(
+                        'flex size-3.5 items-center justify-center rounded-sm border',
+                        localLabels.includes(label)
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input'
+                      )}
+                    >
+                      {localLabels.includes(label) && checkIcon}
+                    </span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      )}
 
       {/* Assignees */}
-      <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            disabled={isPending('assignees') || repoAssignees.loading}
-            className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
-          >
-            {localAssignees.length === 0 ? (
-              <span className="text-muted-foreground">
-                {translate('auto.components.PullRequestPage.14c9fc70ed', '+ Assignee')}
+      {readOnly ? (
+        localAssignees.length > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px]">
+            {localAssignees.map((login) => (
+              <span key={login} className="text-[10px] text-muted-foreground">
+                {login}
               </span>
-            ) : (
-              localAssignees.map((login) => (
-                <span key={login} className="text-[10px] text-muted-foreground">
-                  {login}
+            ))}
+          </span>
+        ) : null
+      ) : (
+        <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={isPending('assignees') || repoAssignees.loading}
+              className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
+            >
+              {localAssignees.length === 0 ? (
+                <span className="text-muted-foreground">
+                  {translate('auto.components.PullRequestPage.14c9fc70ed', '+ Assignee')}
                 </span>
-              ))
-            )}
-            {isPending('assignees') ? (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              ) : (
+                localAssignees.map((login) => (
+                  <span key={login} className="text-[10px] text-muted-foreground">
+                    {login}
+                  </span>
+                ))
+              )}
+              {isPending('assignees') ? (
+                <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-2.5 opacity-50" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
+            {repoAssignees.error ? (
+              <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                {repoAssignees.error}
+              </div>
             ) : (
-              <ChevronDown className="size-2.5 opacity-50" />
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {repoAssignees.error ? (
-            <div className="px-2 py-3 text-center text-[12px] text-destructive">
-              {repoAssignees.error}
-            </div>
-          ) : (
-            <div>
-              {repoAssignees.data.map((user) => (
-                <button
-                  key={user.login}
-                  type="button"
-                  onClick={() => handleAssigneeToggle(user.login)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                >
-                  <span
-                    className={cn(
-                      'flex size-3.5 items-center justify-center rounded-sm border',
-                      localAssignees.includes(user.login)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input'
-                    )}
+              <div>
+                {repoAssignees.data.map((user) => (
+                  <button
+                    key={user.login}
+                    type="button"
+                    onClick={() => handleAssigneeToggle(user.login)}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
                   >
-                    {localAssignees.includes(user.login) && checkIcon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{user.login}</span>
-                    {user.name && (
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {user.name}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
+                    <span
+                      className={cn(
+                        'flex size-3.5 items-center justify-center rounded-sm border',
+                        localAssignees.includes(user.login)
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input'
+                      )}
+                    >
+                      {localAssignees.includes(user.login) && checkIcon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{user.login}</span>
+                      {user.name && (
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {user.name}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      )}
 
       <Button
         size="sm"

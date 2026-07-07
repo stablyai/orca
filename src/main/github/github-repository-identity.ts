@@ -288,6 +288,9 @@ export async function resolveIssueSource(
       fellBack: false
     }
   }
+  // 'auto' and 'mixed' both resolve to the heuristic single source here:
+  // single-target operations (issue creation) cannot act on "both"; the
+  // mixed list-merge happens one level up in listWorkItems.
   return {
     source: await getIssueOwnerRepo(repoPath, connectionId, localGitOptions),
     fellBack: false

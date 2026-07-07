@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
+import { removeGitFixtureDirSync } from '../../shared/git-fixture-cleanup'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -110,7 +111,7 @@ describe('searchBaseRefs (widened glob)', () => {
   })
 
   afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true })
+    removeGitFixtureDirSync(tmpDir)
   })
 
   it('returns upstream/* branches when querying a non-origin remote', async () => {
@@ -471,7 +472,7 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
   })
 
   afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true })
+    removeGitFixtureDirSync(tmpDir)
   })
 
   it('returns origin/main when both origin/main and upstream/main exist (origin wins)', () => {
@@ -585,7 +586,7 @@ describe('getRemoteCount', () => {
   })
 
   afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true })
+    removeGitFixtureDirSync(tmpDir)
   })
 
   it('returns 0 for a repo with no remotes', async () => {

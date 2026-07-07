@@ -27,6 +27,7 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { ensureTasksTab, worktreeSupportsTasksTab } from '@/lib/ensure-tasks-tab'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
@@ -73,7 +74,10 @@ export function useTabGroupWorkspaceModel({
       expandedPaneByTabId: state.expandedPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
-      mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
+      mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false,
+      // Why: pass the selector's subscribed snapshot so the check re-derives
+      // when repos resolve, instead of a non-reactive getState() read.
+      supportsTasksTab: worktreeSupportsTasksTab(worktreeId, state)
     }))
   )
 
@@ -281,7 +285,7 @@ export function useTabGroupWorkspaceModel({
         destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
         closeBrowserTab(item.entityId)
         closeUnifiedTab(item.id)
-      } else if (item.contentType === 'simulator') {
+      } else if (item.contentType === 'simulator' || item.contentType === 'tasks') {
         closeUnifiedTab(item.id)
       } else {
         const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
@@ -346,7 +350,7 @@ export function useTabGroupWorkspaceModel({
           closeUnifiedTab(item.id)
         } else if (item.contentType === 'terminal') {
           closeTab(item.entityId)
-        } else if (item.contentType === 'simulator') {
+        } else if (item.contentType === 'simulator' || item.contentType === 'tasks') {
           closeUnifiedTab(item.id)
         } else {
           const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
@@ -432,6 +436,9 @@ export function useTabGroupWorkspaceModel({
       if (item.contentType === 'simulator') {
         setActiveTabType('simulator')
         // simulator has no editor file entity
+      } else if (item.contentType === 'tasks') {
+        setActiveTabType('tasks')
+        // tasks has no editor file entity
       } else {
         setActiveFile(item.entityId)
         setActiveTabType('editor')
@@ -614,6 +621,11 @@ export function useTabGroupWorkspaceModel({
               placement: 'rightSplit',
               targetGroupId: groupId
             })
+          }
+        : undefined,
+      newTasksTab: worktreeState.supportsTasksTab
+        ? () => {
+            ensureTasksTab(worktreeId, { targetGroupId: groupId })
           }
         : undefined,
       openEntry: async (args: TabCreateEntryArgs) => {

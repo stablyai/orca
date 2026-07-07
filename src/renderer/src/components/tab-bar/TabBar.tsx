@@ -12,6 +12,7 @@ import {
   FilePlus,
   FileText,
   Globe,
+  List,
   Plus,
   Smartphone,
   TerminalSquare
@@ -119,6 +120,7 @@ type TabBarProps = {
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewSimulatorTab?: () => void
+  onNewTasksTab?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
@@ -133,6 +135,7 @@ type TabBarProps = {
   activeFileId?: string | null
   activeBrowserTabId?: string | null
   activeSimulatorTabId?: string | null
+  activeTasksTabId?: string | null
   activeTabType?: WorkspaceVisibleTabType
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
@@ -177,6 +180,13 @@ type TabItem =
       isPinned: boolean
       data: Tab
     }
+  | {
+      type: 'tasks'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab
+    }
 
 function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -187,6 +197,9 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
   }
   if (item.type === 'simulator') {
     return item.data.label || 'Mobile Emulator'
+  }
+  if (item.type === 'tasks') {
+    return item.data.label || 'Tasks'
   }
   return getEditorDisplayLabel(item.data)
 }
@@ -244,6 +257,7 @@ function TabBarInner({
   onNewTerminalWithShell,
   onNewBrowserTab,
   onNewSimulatorTab,
+  onNewTasksTab,
   onOpenEntry,
   terminalOnly = false,
   showAgentLaunchItems = true,
@@ -258,6 +272,7 @@ function TabBarInner({
   activeFileId,
   activeBrowserTabId,
   activeSimulatorTabId,
+  activeTasksTabId,
   activeTabType,
   onActivateFile,
   onCloseFile,
@@ -450,6 +465,10 @@ function TabBarInner({
     () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),
     [unifiedTabs]
   )
+  const workspaceHasTasksTab = useMemo(
+    () => unifiedTabs.some((tab) => tab.contentType === 'tasks'),
+    [unifiedTabs]
+  )
 
   // Why: gate the tab long-press view-mode toggle to agent terminals. A tab is
   // eligible when it launched an agent or has a live agent-status entry on any of
@@ -585,16 +604,20 @@ function TabBarInner({
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
-        simulatorIsGoTo: workspaceHasSimulatorTab
+        simulatorIsGoTo: workspaceHasSimulatorTab,
+        hasTasks: !terminalOnly && Boolean(onNewTasksTab),
+        tasksIsGoTo: workspaceHasTasksTab
       }),
     [
       mobileEmulatorEnabled,
       onNewFileTab,
       onNewSimulatorTab,
+      onNewTasksTab,
       onOpenFileTab,
       terminalOnly,
       windowsShellEntries,
-      workspaceHasSimulatorTab
+      workspaceHasSimulatorTab,
+      workspaceHasTasksTab
     ]
   )
   const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
@@ -628,6 +651,10 @@ function TabBarInner({
       case 'new-simulator':
       case 'go-to-simulator':
         onNewSimulatorTab?.()
+        break
+      case 'new-tasks':
+      case 'go-to-tasks':
+        onNewTasksTab?.()
         break
     }
   }
@@ -773,6 +800,33 @@ function TabBarInner({
         </DropdownMenuItem>
       )
     ) : null
+  const newTasksMenuItem =
+    !terminalOnly && onNewTasksTab ? (
+      workspaceHasTasksTab ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuItem
+              onSelect={onNewTasksTab}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+            >
+              <List className="size-4 text-muted-foreground" />
+              {translate('auto.components.tab.bar.TabBar.46c2430d7f', 'Go to Tasks')}
+            </DropdownMenuItem>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8} className="z-[80]">
+            {translate('auto.components.tab.bar.TabBar.1948ff4179', 'Open the existing tasks tab.')}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <DropdownMenuItem
+          onSelect={onNewTasksTab}
+          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        >
+          <List className="size-4 text-muted-foreground" />
+          {translate('auto.components.tab.bar.TabBar.1926ee1252', 'Tasks')}
+        </DropdownMenuItem>
+      )
+    ) : null
   const newMarkdownMenuItem =
     !terminalOnly && onNewFileTab ? (
       <DropdownMenuItem
@@ -813,6 +867,7 @@ function TabBarInner({
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
         {newSimulatorMenuItem}
+        {newTasksMenuItem}
         {mobileEmulatorIntroMenuBlock}
       </>
     ) : (
@@ -822,6 +877,7 @@ function TabBarInner({
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}
+        {newTasksMenuItem}
         {mobileEmulatorIntroMenuBlock}
       </>
     )
@@ -863,6 +919,13 @@ function TabBarInner({
         .map((t) => t.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const tasksTabIds = useMemo(
+    () =>
+      (unifiedTabs ?? [])
+        .filter((t) => t.groupId === resolvedGroupId && t.contentType === 'tasks')
+        .map((t) => t.id),
+    [unifiedTabs, resolvedGroupId]
+  )
 
   // Build the unified ordered list, reconciling stored order with current items
   const orderedItems = useMemo(() => {
@@ -871,7 +934,8 @@ function TabBarInner({
       terminalIds,
       editorFileIds,
       browserTabIds,
-      simulatorTabIds
+      simulatorTabIds,
+      tasksTabIds
     )
     const items: TabItem[] = []
     for (const id of ids) {
@@ -911,14 +975,24 @@ function TabBarInner({
         })
         continue
       }
-      const simUnified = unifiedTabByVisibleId.get(id)
-      if (simUnified && simUnified.contentType === 'simulator') {
+      const paneUnified = unifiedTabByVisibleId.get(id)
+      if (paneUnified && paneUnified.contentType === 'simulator') {
         items.push({
           type: 'simulator',
           id,
-          unifiedTabId: simUnified.id,
-          isPinned: simUnified.isPinned === true,
-          data: simUnified
+          unifiedTabId: paneUnified.id,
+          isPinned: paneUnified.isPinned === true,
+          data: paneUnified
+        })
+        continue
+      }
+      if (paneUnified && paneUnified.contentType === 'tasks') {
+        items.push({
+          type: 'tasks',
+          id,
+          unifiedTabId: paneUnified.id,
+          isPinned: paneUnified.isPinned === true,
+          data: paneUnified
         })
         continue
       }
@@ -930,6 +1004,7 @@ function TabBarInner({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
+    tasksTabIds,
     terminalMap,
     editorMap,
     browserMap,
@@ -964,6 +1039,9 @@ function TabBarInner({
       if (item.type === 'simulator') {
         return activeTabType === 'simulator' && item.id === activeSimulatorTabId
       }
+      if (item.type === 'tasks') {
+        return activeTabType === 'tasks' && item.id === activeTasksTabId
+      }
       return (
         (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
       )
@@ -975,6 +1053,7 @@ function TabBarInner({
     activeSimulatorTabId,
     activeTabId,
     activeTabType,
+    activeTasksTabId,
     orderedItems
   ])
   const tabStripLayoutKey = useMemo(
@@ -1196,6 +1275,39 @@ function TabBarInner({
                     key={item.id}
                     file={simFile}
                     isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
+                    isPinned={item.isPinned}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    statusByRelativePath={statusByRelativePath}
+                    onActivate={() => onActivateFile?.(item.id)}
+                    onClose={() => onCloseFile?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
+                    onCloseAll={() => onCloseAllFiles?.()}
+                    onMakePermanent={() => {}}
+                    onTogglePin={() => togglePinned(item)}
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                  />
+                )
+              }
+              if (item.type === 'tasks') {
+                const tasksLabel = item.data.label || 'Tasks'
+                const tasksFile: OpenFile & { tabId: string } = {
+                  id: item.id,
+                  tabId: item.id,
+                  filePath: tasksLabel,
+                  relativePath: tasksLabel,
+                  worktreeId,
+                  language: 'tasks',
+                  isPreview: false,
+                  isDirty: false,
+                  mode: 'edit'
+                }
+                return (
+                  <EditorFileTab
+                    key={item.id}
+                    file={tasksFile}
+                    isActive={activeTabType === 'tasks' && item.id === activeTasksTabId}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
                     statusByRelativePath={statusByRelativePath}

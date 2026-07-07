@@ -152,7 +152,13 @@ import {
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
+import {
+  useRepoLabels,
+  useRepoAssignees,
+  useRepoViewerPermission,
+  useGitHubViewerLogin,
+  useImmediateMutation
+} from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import {
@@ -541,7 +547,16 @@ function PRAssigneesPanel({
   )
   const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, sourceSettings)
   const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
-  const canEditAssignees = Boolean(projectOrigin || repoPath)
+  // Why: read-tier repos reject assignee writes with 403s (fail open on
+  // unknown). Probe the PR's own repo (URL slug), not the issue source.
+  const prAssigneeViewerPermission = useRepoViewerPermission(
+    repoPath,
+    item.repoId ?? null,
+    projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : assigneeSlug,
+    sourceSettings
+  )
+  const canEditAssignees =
+    Boolean(projectOrigin || repoPath) && prAssigneeViewerPermission.data !== 'read'
   const assigneesByLogin = useMemo(
     () => new Map(repoAssignees.data.map((user) => [user.login.toLowerCase(), user])),
     [repoAssignees.data]
@@ -3155,10 +3170,30 @@ function ConversationTab({
     () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
     [bodySlug, projectOrigin]
   )
+  // Why: read-tier viewers only keep the pencil on items they authored;
+  // unknown fails open. The probe mirrors the write's routing: PR bodies are
+  // slug-routed to the PR's own repo, issue bodies to the issue source.
+  const bodyViewerPermission = useRepoViewerPermission(
+    repoPath,
+    item.repoId ?? null,
+    projectOrigin
+      ? { owner: projectOrigin.owner, repo: projectOrigin.repo }
+      : item.type === 'pr'
+        ? bodySlug
+        : null,
+    getTaskSourceRuntimeSettings(sourceContext)
+  )
+  const bodyViewerLogin = useGitHubViewerLogin(getTaskSourceRuntimeSettings(sourceContext))
+  const permissionAllowsBodyEdit =
+    bodyViewerPermission.data !== 'read' ||
+    (bodyViewerLogin !== null &&
+      item.author !== null &&
+      item.author.toLowerCase() === bodyViewerLogin.toLowerCase())
   const canEditBody =
-    item.type === 'pr'
+    permissionAllowsBodyEdit &&
+    (item.type === 'pr'
       ? Boolean(projectOrigin || bodySlug)
-      : Boolean(projectOrigin || canUseRepoMutationContext)
+      : Boolean(projectOrigin || canUseRepoMutationContext))
   const bodyChanged = resolvedBodyDraft !== body
 
   const handleSaveBody = useCallback(async (): Promise<void> => {
@@ -3864,11 +3899,31 @@ function PRActionsPanel({
       : repoOwnerSettings
   }, [repoOwnerSettings, sourceContext])
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
+  // Why: read-tier repos reject state/merge writes with 403s — hide/disable
+  // them instead of offering doomed writes; PR authors keep close/reopen.
+  // Probe the PR's own repo (URL slug), not the upstream-leaning issue source.
+  const prPermissionSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const viewerPermission = useRepoViewerPermission(
+    repoPath,
+    repoId,
+    projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : prPermissionSlug,
+    sourceSettings
+  )
+  const viewerLogin = useGitHubViewerLogin(sourceSettings)
+  const readOnly = viewerPermission.data === 'read'
+  const permissionBlocksState =
+    readOnly &&
+    !(
+      viewerLogin !== null &&
+      item.author !== null &&
+      item.author.toLowerCase() === viewerLogin.toLowerCase()
+    )
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
-  const canMutateState = localState !== 'merged' && canMutateWithRepoContext
+  const canMutateState =
+    localState !== 'merged' && canMutateWithRepoContext && !permissionBlocksState
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
-  const canMergeWithRepoContext = !!repoPath || mergeTarget.kind === 'environment'
+  const canMergeWithRepoContext = (!!repoPath || mergeTarget.kind === 'environment') && !readOnly
   const mergeDisabled =
     !canMergeWithRepoContext || mergePending || !mergePresentation.directMergeAvailable
 
@@ -4162,29 +4217,31 @@ function PRActionsPanel({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button
-          type="button"
-          variant={nextState === 'closed' ? 'outline' : 'secondary'}
-          size="sm"
-          className={cn(
-            'w-full justify-center gap-2',
-            nextState === 'closed' &&
-              'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
-          )}
-          disabled={!canMutateState || statePending}
-          onClick={() => void handleStateChange()}
-        >
-          {statePending ? (
-            <LoaderCircle className="size-3.5 animate-spin" />
-          ) : nextState === 'closed' ? (
-            <GitPullRequestClosed className="size-3.5 text-destructive" />
-          ) : (
-            <CircleDot className="size-3.5" />
-          )}
-          {nextState === 'closed'
-            ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
-            : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
-        </Button>
+        {permissionBlocksState ? null : (
+          <Button
+            type="button"
+            variant={nextState === 'closed' ? 'outline' : 'secondary'}
+            size="sm"
+            className={cn(
+              'w-full justify-center gap-2',
+              nextState === 'closed' &&
+                'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
+            )}
+            disabled={!canMutateState || statePending}
+            onClick={() => void handleStateChange()}
+          >
+            {statePending ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : nextState === 'closed' ? (
+              <GitPullRequestClosed className="size-3.5 text-destructive" />
+            ) : (
+              <CircleDot className="size-3.5" />
+            )}
+            {nextState === 'closed'
+              ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
+              : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
+          </Button>
+        )}
       </div>
     </aside>
   )
@@ -5657,6 +5714,22 @@ function GHEditSection({
   )
   const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
+  // Why: read-tier repos (typical fork upstreams) reject state/label/assignee
+  // writes with 403s — hide the affordances. Unknown fails open; issue authors
+  // keep close/reopen (local hosts only until a viewer RPC exists).
+  const viewerPermission = useRepoViewerPermission(
+    repoPath,
+    repoId,
+    projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : null,
+    sourceSettings
+  )
+  const viewerLogin = useGitHubViewerLogin(sourceSettings)
+  const readOnly = viewerPermission.data === 'read'
+  const canMutateStatus =
+    !readOnly ||
+    (viewerLogin !== null &&
+      item.author !== null &&
+      item.author.toLowerCase() === viewerLogin.toLowerCase())
   const hasAttachedWorkspace =
     attachedWorkspaceLabel !== null && attachedWorkspaceLabel !== undefined
   const filteredDuplicateCandidates = useMemo(
@@ -5951,6 +6024,27 @@ function GHEditSection({
 
   const renderIssueStatusPopover = (variant: 'sidebar' | 'pill'): React.JSX.Element => {
     const isSidebar = variant === 'sidebar'
+    if (!canMutateStatus) {
+      return (
+        <span
+          className={cn(
+            isSidebar
+              ? 'inline-flex w-full items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium'
+              : 'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+            localState === 'closed'
+              ? getStateTone({ ...item, state: localState })
+              : 'border-border/60 bg-muted/20 text-foreground'
+          )}
+        >
+          {localState === 'closed' ? (
+            <CircleDashed className={isSidebar ? 'size-3.5' : 'size-3'} />
+          ) : (
+            <CircleDot className={cn(isSidebar ? 'size-3.5' : 'size-3', 'text-emerald-500')} />
+          )}
+          {getStateLabel({ ...item, state: localState })}
+        </span>
+      )
+    }
     return (
       <Popover open={statusPopoverOpen} onOpenChange={handleStatusPopoverOpenChange}>
         <PopoverTrigger asChild>
@@ -6170,65 +6264,67 @@ function GHEditSection({
         <section>
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             <span>{translate('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
-            <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  disabled={isPending('assignees') || repoAssignees.loading}
-                  aria-label={translate(
-                    'auto.components.GitHubItemDialog.76adcf5fe2',
-                    'Edit assignees'
-                  )}
-                  className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+            {readOnly ? null : (
+              <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={isPending('assignees') || repoAssignees.loading}
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.76adcf5fe2',
+                      'Edit assignees'
+                    )}
+                    className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+                  >
+                    {isPending('assignees') ? (
+                      <LoaderCircle className="size-3 animate-spin" />
+                    ) : (
+                      <Pencil className="size-3" />
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="popover-scroll-content scrollbar-sleek w-60 p-1"
+                  align="end"
                 >
-                  {isPending('assignees') ? (
-                    <LoaderCircle className="size-3 animate-spin" />
+                  {repoAssignees.error ? (
+                    <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                      {repoAssignees.error}
+                    </div>
                   ) : (
-                    <Pencil className="size-3" />
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="popover-scroll-content scrollbar-sleek w-60 p-1"
-                align="end"
-              >
-                {repoAssignees.error ? (
-                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
-                    {repoAssignees.error}
-                  </div>
-                ) : (
-                  <div>
-                    {repoAssignees.data.map((user) => (
-                      <button
-                        key={user.login}
-                        type="button"
-                        onClick={() => handleAssigneeToggle(user.login)}
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                      >
-                        <span
-                          className={cn(
-                            'flex size-3.5 items-center justify-center rounded-sm border',
-                            localAssignees.includes(user.login)
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-input'
-                          )}
+                    <div>
+                      {repoAssignees.data.map((user) => (
+                        <button
+                          key={user.login}
+                          type="button"
+                          onClick={() => handleAssigneeToggle(user.login)}
+                          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
                         >
-                          {localAssignees.includes(user.login) && checkIcon}
-                        </span>
-                        <span className="min-w-0 flex-1 text-left">
-                          <span className="block truncate">{user.login}</span>
-                          {user.name && (
-                            <span className="block truncate text-[11px] text-muted-foreground">
-                              {user.name}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </PopoverContent>
-            </Popover>
+                          <span
+                            className={cn(
+                              'flex size-3.5 items-center justify-center rounded-sm border',
+                              localAssignees.includes(user.login)
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-input'
+                            )}
+                          >
+                            {localAssignees.includes(user.login) && checkIcon}
+                          </span>
+                          <span className="min-w-0 flex-1 text-left">
+                            <span className="block truncate">{user.login}</span>
+                            {user.name && (
+                              <span className="block truncate text-[11px] text-muted-foreground">
+                                {user.name}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
           {localAssignees.length === 0 ? (
             <div className="text-[12px] text-muted-foreground">
@@ -6263,64 +6359,66 @@ function GHEditSection({
         <section>
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             <span>{translate('auto.components.GitHubItemDialog.217e55d87c', 'Labels')}</span>
-            <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  disabled={isPending('labels') || repoLabels.loading}
-                  aria-label={translate(
-                    'auto.components.GitHubItemDialog.4ba0132f37',
-                    'Edit labels'
-                  )}
-                  className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+            {readOnly ? null : (
+              <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={isPending('labels') || repoLabels.loading}
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.4ba0132f37',
+                      'Edit labels'
+                    )}
+                    className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+                  >
+                    {isPending('labels') ? (
+                      <LoaderCircle className="size-3 animate-spin" />
+                    ) : (
+                      <Pencil className="size-3" />
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="popover-scroll-content scrollbar-sleek w-60 p-1"
+                  align="end"
                 >
-                  {isPending('labels') ? (
-                    <LoaderCircle className="size-3 animate-spin" />
-                  ) : (
-                    <Pencil className="size-3" />
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="popover-scroll-content scrollbar-sleek w-60 p-1"
-                align="end"
-              >
-                {repoLabels.error ? (
-                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
-                    {repoLabels.error}
-                  </div>
-                ) : null}
-                {!repoLabels.error ? (
-                  <div>
-                    {repoLabels.data.map((label) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => handleLabelToggle(label)}
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                      >
-                        <span
-                          className={cn(
-                            'flex size-3.5 items-center justify-center rounded-sm border',
-                            localLabels.includes(label)
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-input'
-                          )}
+                  {repoLabels.error ? (
+                    <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                      {repoLabels.error}
+                    </div>
+                  ) : null}
+                  {!repoLabels.error ? (
+                    <div>
+                      {repoLabels.data.map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => handleLabelToggle(label)}
+                          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
                         >
-                          {localLabels.includes(label) && checkIcon}
-                        </span>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <GitHubLabelsSettingsLink
-                  url={repositoryLabelsUrl}
-                  separated={!repoLabels.error && repoLabels.data.length > 0}
-                  onOpen={() => setLabelPopoverOpen(false)}
-                />
-              </PopoverContent>
-            </Popover>
+                          <span
+                            className={cn(
+                              'flex size-3.5 items-center justify-center rounded-sm border',
+                              localLabels.includes(label)
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-input'
+                            )}
+                          >
+                            {localLabels.includes(label) && checkIcon}
+                          </span>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <GitHubLabelsSettingsLink
+                    url={repositoryLabelsUrl}
+                    separated={!repoLabels.error && repoLabels.data.length > 0}
+                    onOpen={() => setLabelPopoverOpen(false)}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
           {localLabels.length === 0 ? (
             <div className="text-[12px] text-muted-foreground">
@@ -6415,133 +6513,157 @@ function GHEditSection({
       {renderIssueStatusPopover('pill')}
 
       {/* Labels */}
-      <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            disabled={isPending('labels') || repoLabels.loading}
-            className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
-          >
-            {localLabels.length === 0 ? (
-              <span className="text-muted-foreground">
-                {translate('auto.components.GitHubItemDialog.f41ec96c13', '+ Label')}
+      {readOnly ? (
+        localLabels.length > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px]">
+            {localLabels.map((name) => (
+              <span key={name} className="text-[10px] text-muted-foreground">
+                {name}
               </span>
-            ) : (
-              localLabels.map((name) => (
-                <span key={name} className="text-[10px] text-muted-foreground">
-                  {name}
+            ))}
+          </span>
+        ) : null
+      ) : (
+        <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={isPending('labels') || repoLabels.loading}
+              className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
+            >
+              {localLabels.length === 0 ? (
+                <span className="text-muted-foreground">
+                  {translate('auto.components.GitHubItemDialog.f41ec96c13', '+ Label')}
                 </span>
-              ))
-            )}
-            {isPending('labels') ? (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
-            ) : (
-              <ChevronDown className="size-2.5 opacity-50" />
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {repoLabels.error ? (
-            <div className="px-2 py-3 text-center text-[12px] text-destructive">
-              {repoLabels.error}
-            </div>
-          ) : null}
-          {!repoLabels.error ? (
-            <div>
-              {repoLabels.data.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => handleLabelToggle(label)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                >
-                  <span
-                    className={cn(
-                      'flex size-3.5 items-center justify-center rounded-sm border',
-                      localLabels.includes(label)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input'
-                    )}
-                  >
-                    {localLabels.includes(label) && checkIcon}
+              ) : (
+                localLabels.map((name) => (
+                  <span key={name} className="text-[10px] text-muted-foreground">
+                    {name}
                   </span>
-                  {label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <GitHubLabelsSettingsLink
-            url={repositoryLabelsUrl}
-            separated={!repoLabels.error && repoLabels.data.length > 0}
-            onOpen={() => setLabelPopoverOpen(false)}
-          />
-        </PopoverContent>
-      </Popover>
+                ))
+              )}
+              {isPending('labels') ? (
+                <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-2.5 opacity-50" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
+            {repoLabels.error ? (
+              <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                {repoLabels.error}
+              </div>
+            ) : null}
+            {!repoLabels.error ? (
+              <div>
+                {repoLabels.data.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => handleLabelToggle(label)}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                  >
+                    <span
+                      className={cn(
+                        'flex size-3.5 items-center justify-center rounded-sm border',
+                        localLabels.includes(label)
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input'
+                      )}
+                    >
+                      {localLabels.includes(label) && checkIcon}
+                    </span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <GitHubLabelsSettingsLink
+              url={repositoryLabelsUrl}
+              separated={!repoLabels.error && repoLabels.data.length > 0}
+              onOpen={() => setLabelPopoverOpen(false)}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
 
       {/* Assignees */}
-      <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            disabled={isPending('assignees') || repoAssignees.loading}
-            className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
-          >
-            {localAssignees.length === 0 ? (
-              <span className="text-muted-foreground">
-                {translate('auto.components.GitHubItemDialog.c6f37a563d', '+ Assignee')}
+      {readOnly ? (
+        localAssignees.length > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px]">
+            {localAssignees.map((login) => (
+              <span key={login} className="text-[10px] text-muted-foreground">
+                {login}
               </span>
-            ) : (
-              localAssignees.map((login) => (
-                <span key={login} className="text-[10px] text-muted-foreground">
-                  {login}
+            ))}
+          </span>
+        ) : null
+      ) : (
+        <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={isPending('assignees') || repoAssignees.loading}
+              className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
+            >
+              {localAssignees.length === 0 ? (
+                <span className="text-muted-foreground">
+                  {translate('auto.components.GitHubItemDialog.c6f37a563d', '+ Assignee')}
                 </span>
-              ))
-            )}
-            {isPending('assignees') ? (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              ) : (
+                localAssignees.map((login) => (
+                  <span key={login} className="text-[10px] text-muted-foreground">
+                    {login}
+                  </span>
+                ))
+              )}
+              {isPending('assignees') ? (
+                <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-2.5 opacity-50" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
+            {repoAssignees.error ? (
+              <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                {repoAssignees.error}
+              </div>
             ) : (
-              <ChevronDown className="size-2.5 opacity-50" />
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
-          {repoAssignees.error ? (
-            <div className="px-2 py-3 text-center text-[12px] text-destructive">
-              {repoAssignees.error}
-            </div>
-          ) : (
-            <div>
-              {repoAssignees.data.map((user) => (
-                <button
-                  key={user.login}
-                  type="button"
-                  onClick={() => handleAssigneeToggle(user.login)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
-                >
-                  <span
-                    className={cn(
-                      'flex size-3.5 items-center justify-center rounded-sm border',
-                      localAssignees.includes(user.login)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input'
-                    )}
+              <div>
+                {repoAssignees.data.map((user) => (
+                  <button
+                    key={user.login}
+                    type="button"
+                    onClick={() => handleAssigneeToggle(user.login)}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
                   >
-                    {localAssignees.includes(user.login) && checkIcon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{user.login}</span>
-                    {user.name && (
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {user.name}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
+                    <span
+                      className={cn(
+                        'flex size-3.5 items-center justify-center rounded-sm border',
+                        localAssignees.includes(user.login)
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input'
+                      )}
+                    >
+                      {localAssignees.includes(user.login) && checkIcon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{user.login}</span>
+                      {user.name && (
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {user.name}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      )}
 
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {attachedWorkspaceLabel ? (

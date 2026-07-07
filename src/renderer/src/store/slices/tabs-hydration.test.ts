@@ -134,6 +134,39 @@ describe('buildHydratedTabState – unified format', () => {
     expect(result.layoutByWorktree.w1).toEqual({ type: 'leaf', groupId: 'g2' })
   })
 
+  it('keeps restored tasks tabs', () => {
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      unifiedTabs: {
+        w1: [
+          {
+            id: 'tasks-1',
+            entityId: 'tasks-1',
+            groupId: 'g1',
+            worktreeId: 'w1',
+            contentType: 'tasks',
+            label: 'Tasks',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        w1: [{ id: 'g1', worktreeId: 'w1', activeTabId: 'tasks-1', tabOrder: ['tasks-1'] }]
+      },
+      tabGroupLayouts: { w1: { type: 'leaf', groupId: 'g1' } },
+      activeGroupIdByWorktree: { w1: 'g1' }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1']))
+
+    expect(result.unifiedTabsByWorktree.w1).toEqual([
+      expect.objectContaining({ id: 'tasks-1', contentType: 'tasks', groupId: 'g1' })
+    ])
+  })
+
   it('keeps restored simulator tabs while pruning unrelated empty split groups', () => {
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),

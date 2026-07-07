@@ -199,6 +199,12 @@ export const GIT_METHODS: RpcMethod[] = [
       runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
   }),
   defineMethod({
+    name: 'git.addUpstreamRemote',
+    params: GitForkSync,
+    handler: async (params, { runtime }) =>
+      runtime.addRuntimeGitUpstreamRemote(params.worktree, params.expectedUpstream)
+  }),
+  defineMethod({
     name: 'git.pull',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>

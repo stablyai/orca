@@ -2307,6 +2307,64 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.closeUnifiedTab).not.toHaveBeenCalledWith(simulatorTab.id)
   })
 
+  // Why: tasks tabs are not files either — "Close All Files" must leave them
+  // open exactly like the Mobile Emulator (regression from CodeRabbit review).
+  it('keeps tasks tabs open when closing all files', async () => {
+    const state = storeBox.state as FloatingPanelStoreState
+    const groupId = 'floating-group'
+    const file = makeFile({ id: 'file-a' })
+    const editorTab: Tab = {
+      id: 'tab-file-a',
+      entityId: file.id,
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'editor',
+      label: file.relativePath,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    const tasksTab: Tab = {
+      id: 'tasks-tab',
+      entityId: 'tasks-tab',
+      groupId,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'tasks',
+      label: 'Tasks',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    state.openFiles = [file]
+    state.unifiedTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab, tasksTab]
+    }
+    state.groupsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: groupId,
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: editorTab.id,
+          tabOrder: [editorTab.id, tasksTab.id],
+          recentTabIds: [editorTab.id, tasksTab.id]
+        }
+      ]
+    }
+    state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    state.tabBarOrderByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab.id, tasksTab.id]
+    }
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onCloseAllFiles as () => void)()
+
+    expect(mocks.closeFile).toHaveBeenCalledWith(file.id)
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalledWith(tasksTab.id)
+  })
+
   it('keeps floating terminal create and close local during active web runtime sessions', async () => {
     const onOpenChange = vi.fn()
     setFloatingTabs([makeTab({ id: 'tab-1' })])

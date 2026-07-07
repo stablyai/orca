@@ -507,3 +507,35 @@ export async function listAssignableUsers(
     release()
   }
 }
+
+/**
+ * Enable the Issues feature on a repository the caller administers. Fresh
+ * forks inherit issues turned off, so the tasks page's `issues_disabled`
+ * banner offers this admin-only toggle alongside Retry.
+ */
+export async function enableRepoIssues(
+  repoPath: string,
+  ownerRepo: OwnerRepo,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  // Why: owner/repo cross the untrusted IPC boundary into a mutating gh API
+  // path — reject `.`/`..` and separators that could reroute the PATCH.
+  const validSlugSegment = /^(?!\.{1,2}$)[A-Za-z0-9_.-]+$/
+  if (!validSlugSegment.test(ownerRepo.owner) || !validSlugSegment.test(ownerRepo.repo)) {
+    return { ok: false, error: 'Invalid repository slug' }
+  }
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  await acquire()
+  try {
+    await ghExecFileAsync(
+      ['api', '-X', 'PATCH', `repos/${ownerRepo.owner}/${ownerRepo.repo}`, '-F', 'has_issues=true'],
+      ghOptions
+    )
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    release()
+  }
+}

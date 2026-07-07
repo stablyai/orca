@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { LoaderCircle } from 'lucide-react'
 import type { GitHubOwnerRepo, IssueSourcePreference } from '../../../../shared/types'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,9 +20,9 @@ export type IssueSourceSelectorProps = {
    *  back. */
   upstream: GitHubOwnerRepo | null
   /** Invoked with the new explicit preference. Never called with `'auto'`
-   *  — clicking either pill always writes the explicit value so a later
+   *  — clicking a pill always writes the explicit value so a later
    *  remote-topology change cannot silently move the selection. */
-  onChange: (preference: 'upstream' | 'origin') => void
+  onChange: (preference: 'upstream' | 'origin' | 'mixed') => void
   /** Disables both pills while a persist is in flight. */
   disabled?: boolean
   className?: string
@@ -29,6 +30,14 @@ export type IssueSourceSelectorProps = {
    *  slug in a tooltip. Used where horizontal space is tight (composer
    *  description line). Defaults to `'labeled'` on the Tasks header. */
   density?: 'labeled' | 'compact'
+  /** Why: 'mixed' is a list concept. Single-target surfaces (Create Issue)
+   *  must not offer it — there it resolves like 'auto', making the pill a
+   *  silent alias for Upstream. */
+  showMixed?: boolean
+  /** True while a source flip's refetch is in flight: pills disable at once,
+   *  the spinner shows after ~200ms (STYLEGUIDE UX rule 1). Leave undefined on
+   *  surfaces that never refetch — the spinner slot only renders when wired. */
+  busy?: boolean
   /** Suppresses the "Issues from <slug>" hover tooltip. Passed by callers on
    *  surfaces that only act on issues (e.g. the Create Issue composer) where
    *  the caveat is implicit — on mixed surfaces like the Tasks header the
@@ -62,7 +71,7 @@ export const issueSourceChipClass =
   'inline-flex items-center gap-1 rounded border border-border/50 bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground'
 
 /**
- * Two-pill segmented control: `Upstream | Origin`.
+ * Segmented control: `Upstream | Origin | Mixed`.
  *
  * Why this renders nothing when there's no divergence to toggle:
  *   - `origin` unresolved (non-GitHub remote): nothing to offer.
@@ -85,8 +94,22 @@ export default function IssueSourceSelector({
   disabled,
   className,
   density = 'labeled',
-  suppressTooltip = false
+  suppressTooltip = false,
+  showMixed = false,
+  busy
 }: IssueSourceSelectorProps): React.JSX.Element | null {
+  const busySlotReserved = busy !== undefined
+  // Why: delay the visible spinner ~200ms — local flips often settle before
+  // that and anything visible would read as a glitch; SSH flips get feedback.
+  const [busyVisible, setBusyVisible] = useState(false)
+  useEffect(() => {
+    if (busy !== true) {
+      setBusyVisible(false)
+      return
+    }
+    const timer = setTimeout(() => setBusyVisible(true), 200)
+    return () => clearTimeout(timer)
+  }, [busy])
   if (!origin || !upstream) {
     return null
   }
@@ -97,8 +120,14 @@ export default function IssueSourceSelector({
   // Why: in `'auto'`/unset, the effective pill is whatever `getIssueOwnerRepo`
   // picks — upstream-if-present-else-origin. Since we only render here when
   // upstream exists, the heuristic resolves to upstream.
-  const effective: 'upstream' | 'origin' =
-    preference === 'upstream' || preference === 'origin' ? preference : 'upstream'
+  // Why: without the Mixed pill a persisted 'mixed' resolves like 'auto', so
+  // highlight the pill matching the actual target, not a hidden third state.
+  const effective: 'upstream' | 'origin' | 'mixed' =
+    preference === 'upstream' || preference === 'origin'
+      ? preference
+      : preference === 'mixed' && showMixed
+        ? 'mixed'
+        : 'upstream'
 
   const upstreamSlug = `${upstream.owner}/${upstream.repo}`
   const originSlug = `${origin.owner}/${origin.repo}`
@@ -109,11 +138,16 @@ export default function IssueSourceSelector({
   // undefined`, which means a later remote-topology change (upstream removed
   // or re-added) could silently move the effective source. Only short-circuit
   // when the persisted preference already matches the click.
-  const persistedMatches = (target: 'upstream' | 'origin'): boolean => preference === target
+  const persistedMatches = (target: 'upstream' | 'origin' | 'mixed'): boolean =>
+    preference === target
+  // Why: bind disabled the moment a flip dispatches so double-clicks can't
+  // race two source swaps; the spinner is the delayed *visible* half.
+  const interactionDisabled = disabled || busy === true
 
   const group = (
     <div
       role="group"
+      aria-busy={busy === true}
       aria-label={translate(
         'auto.components.github.IssueSourceSelector.787c970baf',
         'Issue source'
@@ -129,14 +163,20 @@ export default function IssueSourceSelector({
       <button
         type="button"
         aria-pressed={effective === 'upstream'}
-        disabled={disabled}
+        disabled={interactionDisabled}
         onClick={() => {
-          if (disabled || persistedMatches('upstream')) {
+          // Why: with persisted 'mixed' and no Mixed pill this pill renders
+          // active — clicking it would silently overwrite the preference.
+          const rendersAsMixedAlias = preference === 'mixed' && !showMixed
+          if (interactionDisabled || persistedMatches('upstream') || rendersAsMixedAlias) {
             return
           }
           onChange('upstream')
         }}
-        className={segmentClass(effective === 'upstream' ? 'active' : 'inactive', disabled)}
+        className={segmentClass(
+          effective === 'upstream' ? 'active' : 'inactive',
+          interactionDisabled
+        )}
       >
         {density === 'compact'
           ? 'U'
@@ -145,15 +185,15 @@ export default function IssueSourceSelector({
       <button
         type="button"
         aria-pressed={effective === 'origin'}
-        disabled={disabled}
+        disabled={interactionDisabled}
         onClick={() => {
-          if (disabled || persistedMatches('origin')) {
+          if (interactionDisabled || persistedMatches('origin')) {
             return
           }
           onChange('origin')
         }}
         className={cn(
-          segmentClass(effective === 'origin' ? 'active' : 'inactive', disabled),
+          segmentClass(effective === 'origin' ? 'active' : 'inactive', interactionDisabled),
           // Why: 1px divider between segments, matching the outer chip border.
           'border-l border-border/40'
         )}
@@ -162,6 +202,40 @@ export default function IssueSourceSelector({
           ? 'O'
           : translate('auto.components.github.IssueSourceSelector.51d1608920', 'Origin')}
       </button>
+      {showMixed ? (
+        <button
+          type="button"
+          aria-pressed={effective === 'mixed'}
+          disabled={interactionDisabled}
+          onClick={() => {
+            if (interactionDisabled || persistedMatches('mixed')) {
+              return
+            }
+            onChange('mixed')
+          }}
+          className={cn(
+            segmentClass(effective === 'mixed' ? 'active' : 'inactive', interactionDisabled),
+            'border-l border-border/40'
+          )}
+        >
+          {density === 'compact'
+            ? 'M'
+            : translate('auto.components.github.IssueSourceSelector.9d1ff63799', 'Mixed')}
+        </button>
+      ) : null}
+      {/* Why: reserved footprint — the chip must not resize mid-action when
+          the spinner becomes visible (UX rule 1). */}
+      {busySlotReserved ? (
+        <span className="inline-flex w-4 items-center justify-center self-stretch border-l border-border/40">
+          <LoaderCircle
+            aria-hidden="true"
+            className={cn(
+              'size-3 text-muted-foreground',
+              busyVisible ? 'animate-spin' : 'invisible'
+            )}
+          />
+        </span>
+      ) : null}
     </div>
   )
 
@@ -178,8 +252,22 @@ export default function IssueSourceSelector({
     <Tooltip>
       <TooltipTrigger asChild>{group}</TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
-        {translate('auto.components.github.IssueSourceSelector.d6aeb2012b', 'Showing issues from')}{' '}
-        <span className="font-mono">{effective === 'upstream' ? upstreamSlug : originSlug}</span>
+        {effective === 'mixed' ? (
+          translate(
+            'auto.components.github.IssueSourceSelector.b47b195370',
+            'Showing issues from origin and upstream merged'
+          )
+        ) : (
+          <>
+            {translate(
+              'auto.components.github.IssueSourceSelector.d6aeb2012b',
+              'Showing issues from'
+            )}{' '}
+            <span className="font-mono">
+              {effective === 'upstream' ? upstreamSlug : originSlug}
+            </span>
+          </>
+        )}
       </TooltipContent>
     </Tooltip>
   )

@@ -28,6 +28,7 @@ import type {
   GitPushTarget,
   GitStagingArea,
   GitForkSyncExpectedUpstream,
+  GitAddUpstreamRemoteResult,
   GitForkSyncResult,
   GitUpstreamStatus,
   GhosttyImportPreview,
@@ -50,7 +51,9 @@ import type {
   UpdateStatus,
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
-  WorktreeRemoteBranchConflictEvent
+  WorktreeRemoteBranchConflictEvent,
+  GitHubOwnerRepo,
+  GitHubViewerRepoPermission
 } from '../shared/types'
 import type {
   WarpThemeImportPreview,
@@ -1123,6 +1126,22 @@ const api = {
       assignees?: string[]
     }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:createIssue', args),
+
+    enableRepoIssues: (args: {
+      repoPath: string
+      repoId?: string
+      owner: string
+      repo: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:enableRepoIssues', args),
+
+    viewerRepoPermission: (args: {
+      repoPath: string
+      repoId?: string
+      owner?: string
+      repo?: string
+    }): Promise<{ permission: GitHubViewerRepoPermission; source: GitHubOwnerRepo } | null> =>
+      ipcRenderer.invoke('gh:viewerRepoPermission', args),
 
     countWorkItems: (args: {
       repoPath: string
@@ -2794,6 +2813,11 @@ const api = {
       connectionId?: string
       expectedUpstream: GitForkSyncExpectedUpstream
     }): Promise<GitForkSyncResult> => ipcRenderer.invoke('git:syncFork', args),
+    addUpstreamRemote: (args: {
+      worktreePath: string
+      connectionId?: string
+      expectedUpstream: GitForkSyncExpectedUpstream
+    }): Promise<GitAddUpstreamRemoteResult> => ipcRenderer.invoke('git:addUpstreamRemote', args),
     push: (args: {
       worktreePath: string
       publish?: boolean

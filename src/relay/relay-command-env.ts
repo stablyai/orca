@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
+import { withEnglishMessageLocale } from '../shared/english-message-locale-env'
 
 const POSIX_RELAY_PATH_FALLBACKS = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin']
 const WINDOWS_RELAY_PATH_FALLBACKS = [
@@ -150,7 +151,10 @@ export function buildRelayCommandEnv(
   }
 
   return {
-    ...baseEnv,
+    // Why: relay consumers string-match subprocess output (git divergence
+    // hints, "nothing to commit", preflight banners). Localized messages
+    // (e.g. Spanish git) break that matching.
+    ...withEnglishMessageLocale(baseEnv),
     [key]: [...segments].join(delimiter)
   }
 }

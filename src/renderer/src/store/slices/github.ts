@@ -872,7 +872,25 @@ function repoCacheKeyPrefixes(repoId: string, repoPath?: string): string[] {
 }
 
 function matchesRepoCacheKey(key: string, prefixes: readonly string[]): boolean {
-  return prefixes.some((prefix) => key.startsWith(prefix))
+  // Why: work-items cache keys optionally carry a host/source scope segment
+  // in front (`{scope}::{repoId}::…`, see workItemsCacheKey) — match both shapes.
+  if (prefixes.some((prefix) => key.startsWith(prefix))) {
+    return true
+  }
+  // Why: keys embed free-text query segments, so match only the segment right
+  // after the scope — substring-searching the whole key would cross-match.
+  const scopeSeparator = key.indexOf('::')
+  if (scopeSeparator === -1) {
+    return false
+  }
+  const afterScope = key.slice(scopeSeparator + 2)
+  return prefixes.some((prefix) => afterScope.startsWith(prefix))
+}
+
+// Why: source flips stale entries with `fetchedAt: 0` instead of deleting them
+// so the list keeps rendering while the forced refetch is in flight.
+function isStaleMarkedEntry(entry: CacheEntry<unknown> | undefined): boolean {
+  return entry?.fetchedAt === 0
 }
 
 function clearInflightWorkItemsForRepo(repoId: string, repoPath?: string): void {
@@ -2666,19 +2684,22 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         // wrongness introduced by the issue-source split in #1076; PR-side
         // failures existed before and are out of scope for this banner.
         const issuesError = envelope.errors?.issues
-        // Why: if the main process resolved `errors.issues` but not `sources.issues`,
+        // Why: mixed-mode errors carry the failing side's slug; sources.issues
+        // reports the auto-primary side, which may not be the one that failed.
+        const issuesErrorSource = issuesError?.source ?? envelope.sources.issues
+        // Why: if the main process resolved `errors.issues` but no source slug,
         // the renderer has no slug to render in the banner copy, so the error is
         // dropped from the cache entry. Log it so this rare case is at least visible
         // in devtools rather than disappearing silently.
-        if (issuesError && !envelope.sources.issues) {
+        if (issuesError && !issuesErrorSource) {
           console.warn(
             '[workItems] dropping issues-side error with no resolved source:',
             issuesError
           )
         }
         const errorForCache: WorkItemsCacheError | undefined =
-          issuesError && envelope.sources.issues
-            ? { ...issuesError, source: envelope.sources.issues }
+          issuesError && issuesErrorSource
+            ? { ...issuesError, source: issuesErrorSource }
             : undefined
         const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
         const currentHostId = getGitHubWorkItemSourceHostId(
@@ -2712,6 +2733,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         // UI can continue to render something useful while the user retries.
         if (!isGitHubWorkItemsSshRemoteRequiredError(err)) {
           console.error('Failed to fetch GitHub work items:', err)
+        }
+        // Why: stale-while-revalidate is only safe when the revalidate lands —
+        // on failure, drop the entry so the old source's items can't render.
+        if (isStaleMarkedEntry(get().workItemsCache[key])) {
+          set((s) => {
+            const next = { ...s.workItemsCache }
+            delete next[key]
+            return { workItemsCache: next }
+          })
         }
         throw err
       } finally {
@@ -4383,26 +4413,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     // first makes the "new fetch gets a fresh request" invariant impossible
     // to trip on later refactors that change zustand or React flush timing.
     clearInflightWorkItemsForRepo(repoId, repoPath)
-    // Why: evict every cache entry keyed on this repo AFTER the IPC
-    // resolves. If we evicted before awaiting, an overlapping fetch triggered
-    // by a different subscriber would hit main with the pre-flip persisted
-    // preference and repopulate the cache with stale-source data. Work-items
-    // cache keys are repo-scoped, but we also drop legacy path-scoped entries
-    // that may have been restored from older persisted cache data.
+    // Why: invalidate AFTER the IPC resolves, or an overlapping fetch could
+    // repopulate stale-source data under the pre-flip preference. Stale-mark
+    // rather than delete: deleting caused an empty/skeleton flash on every
+    // flip, while isFresh() already fails stale entries for non-forced readers.
     set((s) => {
-      const prefix = `${repoId}::`
-      const legacyPrefix = `${repoPath}::`
+      const prefixes = repoCacheKeyPrefixes(repoId, repoPath)
       const next: Record<string, CacheEntry<GitHubWorkItem[]>> = {}
       for (const [key, entry] of Object.entries(s.workItemsCache)) {
-        if (!key.startsWith(prefix) && !key.startsWith(legacyPrefix)) {
-          next[key] = entry
-        }
+        next[key] = matchesRepoCacheKey(key, prefixes) ? { ...entry, fetchedAt: 0 } : entry
       }
-      // Why: bump the invalidation nonce so the Tasks list's fetch effect
-      // — which keys on `[selectedRepos, appliedTaskSearch, taskRefreshNonce,
-      // taskSource, workItemsInvalidationNonce]` — re-runs and re-populates
-      // the just-evicted entries. Evicting alone wouldn't trigger the effect
-      // because it doesn't depend on the cache.
+      // Why: the nonce re-runs the Tasks list's fetch effect to re-populate the
+      // just-staled entries — staling alone doesn't trigger it (no cache dep).
       return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
     })
   },

@@ -5,9 +5,11 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
+  | 'go-to-tasks'
   | 'new-browser'
   | 'new-markdown'
   | 'new-simulator'
+  | 'new-tasks'
   | 'new-terminal'
   | 'new-terminal-shell'
   | 'open-markdown'
@@ -26,6 +28,8 @@ export type TabCreateMenuOptionsContext = {
   hasOpenMarkdown: boolean
   hasSimulator: boolean
   simulatorIsGoTo: boolean
+  hasTasks: boolean
+  tasksIsGoTo: boolean
   terminalOnly: boolean
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
 }
@@ -161,6 +165,30 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.8a580f88cf', 'iphone'),
         translate('auto.components.tab.bar.tab.create.menu.options.7ecdc5ef08', 'ipad'),
         translate('auto.components.tab.bar.tab.create.menu.options.14965cc123', 'mobile')
+      ]
+    })
+  }
+
+  if (context.hasTasks) {
+    // Why: reuse TabBar.tsx's keys so the same English label can't diverge
+    // across locales between the tab strip and this menu (simulator precedent).
+    const label = context.tasksIsGoTo
+      ? translate('auto.components.tab.bar.TabBar.46c2430d7f', 'Go to Tasks')
+      : translate('auto.components.tab.bar.TabBar.1926ee1252', 'Tasks')
+    options.push({
+      id: context.tasksIsGoTo ? 'go-to-tasks' : 'new-tasks',
+      kind: context.tasksIsGoTo ? 'go-to-tasks' : 'new-tasks',
+      label,
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.799f94c0e3', 'tasks'),
+        translate('auto.components.tab.bar.tab.create.menu.options.829e38f1af', 'issues'),
+        translate('auto.components.tab.bar.tab.create.menu.options.6f9a07b473', 'pull requests'),
+        translate('auto.components.tab.bar.tab.create.menu.options.10cdaa2fb5', 'merge requests'),
+        translate('auto.components.tab.bar.tab.create.menu.options.f8f3e4199d', 'work items'),
+        translate('auto.components.tab.bar.tab.create.menu.options.efd1252f7a', 'github'),
+        translate('auto.components.tab.bar.tab.create.menu.options.3670541c89', 'gitlab'),
+        translate('auto.components.tab.bar.tab.create.menu.options.4a783df1a7', 'linear'),
+        translate('auto.components.tab.bar.tab.create.menu.options.b39c410772', 'jira')
       ]
     })
   }

@@ -6,6 +6,7 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
+  GitAddUpstreamRemoteResult,
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
@@ -264,6 +265,10 @@ export type IGitProvider = {
     worktreePath: string,
     expectedUpstream: GitForkSyncExpectedUpstream
   ): Promise<GitForkSyncResult>
+  addUpstreamRemote(
+    worktreePath: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitAddUpstreamRemoteResult>
   getBranchDiff(
     worktreePath: string,
     baseRef: string,

@@ -15,6 +15,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    setupFiles: [resolve('config/vitest-git-background-jobs-env.ts')],
     include: [
       'src/**/*.test.ts',
       'src/**/*.test.tsx',

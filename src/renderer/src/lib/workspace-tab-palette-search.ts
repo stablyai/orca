@@ -38,7 +38,7 @@ export type SearchableWorkspaceTab = {
   isCurrentWorktree: boolean
 }
 
-type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator' | 'tasks'
 
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]

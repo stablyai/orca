@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises'
+import { removeGitFixtureDir } from '../../shared/git-fixture-cleanup'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -87,7 +88,7 @@ async function createBareRepo(): Promise<string> {
 
 afterEach(async () => {
   revParseTopLevelCalls.count = 0
-  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(tempRoots.splice(0).map((root) => removeGitFixtureDir(root)))
 })
 
 describe('git worktree separate git dir paths', () => {

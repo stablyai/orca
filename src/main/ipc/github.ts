@@ -32,6 +32,7 @@ import {
   createIssue,
   updateIssue,
   addIssueComment,
+  enableRepoIssues,
   listLabels,
   listAssignableUsers,
   getAuthenticatedViewer,
@@ -70,6 +71,7 @@ import {
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { GitHubPRFile } from '../../shared/types'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
+import { getViewerRepoPermission } from '../github/viewer-repo-permission'
 import {
   getProjectViewTable,
   listAccessibleProjects,
@@ -430,6 +432,36 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.issueSourcePreference,
         repoConnectionId(repo),
         fields,
+        ...localGitOptionArgs(store, repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:viewerRepoPermission',
+    (_event, args: RepoScopedArgs & { owner?: string; repo?: string }) => {
+      const repo = assertRegisteredRepo(args, store)
+      const override = args.owner && args.repo ? { owner: args.owner, repo: args.repo } : null
+      // Why: positional call — spreading the optional git-options tuple here
+      // would shift `override` into the options slot when the tuple is empty.
+      return getViewerRepoPermission(
+        repo.path,
+        repo.issueSourcePreference,
+        repoConnectionId(repo),
+        localGitOptionArgs(store, repo)[0] ?? {},
+        override
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:enableRepoIssues',
+    (_event, args: RepoScopedArgs & { owner: string; repo: string }) => {
+      const repo = assertRegisteredRepo(args, store)
+      return enableRepoIssues(
+        repo.path,
+        { owner: args.owner, repo: args.repo },
+        repoConnectionId(repo),
         ...localGitOptionArgs(store, repo)
       )
     }

@@ -35,6 +35,7 @@ import {
   escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
+import { withEnglishMessageLocale } from '../../shared/english-message-locale-env'
 
 // ─── Core resolution ────────────────────────────────────────────────
 
@@ -563,7 +564,10 @@ export function appendGitConfigEnv(
 export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return appendGitConfigEnv(
     {
-      ...env,
+      // Why: consumers string-match git output (clone failures, remote-error
+      // classification). Localized messages break that — same guarantee the
+      // relay env gives the SSH path.
+      ...withEnglishMessageLocale(env),
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: env.GIT_ASKPASS ?? '',
       SSH_ASKPASS: env.SSH_ASKPASS ?? '',
