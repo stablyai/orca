@@ -104,7 +104,11 @@ function browseWithWindowsPowerShell(
     `$dir = ${powerShellPathExpression(dirPath)}`,
     'Set-Location -LiteralPath $dir',
     '$resolved = (Get-Location).ProviderPath',
-    'Write-Output $resolved',
+    // Why: the renderer's parentPath/joinPath only split on `/`, so a native
+    // backslash path (C:\Users\alice) breaks "Up" and mixes separators. Emit a
+    // forward-slash resolvedPath (matching the POSIX branch) while keeping the
+    // native $resolved for Get-ChildItem -LiteralPath.
+    "Write-Output ($resolved -replace '\\\\', '/')",
     'Get-ChildItem -LiteralPath $resolved -Force | ForEach-Object {',
     "  if ($_.PSIsContainer) { Write-Output ($_.Name + '/') } else { Write-Output $_.Name }",
     '}'

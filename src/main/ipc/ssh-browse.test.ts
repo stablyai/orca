@@ -120,12 +120,14 @@ describe('registerSshBrowseHandler', () => {
     })
     // Windows OpenSSH exec emits CRLF; the parser must strip \r so directories
     // aren't misclassified as files with a stray carriage return in the name.
-    windowsChannel.emit('data', Buffer.from('C:\\Users\\alice\r\nDesktop/\r\nnotes.txt\r\n'))
+    // The script emits a forward-slash resolvedPath (the -replace '\\','/' line)
+    // so the renderer's parentPath/joinPath, which only split on `/`, still work.
+    windowsChannel.emit('data', Buffer.from('C:/Users/alice\r\nDesktop/\r\nnotes.txt\r\n'))
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
 
     await expect(resultPromise).resolves.toEqual({
-      resolvedPath: 'C:\\Users\\alice',
+      resolvedPath: 'C:/Users/alice',
       entries: [
         { name: 'Desktop', isDirectory: true },
         { name: 'notes.txt', isDirectory: false }
@@ -143,6 +145,9 @@ describe('registerSshBrowseHandler', () => {
     expect(script).toContain('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8')
     expect(script).toContain("$dir = 'C:/Users/alice'")
     expect(script).toContain('Get-ChildItem -LiteralPath $resolved -Force')
+    // resolvedPath must be emitted with forward slashes so the renderer's
+    // parentPath/joinPath (which only split on `/`) keep working on Windows.
+    expect(script).toContain("Write-Output ($resolved -replace '\\\\', '/')")
   })
 
   it('escapes single quotes in the PowerShell literal path', async () => {
@@ -164,12 +169,12 @@ describe('registerSshBrowseHandler', () => {
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })
-    windowsChannel.emit('data', Buffer.from("C:\\O'Brien\r\n"))
+    windowsChannel.emit('data', Buffer.from("C:/O'Brien\r\n"))
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
 
     await expect(resultPromise).resolves.toEqual({
-      resolvedPath: "C:\\O'Brien",
+      resolvedPath: "C:/O'Brien",
       entries: []
     })
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
@@ -194,11 +199,11 @@ describe('registerSshBrowseHandler', () => {
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })
-    windowsChannel.emit('data', Buffer.from('C:\\Users\\alice\r\n'))
+    windowsChannel.emit('data', Buffer.from('C:/Users/alice\r\n'))
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
 
-    await expect(resultPromise).resolves.toEqual({ resolvedPath: 'C:\\Users\\alice', entries: [] })
+    await expect(resultPromise).resolves.toEqual({ resolvedPath: 'C:/Users/alice', entries: [] })
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
     // ~ must expand to $HOME, not be passed literally to Set-Location.
     expect(script).toContain('$dir = $HOME')
