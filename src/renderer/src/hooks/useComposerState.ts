@@ -290,6 +290,12 @@ export type ComposerCardProps = {
    *  rather than used as the base for a new branch. */
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  /** True when the selected LOCAL repo declares `services:` recipes in
+   *  orca.yaml — gates the isolated-services opt-in (v1 is local repos only). */
+  repoHasServiceRecipes: boolean
+  /** Whether the new worktree should provision its own isolated services. */
+  provisionServices: boolean
+  onProvisionServicesChange: (next: boolean) => void
   /** Whether the "create multiple" toggle is shown — worktree (git) targets
    *  only; folder-workspace targets create-and-close as before. */
   showCreateMultiple: boolean
@@ -920,6 +926,34 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRecipeRepoId,
     selectedRepoIsGit
   ])
+  // Why: the isolated-services opt-in is offered only for local git repos whose
+  // orca.yaml declares `services:` recipes. Reset on every repo switch so a stale
+  // opt-in from a previous repo cannot leak into the next create.
+  useEffect(() => {
+    let cancelled = false
+    setRepoHasServiceRecipes(false)
+    setProvisionServices(false)
+    if (!selectedRecipeRepoId || !selectedRepoIsGit || selectedRecipeRepoConnectionId) {
+      return () => {
+        cancelled = true
+      }
+    }
+    void window.api.hooks
+      .check({ repoId: selectedRecipeRepoId })
+      .then((result) => {
+        if (!cancelled) {
+          setRepoHasServiceRecipes((result.hooks?.services?.length ?? 0) > 0)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRepoHasServiceRecipes(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedRecipeRepoConnectionId, selectedRecipeRepoId, selectedRepoIsGit])
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
@@ -1100,6 +1134,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // is the explicit checkbox value driving whether reuse actually happens.
   const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)
   const [reuseSelectedBranch, setReuseSelectedBranch] = useState(false)
+  const [provisionServices, setProvisionServices] = useState(false)
+  const [repoHasServiceRecipes, setRepoHasServiceRecipes] = useState(false)
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
@@ -4208,6 +4244,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           startupPlan,
           quickPrompt,
           quickTelemetry,
+          ...(provisionServices && repoHasServiceRecipes ? { provisionServices: true } : {}),
           ...(createMultiple ? { suppressTerminalFocusOnCompletion: true } : {})
         }
 
@@ -4349,6 +4386,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       smartNameSelection?.kind === 'branch',
     reuseSelectedBranch,
     onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
+    repoHasServiceRecipes,
+    provisionServices,
+    onProvisionServicesChange: setProvisionServices,
     // Why: the "create multiple" toggle only applies to worktree (git) targets;
     // folder-workspace targets keep the create-and-close behavior.
     showCreateMultiple: !isProjectGroupTarget,

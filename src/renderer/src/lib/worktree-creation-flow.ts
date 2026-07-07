@@ -136,6 +136,25 @@ async function executeWorktreeCreation(
     return
   }
 
+  // Why: stream service provisioning output onto the same pending-creation
+  // surface as git progress, correlated by creationId (== serviceProvisionId).
+  const unsubscribeServiceEvents = preparedRequest.provisionServices
+    ? window.api.worktreeServices.onProvisionEvent?.((event) => {
+        if (event.provisionId !== creationId) {
+          return
+        }
+        const store = useAppStore.getState()
+        const pending = store.pendingWorktreeCreations[creationId]
+        if (!pending) {
+          return
+        }
+        store.updatePendingWorktreeCreation(creationId, {
+          phase: 'provisioning-services',
+          provisioningLog: ((pending.provisioningLog ?? '') + event.chunk).slice(-12_000)
+        })
+      })
+    : undefined
+
   let result: CreateWorktreeResult
   try {
     result = await useAppStore
@@ -165,7 +184,8 @@ async function executeWorktreeCreation(
         preparedRequest.linkedBitbucketPR,
         preparedRequest.linkedAzureDevOpsPR,
         preparedRequest.linkedGiteaPR,
-        preparedRequest.compareBaseRef
+        preparedRequest.compareBaseRef,
+        { provisionServices: preparedRequest.provisionServices }
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
@@ -188,6 +208,8 @@ async function executeWorktreeCreation(
       toast.error(message)
     }
     return
+  } finally {
+    unsubscribeServiceEvents?.()
   }
 
   const worktree = result.worktree
@@ -198,6 +220,11 @@ async function executeWorktreeCreation(
   // via worktrees:changed and provisions lazily on first open.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     return
+  }
+  // Why: refresh the worktreeId→env map so the new worktree's terminals get
+  // their service env, and the sidebar badge reflects provisioning status.
+  if (preparedRequest.provisionServices) {
+    await useAppStore.getState().hydrateWorktreeServices()
   }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 

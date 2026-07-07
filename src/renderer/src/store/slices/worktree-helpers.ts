@@ -164,7 +164,11 @@ export type WorktreeSlice = {
     compareBaseRef?: string,
     // Why: reserved for automation-dispatch flows so host-side provenance can
     // be minted securely; regular create callers should omit this.
-    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
+    options?: {
+      automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+      /** Opt-in to provisioning isolated per-worktree services from orca.yaml. */
+      provisionServices?: boolean
+    }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void

@@ -3090,7 +3090,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
             ...(startup ? { startup } : {}),
             ...(creationId ? { creationId } : {}),
-            ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
+            ...(automationProvenanceRequest ? { automationProvenanceRequest } : {}),
+            // Why: services are provisioned only on the local create path (v1
+            // excludes remote); serviceProvisionId reuses creationId so the
+            // renderer can correlate streamed provision events to this create.
+            ...(options?.provisionServices
+              ? {
+                  provisionServices: true,
+                  ...(creationId ? { serviceProvisionId: creationId } : {})
+                }
+              : {})
           }
           const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
           const result =

@@ -116,6 +116,10 @@ type NewWorkspaceComposerCardProps = {
   canReuseSelectedBranch: boolean
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  /** True when the selected local repo declares `services:` recipes. */
+  repoHasServiceRecipes?: boolean
+  provisionServices?: boolean
+  onProvisionServicesChange?: (next: boolean) => void
   /** Shows the footer "Create more" switch — worktree targets only. */
   showCreateMultiple?: boolean
   createMultiple?: boolean
@@ -580,6 +584,9 @@ export default function NewWorkspaceComposerCard({
   canReuseSelectedBranch,
   reuseSelectedBranch,
   onReuseSelectedBranchChange,
+  repoHasServiceRecipes = false,
+  provisionServices = false,
+  onProvisionServicesChange,
   showCreateMultiple = false,
   createMultiple = false,
   onCreateMultipleChange,
@@ -1030,6 +1037,58 @@ export default function NewWorkspaceComposerCard({
                   {translate(
                     'auto.components.NewWorkspaceComposerCard.reuseExistingBranchHint',
                     'Check out the existing branch instead of creating a new one from it.'
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Why: isolated services are provisioned per-worktree from orca.yaml's
+              `services:` recipes; only offered when the selected local repo
+              declares them. Collapses via the same grid transition as reuse. */}
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              repoHasServiceRecipes ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            )}
+            aria-hidden={!repoHasServiceRecipes}
+          >
+            <div className="min-h-0">
+              <div className="space-y-1 pt-1">
+                <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
+                  <span
+                    className={cn(
+                      'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
+                      provisionServices
+                        ? 'border-emerald-500/60 bg-emerald-500 text-white'
+                        : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        'size-3 transition-opacity',
+                        provisionServices ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={provisionServices}
+                    onChange={(event) => onProvisionServicesChange?.(event.target.checked)}
+                    disabled={!repoHasServiceRecipes}
+                    className="sr-only"
+                  />
+                  <span>
+                    {translate(
+                      'auto.components.NewWorkspaceComposerCard.provisionIsolatedServices',
+                      'Isolated services'
+                    )}
+                  </span>
+                </label>
+                <p className="pl-6 text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.NewWorkspaceComposerCard.provisionIsolatedServicesHint',
+                    "Provision this workspace's own services (database, cache) from orca.yaml."
                   )}
                 </p>
               </div>
