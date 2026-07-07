@@ -1,6 +1,5 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { cancelPendingSidebarWorktreeActivation } from '@/lib/sidebar-worktree-activation'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { translate } from '@/i18n/i18n'
@@ -106,7 +105,6 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
   if (worktreeIds.length === 0) {
     return
   }
-  cancelPendingSidebarWorktreeActivation(worktreeIds)
   const {
     activeWorktreeId,
     setActiveWorktree,
