@@ -40,6 +40,10 @@ import {
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
+import {
+  resolveHostCodexSessionSourceHome,
+  resolveWslCodexSessionSourceHome
+} from '../codex/codex-session-source-home'
 import { startWslCodexSessionBridgeInBackground } from '../codex/wsl-codex-session-bridge'
 import {
   prepareSystemConfigForFreshRuntimeMirror,
@@ -146,7 +150,10 @@ export class CodexRuntimeHomeService {
     syncSystemConfigIntoManagedCodexHome()
     // Why: historical Codex sessions can be large; bridge them after launch
     // setup so starting a fresh Codex TUI never waits on a full tree walk.
-    void startSystemCodexSessionBridgeInBackground()
+    void startSystemCodexSessionBridgeInBackground(
+      {},
+      resolveHostCodexSessionSourceHome(this.store.getSettings())
+    )
     return this.getRuntimeHomePath()
   }
 
@@ -162,10 +169,11 @@ export class CodexRuntimeHomeService {
     if (!distro) {
       return
     }
-    const systemCodexHomePath = this.getWslSystemCodexHomePath({
-      runtime: 'wsl',
-      wslDistro: distro
-    })
+    // Why: history-only override lets custom-CODEX_HOME users bridge from their
+    // real home; falls back to <wslHome>/.codex, which auth/config still use.
+    const systemCodexHomePath =
+      resolveWslCodexSessionSourceHome(this.store.getSettings(), distro) ??
+      this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
     if (!systemCodexHomePath || systemCodexHomePath === runtimeHomePath) {
       return
     }
