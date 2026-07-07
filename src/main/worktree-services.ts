@@ -1,4 +1,3 @@
-import { exec, execFile } from 'node:child_process'
 import {
   buildServiceContextEnv,
   deriveServiceSlug,
@@ -15,11 +14,16 @@ import type {
   WorktreeServiceRuntimeState,
   WorktreeServicesRecord
 } from '../shared/worktree-services'
-import { isWslPath, parseWslPath, toLinuxPath } from './wsl'
+import {
+  SERVICE_STATUS_TIMEOUT_MS,
+  runServiceCommand,
+  sanitizeServiceCommandOutput
+} from './worktree-service-command'
 
-export const SERVICE_COMMAND_TIMEOUT_MS = 600_000
-// Why: status probes run on every panel open; a hung probe must not sit for 10 minutes.
-export const SERVICE_STATUS_TIMEOUT_MS = 30_000
+export {
+  SERVICE_COMMAND_TIMEOUT_MS,
+  sanitizeServiceCommandOutput
+} from './worktree-service-command'
 
 export type ServiceProvisionEvent = {
   provisionId: string
@@ -37,83 +41,6 @@ export type ProvisionWorktreeServicesArgs = {
   services: OrcaServiceRecipe[]
   provisionId?: string
   onEvent?: (event: ServiceProvisionEvent) => void
-}
-
-type RunResult = { success: boolean; output: string }
-type StreamHandler = (stream: 'stdout' | 'stderr', chunk: string) => void
-
-function getServiceShell(): string {
-  return process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : '/bin/bash'
-}
-
-function runServiceCommand(
-  command: string,
-  worktreePath: string,
-  env: Record<string, string>,
-  onChunk?: StreamHandler,
-  timeoutMs: number = SERVICE_COMMAND_TIMEOUT_MS
-): Promise<RunResult> {
-  const wslInfo = isWslPath(worktreePath) ? parseWslPath(worktreePath) : null
-  if (wslInfo) {
-    return runServiceCommandWsl(command, wslInfo, env, onChunk, timeoutMs)
-  }
-  return new Promise((resolve) => {
-    const child = exec(
-      command,
-      {
-        cwd: worktreePath,
-        shell: getServiceShell(),
-        timeout: timeoutMs,
-        env: { ...process.env, ...env }
-      },
-      (error, stdout, stderr) => {
-        resolve({
-          success: !error,
-          output: [stdout, stderr, error ? String(error.message) : ''].filter(Boolean).join('\n')
-        })
-      }
-    )
-    child.stdout?.on('data', (chunk: string) => onChunk?.('stdout', String(chunk)))
-    child.stderr?.on('data', (chunk: string) => onChunk?.('stderr', String(chunk)))
-  })
-}
-
-function runServiceCommandWsl(
-  command: string,
-  wslInfo: { distro: string; linuxPath: string },
-  env: Record<string, string>,
-  onChunk?: StreamHandler,
-  timeoutMs: number = SERVICE_COMMAND_TIMEOUT_MS
-): Promise<RunResult> {
-  // Why: route through wsl.exe (not exec/cmd.exe) with single-quote escaping so
-  // WSL worktree commands are not mangled by the Windows shell — mirrors runHook.
-  const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
-  const escapedScript = command.replace(/'/g, "'\\''")
-  const bashCmd = `cd '${escapedCwd}' && ${escapedScript}`
-  const wslEnv: Record<string, string> = {}
-  for (const [key, value] of Object.entries(env)) {
-    wslEnv[key] = toLinuxPath(value)
-  }
-  return new Promise((resolve) => {
-    const distroArgs = wslInfo.distro ? ['-d', wslInfo.distro] : []
-    const child = execFile(
-      'wsl.exe',
-      [...distroArgs, '--', 'bash', '-c', bashCmd],
-      {
-        timeout: timeoutMs,
-        encoding: 'utf-8',
-        env: { ...process.env, ...wslEnv }
-      },
-      (error, stdout, stderr) => {
-        resolve({
-          success: !error,
-          output: [stdout, stderr, error ? String(error.message) : ''].filter(Boolean).join('\n')
-        })
-      }
-    )
-    child.stdout?.on('data', (chunk: string) => onChunk?.('stdout', String(chunk)))
-    child.stderr?.on('data', (chunk: string) => onChunk?.('stderr', String(chunk)))
-  })
 }
 
 export async function provisionWorktreeServices(
@@ -152,7 +79,13 @@ export async function provisionWorktreeServices(
       service.create,
       worktreePath,
       commandEnv,
-      (stream, chunk) => args.onEvent?.({ provisionId, serviceId: service.id, stream, chunk })
+      (stream, chunk) =>
+        args.onEvent?.({
+          provisionId,
+          serviceId: service.id,
+          stream,
+          chunk: sanitizeServiceCommandOutput(chunk)
+        })
     )
     if (!result.success) {
       await destroyCreatedServices(created.toReversed(), worktreePath, contextEnv)
@@ -164,7 +97,8 @@ export async function provisionWorktreeServices(
         serviceIds: services.map((s) => s.id),
         env: contextEnv,
         status: 'create_failed',
-        error: `Service "${service.id}" create failed: ${result.output}`.trim(),
+        error:
+          `Service "${service.id}" create failed: ${sanitizeServiceCommandOutput(result.output)}`.trim(),
         createdAt,
         updatedAt: new Date().toISOString()
       })
@@ -221,7 +155,9 @@ export async function destroyWorktreeServices(args: {
     }
     const result = await runServiceCommand(service.destroy, worktreePath, env)
     if (!result.success) {
-      errors.push(`Service "${service.id}" destroy failed: ${result.output}`.trim())
+      errors.push(
+        `Service "${service.id}" destroy failed: ${sanitizeServiceCommandOutput(result.output)}`.trim()
+      )
     }
   }
 
@@ -301,7 +237,9 @@ export async function runWorktreeServiceAction(args: {
     }
     const result = await runServiceCommand(command, args.worktreePath, env)
     if (!result.success) {
-      errors.push(`Service "${service.id}" ${args.action} failed: ${result.output}`.trim())
+      errors.push(
+        `Service "${service.id}" ${args.action} failed: ${sanitizeServiceCommandOutput(result.output)}`.trim()
+      )
     }
   }
   return { success: errors.length === 0, errors }

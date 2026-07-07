@@ -1720,29 +1720,7 @@ export function registerWorktreeHandlers(
           }
         }
 
-        // Why: destroy isolated services before git removal, local repos only (v1
-        // scope). Never blocks removal — destroyWorktreeServices collects errors,
-        // which travel back on the result so the renderer can warn the user.
         let serviceDestroyErrors: string[] | undefined
-        if (!repo.connectionId) {
-          const servicesRecord = getWorktreeServicesRecord(app.getPath('userData'), args.worktreeId)
-          if (servicesRecord) {
-            const destroyResult = await destroyWorktreeServices({
-              userDataPath: app.getPath('userData'),
-              worktreeId: args.worktreeId,
-              worktreePath: canonicalWorktreePath,
-              repo,
-              services: loadHooks(repo.path)?.services ?? []
-            })
-            if (!destroyResult.success) {
-              serviceDestroyErrors = destroyResult.errors
-              console.error(
-                `[services] destroy failed for ${canonicalWorktreePath}:`,
-                destroyResult.errors.join('; ')
-              )
-            }
-          }
-        }
 
         if (repo.connectionId) {
           // Why: SSH deletion mirrors the local flow: hooks run while the
@@ -1843,6 +1821,32 @@ export function registerWorktreeHandlers(
           }
           // Why: Git can still classify this as an orphan after preflight;
           // retain strict PTY teardown before any recursive fallback deletion.
+        }
+
+        // Why: destroy isolated services only after the clean check proves the
+        // removal will proceed — destroying earlier would irreversibly drop the
+        // services record for a worktree that a dirty-tree abort leaves standing.
+        // Exotic orphan-directory paths that return earlier are reconciled by
+        // the startup orphan-cleanup sweep. Never blocks removal; errors travel
+        // back on the result so the renderer can warn the user.
+        if (!repo.connectionId) {
+          const servicesRecord = getWorktreeServicesRecord(app.getPath('userData'), args.worktreeId)
+          if (servicesRecord) {
+            const destroyResult = await destroyWorktreeServices({
+              userDataPath: app.getPath('userData'),
+              worktreeId: args.worktreeId,
+              worktreePath: canonicalWorktreePath,
+              repo,
+              services: loadHooks(repo.path)?.services ?? []
+            })
+            if (!destroyResult.success) {
+              serviceDestroyErrors = destroyResult.errors
+              console.error(
+                `[services] destroy failed for ${canonicalWorktreePath}:`,
+                destroyResult.errors.join('; ')
+              )
+            }
+          }
         }
 
         let removalResult: RemoveWorktreeResult | undefined

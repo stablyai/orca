@@ -1789,10 +1789,12 @@ app.whenReady().then(async () => {
   // recipes, missing repos just free the slot. Capture a non-null store ref so
   // the deferred resolveRepo closure keeps its narrowing.
   const bootStore = store
-  void cleanupOrphanedWorktreeServices({
+  cleanupOrphanedWorktreeServices({
     userDataPath: app.getPath('userData'),
     existingWorktreeIds: new Set(Object.keys(bootStore.getAllWorktreeMeta())),
     resolveRepo: (repoId) => bootStore.getRepo(repoId) ?? null
+  }).catch((error) => {
+    console.warn('[services] startup orphan cleanup failed:', error)
   })
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {

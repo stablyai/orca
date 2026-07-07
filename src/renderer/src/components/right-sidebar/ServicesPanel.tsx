@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Database, Play, RefreshCw, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -61,17 +61,28 @@ export default function ServicesPanel(): React.JSX.Element {
   const [pendingAction, setPendingAction] = useState<string | null>(null)
 
   const worktreeId = record?.worktreeId
+  // Why: the panel stays mounted across worktree switches; a slow probe for the
+  // previous worktree must not clobber the current one's display.
+  const probeTargetRef = useRef<string | undefined>(worktreeId)
+  probeTargetRef.current = worktreeId
   const refreshRuntime = useCallback(async (): Promise<void> => {
     if (!worktreeId) {
       return
     }
     setProbing(true)
     try {
-      setRuntime(await window.api.worktreeServices.runtime({ worktreeId }))
+      const states = await window.api.worktreeServices.runtime({ worktreeId })
+      if (probeTargetRef.current === worktreeId) {
+        setRuntime(states)
+      }
     } catch {
-      setRuntime(null)
+      if (probeTargetRef.current === worktreeId) {
+        setRuntime(null)
+      }
     } finally {
-      setProbing(false)
+      if (probeTargetRef.current === worktreeId) {
+        setProbing(false)
+      }
     }
   }, [worktreeId])
 

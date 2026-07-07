@@ -128,7 +128,12 @@ type ServiceParseResult = {
   diagnostics: OrcaVmRecipeDiagnostic[]
 }
 
-function normalizeServiceEnv(value: unknown): Record<string, string> | undefined {
+function normalizeServiceEnv(
+  value: unknown,
+  serviceId: string,
+  index: number,
+  diagnostics: OrcaVmRecipeDiagnostic[]
+): Record<string, string> | undefined {
   const record = asRecord(value)
   if (!record) {
     return undefined
@@ -137,6 +142,12 @@ function normalizeServiceEnv(value: unknown): Record<string, string> | undefined
   for (const [key, raw] of Object.entries(record)) {
     if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
       env[key] = String(raw)
+    } else {
+      diagnostics.push({
+        index,
+        field: 'env',
+        message: `Service "${serviceId}" env value for "${key}" must be a string, number, or boolean.`
+      })
     }
   }
   return Object.keys(env).length > 0 ? env : undefined
@@ -191,7 +202,7 @@ function normalizeServices(value: unknown): ServiceParseResult {
       const start = asTrimmedString(record.start)
       const stop = asTrimmedString(record.stop)
       const status = asTrimmedString(record.status)
-      const env = normalizeServiceEnv(record.env)
+      const env = normalizeServiceEnv(record.env, id, index, diagnostics)
       return {
         id,
         name,

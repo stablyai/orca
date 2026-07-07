@@ -12,22 +12,23 @@ import type {
   WorktreeServiceRuntimeState,
   WorktreeServicesRecord
 } from '../../shared/worktree-services'
-import type { OrcaServiceRecipe } from '../../shared/types'
+import type { OrcaServiceRecipe, Repo } from '../../shared/types'
 import { parseWorktreeId } from './worktree-logic'
 
 function resolveServicesContext(
   store: Store,
   worktreeId: string
-): { worktreePath: string; services: OrcaServiceRecipe[] } {
+): { repo: Repo; worktreePath: string; services: OrcaServiceRecipe[] } {
   const { repoId, worktreePath } = parseWorktreeId(worktreeId)
   const repo = store.getRepo(repoId)
   if (!repo) {
     throw new Error(`Repo not found: ${repoId}`)
   }
+  // Why: v1 provisions local + WSL worktrees only; remote repos never opt in.
   if (repo.connectionId) {
     throw new Error('Isolated services are not supported for remote repositories.')
   }
-  return { worktreePath, services: loadHooks(repo.path)?.services ?? [] }
+  return { repo, worktreePath, services: loadHooks(repo.path)?.services ?? [] }
 }
 
 export function registerWorktreeServicesHandlers(store: Store): void {
@@ -43,16 +44,7 @@ export function registerWorktreeServicesHandlers(store: Store): void {
   ipcMain.handle(
     'worktreeServices:retry',
     async (event, args: { worktreeId: string }): Promise<WorktreeServicesRecord> => {
-      const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
-      const repo = store.getRepo(repoId)
-      if (!repo) {
-        throw new Error(`Repo not found: ${repoId}`)
-      }
-      // Why: v1 provisions local + WSL worktrees only; remote repos never opt in.
-      if (repo.connectionId) {
-        throw new Error('Service provisioning is not supported for remote repositories.')
-      }
-      const services = loadHooks(repo.path)?.services ?? []
+      const { repo, worktreePath, services } = resolveServicesContext(store, args.worktreeId)
       const worktreeName =
         store.getWorktreeMeta(args.worktreeId)?.displayName ?? basename(worktreePath)
       return provisionWorktreeServices({

@@ -57,7 +57,7 @@ services:
 
 - Resolved `env:` values plus `ORCA_WORKTREE_SLUG`/`ORCA_SERVICE_SLOT`/`ORCA_PORT_*` are injected into every PTY (terminals and agents) created for the worktree, sourced from the persisted state. Nothing is written into the worktree.
 - `scripts.setup` and `scripts.archive` receive the same variables, in addition to the existing `ORCA_*` path variables.
-- SSH/WSL: `create`/`destroy` execute where the worktree lives, through the same project-runtime routing as existing hooks (`runHook`). Services run on the worktree's host, not on the machine running Orca.
+- WSL: `create`/`destroy` execute where the worktree lives, mirroring the existing hook runner's WSL routing (`runHook`). SSH/remote worktrees are **not** covered in v1 — the opt-in is hidden whenever `repo.connectionId` is set (see Implementation Notes).
 
 ## UI
 

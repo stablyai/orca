@@ -336,11 +336,21 @@ describe('parseOrcaYaml', () => {
       '    name: C',
       '    create: echo c',
       '  - id: nocreate',
-      '    name: D'
+      '    name: D',
+      '  - id: badenv',
+      '    name: E',
+      '    create: echo e',
+      '    env:',
+      '      GOOD: ok',
+      '      BAD: [not, a, scalar]'
     ].join('\n')
     const result = parseOrcaYaml(yaml)
-    expect(result?.services).toEqual([{ id: 'db', name: 'A', create: 'echo a' }])
-    expect(result?.serviceDiagnostics).toHaveLength(3)
+    expect(result?.services).toEqual([
+      { id: 'db', name: 'A', create: 'echo a' },
+      { id: 'badenv', name: 'E', create: 'echo e', env: { GOOD: 'ok' } }
+    ])
+    expect(result?.serviceDiagnostics).toHaveLength(4)
+    expect(result?.serviceDiagnostics?.at(-1)?.message).toContain('BAD')
   })
 })
 

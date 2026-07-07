@@ -1397,9 +1397,12 @@ function ServiceRecipeDiagnostics({
   const diagnostics = hooks?.serviceDiagnostics ?? []
   const missingDestroyWarnings = (hooks?.services ?? [])
     .filter((service) => !service.destroy)
-    .map(
-      (service) =>
-        `Service "${service.id}" has no destroy command — containers will outlive worktrees.`
+    .map((service) =>
+      translate(
+        'auto.components.settings.RepositoryHooksSection.serviceMissingDestroy',
+        'Service "{{value0}}" has no destroy command — containers will outlive worktrees.',
+        { value0: service.id }
+      )
     )
   if (diagnostics.length === 0 && missingDestroyWarnings.length === 0) {
     return null

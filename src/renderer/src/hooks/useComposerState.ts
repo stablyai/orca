@@ -926,34 +926,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRecipeRepoId,
     selectedRepoIsGit
   ])
-  // Why: the isolated-services opt-in is offered only for local git repos whose
-  // orca.yaml declares `services:` recipes. Reset on every repo switch so a stale
-  // opt-in from a previous repo cannot leak into the next create.
+  // Why: a stale opt-in from a previous repo must not leak into the next create.
   useEffect(() => {
-    let cancelled = false
-    setRepoHasServiceRecipes(false)
     setProvisionServices(false)
-    if (!selectedRecipeRepoId || !selectedRepoIsGit || selectedRecipeRepoConnectionId) {
-      return () => {
-        cancelled = true
-      }
-    }
-    void window.api.hooks
-      .check({ repoId: selectedRecipeRepoId })
-      .then((result) => {
-        if (!cancelled) {
-          setRepoHasServiceRecipes((result.hooks?.services?.length ?? 0) > 0)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRepoHasServiceRecipes(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [selectedRecipeRepoConnectionId, selectedRecipeRepoId, selectedRepoIsGit])
+  }, [repoId])
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
@@ -1135,7 +1111,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)
   const [reuseSelectedBranch, setReuseSelectedBranch] = useState(false)
   const [provisionServices, setProvisionServices] = useState(false)
-  const [repoHasServiceRecipes, setRepoHasServiceRecipes] = useState(false)
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
@@ -1199,6 +1174,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const [yamlHooks, setYamlHooks] = useState<OrcaHooks | null>(null)
   const [checkedHooksRepoId, setCheckedHooksRepoId] = useState<string | null>(null)
+  // Why: the isolated-services opt-in is offered only for local git repos whose
+  // orca.yaml declares `services:` — derived from the already-fetched hook check
+  // instead of a second hooks.check IPC round trip per repo switch.
+  const repoHasServiceRecipes = Boolean(
+    selectedRepoIsGit &&
+    !selectedRepo?.connectionId &&
+    repoId &&
+    checkedHooksRepoId === repoId &&
+    (yamlHooks?.services?.length ?? 0) > 0
+  )
   const [issueCommandTemplate, setIssueCommandTemplate] = useState('')
   const [hasLoadedIssueCommand, setHasLoadedIssueCommand] = useState(false)
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | null>(null)
@@ -3723,7 +3708,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         undefined,
         undefined,
         undefined,
-        submitCompareBaseRef
+        submitCompareBaseRef,
+        provisionServices && repoHasServiceRecipes ? { provisionServices: true } : undefined
       )
       const worktree = result.worktree
 
@@ -3860,6 +3846,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForSetupCheck,
     workspaceSeedName,
     isProjectGroupTarget,
+    provisionServices,
+    repoHasServiceRecipes,
     submitFolderTarget
   ])
 

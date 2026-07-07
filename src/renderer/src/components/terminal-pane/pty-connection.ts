@@ -4450,6 +4450,9 @@ export function connectPanePty(
       env
         ? {
             ...env,
+            // Why: cold-restore/reattach fresh spawns must keep the isolated
+            // service env, same as the initial connect path.
+            ...getWorktreeServiceEnv(deps.worktreeId),
             ...paneIdentityEnv,
             ...(env.ORCA_AGENT_LAUNCH_TOKEN
               ? { ORCA_AGENT_LAUNCH_TOKEN: env.ORCA_AGENT_LAUNCH_TOKEN }
