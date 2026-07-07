@@ -5842,6 +5842,18 @@ export class Store {
         [args.worktreeId]: session.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId
       }
     }
+    // Why: renderer recovery reloads hydrate from activeWorktreeIdsOnShutdown
+    // before panes remount, so the sync PTY binding must record this live
+    // worktree. Fall back to the ptyId-derived live set (which now includes the
+    // just-bound tab) when the list has not been initialized yet.
+    const activeWorktreeIds =
+      session.activeWorktreeIdsOnShutdown ??
+      Object.entries(session.tabsByWorktree)
+        .filter(([, tabs]) => tabs.some((tab) => tab.ptyId))
+        .map(([worktreeId]) => worktreeId)
+    session.activeWorktreeIdsOnShutdown = activeWorktreeIds.includes(args.worktreeId)
+      ? activeWorktreeIds
+      : [...activeWorktreeIds, args.worktreeId]
     if (!isTerminalLeafId(args.leafId)) {
       // Why: legacy renderer-local pane ids may arrive from older callers; keep
       // them out of durable leaf-keyed layout state after the UUID migration.

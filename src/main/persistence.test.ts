@@ -7092,6 +7092,73 @@ describe('Store', () => {
     })
   })
 
+  it('marks the worktree active when persisting a PTY binding for renderer recovery', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      activeWorktreeIdsOnShutdown: [],
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', ptyId: null, worktreeId: 'wt1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      ptyId: 'daemon-pty'
+    })
+
+    expect(store.getWorkspaceSession().activeWorktreeIdsOnShutdown).toEqual(['wt1'])
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().activeWorktreeIdsOnShutdown).toEqual(['wt1'])
+  })
+
+  it('preserves fallback active worktrees when the shutdown list is not initialized yet', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', ptyId: 'existing-pty', worktreeId: 'wt1' })],
+        wt2: [makeTerminalTab({ id: 'tab2', ptyId: null, worktreeId: 'wt2' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null
+        },
+        tab2: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt2',
+      tabId: 'tab2',
+      leafId: TEST_LEAF_2,
+      ptyId: 'new-daemon-pty'
+    })
+
+    expect(store.getWorkspaceSession().activeWorktreeIdsOnShutdown).toEqual(['wt1', 'wt2'])
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().activeWorktreeIdsOnShutdown).toEqual(['wt1', 'wt2'])
+  })
+
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
     const store = await createStore()
     store.setWorkspaceSession({
