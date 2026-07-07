@@ -70,6 +70,7 @@ import { toWorktreeDeleteIdentities } from '../sidebar/worktree-delete-request'
 import { showWorkspaceListChangedToast } from '../sidebar/stale-workspace-list-toast'
 import { prepareActiveWorktreeFocusAfterDelete } from '../sidebar/active-worktree-focus-after-delete'
 import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
+import { formatHostedReviewLabel } from './hosted-review-label'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import {
@@ -199,10 +200,6 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
   return `${count} ${count === 1 ? singular : plural}`
 }
 
-function formatReviewState(state: string): string {
-  return state.charAt(0).toUpperCase() + state.slice(1)
-}
-
 function countLiveTerminals(
   tabs: readonly TerminalTab[],
   ptyIdsByTabId: Record<string, string[]>
@@ -265,9 +262,7 @@ export function getWorkspaceDecisionDetails(
   const linkedPR = workspaceRecord?.linkedPR ?? null
   const reviewLabel =
     hostedReview !== undefined && hostedReview !== null
-      ? `PR #${hostedReview.number} ${formatReviewState(hostedReview.state)}${
-          hostedReview.status && hostedReview.status !== 'none' ? `, ${hostedReview.status}` : ''
-        }`
+      ? formatHostedReviewLabel(hostedReview)
       : linkedPR
         ? `PR #${linkedPR}`
         : null

@@ -536,7 +536,7 @@ describe('workspace space presentation helpers', () => {
     )
 
     expect(explicit.reviewLabel).toBe('PR #12 Open, success')
-    expect(gitLab.reviewLabel).toBe('PR #12 Open, success')
+    expect(gitLab.reviewLabel).toBe('MR !12 Open, success')
   })
 
   it('counts migration-unsupported agent entries by worktree id', () => {
