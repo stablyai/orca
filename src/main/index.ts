@@ -208,6 +208,7 @@ import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
 import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
+import { cleanupOrphanedWorktreeServices } from './worktree-services-orphan-cleanup'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -1783,6 +1784,16 @@ app.whenReady().then(async () => {
     )
   }
   selfHealRuntimeEnvironmentFocus({ store, userDataPath: app.getPath('userData') })
+  // Why: destroy services whose worktree no longer exists (removed while Orca
+  // was closed). Fire-and-forget — must not block startup; local repos resolve
+  // recipes, missing repos just free the slot. Capture a non-null store ref so
+  // the deferred resolveRepo closure keeps its narrowing.
+  const bootStore = store
+  void cleanupOrphanedWorktreeServices({
+    userDataPath: app.getPath('userData'),
+    existingWorktreeIds: new Set(Object.keys(bootStore.getAllWorktreeMeta())),
+    resolveRepo: (repoId) => bootStore.getRepo(repoId) ?? null
+  })
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)

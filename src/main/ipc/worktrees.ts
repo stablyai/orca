@@ -1,6 +1,8 @@
 /* oxlint-disable max-lines */
 import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
+import { destroyWorktreeServices } from '../worktree-services'
+import { getWorktreeServicesRecord } from '../../shared/worktree-services-store'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
@@ -1715,6 +1717,27 @@ export function registerWorktreeHandlers(
               `[hooks] archive hook failed for ${canonicalWorktreePath}:`,
               result.output
             )
+          }
+        }
+
+        // Why: destroy isolated services before git removal, local repos only (v1
+        // scope). Never blocks removal — destroyWorktreeServices collects errors.
+        if (!repo.connectionId) {
+          const servicesRecord = getWorktreeServicesRecord(app.getPath('userData'), args.worktreeId)
+          if (servicesRecord) {
+            const destroyResult = await destroyWorktreeServices({
+              userDataPath: app.getPath('userData'),
+              worktreeId: args.worktreeId,
+              worktreePath: canonicalWorktreePath,
+              repo,
+              services: loadHooks(repo.path)?.services ?? []
+            })
+            if (!destroyResult.success) {
+              console.error(
+                `[services] destroy failed for ${canonicalWorktreePath}:`,
+                destroyResult.errors.join('; ')
+              )
+            }
           }
         }
 
