@@ -536,6 +536,7 @@ describe('fetchCodexRateLimits', () => {
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
       expect(spawnFile).toBe('wsl.exe')
+      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'bash', '-ic'])
       const bashCommand = spawnArgs.at(-1) as string
       expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
       expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
@@ -547,6 +548,62 @@ describe('fetchCodexRateLimits', () => {
         expect.objectContaining({
           cwd: expect.stringContaining('rate-limit-pty-cwd'),
           env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
+        })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('routes Windows host Codex homes through the host RPC path', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: { rateLimits: { primary: { usedPercent: 13 } } }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    try {
+      const resultPromise = fetchCodexRateLimits({ codexHomePath: 'C:\\Users\\alice\\.codex' })
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await resultPromise
+
+      const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
+      expect(spawnFile).toBe('codex')
+      expect(spawnArgs).toEqual(['-s', 'read-only', '-a', 'untrusted', 'app-server'])
+      expect(spawnOptions).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({ CODEX_HOME: 'C:\\Users\\alice\\.codex' })
         })
       )
     } finally {

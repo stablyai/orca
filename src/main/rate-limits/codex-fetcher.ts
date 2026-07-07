@@ -128,7 +128,7 @@ function buildWslCodexCommand(
   ].join(' && ')
   return {
     command: 'wsl.exe',
-    args: ['-d', wslInfo.distro, '--', 'bash', '-lc', script]
+    args: ['-d', wslInfo.distro, '--exec', 'bash', '-ic', script]
   }
 }
 
