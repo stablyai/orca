@@ -8457,7 +8457,9 @@
                 "fe9231215b": "Comprobando el acceso a Linear antes de mostrar las acciones de configuración.",
                 "e1f5e6424c": "Conexión completada para {{value0}} workspace{{value1}}",
                 "disconnect_all": "Desconectar todo",
-                "account_scope_prefix": "Alcance de la cuenta"
+                "account_scope_prefix": "Alcance de la cuenta",
+                "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token. Credentials are stored locally and encrypted when local runtime storage supports it."
               }
             }
           }

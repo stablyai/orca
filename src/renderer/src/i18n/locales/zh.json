@@ -8457,7 +8457,9 @@
                 "fe9231215b": "在显示设置操作前正在检查 Linear 访问权限。",
                 "e1f5e6424c": "{{value0}} 个工作区{{value1}} 已连接",
                 "disconnect_all": "断开连接",
-                "account_scope_prefix": "账户范围"
+                "account_scope_prefix": "账户范围",
+                "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token. Credentials are stored locally and encrypted when local runtime storage supports it."
               }
             }
           }

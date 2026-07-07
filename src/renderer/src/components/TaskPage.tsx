@@ -5566,6 +5566,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [newLinearStates.data, newLinearIssueStateId])
 
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
+  const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
   useContextualTour(
     'tasks',
     !dialogWorkItem &&
@@ -5575,6 +5576,7 @@ export default function TaskPage(): React.JSX.Element {
       !newLinearProjectOpen &&
       !newLinearIssueOpen &&
       !linearConnectOpen &&
+      !jiraConnectOpen &&
       activeModal === 'none',
     'tasks_open'
   )
@@ -5614,7 +5616,6 @@ export default function TaskPage(): React.JSX.Element {
   const [newJiraIssueCustomFieldValues, setNewJiraIssueCustomFieldValues] = useState<
     Record<string, string>
   >({})
-  const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
   const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
   const previousProviderRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
 

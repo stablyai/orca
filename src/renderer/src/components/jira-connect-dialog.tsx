@@ -94,7 +94,9 @@ export function JiraConnectDialog({
     try {
       const result = await connectJira({
         siteUrl: trimmedSite,
-        email: trimmedEmail,
+        // Drop any email typed before toggling to self-hosted: the value is
+        // ignored for PAT auth but would otherwise key/label the stored site.
+        email: isServer ? '' : trimmedEmail,
         apiToken: trimmedToken,
         authType: instanceType
       })
