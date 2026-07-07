@@ -20,6 +20,8 @@ import {
   Workflow
 } from 'lucide-react'
 import CacheTimer, { usePromptCacheCountdownStartedAt } from './CacheTimer'
+import { toast } from 'sonner'
+import { ServicesStatusBadge } from './WorktreeCardMetadataStatusBadges'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
@@ -324,6 +326,25 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
+  const servicesStatus = useAppStore((s) => s.worktreeServicesStatus?.[worktree.id])
+  const handleRetryServices = useCallback(
+    async (event: React.MouseEvent): Promise<void> => {
+      // Why: the badge sits on the clickable card row; don't activate the worktree.
+      event.stopPropagation()
+      try {
+        await window.api.worktreeServices.retry({ worktreeId: worktree.id })
+        await useAppStore.getState().hydrateWorktreeServices()
+      } catch {
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeCard.retryServicesFailed',
+            'Failed to retry services provisioning.'
+          )
+        )
+      }
+    },
+    [worktree.id]
+  )
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
   const workspacePorts = useAppStore(
     (s) =>
@@ -1698,6 +1719,23 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   {CONFLICT_OPERATION_LABELS[conflictOperation]}
                 </Badge>
               )}
+
+              {servicesStatus &&
+                (servicesStatus === 'create_failed' ? (
+                  <button
+                    type="button"
+                    onClick={handleRetryServices}
+                    className="contents"
+                    title={translate(
+                      'auto.components.sidebar.WorktreeCard.retryServices',
+                      'Retry services provisioning'
+                    )}
+                  >
+                    <ServicesStatusBadge status={servicesStatus} />
+                  </button>
+                ) : (
+                  <ServicesStatusBadge status={servicesStatus} />
+                ))}
 
               {cacheStartedAt != null && (
                 <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />

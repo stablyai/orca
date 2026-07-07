@@ -1,10 +1,19 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
+import {
+  CircleCheck,
+  CircleDot,
+  CircleX,
+  Clock,
+  Database,
+  DatabaseZap,
+  GitMerge
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon, checksLabel } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { IssueInfo } from '../../../../shared/types'
+import type { WorktreeServicesStatus } from '../../../../shared/worktree-services'
 import { translate } from '@/i18n/i18n'
 
 function MetadataStatusBadge({
@@ -27,6 +36,37 @@ function MetadataStatusBadge({
       {children}
       <span>{label}</span>
     </Badge>
+  )
+}
+
+export function ServicesStatusBadge({
+  status
+}: {
+  status: WorktreeServicesStatus
+}): React.JSX.Element {
+  if (status === 'create_failed' || status === 'destroy_failed') {
+    return (
+      <MetadataStatusBadge
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.servicesFailed',
+          'Services: Failed'
+        )}
+        className="border-red-500/25 bg-red-500/5 text-red-600 dark:text-red-300"
+      >
+        <DatabaseZap />
+      </MetadataStatusBadge>
+    )
+  }
+  return (
+    <MetadataStatusBadge
+      label={translate(
+        'auto.components.sidebar.WorktreeCardMetadataStatusBadges.servicesReady',
+        'Services'
+      )}
+      className="border-sky-500/25 bg-sky-500/5 text-sky-600 dark:text-sky-300"
+    >
+      <Database />
+    </MetadataStatusBadge>
   )
 }
 
