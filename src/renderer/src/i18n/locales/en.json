@@ -9901,7 +9901,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "isolatedServices": "Services"
           },
           "right": {
             "panel": {
@@ -10306,6 +10307,20 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "ServicesPanel": {
+            "statusReady": "Ready",
+            "statusProvisioning": "Provisioning",
+            "statusCreateFailed": "Create failed",
+            "statusDestroyFailed": "Destroy failed",
+            "emptyState": "No isolated services for this workspace.",
+            "emptyHint": "Declare services in orca.yaml and check \"Isolated services\" when creating a workspace.",
+            "retryFailed": "Retrying services provisioning failed: {{value0}}",
+            "retryProvisioning": "Retry provisioning",
+            "servicesSection": "Services",
+            "slotSection": "Slot & ports",
+            "slotLabel": "Slot {{value0}}",
+            "envSection": "Environment variables"
           }
         }
       },

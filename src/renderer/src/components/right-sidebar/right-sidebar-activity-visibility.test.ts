@@ -26,7 +26,8 @@ const items: ActivityBarItem[] = [
     shortcut: '',
     gitOnly: true
   },
-  { id: 'ports', icon: Files, title: 'Ports', shortcut: '', sshOnly: true }
+  { id: 'ports', icon: Files, title: 'Ports', shortcut: '', sshOnly: true },
+  { id: 'services', icon: Files, title: 'Services', shortcut: '', servicesOnly: true }
 ]
 
 describe('getVisibleRightSidebarActivityItems', () => {
@@ -64,5 +65,24 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isSshRepo: true
       }).map((item) => item.id)
     ).toEqual(['explorer', 'ports'])
+  })
+
+  it('shows Services only for worktrees with an isolated-services record', () => {
+    expect(
+      getVisibleRightSidebarActivityItems(items, {
+        isFolder: false,
+        isFolderWorkspace: false,
+        isSshRepo: false,
+        hasWorktreeServices: true
+      }).map((item) => item.id)
+    ).toEqual(['explorer', 'source-control', 'services'])
+
+    expect(
+      getVisibleRightSidebarActivityItems(items, {
+        isFolder: false,
+        isFolderWorkspace: false,
+        isSshRepo: false
+      }).map((item) => item.id)
+    ).toEqual(['explorer', 'source-control'])
   })
 })

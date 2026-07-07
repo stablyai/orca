@@ -9878,7 +9878,8 @@
             "fc3095d2ed": "资源管理器",
             "aiVaultSessionHistory": "智能体",
             "folderWorkspaces": "已附加的工作树",
-            "parentPrChecks": "PR 检查"
+            "parentPrChecks": "PR 检查",
+            "isolatedServices": "Services"
           },
           "right": {
             "panel": {
@@ -10283,6 +10284,20 @@
             "workspaceGone": "无法打开日志 — 工作区已不可用。",
             "notAuthorized": "无法打开日志 — 路径未授权。",
             "alreadyEditable": "日志已处于编辑状态。"
+          },
+          "ServicesPanel": {
+            "statusReady": "Ready",
+            "statusProvisioning": "Provisioning",
+            "statusCreateFailed": "Create failed",
+            "statusDestroyFailed": "Destroy failed",
+            "emptyState": "No isolated services for this workspace.",
+            "emptyHint": "Declare services in orca.yaml and check \"Isolated services\" when creating a workspace.",
+            "retryFailed": "Retrying services provisioning failed: {{value0}}",
+            "retryProvisioning": "Retry provisioning",
+            "servicesSection": "Services",
+            "slotSection": "Slot & ports",
+            "slotLabel": "Slot {{value0}}",
+            "envSection": "Environment variables"
           }
         }
       },

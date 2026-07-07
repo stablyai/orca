@@ -19,7 +19,10 @@ import type {
   WorktreeMeta
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
-import type { WorktreeServicesStatus } from '../../../../shared/worktree-services'
+import type {
+  WorktreeServicesRecord,
+  WorktreeServicesStatus
+} from '../../../../shared/worktree-services'
 import {
   findWorktreeById,
   applyWorktreeUpdates,
@@ -2308,18 +2311,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   hasHydratedWorktreePurge: false,
   worktreeServicesEnv: {},
   worktreeServicesStatus: {},
+  worktreeServicesRecords: {},
 
   hydrateWorktreeServices: async () => {
     const records = await window.api.worktreeServices.list()
     const worktreeServicesEnv: Record<string, Record<string, string>> = {}
     const worktreeServicesStatus: Record<string, WorktreeServicesStatus> = {}
+    const worktreeServicesRecords: Record<string, WorktreeServicesRecord> = {}
     for (const record of records) {
       worktreeServicesStatus[record.worktreeId] = record.status
+      worktreeServicesRecords[record.worktreeId] = record
       if (record.status === 'ready') {
         worktreeServicesEnv[record.worktreeId] = record.env
       }
     }
-    set({ worktreeServicesEnv, worktreeServicesStatus })
+    set({ worktreeServicesEnv, worktreeServicesStatus, worktreeServicesRecords })
   },
 
   fetchDetectedWorktrees: async (repoId) => {

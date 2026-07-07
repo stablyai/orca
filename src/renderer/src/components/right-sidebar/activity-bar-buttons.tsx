@@ -25,6 +25,8 @@ export type ActivityBarItem = {
   folderOnly?: boolean
   /** When true, shown only for worktrees that belong to an SSH repo. */
   sshOnly?: boolean
+  /** When true, shown only for worktrees with an isolated-services record. */
+  servicesOnly?: boolean
 }
 
 const STATUS_DOT_COLOR: Record<CheckStatus, string> = {

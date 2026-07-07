@@ -28,7 +28,10 @@ import type {
 } from '@/lib/pending-worktree-creation'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
-import type { WorktreeServicesStatus } from '../../../../shared/worktree-services'
+import type {
+  WorktreeServicesRecord,
+  WorktreeServicesStatus
+} from '../../../../shared/worktree-services'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
@@ -121,6 +124,8 @@ export type WorktreeSlice = {
   worktreeServicesEnv: Record<string, Record<string, string>>
   // Provisioning status per worktree, drives the sidebar badge and retry action.
   worktreeServicesStatus: Record<string, WorktreeServicesStatus>
+  // Full provisioning record per worktree, drives the Services right-sidebar panel.
+  worktreeServicesRecords: Record<string, WorktreeServicesRecord>
   hydrateWorktreeServices: () => Promise<void>
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
