@@ -708,20 +708,11 @@ async function drainQueue(): Promise<void> {
       )
 
       if (isBackground(next.reason)) {
-        const rateLimit = await getRateLimit()
-        if (!rateLimit.ok) {
-          const retryAt = Date.now() + 30_000
-          queue.set(next.key, { ...next, dueAt: retryAt })
-          broadcast({
-            aliases,
-            reason: next.reason,
-            status: 'paused',
-            pausedUntil: retryAt,
-            skippedReason: 'rate-limit'
-          })
-          scheduleDrain(30_000)
-          continue
-        }
+        // Why: the probe only warms rateLimitGuard's cached snapshot, so a
+        // failed probe must fail open — GHES with rate limiting disabled 404s
+        // every probe (#7553). A genuinely broken gh surfaces per-key as typed
+        // fetch outcomes instead (visible keys additionally back off).
+        await getRateLimit()
         const buckets = backgroundRefreshBuckets()
         const blockedGuard = buckets
           .map((bucket) => rateLimitGuard(bucket))

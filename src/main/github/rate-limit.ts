@@ -35,6 +35,11 @@ import {
 // 1-per-second "is it safe now?" polling pattern UIs tend to fall into.
 const RATE_LIMIT_CACHE_TTL_MS = 30_000
 let cached: GitHubRateLimitSnapshot | null = null
+// Why: failed probes are cached for the same TTL as successes. Refreshes fail
+// open past a failed probe, so on a host that can never report a budget (GHES
+// with rate limiting disabled 404s every probe) an uncached failure would cost
+// a gh subprocess per queued refresh.
+let probeFailure: { at: number; error: string } | null = null
 
 type GhRateLimitPayload = {
   resources?: {
@@ -66,6 +71,7 @@ function parseBucket(
 /** @internal — test-only */
 export function _resetRateLimitCache(): void {
   cached = null
+  probeFailure = null
 }
 
 // Why: hard-stop thresholds for the circuit breaker. We refuse to issue a new
@@ -196,6 +202,9 @@ export async function getRateLimit(options?: { force?: boolean }): Promise<GetRa
   if (!options?.force && cached && Date.now() - cached.fetchedAt < RATE_LIMIT_CACHE_TTL_MS) {
     return { ok: true, snapshot: cached }
   }
+  if (!options?.force && probeFailure && Date.now() - probeFailure.at < RATE_LIMIT_CACHE_TTL_MS) {
+    return { ok: false, error: probeFailure.error }
+  }
   if (!options?.force && probeInFlight) {
     return probeInFlight
   }
@@ -222,9 +231,11 @@ async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
       fetchedAt: Date.now()
     }
     cached = snapshot
+    probeFailure = null
     return { ok: true, snapshot }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    probeFailure = { at: Date.now(), error: message }
     return { ok: false, error: message }
   } finally {
     release()
