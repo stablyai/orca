@@ -392,6 +392,20 @@ vi.mock('../ipc/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
+// Why: default undefined mirrors the real function's no-.worktreeinclude
+// result, so existing create tests are unaffected; the ordering test overrides
+// it per-run with mockResolvedValueOnce.
+const { copyLocalWorktreeIncludeFilesMock, copyRemoteWorktreeIncludeFilesMock } = vi.hoisted(
+  () => ({
+    copyLocalWorktreeIncludeFilesMock: vi.fn(),
+    copyRemoteWorktreeIncludeFilesMock: vi.fn()
+  })
+)
+vi.mock('../ipc/worktree-include-copy', () => ({
+  copyLocalWorktreeIncludeFiles: copyLocalWorktreeIncludeFilesMock,
+  copyRemoteWorktreeIncludeFiles: copyRemoteWorktreeIncludeFilesMock
+}))
+
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
@@ -2180,6 +2194,36 @@ describe('OrcaRuntimeService', () => {
       id: result.worktree.id,
       path: createdWorktree.path
     })
+  })
+
+  it('copies .worktreeinclude during runtime create and surfaces includeCopy', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const createdWorktree = {
+      path: '/tmp/workspaces/include-copy',
+      head: 'def',
+      branch: 'include-copy',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(listWorktrees).mockResolvedValue([...MOCK_GIT_WORKTREES, createdWorktree])
+    copyLocalWorktreeIncludeFilesMock.mockResolvedValueOnce({ copied: ['.env.local'], skipped: [] })
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'include-copy'
+    })
+
+    expect(copyLocalWorktreeIncludeFilesMock).toHaveBeenCalledWith(
+      '/tmp/repo',
+      createdWorktree.path,
+      expect.any(Object)
+    )
+    const addOrder = vi.mocked(addWorktree).mock.invocationCallOrder.at(-1)
+    const copyOrder = copyLocalWorktreeIncludeFilesMock.mock.invocationCallOrder.at(-1)
+    expect(copyOrder).toBeGreaterThan(addOrder!)
+    expect(result.includeCopy).toEqual({ copied: ['.env.local'], skipped: [] })
   })
 
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {

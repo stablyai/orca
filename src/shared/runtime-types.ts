@@ -18,6 +18,7 @@ import type {
   TerminalLayoutSnapshot,
   TuiAgent,
   Worktree,
+  WorktreeIncludeCopyResult,
   WorktreeLineage,
   WorkspaceLineage,
   WorktreeLineageWarning
@@ -665,6 +666,7 @@ export type RuntimeWorktreeCreateResult = {
   workspaceLineage?: WorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
   warning?: string
+  includeCopy?: WorktreeIncludeCopyResult
 }
 
 export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {

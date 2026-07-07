@@ -2109,6 +2109,24 @@ export type CreateWorktreeArgs = {
   automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
 }
 
+export type WorktreeIncludeCopySkipReason =
+  | 'malformed'
+  | 'tracked'
+  | 'not-ignored'
+  | 'missing'
+  | 'not-a-file'
+  | 'destination-exists'
+  | 'copy-failed'
+  | 'check-failed'
+
+/** Outcome of the harness-level `.worktreeinclude` copy that materializes
+ *  gitignored local setup files from the primary checkout into a freshly
+ *  created worktree, before any setup script or agent starts. */
+export type WorktreeIncludeCopyResult = {
+  copied: string[]
+  skipped: { path: string; reason: WorktreeIncludeCopySkipReason }[]
+}
+
 export type CreateWorktreeResult = {
   worktree: Worktree & {
     parentWorktreeId?: string | null
@@ -2126,6 +2144,7 @@ export type CreateWorktreeResult = {
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
+  includeCopy?: WorktreeIncludeCopyResult
   startupTerminal?: {
     spawned: boolean
     handle?: string
