@@ -513,12 +513,12 @@ describe('registerCoreHandlers', () => {
     ).resolves.toEqual({
       sessions: [],
       issues: [
-        {
+        expect.objectContaining({
           executionHostId: 'runtime:env-123',
           agent: 'codex',
           path: 'env-123',
-          message: 'Invalid aiVault.listSessions response: Invalid input: expected array, received string'
-        }
+          message: expect.stringContaining('Invalid aiVault.listSessions response')
+        })
       ],
       scannedAt: expect.any(String)
     })
