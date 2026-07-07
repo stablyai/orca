@@ -185,8 +185,16 @@ export function buildWindowsAgentHookPostCommand(source: AgentHookSource): strin
   // Why: Codex runs these hooks inline on every turn. PowerShell startup alone
   // makes trusted Windows hooks visibly slow, so mirror the POSIX curl path.
   // Qualify curl so a repo-local curl.exe cannot hijack hook payloads.
+  // Note: the payload is read from stdin (`payload@-`), off the command line.
+  // The token stays on argv here because cmd.exe has no mktemp to stage a
+  // header file and stdin is already taken by the payload; the endpoint.cmd
+  // file that holds the same token is already ACL'd to the user, so this
+  // matches the existing same-user exposure rather than widening it.
   return [
     `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}" ^`,
+    // Why: never let a configured http_proxy/ALL_PROXY route the loopback POST
+    // (token + payload) off-box.
+    '  --noproxy 127.0.0.1 ^',
     '  --connect-timeout 0.5 --max-time 1.5 ^',
     '  -H "Content-Type: application/x-www-form-urlencoded" ^',
     '  -H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%" ^',
@@ -210,6 +218,9 @@ export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): s
   return [
     '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',
     `"http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}"`,
+    // Why: never let a configured http_proxy/ALL_PROXY route the loopback POST
+    // (token + payload) off-box.
+    '--noproxy 127.0.0.1',
     '--connect-timeout 0.5 --max-time 1.5',
     '-H "Content-Type: application/x-www-form-urlencoded"',
     '-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"',

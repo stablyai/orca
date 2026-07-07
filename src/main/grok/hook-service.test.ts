@@ -76,12 +76,10 @@ describe('GrokHookService', () => {
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
     } else {
-      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-      // on the curl command line (EDR oversized-command-line false positive).
-      expect(script).toContain('payload=$(cat)')
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+      // Payload goes to a private temp file (off argv); the endpoint file is
+      // parsed, never sourced.
+      expect(script).toContain('--data-urlencode "payload@${__orca_payload_file}"')
+      expect(script).not.toContain('. "$ORCA_AGENT_HOOK_ENDPOINT"')
     }
   })
 

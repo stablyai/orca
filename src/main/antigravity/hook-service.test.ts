@@ -93,14 +93,11 @@ describe('AntigravityHookService', () => {
       expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')
     } else {
       expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
-      expect(script).toContain('payload=$(cat)')
-      expect(script).toContain("payload='{}'")
-      expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
-      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-      // on the curl command line (EDR oversized-command-line false positive).
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+      // Payload delivered from a private temp file (off argv), with `{}`
+      // substituted when the agent sent no stdin. Endpoint file parsed, not sourced.
+      expect(script).toContain('--data-urlencode "payload@${__orca_payload_file}"')
+      expect(script).toContain("printf '%s' '{}' > \"$__orca_payload_file\"")
+      expect(script).not.toContain('. "$ORCA_AGENT_HOOK_ENDPOINT"')
     }
     expect(script).toContain('{"decision":""}')
   })

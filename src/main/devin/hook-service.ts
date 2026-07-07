@@ -6,6 +6,11 @@ import {
   writeManagedScript
 } from '../agent-hooks/installer-utils'
 import {
+  buildPosixManagedHookScript,
+  buildWindowsEndpointLoadLine,
+  buildWindowsEndpointSubroutineLines
+} from '../agent-hooks/managed-hook-script'
+import {
   readTextFileRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
@@ -36,67 +41,21 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       'setlocal',
       // Why: the endpoint file holds the *live* port/token for this Orca
       // install. A PTY that survived an Orca restart has stale PORT/TOKEN
-      // baked into its env from the old instance — loading `endpoint.cmd`
-      // (`set KEY=VALUE` lines) via `call` refreshes them so the hook
-      // reaches the current server. Falls through to PTY env if the file
-      // is missing (first run / pre-endpoint-file / running outside Orca).
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      // baked into its env from the old instance — reloading `endpoint.cmd`
+      // refreshes them so the hook reaches the current server. Parsed, never
+      // executed, so untrusted content in that path cannot run.
+      buildWindowsEndpointLoadLine(),
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
       buildWindowsAgentHookPostCommand('devin'),
       'exit /b 0',
+      ...buildWindowsEndpointSubroutineLines(),
       ''
     ].join('\r\n')
   }
 
-  return [
-    '#!/bin/sh',
-    // Why: the endpoint file holds the *live* port/token for this Orca
-    // install. PTYs that survive an Orca restart have stale PORT/TOKEN
-    // baked into their env from the old instance — sourcing the file here
-    // lets us reach the new server. Falls back to PTY env if the file is
-    // missing (first-run / pre-endpoint-file scripts / running outside Orca).
-    // Why: suppress stderr on the `.` builtin. A TOCTOU race (endpoint unlinked
-    // between the `[ -r ]` test and the source) or a malformed line (e.g. CRLF
-    // bled in from a cross-platform userData copy) would otherwise print a
-    // parse error that agent transcripts could surface. Stale coords → dead
-    // port → silent-fail is the documented fail-open path anyway — the env-var
-    // guards below handle the empty PORT/TOKEN case — so swallowing the noise
-    // here is strictly better than leaking shell errors into the hook output.
-    // `|| :` defends against an eventual `set -e` in an outer script context
-    // (not present today) aborting the hook on a parse error.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
-    'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
-    '  exit 0',
-    'fi',
-    // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
-    // shell is not safe once a path contains quotes or newlines. Post the raw
-    // hook payload plus metadata as form fields and let the receiver parse it.
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
-    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
-    // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/devin" \\',
-    '  --connect-timeout 0.5 --max-time 1.5 \\',
-    '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
-    'exit 0',
-    ''
-  ].join('\n')
+  return buildPosixManagedHookScript({ source: 'devin' })
 }
 
 export class DevinHookService {

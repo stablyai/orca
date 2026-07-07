@@ -109,6 +109,18 @@ describe('DroidHookService', () => {
     }
   )
 
+  // Why: nothing else pins the droid script body at the service level; assert
+  // the secure post shape so a builder-call regression fails here too.
+  it.skipIf(process.platform === 'win32')('managed script posts securely to /hook/droid', () => {
+    expect(new DroidHookService().install().state).toBe('installed')
+    const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'droid-hook.sh'), 'utf8')
+    expect(script).toContain('/hook/droid')
+    expect(script).not.toContain('. "$ORCA_AGENT_HOOK_ENDPOINT"')
+    expect(script).toContain('-H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}"')
+    expect(script).toContain('--data-urlencode "payload@${__orca_payload_file}"')
+    expect(script).toContain('--noproxy 127.0.0.1')
+  })
+
   it('reports partial when Factory has hooks disabled globally', () => {
     const configPath = join(homeDir, '.factory', 'settings.json')
     mkdirSync(dirname(configPath), { recursive: true })

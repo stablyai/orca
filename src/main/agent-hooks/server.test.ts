@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: this suite exercises the full hook HTTP surface (Claude/Codex/Gemini parsing, transcript chunked scan, paneKey dispatch) and keeping the scenarios co-located avoids fixture drift across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -5668,7 +5667,7 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
-  it('endpoint file contents are re-parseable by /bin/sh', async () => {
+  it('endpoint file stays a clean KEY=VALUE shape (no shell metacharacters)', async () => {
     if (process.platform === 'win32') {
       return
     }
@@ -5677,14 +5676,15 @@ describe('Endpoint file lifecycle', () => {
     try {
       const filePath = server.endpointFilePath!
       const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
-      // Why: sources the file in a subshell and echoes the resulting env var,
-      // exactly as the managed hook script does at runtime. If the file shape
-      // ever drifts from `KEY=VALUE` (e.g. someone adds shell metacharacters
-      // without quoting), this test catches it before users do.
-      const out = execFileSync('/bin/sh', ['-c', `. "${filePath}" && echo "$ORCA_AGENT_HOOK_PORT"`])
-        .toString()
-        .trim()
-      expect(out).toBe(expectedPort)
+      // Why: the managed hook script parses this file (it does not source it),
+      // reading only the four known ORCA_AGENT_HOOK_* keys. This asserts the
+      // writer keeps each line as a bare `KEY=VALUE` so that line-based parse
+      // extracts the value verbatim — catching drift before users do.
+      const contents = readFileSync(filePath, 'utf-8')
+      const portLine = contents
+        .split(/\r?\n/)
+        .find((line) => line.startsWith('ORCA_AGENT_HOOK_PORT='))
+      expect(portLine).toBe(`ORCA_AGENT_HOOK_PORT=${expectedPort}`)
     } finally {
       server.stop()
     }

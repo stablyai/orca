@@ -188,4 +188,25 @@ describe('GeminiHookService', () => {
         : new RegExp(managedHookFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     )
   })
+
+  // Why: the shared-builder tests use synthetic options, so gemini's
+  // agent-specific stdout prelude is only pinned here.
+  it.skipIf(process.platform === 'win32')(
+    'managed script prints {} before the endpoint parse and posts securely',
+    () => {
+      expect(new GeminiHookService().install().state).toBe('installed')
+      const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'gemini-hook.sh'), 'utf8')
+      // Gemini parses hook stdout as JSON; {} must be emitted before any guard
+      // can exit the script.
+      expect(script.indexOf('printf "{}\\n"')).toBeGreaterThan(-1)
+      expect(script.indexOf('printf "{}\\n"')).toBeLessThan(
+        script.indexOf('done < "$ORCA_AGENT_HOOK_ENDPOINT"')
+      )
+      expect(script).toContain('/hook/gemini')
+      expect(script).not.toContain('. "$ORCA_AGENT_HOOK_ENDPOINT"')
+      expect(script).toContain('-H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}"')
+      expect(script).toContain('--data-urlencode "payload@${__orca_payload_file}"')
+      expect(script).toContain('--noproxy 127.0.0.1')
+    }
+  )
 })

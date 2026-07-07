@@ -8,16 +8,20 @@ import { KIMI_HOOK_EVENTS } from './kimi-hook-config-toml'
 // Why: getSharedManagedScriptPath() writes the managed script under
 // homedir()/.orca, and getKimiHome() honors KIMI_CODE_HOME. Point both at a
 // temp dir so the local install/remove cycle never touches the real ~/.orca or
-// ~/.kimi-code. os.homedir() resolves $HOME on POSIX (verified at write time).
+// ~/.kimi-code. os.homedir() resolves $HOME on POSIX and USERPROFILE on
+// Windows, so both must be pinned.
 let home: string
 let originalHome: string | undefined
+let originalUserProfile: string | undefined
 let originalKimiHome: string | undefined
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-kimi-hook-'))
   originalHome = process.env.HOME
+  originalUserProfile = process.env.USERPROFILE
   originalKimiHome = process.env.KIMI_CODE_HOME
   process.env.HOME = home
+  process.env.USERPROFILE = home
   process.env.KIMI_CODE_HOME = join(home, '.kimi-code')
 })
 
@@ -26,6 +30,11 @@ afterEach(() => {
     delete process.env.HOME
   } else {
     process.env.HOME = originalHome
+  }
+  if (originalUserProfile === undefined) {
+    delete process.env.USERPROFILE
+  } else {
+    process.env.USERPROFILE = originalUserProfile
   }
   if (originalKimiHome === undefined) {
     delete process.env.KIMI_CODE_HOME
@@ -55,11 +64,13 @@ describe('KimiHookService', () => {
     // The managed script must exist and POST to the Kimi hook endpoint.
     const script = readFileSync(scriptPath(), 'utf-8')
     expect(script).toContain('/hook/kimi')
-    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-    // on the curl command line (EDR oversized-command-line false positive).
-    expect(script).toContain('printf \'%s\' "$payload" | curl')
-    expect(script).toContain('--data-urlencode "payload@-"')
+    // Why: the payload posts from a private temp file so it never lands on the
+    // curl command line (also avoids EDR oversized-command-line false
+    // positives). Endpoint file parsed, not sourced. Token is a loopback header.
+    expect(script).toContain('--data-urlencode "payload@${__orca_payload_file}"')
+    expect(script).toContain('-H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}"')
     expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    expect(script).not.toContain('. "$ORCA_AGENT_HOOK_ENDPOINT"')
     // The command Kimi runs points at the managed script via sh.
     expect(config).toContain('agent-hooks/kimi-hook.sh')
   })

@@ -117,6 +117,28 @@ describe('CopilotHookService', () => {
     }
   })
 
+  // Why: the shared-builder tests use synthetic options, so copilot's
+  // agent-specific stdout prelude and hookEventName field are only pinned here.
+  it.skipIf(process.platform === 'win32')(
+    'managed script prints {} first and posts the hookEventName field',
+    () => {
+      new CopilotHookService().install()
+      const script = readFileSync(join(tmpDir, '.orca', 'agent-hooks', 'copilot-hook.sh'), 'utf-8')
+      // Copilot parses hook stdout; {} must be emitted before any guard can
+      // exit the script.
+      expect(script.indexOf("printf '{}\\n'")).toBeGreaterThan(-1)
+      expect(script.indexOf("printf '{}\\n'")).toBeLessThan(
+        script.indexOf('done < "$ORCA_AGENT_HOOK_ENDPOINT"')
+      )
+      expect(script).toContain('--data-urlencode "hookEventName=${ORCA_COPILOT_HOOK_EVENT}"')
+      expect(script).toContain('/hook/copilot')
+      expect(script).not.toContain('. "$ORCA_AGENT_HOOK_ENDPOINT"')
+      expect(script).toContain('-H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}"')
+      expect(script).toContain('--data-urlencode "payload@${__orca_payload_file}"')
+      expect(script).toContain('--noproxy 127.0.0.1')
+    }
+  )
+
   it('preserves user-authored hooks and sweeps stale managed entries', () => {
     const configPath = join(copilotHome, 'hooks', 'orca.json')
     mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
