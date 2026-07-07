@@ -2080,6 +2080,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return next
   })()
+  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
 
   return {
     // Worktree-scoped terminal/tab state
@@ -2120,7 +2121,10 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // badge). retainedAgentsByPaneKey and runtimeAgentOrchestrationByPaneKey are
     // intentionally omitted here — both self-heal (pruneRetainedAgents on a
     // worktreesByRepo change; the runtime map is replaced wholesale each sync).
-    agentStatusByPaneKey: omitByPaneKeyTabPrefix(s.agentStatusByPaneKey),
+    agentStatusByPaneKey: nextAgentStatusByPaneKey,
+    ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
+      ? { agentStatusEpoch: s.agentStatusEpoch + 1 }
+      : {}),
     agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey),
     acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
     paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
