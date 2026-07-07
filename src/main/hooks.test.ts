@@ -292,6 +292,50 @@ describe('parseOrcaYaml', () => {
       ]
     })
   })
+
+  it('parses services recipes', () => {
+    const yaml = [
+      'services:',
+      '  - id: db',
+      '    name: Postgres 16',
+      '    create: docker compose up -d --wait',
+      '    destroy: docker compose down -v',
+      '    env:',
+      '      DATABASE_URL: postgres://app:app@localhost:${ORCA_PORT_0}/app'
+    ].join('\n')
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      services: [
+        {
+          id: 'db',
+          name: 'Postgres 16',
+          create: 'docker compose up -d --wait',
+          destroy: 'docker compose down -v',
+          env: { DATABASE_URL: 'postgres://app:app@localhost:${ORCA_PORT_0}/app' }
+        }
+      ]
+    })
+  })
+
+  it('reports diagnostics for invalid services entries', () => {
+    const yaml = [
+      'services:',
+      '  - id: db',
+      '    name: A',
+      '    create: echo a',
+      '  - id: db',
+      '    name: B',
+      '    create: echo b',
+      '  - id: "BAD ID"',
+      '    name: C',
+      '    create: echo c',
+      '  - id: nocreate',
+      '    name: D'
+    ].join('\n')
+    const result = parseOrcaYaml(yaml)
+    expect(result?.services).toEqual([{ id: 'db', name: 'A', create: 'echo a' }])
+    expect(result?.serviceDiagnostics).toHaveLength(3)
+  })
 })
 
 describe('hasUnrecognizedOrcaYamlKeys', () => {

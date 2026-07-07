@@ -2025,6 +2025,8 @@ export type OrcaHooks = {
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
   environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
   environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
+  services?: OrcaServiceRecipe[] // Per-worktree isolated service recipes
+  serviceDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from services
 }
 
 export type OrcaDefaultTabTemplate = {
@@ -2048,6 +2050,14 @@ export type OrcaVmRecipeDiagnostic = {
   index: number
   field?: string
   message: string
+}
+
+export type OrcaServiceRecipe = {
+  id: string
+  name: string
+  create: string
+  destroy?: string
+  env?: Record<string, string>
 }
 
 export type RepoHookSettings = {
