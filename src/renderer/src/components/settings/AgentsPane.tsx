@@ -506,15 +506,6 @@ function AgentRow({
         <div className="min-w-0 flex-1 sm:min-w-[12rem]">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium leading-none">{label}</span>
-            {isDetected ? (
-              <SettingsBadge tone="accent">
-                {translate('auto.components.settings.AgentsPane.c8794e622e', 'Detected')}
-              </SettingsBadge>
-            ) : (
-              <SettingsBadge tone="muted">
-                {translate('auto.components.settings.AgentsPane.df123171d1', 'Not installed')}
-              </SettingsBadge>
-            )}
             {!isEnabled && (
               <SettingsBadge tone="muted">
                 {translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')}
@@ -535,7 +526,7 @@ function AgentRow({
           </div>
         </div>
 
-        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem_1.75rem] items-center gap-1.5">
+        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">
           <AgentAvailabilityControl
             label={label}
             isEnabled={isEnabled}
@@ -560,28 +551,6 @@ function AgentRow({
                 {isDefault
                   ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
                   : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
-              </Button>
-            )}
-          </div>
-
-          <div className="flex size-7 items-center justify-center">
-            {isDetected && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setCmdOpen((prev) => !prev)}
-                title={translate(
-                  'auto.components.settings.AgentsPane.db9e9e5887',
-                  'Customize command'
-                )}
-                aria-expanded={cmdOpen}
-                className={cn(
-                  'size-7 text-muted-foreground hover:text-foreground',
-                  (cmdOpen || cmdOverride) && 'text-foreground'
-                )}
-              >
-                <Terminal className="size-3.5" />
               </Button>
             )}
           </div>
