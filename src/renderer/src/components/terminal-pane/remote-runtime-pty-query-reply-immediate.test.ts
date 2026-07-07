@@ -128,13 +128,15 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     // Immediately (validation still pending) a TUI emits a CPR reply.
     expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true)
 
-    // Let validation + flush settle.
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Wait until the reply is actually flushed instead of sleeping a fixed
+    // interval: the reply legitimately trails the paste's async validation plus
+    // one debounce tick, and a fixed sleep raced that chain under CI load.
+    const combined = (): string =>
+      (terminalSendCalls() as { params: { text: string } }[]).map((s) => s.params.text).join('')
+    await expect.poll(combined, { timeout: 5000, interval: 5 }).toContain('\x1b[3;1R')
 
-    const sends = terminalSendCalls() as { params: { text: string } }[]
-    const combined = sends.map((s) => s.params.text).join('')
     // The paste bytes must come before the reply — no reordering.
-    expect(combined.indexOf('p')).toBeLessThan(combined.indexOf('\x1b[3;1R'))
-    expect(combined).toContain(`${paste}\x1b[3;1R`)
+    expect(combined().indexOf('p')).toBeLessThan(combined().indexOf('\x1b[3;1R'))
+    expect(combined()).toContain(`${paste}\x1b[3;1R`)
   })
 })

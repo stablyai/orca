@@ -5240,6 +5240,87 @@ describe('connectPanePty', () => {
     expect(resetWriteCall as number).toBeLessThan(tailWriteCall as number)
   })
 
+  it('routes native onData query replies through sendInputImmediate, typed input through sendInput (#7329)', async () => {
+    // Why this test: the mock transport delegates sendInputImmediate to the
+    // sendInput spy, so reply-delivery assertions elsewhere cannot tell the two
+    // apart — reverting the onData isTerminalQueryReply branch used to pass the
+    // whole suite. This pins the routing decision itself.
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const pane = createPane(1)
+    const transport = createMockTransport('remote:web-env-1@@pty-7329')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1, 1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+
+    // xterm answers CSI 6n natively by emitting a CPR through onData, mixed
+    // with keystrokes. It must take the immediate path (skips the remote 8ms
+    // input debounce that corrupted it).
+    sendTerminalInputThroughPane(pane, '\x1b[3;1R')
+    expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[3;1R')
+
+    // Ordinary typed input must stay on the debounced path — never immediate.
+    transport.sendInputImmediate.mockClear()
+    sendTerminalInputThroughPane(pane, 'yes')
+    sendTerminalInputThroughPane(pane, '\x1b[A') // arrow-key auto-repeat stays batched
+    expect(transport.sendInput).toHaveBeenCalledWith('yes')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A')
+    expect(transport.sendInputImmediate).not.toHaveBeenCalled()
+  })
+
+  it('writes the onReplayData pendingEscapeTailAnsi meta last, after the replayed bytes (#7329)', async () => {
+    // Why this test: the remote snapshot path delivers the daemon tail through
+    // transport callbacks.onReplayData meta into drainReplayDataQueue. That
+    // consumer (and the replayDataCallback meta threading before it) had no
+    // failing test — severing the meta pass-through kept the suite green.
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const pane = createPane(1)
+    const writes: string[] = []
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      writes.push(data)
+      callback?.()
+    }) as typeof pane.terminal.write
+    const transport = createMockTransport('remote:web-env-1@@pty-7329-tail')
+    const replayCallback: {
+      current:
+        | ((
+            data: string,
+            meta?: { clearBeforeReplay?: boolean; pendingEscapeTailAnsi?: string }
+          ) => void)
+        | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      replayCallback.current = callbacks.onReplayData ?? null
+      return { id: 'remote:web-env-1@@pty-7329-tail', replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1, 1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+    expect(replayCallback.current).toBeTypeOf('function')
+
+    replayCallback.current?.('remote snapshot bytes', {
+      clearBeforeReplay: false,
+      pendingEscapeTailAnsi: '\x1b[3'
+    })
+    await flushAsyncTicks(20)
+
+    const snapshotIndex = writes.indexOf('remote snapshot bytes')
+    const tailIndex = writes.lastIndexOf('\x1b[3')
+    expect(snapshotIndex).toBeGreaterThanOrEqual(0)
+    expect(tailIndex).toBeGreaterThanOrEqual(0)
+    // The dangling tail is re-armed after the snapshot (and any reset), so the
+    // next live chunk's continuation completes it instead of rendering literally.
+    expect(tailIndex).toBeGreaterThan(snapshotIndex)
+    expect(writes.slice(tailIndex + 1)).toEqual([])
+  })
+
   it('preserves live modes and injects focus-in after focused agent reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

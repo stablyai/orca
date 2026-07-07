@@ -1026,6 +1026,51 @@ describe('createIpcPtyTransport', () => {
     })
   })
 
+  it('threads the daemon pendingEscapeTailAnsi through the reattach connect result (#7329)', async () => {
+    // Why: the local daemon ships the mid-escape tail on the spawn/reattach
+    // result; dropping it here silently regressed the local half of #7329
+    // (the consumer test injects at the transport boundary, so only this
+    // asserts the IPC threading).
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi.fn().mockResolvedValue({
+      id: 'pty-reattach-tail',
+      isReattach: true,
+      snapshot: 'snapshot data',
+      snapshotCols: 80,
+      snapshotRows: 24,
+      pendingEscapeTailAnsi: '\x1b[3'
+    })
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport()
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'pty-reattach-tail',
+      callbacks: {}
+    })
+
+    expect(result).toMatchObject({
+      id: 'pty-reattach-tail',
+      pendingEscapeTailAnsi: '\x1b[3'
+    })
+  })
+
   it('kills a PTY that finishes spawning after the transport was destroyed', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnControls: { resolve: ((value: { id: string }) => void) | null } = { resolve: null }
