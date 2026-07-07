@@ -9,6 +9,7 @@ import { createInterface } from 'node:readline'
 const scriptDir = import.meta.dirname
 const repoRoot = path.resolve(scriptDir, '..', '..')
 const orcaDevScript = path.join(scriptDir, 'orca-dev.mjs')
+const ensureNativeRuntimeScript = path.join(scriptDir, 'ensure-native-runtime.mjs')
 const fixedProfileDir = process.env.ORCA_HEADLESS_PAIRING_PROFILE_DIR
 const parsed = parseArgs(process.argv.slice(2))
 
@@ -17,11 +18,11 @@ if (parsed.help) {
   process.exit(0)
 }
 
-if (parsed.serveArgs.includes('--no-pairing')) {
+if (hasForwardedServeFlag(parsed.serveArgs, 'no-pairing')) {
   console.error('serve-headless-fresh-profile-pairing: --no-pairing cannot print a pairing code.')
   process.exit(2)
 }
-if (parsed.serveArgs.includes('--recipe-json')) {
+if (hasForwardedServeFlag(parsed.serveArgs, 'recipe-json')) {
   console.error(
     'serve-headless-fresh-profile-pairing: --recipe-json detaches the server and cannot use an ephemeral profile safely.'
   )
@@ -40,6 +41,7 @@ mkdirSync(profileDir, { recursive: true })
 let cleanedUp = false
 let child = null
 let sawPairingUrl = false
+let stopAttempts = 0
 // Why: temp dev worktrees do not have a root-owned chrome-sandbox; this script
 // is only for local headless testing, not packaged production.
 const childEnv = {
@@ -86,8 +88,8 @@ child.once('exit', (code, signal) => {
   process.exitCode = signal ? 1 : 0
 })
 
-process.once('SIGINT', () => stopChild('SIGINT'))
-process.once('SIGTERM', () => stopChild('SIGTERM'))
+process.on('SIGINT', () => stopChild('SIGINT'))
+process.on('SIGTERM', () => stopChild('SIGTERM'))
 
 /**
  * Parses wrapper flags and forwards everything else to `orca serve`.
@@ -152,7 +154,15 @@ function withDefaultPairingAddress(args) {
  * Checks both supported CLI forms for an explicit pairing address.
  */
 function hasPairingAddress(args) {
-  return args.some((arg) => arg === '--pairing-address' || arg.startsWith('--pairing-address='))
+  return hasForwardedServeFlag(args, 'pairing-address')
+}
+
+/**
+ * Checks both exact and `--flag=value` forms for a forwarded serve flag.
+ */
+function hasForwardedServeFlag(args, name) {
+  const flag = `--${name}`
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
 }
 
 /**
@@ -215,14 +225,10 @@ function formatShellArg(value) {
  */
 function ensureElectronRuntime() {
   console.error('[headless-pairing] ensuring Electron runtime...')
-  const result = spawnSync(
-    process.execPath,
-    ['config/scripts/ensure-native-runtime.mjs', '--runtime=electron'],
-    {
-      cwd: repoRoot,
-      stdio: 'inherit'
-    }
-  )
+  const result = spawnSync(process.execPath, [ensureNativeRuntimeScript, '--runtime=electron'], {
+    cwd: repoRoot,
+    stdio: 'inherit'
+  })
   if (result.error) {
     console.error(`[headless-pairing] Electron runtime preflight failed: ${result.error.message}`)
     process.exit(1)
@@ -263,23 +269,35 @@ function printReadyLine(line) {
 }
 
 /**
- * Stops the foreground server so its normal shutdown path can cleanly persist state.
+ * Stops the foreground server; repeated signals force its process tree down.
  */
 function stopChild(signal) {
   if (!child || child.killed) {
+    return
+  }
+  stopAttempts += 1
+  const targetSignal = stopAttempts > 1 ? 'SIGKILL' : signal
+  if (process.platform === 'win32' && child.pid) {
+    // Why: child.kill() only targets orca-dev on Windows; taskkill walks the
+    // CLI/Electron descendants so the fresh profile is not left locked.
+    const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    killer.on('error', () => child?.kill(targetSignal))
     return
   }
   if (process.platform !== 'win32' && child.pid) {
     // Why: orca-dev synchronously owns the CLI child, which owns Electron; kill
     // the spawned process group so programmatic shutdown does not orphan serve.
     try {
-      process.kill(-child.pid, signal)
+      process.kill(-child.pid, targetSignal)
       return
     } catch {
       // Fall back to the direct child below if the process group already exited.
     }
   }
-  child.kill(signal)
+  child.kill(targetSignal)
 }
 
 /**
@@ -298,6 +316,11 @@ function cleanupProfile() {
     console.error(`[headless-pairing] skipped cleanup for unexpected profile path: ${profileDir}`)
     return
   }
-  rmSync(profileDir, { recursive: true, force: true })
-  console.error(`[headless-pairing] removed ${profileDir}`)
+  try {
+    rmSync(profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    console.error(`[headless-pairing] removed ${profileDir}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[headless-pairing] skipped cleanup for ${profileDir}: ${message}`)
+  }
 }
