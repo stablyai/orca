@@ -24,18 +24,17 @@ describe('WorktreeActivityStatusIndicator', () => {
     mocks.status = 'inactive'
   })
 
-  it('renders the shared inactive status for slept worktrees', () => {
+  it('forwards the sr-only label but draws no dot for slept worktrees', () => {
     const markup = renderMarkup('inactive')
 
     expect(markup).toContain('Inactive')
-    expect(markup).toContain('bg-neutral-500/40')
-    expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).not.toContain('rounded-full')
   })
 
-  it('renders the shared active status when the worktree is live', () => {
-    const markup = renderMarkup('active')
+  it('forwards a visible status dot when the worktree needs attention', () => {
+    const markup = renderMarkup('permission')
 
-    expect(markup).toContain('Active')
-    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('Needs permission')
+    expect(markup).toContain('bg-status-warning')
   })
 })
