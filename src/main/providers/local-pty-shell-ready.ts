@@ -50,7 +50,7 @@ export type ShellReadySignal = {
 // ── Shell wrapper files ─────────────────────────────────────────────
 
 function getShellReadyWrapperRoot(): string {
-  const userDataPath = app?.getPath?.('userData') ?? process.env.ORCA_USER_DATA_PATH ?? tmpdir()
+  const userDataPath = process.env.ORCA_USER_DATA_PATH ?? app?.getPath?.('userData') ?? tmpdir()
   return `${userDataPath}/shell-ready`
 }
 
@@ -64,8 +64,8 @@ function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): s
   ]
 }
 
-function shellReadyWrappersExist(): boolean {
-  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+function shellReadyWrappersExist(root = getShellReadyWrapperRoot()): boolean {
+  return getRequiredShellReadyWrapperPaths(root).every((path) => existsSync(path))
 }
 
 // Why: if our own process inherited ZDOTDIR from a parent shell that was
@@ -288,16 +288,12 @@ fi
 `
 }
 
-function ensureShellReadyWrappers(): void {
-  if (process.platform === 'win32') {
-    return
-  }
-  if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
+export function ensureShellReadyWrappersAt(root = getShellReadyWrapperRoot()): void {
+  if (didEnsureShellReadyWrappers && shellReadyWrappersExist(root)) {
     return
   }
   didEnsureShellReadyWrappers = true
 
-  const root = getShellReadyWrapperRoot()
   const zshDir = `${root}/zsh`
   const bashDir = `${root}/bash`
 
@@ -363,6 +359,13 @@ ${getZshFinalZdotdirRestoreBlock()}
     // Reset the flag so next attempt will try again
     didEnsureShellReadyWrappers = false
   }
+}
+
+function ensureShellReadyWrappers(): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  ensureShellReadyWrappersAt()
 }
 
 // ── Shell launch config ─────────────────────────────────────────────

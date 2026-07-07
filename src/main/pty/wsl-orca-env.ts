@@ -16,10 +16,10 @@ function upsertWslenvEntry(entries: string[], entry: string): void {
 
 export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   const entries = parseWslenvEntries(env.WSLENV)
-  // Why: wsl.exe only imports selected Windows env vars. Agent status in WSL
-  // needs both the pane identity and the hook/OMP coordinates at process start.
+  // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
+    'ORCA_USER_DATA_PATH/p',
     'ORCA_PANE_KEY/u',
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
