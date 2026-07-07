@@ -668,14 +668,6 @@ function AgentRow({
               'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
             )}
           </p>
-          {sessionSourceHome && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.settings.AgentsPane.codexSessionSourceHelp',
-                'Orca runs Codex in an isolated home. Point this at your existing Codex home so Orca imports that history and /resume finds it. Leave empty to use ~/.codex; it does not change which account or config Orca uses.'
-              )}
-            </p>
-          )}
         </div>
       )}
     </div>

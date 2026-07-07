@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Info } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../shared/project-execution-runtime'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { translate } from '@/i18n/i18n'
 
 export type AgentSessionSourceHomeControl = {
@@ -85,11 +87,31 @@ export function AgentSessionSourceHomeInput({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         {translate(
           'auto.components.settings.AgentsPane.codexSessionSource',
           'Codex home to import from'
         )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={translate(
+                'auto.components.settings.AgentsPane.codexSessionSourceInfo',
+                'About importing Codex history'
+              )}
+              className="grid size-4 place-items-center rounded text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <Info className="size-3" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6} className="max-w-xs">
+            {translate(
+              'auto.components.settings.AgentsPane.codexSessionSourceTooltip',
+              'Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.'
+            )}
+          </TooltipContent>
+        </Tooltip>
       </span>
       <div className="flex items-center gap-2">
         <Input
