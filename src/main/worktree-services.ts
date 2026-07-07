@@ -11,10 +11,15 @@ import {
   upsertWorktreeServicesRecord
 } from '../shared/worktree-services-store'
 import type { OrcaServiceRecipe, Repo } from '../shared/types'
-import type { WorktreeServicesRecord } from '../shared/worktree-services'
+import type {
+  WorktreeServiceRuntimeState,
+  WorktreeServicesRecord
+} from '../shared/worktree-services'
 import { isWslPath, parseWslPath, toLinuxPath } from './wsl'
 
 export const SERVICE_COMMAND_TIMEOUT_MS = 600_000
+// Why: status probes run on every panel open; a hung probe must not sit for 10 minutes.
+export const SERVICE_STATUS_TIMEOUT_MS = 30_000
 
 export type ServiceProvisionEvent = {
   provisionId: string
@@ -45,11 +50,12 @@ function runServiceCommand(
   command: string,
   worktreePath: string,
   env: Record<string, string>,
-  onChunk?: StreamHandler
+  onChunk?: StreamHandler,
+  timeoutMs: number = SERVICE_COMMAND_TIMEOUT_MS
 ): Promise<RunResult> {
   const wslInfo = isWslPath(worktreePath) ? parseWslPath(worktreePath) : null
   if (wslInfo) {
-    return runServiceCommandWsl(command, wslInfo, env, onChunk)
+    return runServiceCommandWsl(command, wslInfo, env, onChunk, timeoutMs)
   }
   return new Promise((resolve) => {
     const child = exec(
@@ -57,7 +63,7 @@ function runServiceCommand(
       {
         cwd: worktreePath,
         shell: getServiceShell(),
-        timeout: SERVICE_COMMAND_TIMEOUT_MS,
+        timeout: timeoutMs,
         env: { ...process.env, ...env }
       },
       (error, stdout, stderr) => {
@@ -76,7 +82,8 @@ function runServiceCommandWsl(
   command: string,
   wslInfo: { distro: string; linuxPath: string },
   env: Record<string, string>,
-  onChunk?: StreamHandler
+  onChunk?: StreamHandler,
+  timeoutMs: number = SERVICE_COMMAND_TIMEOUT_MS
 ): Promise<RunResult> {
   // Why: route through wsl.exe (not exec/cmd.exe) with single-quote escaping so
   // WSL worktree commands are not mangled by the Windows shell — mirrors runHook.
@@ -93,7 +100,7 @@ function runServiceCommandWsl(
       'wsl.exe',
       [...distroArgs, '--', 'bash', '-c', bashCmd],
       {
-        timeout: SERVICE_COMMAND_TIMEOUT_MS,
+        timeout: timeoutMs,
         encoding: 'utf-8',
         env: { ...process.env, ...wslEnv }
       },
@@ -221,5 +228,81 @@ export async function destroyWorktreeServices(args: {
   // Why: freeing the slot must not depend on destroy success — a failed destroy
   // otherwise leaks the slot forever. Removal is non-blocking per spec.
   removeWorktreeServicesRecord(userDataPath, worktreeId)
+  return { success: errors.length === 0, errors }
+}
+
+export async function getWorktreeServicesRuntime(args: {
+  userDataPath: string
+  worktreeId: string
+  worktreePath: string
+  services: OrcaServiceRecipe[]
+}): Promise<WorktreeServiceRuntimeState[]> {
+  const record = getWorktreeServicesRecord(args.userDataPath, args.worktreeId)
+  if (!record) {
+    return []
+  }
+  const env = { ...record.env, ORCA_WORKTREE_PATH: args.worktreePath }
+  const provisioned = new Set(record.serviceIds)
+  const states: WorktreeServiceRuntimeState[] = []
+  for (const service of args.services) {
+    if (!provisioned.has(service.id)) {
+      continue
+    }
+    let runState: WorktreeServiceRuntimeState['runState'] = 'unknown'
+    if (service.status) {
+      const result = await runServiceCommand(
+        service.status,
+        args.worktreePath,
+        env,
+        undefined,
+        SERVICE_STATUS_TIMEOUT_MS
+      )
+      runState = result.success ? 'running' : 'stopped'
+    }
+    states.push({
+      serviceId: service.id,
+      name: service.name,
+      runState,
+      canStart: Boolean(service.start),
+      canStop: Boolean(service.stop)
+    })
+  }
+  return states
+}
+
+export async function runWorktreeServiceAction(args: {
+  userDataPath: string
+  worktreeId: string
+  worktreePath: string
+  services: OrcaServiceRecipe[]
+  action: 'start' | 'stop'
+  serviceId?: string // omitted = every provisioned service that declares the command
+}): Promise<{ success: boolean; errors: string[] }> {
+  const record = getWorktreeServicesRecord(args.userDataPath, args.worktreeId)
+  if (!record) {
+    return { success: false, errors: ['No provisioned services for this worktree.'] }
+  }
+  const env = { ...record.env, ORCA_WORKTREE_PATH: args.worktreePath }
+  const provisioned = new Set(record.serviceIds)
+  const errors: string[] = []
+  for (const service of args.services) {
+    if (!provisioned.has(service.id)) {
+      continue
+    }
+    if (args.serviceId && service.id !== args.serviceId) {
+      continue
+    }
+    const command = service[args.action]
+    if (!command) {
+      if (args.serviceId) {
+        errors.push(`Service "${service.id}" has no ${args.action} command.`)
+      }
+      continue
+    }
+    const result = await runServiceCommand(command, args.worktreePath, env)
+    if (!result.success) {
+      errors.push(`Service "${service.id}" ${args.action} failed: ${result.output}`.trim())
+    }
+  }
   return { success: errors.length === 0, errors }
 }

@@ -27,3 +27,14 @@ export const WorktreeServicesStoreSchema = z.object({
   records: z.array(WorktreeServicesRecordSchema)
 })
 export type WorktreeServicesStore = z.infer<typeof WorktreeServicesStoreSchema>
+
+// Live (non-persisted) runtime state of one provisioned service, probed on demand
+// via the recipe's optional `status` command.
+export type WorktreeServiceRunState = 'running' | 'stopped' | 'unknown'
+export type WorktreeServiceRuntimeState = {
+  serviceId: string
+  name: string
+  runState: WorktreeServiceRunState
+  canStart: boolean
+  canStop: boolean
+}

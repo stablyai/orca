@@ -188,12 +188,18 @@ function normalizeServices(value: unknown): ServiceParseResult {
       }
       seenIds.add(id)
       const destroy = asTrimmedString(record.destroy)
+      const start = asTrimmedString(record.start)
+      const stop = asTrimmedString(record.stop)
+      const status = asTrimmedString(record.status)
       const env = normalizeServiceEnv(record.env)
       return {
         id,
         name,
         create,
         ...(destroy ? { destroy } : {}),
+        ...(start ? { start } : {}),
+        ...(stop ? { stop } : {}),
+        ...(status ? { status } : {}),
         ...(env ? { env } : {})
       }
     })

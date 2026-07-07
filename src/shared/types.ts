@@ -2057,6 +2057,9 @@ export type OrcaServiceRecipe = {
   name: string
   create: string
   destroy?: string
+  start?: string
+  stop?: string
+  status?: string // exit 0 = running, non-zero = stopped
   env?: Record<string, string>
 }
 

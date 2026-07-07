@@ -10297,7 +10297,16 @@
             "servicesSection": "Services",
             "slotSection": "Slot & ports",
             "slotLabel": "Slot {{value0}}",
-            "envSection": "Environment variables"
+            "envSection": "Environment variables",
+            "runRunning": "Running",
+            "runStopped": "Stopped",
+            "runUnknown": "No status command",
+            "refreshStatus": "Refresh service status",
+            "startAll": "Start all",
+            "stopAll": "Stop all",
+            "noServices": "No services.",
+            "startService": "Start service",
+            "stopService": "Stop service"
           }
         }
       },

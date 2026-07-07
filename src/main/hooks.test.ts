@@ -300,6 +300,9 @@ describe('parseOrcaYaml', () => {
       '    name: Postgres 16',
       '    create: docker compose up -d --wait',
       '    destroy: docker compose down -v',
+      '    start: docker compose start',
+      '    stop: docker compose stop',
+      '    status: docker compose ps -q | grep -q .',
       '    env:',
       '      DATABASE_URL: postgres://app:app@localhost:${ORCA_PORT_0}/app'
     ].join('\n')
@@ -311,6 +314,9 @@ describe('parseOrcaYaml', () => {
           name: 'Postgres 16',
           create: 'docker compose up -d --wait',
           destroy: 'docker compose down -v',
+          start: 'docker compose start',
+          stop: 'docker compose stop',
+          status: 'docker compose ps -q | grep -q .',
           env: { DATABASE_URL: 'postgres://app:app@localhost:${ORCA_PORT_0}/app' }
         }
       ]

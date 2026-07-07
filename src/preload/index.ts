@@ -2718,6 +2718,8 @@ const api = {
   worktreeServices: {
     list: () => ipcRenderer.invoke('worktreeServices:list'),
     retry: (args) => ipcRenderer.invoke('worktreeServices:retry', args),
+    runtime: (args) => ipcRenderer.invoke('worktreeServices:runtime', args),
+    action: (args) => ipcRenderer.invoke('worktreeServices:action', args),
     onProvisionEvent: (callback) => {
       const listener = (
         _e: Electron.IpcRendererEvent,

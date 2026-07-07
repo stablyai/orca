@@ -2,14 +2,39 @@ import { basename } from 'node:path'
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { loadHooks } from '../hooks'
-import { provisionWorktreeServices } from '../worktree-services'
+import {
+  getWorktreeServicesRuntime,
+  provisionWorktreeServices,
+  runWorktreeServiceAction
+} from '../worktree-services'
 import { listWorktreeServicesRecords } from '../../shared/worktree-services-store'
-import type { WorktreeServicesRecord } from '../../shared/worktree-services'
+import type {
+  WorktreeServiceRuntimeState,
+  WorktreeServicesRecord
+} from '../../shared/worktree-services'
+import type { OrcaServiceRecipe } from '../../shared/types'
 import { parseWorktreeId } from './worktree-logic'
+
+function resolveServicesContext(
+  store: Store,
+  worktreeId: string
+): { worktreePath: string; services: OrcaServiceRecipe[] } {
+  const { repoId, worktreePath } = parseWorktreeId(worktreeId)
+  const repo = store.getRepo(repoId)
+  if (!repo) {
+    throw new Error(`Repo not found: ${repoId}`)
+  }
+  if (repo.connectionId) {
+    throw new Error('Isolated services are not supported for remote repositories.')
+  }
+  return { worktreePath, services: loadHooks(repo.path)?.services ?? [] }
+}
 
 export function registerWorktreeServicesHandlers(store: Store): void {
   ipcMain.removeHandler('worktreeServices:list')
   ipcMain.removeHandler('worktreeServices:retry')
+  ipcMain.removeHandler('worktreeServices:runtime')
+  ipcMain.removeHandler('worktreeServices:action')
 
   ipcMain.handle('worktreeServices:list', (): WorktreeServicesRecord[] =>
     listWorktreeServicesRecords(app.getPath('userData'))
@@ -39,6 +64,37 @@ export function registerWorktreeServicesHandlers(store: Store): void {
         services,
         onEvent: (provisionEvent) =>
           event.sender.send('worktreeServices:provisionEvent', provisionEvent)
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'worktreeServices:runtime',
+    async (_event, args: { worktreeId: string }): Promise<WorktreeServiceRuntimeState[]> => {
+      const { worktreePath, services } = resolveServicesContext(store, args.worktreeId)
+      return getWorktreeServicesRuntime({
+        userDataPath: app.getPath('userData'),
+        worktreeId: args.worktreeId,
+        worktreePath,
+        services
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'worktreeServices:action',
+    async (
+      _event,
+      args: { worktreeId: string; action: 'start' | 'stop'; serviceId?: string }
+    ): Promise<{ success: boolean; errors: string[] }> => {
+      const { worktreePath, services } = resolveServicesContext(store, args.worktreeId)
+      return runWorktreeServiceAction({
+        userDataPath: app.getPath('userData'),
+        worktreeId: args.worktreeId,
+        worktreePath,
+        services,
+        action: args.action,
+        ...(args.serviceId ? { serviceId: args.serviceId } : {})
       })
     }
   )
