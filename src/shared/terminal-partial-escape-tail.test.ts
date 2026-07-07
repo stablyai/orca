@@ -35,13 +35,31 @@ describe('extractPartialEscapeTail', () => {
     expect(extractPartialEscapeTail('\x1b[3\x1b[')).toBe('\x1b[')
   })
 
+  it('treats CAN/SUB as aborting an in-progress escape back to ground', () => {
+    // CAN (0x18) / SUB (0x1a) abort the sequence in xterm's VT500 parser.
+    // esc state:
+    expect(extractPartialEscapeTail('\x1b\x18')).toBe('') // ESC CAN
+    expect(extractPartialEscapeTail('\x1b\x1a')).toBe('') // ESC SUB
+    // escIntermediate state (ESC then an intermediate byte, then CAN):
+    expect(extractPartialEscapeTail('\x1b \x18')).toBe('') // ESC SP CAN
+    expect(extractPartialEscapeTail('\x1b#\x1a')).toBe('') // ESC # SUB
+    // csi/osc/string already aborted — keep them green:
+    expect(extractPartialEscapeTail('\x1b[38;\x18')).toBe('') // CSI ... CAN
+    expect(extractPartialEscapeTail('\x1b]0;title\x18')).toBe('') // OSC ... CAN
+    // A CAN that aborts, followed by a fresh dangling sequence, tracks the new one:
+    expect(extractPartialEscapeTail('\x1b\x18\x1b[3')).toBe('\x1b[3')
+  })
+
   it('is fold-safe across chunk boundaries', () => {
     // extract(a + b) === extract(extract(a) + b) — the invariant ingest relies on.
     const cases: [string, string][] = [
       ['first\x1b[3', '8;5;196mred'],
       ['\x1b', '[0m'],
       ['\x1b]0;ti', 'tle\x07'],
-      ['clean', '\x1b[1']
+      ['clean', '\x1b[1'],
+      // Fold-safety must hold across the CAN abort too.
+      ['\x1b', '\x18after'],
+      ['\x1b ', '\x18after']
     ]
     for (const [a, b] of cases) {
       expect(extractPartialEscapeTail(extractPartialEscapeTail(a) + b)).toBe(

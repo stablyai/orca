@@ -79,6 +79,14 @@ export function extractPartialEscapeTail(stream: string): string {
       state = 'esc'
       continue
     }
+    // CAN/SUB abort an in-progress escape sequence back to ground in every
+    // non-string state (xterm's VT500 parser). The csi/osc/string cases handle
+    // this inline below; esc/escIntermediate must too, or `ESC CAN` and
+    // `ESC <intermediate> CAN` leave a bogus tail instead of dropping to ground.
+    if ((code === CAN || code === SUB) && (state === 'esc' || state === 'escIntermediate')) {
+      state = 'ground'
+      continue
+    }
     switch (state) {
       case 'esc':
         state = stateAfterEscByte(code)
@@ -87,7 +95,7 @@ export function extractPartialEscapeTail(stream: string): string {
         if (code >= 0x30 && code <= 0x7e) {
           state = 'ground'
         }
-        // 0x20–0x2f stays; C0 executes and stays.
+        // 0x20–0x2f stays; other C0 executes and stays (CAN/SUB handled above).
         break
       case 'csi':
         if (code === CAN || code === SUB) {
