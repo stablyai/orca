@@ -451,9 +451,13 @@ describe('registerCoreHandlers', () => {
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
     expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store)
-    expect(registerAiVaultHandlersMock).toHaveBeenCalledWith({
-      getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths
-    })
+    expect(registerAiVaultHandlersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,
+        getActiveRuntimeAiVaultHostInfos: expect.any(Function),
+        scanRuntimeAiVaultSessions: expect.any(Function)
+      })
+    )
     expect(registerNativeChatHandlersMock).toHaveBeenCalled()
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()

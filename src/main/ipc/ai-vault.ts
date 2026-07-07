@@ -13,7 +13,9 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostScope,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   toSshExecutionHostId,
+  type ExecutionHostId,
   type ExecutionHostScope
 } from '../../shared/execution-host'
 import {
@@ -26,12 +28,22 @@ const AI_VAULT_CACHE_TTL_MS = 15_000
 
 type AiVaultHandlerOptions = {
   getAdditionalCodexHomePaths?: () => readonly string[]
+  getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
+  scanRuntimeAiVaultSessions?: (
+    environmentId: string,
+    args: AiVaultListArgs
+  ) => Promise<AiVaultListResult>
 }
 
 type CachedAiVaultList = {
   key: string
   result: AiVaultListResult
   expiresAt: number
+}
+
+type RuntimeAiVaultHostInfo = {
+  environmentId: string
+  executionHostId: `runtime:${string}`
 }
 
 let cachedList: CachedAiVaultList | null = null
@@ -94,6 +106,9 @@ async function scanAiVaultSessionsByHostScope(
         scanLocalAiVaultSessions(args),
         ...getActiveSshAiVaultHostInfos().map((hostInfo) =>
           scanSshAiVaultSessions(hostInfo.targetId, args)
+        ),
+        ...getActiveRuntimeAiVaultHostInfos().map((hostInfo) =>
+          scanRuntimeAiVaultSessions(hostInfo, args)
         )
       ]),
       args?.limit
@@ -104,15 +119,82 @@ async function scanAiVaultSessionsByHostScope(
   if (parsed?.kind === 'ssh') {
     return scanSshAiVaultSessions(parsed.targetId, args)
   }
+  if (parsed?.kind === 'runtime') {
+    return scanRuntimeAiVaultSessions(
+      {
+        environmentId: parsed.environmentId,
+        executionHostId: toRuntimeExecutionHostId(parsed.environmentId)
+      },
+      args
+    )
+  }
 
+  return unavailableScanIssueResult({
+    executionHostId: executionHostScope,
+    path: executionHostScope,
+    message: 'Agent Session History is not available for this execution host.'
+  })
+}
+
+function getActiveRuntimeAiVaultHostInfos(): readonly RuntimeAiVaultHostInfo[] {
+  return handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? []
+}
+
+async function scanRuntimeAiVaultSessions(
+  hostInfo: RuntimeAiVaultHostInfo,
+  args?: AiVaultListArgs
+): Promise<AiVaultListResult> {
+  const scanner = handlerOptions.scanRuntimeAiVaultSessions
+  if (!scanner) {
+    return runtimeScanIssueResult(
+      hostInfo,
+      'Agent Session History is not available for this execution host.'
+    )
+  }
+  const scanArgs: AiVaultListArgs = { executionHostScope: hostInfo.executionHostId }
+  if (args?.limit !== undefined) {
+    scanArgs.limit = args.limit
+  }
+  if (args?.force !== undefined) {
+    scanArgs.force = args.force
+  }
+  if (args?.scopePaths !== undefined) {
+    scanArgs.scopePaths = args.scopePaths
+  }
+  try {
+    return await scanner(hostInfo.environmentId, scanArgs)
+  } catch (error) {
+    return runtimeScanIssueResult(
+      hostInfo,
+      error instanceof Error ? error.message : 'Remote Orca server is unavailable.'
+    )
+  }
+}
+
+function runtimeScanIssueResult(
+  hostInfo: RuntimeAiVaultHostInfo,
+  message: string
+): AiVaultListResult {
+  return unavailableScanIssueResult({
+    executionHostId: hostInfo.executionHostId,
+    path: hostInfo.environmentId,
+    message
+  })
+}
+
+function unavailableScanIssueResult(args: {
+  executionHostId: ExecutionHostId
+  path: string
+  message: string
+}): AiVaultListResult {
   return {
     sessions: [],
     issues: [
       {
-        executionHostId: executionHostScope,
+        executionHostId: args.executionHostId,
         agent: 'codex',
-        path: executionHostScope,
-        message: 'Agent Session History is not available for this execution host.'
+        path: args.path,
+        message: args.message
       }
     ],
     scannedAt: new Date().toISOString()

@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { registerAppHandlers } from './app'
 import { registerCliHandlers } from './cli'
 import { registerPreflightHandlers } from './preflight'
@@ -23,6 +24,7 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
@@ -69,6 +71,9 @@ import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
+import { listEnvironments } from '../../shared/runtime-environment-store'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
+import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 
 let registered = false
 
@@ -171,10 +176,51 @@ export function registerCoreHandlers(
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store)
   registerAiVaultHandlers({
-    getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths
+    getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
+    getActiveRuntimeAiVaultHostInfos: () =>
+      listEnvironments(app.getPath('userData')).map((environment) => ({
+        environmentId: environment.id,
+        executionHostId: toRuntimeExecutionHostId(environment.id)
+      })),
+    scanRuntimeAiVaultSessions: async (environmentId, args) =>
+      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args)
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
+}
+
+async function scanRuntimeAiVaultSessions(
+  userDataPath: string,
+  environmentId: string,
+  args: AiVaultListArgs
+): Promise<AiVaultListResult> {
+  const executionHostId = toRuntimeExecutionHostId(environmentId)
+  const response = await callRuntimeEnvironment(
+    userDataPath,
+    environmentId,
+    'aiVault.listSessions',
+    {
+      limit: args.limit,
+      force: args.force,
+      scopePaths: args.scopePaths,
+      executionHostId
+    }
+  )
+  if (response.ok === true) {
+    return response.result as AiVaultListResult
+  }
+  return {
+    sessions: [],
+    issues: [
+      {
+        executionHostId,
+        agent: 'codex',
+        path: environmentId,
+        message: response.error.message
+      }
+    ],
+    scannedAt: new Date().toISOString()
+  }
 }
