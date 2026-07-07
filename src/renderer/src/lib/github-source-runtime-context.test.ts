@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { GlobalSettings } from '../../../shared/types'
 import { getActiveRuntimeTarget } from '../runtime/runtime-rpc-client'
 import {
   canUseGitHubRepoContext,
   getGitHubMutationRoutingSettings,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
-  getGitHubSourceRuntimeTarget
+  getGitHubSourceRuntimeTarget,
+  resolveGitHubSourceSettings
 } from './github-source-runtime-context'
 import type { RepoRuntimeOwnerState } from './repo-runtime-owner'
 
@@ -53,6 +55,29 @@ describe('GitHub source runtime context', () => {
     expect(
       getGitHubRuntimeRepoId({ ...runtimeSourceContext, provider: 'gitlab' }, 'fallback')
     ).toBe('fallback')
+  })
+
+  it('keeps the repo owner runtime when the GitHub source is local', () => {
+    const repoOwnerSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> = {
+      activeRuntimeEnvironmentId: 'repo-owner-env'
+    }
+
+    expect(
+      resolveGitHubSourceSettings(repoOwnerSettings, {
+        ...runtimeSourceContext,
+        hostId: 'local'
+      })
+    ).toEqual({ activeRuntimeEnvironmentId: 'repo-owner-env' })
+  })
+
+  it('uses the GitHub source runtime when it is remote', () => {
+    const repoOwnerSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> = {
+      activeRuntimeEnvironmentId: 'repo-owner-env'
+    }
+
+    expect(resolveGitHubSourceSettings(repoOwnerSettings, runtimeSourceContext)).toEqual({
+      activeRuntimeEnvironmentId: 'env-1'
+    })
   })
 })
 

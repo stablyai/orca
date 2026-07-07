@@ -3,12 +3,12 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useRepoAssignees } from '@/hooks/useIssueMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { resolveGitHubSourceSettings } from '@/lib/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { getGitHubPRReviewerRows } from '@/components/github-pr-reviewer-display'
 import { mergeReviewerSuggestions } from '@/components/github/work-item-state-presentation'
@@ -57,13 +57,7 @@ export function PRReviewersPanel({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const submittingRef = useRef(false)

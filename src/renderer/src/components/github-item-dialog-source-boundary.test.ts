@@ -41,7 +41,7 @@ describe('GitHubItemDialog source host boundaries', () => {
     )
     const section = source
 
-    expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
+    expect(section).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
     expect(section).toContain('useRepoAssigneesBySlug(')
     expect(section).toContain('sourceSettings')
     expect(section).toContain('useRepoAssignees(')
@@ -66,7 +66,7 @@ describe('GitHubItemDialog source host boundaries', () => {
     const section = source
     const helperSection = componentSource('github/github-work-item-edit-mutations.ts')
 
-    expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
+    expect(section).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
     expect(section).toContain('useRepoLabels(')
     expect(section).toContain('useRepoLabelsBySlug(')
     expect(section).toContain('projectOrigin?.host')

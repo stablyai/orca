@@ -76,7 +76,7 @@ describe('PullRequestPage host boundaries', () => {
   it('routes reviewer metadata and mutations through the PR repo owner host', () => {
     const section = reviewersSource
 
-    expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
+    expect(section).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
     expect(section).toContain('useRepoAssigneesBySlug(')
     expect(section).toContain('sourceSettings')
     expect(section).toContain('useRepoAssignees(')
@@ -101,7 +101,7 @@ describe('PullRequestPage host boundaries', () => {
     const section = editSource
 
     expect(section).toContain('getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null)')
-    expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
+    expect(section).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
     expect(section).toContain('useRepoLabels(')
     expect(section).toContain('useRepoLabelsBySlug(')
     expect(section).toContain('projectOrigin?.host')
@@ -321,7 +321,7 @@ describe('PullRequestPage host boundaries', () => {
       "repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? '')"
     )
     expect(editHelperSection).toContain('{ local: false }')
-    expect(editSource).toContain('getTaskSourceRuntimeSettings(sourceContext)')
+    expect(editSource).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
     expect(editSource).toContain('sourceContext,')
   })
 

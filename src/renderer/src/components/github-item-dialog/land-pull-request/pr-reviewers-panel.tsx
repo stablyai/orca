@@ -12,12 +12,12 @@ import {
   filterGitHubPRReviewerCandidates,
   getGitHubPRReviewerQueryState
 } from '@/components/github/github-pr-reviewer-candidate-filter'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { resolveGitHubSourceSettings } from '@/lib/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { mergeReviewerSuggestions } from '@/components/github/work-item-state-presentation'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
@@ -60,13 +60,7 @@ export function PRReviewersPanel({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)

@@ -46,6 +46,18 @@ export function getGitHubMutationRoutingSettings(
   }
 }
 
+export function resolveGitHubSourceSettings<
+  T extends Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
+>(repoOwnerSettings: T, sourceContext: TaskSourceContext | null | undefined): T {
+  if (sourceContext?.provider !== 'github') {
+    return repoOwnerSettings
+  }
+  const sourceRuntimeSettings = getTaskSourceRuntimeSettings(sourceContext)
+  return sourceRuntimeSettings.activeRuntimeEnvironmentId
+    ? ({ ...repoOwnerSettings, ...sourceRuntimeSettings } as T)
+    : repoOwnerSettings
+}
+
 export function canUseGitHubRepoContext(
   repoPath: string | null | undefined,
   sourceContext: TaskSourceContext | null | undefined
