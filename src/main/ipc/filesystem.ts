@@ -1026,6 +1026,14 @@ export function registerFilesystemHandlers(
   )
 
   // ─── List all files (for quick-open) ─────────────────────
+  // Why: a remote listFiles is a full-tree scan (tens of thousands of paths
+  // streamed over one relay socket). Fast project switching fires a fresh scan
+  // for the same SSH connection before the previous finishes; without
+  // cancellation they pile up on the single-threaded relay and starve
+  // concurrent fs.readDir/fs.stat past the 30s request timeout, which surfaces
+  // as "Could not load files for this workspace". Keep one in-flight scan per
+  // connection and abort the previous when a newer one starts.
+  const inFlightListFiles = new Map<string, AbortController>()
   ipcMain.handle(
     'fs:listFiles',
     async (
@@ -1041,10 +1049,33 @@ export function registerFilesystemHandlers(
         if (!provider) {
           return []
         }
-        // Why: forward excludePaths through to the remote provider.
-        // Dropping it here would silently double-scan nested linked worktrees
-        // over SSH and contribute to timeout-induced partial results.
-        return provider.listFiles(args.rootPath, { excludePaths: args.excludePaths })
+        const previous = inFlightListFiles.get(args.connectionId)
+        if (previous) {
+          previous.abort()
+        }
+        const controller = new AbortController()
+        inFlightListFiles.set(args.connectionId, controller)
+        try {
+          // Why: forward excludePaths through to the remote provider.
+          // Dropping it here would silently double-scan nested linked worktrees
+          // over SSH and contribute to timeout-induced partial results.
+          return await provider.listFiles(args.rootPath, {
+            excludePaths: args.excludePaths,
+            signal: controller.signal
+          })
+        } catch (error) {
+          // Why: a scan aborted by a newer request is superseded, not failed.
+          // Resolve empty so the switched-away project doesn't raise an error
+          // banner; the active project's own scan populates quick-open.
+          if (controller.signal.aborted) {
+            return []
+          }
+          throw error
+        } finally {
+          if (inFlightListFiles.get(args.connectionId) === controller) {
+            inFlightListFiles.delete(args.connectionId)
+          }
+        }
       }
       return listQuickOpenFiles(args.rootPath, store, args.excludePaths)
     }

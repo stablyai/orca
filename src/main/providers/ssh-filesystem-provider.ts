@@ -283,12 +283,21 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.search', opts)) as SearchResult
   }
 
-  async listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]> {
+  async listFiles(
+    rootPath: string,
+    options?: { excludePaths?: string[]; signal?: AbortSignal }
+  ): Promise<string[]> {
     const params: Record<string, unknown> = { rootPath }
     if (options?.excludePaths && options.excludePaths.length > 0) {
       params.excludePaths = options.excludePaths
     }
-    return (await this.mux.request('fs.listFiles', params)) as string[]
+    // Why: pass the caller's abort signal so a superseded index (e.g. the user
+    // switched to another project before this full-tree scan finished) is
+    // canceled via the mux's rpc.cancel instead of running to completion and
+    // starving concurrent fs.readDir/fs.stat past the 30s request timeout.
+    return (await this.mux.request('fs.listFiles', params, {
+      signal: options?.signal
+    })) as string[]
   }
 
   async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {

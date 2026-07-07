@@ -27,7 +27,8 @@ export const LIST_FILES_TIMEOUT_MS = 25_000
 
 export function listFilesWithRg(
   rootPath: string,
-  excludePathPrefixes: readonly string[] = []
+  excludePathPrefixes: readonly string[] = [],
+  signal?: AbortSignal
 ): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const files = new Set<string>()
@@ -193,8 +194,31 @@ export function listFilesWithRg(
       }
     }
 
+    // Why: a canceled request (superseded by a newer scan on fast project
+    // switch, or an explicit rpc.cancel) must stop the rg children instead of
+    // letting them run to LIST_FILES_TIMEOUT_MS and keep saturating the relay.
+    const onAbort = (): void => {
+      if (done) {
+        return
+      }
+      done = true
+      killSurvivors()
+      reject(new Error('fs.listFiles canceled'))
+    }
+    if (signal) {
+      if (signal.aborted) {
+        onAbort()
+        return
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+    const detachAbort = (): void => {
+      signal?.removeEventListener('abort', onAbort)
+    }
+
     Promise.all([runPass(primary), runPass(ignoredPass)])
       .then(() => {
+        detachAbort()
         if (done) {
           return
         }
@@ -202,6 +226,7 @@ export function listFilesWithRg(
         resolve(Array.from(files))
       })
       .catch((err) => {
+        detachAbort()
         if (done) {
           return
         }

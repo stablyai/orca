@@ -322,3 +322,33 @@ describe('relay quick open ignored file listing', () => {
     }
   })
 })
+
+describe('relay quick open cancellation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('rejects immediately and spawns no rg when the signal is already aborted', async () => {
+    await expect(listFilesWithRg('/remote/root', [], AbortSignal.abort())).rejects.toThrow(
+      'fs.listFiles canceled'
+    )
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('kills the rg children and rejects when the signal aborts mid-flight', async () => {
+    const primaryProc = createMockProcess()
+    const ignoredProc = createMockProcess()
+    spawnMock.mockImplementation((_cmd: string, args: string[]) =>
+      args.includes('--no-ignore-vcs') ? ignoredProc : primaryProc
+    )
+
+    const controller = new AbortController()
+    const promise = listFilesWithRg('/remote/root', [], controller.signal)
+
+    controller.abort()
+
+    await expect(promise).rejects.toThrow('fs.listFiles canceled')
+    expect(primaryProc.kill).toHaveBeenCalled()
+    expect(ignoredProc.kill).toHaveBeenCalled()
+  })
+})

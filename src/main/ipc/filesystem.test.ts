@@ -332,6 +332,40 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
+  it('aborts the previous in-flight remote listFiles when a newer one starts for the same connection', async () => {
+    // Why: fast project switching fires a fresh remote listFiles before the
+    // previous full-tree scan finishes. The handler must cancel the superseded
+    // scan so it stops saturating the single-threaded relay, and resolve it to
+    // [] instead of surfacing an error for the project the user left.
+    const signals: (AbortSignal | undefined)[] = []
+    const provider = {
+      listFiles: vi.fn((_rootPath: string, opts?: { signal?: AbortSignal }) => {
+        signals.push(opts?.signal)
+        return new Promise<string[]>((_resolve, reject) => {
+          opts?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true
+          })
+        })
+      })
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    registerFilesystemHandlers(store as never)
+
+    const first = handlers.get('fs:listFiles')!(null, {
+      rootPath: '/remote/a',
+      connectionId: 'ssh-1'
+    })
+    const second = handlers.get('fs:listFiles')!(null, {
+      rootPath: '/remote/b',
+      connectionId: 'ssh-1'
+    })
+
+    await expect(first).resolves.toEqual([])
+    expect(signals[0]?.aborted).toBe(true)
+    expect(signals[1]?.aborted).toBe(false)
+    void second
+  })
+
   // Why: handler-level WSL UNC authorization depends on native Windows path
   // resolution; path-shape classification has separate cross-platform coverage.
   it.runIf(process.platform === 'win32')(
