@@ -59,6 +59,9 @@ export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheck
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,
     status: mapGitLabPipelineJobStatusToCheckStatus(job.status),
     conclusion: mapGitLabPipelineJobStatusToConclusion(job.status),
-    url: job.webUrl || null
+    url: job.webUrl || null,
+    // Why: lets the Checks panel fetch this job's trace via `gitlab:jobTrace`,
+    // since GitLab jobs have no GitHub-style check-run/workflow ids.
+    ...(job.id ? { gitlabJobId: job.id } : {})
   }))
 }

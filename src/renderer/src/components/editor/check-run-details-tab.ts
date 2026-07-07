@@ -15,6 +15,11 @@ export function getCheckRunTabIdentity(check: PRCheckDetail): string {
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}`
   }
+  // Why: GitLab jobs share names across pipelines and may have no url, so key
+  // on the job id first to avoid two distinct jobs colliding onto one tab.
+  if (check.gitlabJobId) {
+    return `gitlab-job:${check.gitlabJobId}`
+  }
   if (check.url) {
     return `url:${check.url}`
   }
