@@ -68,7 +68,12 @@ function resumableStateFactoryFor(
       return candidate.file.path.endsWith('.jsonl')
         ? () => createGeminiJsonlSessionResumeState(candidate.file)
         : null
-    default:
+    case 'devin':
+    case 'grok':
+    case 'hermes':
+    case 'kimi':
+    case 'opencode':
+    case 'rovo':
       return null
   }
 }
@@ -104,7 +109,7 @@ function storeEntry(path: string, entry: SessionParseCacheEntry): void {
 /**
  * Parse a session file, reusing prior work where the file is provably
  * unchanged (mtime+size) and, for append-only JSONL transcripts (Claude,
- * Codex, Cursor, Copilot, Droid, OpenClaw/Pi, Gemini-JSONL), resuming the
+ * Codex, Cursor, Copilot, Droid, OpenClaw/Pi/OMP, Gemini-JSONL), resuming the
  * parse from the last consumed byte when the file only grew. This is what
  * keeps the renderer's ~5s forced rescans from re-reading gigabytes of
  * transcripts (STA-1278/STA-1417: main process pegging one core during
