@@ -44,6 +44,7 @@ import {
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
+import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
@@ -157,7 +158,6 @@ export function HostScreen({
   const now = useNow(30_000)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
-  const [repoSummaries, setRepoSummaries] = useState<RepoSummary[]>([])
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
   const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
@@ -204,9 +204,7 @@ export function HostScreen({
     hideDefaultBranch: false,
     filterRepoIds: [],
     collapsedGroups: [],
-    workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES,
-    workspaceHostScope: undefined,
-    visibleWorkspaceHostIds: undefined
+    workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES
   })
 
   useEffect(() => {
@@ -217,9 +215,7 @@ export function HostScreen({
       hideDefaultBranch: filters.hideDefaultBranch,
       filterRepoIds: [...filters.filterRepoIds],
       collapsedGroups: [...collapsedGroups],
-      workspaceStatuses,
-      workspaceHostScope: viewStateRef.current.workspaceHostScope,
-      visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds
+      workspaceStatuses
     }
   }, [groupMode, sortMode, filters, collapsedGroups, workspaceStatuses])
 
@@ -338,7 +334,6 @@ export function HostScreen({
     setCompatVerdict({ kind: 'ok' })
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
-    setRepoSummaries([])
     repoMetadataFetchedAtRef.current = 0
     // Why: re-seed from the current host's cache on every hostId change.
     // The useState initializer only runs on first mount, so if Expo Router
@@ -397,7 +392,6 @@ export function HostScreen({
         const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
         repoMetadataFetchedAtRef.current = Date.now()
         setCachedRepos(requestHostId, repoResult.repos)
-        setRepoSummaries(repoResult.repos)
         setRepoColorsByName(
           new Map(
             repoResult.repos.map((repo) => [
@@ -820,11 +814,8 @@ export function HostScreen({
     groupMode,
     pinnedIds,
     repoIdsByName,
-    repoSummaries,
     repoColorsByName,
     collapsedGroups,
-    workspaceHostScope: viewStateRef.current.workspaceHostScope,
-    visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds,
     workspaceStatuses
   })
   const existingWorktreePaths = useMemo(() => worktrees.map((w) => w.path), [worktrees])
@@ -1099,17 +1090,6 @@ export function HostScreen({
               />
             </Pressable>
 
-            <Pressable
-              style={styles.newButton}
-              onPress={openNewWorktreeModal}
-              disabled={connState !== 'connected'}
-            >
-              <Plus
-                size={16}
-                color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
-              />
-            </Pressable>
-
             <Pressable style={styles.searchToggle} onPress={() => setShowSearch((s) => !s)}>
               {showSearch ? (
                 <X size={16} color={colors.textSecondary} />
@@ -1187,7 +1167,9 @@ export function HostScreen({
           // above the Samsung 3-button nav / iOS home indicator.
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: spacing.lg + insets.bottom },
+            // Phone shows a floating "+" button bottom-right; reserve room so the
+            // last row stays tappable above it. Embedded sidebars keep the toolbar +.
+            { paddingBottom: (embedded ? spacing.lg : FAB_SIZE + spacing.xl) + insets.bottom },
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
@@ -1243,6 +1225,11 @@ export function HostScreen({
             />
           )}
         />
+      )}
+
+      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
+      {!embedded && (
+        <NewWorkspaceFab onPress={openNewWorktreeModal} disabled={connState !== 'connected'} />
       )}
 
       <PickerModal
@@ -1609,9 +1596,6 @@ const styles = StyleSheet.create({
   },
   toolbarIconDisabled: {
     opacity: 0.6
-  },
-  newButton: {
-    padding: spacing.xs
   },
   searchToggle: {
     padding: spacing.xs

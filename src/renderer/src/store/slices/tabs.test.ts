@@ -2124,5 +2124,84 @@ describe('TabsSlice', () => {
         groupId: restoredGroup?.id
       })
     })
+
+    it('promotes legacy terminals to the worktree remembered tab, not always the first one', () => {
+      // Why (regression): selecting a non-first terminal, switching to another
+      // worktree, then returning must land on the remembered tab. Reconcile
+      // used to seed a freshly-ensured group with restoredLegacyTabs[0], so the
+      // remembered selection in activeTabIdByWorktree was silently dropped and
+      // the worktree always reopened on Terminal 1.
+      const firstTerminalId = 'runtime-terminal-1'
+      const secondTerminalId = 'runtime-terminal-2'
+
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: firstTerminalId,
+              ptyId: 'pty-1',
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: secondTerminalId,
+              ptyId: 'pty-2',
+              worktreeId: WT,
+              title: 'Terminal 2',
+              customTitle: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 2
+            }
+          ]
+        },
+        ptyIdsByTabId: {
+          [firstTerminalId]: ['pty-1'],
+          [secondTerminalId]: ['pty-2']
+        },
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: { [WT]: [] },
+        activeGroupIdByWorktree: {},
+        // The user had Terminal 2 active before leaving this worktree.
+        activeTabIdByWorktree: { [WT]: secondTerminalId }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const restoredGroup = store.getState().groupsByWorktree[WT]?.[0]
+
+      expect(result.renderableTabCount).toBe(2)
+      expect(result.activeRenderableTabId).toBe(secondTerminalId)
+      expect(restoredGroup?.activeTabId).toBe(secondTerminalId)
+    })
+
+    it('keeps a sole terminal renderable after its PTY exits so a failed direnv does not strand the worktree', () => {
+      // Why (regression): a PR worktree's only terminal can die on startup (a
+      // failing .envrc/direnv). pty-connection keeps that dead pane mounted
+      // instead of bouncing to Landing; this asserts the supporting invariant —
+      // once a terminal is promoted to a unified tab, clearing its PTY does NOT
+      // make it an orphan, so reconcile still reports it renderable (count 1).
+      // If this regressed to 0, the worktree would auto-respawn or get torn
+      // down (setActiveWorktree(null)), reintroducing the Landing bounce.
+      const tab = store
+        .getState()
+        .createTab(WT, undefined, undefined, { pendingActivationSpawn: true })
+      store.getState().updateTabPtyId(tab.id, 'pty-died')
+      // First reconcile promotes the legacy runtime tab into the unified model.
+      expect(store.getState().reconcileWorktreeTabModel(WT).renderableTabCount).toBe(1)
+
+      // The newborn PTY exits: pty-connection clears the binding but keeps the pane.
+      store.getState().clearTabPtyId(tab.id, 'pty-died')
+      const clearedTab = store.getState().tabsByWorktree[WT]?.find((t) => t.id === tab.id)
+      expect(store.getState().ptyIdsByTabId[tab.id] ?? []).toEqual([])
+      expect(clearedTab?.ptyId ?? null).toBeNull()
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe(tab.id)
+    })
   })
 })

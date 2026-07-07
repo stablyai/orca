@@ -1,6 +1,9 @@
-import { basename, join } from 'path'
-import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'fs'
+import { basename, join } from 'node:path'
+import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
+import { isWslUncPath } from '../../shared/wsl-paths'
+import { wslUncDirectoryExists } from '../wsl'
+import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
 
 let didEnsureSpawnHelperExecutable = false
 
@@ -75,20 +78,48 @@ export function ensureNodePtySpawnHelperExecutable(): void {
   }
 }
 
+function throwMissingWorkingDirectory(cwd: string): never {
+  throw new Error(
+    `Working directory "${cwd}" does not exist. ` +
+      `It may have been deleted or is on an unmounted volume.`
+  )
+}
+
 /**
  * Validate that a working directory exists and is a directory.
  * Throws a descriptive Error if not.
  */
 export function validateWorkingDirectory(cwd: string): void {
+  // Why: Win32 fs.statSync against the WSL 9P share (\\wsl.localhost\...) can
+  // falsely report ENOENT for directories that exist on the Linux side. Ask the
+  // distro itself; only fall back to the fs check when wsl.exe is inconclusive.
+  if (isWslUncPath(cwd)) {
+    const existsInDistro = wslUncDirectoryExists(cwd)
+    if (existsInDistro === false) {
+      throwMissingWorkingDirectory(cwd)
+    }
+    if (existsInDistro === true) {
+      return
+    }
+  }
+
   if (!existsSync(cwd)) {
-    throw new Error(
-      `Working directory "${cwd}" does not exist. ` +
-        `It may have been deleted or is on an unmounted volume.`
-    )
+    throwMissingWorkingDirectory(cwd)
   }
   if (!statSync(cwd).isDirectory()) {
     throw new Error(`Working directory "${cwd}" is not a directory.`)
   }
+}
+
+/** A pre-resolved Windows shell attempt: an absolute executable plus the launch
+ *  args + cwd computed for it. Used to walk the PowerShell -> Windows PowerShell
+ *  -> cmd.exe fallback chain when ConPTY rejects the primary shell. */
+export type WindowsShellSpawnAttempt = {
+  shellPath: string
+  shellArgs: string[]
+  effectiveCwd: string
+  validationCwd: string
+  startupCommandDeliveredInShellArgs: boolean
 }
 
 export type ShellSpawnParams = {
@@ -106,16 +137,73 @@ export type ShellSpawnParams = {
   /** Called before each fallback shell spawn so callers can update env vars
    *  (e.g. HISTFILE) that depend on which shell is about to run. */
   onBeforeFallbackSpawn?: (env: Record<string, string>, fallbackShell: string) => void
+  /** Windows-only ordered fallback chain (PowerShell -> Windows PowerShell ->
+   *  cmd.exe). When the first attempt (which must match shellPath/shellArgs)
+   *  fails to spawn, the next real absolute executable is tried with its own
+   *  recomputed args/cwd. */
+  windowsFallbackAttempts?: WindowsShellSpawnAttempt[]
 }
 
 export type ShellSpawnResult = {
   process: pty.IPty
   shellPath: string
+  /** True when the winning shell's startup command was already embedded in its
+   *  argv, so callers must not re-deliver it through stdin. Only set when a
+   *  Windows fallback attempt other than the primary was used. */
+  startupCommandDeliveredInShellArgs?: boolean
 }
 
 /**
- * Attempt to spawn a PTY shell. If the primary shell fails on Unix,
- * try common fallback shells before giving up.
+ * Walk the Windows PowerShell -> Windows PowerShell -> cmd.exe fallback chain.
+ *
+ * Why: ConPTY's CreateProcessW rejects a Store App Execution Alias stub with
+ * ERROR_ACCESS_DENIED (error code 5). The chain entries are real absolute
+ * executables with per-shell args, so when the primary fails we retry with the
+ * next safe shell instead of leaving the user with no terminal.
+ */
+// Why: match the daemon spawn path (pty-subprocess.ts) — the bundled ConPTY
+// has the modern wrap-marker behavior xterm expects; legacy system ConPTY can
+// corrupt full-width TUI rows in scrollback. Without this, degraded-mode and
+// fresh-local spawns silently behave differently from daemon terminals.
+function windowsConptyDllOptions(): { useConptyDll: true } | Record<string, never> {
+  return process.platform === 'win32' ? { useConptyDll: true } : {}
+}
+
+function spawnWindowsFallbackChain(
+  params: ShellSpawnParams,
+  primaryError: string
+): ShellSpawnResult | null {
+  const { termName = 'xterm-256color', cols, rows, env, ptySpawn } = params
+  const attempts = params.windowsFallbackAttempts ?? []
+  // Skip the first entry: it is the primary that already failed above.
+  for (const attempt of attempts.slice(1)) {
+    try {
+      const proc = ptySpawn(attempt.shellPath, attempt.shellArgs, {
+        name: termName,
+        cols,
+        rows,
+        cwd: attempt.effectiveCwd,
+        env,
+        ...windowsConptyDllOptions()
+      })
+      console.warn(
+        `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`
+      )
+      return {
+        process: proc,
+        shellPath: attempt.shellPath,
+        startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
+      }
+    } catch {
+      // This fallback shell also failed -- try the next link in the chain.
+    }
+  }
+  return null
+}
+
+/**
+ * Attempt to spawn a PTY shell. If the primary shell fails, try fallback shells
+ * (Unix: zsh/bash/sh; Windows: the PowerShell -> cmd.exe chain) before giving up.
  */
 export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResult {
   const {
@@ -138,12 +226,27 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
 
   if (!primaryError) {
     try {
+      const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
       return {
-        process: ptySpawn(shellPath, shellArgs, { name: termName, cols, rows, cwd, env }),
+        process: ptySpawn(wrapped.file, wrapped.args, {
+          name: termName,
+          cols,
+          rows,
+          cwd,
+          env,
+          ...windowsConptyDllOptions()
+        }),
         shellPath
       }
     } catch (err) {
       primaryError = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  if (process.platform === 'win32') {
+    const fallback = spawnWindowsFallbackChain(params, primaryError ?? 'unknown error')
+    if (fallback) {
+      return fallback
     }
   }
 
@@ -159,7 +262,12 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         env.SHELL = fallback
         onBeforeFallbackSpawn?.(env, fallback)
         Object.assign(env, fallbackReady?.env ?? {})
-        const proc = ptySpawn(fallback, fallbackReady?.args ?? ['-l'], {
+        const wrapped = wrapShellSpawnForMacosTccAttribution(
+          fallback,
+          fallbackReady?.args ?? ['-l'],
+          env
+        )
+        const proc = ptySpawn(wrapped.file, wrapped.args, {
           name: termName,
           cols,
           rows,

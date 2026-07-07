@@ -1,4 +1,4 @@
-import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
@@ -308,7 +308,7 @@ export function buildAttentionByWorktree(
           }
           panes.push({
             kind: 'title',
-            status: detectAgentStatusFromTitle(title),
+            status: classifyTitleActivity(title),
             worktreeLastActivityAt: worktree.lastActivityAt
           })
         }
@@ -318,7 +318,7 @@ export function buildAttentionByWorktree(
         // titles or hook entries exist for this tab.
         panes.push({
           kind: 'title',
-          status: detectAgentStatusFromTitle(tab.title),
+          status: classifyTitleActivity(tab.title),
           worktreeLastActivityAt: worktree.lastActivityAt
         })
       }

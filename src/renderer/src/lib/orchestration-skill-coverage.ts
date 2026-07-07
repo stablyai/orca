@@ -61,7 +61,7 @@ function normalizeSkillName(value: string): string {
 }
 
 function basenameFromPath(pathValue: string): string {
-  return pathValue.split(/[\\/]/).filter(Boolean).at(-1) ?? pathValue
+  return pathValue.split(/[\\/]/).findLast(Boolean) ?? pathValue
 }
 
 function normalizePath(pathValue: string): string {

@@ -53,7 +53,8 @@ const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
-  acceptMergedFallbackPR: z.boolean().optional()
+  acceptMergedFallbackPR: z.boolean().optional(),
+  currentHeadOid: z.string().nullable().optional()
 })
 
 const Issue = RepoSelector.extend({
@@ -361,7 +362,8 @@ export const GITHUB_METHODS: RpcMethod[] = [
         params.branch,
         params.linkedPRNumber,
         params.fallbackPRNumber,
-        params.acceptMergedFallbackPR
+        params.acceptMergedFallbackPR,
+        params.currentHeadOid
       )
   }),
   defineMethod({

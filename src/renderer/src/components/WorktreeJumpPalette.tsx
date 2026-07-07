@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
+import { selectPaletteStatusInputs } from './worktree-jump-palette-status-inputs'
 import {
   CommandDialog,
   CommandInput,
@@ -112,6 +114,7 @@ import {
 } from '@/lib/github-work-item-source-lookup'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
+import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
@@ -191,6 +194,10 @@ type PaletteItem =
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 
 const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_QUICK_ACTION_ID}`
+
+// Why: comfortably outlast the CommandDialog close animation (~150–200ms) so the
+// gated status maps stay live until the fading rows are gone from the DOM.
+const PALETTE_STATUS_INPUTS_LINGER_MS = 300
 
 function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
@@ -336,21 +343,44 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const pendingWorktreeCreations = useAppStore((s) => s.pendingWorktreeCreations)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  // Why: getWorktreeStatus needs per-pane titles so split-pane tabs with a
-  // working agent in a non-focused pane still surface as 'working' in the
-  // jump palette. Without this, clicking between panes would desync the
-  // palette's spinner from the sidebar's spinner.
-  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
-  // Why: ptyIdsByTabId is the live-pty source of truth — without it,
-  // getWorktreeStatus would treat slept tabs as live (their preserved
-  // tab.ptyId is a wake-hint sessionId, not a liveness signal) and the jump
-  // palette dot would lie green even though the sidebar dot is correctly grey.
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
+  // Why: keep the (very hot) status maps subscribed through the dialog's close
+  // animation. `visible` flips false synchronously on close, but the CommandDialog
+  // content stays mounted while it fades/zooms out — dropping the maps to empty
+  // there would flash the switcher rows empty/reordered mid-animation. Linger a
+  // beat past close, then let the gate drop the subscription.
+  const [statusInputsLingering, setStatusInputsLingering] = useState(false)
+  useEffect(() => {
+    if (visible) {
+      setStatusInputsLingering(true)
+      return
+    }
+    const timer = window.setTimeout(
+      () => setStatusInputsLingering(false),
+      PALETTE_STATUS_INPUTS_LINGER_MS
+    )
+    return () => window.clearTimeout(timer)
+  }, [visible])
+  // Why: these five status maps drive per-worktree live/working dots and the
+  // switcher sort, but only matter while the palette is active. Two of them
+  // (agentStatusByPaneKey, runtimePaneTitlesByTabId) get a new identity on every
+  // agent-status / pane-title write app-wide, so subscribing to them while the
+  // always-mounted palette is closed re-rendered it on unrelated terminals. Gate
+  // the subscription on active-or-still-closing: a shared frozen constant while
+  // inactive keeps useShallow referentially equal across the churn, and the live
+  // maps flow through the instant the palette opens.
+  // - runtimePaneTitlesByTabId: split-pane tabs with a working agent in a
+  //   non-focused pane still surface as 'working' (matches the sidebar spinner).
+  // - ptyIdsByTabId: the live-pty source of truth — slept tabs keep a wake-hint
+  //   sessionId in tab.ptyId, so without it the palette dot would lie green.
+  const {
+    agentStatusByPaneKey,
+    runtimePaneTitlesByTabId,
+    ptyIdsByTabId,
+    terminalLayoutsByTabId,
+    tabsByWorktree
+  } = useAppStore(useShallow((s) => selectPaletteStatusInputs(s, visible || statusInputsLingering)))
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeTabType = useAppStore((s) => s.activeTabType)
@@ -1799,7 +1829,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id
-                const sshConnectionId = repo?.connectionId ?? null
+                // Runtime-owned (per-workspace-env) SSH targets are hidden and their relay health is
+                // owned by the runtime layer (broadcasts suppressed) — don't show a false disconnected.
+                const sshConnectionId =
+                  repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
+                    ? repo.connectionId
+                    : null
                 const sshStatus = sshConnectionId
                   ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
                   : null

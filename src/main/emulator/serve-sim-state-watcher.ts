@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, readdirSync, watch } from 'fs'
-import { basename, join } from 'path'
-import { tmpdir } from 'os'
-import type { FSWatcher } from 'fs'
+import { existsSync, readFileSync, readdirSync, watch } from 'node:fs'
+import { basename, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { FSWatcher } from 'node:fs'
 
 // Why: terminal-started `serve-sim --detach` writes state under $TMPDIR/serve-sim/ and may
 // print JSON to the PTY. Orca-managed attach (CLI/pane) already registers via EmulatorBridge;
@@ -68,19 +68,16 @@ function helperInstanceKey(info: ServeSimHelperInfo): string {
 
 export class ServeSimStateWatcher {
   private readonly stateDir: string
-  private readonly parentDir: string
   private readonly ptyToWorktree = new Map<string, string>()
   private readonly ptyBuffers = new Map<string, string>()
   private readonly seenExternalKeys = new Set<string>()
   private readonly orcaManagedHelperKeys = new Set<string>()
   private readonly listeners = new Set<(event: ServeSimStateDetectedEvent) => void>()
-  private parentWatcher: FSWatcher | null = null
   private stateWatcher: FSWatcher | null = null
   private stateDirPoll: ReturnType<typeof setInterval> | null = null
 
-  constructor(options: { stateDir?: string; parentDir?: string } = {}) {
+  constructor(options: { stateDir?: string } = {}) {
     this.stateDir = options.stateDir ?? DEFAULT_STATE_DIR
-    this.parentDir = options.parentDir ?? tmpdir()
   }
 
   onDetected(listener: (event: ServeSimStateDetectedEvent) => void): () => void {
@@ -118,6 +115,15 @@ export class ServeSimStateWatcher {
         this.ptyBuffers.delete(ptyId)
       }
     }
+    // Why: dedupe keys are worktree-scoped (`${worktreeId}::...`); prune them on
+    // forget so the Set does not grow for the session across worktree switches.
+    // A later re-bind of the same worktree is a fresh context and should re-emit.
+    const prefix = `${worktreeId}::`
+    for (const key of this.seenExternalKeys) {
+      if (key.startsWith(prefix)) {
+        this.seenExternalKeys.delete(key)
+      }
+    }
   }
 
   ingestPtyOutput(ptyId: string, data: string): void {
@@ -147,25 +153,20 @@ export class ServeSimStateWatcher {
   }
 
   start(): void {
-    if (this.parentWatcher || this.stateWatcher) {
+    if (this.stateDirPoll || this.stateWatcher) {
       return
     }
     try {
       // Why: $TMPDIR/serve-sim/ may not exist until the first terminal `serve-sim --detach`.
-      // Watch the parent tmpdir and attach to serve-sim/ when it appears (or watch it directly if present).
+      // Poll for it instead of fs.watch on the parent tmpdir: watching $TMPDIR
+      // registers a permanent FSEvents client on the system's highest-churn
+      // directory, while an existence poll costs the daemon nothing.
       this.attachStateDirWatch()
       if (this.stateWatcher) {
         this.scanExistingStateFiles()
         return
       }
 
-      this.parentWatcher = watch(this.parentDir, (_event, filename) => {
-        if (!filename || String(filename) !== 'serve-sim') {
-          return
-        }
-        this.attachStateDirWatch()
-        this.scanExistingStateFiles()
-      })
       this.stateDirPoll = setInterval(() => {
         this.attachStateDirWatch()
         this.scanExistingStateFiles()
@@ -177,12 +178,10 @@ export class ServeSimStateWatcher {
   }
 
   stop(): void {
-    this.parentWatcher?.close()
     this.stateWatcher?.close()
     if (this.stateDirPoll) {
       clearInterval(this.stateDirPoll)
     }
-    this.parentWatcher = null
     this.stateWatcher = null
     this.stateDirPoll = null
     this.ptyToWorktree.clear()

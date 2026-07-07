@@ -62,6 +62,16 @@ function canEnableAutoMerge(item: GitHubPRMergeStateInput): boolean {
   return canEnableGitHubPRAutoMerge(item)
 }
 
+// Why: when GitHub already allows a direct merge, offering "Enable auto-merge"
+// only yields a "clean status" rejection. Keep the Disable action so users can
+// still turn off an existing auto-merge request; merge-queue "Merge when ready"
+// paths set directMergeAvailable=false and never reach here.
+function autoMergeActionWhenDirectMergeAvailable(
+  autoMergeAction: GitHubPRAutoMergeAction | null
+): GitHubPRAutoMergeAction | null {
+  return autoMergeAction?.kind === 'disable' ? autoMergeAction : null
+}
+
 function passedChecksMergePresentation(
   autoMergeAction: GitHubPRAutoMergeAction | null
 ): GitHubPRMergeStatePresentation {
@@ -73,7 +83,7 @@ function passedChecksMergePresentation(
       'Checks passed. Merge eligibility will be checked again before merging.'
     ),
     directMergeAvailable: true,
-    autoMergeAction
+    autoMergeAction: autoMergeActionWhenDirectMergeAvailable(autoMergeAction)
   }
 }
 
@@ -280,7 +290,7 @@ export function presentGitHubPRMergeState(
           ? 'GitHub says this PR can merge and checks passed'
           : 'GitHub says this PR can merge'),
       directMergeAvailable: true,
-      autoMergeAction
+      autoMergeAction: autoMergeActionWhenDirectMergeAvailable(autoMergeAction)
     }
   }
   // Why: GitHub may still report intermediate mergeability while checks are

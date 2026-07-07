@@ -283,6 +283,29 @@ const ATTACHMENT_BY_UUID_QUERY = `
   }
 `
 
+// Why: fetch comments with their author in a single request. Accessing
+// `.user` on the SDK's Comment model lazily issues one user(id) query per
+// comment, so the previous loop was an N+1 (issue + comments + N user
+// fetches, all sequential while holding a shared Linear concurrency slot).
+// first: 50 matches the SDK default page size the previous code relied on.
+const ISSUE_COMMENTS_QUERY = `
+  query OrcaLinearIssueComments($id: String!) {
+    issue(id: $id) {
+      comments(first: 50) {
+        nodes {
+          id
+          body
+          createdAt
+          user {
+            displayName
+            avatarUrl
+          }
+        }
+      }
+    }
+  }
+`
+
 type LinearIssueByUuidResponse = {
   issue?:
     | (Omit<LinearIssueWriteRecord, 'labels'> & {
@@ -307,6 +330,21 @@ type LinearAttachmentByUuidResponse = {
     title?: string | null
     url?: string | null
     issue?: { id?: string | null; identifier?: string | null; url?: string | null } | null
+  } | null
+}
+
+type LinearIssueCommentsResponse = {
+  issue?: {
+    comments?: {
+      nodes?:
+        | {
+            id: string
+            body?: string | null
+            createdAt?: string | null
+            user?: { displayName?: string | null; avatarUrl?: string | null } | null
+          }[]
+        | null
+    } | null
   } | null
 }
 
@@ -1446,21 +1484,24 @@ export async function getIssueComments(
 
   await acquire()
   try {
-    const issue = await entry.client.issue(issueId)
-    const comments = await issue.comments()
-    const results: LinearComment[] = []
-    for (const c of comments.nodes) {
-      const user = await c.user
-      results.push({
-        id: c.id,
-        body: c.body,
-        createdAt: c.createdAt.toISOString(),
-        user: user
-          ? { displayName: user.displayName, avatarUrl: user.avatarUrl ?? undefined }
-          : undefined
-      })
-    }
-    return results
+    const result = await entry.client.client.rawRequest<
+      LinearIssueCommentsResponse,
+      LinearRawVariables
+    >(ISSUE_COMMENTS_QUERY, { id: issueId })
+    const nodes = result.data?.issue?.comments?.nodes ?? []
+    return nodes.map((node) => ({
+      id: node.id,
+      body: node.body ?? '',
+      // Why: rawRequest returns createdAt as an ISO string already; do not
+      // re-serialize (the SDK model path used .toISOString() on a parsed Date).
+      createdAt: node.createdAt ?? '',
+      user: node.user
+        ? {
+            displayName: node.user.displayName ?? '',
+            avatarUrl: node.user.avatarUrl ?? undefined
+          }
+        : undefined
+    }))
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)

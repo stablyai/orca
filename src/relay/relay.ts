@@ -19,10 +19,10 @@
 // can reconnect by running relay.js --connect, which bridges the new
 // SSH channel's stdin/stdout to the existing relay's socket.
 
-import { createServer, createConnection, type Socket, type Server } from 'net'
-import { homedir } from 'os'
-import { resolve, join } from 'path'
-import { unlinkSync, existsSync, statSync } from 'fs'
+import { createServer, createConnection, type Socket, type Server } from 'node:net'
+import { homedir } from 'node:os'
+import { resolve, join } from 'node:path'
+import { unlinkSync, existsSync, statSync } from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -57,6 +57,7 @@ import {
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
+import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
@@ -121,11 +122,11 @@ function parseArgs(argv: string[]): {
   let endpointDir: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
-      const parsed = parseInt(argv[i + 1], 10)
+      const parsed = Number.parseInt(argv[i + 1], 10)
       // Why: the CLI flag is in seconds for ergonomics, but internally we track
       // ms. 0 is allowed for opt-in synced workspaces that intentionally keep a
       // relay alive until explicitly terminated.
-      if (!isNaN(parsed) && parsed >= 0) {
+      if (!Number.isNaN(parsed) && parsed >= 0) {
         graceTimeMs = parsed * 1000
       }
       i++
@@ -372,15 +373,44 @@ async function main(): Promise<void> {
   // write to a dead pipe, silently failing or throwing EPIPE.  When a
   // socket client reconnects, setWrite swaps the callback to the socket.
   let stdoutAlive = true
-  const dispatcher = new RelayDispatcher((data) => {
-    if (stdoutAlive) {
+  // Why: one-shot waiters parked by the dispatcher's bulk lane when stdout
+  // reports saturation (write() === false). Flushed on 'drain' and on every
+  // stdout-death path so a stalled file-stream pump never outlives the pipe
+  // it was waiting on.
+  const stdoutDrainWaiters = new Set<() => void>()
+  const flushStdoutDrainWaiters = (): void => {
+    for (const cb of Array.from(stdoutDrainWaiters)) {
+      stdoutDrainWaiters.delete(cb)
+      cb()
+    }
+  }
+  process.stdout.on('drain', flushStdoutDrainWaiters)
+  const dispatcher = new RelayDispatcher(
+    (data) => {
+      if (!stdoutAlive) {
+        return
+      }
       try {
-        process.stdout.write(data)
+        // Why: surface Node's backpressure signal to the dispatcher so bulk
+        // frames (fs.streamChunk) wait for drain instead of queueing megabytes
+        // ahead of interactive pty.data frames on the SSH channel.
+        return process.stdout.write(data)
       } catch {
         stdoutAlive = false
+        flushStdoutDrainWaiters()
+        return undefined
+      }
+    },
+    {
+      waitWriteDrain: (cb) => {
+        if (!stdoutAlive) {
+          cb()
+          return
+        }
+        stdoutDrainWaiters.add(cb)
       }
     }
-  })
+  )
 
   const context = new RelayContext()
 
@@ -536,8 +566,10 @@ async function main(): Promise<void> {
       // Why: source-dir defaulting is keyed on which Pi-compatible agent is
       // being launched (Pi vs OMP). Install Orca's guarded extension into that
       // real remote agent dir without redirecting PI_CODING_AGENT_DIR.
-      const kind = detectPiAgentKindFromCommand(ctx.command)
-      const hasLaunchCommand = typeof ctx.command === 'string' && ctx.command.trim().length > 0
+      const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(ctx.env, ctx.command)
+      const kind = detectPiAgentKindFromCommand(launchCommandHint)
+      const hasLaunchCommand =
+        typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
       const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
       if (kind === 'pi') {
         const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')
@@ -677,11 +709,35 @@ async function main(): Promise<void> {
     )
     cancelGrace('socket client accepted')
 
-    const clientId = dispatcher.attachClient((data) => {
-      if (!sock.destroyed) {
-        sock.write(data)
+    // Why: same backpressure surface as the stdout sink — bulk frames wait
+    // for the socket to drain so they cannot bury interactive PTY frames.
+    const sockDrainWaiters = new Set<() => void>()
+    const flushSockDrainWaiters = (): void => {
+      for (const cb of Array.from(sockDrainWaiters)) {
+        sockDrainWaiters.delete(cb)
+        cb()
       }
-    })
+    }
+    sock.on('drain', flushSockDrainWaiters)
+    sock.on('close', flushSockDrainWaiters)
+    sock.on('error', flushSockDrainWaiters)
+    const clientId = dispatcher.attachClient(
+      (data) => {
+        if (!sock.destroyed) {
+          return sock.write(data)
+        }
+        return undefined
+      },
+      {
+        waitWriteDrain: (cb) => {
+          if (sock.destroyed) {
+            cb()
+            return
+          }
+          sockDrainWaiters.add(cb)
+        }
+      }
+    )
     socketClients.set(sock, clientId)
 
     // Why: bytes that arrived in the same TCP send as the handshake frame
@@ -886,18 +942,20 @@ async function main(): Promise<void> {
   // before the grace period starts.
   process.stdout.on('error', () => {
     stdoutAlive = false
+    flushStdoutDrainWaiters()
     dispatcher.invalidateClient()
   })
 
   function startGrace(reason: string): void {
     const startupEmptyDetached =
       detached && !hasAcceptedSocketClient && ptyHandler.activePtyCount === 0
-    const timeoutMs =
-      graceTimeMs === 0
-        ? 0
-        : startupEmptyDetached
-          ? Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
-          : graceTimeMs
+    // Why: "until reset" preserves real PTYs, but a detached relay that never
+    // accepted a client has no terminal state and should not linger forever.
+    const timeoutMs = startupEmptyDetached
+      ? graceTimeMs === 0
+        ? EMPTY_DETACHED_STARTUP_GRACE_MS
+        : Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
+      : graceTimeMs
     graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
     graceReason = reason
     process.stderr.write(
@@ -930,6 +988,7 @@ async function main(): Promise<void> {
       // dead so the primary client write callback becomes a no-op while
       // socket clients, if any, keep their own live transports.
       stdoutAlive = false
+      flushStdoutDrainWaiters()
       dispatcher.invalidateClient()
       if (socketClients.size === 0) {
         startGrace('stdin ended')
@@ -938,6 +997,7 @@ async function main(): Promise<void> {
 
     process.stdin.on('error', () => {
       stdoutAlive = false
+      flushStdoutDrainWaiters()
       dispatcher.invalidateClient()
       if (socketClients.size === 0) {
         startGrace('stdin error')

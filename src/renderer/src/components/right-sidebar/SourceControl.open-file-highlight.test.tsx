@@ -132,6 +132,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     updateWorktreeGitIdentity: vi.fn(),
     beginGitBranchCompareRequest: vi.fn(() => 'request-key'),
     setGitBranchCompareResult: vi.fn(),
+    clearGitBranchCompare: vi.fn(),
     fetchUpstreamStatus: noopAsync(),
     setUpstreamStatus: vi.fn(),
     pushBranch: noopAsync(),

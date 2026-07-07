@@ -1,4 +1,5 @@
 import {
+  DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS,
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -14,6 +15,7 @@ export type EditingTarget = {
   identityFile: string
   proxyCommand: string
   jumpHost: string
+  systemSshConnectionReuse: boolean
   relayGracePeriodSeconds: string
   relayKeepAliveUntilReset: boolean
 }
@@ -27,8 +29,9 @@ export const EMPTY_FORM: EditingTarget = {
   identityFile: '',
   proxyCommand: '',
   jumpHost: '',
-  relayGracePeriodSeconds: String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS),
-  relayKeepAliveUntilReset: false
+  systemSshConnectionReuse: true,
+  relayGracePeriodSeconds: String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS),
+  relayKeepAliveUntilReset: DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS === 0
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
@@ -44,12 +47,14 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     identityFile: target.identityFile ?? '',
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
+    systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
     relayGracePeriodSeconds: String(
       target.relayGracePeriodSeconds === 0
-        ? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
-        : (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
+        ? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS
+        : (target.relayGracePeriodSeconds ?? DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS)
     ),
-    relayKeepAliveUntilReset: target.relayGracePeriodSeconds === 0
+    relayKeepAliveUntilReset:
+      (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS) === 0
   }
 }
 
@@ -116,7 +121,7 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
   const host = parsed?.host ?? draft.host.trim()
   const configHost = draft.configHost.trim() || parsed?.configHost || host
   const username = draft.username.trim() || parsed?.username || ''
-  const parsedPort = parseInt(draft.port, 10)
+  const parsedPort = Number.parseInt(draft.port, 10)
   const port =
     parsed?.invalidPort === true
       ? Number.NaN
@@ -133,13 +138,13 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
 }
 
 export function parseRelayGracePeriodSeconds(draft: EditingTarget): number {
-  return draft.relayKeepAliveUntilReset ? 0 : parseInt(draft.relayGracePeriodSeconds, 10)
+  return draft.relayKeepAliveUntilReset ? 0 : Number.parseInt(draft.relayGracePeriodSeconds, 10)
 }
 
 export function isRelayGracePeriodValid(draft: EditingTarget, graceSeconds: number): boolean {
   return (
     draft.relayKeepAliveUntilReset ||
-    (!isNaN(graceSeconds) &&
+    (!Number.isNaN(graceSeconds) &&
       graceSeconds >= MIN_SSH_RELAY_GRACE_PERIOD_SECONDS &&
       graceSeconds <= MAX_SSH_RELAY_GRACE_PERIOD_SECONDS)
   )

@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: browser runtime command tests share one
-mocked BrowserManager/agent-browser bridge so page wake and registration
-ordering regressions stay in one boundary-focused suite. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
@@ -11,14 +8,42 @@ const {
   webContentsFromIdMock,
   startBrowserScreencastMock,
   waitForTabRegistrationMock,
-  waitForWorktreeTabRegistrationMock
+  waitForWorktreeTabRegistrationMock,
+  browserSessionRegistryMock
 } = vi.hoisted(() => ({
   ipcMainOnMock: vi.fn(),
   ipcMainRemoveListenerMock: vi.fn(),
   webContentsFromIdMock: vi.fn(),
   startBrowserScreencastMock: vi.fn(),
   waitForTabRegistrationMock: vi.fn(),
-  waitForWorktreeTabRegistrationMock: vi.fn()
+  waitForWorktreeTabRegistrationMock: vi.fn(),
+  browserSessionRegistryMock: {
+    profiles: new Map([
+      [
+        'default',
+        {
+          id: 'default',
+          scope: 'default',
+          partition: 'persist:orca-browser',
+          label: 'Default',
+          source: null
+        }
+      ],
+      [
+        'profile-isolated',
+        {
+          id: 'profile-isolated',
+          scope: 'isolated',
+          partition: 'persist:orca-browser-session-profile-isolated',
+          label: 'Isolated',
+          source: null
+        }
+      ]
+    ]),
+    getDefaultProfile: vi.fn(),
+    getProfile: vi.fn(),
+    resolveKnownPartition: vi.fn()
+  }
 }))
 
 vi.mock('electron', () => ({
@@ -33,6 +58,10 @@ vi.mock('../browser/browser-screencast-stream', () => ({
 vi.mock('../ipc/browser', () => ({
   waitForTabRegistration: waitForTabRegistrationMock,
   waitForWorktreeTabRegistration: waitForWorktreeTabRegistrationMock
+}))
+
+vi.mock('../browser/browser-session-registry', () => ({
+  browserSessionRegistry: browserSessionRegistryMock
 }))
 
 function deferred<T>() {
@@ -83,6 +112,23 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     waitForTabRegistrationMock.mockResolvedValue(undefined)
     waitForWorktreeTabRegistrationMock.mockReset()
     waitForWorktreeTabRegistrationMock.mockResolvedValue(undefined)
+    browserSessionRegistryMock.getDefaultProfile.mockReset()
+    browserSessionRegistryMock.getDefaultProfile.mockImplementation(() =>
+      browserSessionRegistryMock.profiles.get('default')
+    )
+    browserSessionRegistryMock.getProfile.mockReset()
+    browserSessionRegistryMock.getProfile.mockImplementation(
+      (profileId: string) => browserSessionRegistryMock.profiles.get(profileId) ?? null
+    )
+    browserSessionRegistryMock.resolveKnownPartition.mockReset()
+    browserSessionRegistryMock.resolveKnownPartition.mockImplementation(
+      (profileId: string | null | undefined) => {
+        if (!profileId) {
+          return 'persist:orca-browser'
+        }
+        return browserSessionRegistryMock.profiles.get(profileId)?.partition ?? null
+      }
+    )
   })
 
   it('waits for explicit worktree browser registration after requesting a hidden mount', async () => {
@@ -151,6 +197,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
 
   it('creates the first explicit-worktree browser tab without waiting for an existing registration', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const webContents = { send: vi.fn() }
     const send = vi.fn((channel: string, data: { requestId: string }) => {
       expect(channel).toBe('browser:requestTabCreate')
       const handler = ipcMainOnMock.mock.calls.find(
@@ -161,8 +208,16 @@ describe('RuntimeBrowserCommands browser screencast', () => {
             reply: { requestId: string; browserPageId?: string; error?: string }
           ) => void)
         | undefined
-      handler?.({} as never, { requestId: data.requestId, browserPageId: 'page-new' })
+      handler?.({ sender: { send: vi.fn() } } as never, {
+        requestId: data.requestId,
+        error: 'spoofed renderer reply'
+      })
+      handler?.({ sender: webContents } as never, {
+        requestId: data.requestId,
+        browserPageId: 'page-new'
+      })
     })
+    webContents.send = send
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-new', 101]])),
       getActivePageId: vi.fn(() => 'page-new'),
@@ -173,7 +228,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
       createHost({
         getAgentBrowserBridge: () => bridge,
         getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
-        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send } }) as never)
+        getAuthoritativeWindow: vi.fn(() => ({ webContents }) as never)
       })
     )
 
@@ -182,12 +237,131 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     ).resolves.toEqual({ browserPageId: 'page-new' })
 
     expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
+    // Why: with no explicit profile, main must leave sessionProfileId/
+    // sessionPartition undefined so the renderer applies the user's configured
+    // default-profile inheritance instead of being forced onto the shared
+    // default partition.
     expect(send).toHaveBeenCalledWith(
       'browser:requestTabCreate',
-      expect.objectContaining({ url: 'about:blank', worktreeId: 'wt-1' })
+      expect.objectContaining({
+        url: 'about:blank',
+        worktreeId: 'wt-1',
+        sessionProfileId: undefined,
+        sessionPartition: undefined
+      })
     )
     expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-new')
     expect(bridge.setActiveTab).toHaveBeenCalledWith(101, 'wt-1')
+  })
+
+  it('sends the resolved isolated profile partition when creating a renderer tab', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const webContents = { send: vi.fn() }
+    const send = vi.fn((channel: string, data: { requestId: string }) => {
+      expect(channel).toBe('browser:requestTabCreate')
+      const handler = ipcMainOnMock.mock.calls.find(
+        ([eventName]) => eventName === 'browser:tabCreateReply'
+      )?.[1] as
+        | ((event: unknown, reply: { requestId: string; browserPageId?: string }) => void)
+        | undefined
+      handler?.({ sender: webContents } as never, {
+        requestId: data.requestId,
+        browserPageId: 'page-isolated'
+      })
+    })
+    webContents.send = send
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map([['page-isolated', 101]])),
+      getActivePageId: vi.fn(() => 'page-isolated'),
+      setActiveTab: vi.fn(),
+      tabList: vi.fn(() => ({ tabs: [] }))
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
+        getAuthoritativeWindow: vi.fn(() => ({ webContents }) as never)
+      })
+    )
+
+    await expect(
+      commands.browserTabCreate({
+        worktree: 'id:wt-1',
+        url: 'https://example.com',
+        profileId: 'profile-isolated'
+      })
+    ).resolves.toEqual({ browserPageId: 'page-isolated' })
+
+    expect(send).toHaveBeenCalledWith(
+      'browser:requestTabCreate',
+      expect.objectContaining({
+        sessionProfileId: 'profile-isolated',
+        sessionPartition: 'persist:orca-browser-session-profile-isolated'
+      })
+    )
+  })
+
+  it('rejects unknown explicit profile ids before requesting a renderer tab', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const send = vi.fn()
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
+        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send } }) as never)
+      })
+    )
+
+    await expect(
+      commands.browserTabCreate({
+        worktree: 'id:wt-1',
+        url: 'https://example.com',
+        profileId: 'missing-profile'
+      })
+    ).rejects.toThrow(/Browser profile missing-profile was not found/)
+
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('sends the resolved partition when switching a renderer tab profile', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const webContents = { send: vi.fn() }
+    const send = vi.fn((channel: string, data: { requestId: string }) => {
+      expect(channel).toBe('browser:requestTabSetProfile')
+      const handler = ipcMainOnMock.mock.calls.find(
+        ([eventName]) => eventName === 'browser:tabSetProfileReply'
+      )?.[1] as ((event: unknown, reply: { requestId: string; error?: string }) => void) | undefined
+      handler?.({ sender: webContents } as never, { requestId: data.requestId })
+    })
+    webContents.send = send
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map([['page-1', 101]])),
+      getActivePageId: vi.fn(() => 'page-1')
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
+        getAuthoritativeWindow: vi.fn(() => ({ webContents }) as never)
+      })
+    )
+
+    await expect(
+      commands.browserTabSetProfile({ worktree: 'id:wt-1', profileId: 'profile-isolated' })
+    ).resolves.toEqual({
+      browserPageId: 'page-1',
+      profileId: 'profile-isolated',
+      profileLabel: 'Isolated'
+    })
+
+    expect(send).toHaveBeenCalledWith(
+      'browser:requestTabSetProfile',
+      expect.objectContaining({
+        browserPageId: 'page-1',
+        profileId: 'profile-isolated',
+        sessionPartition: 'persist:orca-browser-session-profile-isolated'
+      })
+    )
+    expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-1')
   })
 
   it('wakes the requested page instead of the first worktree tab for page-scoped commands', async () => {
@@ -504,5 +678,28 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
       closed: false
     })
     expect(closeTab).not.toHaveBeenCalled()
+  })
+
+  it('forwards an unresolved worktree to the bridge unchanged for keyboard inserttext', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    // Why: when no --worktree is passed (or cwd is outside a managed worktree),
+    // worktreeId arrives undefined. The bridge — not the runtime — owns the
+    // cross-worktree guard, so verify the undefined scope is threaded through
+    // intact rather than silently widened here.
+    const keyboardInsertText = vi.fn().mockResolvedValue({ inserted: true })
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
+      keyboardInsertText
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send: vi.fn() } }) as never)
+      })
+    )
+
+    await commands.browserKeyboardInsertText({ text: 'hello' })
+
+    expect(keyboardInsertText).toHaveBeenCalledWith('hello', undefined, undefined)
   })
 })

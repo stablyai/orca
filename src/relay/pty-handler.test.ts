@@ -1,14 +1,23 @@
 /* oxlint-disable max-lines */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import * as gitBash from '../main/git-bash'
+import * as ptyShellUtils from './pty-shell-utils'
+import {
+  resolveSetupAgentSequenceLaunchCommand,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+} from '../shared/setup-agent-sequencing'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
   mockPtyInstance: {
-    pid: 12345,
+    // Why: attach now proves the backing pid is alive before replaying, so the
+    // default managed PTY must report a live pid. Reuse the test runner's own
+    // pid — always alive — so unrelated attach tests are not seen as dead.
+    pid: process.pid,
     onData: vi.fn(),
     onExit: vi.fn(),
     write: vi.fn(),
@@ -22,7 +31,7 @@ vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
 }))
 
-import { PtyHandler } from './pty-handler'
+import { PtyHandler, attachIdentityMismatches } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
 function createMockDispatcher() {
@@ -165,8 +174,183 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it('uses an explicit shell override and falls back to the default shell otherwise', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveDefaultShellSpy = vi
+      .spyOn(ptyShellUtils, 'resolveDefaultShell')
+      .mockReturnValue('/default-shell')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'powershell.exe',
+        expect.any(Array),
+        expect.any(Object)
+      )
+
+      mockPtySpawn.mockClear()
+
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        '/default-shell',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveDefaultShellSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('ignores Windows shell overrides on non-Windows relay hosts', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+    const resolveDefaultShellSpy = vi
+      .spyOn(ptyShellUtils, 'resolveDefaultShell')
+      .mockReturnValue('/default-shell')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        '/default-shell',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveDefaultShellSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('rejects unsupported shell overrides on Windows relay hosts', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    try {
+      await expect(
+        dispatcher.callRequest('pty.spawn', {
+          cols: 80,
+          rows: 24,
+          shellOverride: 'notepad.exe'
+        })
+      ).rejects.toThrow('Unsupported Windows shell override')
+      expect(mockPtySpawn).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('resolves the Git Bash sentinel to the remote bash.exe path on Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveGitBashSpy = vi
+      .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+      .mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'git-bash'
+      })
+
+      expect(resolveGitBashSpy).toHaveBeenCalledWith('git-bash')
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'C:\\Program Files\\Git\\bin\\bash.exe',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveGitBashSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('passes the selected WSL distro to relay launches on Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu-24.04'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu-24.04'],
+        expect.any(Object)
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('keeps SSH spawn commands as hints unless provider delivery is requested', async () => {
+    await dispatcher.callRequest('pty.spawn', { command: 'echo renderer-owned' })
+
+    vi.advanceTimersByTime(50)
+
+    const term = mockPtySpawn.mock.results[0]?.value
+    expect(term.write).not.toHaveBeenCalled()
+  })
+
+  it('submits provider-delivered spawn commands to the relay shell', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      command: 'echo provider-owned',
+      commandDelivery: 'provider'
+    })
+
+    vi.advanceTimersByTime(49)
+    const term = mockPtySpawn.mock.results[0]?.value
+    expect(handler.retainedStartupCommandCount).toBe(1)
+    expect(term.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    const submit = process.platform === 'win32' ? '\r' : '\n'
+    expect(term.write).toHaveBeenCalledWith(`echo provider-owned${submit}`)
+    expect(handler.retainedStartupCommandCount).toBe(0)
+  })
+
   it.skipIf(process.platform === 'win32')(
-    'enables shell-ready marker env for delivery-hinted startup commands',
+    'emits shell-ready markers for renderer-delivered startup commands',
     async () => {
       const oldShell = process.env.SHELL
       const oldHome = process.env.HOME
@@ -177,6 +361,7 @@ describe('PtyHandler', () => {
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
+          command: 'echo renderer-owned',
           startupCommandDelivery: 'shell-ready'
         })
       } finally {
@@ -197,11 +382,12 @@ describe('PtyHandler', () => {
         | { env?: Record<string, string> }
         | undefined
       expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(handler.retainedStartupCommandCount).toBe(0)
     }
   )
 
   it.skipIf(process.platform === 'win32')(
-    'enables shell-ready marker env for Codex native prefill commands',
+    'emits shell-ready markers for renderer-delivered Codex native prefill commands',
     async () => {
       const oldShell = process.env.SHELL
       const oldHome = process.env.HOME
@@ -232,8 +418,264 @@ describe('PtyHandler', () => {
         | { env?: Record<string, string> }
         | undefined
       expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(handler.retainedStartupCommandCount).toBe(0)
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'enables shell-ready marker env for provider-delivered startup commands',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-provider-ready-env-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo provider-owned',
+          commandDelivery: 'provider',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'uses the sequenced startup command hint for provider shell-ready detection',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-provider-sequenced-ready-env-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: {
+            HOME: homeDir,
+            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --prefill 'linked issue context'"
+          },
+          command: 'bash -lc wait-for-setup-wrapper',
+          commandDelivery: 'provider'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'waits for the shell-ready marker before provider-delivered startup commands',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-provider-ready-spawn-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo after-ready',
+          commandDelivery: 'provider',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      vi.advanceTimersByTime(1499)
+      expect(term.write).not.toHaveBeenCalled()
+
+      dataCallback?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+      vi.advanceTimersByTime(49)
+      expect(term.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+
+      expect(term.write).toHaveBeenCalledWith('echo after-ready\n')
+      expect(handler.retainedStartupCommandCount).toBe(0)
+      vi.advanceTimersByTime(8)
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: 'user@remote $ '
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'flushes held shell-ready marker bytes when provider delivery falls back',
+    async () => {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-provider-fallback-spawn-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'echo fallback',
+          commandDelivery: 'provider',
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      dataCallback?.('\x1b]777;orca-shell-ready')
+      vi.advanceTimersByTime(1500)
+
+      expect(term.write).toHaveBeenCalledWith('echo fallback\n')
+      vi.advanceTimersByTime(8)
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]777;orca-shell-ready'
+      })
+
+      const result = await dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        suppressReplayNotification: true
+      })
+      expect(result).toEqual({ replay: '\x1b]777;orca-shell-ready' })
+    }
+  )
+
+  it('reports not-found and reaps a reattach whose backing shell is dead', async () => {
+    // Why: a lingering managed entry whose child died without an onExit would
+    // otherwise attach-succeed with an empty replay and strand the pane on a
+    // black shell. A provably-dead pid must surface as not-found so the SSH
+    // provider maps it to SSH_SESSION_EXPIRED and the pane respawns fresh.
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    const exits: { id: string; paneKey?: string }[] = []
+    handler.setExitListener((evt) => exits.push(evt))
+
+    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dead:0' } })
+    expect(handler.activePtyCount).toBe(1)
+    expect(onExitCb).toBeDefined()
+
+    const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+    try {
+      await expect(
+        dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
+      ).rejects.toThrow('PTY "pty-1" not found')
+    } finally {
+      aliveSpy.mockRestore()
+    }
+
+    // The stale entry is reaped: cache-eviction observers fire and the map slot
+    // is freed so a later attach also cleanly reports not-found.
+    expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-dead:0' }])
+    expect(handler.activePtyCount).toBe(0)
+    await expect(
+      dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
+    ).rejects.toThrow('PTY "pty-1" not found')
+  })
+
+  it('replays for a reattach whose backing shell is still alive', async () => {
+    // Guard the other direction: a live pid must never be reaped, so a quiet
+    // but live session still returns its buffered replay on reattach.
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback?.('prompt$ ')
+
+    const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+    try {
+      const result = await dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        suppressReplayNotification: true
+      })
+      expect(result).toEqual({ replay: 'prompt$ ' })
+    } finally {
+      aliveSpy.mockRestore()
+    }
+    expect(handler.activePtyCount).toBe(1)
+  })
 
   it('terminates spawned PTY when request becomes stale before response', async () => {
     const killSpy = vi.fn()
@@ -249,6 +691,42 @@ describe('PtyHandler', () => {
     // neutralized function, not the original spy. killSpy retains call history.
     expect(killSpy).toHaveBeenCalledWith('SIGTERM')
     vi.advanceTimersByTime(5000)
+    expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('does not submit provider-delivered commands for stale spawn responses', async () => {
+    const killSpy = vi.fn()
+    const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
+    mockPtySpawn.mockReturnValue(term)
+
+    await dispatcher.callRequest(
+      'pty.spawn',
+      { command: 'echo stale', commandDelivery: 'provider' },
+      { isStale: () => true }
+    )
+
+    vi.advanceTimersByTime(50)
+    expect(term.write).not.toHaveBeenCalled()
+    expect(handler.retainedStartupCommandCount).toBe(0)
+    expect(killSpy).toHaveBeenCalledWith('SIGTERM')
+  })
+
+  it('releases pending provider-delivered commands on shutdown before delivery', async () => {
+    const killSpy = vi.fn()
+    const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
+    mockPtySpawn.mockReturnValue(term)
+
+    await dispatcher.callRequest('pty.spawn', {
+      command: 'echo stop-before-run',
+      commandDelivery: 'provider'
+    })
+    expect(handler.retainedStartupCommandCount).toBe(1)
+
+    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    vi.advanceTimersByTime(50)
+
+    expect(handler.retainedStartupCommandCount).toBe(0)
+    expect(term.write).not.toHaveBeenCalled()
     expect(killSpy).toHaveBeenCalledWith('SIGKILL')
   })
 
@@ -411,6 +889,51 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
   })
 
+  it('uses attach identity metadata without exporting it to the shell env', async () => {
+    const oldPaneKey = process.env.ORCA_PANE_KEY
+    const oldTabId = process.env.ORCA_TAB_ID
+    delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_TAB_ID
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: { FOO: 'bar' },
+        paneKey: 'tab-a:leaf-a',
+        tabId: 'tab-a'
+      })
+    } finally {
+      if (oldPaneKey === undefined) {
+        delete process.env.ORCA_PANE_KEY
+      } else {
+        process.env.ORCA_PANE_KEY = oldPaneKey
+      }
+      if (oldTabId === undefined) {
+        delete process.env.ORCA_TAB_ID
+      } else {
+        process.env.ORCA_TAB_ID = oldTabId
+      }
+    }
+
+    const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnOptions.env.ORCA_PANE_KEY).toBeUndefined()
+    expect(spawnOptions.env.ORCA_TAB_ID).toBeUndefined()
+
+    await expect(
+      dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        expectedPaneKey: 'tab-b:leaf-b',
+        expectedTabId: 'tab-b'
+      })
+    ).rejects.toThrow('PTY "pty-1" not found')
+
+    await expect(
+      dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        expectedPaneKey: 'tab-a:leaf-a',
+        expectedTabId: 'tab-a'
+      })
+    ).resolves.toEqual({})
+  })
+
   it('notifies on PTY exit and removes from map', async () => {
     let exitCallback: ((info: { exitCode: number }) => void) | undefined
     mockPtySpawn.mockReturnValue({
@@ -564,12 +1087,23 @@ describe('PtyHandler', () => {
     )
   })
 
-  it('grace timer waits full period even when no PTYs exist', () => {
+  it('default grace timer does not expire', () => {
     const onExpire = vi.fn()
-    const defaultGraceMs = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
+
+    handler.startGraceTimer(onExpire)
+
+    expect(handler.graceTimerActive).toBe(false)
+    vi.advanceTimersByTime(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000)
+    expect(onExpire).not.toHaveBeenCalled()
+  })
+
+  it('configured grace timer waits full period even when no PTYs exist', () => {
+    const onExpire = vi.fn()
+    const boundedGraceMs = DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
+    handler.setGraceTimeMs(boundedGraceMs)
     handler.startGraceTimer(onExpire)
     expect(onExpire).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(defaultGraceMs - 1)
+    vi.advanceTimersByTime(boundedGraceMs - 1)
     expect(onExpire).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
     expect(onExpire).toHaveBeenCalledTimes(1)
@@ -584,11 +1118,12 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
 
     const onExpire = vi.fn()
-    const defaultGraceMs = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
+    const boundedGraceMs = DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
+    handler.setGraceTimeMs(boundedGraceMs)
     handler.startGraceTimer(onExpire)
     expect(onExpire).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(defaultGraceMs - 1)
+    vi.advanceTimersByTime(boundedGraceMs - 1)
     expect(onExpire).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
     expect(onExpire).toHaveBeenCalledTimes(1)
@@ -603,13 +1138,14 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
 
     const onExpire = vi.fn()
-    const defaultGraceMs = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
+    const boundedGraceMs = DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
+    handler.setGraceTimeMs(boundedGraceMs)
     handler.startGraceTimer(onExpire)
 
     vi.advanceTimersByTime(60_000)
     handler.cancelGraceTimer()
 
-    vi.advanceTimersByTime(defaultGraceMs)
+    vi.advanceTimersByTime(boundedGraceMs)
     expect(onExpire).not.toHaveBeenCalled()
   })
 
@@ -759,6 +1295,20 @@ describe('PtyHandler', () => {
     expect(spawnEnv.env.SEEN_PI_CODING_AGENT_DIR).toBe('/remote/pi')
   })
 
+  it('lets relay env augmenters resolve the original sequenced startup command hint', async () => {
+    handler.addEnvAugmenter((ctx) => ({
+      SEEN_LAUNCH_COMMAND_HINT: resolveSetupAgentSequenceLaunchCommand(ctx.env, ctx.command) ?? ''
+    }))
+
+    await dispatcher.callRequest('pty.spawn', {
+      command: 'powershell wait-wrapper',
+      env: { [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'omp --resume' }
+    })
+
+    const spawnEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(spawnEnv.env.SEEN_LAUNCH_COMMAND_HINT).toBe('omp --resume')
+  })
+
   it.skipIf(process.platform === 'win32')(
     'wraps bash spawns to restore overlay env after remote startup files',
     async () => {
@@ -854,6 +1404,70 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
   })
 
+  it('revive preserves attach identity metadata without exporting hook identity env', async () => {
+    const oldPaneKey = process.env.ORCA_PANE_KEY
+    const oldTabId = process.env.ORCA_TAB_ID
+    delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_TAB_ID
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 90,
+        rows: 30,
+        cwd: '/tmp',
+        env: { FOO: 'bar' },
+        paneKey: 'tab-5:leaf-5',
+        tabId: 'tab-5'
+      })
+    } finally {
+      if (oldPaneKey === undefined) {
+        delete process.env.ORCA_PANE_KEY
+      } else {
+        process.env.ORCA_PANE_KEY = oldPaneKey
+      }
+      if (oldTabId === undefined) {
+        delete process.env.ORCA_TAB_ID
+      } else {
+        process.env.ORCA_TAB_ID = oldTabId
+      }
+    }
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+
+    handler.dispose()
+    mockPtySpawn.mockClear()
+    dispatcher = createMockDispatcher()
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_TAB_ID
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+      if (oldPaneKey === undefined) {
+        delete process.env.ORCA_PANE_KEY
+      } else {
+        process.env.ORCA_PANE_KEY = oldPaneKey
+      }
+      if (oldTabId === undefined) {
+        delete process.env.ORCA_TAB_ID
+      } else {
+        process.env.ORCA_TAB_ID = oldTabId
+      }
+    }
+
+    const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(callArgs.env.ORCA_PANE_KEY).toBeUndefined()
+    expect(callArgs.env.ORCA_TAB_ID).toBeUndefined()
+
+    await expect(
+      dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        expectedPaneKey: 'tab-other:leaf',
+        expectedTabId: 'tab-other'
+      })
+    ).rejects.toThrow('PTY "pty-1" not found')
+  })
+
   it('invokes the exit listener with the spawn-time paneKey', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     mockPtySpawn.mockReturnValue({
@@ -927,5 +1541,41 @@ describe('PtyHandler', () => {
       { id: 'pty-2', paneKey: 'tab-dispose:1' }
     ])
     expect(handler.activePtyCount).toBe(0)
+  })
+})
+
+describe('attachIdentityMismatches', () => {
+  it('rejects a paneKey collision across relay generations', () => {
+    // Old lease expects tab-a's pane; the reset relay's pty-1 belongs to tab-b.
+    expect(
+      attachIdentityMismatches({ paneKey: 'tab-a:0' }, { paneKey: 'tab-b:0', tabId: 'tab-b' })
+    ).toBe(true)
+  })
+
+  it('rejects a tabId collision when only tab identity is known', () => {
+    expect(attachIdentityMismatches({ tabId: 'tab-a' }, { tabId: 'tab-b' })).toBe(true)
+  })
+
+  it('accepts a matching identity', () => {
+    expect(
+      attachIdentityMismatches(
+        { paneKey: 'tab-a:0', tabId: 'tab-a' },
+        { paneKey: 'tab-a:0', tabId: 'tab-a' }
+      )
+    ).toBe(false)
+  })
+
+  it('stays permissive when the caller supplies no identity', () => {
+    expect(attachIdentityMismatches({}, { paneKey: 'tab-a:0', tabId: 'tab-a' })).toBe(false)
+  })
+
+  it('stays permissive when the managed PTY predates identity capture', () => {
+    expect(attachIdentityMismatches({ paneKey: 'tab-a:0', tabId: 'tab-a' }, {})).toBe(false)
+  })
+
+  it('does not reject on tabId when paneKey matches (split panes share a tab)', () => {
+    expect(
+      attachIdentityMismatches({ paneKey: 'tab-a:1' }, { paneKey: 'tab-a:1', tabId: 'tab-a' })
+    ).toBe(false)
   })
 })

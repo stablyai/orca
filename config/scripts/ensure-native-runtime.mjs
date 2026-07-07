@@ -4,12 +4,11 @@ import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
-import { basename, dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { basename, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const scriptPath = fileURLToPath(import.meta.url)
-const projectDir = resolve(dirname(scriptPath), '../..')
+const scriptPath = import.meta.filename
+const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
 
 const NATIVE_MODULES = ['node-pty']

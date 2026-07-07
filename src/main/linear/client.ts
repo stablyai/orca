@@ -3,9 +3,9 @@
    stay in one consistency boundary. */
 import { safeStorage } from 'electron'
 import { LinearClient, AuthenticationLinearError } from '@linear/sdk'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
@@ -62,6 +62,8 @@ export type LinearClientForWorkspace = {
   client: LinearClient
   apiKey: string
 }
+
+export const LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS = 60 * 60
 
 let cachedTokens = new Map<string, string>()
 // Why: decrypt failures are recorded per workspace so getStatus can explain
@@ -547,6 +549,15 @@ export function getClients(
     clients.push({ workspace, client: new LinearClient({ apiKey: token }), apiKey: token })
   }
   return clients
+}
+
+export function getPublicFileUrlClient(entry: LinearClientForWorkspace): LinearClient {
+  return new LinearClient({
+    apiKey: entry.apiKey,
+    headers: {
+      'public-file-urls-expire-in': String(LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
+    }
+  })
 }
 
 // ── Auth error detection ─────────────────────────────────────────────

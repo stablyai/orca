@@ -50,6 +50,7 @@ export function useAddRepoNestedImportFlow({
   setIsAdding: (isAdding: boolean) => void
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
+  handleOpenNestedRootFolder: () => Promise<void>
   resetNestedImportFlow: () => void
   trackNestedBackAction: () => void
 } {
@@ -236,5 +237,69 @@ export function useAddRepoNestedImportFlow({
     ]
   )
 
-  return { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction }
+  const handleOpenNestedRootFolder = useCallback(async (): Promise<void> => {
+    if (!nestedScan) {
+      return
+    }
+    const gen = ++nestedImportGenRef.current
+    const path = nestedScan.selectedPath
+    if (nestedAttemptId) {
+      track(
+        'add_repo_nested_import_action',
+        buildNestedRepoImportActionTelemetry({
+          attemptId: nestedAttemptId,
+          surface: 'sidebar',
+          runtimeKind: nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId),
+          action: 'open_as_folder',
+          foundCount: nestedScan.repos.length,
+          selectedCount: nestedSelectedPaths.size
+        })
+      )
+    }
+    setIsAdding(true)
+    try {
+      const state = useAppStore.getState()
+      if (nestedConnectionId) {
+        state.closeModal()
+        state.openModal('confirm-non-git-folder', {
+          folderPath: path,
+          connectionId: nestedConnectionId
+        })
+        return
+      }
+      const repo = await state.addNonGitFolder(path, {
+        runtimeEnvironmentId: activeRuntimeEnvironmentId?.trim() || null
+      })
+      if (gen !== nestedImportGenRef.current) {
+        return
+      }
+      if (repo) {
+        useAppStore.getState().closeModal()
+      }
+    } catch (err) {
+      if (gen === nestedImportGenRef.current) {
+        toast.error(err instanceof Error ? err.message : String(err))
+      }
+    } finally {
+      if (gen === nestedImportGenRef.current) {
+        setIsAdding(false)
+      }
+    }
+  }, [
+    activeRuntimeEnvironmentId,
+    getNestedRepoRuntimeKind,
+    nestedAttemptId,
+    nestedConnectionId,
+    nestedRuntimeKind,
+    nestedScan,
+    nestedSelectedPaths.size,
+    setIsAdding
+  ])
+
+  return {
+    handleImportNestedRepos,
+    handleOpenNestedRootFolder,
+    resetNestedImportFlow,
+    trackNestedBackAction
+  }
 }

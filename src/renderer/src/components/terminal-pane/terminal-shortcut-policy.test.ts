@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: terminal keyboard policy covers platform
- * readline compatibility, pane management, and Option-as-Alt translation in
- * one pure function; the cases need to stay adjacent. */
 import { describe, expect, it } from 'vitest'
 import {
   resolveTerminalShortcutAction,
@@ -260,6 +257,42 @@ describe('resolveTerminalShortcutAction', () => {
         { 'terminal.equalizePaneSizes': ['Mod+Equal'] }
       )
     ).toEqual({ type: 'equalizePaneSizes' })
+  })
+
+  it('resolves terminal title actions only when users assign them', () => {
+    expect(
+      resolveTerminalShortcutAction(event({ key: 't', code: 'KeyT', metaKey: true }), true)
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 't', code: 'KeyT', metaKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        { 'terminal.setTitle': ['Mod+T'] }
+      )
+    ).toEqual({ type: 'setTitle' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 't', code: 'KeyT', metaKey: true, altKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        { 'terminal.clearPaneTitle': ['Mod+Alt+T'] }
+      )
+    ).toEqual({ type: 'clearPaneTitle' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 't', code: 'KeyT', metaKey: true, altKey: true, repeat: true }),
+        true,
+        'false',
+        0,
+        false,
+        { 'terminal.clearPaneTitle': ['Mod+Alt+T'] }
+      )
+    ).toBeNull()
   })
 
   it('lets Ctrl+D pass through as EOF on non-Mac, requires Shift for split (#586)', () => {

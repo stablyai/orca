@@ -1,22 +1,20 @@
 /* oxlint-disable max-lines */
-import { execSync } from 'child_process'
-import { existsSync, statSync } from 'fs'
-import { basename } from 'path'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
-import {
-  buildHostedRemoteCommitUrl,
-  buildHostedRemoteFileUrl,
-  parseHostedRemote
-} from './hosted-remote-url'
-import { normalizeGitUsername } from './git-username'
-
-const GH_LOGIN_TIMEOUT_MS = 2500
+import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { toWindowsWslPath } from '../wsl'
+import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
 
 type LocalGitExecOptions = {
   wslDistro?: string
 }
+
+type GitRepoProbeResult = 'repo' | 'not-repo' | 'indeterminate'
+type GitMarkerScanResult = { status: 'valid'; rootPath: string } | { status: 'absent' | 'invalid' }
 
 function gitExecOptions(
   cwd: string,
@@ -69,24 +67,367 @@ export function isGitRepo(path: string): boolean {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return false
     }
+  } catch {
+    return false
+  }
+
+  // Authoritative positive signal: ask git directly. Covers regular work
+  // trees, linked worktrees (gitfile), submodules, and bare repos.
+  const gitProbeResult = probeGitRepo(path)
+  if (gitProbeResult === 'repo') {
+    return true
+  }
+  if (gitProbeResult === 'not-repo') {
+    return false
+  }
+
+  // Why: `git rev-parse` can fail to produce a clean answer for reasons
+  // unrelated to repo-ness — a transient spawn failure or git-shim hiccup in
+  // the packaged app, resource pressure in the Electron main process, or a
+  // repo whose config errors out. Treating every such failure as "not a repo"
+  // silently downgrades a real repository to a plain folder (worktrees, SCM,
+  // PRs all disappear) and is the regression behind the spurious "Open as
+  // Folder" prompt. Fall back to a validated `.git` marker so a directory that
+  // genuinely carries Git metadata is still recognized; a directory with only
+  // a garbage `.git` file has no valid marker and is correctly rejected.
+  const markerScan = scanGitMarkerSync(path)
+  if (markerScan.status === 'valid' && !warnedMarkerFallbackThisSession) {
+    // Why: warn only once per session. The folder scanner calls isGitRepo for
+    // many paths; if git is genuinely unavailable, warning per path would flood
+    // the main-process logs without adding signal beyond the first occurrence.
+    warnedMarkerFallbackThisSession = true
+    console.warn('[isGitRepo] git rev-parse could not confirm repo; accepted via .git marker', {
+      path
+    })
+  }
+  return markerScan.status === 'valid'
+}
+
+let warnedMarkerFallbackThisSession = false
+
+/**
+ * Tri-state git probe: only a clean pair of negative answers is a definitive
+ * non-repo. Spawn/config failures stay indeterminate so marker fallback can run.
+ */
+function probeGitRepo(path: string): GitRepoProbeResult {
+  let sawFailure = false
+
+  try {
     const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
       cwd: path
     }).trim()
     if (insideWorkTree === 'true') {
-      return true
+      return 'repo'
+    }
+    if (insideWorkTree !== 'false') {
+      return 'indeterminate'
     }
   } catch {
-    // Fall through to the bare-repo probe below.
+    sawFailure = true
   }
 
   try {
     const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
       cwd: path
     }).trim()
-    return bareRepo === 'true'
+    if (bareRepo === 'true') {
+      return 'repo'
+    }
+    if (bareRepo !== 'false') {
+      return 'indeterminate'
+    }
+  } catch {
+    sawFailure = true
+  }
+
+  return sawFailure ? 'indeterminate' : 'not-repo'
+}
+
+export function getGitRepoRoot(path: string): string {
+  try {
+    if (!existsSync(path) || !statSync(path).isDirectory()) {
+      return path
+    }
+    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
+      cwd: path
+    }).trim()
+    if (insideWorkTree === 'true') {
+      const root = gitExecFileSync(['rev-parse', '--show-toplevel'], {
+        cwd: path
+      }).trim()
+      return normalizeGitRepoRootForInputPath(path, root)
+    }
+  } catch {
+    // Fall through to preserving the original path.
+  }
+  const markerScan = scanGitMarkerSync(path)
+  if (markerScan.status === 'valid') {
+    return normalizeGitRepoRootForInputPath(path, markerScan.rootPath)
+  }
+  return path
+}
+
+export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: string): string {
+  const inputWsl = parseWslUncPath(inputPath)
+  if (inputWsl && rootPath.startsWith('/')) {
+    // Why: WSL git reports Linux-native roots; Orca must persist the UNC path so
+    // later local git calls keep routing through the WSL-aware runner.
+    return toWindowsWslPath(rootPath, inputWsl.distro)
+  }
+  return normalizeRuntimePathSeparators(rootPath)
+}
+
+/**
+ * Filesystem-only check for genuine Git metadata, used as a fallback when git
+ * cannot give a clean answer. Strict enough to reject a directory whose `.git`
+ * is a garbage file (preserving the validation added in 18ed7b27d):
+ * - `.git` directory: accepted only if it has real common or linked-worktree
+ *   gitdir shape, so empty/incomplete `.git/` folders are rejected.
+ * - `.git` file: accepted only if its `gitdir:` target resolves to valid Git
+ *   metadata, covering linked worktrees and submodules.
+ * - bare repo root: accepted when HEAD + objects/ + refs/ are present and the
+ *   config does not mark it as a regular worktree admin dir.
+ */
+function scanGitMarkerSync(path: string): GitMarkerScanResult {
+  const realPath = resolveRealPathSync(path)
+  if (realPath && realPath !== path) {
+    const lexicalScan = scanGitMarkerAncestorsSync(path)
+    const realPathScan = scanGitMarkerAncestorsSync(realPath)
+    if (
+      lexicalScan.status === 'valid' &&
+      realPathScan.status === 'valid' &&
+      pathsReferToSameEntry(lexicalScan.rootPath, realPathScan.rootPath)
+    ) {
+      // Why: preserve lexical spellings such as /var vs /private/var, but let a
+      // symlink from one repo into another bind to the real target repo like git.
+      return lexicalScan
+    }
+    return realPathScan
+  }
+  return scanGitMarkerAncestorsSync(path)
+}
+
+function resolveRealPathSync(path: string): string | null {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    try {
+      return realpathSync(path)
+    } catch {
+      return null
+    }
+  }
+}
+
+function scanGitMarkerAncestorsSync(path: string): GitMarkerScanResult {
+  for (const candidate of ancestorDirectories(path)) {
+    if (!isInsideDotGitMarker(candidate, path)) {
+      const worktreeMarker = scanWorktreeMarkerSync(candidate)
+      if (worktreeMarker.status !== 'absent') {
+        return worktreeMarker
+      }
+    }
+    if (hasValidBareRepoMarkerSync(candidate)) {
+      return { status: 'valid', rootPath: candidate }
+    }
+  }
+  return { status: 'absent' }
+}
+
+function ancestorDirectories(path: string): string[] {
+  const directories: string[] = []
+  let current = path
+  while (true) {
+    directories.push(current)
+    const parent = dirname(current)
+    if (parent === current) {
+      return directories
+    }
+    current = parent
+  }
+}
+
+function isInsideDotGitMarker(rootPath: string, targetPath: string): boolean {
+  const relativePath = relative(rootPath, targetPath)
+  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    return false
+  }
+  const firstSegment = relativePath.split(/[\\/]+/)[0]
+  if (firstSegment === '.git') {
+    return true
+  }
+  if (firstSegment.toLowerCase() !== '.git') {
+    return false
+  }
+  return pathsReferToSameEntry(join(rootPath, firstSegment), join(rootPath, '.git'))
+}
+
+function pathsReferToSameEntry(leftPath: string, rightPath: string): boolean {
+  try {
+    const leftStat = statSync(leftPath)
+    const rightStat = statSync(rightPath)
+    if (leftStat.ino !== 0 && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino) {
+      return true
+    }
+    const leftRealPath = normalizeRuntimePathSeparators(realpathSync.native(leftPath))
+    const rightRealPath = normalizeRuntimePathSeparators(realpathSync.native(rightPath))
+    return process.platform === 'win32'
+      ? leftRealPath.toLowerCase() === rightRealPath.toLowerCase()
+      : leftRealPath === rightRealPath
   } catch {
     return false
   }
+}
+
+function scanWorktreeMarkerSync(worktreePath: string): GitMarkerScanResult {
+  const dotGit = join(worktreePath, '.git')
+  let marker: ReturnType<typeof statSync>
+  try {
+    marker = statSync(dotGit)
+  } catch {
+    return { status: 'absent' }
+  }
+
+  if (marker.isDirectory()) {
+    return hasValidGitDirectorySync(dotGit)
+      ? { status: 'valid', rootPath: worktreePath }
+      : { status: 'invalid' }
+  }
+  if (marker.isFile()) {
+    let gitDir: string | null
+    try {
+      gitDir = parseGitdirFile(worktreePath, readFileSync(dotGit, 'utf8'))
+    } catch {
+      return { status: 'invalid' }
+    }
+    return gitDir !== null && hasValidGitDirectorySync(gitDir)
+      ? { status: 'valid', rootPath: worktreePath }
+      : { status: 'invalid' }
+  }
+  return { status: 'invalid' }
+}
+
+function parseGitdirFile(basePath: string, content: string): string | null {
+  const firstLine = content.split(/\r?\n/, 1)[0] ?? ''
+  const match = firstLine.match(/^gitdir:\s*(.+?)\s*$/i)
+  if (!match) {
+    return null
+  }
+  return resolveGitMetadataPath(basePath, match[1])
+}
+
+function resolveGitMetadataPath(basePath: string, rawPath: string): string | null {
+  const value = rawPath.trim()
+  if (!value) {
+    return null
+  }
+  const baseWsl = parseWslUncPath(basePath)
+  if (baseWsl && value.startsWith('/')) {
+    return toWindowsWslPath(value, baseWsl.distro)
+  }
+  return isAbsolute(value) ? value : resolve(basePath, value)
+}
+
+function hasValidGitDirectorySync(gitDir: string): boolean {
+  return hasValidCommonGitDirectorySync(gitDir) || hasValidLinkedWorktreeGitDirectorySync(gitDir)
+}
+
+function hasValidCommonGitDirectorySync(gitDir: string): boolean {
+  try {
+    return (
+      statSync(join(gitDir, 'HEAD')).isFile() &&
+      statSync(join(gitDir, 'objects')).isDirectory() &&
+      statSync(join(gitDir, 'refs')).isDirectory()
+    )
+  } catch {
+    return false
+  }
+}
+
+function hasValidLinkedWorktreeGitDirectorySync(gitDir: string): boolean {
+  try {
+    if (!statSync(join(gitDir, 'HEAD')).isFile() || !statSync(join(gitDir, 'commondir')).isFile()) {
+      return false
+    }
+    const commonDir = resolveGitMetadataPath(
+      gitDir,
+      readFileSync(join(gitDir, 'commondir'), 'utf8')
+    )
+    return commonDir !== null && hasValidCommonGitDirectorySync(commonDir)
+  } catch {
+    return false
+  }
+}
+
+function hasValidBareRepoMarkerSync(path: string): boolean {
+  return hasValidCommonGitDirectorySync(path) && !gitConfigDeclaresNonBare(path)
+}
+
+function gitConfigDeclaresNonBare(gitDir: string): boolean {
+  try {
+    const config = readFileSync(join(gitDir, 'config'), 'utf8')
+    let inCoreSection = false
+    for (const line of config.split(/\r?\n/)) {
+      const section = line.match(/^\s*\[([^\]]+)\]/)
+      if (section) {
+        inCoreSection = section[1].trim().toLowerCase() === 'core'
+        continue
+      }
+      const bare = line.match(/^\s*bare\s*=\s*(.*?)\s*$/i)
+      if (inCoreSection && bare) {
+        return isGitBooleanFalse(normalizeGitConfigValue(bare[1]))
+      }
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+function normalizeGitConfigValue(value: string): string {
+  const unescaped = stripGitConfigInlineComment(value).trim().replace(/\\"/g, '"')
+  if (
+    unescaped.length >= 2 &&
+    ((unescaped.startsWith('"') && unescaped.endsWith('"')) ||
+      (unescaped.startsWith("'") && unescaped.endsWith("'")))
+  ) {
+    return unescaped.slice(1, -1)
+  }
+  return unescaped
+}
+
+function stripGitConfigInlineComment(value: string): string {
+  let quote: '"' | "'" | null = null
+  let escaped = false
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      }
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (char === '#' || char === ';') {
+      return value.slice(0, i)
+    }
+  }
+  return value
+}
+
+function isGitBooleanFalse(value: string): boolean {
+  return ['', 'false', 'no', 'off', '0'].includes(value.toLowerCase())
 }
 
 /**
@@ -115,183 +456,6 @@ function getRemoteUrlByName(path: string, remote: string): string {
   }).trim()
 }
 
-function listRemoteNamesSync(path: string): string[] {
-  try {
-    return gitExecFileSync(['remote'], { cwd: path })
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
-function getConfiguredBranchRemote(path: string, branch: string | null): string {
-  if (!branch) {
-    return ''
-  }
-  const remote = getGitConfigValue(path, `branch.${branch}.remote`)
-  return remote === '.' ? '' : remote
-}
-
-function getCurrentBranchName(path: string): string {
-  try {
-    return gitExecFileSync(['branch', '--show-current'], { cwd: path }).trim()
-  } catch {
-    return ''
-  }
-}
-
-function getRemoteNameFromRef(shortRef: string, remotes: readonly string[]): string {
-  const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
-  return sortedRemotes.find((remote) => shortRef.startsWith(`${remote}/`)) ?? ''
-}
-
-function getDefaultBranchName(shortRef: string, remoteName: string): string {
-  if (!shortRef.includes('/')) {
-    return shortRef
-  }
-  return remoteName ? shortRef.slice(remoteName.length + 1) : shortRef.split('/').slice(1).join('/')
-}
-
-function getGitConfigValue(path: string, key: string): string {
-  try {
-    return gitExecFileSync(['config', '--get', key], {
-      cwd: path
-    }).trim()
-  } catch {
-    return ''
-  }
-}
-
-let cachedGhLogin: string | undefined
-
-function isGhProbeTimeout(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false
-  }
-
-  const err = error as { code?: unknown; message?: unknown }
-  return (
-    err.code === 'ETIMEDOUT' ||
-    (typeof err.message === 'string' && /\bETIMEDOUT\b|timed out/i.test(err.message))
-  )
-}
-
-function getGhLogin(): string {
-  if (cachedGhLogin !== undefined) {
-    return cachedGhLogin
-  }
-
-  try {
-    const apiLogin = execSync('gh api user -q .login', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: GH_LOGIN_TIMEOUT_MS
-    }).trim()
-    if (apiLogin) {
-      cachedGhLogin = normalizeGitUsername(apiLogin)
-      return cachedGhLogin
-    }
-  } catch (err) {
-    if (isGhProbeTimeout(err)) {
-      // Why: if `gh api user` timed out, `gh auth status` is likely to hit the
-      // same stuck keychain/network path. Keep repo creation bounded to one probe.
-      cachedGhLogin = ''
-      return ''
-    }
-    // Fall through to auth status parsing
-  }
-
-  try {
-    // Why: gh auth status writes to stderr; redirect via shell so we can capture it.
-    // Use platform-appropriate shell — /bin/bash does not exist on Windows.
-    const output = execSync('gh auth status 2>&1', {
-      encoding: 'utf-8',
-      shell: process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : '/bin/bash',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: GH_LOGIN_TIMEOUT_MS
-    })
-
-    const activeAccountMatch = output.match(
-      /Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/
-    )
-    if (activeAccountMatch?.[1]) {
-      cachedGhLogin = normalizeGitUsername(activeAccountMatch[1])
-      return cachedGhLogin
-    }
-
-    const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
-    const login = normalizeGitUsername(accountMatch?.[1] ?? '')
-    if (login) {
-      cachedGhLogin = login
-    }
-    return login
-  } catch {
-    // Why: broken tokens/keychains can block the Electron main process.
-    // Keep the fallback best-effort for this app session.
-    cachedGhLogin = ''
-    return ''
-  }
-}
-
-function getGhLoginForGitHubRemote(path: string): string {
-  const remoteUrl = getGitHubRemoteUrlForGhLogin(path)
-  if (!remoteUrl) {
-    return ''
-  }
-  return getGhLogin()
-}
-
-function getGitHubRemoteUrlForGhLogin(path: string): string {
-  const remotes = listRemoteNamesSync(path)
-  const defaultBaseRef = getDefaultBaseRef(path)
-  const defaultBaseRemote = defaultBaseRef ? getRemoteNameFromRef(defaultBaseRef, remotes) : ''
-  const defaultBranch = defaultBaseRef
-    ? getDefaultBranchName(defaultBaseRef, defaultBaseRemote)
-    : null
-
-  const candidateRemotes = [
-    getConfiguredBranchRemote(path, getCurrentBranchName(path)),
-    getConfiguredBranchRemote(path, defaultBranch),
-    defaultBaseRemote,
-    'origin',
-    remotes.length === 1 ? remotes[0] : ''
-  ]
-
-  const seen = new Set<string>()
-  for (const remote of candidateRemotes) {
-    if (!remote || seen.has(remote)) {
-      continue
-    }
-    seen.add(remote)
-    try {
-      const remoteUrl = getRemoteUrlByName(path, remote)
-      if (parseHostedRemote(remoteUrl)?.provider === 'github') {
-        return remoteUrl
-      }
-    } catch {
-      // Missing candidate remotes are expected; try the next repo-level fallback.
-    }
-  }
-  // Why: `gh` reports a GitHub account. For GitLab/Bitbucket/self-hosted
-  // repos, using that identity would create the wrong provider prefix.
-  return ''
-}
-
-/**
- * Get the GitHub/explicit username-style branch prefix for the repo.
- */
-export function getGitUsername(path: string): string {
-  // Why: this backs the "Git Username" branch-prefix setting. Commit author
-  // email/name are not hosted-account usernames, so keep them out of this path.
-  return normalizeGitUsername(
-    getGitConfigValue(path, 'github.user') ||
-      getGitConfigValue(path, 'user.username') ||
-      getGhLoginForGitHubRemote(path)
-  )
-}
-
 function hasGitRef(path: string, ref: string): boolean {
   try {
     gitExecFileSync(['rev-parse', '--verify', ref], {
@@ -300,6 +464,24 @@ function hasGitRef(path: string, ref: string): boolean {
     return true
   } catch {
     return false
+  }
+}
+
+function gitRefToDefaultBaseRef(ref: string): string {
+  return ref.replace(/^refs\/remotes\//, '')
+}
+
+function getVerifiedOriginHeadBaseRef(path: string): string | null {
+  try {
+    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
+      cwd: path
+    }).trim()
+
+    // Why: origin/HEAD may survive a default-branch rename while pointing at a
+    // deleted ref; verify before trusting it over the probe list.
+    return ref && hasGitRef(path, ref) ? gitRefToDefaultBaseRef(ref) : null
+  } catch {
+    return null
   }
 }
 
@@ -314,16 +496,9 @@ function hasGitRef(path: string, ref: string): boolean {
  * degrade gracefully for non-creation uses (e.g. hosted URL building).
  */
 export function getDefaultBaseRef(path: string): string | null {
-  try {
-    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
-      cwd: path
-    }).trim()
-
-    if (ref) {
-      return ref.replace(/^refs\/remotes\//, '')
-    }
-  } catch {
-    // Fall through to explicit remote branch probes.
+  const originHeadBaseRef = getVerifiedOriginHeadBaseRef(path)
+  if (originHeadBaseRef) {
+    return originHeadBaseRef
   }
 
   // Why: walk the shared DEFAULT_BASE_REF_PROBES list so the sync path and the
@@ -431,6 +606,28 @@ export async function getRemoteCount(path: string): Promise<number> {
 /** Callback shape for a git exec function that yields stdout. */
 export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
 
+async function hasGitRefViaExec(exec: GitExec, ref: string): Promise<boolean> {
+  try {
+    await exec(['rev-parse', '--verify', '--quiet', ref])
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function resolveVerifiedOriginHeadBaseRefViaExec(exec: GitExec): Promise<string | null> {
+  try {
+    const { stdout } = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
+    const ref = stdout.trim()
+    if (!ref || !(await hasGitRefViaExec(exec, ref))) {
+      return null
+    }
+    return gitRefToDefaultBaseRef(ref)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Resolve the default base ref given a git exec callback. Prefers
  * origin/HEAD's symbolic-ref target; falls back to DEFAULT_BASE_REF_PROBES.
@@ -445,24 +642,11 @@ export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
  * from a genuine transport failure.
  */
 export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<string | null> {
-  try {
-    const { stdout } = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
-    const ref = stdout.trim()
-    if (ref) {
-      return ref.replace(/^refs\/remotes\//, '')
-    }
-  } catch {
-    // symbolic-ref returns non-zero when origin/HEAD is unset — expected.
-    // Fall through to probes.
+  const originHeadBaseRef = await resolveVerifiedOriginHeadBaseRefViaExec(exec)
+  if (originHeadBaseRef) {
+    return originHeadBaseRef
   }
-  return resolveDefaultBaseRefFromProbes(async (ref) => {
-    try {
-      await exec(['rev-parse', '--verify', '--quiet', ref])
-      return true
-    } catch {
-      return false
-    }
-  })
+  return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
 }
 
 async function getDefaultBaseRefAsync(

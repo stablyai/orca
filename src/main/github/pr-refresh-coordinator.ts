@@ -34,7 +34,7 @@ type PRRefreshOutcomeObserver = (
 
 type PRBranchLookupCandidate = Pick<
   GitHubPRRefreshCandidate,
-  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource'
+  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'currentHeadOid'
 >
 
 function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
@@ -54,6 +54,9 @@ function hostedReviewOptionArgs(
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
+  }
+  if (typeof candidate.currentHeadOid === 'string' && candidate.currentHeadOid.trim().length > 0) {
+    options.currentHeadOid = candidate.currentHeadOid.trim()
   }
   return Object.keys(options).length > 0 ? [options] : []
 }
@@ -145,6 +148,54 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
     // Why: visible follow-ups are owned by the renderer that reported them.
     // If that WebContents is destroyed, no later visibility report may arrive.
     removeInvisibleVisibleRefreshes()
+  }
+}
+
+/**
+ * Drop a removed worktree's aliases from every queue entry.
+ *
+ * Why: many local branches/worktrees that resolve to the same PR coalesce into
+ * one queue entry whose `aliases` map keeps one entry per worktree. Aliases are
+ * only pruned when a candidate is re-enqueued as invalid — never when a worktree
+ * is simply removed. Over a long session with churning worktrees these maps grow
+ * unbounded, contributing to the renderer/process memory creep behind the OOM
+ * reports. Called from worktree removal so stale aliases are released promptly.
+ */
+export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
+  for (const [key, entry] of queue) {
+    let removed = false
+    for (const [cacheKey, alias] of entry.aliases) {
+      if (alias.worktreeId === worktreeId) {
+        entry.aliases.delete(cacheKey)
+        removed = true
+      }
+    }
+    if (!removed) {
+      continue
+    }
+    // No aliases left means no worktree still cares about this refresh.
+    if (entry.aliases.size === 0) {
+      queue.delete(key)
+      errorBackoff.delete(key)
+      continue
+    }
+    // Keep the entry alive but ensure its representative candidate is not a
+    // dangling reference to the removed worktree.
+    if (entry.candidate.worktreeId === worktreeId) {
+      const replacementAlias = entry.aliases.values().next().value
+      if (replacementAlias) {
+        entry.candidate = {
+          ...entry.candidate,
+          cacheKey: replacementAlias.cacheKey,
+          branch: replacementAlias.branch,
+          worktreeId: replacementAlias.worktreeId,
+          // Why: the probe now represents the replacement worktree, so it must
+          // use that worktree's head — otherwise divergence is stamped for the
+          // removed worktree's head and the survivor's link is never cleared.
+          currentHeadOid: replacementAlias.currentHeadOid ?? null
+        }
+      }
+    }
   }
 }
 
@@ -274,6 +325,7 @@ function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefres
     branch: candidate.branch,
     worktreeId: candidate.worktreeId,
     connectionId: candidate.connectionId ?? null,
+    currentHeadOid: candidate.currentHeadOid ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
     fallbackPRNumber:
       candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
@@ -346,6 +398,10 @@ function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefres
       cacheKey: replacementAlias.cacheKey,
       branch: replacementAlias.branch,
       worktreeId: replacementAlias.worktreeId,
+      // Why: the probe now represents the replacement worktree, so it must use
+      // that worktree's head — otherwise divergence is stamped for the pruned
+      // candidate's head and the survivor's link is never cleared.
+      currentHeadOid: replacementAlias.currentHeadOid ?? null,
       isArchived: false,
       isBare: false
     }
@@ -652,20 +708,11 @@ async function drainQueue(): Promise<void> {
       )
 
       if (isBackground(next.reason)) {
-        const rateLimit = await getRateLimit()
-        if (!rateLimit.ok) {
-          const retryAt = Date.now() + 30_000
-          queue.set(next.key, { ...next, dueAt: retryAt })
-          broadcast({
-            aliases,
-            reason: next.reason,
-            status: 'paused',
-            pausedUntil: retryAt,
-            skippedReason: 'rate-limit'
-          })
-          scheduleDrain(30_000)
-          continue
-        }
+        // Why: the probe only warms rateLimitGuard's cached snapshot, so a
+        // failed probe must fail open — GHES with rate limiting disabled 404s
+        // every probe (#7553). A genuinely broken gh surfaces per-key as typed
+        // fetch outcomes instead (visible keys additionally back off).
+        await getRateLimit()
         const buckets = backgroundRefreshBuckets()
         const blockedGuard = buckets
           .map((bucket) => rateLimitGuard(bucket))
@@ -762,6 +809,18 @@ export function enqueuePRRefresh(
       existing.activeDelayNotified = false
       existing.candidate = candidate
       existing.windowId = windowId ?? existing.windowId
+    } else if (existing.candidate.worktreeId === candidate.worktreeId) {
+      // Why: a non-promoting coalesce (e.g. visible→visible) keeps the existing
+      // representative, but the representative drives the probe head. If its own
+      // worktree moved head/branch, refresh those probe inputs so divergence is
+      // stamped for the current head — otherwise the head-scoped clear never
+      // matches and a merged linked PR lingers after a branch switch.
+      existing.candidate = {
+        ...existing.candidate,
+        cacheKey: candidate.cacheKey,
+        branch: candidate.branch,
+        currentHeadOid: candidate.currentHeadOid ?? null
+      }
     }
   } else {
     diagnosticsCounters.enqueued += 1
@@ -807,6 +866,14 @@ export function _getVisiblePRRefreshWindowCountForTests(): number {
 
 export function _getPRRefreshErrorBackoffCountForTests(): number {
   return errorBackoff.size
+}
+
+export function _getPRRefreshQueueSizeForTests(): number {
+  return queue.size
+}
+
+export function _getPRRefreshAliasCountForTests(key: string): number {
+  return queue.get(key)?.aliases.size ?? 0
 }
 
 export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {

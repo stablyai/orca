@@ -40,6 +40,9 @@ export function isStageableStatusEntry(entry: GitStatusEntry): boolean {
   return (
     (entry.area === 'unstaged' || entry.area === 'untracked') &&
     entry.conflictStatus !== 'unresolved' &&
+    // Why: changes inside a submodule (lazily expanded) are read-only from the
+    // parent — `git add` here can't stage the submodule's own working tree.
+    !entry.submoduleRoot &&
     !isSubmoduleWorktreeOnlyChange(entry)
   )
 }

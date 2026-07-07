@@ -976,6 +976,10 @@ export default function SmartWorkspaceNameField({
     }
     let stale = false
     setGitlabLoading(true)
+    // Why: thread the typed query through so the GitLab API filters MRs by
+    // name/number (mirrors the GitHub effect). shouldQueryGitlab already
+    // gates on sourceQueryWithinLimit, so an oversized query never reaches here.
+    const trimmedQuery = debouncedQuery.trim() || undefined
     void Promise.all(
       repoBackedSearchTargets.map((target) =>
         listGitLabMRsForSource({
@@ -984,7 +988,8 @@ export default function SmartWorkspaceNameField({
           sourceContext: target.gitlabSourceContext,
           state: mrStateFilter,
           page: 1,
-          perPage: RESULT_LIMIT
+          perPage: RESULT_LIMIT,
+          query: trimmedQuery
         }).catch(() => ({ items: [], hasMore: false }))
       )
     )
@@ -1013,6 +1018,7 @@ export default function SmartWorkspaceNameField({
       stale = true
     }
   }, [
+    debouncedQuery,
     disabled,
     mode,
     mrStateFilter,

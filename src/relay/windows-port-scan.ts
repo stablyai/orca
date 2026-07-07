@@ -1,5 +1,5 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { getProcessOutputFields } from '../shared/process-output-field-scanner'
 import { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 import type { DetectedPort } from './port-scan-handler'
@@ -157,7 +157,11 @@ function readString(value: unknown): string | undefined {
 
 function readInteger(value: unknown): number | undefined {
   const parsed =
-    typeof value === 'number' ? value : typeof value === 'string' ? Number.parseInt(value, 10) : NaN
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number.parseInt(value, 10)
+        : Number.NaN
   return Number.isSafeInteger(parsed) ? parsed : undefined
 }
 

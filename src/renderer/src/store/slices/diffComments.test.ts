@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this test file owns the diff-comments
-slice's persistence, runtime routing, rollback, and compatibility behavior. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -131,6 +129,7 @@ import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createAgentStatusSlice } from './agent-status'
+import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
@@ -167,6 +166,7 @@ function createTestStore() {
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
     ...createAgentStatusSlice(...a),
+    ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),

@@ -1,9 +1,14 @@
+import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 import {
   buildWindowsPtyCompatibilityOptions,
   isLocalNativeWindowsConpty,
   isLocalNativeWindowsPty
 } from './windows-pty-compatibility'
+
+function writeTerminal(terminal: Terminal, data: string): Promise<void> {
+  return new Promise((resolve) => terminal.write(data, resolve))
+}
 
 describe('buildWindowsPtyCompatibilityOptions', () => {
   it('returns ConPTY compatibility options for local Windows terminals', () => {
@@ -34,6 +39,40 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     ).toEqual({
       windowsPty: { backend: 'conpty' }
     })
+  })
+
+  it('omits old Windows build numbers that enable xterm legacy wrap heuristics', () => {
+    expect(
+      buildWindowsPtyCompatibilityOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.19045',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      })
+    ).toEqual({
+      windowsPty: { backend: 'conpty' }
+    })
+  })
+
+  it('does not mark the row after a full-width Windows status line as wrapped', async () => {
+    const options = buildWindowsPtyCompatibilityOptions({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      osRelease: '10.0.19045',
+      connectionId: null,
+      cwd: 'C:\\repo',
+      shellOverride: null,
+      executionHostId: 'local'
+    })
+    const terminal = new Terminal({ cols: 20, rows: 5, ...options })
+
+    await writeTerminal(terminal, `${'─'.repeat(20)}\r\nNEXT\r\n`)
+
+    // Why: the Chinese report said scrollback stopped working; with the legacy
+    // xterm Windows wrap heuristic, a full-width row falsely wraps the next row.
+    expect(terminal.buffer.active.getLine(1)?.translateToString(true)).toBe('NEXT')
+    expect(terminal.buffer.active.getLine(1)?.isWrapped).toBe(false)
   })
 
   it('skips compatibility options for SSH-backed Windows terminals', () => {
@@ -186,6 +225,18 @@ describe('isLocalNativeWindowsConpty', () => {
       isLocalNativeWindowsConpty({
         ...localNativeWindowsContext,
         executionHostId: 'ssh:my-host'
+      })
+    ).toBe(false)
+  })
+
+  it('does NOT treat unresolved connection ownership as native ConPTY', () => {
+    expect(
+      isLocalNativeWindowsConpty({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        connectionId: undefined,
+        cwd: '/home/me/repo',
+        shellOverride: null,
+        executionHostId: 'local'
       })
     ).toBe(false)
   })

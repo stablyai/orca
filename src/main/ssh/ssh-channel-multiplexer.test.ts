@@ -1,5 +1,3 @@
-/* oxlint-disable max-lines -- Why: keeps the mux protocol lifecycle harness
-   together across request, notification, keepalive, and disposal cases. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { SshChannelMultiplexer, type MultiplexerTransport } from './ssh-channel-multiplexer'
 import { encodeFrame, MessageType, HEADER_LENGTH, encodeKeepAliveFrame } from './relay-protocol'

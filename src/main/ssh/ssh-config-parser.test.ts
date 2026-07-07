@@ -1,6 +1,5 @@
-/* eslint-disable max-lines -- Why: SSH config parsing fixtures cover OpenSSH file parsing and ssh -G output together so import and connection resolution stay aligned. */
 import { describe, expect, it, vi } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
 
 vi.mock('os', () => ({
@@ -507,5 +506,26 @@ describe('parseSshGOutput', () => {
     const output = 'hostname example.com\nidentitiesonly yes\nport 22'
     const result = parseSshGOutput(output)
     expect(result.identitiesOnly).toBe(true)
+  })
+
+  it('parses controlmaster options and filters controlpath none', () => {
+    const output = [
+      'hostname example.com',
+      'controlmaster auto',
+      'controlpath ~/.ssh/cm/%r@%h:%p',
+      'controlpersist 10m',
+      'port 22'
+    ].join('\n')
+    const result = parseSshGOutput(output)
+    expect(result.controlMaster).toBe('auto')
+    expect(result.controlPath).toBe(testHomePath('.ssh', 'cm', '%r@%h:%p'))
+    expect(result.controlPersist).toBe('10m')
+
+    const noneResult = parseSshGOutput(
+      'hostname example.com\ncontrolmaster no\ncontrolpath none\ncontrolpersist no\nport 22'
+    )
+    expect(noneResult.controlMaster).toBe('no')
+    expect(noneResult.controlPath).toBeUndefined()
+    expect(noneResult.controlPersist).toBe('no')
   })
 })

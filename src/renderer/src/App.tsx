@@ -50,7 +50,10 @@ import { ActivityTitlebarControls } from './components/activity/ActivityTitlebar
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
-import { useSystemPrefersDark } from './components/terminal-pane/use-system-prefers-dark'
+import {
+  getSystemPrefersDarkSnapshot,
+  useSystemPrefersDark
+} from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
@@ -109,17 +112,22 @@ import {
 } from './lib/workspace-session'
 import { createSessionWriteSubscriber } from './lib/session-write-subscriber'
 import {
-  fetchWorkspaceSessionFromHosts,
+  fetchWorkspaceSessionWithRuntimeHostOwners,
   patchWorkspaceSessionByHost,
   persistWorkspaceSessionByHostSync
 } from './lib/workspace-session-host-persistence'
+import { collectFolderWorkspaceKeysFromSession } from './lib/workspace-session-hydration-keys'
 import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
 } from './lib/startup-ui-hydration'
+import {
+  logRendererStartupDiagnostic,
+  timeRendererStartupStep,
+  timeRendererStartupSyncStep
+} from './startup/startup-diagnostics'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
-import { getSystemPrefersDark } from './lib/terminal-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -151,6 +159,7 @@ import {
   type KeybindingContext,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -172,6 +181,17 @@ const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
   platform: shortcutPlatform,
   isWebClient: isPairedWebClientWindow()
 })
+
+async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
+  try {
+    return (await window.api.runtimeEnvironments.list()).map((environment) =>
+      toRuntimeExecutionHostId(environment.id)
+    )
+  } catch (err) {
+    console.warn('Failed to list runtime session hosts for startup:', err)
+    return []
+  }
+}
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -841,39 +861,86 @@ function App(): React.JSX.Element {
     // UI mounts.
     let reconnectStarted = false
     void (async () => {
+      const startupStartedAt = performance.now()
+      logRendererStartupDiagnostic('startup-chain-start')
       try {
         // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
-        await actions.fetchSettings()
-        // Why: load local + every configured runtime environment (not just the
-        // active one) so a cold start that restored a remote workspace doesn't
-        // hide local repos. The sidebar "All hosts" scope then shows them all.
-        await actions.fetchReposForAllHosts()
-        await actions.fetchProjectGroupsForAllHosts()
-        await actions.fetchFolderWorkspacesForAllHosts()
-        await actions.fetchAllWorktrees()
-        await actions.fetchWorktreeLineage()
-        const persistedUI = await window.api.ui.get()
-        uiHydrated = hydratePersistedUIAfterStartupRead({
-          persistedUI,
-          cancelled,
-          hydratePersistedUI: actions.hydratePersistedUI
-        })
-        // Why: runtime-owned worktree slices live in per-host partitions.
-        // Repos were fetched above, so the known runtime hosts are derivable
-        // here; merge their slices into the unified session the hydrators
-        // expect. An unreadable host partition is skipped (fail-soft).
-        const session = await fetchWorkspaceSessionFromHosts(
-          window.api.session,
-          useAppStore.getState().repos
+        await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why: keybindings + onboarding are main-side reads with no dependency
+        // on the catalog/session steps below, so start them now and await them
+        // at their original positions — the round-trips overlap the local
+        // catalog scans instead of queuing after them. Browser session profiles
+        // are deliberately NOT started early: on a remote runtime they route
+        // through a runtime RPC that may not be connected this early, and a
+        // failed fetch clears the profile list. The floating .catch marks the
+        // rejection handled if an earlier awaited step throws first; each await
+        // still rethrows its own failure.
+        const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
+          actions.fetchKeybindings()
         )
-        await actions.fetchKeybindings()
+        keybindingsPromise.catch(() => {})
+        const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
+          window.api.onboarding.get()
+        )
+        onboardingPromise.catch(() => {})
+        // Why: hydrate persisted UI immediately after ui.get() so first paint
+        // reflects saved view settings before the catalog scans below. ui.get()
+        // is awaited (not overlapped) because the hydrate must land before the
+        // local-first catalog/session steps run.
+        const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
+          hydratePersistedUIAfterStartupRead({
+            persistedUI,
+            cancelled,
+            hydratePersistedUI: actions.hydratePersistedUI
+          })
+        )
+        const startupRuntimeHostIds = await timeRendererStartupStep(
+          'list-runtime-session-hosts',
+          listRuntimeSessionHostIdsForStartup
+        )
+        // Why: first paint needs local data and persisted view settings, but
+        // saved remote runtimes can spend the full connect timeout. Load only
+        // the local catalog here; remotes refresh after hydration below.
+        await timeRendererStartupStep('fetch-repos-local', () =>
+          actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-project-groups-local', () =>
+          actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
+          actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-worktrees', () =>
+          actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
+        )
+        // Why: runtime-owned worktree slices live in per-host partitions.
+        // Remote catalogs now load after first paint, so include saved runtime
+        // host ids from local settings to restore their persisted session slices
+        // without waiting on network reachability. Unreadable partitions skip.
+        const sessionRead = await timeRendererStartupStep('session-get', () =>
+          fetchWorkspaceSessionWithRuntimeHostOwners(
+            window.api.session,
+            useAppStore.getState().repos,
+            startupRuntimeHostIds
+          )
+        )
+        await keybindingsPromise
         if (!cancelled) {
-          actions.hydrateWorkspaceSession(session)
-          actions.hydrateTabsSession(session)
-          actions.hydrateEditorSession(session)
-          actions.hydrateBrowserSession(session)
+          const sessionHydrationOptions = {
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+          }
+          timeRendererStartupSyncStep('hydrate-session-stores', () => {
+            actions.hydrateWorkspaceSession(sessionRead.session, {
+              ...sessionHydrationOptions,
+              runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey
+            })
+            actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
+          })
           // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
           // no longer exist. Must run AFTER hydration — before this point,
           // async repo loads may not have populated worktreesByRepo yet and
@@ -882,10 +949,14 @@ function App(): React.JSX.Element {
           // so users upgrading from a pre-feature build don't see the active
           // worktree sink in the empty-query list.
           // See docs/cmd-j-empty-query-ordering.md.
-          actions.pruneLastVisitedTimestamps()
-          actions.seedActiveWorktreeLastVisitedIfMissing()
-          await actions.fetchBrowserSessionProfiles()
-          const onboardingState = await window.api.onboarding.get()
+          timeRendererStartupSyncStep('visit-timestamp-prune', () => {
+            actions.pruneLastVisitedTimestamps()
+            actions.seedActiveWorktreeLastVisitedIfMissing()
+          })
+          await timeRendererStartupStep('fetch-browser-session-profiles', () =>
+            actions.fetchBrowserSessionProfiles()
+          )
+          const onboardingState = await onboardingPromise
           if (!cancelled) {
             setOnboarding(onboardingState)
             setOnboardingLoaded(true)
@@ -896,11 +967,13 @@ function App(): React.JSX.Element {
           // tabs through pty.attach on the relay. Passphrase-protected targets
           // are deferred to tab focus to avoid stacking credential dialogs at
           // startup before the user has context.
-          const connectionIds = session.activeConnectionIdsAtShutdown ?? []
+          const connectionIds = sessionRead.session.activeConnectionIdsAtShutdown ?? []
           if (connectionIds.length > 0) {
             try {
               const SSH_RECONNECT_TIMEOUT_MS = 15_000
-              const allTargets = await window.api.ssh.listTargets()
+              const allTargets = await timeRendererStartupStep('ssh-list-targets', () =>
+                window.api.ssh.listTargets()
+              )
               const targetMap = new Map(allTargets.map((t) => [t.id, t]))
               const targets = connectionIds.map((targetId) => ({
                 targetId,
@@ -921,25 +994,33 @@ function App(): React.JSX.Element {
               // reattached when the user focuses the tab (by which time the
               // slow connect will likely have succeeded).
               const timedOutTargets: string[] = []
-              await Promise.allSettled(
-                eagerTargets.map(({ targetId }) =>
-                  Promise.race([
-                    window.api.ssh.connect({ targetId }),
-                    new Promise((_, reject) =>
-                      setTimeout(
-                        () => reject(new Error('SSH reconnect timeout')),
-                        SSH_RECONNECT_TIMEOUT_MS
-                      )
+              await timeRendererStartupStep(
+                'ssh-reconnect',
+                () =>
+                  Promise.allSettled(
+                    eagerTargets.map(({ targetId }) =>
+                      Promise.race([
+                        window.api.ssh.connect({ targetId }),
+                        new Promise((_, reject) =>
+                          setTimeout(
+                            () => reject(new Error('SSH reconnect timeout')),
+                            SSH_RECONNECT_TIMEOUT_MS
+                          )
+                        )
+                      ]).catch((err) => {
+                        const isTimeout =
+                          err instanceof Error && err.message === 'SSH reconnect timeout'
+                        if (isTimeout) {
+                          timedOutTargets.push(targetId)
+                        }
+                        console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
+                      })
                     )
-                  ]).catch((err) => {
-                    const isTimeout =
-                      err instanceof Error && err.message === 'SSH reconnect timeout'
-                    if (isTimeout) {
-                      timedOutTargets.push(targetId)
-                    }
-                    console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
-                  })
-                )
+                  ),
+                {
+                  eagerTargets: eagerTargets.length,
+                  deferredTargets: deferredTargets.length
+                }
               )
               if (timedOutTargets.length > 0) {
                 actions.setDeferredSshReconnectTargets([
@@ -972,14 +1053,20 @@ function App(): React.JSX.Element {
             } catch (err) {
               console.warn('SSH startup reconnect failed:', err)
             }
+          } else {
+            logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
           }
 
           // Why: main overlaps daemon/hook startup with renderer hydration for
           // first paint, but restored terminals still need those services ready
           // before they mount and spawn/reconnect PTYs.
-          await window.api.app.awaitFirstWindowStartupServices()
+          await timeRendererStartupStep('first-window-services-await', () =>
+            window.api.app.awaitFirstWindowStartupServices()
+          )
           reconnectStarted = true
-          await actions.reconnectPersistedTerminals(abortController.signal)
+          await timeRendererStartupStep('reconnect-terminals', () =>
+            actions.reconnectPersistedTerminals(abortController.signal)
+          )
           syncZoomCSSVar()
           // Why (issue #1158): unlock the debounced session writer only after
           // hydration AND all dependent startup steps (SSH reconnect, terminal
@@ -989,6 +1076,26 @@ function App(): React.JSX.Element {
           // and the writer would serialize a partially-mutated store back to
           // disk — the exact data-loss mode this PR fixes.
           actions.setHydrationSucceeded(true)
+          logRendererStartupDiagnostic('startup-hydration-done', {
+            durationMs: Math.round(performance.now() - startupStartedAt)
+          })
+          void (async () => {
+            try {
+              await timeRendererStartupStep('remote-catalog-refresh', async () => {
+                await actions.fetchReposForAllHosts()
+                await actions.fetchProjectGroupsForAllHosts()
+                await actions.fetchFolderWorkspacesForAllHosts()
+              })
+              if (!cancelled) {
+                await timeRendererStartupStep('remote-worktree-refresh', async () => {
+                  await actions.fetchAllWorktrees()
+                  await actions.fetchWorktreeLineage()
+                })
+              }
+            } catch (err) {
+              console.warn('Remote startup catalog refresh failed:', err)
+            }
+          })()
         }
       } catch (error) {
         // Why (issue #1158): previously this catch called hydrateWorkspaceSession
@@ -1113,7 +1220,12 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      const systemPrefersDark = getSystemPrefersDark()
+      // Why: this subscriber fires on every store mutation (PTY/agent-status
+      // ticks). Read the cached prefers-dark snapshot — kept fresh by the shared
+      // listener that useSystemPrefersDark() below already mounts — instead of
+      // allocating a throwaway MediaQueryList via matchMedia on every tick,
+      // before the skip-gate even runs.
+      const systemPrefersDark = getSystemPrefersDarkSnapshot()
       // Why: skip the key build entirely when every input field is unchanged
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the

@@ -48,7 +48,7 @@ describe('github PR auto-merge availability', () => {
     expect(canShowGitHubPRAutoMergeControl(pr({ autoMergeEnabled: true }))).toBe(true)
   })
 
-  it('suppresses closed, draft, disallowed, and conflicting PRs', () => {
+  it('suppresses closed, draft, disallowed, conflicting, and unstable PRs', () => {
     expect(
       canShowGitHubPRAutoMergeControl(pr({ state: 'draft', mergeStateStatus: 'BLOCKED' }))
     ).toBe(false)
@@ -62,6 +62,12 @@ describe('github PR auto-merge availability', () => {
     ).toBe(false)
     expect(
       canShowGitHubPRAutoMergeControl(pr({ mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }))
+    ).toBe(false)
+    expect(
+      canEnableGitHubPRAutoMerge(pr({ mergeable: 'UNKNOWN', mergeStateStatus: 'UNSTABLE' }))
+    ).toBe(false)
+    expect(
+      canShowGitHubPRAutoMergeControl(pr({ mergeable: 'UNKNOWN', mergeStateStatus: 'UNSTABLE' }))
     ).toBe(false)
   })
 })

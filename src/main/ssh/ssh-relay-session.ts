@@ -14,7 +14,11 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import { SshPtyProvider, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
+import {
+  SshPtyProvider,
+  isSshPtyIdentityMismatchError,
+  isSshPtyNotFoundError
+} from '../providers/ssh-pty-provider'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
@@ -37,7 +41,8 @@ import {
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
-  setPtyOwnership
+  setPtyOwnership,
+  answerStartupTerminalColorQueriesForPty
 } from '../ipc/pty'
 import {
   registerSshFilesystemProvider,
@@ -61,10 +66,14 @@ import {
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
 type RemoteCliBridgeEnv = {
+  remoteHome: string
   binDir: string
   relayDir: string
   nodePath: string
@@ -73,9 +82,37 @@ type RemoteCliBridgeEnv = {
   pathDelimiter?: ':' | ';'
 }
 
+type ExpectedPtyIdentity = { paneKey?: string; tabId?: string }
+
+function expectedIdentityForLease(lease: {
+  tabId?: string
+  leafId?: string
+}): ExpectedPtyIdentity | null {
+  if (typeof lease.tabId !== 'string' || lease.tabId.length === 0) {
+    return null
+  }
+  const paneKey =
+    isValidTerminalTabId(lease.tabId) &&
+    typeof lease.leafId === 'string' &&
+    isTerminalLeafId(lease.leafId)
+      ? makePaneKey(lease.tabId, lease.leafId)
+      : undefined
+  return {
+    ...(paneKey ? { paneKey } : {}),
+    tabId: lease.tabId
+  }
+}
+
 type ForwardedReplayFingerprint = {
   fingerprint: string
   deliveredAt: number
+}
+
+export type SshRelayAiVaultHostInfo = {
+  targetId: string
+  executionHostId: ExecutionHostId
+  remoteHome: string
+  hostPlatform: RemoteHostPlatform
 }
 
 const RECONNECT_REPLAY_DUPLICATE_WINDOW_MS = 1000
@@ -188,6 +225,19 @@ export class SshRelaySession {
     return this.remoteCliBridgeEnv?.hostPlatform ?? this.hostPlatform
   }
 
+  getAiVaultHostInfo(): SshRelayAiVaultHostInfo | null {
+    const env = this.remoteCliBridgeEnv
+    if (!env) {
+      return null
+    }
+    return {
+      targetId: this.targetId,
+      executionHostId: toSshExecutionHostId(this.targetId),
+      remoteHome: env.remoteHome,
+      hostPlatform: env.hostPlatform
+    }
+  }
+
   getPortScanner(): PortScanner | null {
     return this.portScanner
   }
@@ -217,6 +267,7 @@ export class SshRelaySession {
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
+              remoteHome,
               binDir: joinRemotePath(hostPlatform, remoteHome, '.orca-relay', 'bin'),
               relayDir: remoteRelayDir,
               nodePath,
@@ -344,6 +395,7 @@ export class SshRelaySession {
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
+              remoteHome,
               binDir: joinRemotePath(hostPlatform, remoteHome, '.orca-relay', 'bin'),
               relayDir: remoteRelayDir,
               nodePath,
@@ -530,7 +582,19 @@ export class SshRelaySession {
       return false
     }
 
-    await this.installRemoteOrcaCliShim()
+    try {
+      await this.installRemoteOrcaCliShim()
+    } catch (error) {
+      // Why: the remote `orca` CLI shim is a convenience bridge. On session-
+      // limited remotes (MaxSessions=1) the relay bridge holds the only slot,
+      // so this raw-connection install can fail — that must not fail the
+      // whole connection, matching the managed-hook install above.
+      console.warn(
+        `[ssh-relay-session] remote orca CLI shim install failed for ${this.targetId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
     if (shouldContinue && !shouldContinue()) {
       return false
     }
@@ -941,11 +1005,15 @@ export class SshRelaySession {
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
     ptyProvider.onData((payload) => {
       const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
+      const rendererData = answerStartupTerminalColorQueriesForPty(payload.id, payload.data)
       const win = this.getMainWindow()
-      if (win && !win.isDestroyed()) {
+      if (win && !win.isDestroyed() && rendererData.length > 0) {
         win.webContents.send('pty:data', {
           ...payload,
-          ...(typeof seq === 'number' ? { seq, rawLength: payload.data.length } : {})
+          data: rendererData,
+          ...(rendererData === payload.data && typeof seq === 'number'
+            ? { seq, rawLength: payload.data.length }
+            : {})
         })
       }
     })
@@ -998,10 +1066,21 @@ export class SshRelaySession {
   }
 
   private async reattachKnownPtys(shouldContinue: () => boolean): Promise<void> {
-    const leasedPtyIds = this.store
+    const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
-      .map((lease) => lease.ptyId)
+    const leasedPtyIds = activeLeases.map((lease) => lease.ptyId)
+    // Why: carry each lease's pane identity into the attach so the relay can
+    // reject cross-generation id collisions even between split panes in one tab.
+    // Older leases may lack leafId, so tabId remains the compatibility fallback.
+    const expectedIdentityByPtyId = new Map(
+      activeLeases
+        .map((lease): [string, ExpectedPtyIdentity] | null => {
+          const expected = expectedIdentityForLease(lease)
+          return expected ? [lease.ptyId, expected] : null
+        })
+        .filter((entry): entry is [string, ExpectedPtyIdentity] => entry !== null)
+    )
     // Why: after app restart, ptyOwnership is empty but durable SSH leases
     // still describe remote PTYs that survived in the relay grace window.
     const ptyIds = Array.from(
@@ -1021,7 +1100,11 @@ export class SshRelaySession {
         return
       }
       try {
-        const attachResult = (await ptyProvider.attachForReconnect(ptyId)) ?? {}
+        const expectedIdentity = expectedIdentityByPtyId.get(ptyId)
+        const attachResult =
+          (expectedIdentity
+            ? await ptyProvider.attachForReconnect(ptyId, expectedIdentity)
+            : await ptyProvider.attachForReconnect(ptyId)) ?? {}
         if (!shouldContinue()) {
           return
         }
@@ -1033,12 +1116,20 @@ export class SshRelaySession {
         if (!isSshPtyNotFoundError(err)) {
           throw err
         }
+        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+        if (isSshPtyIdentityMismatchError(err)) {
+          console.warn(
+            `[ssh-relay-session] Ignoring stale PTY ${ptyId} for ${this.targetId} after relay identity mismatch: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          )
+          continue
+        }
         console.warn(
           `[ssh-relay-session] Dropping stale PTY ${ptyId} for ${this.targetId} after relay reattach failed: ${
             err instanceof Error ? err.message : String(err)
           }`
         )
-        const appPtyId = toAppSshPtyId(this.targetId, ptyId)
         clearProviderPtyState(appPtyId)
         deletePtyOwnership(appPtyId)
         this.forwardedReattachReplayByPty.delete(appPtyId)

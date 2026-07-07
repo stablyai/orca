@@ -21,3 +21,21 @@ export function isShellProcess(processName: string): boolean {
     SHELL_NAMES.has(basenameWithoutWindowsExtension)
   )
 }
+
+// Why: a ConPTY-side buffer clear cannot reach PSReadLine's cached cursor
+// row, so the first Enter after a terminal clear still repaints the prompt at
+// the stale row. Only the PowerShell family binds Ctrl+L (form feed) to a
+// full prompt repaint, so the post-clear nudge must stay scoped to it.
+const POWERSHELL_NAMES = new Set(['powershell', 'pwsh'])
+
+export function isPowerShellProcess(processName: string | null | undefined): boolean {
+  if (!processName) {
+    return false
+  }
+  const normalized = processName
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .toLowerCase()
+  const basename = normalized.split(/[\\/]/).pop() ?? normalized
+  return POWERSHELL_NAMES.has(basename.replace(WINDOWS_PROCESS_EXTENSION_RE, ''))
+}

@@ -26,16 +26,42 @@ export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
   return true
 }
 
-async function deleteRelayBranchAtExpectedHead(
+export async function forceDeletePreservedRelayBranch(
   git: GitExec,
   repoPath: string,
   branchName: string,
   expectedHead: string
 ): Promise<void> {
+  if (!branchName || branchName.includes('\0') || branchName.startsWith('-')) {
+    throw new Error('Invalid branch name for preserved branch delete.')
+  }
+  if (!expectedHead) {
+    throw new Error('Expected branch head is required for preserved branch delete.')
+  }
+  await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, expectedHead, () => {
+    return new Error(
+      `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
+    )
+  })
+}
+
+async function deleteRelayBranchAtExpectedHead(
+  git: GitExec,
+  repoPath: string,
+  branchName: string,
+  expectedHead: string,
+  mapUpdateRefError?: (error: unknown) => Error
+): Promise<void> {
   if (await isRelayBranchCheckedOut(git, repoPath, branchName)) {
     throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
   }
-  await git(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+  try {
+    await git(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+  } catch (error) {
+    // Why: only stale ref writes get the force-delete message; checkout guards
+    // and removeWorktree cleanup still rely on their distinct/raw failures.
+    throw mapUpdateRefError?.(error) ?? error
+  }
   if (await isRelayBranchCheckedOut(git, repoPath, branchName)) {
     try {
       await git(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)

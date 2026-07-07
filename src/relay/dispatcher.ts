@@ -27,10 +27,28 @@ export type MethodHandler = (
 
 export type NotificationHandler = (params: Record<string, unknown>, context: RequestContext) => void
 
+/** Sink write. Returning literal `false` signals saturation (Node stream
+ * semantics); `void`/`true` mean the frame was accepted. */
+export type RelayClientWrite = (data: Buffer) => boolean | void
+
+export type RelayClientSinkOptions = {
+  /** One-shot: invoke `cb` once when the sink can accept more data again
+   * (stream 'drain'), or when the sink is permanently dead (error/close) so
+   * bulk senders waiting on it never hang. */
+  waitWriteDrain?: (cb: () => void) => void
+}
+
 type RelayClient = {
   id: number
   decoder: FrameDecoder
-  write: (data: Buffer) => void
+  write: RelayClientWrite
+  waitWriteDrain?: (cb: () => void) => void
+  /** Pending resolvers for bulk sends stalled on sink saturation. Flushed on
+   * drain, write failure, detach, setWrite, and dispose so no pump hangs. */
+  drainWaiters: Set<() => void>
+  /** Serializes bulk-lane sends per client so at most one bulk frame is
+   * admitted past the sink's high-water mark at a time. */
+  bulkChain: Promise<void>
   nextOutgoingSeq: number
   highestReceivedSeq: number
   generation: number
@@ -58,8 +76,8 @@ export class RelayDispatcher {
   private nextClientId = 1
   private nextRequestId = 1
 
-  constructor(write: (data: Buffer) => void) {
-    this.primaryClient = this.createClient(write)
+  constructor(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions) {
+    this.primaryClient = this.createClient(write, sinkOptions)
     this.clients.set(this.primaryClient.id, this.primaryClient)
     this.startKeepalive()
   }
@@ -75,10 +93,14 @@ export class RelayDispatcher {
   // never acks the new client's frames until the new client's seq catches
   // up - causing the client's unacked-timeout checker to accumulate stale
   // timestamps that could eventually fire a false connection-dead signal.
-  setWrite(write: (data: Buffer) => void): void {
+  setWrite(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): void {
     this.requestAborts.abortClient(this.primaryClient.id)
     this.primaryClient.write = write
+    this.primaryClient.waitWriteDrain = sinkOptions?.waitWriteDrain
     this.primaryClient.closed = false
+    // Why: the saturated sink the waiters were parked on no longer exists;
+    // wake stalled bulk senders so they re-evaluate against the new sink.
+    this.flushDrainWaiters(this.primaryClient)
     this.resetClient(this.primaryClient)
   }
 
@@ -89,14 +111,15 @@ export class RelayDispatcher {
     this.requestAborts.abortClient(this.primaryClient.id)
     this.primaryClient.generation++
     this.primaryClient.closed = true
+    this.flushDrainWaiters(this.primaryClient)
     this.notifyClientDetached(this.primaryClient.id)
   }
 
   // Why: synced remote workspaces can have more than one Orca client attached
   // to the same relay. Frame sequence numbers and JSON-RPC request ids are per
   // SSH channel, so each socket client needs independent protocol state.
-  attachClient(write: (data: Buffer) => void): number {
-    const client = this.createClient(write)
+  attachClient(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): number {
+    const client = this.createClient(write, sinkOptions)
     this.clients.set(client.id, client)
     return client.id
   }
@@ -109,6 +132,7 @@ export class RelayDispatcher {
     this.requestAborts.abortClient(clientId)
     client.generation++
     client.closed = true
+    this.flushDrainWaiters(client)
     this.clients.delete(clientId)
     this.notifyClientDetached(clientId)
   }
@@ -162,6 +186,90 @@ export class RelayDispatcher {
     }
     for (const client of this.clients.values()) {
       this.sendFrame(client, msg)
+    }
+  }
+
+  /**
+   * Bulk-lane notification. Sends are serialized per client and the returned
+   * promise resolves only after the sink accepted the frame without reporting
+   * saturation (or the client went away). Bulk producers (file streams) await
+   * this between frames so interactive frames (pty.data echo) never queue
+   * behind an unbounded backlog on the shared SSH channel.
+   *
+   * With `clientId`, the frame goes only to that client — stream chunks have
+   * exactly one consumer, and broadcasting them would let one slow secondary
+   * client stall everyone. A missing/closed target resolves immediately; the
+   * caller's staleness check owns aborting the stream.
+   */
+  notifyBulk(
+    method: string,
+    params?: Record<string, unknown>,
+    opts?: { clientId?: number }
+  ): Promise<void> {
+    if (this.disposed) {
+      return Promise.resolve()
+    }
+    const msg: JsonRpcNotification = {
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined ? { params } : {})
+    }
+    const targets =
+      opts?.clientId !== undefined
+        ? [this.clients.get(opts.clientId)].filter((c): c is RelayClient => c !== undefined)
+        : Array.from(this.clients.values())
+    const waits: Promise<void>[] = []
+    for (const client of targets) {
+      if (client.closed) {
+        continue
+      }
+      // Why: the frame is encoded inside the chain step, not at call time —
+      // sequence numbers must be assigned in actual write order.
+      const step = client.bulkChain.then(() => {
+        if (this.disposed || client.closed) {
+          return
+        }
+        const accepted = this.sendFrame(client, msg)
+        if (accepted === false) {
+          return this.waitForClientDrain(client)
+        }
+        return undefined
+      })
+      client.bulkChain = step.catch(() => {})
+      waits.push(step)
+    }
+    if (waits.length === 0) {
+      return Promise.resolve()
+    }
+    return Promise.all(waits).then(() => {})
+  }
+
+  private waitForClientDrain(client: RelayClient): Promise<void> {
+    if (this.disposed || client.closed || !client.waitWriteDrain) {
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve) => {
+      let settled = false
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        client.drainWaiters.delete(finish)
+        resolve()
+      }
+      client.drainWaiters.add(finish)
+      try {
+        client.waitWriteDrain!(finish)
+      } catch {
+        finish()
+      }
+    })
+  }
+
+  private flushDrainWaiters(client: RelayClient): void {
+    for (const waiter of Array.from(client.drainWaiters)) {
+      waiter()
     }
   }
 
@@ -236,14 +344,20 @@ export class RelayDispatcher {
     // Why: dispose means this relay instance cannot send responses anymore;
     // abort in-flight request work so stale SSH-side scans/watchers release.
     this.requestAborts.abortAll()
+    for (const client of this.clients.values()) {
+      this.flushDrainWaiters(client)
+    }
   }
 
-  private createClient(write: (data: Buffer) => void): RelayClient {
+  private createClient(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): RelayClient {
     const id = this.nextClientId++
     const client: RelayClient = {
       id,
       decoder: new FrameDecoder((frame) => this.handleFrame(client, frame)),
       write,
+      waitWriteDrain: sinkOptions?.waitWriteDrain,
+      drainWaiters: new Set(),
+      bulkChain: Promise.resolve(),
       nextOutgoingSeq: 1,
       highestReceivedSeq: 0,
       generation: 0,
@@ -387,13 +501,13 @@ export class RelayDispatcher {
   private sendFrame(
     client: RelayClient,
     msg: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification
-  ): void {
+  ): boolean | void {
     if (this.disposed || client.closed) {
       return
     }
     const seq = client.nextOutgoingSeq++
     const frame = encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
-    this.writeFrame(client, frame)
+    return this.writeFrame(client, frame)
   }
 
   private startKeepalive(): void {
@@ -416,12 +530,13 @@ export class RelayDispatcher {
     this.keepaliveTimer.unref()
   }
 
-  private writeFrame(client: RelayClient, frame: Buffer): void {
+  private writeFrame(client: RelayClient, frame: Buffer): boolean | void {
     try {
-      client.write(frame)
+      return client.write(frame)
     } catch (err) {
       client.closed = true
       client.generation++
+      this.flushDrainWaiters(client)
       if (client !== this.primaryClient) {
         this.clients.delete(client.id)
         this.notifyClientDetached(client.id)

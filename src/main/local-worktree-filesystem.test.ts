@@ -29,6 +29,12 @@ function completeExecFile(stdout = ''): void {
   })
 }
 
+function failExecFile(error: Error & { code?: number | string }): void {
+  execFileMock.mockImplementation((_file, _args, _options, callback) => {
+    callback(error, '', '')
+  })
+}
+
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -49,6 +55,7 @@ describe('local worktree filesystem runtime access', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -63,10 +70,13 @@ describe('local worktree filesystem runtime access', () => {
 
     expect(lstatMock).toHaveBeenCalledWith('C:\\repo\\.git')
     expect(readFileMock).toHaveBeenCalledWith('C:\\repo\\.git', 'utf8')
-    expect(rmMock).toHaveBeenCalledWith(toHostRemovalPath('C:\\repo\\feature'), {
-      recursive: true,
-      force: true
-    })
+    expect(rmMock).toHaveBeenCalledWith(
+      toHostRemovalPath('C:\\repo\\feature'),
+      expect.objectContaining({
+        recursive: true,
+        force: true
+      })
+    )
     expect(execFileMock).not.toHaveBeenCalled()
   })
 
@@ -77,10 +87,59 @@ describe('local worktree filesystem runtime access', () => {
       await removeLocalWorktreePath(longPath)
 
       expect(toHostRemovalPath(longPath)).toBe(`\\\\?\\${longPath}`)
-      expect(rmMock).toHaveBeenCalledWith(`\\\\?\\${longPath}`, {
-        recursive: true,
-        force: true
-      })
+      expect(rmMock).toHaveBeenCalledWith(
+        `\\\\?\\${longPath}`,
+        expect.objectContaining({
+          recursive: true,
+          force: true,
+          maxRetries: expect.any(Number),
+          retryDelay: expect.any(Number)
+        })
+      )
+    })
+  })
+
+  it('retries transient host removal failures on Windows', async () => {
+    vi.useFakeTimers()
+    await withPlatform('win32', async () => {
+      const error = Object.assign(new Error('Directory not empty'), { code: 'ENOTEMPTY' })
+      rmMock.mockRejectedValueOnce(error).mockResolvedValueOnce(undefined)
+
+      const removal = removeLocalWorktreePath('C:\\repo\\feature')
+      await vi.advanceTimersByTimeAsync(250)
+
+      await expect(removal).resolves.toBeUndefined()
+      expect(rmMock).toHaveBeenCalledTimes(2)
+      expect(rmMock).toHaveBeenNthCalledWith(
+        1,
+        toHostRemovalPath('C:\\repo\\feature'),
+        expect.objectContaining({
+          recursive: true,
+          force: true,
+          maxRetries: expect.any(Number),
+          retryDelay: expect.any(Number)
+        })
+      )
+      expect(rmMock).toHaveBeenNthCalledWith(
+        2,
+        toHostRemovalPath('C:\\repo\\feature'),
+        expect.objectContaining({
+          recursive: true,
+          force: true,
+          maxRetries: expect.any(Number),
+          retryDelay: expect.any(Number)
+        })
+      )
+    })
+  })
+
+  it('does not retry host removal failures outside Windows', async () => {
+    await withPlatform('linux', async () => {
+      const error = Object.assign(new Error('Directory not empty'), { code: 'ENOTEMPTY' })
+      rmMock.mockRejectedValue(error)
+
+      await expect(removeLocalWorktreePath('/repo/feature')).rejects.toBe(error)
+      expect(rmMock).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -112,6 +171,17 @@ describe('local worktree filesystem runtime access', () => {
         String.raw`rm -rf -- '\''/mnt/c/Users/me/repo feature'\''`
       )
       expect(rmMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('reports missing WSL stat targets with an ENOENT-shaped error', async () => {
+    await withPlatform('win32', async () => {
+      failExecFile(Object.assign(new Error('missing'), { code: 2 }))
+      const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+
+      await expect(access.statPath('/mnt/c/repo/missing/.git')).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
     })
   })
 })

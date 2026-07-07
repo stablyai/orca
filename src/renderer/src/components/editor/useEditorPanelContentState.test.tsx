@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getRuntimeGitDiff: vi.fn(),
   getConnectionId: vi.fn(),
   getConnectionIdForFile: vi.fn(),
+  isWorktreeConnectionResolved: vi.fn(() => true),
   getState: vi.fn()
 }))
 
@@ -35,7 +36,8 @@ vi.mock('@/runtime/runtime-git-client', () => ({
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId,
-  getConnectionIdForFile: mocks.getConnectionIdForFile
+  getConnectionIdForFile: mocks.getConnectionIdForFile,
+  isWorktreeConnectionResolved: mocks.isWorktreeConnectionResolved
 }))
 
 vi.mock('@/store', () => ({
@@ -130,6 +132,8 @@ describe('useEditorPanelContentState', () => {
     mocks.getConnectionId.mockReturnValue(undefined)
     mocks.getConnectionIdForFile.mockReset()
     mocks.getConnectionIdForFile.mockReturnValue(undefined)
+    mocks.isWorktreeConnectionResolved.mockReset()
+    mocks.isWorktreeConnectionResolved.mockReturnValue(true)
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({ settings: null })
   })
@@ -173,6 +177,50 @@ describe('useEditorPanelContentState', () => {
         relativePath: 'api/src/file.ts',
         worktreeId: 'folder:folder-workspace-1',
         connectionId: 'ssh-1'
+      })
+    )
+  })
+
+  it('does not read locally while a remote host worktree owner is still hydrating (#6648)', async () => {
+    const activeFile = createOpenFile({
+      filePath: '/home/user/project/src/index.ts',
+      relativePath: 'src/index.ts',
+      worktreeId: 'repo-ssh::/home/user/project'
+    })
+    // Owner unknown (SSH repo not hydrated): connection unresolved + not ready.
+    mocks.getConnectionIdForFile.mockReturnValue(undefined)
+    mocks.isWorktreeConnectionResolved.mockReturnValue(false)
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    // Surfaces a retryable owner-not-ready error instead of a terminal local
+    // "access denied", and never attempts the bad local read.
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.loadError).toBeTruthy())
+    expect(latestFileContents[activeFile.id]?.loadError).not.toMatch(/access denied/i)
+    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
+
+    // The SSH repo finishes hydrating: the worktree owner resolves to its
+    // target. We do NOT bump the reload nonce here — the retry hook must
+    // re-attempt the read on its own once the owner-not-ready error clears.
+    mocks.isWorktreeConnectionResolved.mockReturnValue(true)
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-target-1')
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'remote', isBinary: false })
+
+    // Driven purely by the automatic retry (no re-render, no forced reload).
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('remote'), {
+      timeout: 3000
+    })
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/home/user/project/src/index.ts',
+        worktreeId: 'repo-ssh::/home/user/project',
+        connectionId: 'ssh-target-1'
       })
     )
   })

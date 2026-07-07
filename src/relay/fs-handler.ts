@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: relay filesystem request handling shares
    path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
-import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
-import { execFile } from 'child_process'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 // Why: RelayContext is accepted in the constructor for protocol back-compat
@@ -17,13 +17,22 @@ import {
 } from './fs-handler-utils'
 import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
+import { isQuickOpenReaddirBudgetError } from '../shared/quick-open-readdir-walk'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
+import {
+  readVerifiedTerminalArtifact,
+  writeVerifiedTerminalArtifact
+} from './fs-handler-terminal-artifact'
 import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
+import {
+  WATCHER_IGNORE_DIRS,
+  buildParcelWatcherIgnoreOption
+} from '../main/ipc/filesystem-watcher-ignore'
 
 type WatchState = {
   rootPath: string
@@ -58,7 +67,15 @@ function fileStatFromLstat(stats: Awaited<ReturnType<typeof lstat>>) {
   } else if (stats.isSymbolicLink()) {
     type = 'symlink'
   }
-  return { size: stats.size, type, mtime: stats.mtimeMs }
+  return {
+    size: stats.size,
+    type,
+    mtime: stats.mtimeMs,
+    mtimeMs: stats.mtimeMs,
+    dev: stats.dev,
+    ino: stats.ino,
+    nlink: stats.nlink
+  }
 }
 
 export class FsHandler {
@@ -69,15 +86,23 @@ export class FsHandler {
   constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
     this.dispatcher = dispatcher
     this.registerHandlers()
-    this.dispatcher.onClientDetached?.((clientId) => this.releaseClientWatches(clientId))
+    this.dispatcher.onClientDetached?.((clientId) => {
+      this.releaseClientWatches(clientId)
+      // Why: a detached client's fs.streamAck frames will never arrive; wake
+      // any pump parked on the ack window so it re-checks staleness and exits
+      // instead of stranding its open file handle.
+      this.streamRegistry.wakeAllAckWaiters()
+    })
   }
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('fs.readDir', (p) => this.readDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
+    this.dispatcher.onRequest('fs.readTerminalArtifact', (p) => this.readTerminalArtifact(p))
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => this.writeFile(p))
+    this.dispatcher.onRequest('fs.writeTerminalArtifact', (p) => this.writeTerminalArtifact(p))
     this.dispatcher.onRequest('fs.stat', (p) => this.stat(p))
     this.dispatcher.onRequest('fs.lstat', (p) => this.lstat(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
@@ -94,6 +119,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
     this.dispatcher.onNotification('fs.unwatch', (p, context) => this.unwatch(p, context))
     this.dispatcher.onNotification('fs.cancelStream', (p) => this.cancelStream(p))
+    this.dispatcher.onNotification('fs.streamAck', (p) => this.streamAck(p))
   }
 
   private async readDir(params: Record<string, unknown>) {
@@ -119,10 +145,23 @@ export class FsHandler {
     return readRelayFileContent(filePath)
   }
 
+  private async readTerminalArtifact(params: Record<string, unknown>) {
+    return readVerifiedTerminalArtifact({
+      ...params,
+      filePath: expandTilde(params.filePath as string)
+    })
+  }
+
   private async readFileStream(params: Record<string, unknown>, context?: RequestContext) {
     const filePath = expandTilde(params.filePath as string)
     const ctx = context ?? { clientId: 0, isStale: () => false }
-    return readRelayFileStreamMetadata(filePath, this.dispatcher, this.streamRegistry, ctx)
+    return readRelayFileStreamMetadata(filePath, this.dispatcher, this.streamRegistry, ctx, {
+      // Why: only target the requesting client when the dispatcher actually
+      // routed this request (context present) — direct-call tests and legacy
+      // paths keep broadcast semantics.
+      ...(context ? { clientId: context.clientId } : {}),
+      paceWithAcks: params.flowControl === 'ack'
+    })
   }
 
   private async tempDir(): Promise<string> {
@@ -133,6 +172,14 @@ export class FsHandler {
     const streamId = params.streamId as number | undefined
     if (typeof streamId === 'number') {
       this.streamRegistry.abort(streamId)
+    }
+  }
+
+  private streamAck(params: Record<string, unknown>): void {
+    const streamId = params.streamId as number | undefined
+    const seq = params.seq as number | undefined
+    if (typeof streamId === 'number' && typeof seq === 'number') {
+      this.streamRegistry.recordAck(streamId, seq)
     }
   }
 
@@ -152,6 +199,13 @@ export class FsHandler {
     await writeFile(filePath, content, 'utf-8')
   }
 
+  private async writeTerminalArtifact(params: Record<string, unknown>) {
+    return writeVerifiedTerminalArtifact({
+      ...params,
+      filePath: expandTilde(params.filePath as string)
+    })
+  }
+
   private async stat(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
     const stats = await lstat(filePath)
@@ -163,7 +217,11 @@ export class FsHandler {
         return {
           size: targetStats.size,
           type: targetStats.isDirectory() ? 'directory' : 'file',
-          mtime: targetStats.mtimeMs
+          mtime: targetStats.mtimeMs,
+          mtimeMs: targetStats.mtimeMs,
+          dev: targetStats.dev,
+          ino: targetStats.ino,
+          nlink: targetStats.nlink
         }
       } catch {
         return { size: stats.size, type: 'symlink', mtime: stats.mtimeMs }
@@ -189,7 +247,7 @@ export class FsHandler {
 
   private async createFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    const { dirname } = await import('path')
+    const { dirname } = await import('node:path')
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
   }
@@ -298,7 +356,18 @@ export class FsHandler {
       )
     })
     if (isGitRepo) {
-      return listFilesWithGit(rootPath, excludePathPrefixes)
+      // Why: a git monorepo parent fills nested-repo subtrees via the readdir
+      // walk, which can exhaust the same cap/deadline. Translate only those
+      // budget errors into install-rg guidance; genuine git failures keep
+      // their own messages.
+      try {
+        return await listFilesWithGit(rootPath, excludePathPrefixes)
+      } catch (err) {
+        if (isQuickOpenReaddirBudgetError(err)) {
+          throw new Error(await buildInstallRgMessage(err))
+        }
+        throw err
+      }
     }
     // Why: the readdir walker rejects on cap/deadline instead of returning a
     // partial list (design doc: silent truncation is worse than an explicit
@@ -364,7 +433,9 @@ export class FsHandler {
           }))
           this.dispatcher.notify('fs.changed', { events: mapped })
         },
-        { ignore: ['.git', 'node_modules', 'dist', 'build', '.next', '.cache', '__pycache__'] }
+        // Why: align remote-Linux watchers with the shared nested-glob exclusion
+        // so nested node_modules/.git don't exhaust inotify on large codebases.
+        { ignore: buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS) }
       )
       watchState.unwatchFn = () => {
         void subscription.unsubscribe()

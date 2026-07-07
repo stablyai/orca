@@ -67,7 +67,12 @@ type ClaudeAuthIdentity = {
 
 type ClaudeReadBackResult =
   | { status: 'unchanged' | 'persisted' }
-  | { status: 'rejected'; runtimeCredentialsChanged: boolean; runtimeCredentialsJson?: string }
+  | {
+      status: 'rejected'
+      runtimeCredentialsChanged: boolean
+      hasValidChangedRuntimeCredentials: boolean
+      runtimeCredentialsJson?: string
+    }
 type ClaudeReadBackMatch =
   | { kind: 'matched'; account: ClaudeManagedAccount; managedCredentialsJson: string }
   | { kind: 'none' | 'ambiguous' }
@@ -378,6 +383,10 @@ export class ClaudeRuntimeAuthService {
         } else if (
           readBackResult.status === 'rejected' &&
           readBackResult.runtimeCredentialsChanged &&
+          // Why: a live Claude that lost a refresh-token race wipes its runtime
+          // blob (empty tokens). Preserving that wreckage would leave every new
+          // session logged out — rematerialize managed credentials instead.
+          readBackResult.hasValidChangedRuntimeCredentials &&
           hasLiveClaudePtys()
         ) {
           if (
@@ -499,10 +508,12 @@ export class ClaudeRuntimeAuthService {
       }[] = []
       const ambiguousCandidates: string[] = []
       let sawAmbiguousCandidate = false
+      let sawValidChangedCandidate = false
       for (const runtimeContents of changedCandidates) {
         if (!this.isValidCredentialsJsonObject(runtimeContents.credentialsJson)) {
           continue
         }
+        sawValidChangedCandidate = true
         const match = await this.findManagedAccountForRuntimeCredentials(
           runtimeContents.credentialsJson,
           runtimeContents.runtimeOauthAccount
@@ -557,6 +568,7 @@ export class ClaudeRuntimeAuthService {
         return {
           status: 'rejected',
           runtimeCredentialsChanged: true,
+          hasValidChangedRuntimeCredentials: sawValidChangedCandidate,
           runtimeCredentialsJson:
             ambiguousCandidates.length === 1 ? ambiguousCandidates[0] : undefined
         }
@@ -582,7 +594,10 @@ export class ClaudeRuntimeAuthService {
       return {
         status: 'rejected',
         runtimeCredentialsChanged:
-          this.runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson)
+          this.runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson),
+        // Why: an fs error hides whether a live session's refresh is present,
+        // so err toward preserving runtime state like before.
+        hasValidChangedRuntimeCredentials: true
       }
     }
   }

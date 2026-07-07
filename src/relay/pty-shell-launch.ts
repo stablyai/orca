@@ -1,6 +1,6 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   getZshFinalZdotdirRestoreBlock,
@@ -25,7 +25,10 @@ function shellBasename(shellPath: string): string {
   return shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
 }
 
-function windowsShellArgs(shellName: string): string[] | null {
+function windowsShellArgs(
+  shellName: string,
+  options: { terminalWindowsWslDistro?: string | null } = {}
+): string[] | null {
   if (shellName === 'powershell.exe' || shellName === 'powershell') {
     return ['-NoLogo']
   }
@@ -34,6 +37,10 @@ function windowsShellArgs(shellName: string): string[] | null {
   }
   if (shellName === 'cmd.exe' || shellName === 'cmd') {
     return []
+  }
+  if (shellName === 'wsl.exe' || shellName === 'wsl') {
+    const distro = options.terminalWindowsWslDistro?.trim()
+    return distro ? ['-d', distro] : []
   }
   return null
 }
@@ -134,6 +141,11 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
+# Why: enable bracketed paste so Orca can deliver a multiline startup prompt as
+# a single literal paste (ESC[200~…ESC[201~); without it, older readline builds
+# treat each embedded newline as Enter and mangle the prompt into PS2
+# continuation. Modern readline defaults this on; force it for the rest.
+[[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 # Why: remote startup files can re-export user defaults after relay spawn.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
@@ -180,6 +192,11 @@ __orca_normalize_prompt_command() {
     done
     PROMPT_COMMAND="$__orca_joined"
   fi
+  # Why: RHEL-family /etc/bashrc can leave an inherited PROMPT_COMMAND ending in
+  # a ";"/whitespace separator; trim it so Orca's prepend/append never form ";;".
+  while [[ "\${PROMPT_COMMAND:-}" == *[[:space:]\\;] ]]; do
+    PROMPT_COMMAND="\${PROMPT_COMMAND%?}"
+  done
 }
 __orca_prepend_prompt_command() {
   __orca_normalize_prompt_command
@@ -247,14 +264,20 @@ export function getRelayShellLaunchConfig(
   shellPath: string,
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform,
-  options: { emitReadyMarker?: boolean } = {}
+  options: { emitReadyMarker?: boolean; terminalWindowsWslDistro?: string | null } = {}
 ): RelayShellLaunchConfig {
   const shellName = shellBasename(shellPath)
   const emitReadyMarker = options.emitReadyMarker === true
   if (platform === 'win32') {
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
-    return { args: windowsShellArgs(shellName) ?? [], env: {} }
+    return {
+      args:
+        windowsShellArgs(shellName, {
+          terminalWindowsWslDistro: options.terminalWindowsWslDistro
+        }) ?? [],
+      env: {}
+    }
   }
 
   if (shellName !== 'zsh' && shellName !== 'bash') {

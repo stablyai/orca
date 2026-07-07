@@ -1,8 +1,7 @@
-/* eslint-disable max-lines -- Why: integration test covering the full browser automation pipeline end-to-end. */
-import { mkdtempSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { createConnection } from 'net'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createConnection } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ── Electron mocks ──
@@ -50,7 +49,7 @@ function axNode(
 ): AXNode {
   return {
     nodeId: id,
-    backendDOMNodeId: opts?.backendDOMNodeId ?? parseInt(id, 10) * 100,
+    backendDOMNodeId: opts?.backendDOMNodeId ?? Number.parseInt(id, 10) * 100,
     role: { type: 'role', value: role },
     name: { type: 'computedString', value: name },
     childIds: opts?.childIds

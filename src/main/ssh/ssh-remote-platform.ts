@@ -132,7 +132,7 @@ export function joinRemotePath(host: RemoteHostPlatform, ...segments: string[]):
 
 export function remoteBasename(path: string, host: RemoteHostPlatform): string {
   const normalized = host.pathFlavor === 'windows' ? normalizeWindowsRemotePath(path) : path
-  return normalized.split('/').filter(Boolean).pop() ?? ''
+  return normalized.split('/').findLast(Boolean) ?? ''
 }
 
 export function remoteDirname(path: string, host: RemoteHostPlatform): string {

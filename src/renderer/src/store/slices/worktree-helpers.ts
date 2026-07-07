@@ -112,7 +112,7 @@ export type WorktreeSlice = {
   hasHydratedWorktreePurge: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
-  fetchAllWorktrees: () => Promise<void>
+  fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
   updateWorktreeLineage: (
     worktreeId: string,
@@ -162,14 +162,16 @@ export type WorktreeSlice = {
     patch: {
       phase?: WorktreeCreationPhase
       status?: 'creating' | 'error'
+      startedAt?: number
       error?: string
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
+      provisioningLog?: string
     }
   ) => void
-  /** Drop a pending entry (on success or dismiss), clearing the active surface
-   *  if it pointed at this creation. */
-  removePendingWorktreeCreation: (creationId: string) => void
+  /** Drop a pending entry, clearing the active surface if it pointed at this
+   *  creation. VM cleanup is for cancellation/dismissal, not successful handoff. */
+  removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>

@@ -66,6 +66,17 @@ type AgentLaunchConfigRegistrationMetadata = {
   providerSession?: AgentProviderSessionMetadata
 }
 
+type AgentLaunchConfigStatusMetadata = {
+  paneKey: string
+  agentType?: AgentType
+  tabId?: string
+  terminalHandle?: string
+  launchToken?: string
+  providerSession?: AgentProviderSessionMetadata
+  existingProviderSession?: AgentProviderSessionMetadata
+  providerSessionChanged?: boolean
+}
+
 type AgentLaunchConfigRegistryEntry = {
   launchConfig: SleepingAgentLaunchConfig
   registeredAt: number
@@ -129,6 +140,9 @@ export type AgentStatusSlice = {
   ) => void
   getAgentLaunchConfigForStatusEntry: (
     entry: AgentStatusEntry
+  ) => SleepingAgentLaunchConfig | undefined
+  getAgentLaunchConfigForStatusMetadata: (
+    metadata: AgentLaunchConfigStatusMetadata
   ) => SleepingAgentLaunchConfig | undefined
   clearAgentLaunchConfig: (paneKey: string) => void
 
@@ -199,6 +213,32 @@ export type AgentStatusSlice = {
   /** Clear one-shot teardown suppressors after the retention sync observes
    *  that disappearance and decides not to retain the row. */
   clearRetentionSuppressedPaneKeys: (paneKeys: string[]) => void
+}
+
+// Why: retainedAgentsByPaneKey snapshots a completed agent (a full
+// AgentStatusEntry — up to ~24KB of prompt/message text — plus a TerminalTab)
+// per ephemeral paneKey. paneKeys never recur, and the map is pruned only on
+// worktree removal or manual dismissal, so a long-lived worktree in a busy
+// multi-agent session grows it without bound — the dominant driver of the
+// renderer JS-heap OOM. Cap by insertion order (== retention order), evicting
+// the oldest completions first so the newest — the ones a user is most likely
+// to still care about — always survive. Evicted rows just stop showing in the
+// recently-completed overlay.
+const MAX_RETAINED_AGENTS = 500
+
+function capRetainedAgents(
+  retained: Record<string, RetainedAgentEntry>,
+  maxEntries = MAX_RETAINED_AGENTS
+): Record<string, RetainedAgentEntry> {
+  const keys = Object.keys(retained)
+  if (keys.length <= maxEntries) {
+    return retained
+  }
+  const capped: Record<string, RetainedAgentEntry> = {}
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    capped[key] = retained[key]
+  }
+  return capped
 }
 
 function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
@@ -640,14 +680,16 @@ function registryEntryMatchesStatus(args: {
   ) {
     return false
   }
-  if (identity.providerSession !== undefined) {
-    return providerSessionsEqual(identity.providerSession, args.providerSession)
-  }
   if (
     identity.launchToken !== undefined &&
     (args.launchToken === undefined || identity.launchToken !== args.launchToken)
   ) {
+    // Why: missing or mismatched launch tokens are stale launch proof even if a
+    // provider session id was reused by a later manual/mixed Codex run.
     return false
+  }
+  if (identity.providerSession !== undefined) {
+    return providerSessionsEqual(identity.providerSession, args.providerSession)
   }
   if (identity.launchToken !== undefined) {
     return true
@@ -688,6 +730,55 @@ function getLaunchConfigForEntry(
     entry.providerSession &&
     providerSessionsEqual(sleepingRecord.providerSession, entry.providerSession)
     ? sleepingRecord.launchConfig
+    : undefined
+}
+
+// Why: the renderer twin of the main-process closedAgentStatusTabIds set that
+// #7561 FIFO-capped. It suppresses late hook/status events for a just-closed tab,
+// so it must outlive the tab briefly — but tabId is ephemeral and it was only
+// ever added to, growing one entry per tab-close for the renderer's whole life.
+export const RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
+
+// delete-then-set for LRU recency, then evict the oldest keys past the cap (Record
+// key order is insertion order for non-integer string keys). A status event for a
+// tab closed >MAX tabs ago cannot still arrive, so eviction is safe.
+function boundRecentlyClosedAgentStatusTabIds(
+  existing: Record<string, true>,
+  tabId: string
+): Record<string, true> {
+  const next: Record<string, true> = {}
+  for (const key of Object.keys(existing)) {
+    if (key !== tabId) {
+      next[key] = true
+    }
+  }
+  next[tabId] = true
+  const keys = Object.keys(next)
+  if (keys.length > RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX) {
+    for (const stale of keys.slice(0, keys.length - RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX)) {
+      delete next[stale]
+    }
+  }
+  return next
+}
+
+function getLaunchConfigForStatusMetadata(
+  state: AppState,
+  metadata: AgentLaunchConfigStatusMetadata
+): SleepingAgentLaunchConfig | undefined {
+  const registryEntry = state.agentLaunchConfigByPaneKey[metadata.paneKey]
+  return registryEntryMatchesStatus({
+    entry: registryEntry,
+    paneKey: metadata.paneKey,
+    agentType: metadata.agentType,
+    tabId: metadata.tabId ?? getTabIdFromPaneKey(metadata.paneKey) ?? undefined,
+    terminalHandle: metadata.terminalHandle,
+    launchToken: metadata.launchToken,
+    providerSession: metadata.providerSession,
+    existingProviderSession: metadata.existingProviderSession,
+    providerSessionChanged: metadata.providerSessionChanged ?? false
+  })
+    ? registryEntry?.launchConfig
     : undefined
 }
 
@@ -916,6 +1007,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       })
     },
     getAgentLaunchConfigForStatusEntry: (entry) => getLaunchConfigForEntry(get(), entry),
+    getAgentLaunchConfigForStatusMetadata: (metadata) =>
+      getLaunchConfigForStatusMetadata(get(), metadata),
 
     clearAgentLaunchConfig: (paneKey) => {
       set((s) => {
@@ -1100,6 +1193,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           stateHistory: history,
           toolName: payload.toolName,
           toolInput: payload.toolInput,
+          // Why: full untruncated AskUserQuestion JSON; carried so mobile/web
+          // clients can render the live prompt card. parseAgentStatusPayload
+          // already clears it when the agent moves to a different tool/state.
+          interactivePrompt: payload.interactivePrompt,
           lastAssistantMessage: payload.lastAssistantMessage,
           // Why: reused panes may start non-orchestrated work after runtime
           // metadata expires. Only final done rows keep the previous lineage
@@ -1564,10 +1661,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             delete nextAck[k]
           }
         }
-        const nextClosedTabs: Record<string, true> = {
-          ...s.recentlyClosedAgentStatusTabIds,
-          [tabIdPrefix]: true
-        }
+        const nextClosedTabs = boundRecentlyClosedAgentStatusTabIds(
+          s.recentlyClosedAgentStatusTabIds,
+          tabIdPrefix
+        )
 
         if (
           liveKeys.length === 0 &&
@@ -2105,7 +2202,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           next[retained.entry.paneKey] =
             entry === retained.entry ? retained : { ...retained, entry }
         }
-        return { retainedAgentsByPaneKey: next }
+        // Why: bound the map so a long multi-agent session cannot leak the
+        // renderer heap. retainAgents is the only path that grows it, so
+        // capping here is sufficient; evicts oldest-retained first.
+        return { retainedAgentsByPaneKey: capRetainedAgents(next) }
       })
     },
 

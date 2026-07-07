@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: terminal subscribe buffering tests share a live dispatcher harness; splitting would duplicate stream setup and weaken lifecycle coverage. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
@@ -317,6 +316,13 @@ describe('terminal subscribe buffering', () => {
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
     )
+    const subscribed = messages
+      .map((msg) => JSON.parse(msg).result)
+      .find((result) => result?.type === 'subscribed')
+    expect(subscribed).toMatchObject({
+      type: 'subscribed',
+      truncated: false
+    })
     const snapshotStart = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
@@ -338,14 +344,14 @@ describe('terminal subscribe buffering', () => {
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
       const cleanups = new Map<string, () => void>()
       const dataListenerRef: { current?: (data: string) => void } = {}
-      let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
+      const snapshotResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn(
           () =>
             new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
-              resolveSnapshot = resolve
+              snapshotResolves.push(resolve)
             })
         ),
         getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
@@ -392,7 +398,9 @@ describe('terminal subscribe buffering', () => {
       const shiftCallCount = shiftSpy.mock.calls.length
       shiftSpy.mockRestore()
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
-      resolveSnapshot({ data: '', cols: 120, rows: 40 })
+      snapshotResolves.shift()?.({ data: '', cols: 120, rows: 40 })
+      await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
+      snapshotResolves.shift()?.({ data: '399', cols: 120, rows: 40 })
       await vi.waitFor(() =>
         expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
       )
@@ -404,8 +412,14 @@ describe('terminal subscribe buffering', () => {
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
         .join('')
       expect(output.length).toBeLessThanOrEqual(256 * 1024)
+      expect(output).toBe('')
+      const snapshotPayload = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .join('')
+      expect(snapshotPayload).toBe('399')
       expect(output).not.toContain('000')
-      expect(output).toContain('399')
       expect(shiftCallCount).toBe(0)
 
       runtime.cleanupSubscription('terminal-1:desktop-1')

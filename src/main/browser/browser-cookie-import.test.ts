@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: cookie import tests share import-time Electron mocks plus
-   browser-specific cookie fixtures; splitting would duplicate brittle setup. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({
@@ -347,7 +345,16 @@ describe('detectInstalledBrowsers', () => {
 
   it('each detected browser has a valid family', () => {
     const browsers = detectInstalledBrowsers()
-    const validFamilies = ['chrome', 'edge', 'arc', 'chromium', 'firefox', 'safari', 'comet']
+    const validFamilies = [
+      'chrome',
+      'edge',
+      'arc',
+      'chromium',
+      'firefox',
+      'safari',
+      'comet',
+      'helium'
+    ]
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)
     }

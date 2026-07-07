@@ -45,7 +45,7 @@ function isOrchestrationSkillName(skillName: string): boolean {
 }
 
 function basenameFromPath(pathValue: string): string {
-  return pathValue.split(/[\\/]/).filter(Boolean).at(-1) ?? pathValue
+  return pathValue.split(/[\\/]/).findLast(Boolean) ?? pathValue
 }
 
 export function hasInstalledAgentSkill(

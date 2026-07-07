@@ -1,6 +1,6 @@
 import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
-import type { SshExecOptions } from './ssh-connection-utils'
+import { createSshOperationAbortError, type SshExecOptions } from './ssh-connection-utils'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import { buildRelayVersionMismatchError } from './ssh-relay-handshake-mismatch'
@@ -247,6 +247,10 @@ export async function execCommand(
   options?: ExecCommandOptions
 ): Promise<string> {
   const { timeoutMs = EXEC_TIMEOUT_MS, ...execOptions } = options ?? {}
+  const signal = options?.signal
+  if (signal?.aborted) {
+    throw createSshOperationAbortError()
+  }
   const channel = await conn.exec(command, execOptions)
   return new Promise((resolve, reject) => {
     let stdout = ''
@@ -255,6 +259,7 @@ export async function execCommand(
 
     const cleanup = (): void => {
       clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
       channel.off('error', fail)
       channel.stderr.off('error', fail)
       channel.off('data', onStdoutData)
@@ -270,7 +275,16 @@ export async function execCommand(
       fn(val as never)
     }
     const fail = (err: Error): void => {
-      settle(reject, err)
+      settle(reject, abortRequested ? createSshOperationAbortError() : err)
+    }
+    // Why: sshd counts the session against MaxSessions until CHANNEL_CLOSE
+    // completes. Settling on abort before the channel actually closes lets the
+    // concurrent-bootstrap sequential fallback reissue an exec while the slot
+    // is still held, so it gets refused again. Close and settle from onClose.
+    let abortRequested = false
+    const onAbort = (): void => {
+      abortRequested = true
+      channel.close()
     }
     const onStdoutData = (data: Buffer): void => {
       stdout += data.toString('utf-8')
@@ -279,8 +293,12 @@ export async function execCommand(
       stderr += data.toString('utf-8')
     }
     const onClose = (code: number): void => {
-      if (code !== 0) {
-        const output = stderr.trim() || stdout.trim()
+      if (abortRequested) {
+        settle(reject, createSshOperationAbortError())
+      } else if (code !== 0) {
+        // Why: on the system-ssh transport channel.stderr carries local OpenSSH
+        // client noise; preferring it masks the real failure in stdout (2>&1).
+        const output = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
         settle(reject, new Error(`Command "${command}" failed (exit ${code}): ${output}`))
       } else {
         settle(resolve, stdout)
@@ -288,15 +306,24 @@ export async function execCommand(
     }
     const timeout = setTimeout(() => {
       channel.close()
-      settle(reject, new Error(`Command "${command}" timed out after ${timeoutMs / 1000}s`))
+      settle(
+        reject,
+        abortRequested
+          ? createSshOperationAbortError()
+          : new Error(`Command "${command}" timed out after ${timeoutMs / 1000}s`)
+      )
     }, timeoutMs)
 
     // Why: remote reboot tears down exec channels with stream errors. Without
     // scoped listeners, Node treats those as uncaught exceptions.
+    signal?.addEventListener('abort', onAbort, { once: true })
     channel.on('error', fail)
     channel.stderr.on('error', fail)
     channel.on('data', onStdoutData)
     channel.stderr.on('data', onStderrData)
     channel.on('close', onClose)
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
 }

@@ -1,6 +1,7 @@
 import type { IBufferLine, IBufferRange, IDisposable, Terminal } from '@xterm/xterm'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { buildCandidateLogicalLinesForBufferPosition } from './terminal-file-link-hit-testing'
+import { isTerminalLinkActivation } from './terminal-link-activation'
 import { rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 
 type UrlLinkHitTestDeps = {
@@ -48,13 +49,14 @@ export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLi
   return links
 }
 
-function isPrimaryHttpLinkFallbackActivation(event: MouseEvent): boolean {
+function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || event.button !== 0) {
     return false
   }
-  // Why: URL links now open on ordinary clicks, but macOS Ctrl-click must stay
-  // available for context menus even when Chromium reports it as button 0.
-  return !(navigator.userAgent.includes('Mac') && event.ctrlKey && !event.metaKey)
+  // Why: desktop terminal links require an intentional Cmd/Ctrl gesture so
+  // plain clicks remain available for cursor placement and selection. Mobile
+  // tap routing is handled separately under mobile/src/terminal.
+  return isTerminalLinkActivation(event)
 }
 
 function* iterateTerminalHttpUrlCandidates(
@@ -220,7 +222,7 @@ export function installHttpLinkClickFallback(
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
   const handleMouseUp = (event: MouseEvent): void => {
-    if (!isPrimaryHttpLinkFallbackActivation(event)) {
+    if (!isDesktopHttpLinkFallbackActivation(event)) {
       return
     }
 
@@ -230,8 +232,8 @@ export function installHttpLinkClickFallback(
     }
 
     // Why: xterm's WebLinksAddon only activates after hover state exists. This
-    // direct mouseup fallback preserves ordinary link clicks when the hover link
-    // was never established, while defaultPrevented avoids duplicate opens.
+    // direct mouseup fallback preserves modifier-clicks when the hover link was
+    // never established, while defaultPrevented avoids duplicate opens.
     const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, {
       worktreeId: deps.worktreeId,
       forceSystemBrowser: event.shiftKey,

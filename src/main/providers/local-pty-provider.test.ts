@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { delimiter } from 'node:path'
 
 const {
   existsSyncMock,
@@ -39,6 +40,23 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+// Resolve PowerShell family names to deterministic absolute paths (the fs mock
+// above otherwise makes every probe miss). The real resolver — which skips the
+// Store App Execution Alias stub — is covered in
+// windows-powershell-executable.test.ts.
+const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+vi.mock('./windows-powershell-executable', () => ({
+  resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
+    family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
+  resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
+    family === 'pwsh.exe'
+      ? [PWSH7_ABS, WINDOWS_POWERSHELL_ABS, CMD_ABS]
+      : [WINDOWS_POWERSHELL_ABS, CMD_ABS],
+  getWindowsCmdPath: () => CMD_ABS
+}))
+
 vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
 }))
@@ -57,10 +75,14 @@ vi.mock('../wsl', () => ({
   toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
   toWindowsWslPath: (path: string, distro: string) =>
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
-  isWslAvailable: () => true
+  isWslAvailable: () => true,
+  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
+  // cwds that are meant to exist, so report them present without spawning wsl.exe.
+  wslUncDirectoryExists: () => true
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { isRootLikePath } from './pty-path-safety'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 
 describe('LocalPtyProvider', () => {
@@ -77,6 +99,7 @@ describe('LocalPtyProvider', () => {
   let exitCb: ((info: { exitCode: number }) => void) | undefined
   let origShell: string | undefined
   let origPowerlevelWizardDisable: string | undefined
+  let origHistFile: string | undefined
   let origPlatform: PropertyDescriptor | undefined
 
   beforeEach(() => {
@@ -84,8 +107,11 @@ describe('LocalPtyProvider', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     origShell = process.env.SHELL
     origPowerlevelWizardDisable = process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
+    origHistFile = process.env.HISTFILE
     process.env.SHELL = '/bin/zsh'
     delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
+    // injectHistoryEnv preserves an inherited HISTFILE, so clear it for hermetic history assertions.
+    delete process.env.HISTFILE
 
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
@@ -137,6 +163,11 @@ describe('LocalPtyProvider', () => {
     } else {
       process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD = origPowerlevelWizardDisable
     }
+    if (origHistFile === undefined) {
+      delete process.env.HISTFILE
+    } else {
+      process.env.HISTFILE = origHistFile
+    }
   })
 
   describe('spawn', () => {
@@ -186,6 +217,52 @@ describe('LocalPtyProvider', () => {
       await expect(provider.spawn({ cols: 80, rows: 24, cwd: '/nonexistent' })).rejects.toThrow(
         'does not exist'
       )
+    })
+
+    it('allows an explicitly requested plain shell at POSIX root', async () => {
+      await provider.spawn({ cols: 80, rows: 24, cwd: '/' })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ cwd: '/' })
+      )
+    })
+
+    it('falls back to the safe default cwd for automatic agent startup without an explicit cwd', async () => {
+      spawnMock.mockClear()
+      const origHome = process.env.HOME
+      // Pin HOME so we assert the exact resolved candidate, not just non-root-ness —
+      // catches regressions where resolveSafePtyDefaultCwd picks an unintended home.
+      process.env.HOME = '/home/testuser'
+
+      try {
+        // Why: an omitted cwd resolves to a guaranteed-safe default home (the
+        // guard only rejects root-like paths), so the agent must still launch.
+        await expect(
+          provider.spawn({ cols: 80, rows: 24, command: 'codex' })
+        ).resolves.toBeDefined()
+
+        const spawnCall = spawnMock.mock.calls.at(-1)!
+        expect(spawnCall[2].cwd).toBe('/home/testuser')
+        expect(isRootLikePath(spawnCall[2].cwd)).toBe(false)
+      } finally {
+        if (origHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = origHome
+        }
+      }
+    })
+
+    it('rejects automatic agent startup at POSIX root', async () => {
+      spawnMock.mockClear()
+
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, cwd: '/', command: 'claude' })
+      ).rejects.toThrow(/requires a non-root workspace/)
+
+      expect(spawnMock).not.toHaveBeenCalled()
     })
 
     it('invokes onSpawned callback', async () => {
@@ -343,6 +420,50 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    })
+
+    it('does not inherit AppImage runtime env into Linux PTY shells', async () => {
+      const saved = {
+        APPIMAGE: process.env.APPIMAGE,
+        APPDIR: process.env.APPDIR,
+        ARGV0: process.env.ARGV0,
+        OWD: process.env.OWD,
+        APPIMAGE_LIBRARY_PATH: process.env.APPIMAGE_LIBRARY_PATH,
+        PATH: process.env.PATH,
+        LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
+      }
+      process.env.APPIMAGE = '/data/apps/orca.appimage'
+      process.env.APPDIR = '/tmp/.mount_orca123'
+      process.env.ARGV0 = '/data/apps/orca.appimage'
+      process.env.OWD = '/home/user/project'
+      process.env.APPIMAGE_LIBRARY_PATH = '/tmp/.mount_orca123/usr/lib'
+      process.env.PATH = ['/tmp/.mount_orca123', '/tmp/.mount_orca123/usr/sbin', '/usr/bin'].join(
+        delimiter
+      )
+      process.env.LD_LIBRARY_PATH = ['/tmp/.mount_orca123/usr/lib', '/opt/audio/lib'].join(
+        delimiter
+      )
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.APPIMAGE).toBeUndefined()
+      expect(env.APPDIR).toBeUndefined()
+      expect(env.ARGV0).toBeUndefined()
+      expect(env.OWD).toBeUndefined()
+      expect(env.APPIMAGE_LIBRARY_PATH).toBeUndefined()
+      expect(env.PATH).toBe('/usr/bin')
+      expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
     })
 
     it('uses shell wrapper when MiMo home must survive shell startup', async () => {
@@ -504,6 +625,27 @@ describe('LocalPtyProvider', () => {
       ])
       expect(spawnCall[1][5]).toContain('exec "\\$_orca_wsl_shell" -l')
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
+    })
+
+    it('repro: keeps explicit PowerShell 7 selection when the pwsh probe is cold-false', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const pwshAvailable = vi.fn(() => false)
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'pwsh.exe',
+        pwshAvailable
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe(PWSH7_ABS)
+      expect(spawnCall[1]).toContain('-EncodedCommand')
+      expect(pwshAvailable).not.toHaveBeenCalled()
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {

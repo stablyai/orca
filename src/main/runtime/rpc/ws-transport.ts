@@ -1,13 +1,10 @@
-/* eslint-disable max-lines -- Why: the WebSocket transport owns connection
-   admission, heartbeat, pre-auth timeout, and client-id cleanup together; those
-   invariants are easier to audit in one transport boundary. */
 // Why: the WebSocket transport enables mobile clients to connect to the Orca
 // runtime over the local network. When TLS cert/key are provided it uses wss://
 // to prevent passive sniffing; otherwise it falls back to plain ws://. Per-device
 // tokens (validated by the message handler in OrcaRuntimeRpcServer) provide auth
 // regardless of transport encryption.
-import { createServer as createHttpsServer, type Server as HttpsServer } from 'https'
-import { createServer as createHttpServer, type Server as HttpServer } from 'http'
+import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
+import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'

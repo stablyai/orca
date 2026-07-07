@@ -7,6 +7,7 @@ import {
   buildWslInteractiveLoginShellCommand,
   escapeWslShCommandForWindows
 } from '../../shared/wsl-login-shell-command'
+import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 
 function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
@@ -298,5 +299,44 @@ describe('resolveWindowsShellLaunchArgs', () => {
       '-EncodedCommand',
       encodePowerShellCommand(getPowerShellOsc133Bootstrap())
     ])
+  })
+})
+
+// Regression guard for issue #7236: a worktree Setup Script runs through a
+// generated `.cmd` runner invoked as `cmd.exe /c "<runner>"`. When PowerShell
+// received that command as raw typed stdin, a dropped/unbalanced quote surfaced
+// as a "missing terminator" parser error. Delivering it via -EncodedCommand
+// (base64 UTF-16) keeps the quotes balanced and the text verbatim, so it can
+// never be re-parsed as an open string.
+describe('issue #7236: PowerShell setup-runner command delivery', () => {
+  // git rev-parse hands back a forward-slash Windows-absolute path for the runner.
+  const runnerPath = 'C:/Users/alice/repo/.git/orca/setup-runner.cmd'
+
+  it('wraps the setup runner in balanced double quotes', () => {
+    const { command } = resolveSetupRunnerCommand(runnerPath, 'windows')
+    expect(command).toBe(`cmd.exe /c "${runnerPath}"`)
+    expect((command.match(/"/g) ?? []).length % 2).toBe(0)
+  })
+
+  it('delivers the setup-runner command through -EncodedCommand, never raw stdin', () => {
+    const { command } = resolveSetupRunnerCommand(runnerPath, 'windows')
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice\\repo',
+      'C:\\Users\\alice',
+      undefined,
+      command
+    )
+
+    // The flag tells the daemon/provider NOT to also type the command over
+    // stdin — raw stdin delivery is the pre-encoded path that broke in #7236.
+    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+    expect(result.shellArgs.slice(0, 3)).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand'])
+
+    const decoded = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    expect(decoded).toContain(`\n${command}`)
+    expect(decoded.trimEnd().endsWith(command)).toBe(true)
+    // Quotes survive encoding intact, so PowerShell parses one balanced string.
+    expect((decoded.slice(decoded.lastIndexOf(command)).match(/"/g) ?? []).length % 2).toBe(0)
   })
 })

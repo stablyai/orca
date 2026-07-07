@@ -1,6 +1,6 @@
-import { spawn, type ChildProcess } from 'child_process'
-import { Duplex } from 'stream'
-import type { Socket as NetSocket } from 'net'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { Duplex } from 'node:stream'
+import type { Socket as NetSocket } from 'node:net'
 import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
@@ -100,6 +100,13 @@ export function wrapRemoteCommandForPosixShell(command: string): string {
 
 export type SshExecOptions = {
   wrapCommand?: boolean
+  signal?: AbortSignal
+}
+
+export function createSshOperationAbortError(): Error & { name: string } {
+  const error = new Error('SSH operation was cancelled') as Error & { name: string }
+  error.name = 'AbortError'
+  return error
 }
 
 function cmdEscape(s: string): string {

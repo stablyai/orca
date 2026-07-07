@@ -27,6 +27,7 @@ import { translate } from '@/i18n/i18n'
 import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 import { WorktreeCardIssueDetailSection } from './WorktreeCardIssueDetailSection'
+import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -140,10 +141,13 @@ export function WorktreeCardDetailsHover({
   branchName,
   workspaceTitle,
   identityOrder = 'workspace-first',
+  workspaceTitleRenameDisabled = false,
   automationHostId,
   detailsAfter,
   openDelay = 250,
   closeDelay = 120,
+  onRenameWorkspaceTitle,
+  onWorkspaceTitleEditingChange,
   onEditIssue,
   onEditComment,
   onOpenGitHubIssueInOrca,
@@ -164,6 +168,30 @@ export function WorktreeCardDetailsHover({
     handleReviewMenuOpenChange,
     closeHover
   } = hoverControl ?? internalHoverControl
+  const [workspaceTitleEditing, setWorkspaceTitleEditing] = React.useState(false)
+  const pendingWorkspaceTitleCloseRef = React.useRef(false)
+  const handleWorkspaceTitleEditingChange = React.useCallback(
+    (editing: boolean): void => {
+      setWorkspaceTitleEditing(editing)
+      onWorkspaceTitleEditingChange?.(editing)
+      if (!editing && pendingWorkspaceTitleCloseRef.current) {
+        pendingWorkspaceTitleCloseRef.current = false
+        handleHoverOpenChange(false)
+      }
+    },
+    [handleHoverOpenChange, onWorkspaceTitleEditingChange]
+  )
+  const handleEffectiveHoverOpenChange = React.useCallback(
+    (next: boolean): void => {
+      if (!next && workspaceTitleEditing) {
+        pendingWorkspaceTitleCloseRef.current = true
+        return
+      }
+      pendingWorkspaceTitleCloseRef.current = false
+      handleHoverOpenChange(next)
+    },
+    [handleHoverOpenChange, workspaceTitleEditing]
+  )
   const dismissAndRun = React.useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
       closeHover()
@@ -219,34 +247,10 @@ export function WorktreeCardDetailsHover({
     return children
   }
 
-  const branchIdentity = branchName ? (
-    <div
-      className={cn(
-        // Why: the hover panel is where users read full git identity; wrap instead
-        // of truncating so long branch names stay readable like issue titles below.
-        'break-words font-mono text-[11px] leading-snug text-muted-foreground',
-        identityOrder === 'workspace-first' && 'mt-1'
-      )}
-    >
-      {branchName}
-    </div>
-  ) : null
-  const workspaceIdentity =
-    workspaceTitle && workspaceTitle !== branchName ? (
-      <div
-        className={cn(
-          'break-words text-[13px] font-semibold leading-snug text-foreground',
-          identityOrder === 'branch-first' && 'mt-1'
-        )}
-      >
-        {workspaceTitle}
-      </div>
-    ) : null
-
   return (
     <HoverCard
-      open={hoverOpen}
-      onOpenChange={handleHoverOpenChange}
+      open={hoverOpen || workspaceTitleEditing}
+      onOpenChange={handleEffectiveHoverOpenChange}
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
@@ -262,12 +266,14 @@ export function WorktreeCardDetailsHover({
       >
         <SelectedTextCopyMenu className="space-y-3">
           {showIdentityHeader && (
-            <div className="min-w-0 border-l border-border/70 pl-2">
-              {/* Why: the closed card no longer carries a branch row; custom-titled
-                  worktrees still need their git branch available in the hover. */}
-              {identityOrder === 'branch-first' ? branchIdentity : workspaceIdentity}
-              {identityOrder === 'branch-first' ? workspaceIdentity : branchIdentity}
-            </div>
+            <WorktreeCardHoverIdentityHeader
+              branchName={branchName}
+              workspaceTitle={workspaceTitle}
+              identityOrder={identityOrder}
+              workspaceTitleRenameDisabled={workspaceTitleRenameDisabled}
+              onRenameWorkspaceTitle={onRenameWorkspaceTitle}
+              onWorkspaceTitleEditingChange={handleWorkspaceTitleEditingChange}
+            />
           )}
 
           <WorktreeCardIssueDetailSection

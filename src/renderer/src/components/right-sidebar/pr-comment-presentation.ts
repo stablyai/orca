@@ -6,12 +6,6 @@ export type PRCommentPresentationVariant = 'flat' | 'cards' | 'focus'
 
 export const DEFAULT_PR_COMMENT_PRESENTATION_VARIANT: PRCommentPresentationVariant = 'cards'
 
-export const PR_COMMENT_PRESENTATION_VARIANTS: PRCommentPresentationVariant[] = [
-  'flat',
-  'cards',
-  'focus'
-]
-
 const STORAGE_KEY = 'orca:pr-comment-presentation'
 
 export type PRCommentPresentationClasses = {
@@ -47,7 +41,6 @@ export type PRCommentPresentationClasses = {
   audienceTab: string
   audienceTabActive: string
   sectionTriageLabel: string
-  statusBadgeOpen: string
   statusBadgeResolved: string
   statusBadgeQueued: string
   commentHeaderPrimary: string
@@ -166,8 +159,6 @@ export function getPRCommentPresentationClasses(
         'flex h-7 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors',
       audienceTabActive: 'bg-muted text-foreground',
       sectionTriageLabel: cn('px-3 pt-2', RESOLVED_SECTION_LABEL),
-      statusBadgeOpen:
-        'shrink-0 rounded border border-status-success-border bg-status-success-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-status-success',
       statusBadgeResolved:
         'shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
       statusBadgeQueued:
@@ -217,8 +208,6 @@ export function getPRCommentPresentationClasses(
       'flex h-7 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors',
     audienceTabActive: 'bg-muted text-foreground shadow-xs',
     sectionTriageLabel: cn('px-3 pt-1', RESOLVED_SECTION_LABEL),
-    statusBadgeOpen:
-      'shrink-0 rounded border border-status-success-border bg-status-success-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-status-success',
     statusBadgeResolved:
       'shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
     statusBadgeQueued:
