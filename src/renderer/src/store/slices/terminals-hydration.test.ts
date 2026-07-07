@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: hydration regressions share store setup and session invariants that are easier to audit together. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -93,7 +92,11 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import type { WorkspaceSessionState } from '../../../../shared/types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  FLOATING_TERMINAL_WORKTREE_ID,
+  getDefaultWorkspaceSession
+} from '../../../../shared/constants'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 import { canGoBackWorktreeHistory } from './worktree-nav-history'
 
@@ -136,6 +139,145 @@ describe('hydrateWorkspaceSession', () => {
       ...makeLayout(),
       ptyIdsByLeafId: { 'pane:1': 'daemon-session-1' },
       buffersByLeafId: { 'pane:1': 'buffer' }
+    })
+  })
+
+  it('hydrates runtime-owned tabs from host partitions before remote catalogs load', () => {
+    const store = createTestStore()
+    const worktreeId = 'remote-repo::/srv/remote-wt'
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'remote-repo',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'remote-tab',
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({
+            id: 'remote-tab',
+            worktreeId,
+            ptyId: 'remote-session'
+          })
+        ]
+      },
+      remoteSessionIdsByTabId: { 'remote-tab': 'remote-session' }
+    }
+
+    store.getState().hydrateWorkspaceSession(session, {
+      runtimeHostIdByWorkspaceSessionKey: { [worktreeId]: 'runtime:env-1' }
+    })
+
+    expect(store.getState().tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual([
+      'remote-tab'
+    ])
+    expect(store.getState().activeWorktreeId).toBe(worktreeId)
+    expect(store.getState().activeRepoId).toBe('remote-repo')
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([worktreeId])
+    expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
+      'remote-tab': 'remote-session'
+    })
+    expect(store.getState().repos).toEqual([
+      expect.objectContaining({
+        id: 'remote-repo',
+        executionHostId: 'runtime:env-1'
+      })
+    ])
+    expect(store.getState().worktreesByRepo['remote-repo']).toEqual([
+      expect.objectContaining({
+        id: worktreeId,
+        hostId: 'runtime:env-1'
+      })
+    ])
+  })
+
+  it('avoids duplicate repo placeholders when a same-id local repo is already loaded', () => {
+    const store = createTestStore()
+    const worktreeId = 'same-repo::/srv/remote-wt'
+    store.setState({
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/Users/me/same-repo',
+          displayName: 'Same repo',
+          badgeColor: '#000',
+          addedAt: 1,
+          connectionId: null,
+          executionHostId: 'local'
+        }
+      ],
+      worktreesByRepo: {}
+    })
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'same-repo',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'remote-tab',
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({
+            id: 'remote-tab',
+            worktreeId,
+            ptyId: 'remote-session'
+          })
+        ]
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session, {
+      runtimeHostIdByWorkspaceSessionKey: {
+        [worktreeWorkspaceKey(worktreeId)]: 'runtime:env-1'
+      }
+    })
+
+    expect(store.getState().repos.map((repo) => `${repo.id}:${repo.executionHostId}`)).toEqual([
+      'same-repo:local'
+    ])
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([
+      expect.objectContaining({ id: worktreeId, hostId: 'runtime:env-1' })
+    ])
+    expect(store.getState().tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual([
+      'remote-tab'
+    ])
+  })
+
+  it('hydrates runtime folder workspace tabs before remote folder catalogs load', () => {
+    const store = createTestStore()
+    const folderKey = folderWorkspaceKey('folder-1')
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: folderKey,
+      activeWorktreeId: folderKey,
+      activeTabId: 'remote-folder-tab',
+      activeWorktreeIdsOnShutdown: [folderKey],
+      tabsByWorktree: {
+        [folderKey]: [
+          makeTab({
+            id: 'remote-folder-tab',
+            worktreeId: folderKey,
+            ptyId: 'remote-folder-session'
+          })
+        ]
+      },
+      remoteSessionIdsByTabId: { 'remote-folder-tab': 'remote-folder-session' }
+    }
+
+    store.getState().hydrateWorkspaceSession(session, {
+      additionalValidWorkspaceKeys: [folderKey],
+      runtimeHostIdByWorkspaceSessionKey: { [folderKey]: 'runtime:env-1' }
+    })
+
+    expect(store.getState().tabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual([
+      'remote-folder-tab'
+    ])
+    expect(store.getState().activeWorktreeId).toBe(folderKey)
+    expect(store.getState().activeWorkspaceKey).toBe(folderKey)
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([folderKey])
+    expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
+      'remote-folder-tab': 'remote-folder-session'
+    })
+    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
+      [folderKey]: 'runtime:env-1'
     })
   })
 

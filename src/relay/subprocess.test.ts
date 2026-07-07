@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: subprocess coverage shares one bundled relay artifact; splitting this file would rebuild the same daemon bundle across suites and make these lifecycle tests slower/flakier. */
 import { afterAll, beforeAll, describe, expect, it, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -359,6 +358,22 @@ describe('Subprocess: Relay entry point', () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-empty-'))
       relay = spawn(
         ['--detached', '--grace-time', '10', '--sock-path', path.join(tmpDir, 'relay.sock')],
+        { ...process.env, ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '100' }
+      )
+      await relay.sentinelReceived
+
+      await relay.waitForExit(3000)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'uses a short startup grace for unlimited empty detached relays before any client connects',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-empty-unlimited-'))
+      relay = spawn(
+        ['--detached', '--grace-time', '0', '--sock-path', path.join(tmpDir, 'relay.sock')],
         { ...process.env, ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '100' }
       )
       await relay.sentinelReceived

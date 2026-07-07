@@ -21,6 +21,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -763,6 +764,56 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarExplorerView).toBe('files')
   })
 
+  it('preserves persisted repo filters until repos are loaded', () => {
+    const store = createUIStore()
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterRepoIds: ['remote-repo', 12 as never, 'stale-repo'],
+        trustedOrcaHooks: {
+          'remote-repo': { all: { approvedAt: 1 } },
+          'bad-shape': 'yes' as never
+        },
+        setupScriptPromptDismissedRepoIds: [remoteDismissalKey, 'remote-repo', remoteDismissalKey]
+      })
+    )
+
+    expect(store.getState().filterRepoIds).toEqual(['remote-repo', 'stale-repo'])
+    expect(store.getState().trustedOrcaHooks).toEqual({
+      'remote-repo': { all: { approvedAt: 1 } }
+    })
+    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([remoteDismissalKey])
+  })
+
+  it('validates persisted repo filters when repos are already loaded', () => {
+    const store = createUIStore()
+    const localDismissalKey = getSetupScriptPromptDismissalKey('local-repo')
+    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    store.setState({
+      repos: [
+        { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
+      ]
+    } as Partial<AppState>)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterRepoIds: ['local-repo', 'stale-repo'],
+        trustedOrcaHooks: {
+          'local-repo': { all: { approvedAt: 1 } },
+          'stale-repo': { all: { approvedAt: 2 } }
+        },
+        setupScriptPromptDismissedRepoIds: [localDismissalKey, staleDismissalKey]
+      })
+    )
+
+    expect(store.getState().filterRepoIds).toEqual(['local-repo'])
+    expect(store.getState().trustedOrcaHooks).toEqual({
+      'local-repo': { all: { approvedAt: 1 } }
+    })
+    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([localDismissalKey])
+  })
+
   it('hydrates legacy persisted search tab as Explorer search', () => {
     const store = createUIStore()
 
@@ -1162,11 +1213,18 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports', 'kimi'])
+    expect(store.getState().statusBarItems).toEqual([
+      'claude',
+      'resource-usage',
+      'ports',
+      'kimi',
+      'minimax'
+    ])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi'],
+      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi', 'minimax'],
       _portsStatusBarDefaultAdded: true,
-      _kimiStatusBarDefaultAdded: true
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true
     })
   })
 
@@ -1179,7 +1237,8 @@ describe('createUISlice hydratePersistedUI', () => {
       makePersistedUI({
         statusBarItems: ['claude', 'resource-usage'],
         _portsStatusBarDefaultAdded: true,
-        _kimiStatusBarDefaultAdded: true
+        _kimiStatusBarDefaultAdded: true,
+        _minimaxStatusBarDefaultAdded: true
       })
     )
 

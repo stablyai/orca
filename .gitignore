@@ -60,6 +60,10 @@ pnpm-debug.log*
 # Coverage
 coverage/
 
+# Benchmark run output
+/tools/benchmarks/results/*.json
+/.bench-fixtures/
+
 # Temp
 tmp/
 .tmp/

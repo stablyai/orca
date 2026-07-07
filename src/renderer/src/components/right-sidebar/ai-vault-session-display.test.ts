@@ -9,6 +9,7 @@ import {
 
 const baseSession: AiVaultSession = {
   id: 'codex:1',
+  executionHostId: 'local',
   agent: 'codex',
   sessionId: 'session-1',
   title: 'Fix the flaky golden tests',

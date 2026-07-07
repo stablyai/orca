@@ -3,18 +3,64 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('renderer startup runtime routing', () => {
-  it('loads settings before repo and worktree hydration', () => {
+  it('hydrates persisted UI before local catalog and worktree hydration', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const startupBlockStart = source.indexOf('void (async () => {')
-    const startupBlockEnd = source.indexOf(
-      "const persistedUI = await timeRendererStartupStep('ui-get'"
-    )
+    const startupBlockEnd = source.indexOf("timeRendererStartupStep('session-get'")
     const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
 
     const settingsIndex = startupBlock.indexOf('actions.fetchSettings()')
+    const uiGetIndex = startupBlock.indexOf("timeRendererStartupStep('ui-get'")
+    const hydrateUiIndex = startupBlock.indexOf(
+      "timeRendererStartupSyncStep('hydrate-persisted-ui'"
+    )
+    const localReposIndex = startupBlock.indexOf(
+      "actions.fetchReposForAllHosts({ remoteHosts: 'skip' })"
+    )
+    const localGroupsIndex = startupBlock.indexOf(
+      "actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })"
+    )
+    const localFoldersIndex = startupBlock.indexOf(
+      "actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })"
+    )
+    const localWorktreesIndex = startupBlock.indexOf(
+      "actions.fetchAllWorktrees({ hydrationPurge: 'defer' })"
+    )
+    const lineageIndex = startupBlock.indexOf('actions.fetchWorktreeLineage()')
+
     expect(settingsIndex).toBeGreaterThanOrEqual(0)
-    expect(settingsIndex).toBeLessThan(startupBlock.indexOf('actions.fetchReposForAllHosts()'))
-    expect(settingsIndex).toBeLessThan(startupBlock.indexOf('actions.fetchAllWorktrees()'))
+    expect(startupBlockEnd).toBeGreaterThan(startupBlockStart)
+    expect(settingsIndex).toBeLessThan(uiGetIndex)
+    expect(uiGetIndex).toBeLessThan(hydrateUiIndex)
+    expect(hydrateUiIndex).toBeLessThan(localReposIndex)
+    expect(localReposIndex).toBeLessThan(localGroupsIndex)
+    expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
+    expect(localFoldersIndex).toBeLessThan(localWorktreesIndex)
+    expect(lineageIndex).toBe(-1)
+  })
+
+  it('refreshes remote catalogs after startup hydration succeeds', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const hydrationDoneIndex = source.indexOf(
+      "logRendererStartupDiagnostic('startup-hydration-done'"
+    )
+    const remoteCatalogIndex = source.indexOf("timeRendererStartupStep('remote-catalog-refresh'")
+    const remoteWorktreeIndex = source.indexOf("timeRendererStartupStep('remote-worktree-refresh'")
+    const lineageIndex = source.indexOf('actions.fetchWorktreeLineage()')
+
+    expect(hydrationDoneIndex).toBeGreaterThanOrEqual(0)
+    expect(hydrationDoneIndex).toBeLessThan(remoteCatalogIndex)
+    expect(remoteCatalogIndex).toBeLessThan(remoteWorktreeIndex)
+    expect(remoteWorktreeIndex).toBeLessThan(lineageIndex)
+    expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
+      'actions.fetchReposForAllHosts()'
+    )
+    expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
+      'actions.fetchProjectGroupsForAllHosts()'
+    )
+    expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
+      'actions.fetchFolderWorkspacesForAllHosts()'
+    )
   })
 
   it('waits for first-window startup services before terminal reconnect', () => {

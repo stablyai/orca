@@ -1,9 +1,12 @@
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Repo } from '../shared/types'
-import { hasLocalCommitObject } from './git/commit-object-ref'
+import { hasLocalCommitObject, isFullGitObjectId } from './git/commit-object-ref'
+import { hasWorktreeBaseCommitRef } from './git/worktree-base-ref-probe'
 import { getDefaultBaseRef } from './git/repo'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { prefetchRemoteWorktreeCreateBase } from './ipc/worktree-remote'
+import { resolveWorktreeCreateBase } from './worktree-create-base'
+import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 
 type RemoteTrackingBaseForPrefetch = {
   remote: string
@@ -17,6 +20,7 @@ type WorktreeCreateBasePrefetchRuntime = {
     repoPath: string,
     baseBranch: string
   ) => Promise<RemoteTrackingBaseForPrefetch | null>
+  hasRemoteTrackingRef: (repoPath: string, base: RemoteTrackingBaseForPrefetch) => Promise<boolean>
   getOrStartRemoteTrackingBaseRefresh: (
     repoPath: string,
     base: RemoteTrackingBaseForPrefetch
@@ -24,23 +28,62 @@ type WorktreeCreateBasePrefetchRuntime = {
   fetchRemoteWithCache: (repoPath: string, remote: string) => Promise<void>
 }
 
+async function hasLocalWorktreeBaseRef(repoPath: string, baseRef: string): Promise<boolean> {
+  const refExists = (qualifiedRef: string) => hasWorktreeBaseCommitRef(repoPath, qualifiedRef)
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
+  if (resolvedBaseRef !== baseRef) {
+    return true
+  }
+  if (baseRef.startsWith('refs/')) {
+    return refExists(baseRef)
+  }
+  return hasLocalCommitObject(repoPath, baseRef)
+}
+
 async function prefetchLocalWorktreeCreateBase(
   repo: Repo,
   baseBranch: string | undefined,
   runtime: WorktreeCreateBasePrefetchRuntime
 ): Promise<void> {
-  const resolvedBaseBranch = baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
+  const resolvedBaseBranch = await resolveWorktreeCreateBase({
+    requestedBaseBranch: baseBranch,
+    repoWorktreeBaseRef: repo.worktreeBaseRef,
+    resolveDefaultBaseRef: async () => getDefaultBaseRef(repo.path),
+    isBaseUsable: async (baseBranchCandidate) => {
+      const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(
+        repo.path,
+        baseBranchCandidate
+      )
+      if (remoteTrackingBase) {
+        if (await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)) {
+          return true
+        }
+        return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate)
+      }
+      return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate)
+    }
+  })
   if (!resolvedBaseBranch) {
     return
   }
-  if (await hasLocalCommitObject(repo.path, resolvedBaseBranch)) {
-    // Why: hosted-review start points can be verified commit SHAs; a broad
-    // remote fetch cannot make an already-local object fresher.
+  if (
+    isFullGitObjectId(resolvedBaseBranch) &&
+    (await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch))
+  ) {
     return
   }
   const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, resolvedBaseBranch)
   if (remoteTrackingBase) {
-    await runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase)
+    if (
+      (await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)) ||
+      !(await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch))
+    ) {
+      await runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase)
+      return
+    }
+  }
+  if (await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch)) {
+    // Why: hosted-review start points and local branch bases are already local; a broad remote fetch cannot make them fresher.
     return
   }
 

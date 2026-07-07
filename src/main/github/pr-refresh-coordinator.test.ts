@@ -94,6 +94,47 @@ describe('pr-refresh-coordinator', () => {
     vi.useRealTimers()
   })
 
+  it('forwards the candidate worktree head into the branch lookup options', async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'no-pr',
+      fetchedAt: Date.now()
+    })
+
+    reportVisiblePRRefreshCandidates([makeCandidate({ currentHeadOid: 'worktree-head-oid' })], 1, 1)
+    await vi.runOnlyPendingTimersAsync()
+
+    // Why: without the head, a panel-supplied fallback number preserves a
+    // merged PR head-blind after the branch moves on to new work.
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      null,
+      expect.objectContaining({ currentHeadOid: 'worktree-head-oid' })
+    )
+  })
+
+  it('copies the candidate worktree head onto broadcast aliases', async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ state: 'merged' }),
+      fetchedAt: Date.now()
+    })
+
+    reportVisiblePRRefreshCandidates([makeCandidate({ currentHeadOid: 'worktree-head-oid' })], 1, 1)
+    await vi.runOnlyPendingTimersAsync()
+
+    // Why: the renderer clear of a diverged merged linked PR is head-scoped, so
+    // the broadcast alias must carry the request-time head it was probed against.
+    const outcomeEvent = sendMock.mock.calls
+      .map(([, event]) => event)
+      .find((event) => event.outcome)
+    expect(outcomeEvent?.aliases[0]?.currentHeadOid).toBe('worktree-head-oid')
+  })
+
   it('does not show visible background refreshes as queued', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock.mockResolvedValueOnce({
@@ -609,6 +650,103 @@ describe('pr-refresh-coordinator', () => {
       '/repo::feature/b'
     ])
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('probes with the survivor head after the representative alias is invalidated', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'found',
+      pr: makePR({ state: 'merged' }),
+      fetchedAt: Date.now()
+    })
+
+    const survivor = makeCandidate({
+      cacheKey: '/repo::feature/b',
+      branch: 'feature/b',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-b',
+      currentHeadOid: 'head-b'
+    })
+    const representative = makeCandidate({
+      cacheKey: '/repo::feature/a',
+      branch: 'feature/a',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-a',
+      currentHeadOid: 'head-a'
+    })
+
+    // Enqueue the survivor first, then the representative (active coalescing
+    // promotes the latter to representative), then invalidate the representative
+    // so the still-queued entry rebinds to the survivor before draining.
+    enqueuePRRefresh(survivor, 'active', 80, 1)
+    enqueuePRRefresh(representative, 'active', 80, 1)
+    enqueuePRRefresh({ ...representative, isArchived: true }, 'active', 80, 1)
+    await vi.runOnlyPendingTimersAsync()
+
+    const probedHeads = getPRForBranchOutcomeMock.mock.calls.map((call) => call[5]?.currentHeadOid)
+    expect(probedHeads).toContain('head-b')
+    expect(probedHeads).not.toContain('head-a')
+  })
+
+  it('probes with the survivor head after the representative worktree is pruned', async () => {
+    const { enqueuePRRefresh, pruneWorktreePRRefreshAliases } =
+      await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'found',
+      pr: makePR({ state: 'merged' }),
+      fetchedAt: Date.now()
+    })
+
+    const survivor = makeCandidate({
+      cacheKey: '/repo::feature/b',
+      branch: 'feature/b',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-b',
+      currentHeadOid: 'head-b'
+    })
+    const representative = makeCandidate({
+      cacheKey: '/repo::feature/a',
+      branch: 'feature/a',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-a',
+      currentHeadOid: 'head-a'
+    })
+
+    enqueuePRRefresh(survivor, 'active', 80, 1)
+    enqueuePRRefresh(representative, 'active', 80, 1)
+    pruneWorktreePRRefreshAliases('wt-a')
+    await vi.runOnlyPendingTimersAsync()
+
+    const probedHeads = getPRForBranchOutcomeMock.mock.calls.map((call) => call[5]?.currentHeadOid)
+    expect(probedHeads).toContain('head-b')
+    expect(probedHeads).not.toContain('head-a')
+  })
+
+  it('refreshes the representative head when the same worktree re-reports a moved head', async () => {
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'found',
+      pr: makePR({ state: 'merged' }),
+      fetchedAt: Date.now()
+    })
+
+    // Same worktree/branch, moved head, coalescing visible→visible (no promote):
+    // the representative head must track the newest report before the drain.
+    reportVisiblePRRefreshCandidates(
+      [makeCandidate({ linkedPRNumber: 12, worktreeId: 'wt-a', currentHeadOid: 'head-a' })],
+      1,
+      1
+    )
+    reportVisiblePRRefreshCandidates(
+      [makeCandidate({ linkedPRNumber: 12, worktreeId: 'wt-a', currentHeadOid: 'head-b' })],
+      2,
+      1
+    )
+    await vi.runOnlyPendingTimersAsync()
+
+    const probedHeads = getPRForBranchOutcomeMock.mock.calls.map((call) => call[5]?.currentHeadOid)
+    expect(probedHeads).toContain('head-b')
+    expect(probedHeads).not.toContain('head-a')
   })
 
   it('includes request start time on manual refresh events', async () => {

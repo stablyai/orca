@@ -4,7 +4,7 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-revi
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getWorktreeCardPrDisplay } from '@/components/sidebar/worktree-card-pr-display'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
-import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from '@/store/slices/hosted-review'
 import { prChecksCacheSuffix } from '@/store/slices/github'
 import {
@@ -23,6 +23,13 @@ import {
   getRowSummary,
   groupForRowStatus
 } from './parent-pr-checks-row-status'
+import {
+  canUseParentPrChecksGitHubPRCacheEntry,
+  getParentPrChecksGitHubPRCacheEntry
+} from './parent-pr-checks-github-pr-cache'
+import { canUseParentPrChecksHostedReviewCacheEntry } from './parent-pr-checks-hosted-review-cache'
+
+type ParentPrChecksRowSourceArgs = Omit<BuildParentPrChecksRowsArgs, 'repos'>
 
 export type {
   ParentPrChecksGroupKey,
@@ -37,19 +44,28 @@ export function buildParentPrChecksProjection(
   args: BuildParentPrChecksRowsArgs
 ): ParentPrChecksProjection {
   const repoById = new Map(args.repos.map((repo) => [repo.id, repo]))
-  const rows = args.worktrees.map((worktree) =>
-    buildParentPrChecksRow({
-      ...args,
-      worktree,
-      repo: repoById.get(worktree.repoId) ?? null
-    })
-  )
+  const rows = buildParentPrChecksRows({
+    ...args,
+    repoById
+  })
   const groups = PARENT_PR_CHECKS_GROUP_ORDER.map((key) => ({
     key,
     label: PARENT_PR_CHECKS_GROUP_LABELS[key],
     rows: rows.filter((row) => row.group === key)
   })).filter((group) => group.rows.length > 0)
   return { rows, groups, summary: summarizeParentPrChecksRows(rows) }
+}
+
+export function buildParentPrChecksRows(
+  args: ParentPrChecksRowSourceArgs & { repoById: ReadonlyMap<string, Repo> }
+): ParentPrChecksRow[] {
+  return args.worktrees.map((worktree) =>
+    buildParentPrChecksRow({
+      ...args,
+      worktree,
+      repo: args.repoById.get(worktree.repoId) ?? null
+    })
+  )
 }
 
 export function summarizeParentPrChecksRows(
@@ -90,7 +106,7 @@ export function getParentPrChecksRefreshIdentity(
 }
 
 function buildParentPrChecksRow(
-  args: BuildParentPrChecksRowsArgs & { worktree: Worktree; repo: Repo | null }
+  args: ParentPrChecksRowSourceArgs & { worktree: Worktree; repo: Repo | null }
 ): ParentPrChecksRow {
   const branch = getBranchName(args.worktree)
   const refreshIdentity = getParentPrChecksRefreshIdentity(args.worktree, args.repo, branch)
@@ -125,9 +141,11 @@ function buildParentPrChecksRow(
     group: groupForRowStatus(status),
     checkTone: getRowCheckTone(status, review),
     title: getRowTitle(args.worktree, branch, review, fallbackDisplay?.title),
+    reviewNumber: review?.number ?? fallbackDisplay?.number ?? null,
     reviewLabel: getReviewLabel(review, fallbackDisplay),
     reviewUrl: review?.url ?? fallbackDisplay?.url ?? null,
     reviewState: review?.state ?? fallbackDisplay?.state ?? null,
+    reviewStatus: review?.status ?? fallbackDisplay?.status ?? null,
     provider: review?.provider ?? fallbackDisplay?.provider ?? null,
     summary: getRowSummary(status, review, detailNames),
     detailNames,
@@ -138,7 +156,7 @@ function buildParentPrChecksRow(
 }
 
 function getReviewSnapshot(
-  args: BuildParentPrChecksRowsArgs & { worktree: Worktree; repo: Repo | null },
+  args: ParentPrChecksRowSourceArgs & { worktree: Worktree; repo: Repo | null },
   branch: string | null,
   outcome: ParentPrChecksRefreshOutcome | undefined
 ): { review: HostedReviewInfo | null | undefined; hasCacheEntry: boolean } {
@@ -150,18 +168,30 @@ function getReviewSnapshot(
   }
   const scopedArgs = { ...args, repo: args.repo }
   const hostedReviewEntry = args.hostedReviewCache[getHostedReviewKey(scopedArgs, branch)]
-  if (hostedReviewEntry?.data) {
+  if (
+    hostedReviewEntry?.data &&
+    canUseParentPrChecksHostedReviewCacheEntry(
+      args.worktree,
+      hostedReviewEntry.data,
+      hostedReviewEntry
+    )
+  ) {
     return { review: hostedReviewEntry.data, hasCacheEntry: true }
   }
-  const prEntry = args.prCache[getPRKey(scopedArgs, branch)]
-  if (prEntry?.data) {
+  const prEntry = getParentPrChecksGitHubPRCacheEntry({
+    prCache: args.prCache,
+    repo: args.repo,
+    branch,
+    settings: args.settings
+  })
+  if (canUseParentPrChecksGitHubPRCacheEntry(args.worktree, prEntry, hostedReviewEntry)) {
     return {
       review: hostedReviewInfoFromGitHubPRInfo(prEntry.data),
       hasCacheEntry: true
     }
   }
   return {
-    review: hostedReviewEntry?.data,
+    review: hostedReviewEntry?.data === null ? null : undefined,
     hasCacheEntry: hostedReviewEntry !== undefined
   }
 }
@@ -188,7 +218,7 @@ function getReviewLabel(
 }
 
 function getCheckDetails(
-  args: BuildParentPrChecksRowsArgs & { repo: Repo | null },
+  args: ParentPrChecksRowSourceArgs & { repo: Repo | null },
   review: HostedReviewInfo | null | undefined,
   branch: string | null
 ): PRCheckDetail[] {
@@ -218,7 +248,7 @@ function getCheckDetailNames(checks: readonly PRCheckDetail[]): string[] {
 }
 
 function getGitHubChecksEntry(
-  args: BuildParentPrChecksRowsArgs & { repo: Repo },
+  args: ParentPrChecksRowSourceArgs & { repo: Repo },
   review: HostedReviewInfo
 ): ParentPrChecksCacheEntry<PRCheckDetail[]> | undefined {
   const prRepo = null
@@ -244,7 +274,7 @@ function getGitHubChecksEntry(
 }
 
 function getHostedReviewKey(
-  args: BuildParentPrChecksRowsArgs & { repo: Repo },
+  args: ParentPrChecksRowSourceArgs & { repo: Repo },
   branch: string
 ): string {
   return getHostedReviewCacheKey(
@@ -252,18 +282,6 @@ function getHostedReviewKey(
     branch,
     args.settings,
     args.repo.id,
-    args.repo.connectionId,
-    args.repo.executionHostId,
-    true
-  )
-}
-
-function getPRKey(args: BuildParentPrChecksRowsArgs & { repo: Repo }, branch: string): string {
-  return getGitHubPRCacheKey(
-    args.repo.path,
-    args.repo.id,
-    branch,
-    args.settings,
     args.repo.connectionId,
     args.repo.executionHostId,
     true

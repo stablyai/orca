@@ -82,6 +82,7 @@ describe('PiTitlebarExtensionService', () => {
     rmSync(piHome, { recursive: true, force: true })
     rmSync(join(userDataDir, 'pi-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-agent-overlays'), { recursive: true, force: true })
+    rmSync(join(userDataDir, 'omp-managed-status-extension'), { recursive: true, force: true })
   })
 
   function expectPiHomeIntact(): void {
@@ -229,6 +230,25 @@ describe('PiTitlebarExtensionService', () => {
       userStatusExtension
     )
     expectPiHomeIntact()
+  })
+
+  it('uses an Orca-owned OMP status extension when a same-named user file exists', () => {
+    const userStatusExtension = 'user-owned status extension'
+    const userStatusPath = join(piHome, 'extensions', 'orca-agent-status.ts')
+    writeFileSync(userStatusPath, userStatusExtension, 'utf-8')
+
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildPtyEnv('pty-omp-user-status-extension', piHome, 'omp')
+
+    const fallbackStatusPath = join(
+      userDataDir,
+      'omp-managed-status-extension',
+      'orca-agent-status.ts'
+    )
+    expect(readFileSync(userStatusPath, 'utf-8')).toBe(userStatusExtension)
+    expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(fallbackStatusPath)
+    expect(readFileSync(fallbackStatusPath, 'utf-8')).toContain('@orca-managed-pi-extension')
+    expect(readFileSync(fallbackStatusPath, 'utf-8')).toContain('/hook/omp')
   })
 
   it.skipIf(process.platform === 'win32')(

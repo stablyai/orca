@@ -22,12 +22,12 @@ describe('resolveGitHubPrStartPoint', () => {
     getPullRequestPushTargetMock.mockResolvedValue({
       pushTarget: {
         remoteName: 'pr-contributor-orca',
-        branchName: 'feat/onboarding-model-choice-782',
+        branchName: 'fix-issue-6933',
         remoteUrl: 'git@github.com:contributor/orca.git'
       }
     })
     const fetchRemoteTrackingRef = vi.fn(async (_remote: string, branch: string) => {
-      if (branch === 'feat/onboarding-model-choice-782') {
+      if (branch === 'fix-issue-6933') {
         throw new Error('fatal: could not find remote ref')
       }
     })
@@ -40,28 +40,25 @@ describe('resolveGitHubPrStartPoint', () => {
 
     const result = await resolveGitHubPrStartPoint({
       repoPath: '/repo-root',
-      prNumber: 1849,
-      headRefName: 'feat/onboarding-model-choice-782',
+      prNumber: 6934,
+      headRefName: 'fix-issue-6933',
       baseRefName: 'main',
       gitExec,
       fetchRemoteTrackingRef,
       resolveRemote: async () => 'origin'
     })
 
-    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith(
-      'origin',
-      'feat/onboarding-model-choice-782'
-    )
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('origin', 'fix-issue-6933')
     expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('origin', 'main')
-    expect(gitExec).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'])
+    expect(gitExec).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/6934/head'])
     expect(result).toEqual({
       baseBranch: 'def456',
       compareBaseRef: 'refs/remotes/origin/main',
       headSha: 'def456',
-      branchNameOverride: 'feat/onboarding-model-choice-782',
+      branchNameOverride: 'fix-issue-6933',
       pushTarget: {
         remoteName: 'pr-contributor-orca',
-        branchName: 'feat/onboarding-model-choice-782',
+        branchName: 'fix-issue-6933',
         remoteUrl: 'git@github.com:contributor/orca.git'
       }
     })

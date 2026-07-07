@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
@@ -52,7 +52,7 @@ export function dispatchTerminalNotification(
   // not lend its prompt/agentType or timing id to this notification.
   const explicitTitleAgentType =
     event.source === 'agent-task-complete' && event.terminalTitle
-      ? resolveExplicitTerminalTitleAgentType(event.terminalTitle)
+      ? resolveCommittedTitleAgentType(event.terminalTitle)
       : null
   const storedAgentStatus =
     event.source === 'agent-task-complete' && event.paneKey

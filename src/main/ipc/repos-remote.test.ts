@@ -94,7 +94,6 @@ vi.mock('../git/repo', async () => {
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo: vi.fn().mockReturnValue(true),
     getGitRepoRoot: vi.fn((path: string) => path),
-    getGitUsername: vi.fn().mockReturnValue(''),
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
     getRemoteCount: vi.fn().mockResolvedValue(1),
@@ -2414,13 +2413,13 @@ describe('repos:getBaseRefDefault envelope', () => {
   // independent of which Promise in the Promise.all resolves first.
   type ExecResponse = { stdout: string; stderr: string }
   type ExecRule = {
-    match: (argv: string[]) => boolean
+    matches: (argv: string[]) => boolean
     respond: () => Promise<ExecResponse>
   }
   const dispatchExec = (rules: ExecRule[]): ((argv: string[]) => Promise<ExecResponse>) => {
     return (argv: string[]) => {
       for (const rule of rules) {
-        if (rule.match(argv)) {
+        if (rule.matches(argv)) {
           return rule.respond()
         }
       }
@@ -2439,11 +2438,17 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          match: isSymbolicRef,
+          matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
+        // The origin/HEAD target is verified before it is trusted, so the
+        // symbolic-ref result must also resolve via rev-parse.
         {
-          match: isRemoteList,
+          matches: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+        },
+        {
+          matches: isRemoteList,
           respond: () => Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
         }
       ])
@@ -2469,11 +2474,17 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          match: isSymbolicRef,
+          matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
+        // The origin/HEAD target is verified before it is trusted, so the
+        // symbolic-ref result must also resolve via rev-parse.
         {
-          match: isRemoteList,
+          matches: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+        },
+        {
+          matches: isRemoteList,
           respond: () => Promise.reject(new Error('relay exec failed'))
         }
       ])
@@ -2501,18 +2512,21 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         // symbolic-ref rejects (no origin/HEAD on the remote)
-        { match: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
+        { matches: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
         // probe 1: refs/remotes/origin/main — rejects
         {
-          match: isRevParseFor('refs/remotes/origin/main'),
+          matches: isRevParseFor('refs/remotes/origin/main'),
           respond: () => Promise.reject(new Error('missing'))
         },
         // probe 2: refs/remotes/origin/master — succeeds
         {
-          match: isRevParseFor('refs/remotes/origin/master'),
+          matches: isRevParseFor('refs/remotes/origin/master'),
           respond: () => Promise.resolve({ stdout: 'abc123\n', stderr: '' })
         },
-        { match: isRemoteList, respond: () => Promise.resolve({ stdout: 'origin\n', stderr: '' }) }
+        {
+          matches: isRemoteList,
+          respond: () => Promise.resolve({ stdout: 'origin\n', stderr: '' })
+        }
       ])
     )
 

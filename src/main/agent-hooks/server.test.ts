@@ -13,7 +13,12 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AgentHookServer, agentHookServer, _internals } from './server'
+import {
+  AgentHookServer,
+  agentHookServer,
+  CLOSED_AGENT_STATUS_TAB_IDS_MAX,
+  _internals
+} from './server'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_STALE_AFTER_MS,
@@ -6846,5 +6851,25 @@ describe('AgentHookServer ingestTerminalStatus', () => {
 
     expect(listener).not.toHaveBeenCalled()
     expect(server.getStatusSnapshot()).toEqual([])
+  })
+})
+
+describe('AgentHookServer closed-tab suppression bound', () => {
+  it('bounds closedAgentStatusTabIds with LRU eviction as tabs close', () => {
+    const server = new AgentHookServer()
+    const internals = server as unknown as {
+      markTabClosedForAgentStatus: (tabId: string) => void
+      closedAgentStatusTabIds: Set<string>
+    }
+
+    const total = CLOSED_AGENT_STATUS_TAB_IDS_MAX + 200
+    for (let i = 0; i < total; i += 1) {
+      internals.markTabClosedForAgentStatus(`closed-tab-${i}`)
+    }
+
+    // Set stays bounded; oldest ids are evicted, most-recent are retained.
+    expect(internals.closedAgentStatusTabIds.size).toBe(CLOSED_AGENT_STATUS_TAB_IDS_MAX)
+    expect(internals.closedAgentStatusTabIds.has('closed-tab-0')).toBe(false)
+    expect(internals.closedAgentStatusTabIds.has(`closed-tab-${total - 1}`)).toBe(true)
   })
 })

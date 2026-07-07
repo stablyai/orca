@@ -1,6 +1,11 @@
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import {
+  getDuplicateProjectDetailsById,
+  type ProjectSetupDirectory
+} from './new-workspace-duplicate-project-details'
 
 export const NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX = 'project-group:'
 export const NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX = 'folder-source:'
@@ -45,6 +50,7 @@ type BuildNewWorkspaceProjectOptionsInput = {
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
+  hosts?: readonly Pick<ExecutionHostRegistryEntry, 'id' | 'label'>[]
 }
 
 type BuildNewWorkspaceCreateTargetOptionsInput = BuildNewWorkspaceProjectOptionsInput & {
@@ -85,7 +91,9 @@ export function buildNewWorkspaceProjectOptions(
   const { eligibleRepos } = input
   const { projects, projectHostSetups } = getProjectModel(input)
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
+  const hostLabelById = new Map((input.hosts ?? []).map((host) => [host.id, host.label]))
   const readySetupCountsByProjectId = new Map<string, number>()
+  const setupDirectoriesByProjectId = new Map<string, ProjectSetupDirectory[]>()
 
   for (const setup of projectHostSetups) {
     if (setup.setupState !== 'ready' || !eligibleRepoIds.has(setup.repoId)) {
@@ -95,9 +103,12 @@ export function buildNewWorkspaceProjectOptions(
       setup.projectId,
       (readySetupCountsByProjectId.get(setup.projectId) ?? 0) + 1
     )
+    const directories = setupDirectoriesByProjectId.get(setup.projectId) ?? []
+    directories.push({ path: setup.path, hostId: setup.hostId })
+    setupDirectoriesByProjectId.set(setup.projectId, directories)
   }
 
-  return projects
+  const options = projects
     .filter((project) => (readySetupCountsByProjectId.get(project.id) ?? 0) > 0)
     .map((project) => ({
       kind: 'project' as const,
@@ -105,8 +116,21 @@ export function buildNewWorkspaceProjectOptions(
       projectId: project.id,
       displayName: project.displayName,
       badgeColor: project.badgeColor,
-      detail: getProjectDetail(project, readySetupCountsByProjectId.get(project.id) ?? 0)
+      detail: getProjectDetail(project, readySetupCountsByProjectId.get(project.id) ?? 0),
+      detailSource: project.providerIdentity ? ('provider' as const) : ('generic' as const)
     }))
+
+  const duplicateProjectDetailsById = getDuplicateProjectDetailsById(
+    options,
+    setupDirectoriesByProjectId,
+    hostLabelById
+  )
+
+  return options
+    .map(({ detailSource: _detailSource, ...option }) => {
+      const directoryDetail = duplicateProjectDetailsById.get(option.id)
+      return directoryDetail ? { ...option, detail: directoryDetail } : option
+    })
     .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
 }
 

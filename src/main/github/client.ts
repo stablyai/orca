@@ -62,6 +62,10 @@ import {
   type LocalGitExecOptions,
   type OwnerRepo
 } from './gh-utils'
+import {
+  isCommitPartOfMergedPR,
+  type MergedPRCommitMembership
+} from './merged-pr-commit-membership'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   hasHostedReviewLocalGitOptions,
@@ -69,6 +73,12 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
+import {
+  getRememberedGhCwdResolutionFailure,
+  isGhCwdRepoResolutionFailure,
+  rememberGhCwdResolutionFailure
+} from './gh-cwd-repo-negative-cache'
+import type { GitHubRepoContext } from './github-repository-identity'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -1001,6 +1011,32 @@ async function resolvePrWorkItemSource(
   return { source, originCandidate, upstreamCandidate }
 }
 
+/**
+ * gh exec for calls that rely on gh's own cwd→repo resolution (no explicit
+ * owner/repo). Serves a remembered deterministic resolution failure without
+ * spawning, so a remote-less repo costs one gh spawn per config change/TTL
+ * instead of two per Tasks refresh.
+ */
+async function ghCwdResolvedExec(
+  context: GitHubRepoContext,
+  args: string[],
+  ghOptions: GhExecOptions
+): Promise<{ stdout: string; stderr: string }> {
+  const remembered = await getRememberedGhCwdResolutionFailure(context)
+  if (remembered !== null) {
+    throw new Error(remembered)
+  }
+  try {
+    return await ghExecFileAsync(args, ghOptions)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (isGhCwdRepoResolutionFailure(message)) {
+      await rememberGhCwdResolutionFailure(context, message)
+    }
+    throw err
+  }
+}
+
 async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -1010,7 +1046,8 @@ async function listRecentWorkItems(
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
   const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
@@ -1030,7 +1067,8 @@ async function listRecentWorkItems(
           )
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghExecFileAsync(
+          : ghCwdResolvedExec(
+              repoContext,
               [
                 'issue',
                 'list',
@@ -1054,7 +1092,8 @@ async function listRecentWorkItems(
           )
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghExecFileAsync(
+          : ghCwdResolvedExec(
+              repoContext,
               [
                 'pr',
                 'list',
@@ -1126,7 +1165,8 @@ async function listRecentWorkItems(
   // effectively unusable for the feature — reject-all matches reality. If
   // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
-    ghExecFileAsync(
+    ghCwdResolvedExec(
+      repoContext,
       [
         'issue',
         'list',
@@ -1139,7 +1179,8 @@ async function listRecentWorkItems(
       ],
       ghOptions
     ),
-    ghExecFileAsync(
+    ghCwdResolvedExec(
+      repoContext,
       [
         'pr',
         'list',
@@ -1176,7 +1217,8 @@ async function listQueriedWorkItems(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
@@ -1205,7 +1247,9 @@ async function listQueriedWorkItems(
       before
     })
     try {
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const { stdout } = issueOwnerRepo
+        ? await ghExecFileAsync(args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, args, ghOptions)
       return {
         items: (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
       }
@@ -1230,7 +1274,9 @@ async function listQueriedWorkItems(
       before
     })
     try {
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const { stdout } = prOwnerRepo
+        ? await ghExecFileAsync(args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, args, ghOptions)
       const mapped = (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
         mapPullRequestWorkItem(item, prOwnerRepo)
       )
@@ -1394,7 +1440,10 @@ async function countWorkItemsForQuery(
     ],
     ghOptions
   )
-  return parseInt(stdout.trim(), 10) || 0
+  // Why: over-counts gh cache hits, which is the safe direction — the search
+  // bucket is only 30/min and the next probe corrects the estimate.
+  noteRateLimitSpend('search')
+  return Number.parseInt(stdout.trim(), 10) || 0
 }
 
 function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): boolean {
@@ -1448,6 +1497,15 @@ export async function countWorkItems(
 
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
+
+  // Why: counts are decorative (pagination totals). The search bucket is only
+  // 30/min, so a multi-repo Tasks page must stop counting when the budget is
+  // gone instead of converting the remaining repos into 403 spawns. getRateLimit
+  // is 30s-cached and single-flight, so priming here is one spawn per window.
+  await getRateLimit()
+  if (rateLimitGuard('search').blocked) {
+    return 0
+  }
 
   await acquire()
   try {
@@ -2770,6 +2828,15 @@ export async function getPRForBranch(
   return outcome.kind === 'found' ? outcome.pr : null
 }
 
+// Why: the exact-linked fallback (`gh pr view` with no resolved repo candidates)
+// returns dataRepo=null, which would leave the merged-PR membership probe unable
+// to run. Derive the PR's own repo from its web URL so a diverged merged linked
+// PR can still be confirmed and cleared. Host-agnostic to cover GitHub Enterprise.
+function ownerRepoFromPullRequestUrl(url: string): OwnerRepo | null {
+  const match = url.match(/^https?:\/\/[^/\s]+\/([^/\s]+)\/([^/\s]+)\/pull\/\d+/)
+  return match ? { owner: match[1], repo: match[2] } : null
+}
+
 export async function getPRForBranchOutcome(
   repoPath: string,
   branch: string,
@@ -2808,7 +2875,55 @@ export async function getPRForBranchOutcome(
       typeof options.currentHeadOid === 'string' && options.currentHeadOid.trim().length > 0
         ? options.currentHeadOid.trim()
         : null
-    const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
+    let confirmedContainedHeadOid: string | null = null
+    let headDivergedFromMergedPRAtOid: string | null = null
+    const mergedPRContainsHead = async (
+      candidate: PullRequestLookupData,
+      candidateRepo: OwnerRepo | null,
+      headOid: string | null
+    ): Promise<MergedPRCommitMembership> => {
+      if (!candidateRepo || !headOid) {
+        return 'unknown'
+      }
+      const membership = await isCommitPartOfMergedPR({
+        ownerRepo: candidateRepo,
+        prNumber: candidate.number,
+        commitOid: headOid,
+        ghOptions
+      })
+      if (membership === 'contained') {
+        confirmedContainedHeadOid = headOid
+      }
+      return membership
+    }
+    const recordLinkedMergedPRDivergence = async (
+      candidate: PullRequestLookupData | null,
+      candidateRepo: OwnerRepo | null
+    ): Promise<void> => {
+      if (
+        typeof linkedPRNumber !== 'number' ||
+        !candidate ||
+        mapPRState(candidate.state, candidate.isDraft) !== 'merged' ||
+        explicitCurrentHeadOid === null ||
+        candidate.headRefOid === explicitCurrentHeadOid
+      ) {
+        return
+      }
+      const membership = await mergedPRContainsHead(
+        candidate,
+        candidateRepo ?? ownerRepoFromPullRequestUrl(candidate.url),
+        explicitCurrentHeadOid
+      )
+      if (membership === 'not-contained') {
+        // explicitCurrentHeadOid is non-null here (guarded above); record the
+        // exact head so consumers only clear the worktree that actually diverged.
+        headDivergedFromMergedPRAtOid = explicitCurrentHeadOid
+      }
+    }
+    const hideMergedImplicitPR = async (
+      candidate: PullRequestLookupData | null,
+      candidateRepo: OwnerRepo | null
+    ) => {
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
@@ -2819,7 +2934,17 @@ export async function getPRForBranchOutcome(
         explicitCurrentHeadOid !== null
           ? explicitCurrentHeadOid
           : await getCurrentHeadOid(repoPath, connectionId, localGitOptions)
-      return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
+      if (!shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)) {
+        return false
+      }
+      // Why: a worktree can sit behind its own PR's final head (update-branch
+      // merges, web-committed suggestions). A head that is one of the PR's own
+      // commits is the same line of work, not a reused branch name — keep the
+      // merged PR visible instead of offering "create a pull request".
+      return (
+        (await mergedPRContainsHead(candidate, candidateRepo, currentHeadOidForMergedImplicit)) !==
+        'contained'
+      )
     }
 
     if (typeof linkedPRNumber === 'number') {
@@ -2886,7 +3011,7 @@ export async function getPRForBranchOutcome(
       }
     }
     let mergedBranchLookupNumber: number | null = null
-    if (await hideMergedImplicitPR(data)) {
+    if (await hideMergedImplicitPR(data, dataRepo)) {
       mergedBranchLookupNumber = data?.number ?? null
       data = null
       dataRepo = null
@@ -2907,20 +3032,26 @@ export async function getPRForBranchOutcome(
       }
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
+    await recordLinkedMergedPRDivergence(data, dataRepo)
     const fallbackConfirmedMergedBranch =
       typeof fallbackPRNumber === 'number' &&
       mergedBranchLookupNumber === fallbackPRNumber &&
       data.number === fallbackPRNumber
     const explicitHeadHidesMergedImplicitPR =
       explicitCurrentHeadOid !== null &&
-      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid)
+      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid) &&
+      (await mergedPRContainsHead(data, dataRepo, explicitCurrentHeadOid)) !== 'contained'
+    // Why no lazy-HEAD re-check on preservation: fallback numbers come from
+    // callers that already gated them on head equality or confirmed
+    // containment; re-hiding against the main-repo HEAD would blank
+    // deleted-head merged PRs that are deliberately kept visible.
     const shouldPreserveMergedFallback =
       !explicitHeadHidesMergedImplicitPR &&
       (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
     // Why: a currently visible PR can be merged outside Orca; when the caller
     // marks the fallback as visible review state, keep its lifecycle fresh even
     // if GitHub no longer reports it by branch (for example deleted heads).
-    if ((await hideMergedImplicitPR(data)) && !shouldPreserveMergedFallback) {
+    if ((await hideMergedImplicitPR(data, dataRepo)) && !shouldPreserveMergedFallback) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
@@ -2962,6 +3093,8 @@ export async function getPRForBranchOutcome(
           : {}),
         ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
         headSha: data.headRefOid,
+        ...(confirmedContainedHeadOid ? { confirmedContainedHeadOid } : {}),
+        ...(headDivergedFromMergedPRAtOid ? { headDivergedFromMergedPRAtOid } : {}),
         ...(data.baseRefName ? { baseRefName: data.baseRefName } : {}),
         prRepo: dataRepo ?? undefined,
         headRepo: dataHeadRepo ?? undefined,

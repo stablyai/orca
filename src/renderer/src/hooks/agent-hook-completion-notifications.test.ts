@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: notification edge cases share one module-scoped coordinator, so keeping setup and regression cases together prevents brittle cross-file mock resets. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
@@ -726,5 +725,82 @@ describe('agent hook completion notifications', () => {
         })
       })
     )
+  })
+
+  const MANY_PANES = [
+    { tabId: 'tab-1', leafId: '11111111-1111-4111-8111-111111111111', ptyId: 'pty-1' },
+    { tabId: 'tab-2', leafId: '22222222-2222-4222-8222-222222222222', ptyId: 'pty-2' },
+    { tabId: 'tab-3', leafId: '33333333-3333-4333-8333-333333333333', ptyId: 'pty-3' },
+    { tabId: 'tab-4', leafId: '44444444-4444-4444-8444-444444444444', ptyId: 'pty-4' },
+    { tabId: 'tab-5', leafId: '55555555-5555-4555-8555-555555555555', ptyId: 'pty-5' }
+  ]
+
+  function seedManyLivePanes(): void {
+    mockStoreState.ptyIdsByTabId = Object.fromEntries(MANY_PANES.map((p) => [p.tabId, [p.ptyId]]))
+    mockStoreState.tabsByWorktree = {
+      'wt-1': MANY_PANES.map((p) => ({ id: p.tabId, ptyId: p.ptyId }))
+    }
+  }
+
+  it('prunes only the coordinators whose panes lost liveness, keeping the rest', async () => {
+    seedManyLivePanes()
+    const {
+      _getAgentHookCompletionNotificationCoordinatorCountForTest,
+      observeAgentHookCompletionForNotification,
+      syncAgentHookCompletionNotificationSettings
+    } = await import('./agent-hook-completion-notifications')
+
+    for (const pane of MANY_PANES) {
+      observeAgentHookCompletionForNotification({
+        paneKey: `${pane.tabId}:${pane.leafId}`,
+        worktreeId: 'wt-1',
+        payload: hookStatus('working')
+      })
+    }
+    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(MANY_PANES.length)
+
+    // Remove liveness for two panes (both the tab hint and the pty list).
+    mockStoreState.tabsByWorktree = {
+      'wt-1': MANY_PANES.slice(0, 3).map((p) => ({ id: p.tabId, ptyId: p.ptyId }))
+    }
+    mockStoreState.ptyIdsByTabId = Object.fromEntries(
+      MANY_PANES.slice(0, 3).map((p) => [p.tabId, [p.ptyId]])
+    )
+    syncAgentHookCompletionNotificationSettings()
+
+    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(3)
+  })
+
+  it('reads tabsByWorktree once per prune pass regardless of coordinator count', async () => {
+    seedManyLivePanes()
+    const {
+      observeAgentHookCompletionForNotification,
+      syncAgentHookCompletionNotificationSettings
+    } = await import('./agent-hook-completion-notifications')
+
+    for (const pane of MANY_PANES) {
+      observeAgentHookCompletionForNotification({
+        paneKey: `${pane.tabId}:${pane.leafId}`,
+        worktreeId: 'wt-1',
+        payload: hookStatus('working')
+      })
+    }
+
+    // Count tabsByWorktree reads during a single prune pass. Pre-fix this was
+    // O(coordinators) because each pane re-flattened tabsByWorktree; the index
+    // makes it exactly one read for the whole pass.
+    const realTabs = mockStoreState.tabsByWorktree
+    let tabsReadCount = 0
+    Object.defineProperty(mockStoreState, 'tabsByWorktree', {
+      configurable: true,
+      get() {
+        tabsReadCount += 1
+        return realTabs
+      }
+    })
+
+    syncAgentHookCompletionNotificationSettings()
+
+    expect(tabsReadCount).toBe(1)
   })
 })

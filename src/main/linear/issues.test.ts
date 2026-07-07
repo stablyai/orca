@@ -120,6 +120,68 @@ describe('Linear issue queries', () => {
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
   })
 
+  it('fetches issue comments with one request (no per-comment user N+1)', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issue: {
+          comments: {
+            nodes: [
+              {
+                id: 'comment-1',
+                body: 'First',
+                createdAt: '2026-01-02T03:04:05.000Z',
+                user: { displayName: 'Ada', avatarUrl: 'https://example.com/a.png' }
+              },
+              {
+                id: 'comment-2',
+                body: 'Second',
+                createdAt: '2026-01-02T03:05:05.000Z',
+                user: { displayName: 'Grace', avatarUrl: null }
+              },
+              {
+                id: 'comment-3',
+                body: 'Third',
+                createdAt: '2026-01-02T03:06:05.000Z',
+                user: null
+              }
+            ]
+          }
+        }
+      }
+    })
+    const { getIssueComments } = await import('./issues')
+
+    await expect(getIssueComments('issue-uuid', 'workspace-1')).resolves.toEqual([
+      {
+        id: 'comment-1',
+        body: 'First',
+        createdAt: '2026-01-02T03:04:05.000Z',
+        user: { displayName: 'Ada', avatarUrl: 'https://example.com/a.png' }
+      },
+      {
+        id: 'comment-2',
+        body: 'Second',
+        createdAt: '2026-01-02T03:05:05.000Z',
+        user: { displayName: 'Grace', avatarUrl: undefined }
+      },
+      { id: 'comment-3', body: 'Third', createdAt: '2026-01-02T03:06:05.000Z', user: undefined }
+    ])
+
+    // The point of the fix: one request regardless of comment count.
+    expect(rawRequest).toHaveBeenCalledTimes(1)
+    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssueComments')
+    expect(rawRequest.mock.calls[0][0]).toContain('user {')
+    expect(rawRequest.mock.calls[0][1]).toEqual({ id: 'issue-uuid' })
+  })
+
+  it('returns an empty comment list when no Linear client is configured', async () => {
+    getClients.mockReturnValue([])
+    const { getIssueComments } = await import('./issues')
+
+    await expect(getIssueComments('issue-uuid', 'workspace-1')).resolves.toEqual([])
+    expect(rawRequest).not.toHaveBeenCalled()
+  })
+
   it('passes team filters into Linear before list pagination', async () => {
     rawRequest.mockResolvedValueOnce({
       data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: false } } }

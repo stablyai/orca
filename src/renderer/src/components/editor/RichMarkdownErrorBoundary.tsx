@@ -13,7 +13,7 @@ type State = {
 }
 
 // Why: a thrown exception inside the TipTap/ProseMirror render or in the
-// effect that runs `setContent` + `normalizeSoftBreaks` on external-reload
+// effect that runs `setContent` + empty-list repair on external-reload
 // would escape to the React root and — without this boundary — cause React
 // 18 to unmount the entire renderer subtree, blacking out the whole Orca
 // window (see issue #826). Scoping the boundary to the rich-markdown editor

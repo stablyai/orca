@@ -27,6 +27,7 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 
@@ -151,6 +152,7 @@ export function useTabGroupWorkspaceModel({
             createdAt: item.createdAt,
             generation: terminalTab?.generation,
             shellOverride: terminalTab?.shellOverride,
+            startupCwd: terminalTab?.startupCwd,
             // Why: carry the launched agent through the rebuilt tab so the tab
             // bar can show the provider icon before the agent's first hook —
             // this object is reconstructed from the unified-tab model, so any
@@ -639,8 +641,7 @@ export function useTabGroupWorkspaceModel({
             return
           }
           createBrowserTab(worktreeId, source.url, {
-            title: source.title,
-            sessionProfileId: source.sessionProfileId,
+            ...buildDuplicatedBrowserTabOptions(source),
             targetGroupId: groupId
           })
         })()

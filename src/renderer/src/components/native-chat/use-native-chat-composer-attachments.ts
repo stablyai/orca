@@ -7,6 +7,7 @@ import {
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
 export type UseNativeChatComposerAttachmentsArgs = {
   attachmentScopeKey: string
@@ -153,7 +154,8 @@ function writeNativeChatAttachmentCache(
     attachmentCache.delete(scopeKey)
     return
   }
-  attachmentCache.set(scopeKey, [...attachments])
+  // LRU-bounded so pending attachments for permanently-removed panes can't accumulate.
+  setBoundedScopeCacheEntry(attachmentCache, scopeKey, [...attachments])
 }
 
 export function clearNativeChatAttachmentCacheForTests(): void {

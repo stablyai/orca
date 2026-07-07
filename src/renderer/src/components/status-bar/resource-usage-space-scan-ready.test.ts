@@ -15,7 +15,6 @@ describe('resolveResourceUsageSpaceScanReady', () => {
     expect(
       resolveResourceUsageSpaceScanReady({
         snapshot: { ...baseSnapshot, previousScanning: true },
-        runtimeEnvironmentActive: false,
         open: false,
         activeView: 'terminal',
         scannedAt: 100,
@@ -32,7 +31,6 @@ describe('resolveResourceUsageSpaceScanReady', () => {
     expect(
       resolveResourceUsageSpaceScanReady({
         snapshot: { ...baseSnapshot, previousScanning: true },
-        runtimeEnvironmentActive: false,
         open: true,
         activeView: 'terminal',
         scannedAt: 100,
@@ -47,7 +45,6 @@ describe('resolveResourceUsageSpaceScanReady', () => {
     expect(
       resolveResourceUsageSpaceScanReady({
         snapshot: { ...baseSnapshot, previousScanning: true },
-        runtimeEnvironmentActive: false,
         open: false,
         activeView: 'space',
         scannedAt: 100,
@@ -66,7 +63,6 @@ describe('resolveResourceUsageSpaceScanReady', () => {
     expect(
       resolveResourceUsageSpaceScanReady({
         snapshot: readySnapshot,
-        runtimeEnvironmentActive: false,
         open: true,
         activeView: 'terminal',
         scannedAt: 100,
@@ -81,7 +77,6 @@ describe('resolveResourceUsageSpaceScanReady', () => {
     expect(
       resolveResourceUsageSpaceScanReady({
         snapshot: readySnapshot,
-        runtimeEnvironmentActive: false,
         open: false,
         activeView: 'space',
         scannedAt: 100,
@@ -97,7 +92,6 @@ describe('resolveResourceUsageSpaceScanReady', () => {
         previousScanning: true,
         lastSeenScannedAt: 100
       },
-      runtimeEnvironmentActive: false,
       open: false,
       activeView: 'terminal',
       scannedAt: 100,
@@ -108,7 +102,7 @@ describe('resolveResourceUsageSpaceScanReady', () => {
     expect(result.lastSeenScannedAt).toBe(100)
   })
 
-  it('hides local Space scan handoffs while a remote runtime is active', () => {
+  it('keeps local Space scan handoffs independent of remote runtime focus', () => {
     expect(
       resolveResourceUsageSpaceScanReady({
         snapshot: {
@@ -116,15 +110,14 @@ describe('resolveResourceUsageSpaceScanReady', () => {
           previousScanning: true,
           lastSeenScannedAt: 100
         },
-        runtimeEnvironmentActive: true,
         open: false,
         activeView: 'terminal',
         scannedAt: 200,
         scanning: true
       })
     ).toEqual({
-      ready: false,
-      previousScanning: false,
+      ready: true,
+      previousScanning: true,
       lastSeenScannedAt: 100
     })
   })
@@ -133,7 +126,6 @@ describe('resolveResourceUsageSpaceScanReady', () => {
     expect(
       resolveResourceUsageSpaceScanReady({
         snapshot: baseSnapshot,
-        runtimeEnvironmentActive: false,
         open: false,
         activeView: 'terminal',
         scannedAt: null,

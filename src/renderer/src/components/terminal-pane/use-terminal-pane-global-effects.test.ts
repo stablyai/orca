@@ -130,6 +130,7 @@ function useMountForFileDrop(
     getPanes: ReturnType<typeof vi.fn>
     resumeRendering: ReturnType<typeof vi.fn>
     resetWebglTextureAtlases: ReturnType<typeof vi.fn>
+    scheduleRevealRepaint: ReturnType<typeof vi.fn>
     suspendRendering: ReturnType<typeof vi.fn>
     getActivePane: ReturnType<typeof vi.fn>
   }
@@ -146,6 +147,7 @@ function useMountForFileDrop(
     getPanes: vi.fn(() => []),
     resumeRendering: vi.fn(),
     resetWebglTextureAtlases: vi.fn(),
+    scheduleRevealRepaint: vi.fn(),
     suspendRendering: vi.fn(),
     getActivePane: vi.fn(() => null)
   }
@@ -205,6 +207,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     delete (globalThis as unknown as { window?: unknown }).window
     delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver
@@ -221,6 +224,8 @@ describe('useTerminalPaneGlobalEffects', () => {
       ]),
       resumeRendering: vi.fn(() => order.push('resume')),
       resetWebglTextureAtlases: vi.fn(() => order.push('reset-atlas')),
+      scheduleRevealRepaint: vi.fn(() => order.push('reveal-repaint')),
+      refreshAllPanes: vi.fn(() => order.push('refresh')),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
@@ -277,7 +282,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       'fit-focus',
       'intent:terminal-a',
       'intent:terminal-b',
-      'reset-atlas'
+      'reset-atlas',
+      'refresh',
+      'reveal-repaint'
     ])
     expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
@@ -292,11 +299,21 @@ describe('useTerminalPaneGlobalEffects', () => {
   })
 
   it('uses a light resume for tab switches while the worktree stays active', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
     const terminal = { name: 'terminal-a' }
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
+      refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
@@ -326,6 +343,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     manager.resumeRendering.mockClear()
     manager.resetWebglTextureAtlases.mockClear()
+    manager.refreshAllPanes.mockClear()
     manager.suspendRendering.mockClear()
     mocks.fitAndFocusPanes.mockClear()
     mocks.fitPanes.mockClear()
@@ -354,16 +372,28 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resumeRendering).not.toHaveBeenCalled()
     expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
     expect(mocks.fitPanes).not.toHaveBeenCalled()
-    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
     expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
+    vi.advanceTimersByTime(500)
   })
 
   it('keeps visible active-state updates on the light resume path', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      })
+    )
     const terminal = { name: 'terminal-a' }
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
+      refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
@@ -393,6 +423,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     manager.resumeRendering.mockClear()
     manager.resetWebglTextureAtlases.mockClear()
+    manager.refreshAllPanes.mockClear()
     mocks.fitAndFocusPanes.mockClear()
     mocks.fitPanes.mockClear()
     mocks.focusActivePane.mockClear()
@@ -411,8 +442,10 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resumeRendering).not.toHaveBeenCalled()
     expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
     expect(mocks.fitPanes).not.toHaveBeenCalled()
-    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
     expect(mocks.focusActivePane).toHaveBeenCalledWith(manager)
+    vi.advanceTimersByTime(500)
   })
 
   it('suspends rendering when a terminal tab first mounts hidden', () => {
@@ -421,6 +454,8 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
+      refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
@@ -473,6 +508,8 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
+      refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
@@ -523,6 +560,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     manager.resumeRendering.mockClear()
     manager.resetWebglTextureAtlases.mockClear()
+    manager.refreshAllPanes.mockClear()
     mocks.fitAndFocusPanes.mockClear()
     mocks.flushTerminalOutput.mockClear()
     mocks.requestTerminalBacklogRecovery.mockClear()
@@ -540,6 +578,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
     expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
   })
 
   it('reports the active local PTY to the main output scheduler', () => {
@@ -547,6 +586,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => [{ id: 1, terminal: { name: 'terminal-a' } }]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => ({ id: 1, terminal: { name: 'terminal-a' } }))
     }
@@ -578,6 +618,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => [{ id: 1, terminal: terminalA }]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null),
@@ -636,6 +677,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
@@ -680,6 +722,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       refreshAllPanes: vi.fn(),
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => ({ id: 1, terminal }))
@@ -744,6 +787,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
@@ -798,6 +842,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => null)
     }
@@ -843,6 +888,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => [pane]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => pane)
     }
@@ -898,6 +944,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => [pane]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => pane)
     }
@@ -1013,6 +1060,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null)
@@ -1046,6 +1094,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getPanes: vi.fn(() => []),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
+      scheduleRevealRepaint: vi.fn(),
       suspendRendering: vi.fn(),
       fitAllPanes: vi.fn(),
       getActivePane: vi.fn(() => null)

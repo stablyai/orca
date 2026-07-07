@@ -46,12 +46,20 @@ export class IosEmulatorBackend implements EmulatorBackend {
     logcat: false
   }
 
-  private readonly serveSimExecutable: ServeSimExecutable
+  private cachedServeSimExecutable: ServeSimExecutable | undefined
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
 
   constructor(options: EmulatorBridgeOptions = {}) {
-    this.serveSimExecutable = resolveServeSimExecutable()
     this.waitForEndpointReady = options.waitForEndpointReady ?? waitForServeSimEndpointReady
+  }
+
+  // Why: resolving the executable can materialize the serve-sim runtime (a one-time
+  // recursive copy + xattr subprocess on macOS after each version bump). Defer it
+  // off the startup path — the bridge is constructed before the main window shows —
+  // so it only runs when an emulator command is actually issued.
+  private get serveSimExecutable(): ServeSimExecutable {
+    this.cachedServeSimExecutable ??= resolveServeSimExecutable()
+    return this.cachedServeSimExecutable
   }
 
   isSupportedOnHost(): boolean {
@@ -190,9 +198,43 @@ export class IosEmulatorBackend implements EmulatorBackend {
       return false
     }
 
-    let info = await startDetachedHelper()
+    const throwPersistentMissingFramebuffer = (error: EmulatorError): never => {
+      throw new EmulatorError(
+        'emulator_helper_failed',
+        `Simulator ${udid} keeps booting without a working display (no framebuffer descriptor), even after a reboot. Erase it with \`xcrun simctl erase ${udid}\` or recreate it in Xcode > Window > Devices and Simulators.\n\n${error.message}`
+      )
+    }
+
+    // Why: CoreSimulator can report "Booted" with the display IO ports down
+    // (HID alive, no framebuffer); a shutdown/boot recycle is the only recovery.
+    let didRecycleWedgedBoot = false
+    const startHelperRecyclingWedgedBoot = async (): Promise<EmulatorSessionInfo> => {
+      try {
+        return await startDetachedHelper()
+      } catch (error) {
+        if (!isMissingFramebufferError(error)) {
+          throw error
+        }
+        if (didRecycleWedgedBoot) {
+          return throwPersistentMissingFramebuffer(error)
+        }
+        didRecycleWedgedBoot = true
+        await shutdownSimulatorDevice(udid)
+        await ensureSimulatorBooted(udid)
+        try {
+          return await startDetachedHelper()
+        } catch (retryError) {
+          if (!isMissingFramebufferError(retryError)) {
+            throw retryError
+          }
+          return throwPersistentMissingFramebuffer(retryError)
+        }
+      }
+    }
+
+    let info = await startHelperRecyclingWedgedBoot()
     if (!(await waitForReadyOrKill(info))) {
-      info = await startDetachedHelper()
+      info = await startHelperRecyclingWedgedBoot()
       if (!(await waitForReadyOrKill(info))) {
         throw new EmulatorError(
           'emulator_helper_failed',
@@ -240,6 +282,18 @@ export class IosEmulatorBackend implements EmulatorBackend {
   ): Promise<unknown> {
     return execServeSimCommand(this.serveSimExecutable, args, options)
   }
+}
+
+// Why: serve-sim's capture helper prints exactly this when a booted device has
+// no com.apple.framebuffer.display IO port: the signature of a wedged boot.
+const MISSING_FRAMEBUFFER_RE = /No framebuffer display descriptor found/i
+
+function isMissingFramebufferError(error: unknown): error is EmulatorError {
+  return (
+    error instanceof EmulatorError &&
+    error.code === 'emulator_error' &&
+    MISSING_FRAMEBUFFER_RE.test(error.message)
+  )
 }
 
 function toEmulatorDevice(device: SimulatorDevice): EmulatorDevice {

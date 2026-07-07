@@ -35,6 +35,10 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  addAdditionalValidWorkspaceKeys,
+  type WorkspaceSessionHydrationOptions
+} from '@/lib/workspace-session-hydration-keys'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -172,7 +176,10 @@ export type TabsSlice = {
     renderableTabCount: number
     activeRenderableTabId: string | null
   }
-  hydrateTabsSession: (session: WorkspaceSessionState) => void
+  hydrateTabsSession: (
+    session: WorkspaceSessionState,
+    options?: WorkspaceSessionHydrationOptions
+  ) => void
 }
 
 // Why: keep the TerminalTab (tabsByWorktree) pin in sync with the unified-tab
@@ -2036,7 +2043,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     }
   },
 
-  hydrateTabsSession: (session) => {
+  hydrateTabsSession: (session, options) => {
     const state = get()
     const validWorktreeIds = new Set(
       Object.values(state.worktreesByRepo)
@@ -2047,6 +2054,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     for (const workspace of state.folderWorkspaces) {
       validWorktreeIds.add(folderWorkspaceKey(workspace.id))
     }
+    addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
     set(buildHydratedTabState(session, validWorktreeIds))
   }
 })

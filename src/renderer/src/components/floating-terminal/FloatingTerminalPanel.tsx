@@ -28,6 +28,7 @@ import { appendUniqueOpenFileIds } from '@/components/terminal/unsaved-close-que
 import { getConnectionId } from '@/lib/connection-context'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { detectLanguage } from '@/lib/language-detect'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import {
@@ -1490,8 +1491,7 @@ export function FloatingTerminalPanel({
                   return
                 }
                 createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, source.url, {
-                  title: source.title,
-                  sessionProfileId: source.sessionProfileId,
+                  ...buildDuplicatedBrowserTabOptions(source),
                   targetGroupId: activeGroup?.id,
                   browserRuntimeEnvironmentId: null
                 })

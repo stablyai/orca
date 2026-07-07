@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Terminal shortcut E2E keeps platform keyboard paths beside their shared PTY assertions. */
 /**
  * E2E test for terminal keyboard shortcuts.
  *
@@ -413,21 +412,6 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
   })
 }
 
-// Why: handleRequestClosePane pops a "Close Terminal?" dialog when the pane
-// reports a running child process. Under E2E, a freshly split pane's
-// proc.process is briefly unset so the check returns true spuriously. Click
-// Close when the dialog appears so the test's chord-routing assertion stays
-// deterministic; no-op when it doesn't.
-async function confirmCloseDialogIfShown(page: Page): Promise<void> {
-  const confirmButton = page.getByRole('button', { name: 'Close', exact: true })
-  try {
-    await confirmButton.waitFor({ state: 'visible', timeout: 500 })
-    await confirmButton.click()
-  } catch {
-    // Dialog did not appear — pane closed directly.
-  }
-}
-
 async function pressAndExpectWrite(
   page: Page,
   app: ElectronApplication,
@@ -459,6 +443,34 @@ const mod = isMac ? 'Meta' : 'Control'
 // and horizontal is Alt+Shift+D (Windows Terminal convention).
 const splitVerticalChord = isMac ? `${mod}+d` : `${mod}+Shift+d`
 const splitHorizontalChord = isMac ? `${mod}+Shift+d` : 'Alt+Shift+d'
+
+// Why: a freshly split pane can transiently still report a running child, so
+// poll for the confirm dialog and pane-count settling instead of a fixed wait.
+async function closeActivePaneAndSettle(page: Page, expectedCount: number): Promise<void> {
+  await focusActiveTerminal(page)
+  await page.keyboard.press(`${mod}+w`)
+  // The "Stop running command?" confirm surfaces a "Stop and Close" action when
+  // the pane still reports a running child.
+  const confirmButton = page.getByRole('button', { name: /Stop and Close/i })
+  await expect
+    .poll(
+      async () => {
+        if (await confirmButton.isVisible().catch(() => false)) {
+          // Why: surface a click failure so a real actionability/strict-mode
+          // error isn't hidden behind the generic pane-count timeout.
+          await confirmButton.click().catch((err) => {
+            console.warn('closeActivePaneAndSettle: confirm click failed', err)
+          })
+        }
+        return countVisibleTerminalPanes(page)
+      },
+      {
+        timeout: 10_000,
+        message: `Expected ${expectedCount} visible terminal panes after close`
+      }
+    )
+    .toBe(expectedCount)
+}
 
 // Why: serial mode is load-bearing. Tests mutate shared Electron app state
 // (pane layout, terminal buffer, expand toggle) and the pty:write spy log is
@@ -749,6 +761,9 @@ test.describe('Terminal Shortcuts', () => {
     await focusActiveTerminal(orcaPage)
     await orcaPage.keyboard.press(splitVerticalChord)
     await waitForPaneCount(orcaPage, panesBeforeSplit + 1)
+    // Why: ensure the new split pane's PTY is actually bound before we later
+    // close it, so the close cycle can't race an in-progress split.
+    await waitForActivePanePtyId(orcaPage)
 
     // Cmd/Ctrl+] and Cmd/Ctrl+[ cycle focus (no pane-count change).
     await focusActiveTerminal(orcaPage)
@@ -781,25 +796,15 @@ test.describe('Terminal Shortcuts', () => {
       .toBe(false)
 
     // Cmd/Ctrl+W closes the active split pane (not the whole tab: >1 pane).
-    // Why: the close handler checks hasChildProcesses async; a freshly
-    // spawned pane can transiently report a running child (node-pty's
-    // proc.process lags the spawn), which surfaces a confirmation dialog
-    // instead of closing immediately. Confirm it if it appears — the test
-    // only needs to prove the chord routed to the close handler.
-    await focusActiveTerminal(orcaPage)
-    await orcaPage.keyboard.press(`${mod}+w`)
-    await confirmCloseDialogIfShown(orcaPage)
-    await waitForPaneCount(orcaPage, panesBeforeSplit)
+    await closeActivePaneAndSettle(orcaPage, panesBeforeSplit)
 
     // Split horizontally (chord varies by platform — see splitHorizontalChord).
     const panesBeforeHSplit = await countVisibleTerminalPanes(orcaPage)
     await focusActiveTerminal(orcaPage)
     await orcaPage.keyboard.press(splitHorizontalChord)
     await waitForPaneCount(orcaPage, panesBeforeHSplit + 1)
-    await focusActiveTerminal(orcaPage)
-    await orcaPage.keyboard.press(`${mod}+w`)
-    await confirmCloseDialogIfShown(orcaPage)
-    await waitForPaneCount(orcaPage, panesBeforeHSplit)
+    await waitForActivePanePtyId(orcaPage)
+    await closeActivePaneAndSettle(orcaPage, panesBeforeHSplit)
 
     // Cmd/Ctrl+F toggles the search overlay.
     await focusActiveTerminal(orcaPage)

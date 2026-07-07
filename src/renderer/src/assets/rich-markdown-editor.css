@@ -566,6 +566,13 @@
   margin: 0.75em 0;
 }
 
+/* Why: document markdown files treat source newlines inside a paragraph as
+   soft breaks, so prose must collapse them instead of inheriting Tiptap's
+   editable-root `break-spaces` behavior. */
+.rich-markdown-editor-shell .rich-markdown-editor p {
+  white-space: normal;
+}
+
 .rich-markdown-editor .tiptap-mathematics-render {
   border-radius: 4px;
 }

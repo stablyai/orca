@@ -13,6 +13,8 @@ import {
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
+import type { Store } from '../persistence'
+import { clearActiveRuntimeEnvironmentFocusIfMatches } from '../runtime-environment-focus-self-heal'
 import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
 import {
   callRuntimeEnvironment,
@@ -63,7 +65,7 @@ function listPublicRuntimeEnvironments(): PublicKnownRuntimeEnvironment[] {
   return listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
 }
 
-export function registerRuntimeEnvironmentHandlers(): void {
+export function registerRuntimeEnvironmentHandlers(store: Store): void {
   // Why: keep direct re-registration safe even though register-core-handlers
   // normally guards this path; otherwise the binary send listener can stack.
   resetSharedControlSupport()
@@ -99,6 +101,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
         closeRemoteRuntimeRequestConnection(args.selector)
         clearSharedControlSupport(args.selector)
       }
+      clearActiveRuntimeEnvironmentFocusIfMatches(store, removed.id)
       closeSubscriptionsForEnvironment(removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }

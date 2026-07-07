@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot'
 
 const execFileAsync = promisify(execFile)
 const WINDOWS_PROCESS_QUERY_TIMEOUT_MS = 3_000
@@ -22,12 +23,48 @@ export type WindowsProcessRow = {
 
 export type WindowsProcessCandidate = WindowsProcessRow & { depth: number }
 
+// Why: agent foreground inspection forks a whole-process-table PowerShell/CIM
+// scan per pane on the same 750ms/2000ms cadence as the POSIX `ps` path. Without
+// dedup, K concurrent agent panes fork K powershell.exe cold-starts, each ~10-40x
+// heavier than `ps` — the Windows analogue of the idle-CPU churn #6288/#6667 fixed
+// for POSIX. Reuse the same TTL + single-in-flight reader, caching parsed rows so
+// a burst of panes collapses to ~2 scans/sec; every caller runs its own descendant
+// walk over the shared snapshot.
+async function runWindowsProcessRows(): Promise<WindowsProcessRow[]> {
+  const rows =
+    (await queryWindowsProcessesWithPowerShell()) ?? (await queryWindowsProcessesWithWmic())
+  if (!rows) {
+    // Reject so the reader does not cache the miss; callers fall through to
+    // node-pty's process name (the prior null-return contract is preserved by
+    // queryWindowsProcessDescendants catching this).
+    throw new Error('windows process enumeration unavailable')
+  }
+  return rows
+}
+
+const windowsProcessRowsReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
+  runPs: runWindowsProcessRows,
+  now: () => Date.now()
+})
+
 export async function queryWindowsProcessDescendants(
   rootPid: number
 ): Promise<WindowsProcessCandidate[] | null> {
-  const rows =
-    (await queryWindowsProcessesWithPowerShell()) ?? (await queryWindowsProcessesWithWmic())
-  return rows ? collectDescendants(rows, rootPid).sort((a, b) => b.depth - a.depth) : null
+  let rows: WindowsProcessRow[]
+  try {
+    rows = await windowsProcessRowsReader.getSnapshot()
+  } catch {
+    return null
+  }
+  return collectDescendants(rows, rootPid).sort((a, b) => b.depth - a.depth)
+}
+
+/**
+ * Test-only: clear the shared Windows process-table snapshot so suites that mock
+ * execFile between cases don't get one case's rows served to the next within TTL.
+ */
+export function resetWindowsProcessRowsSnapshotForTests(): void {
+  windowsProcessRowsReader.reset()
 }
 
 function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {

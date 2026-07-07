@@ -123,6 +123,52 @@ describe('ai vault resume command runtime', () => {
     ).toBe("cd 'C:\\Users\\alice\\repo' && claude '--resume' 'session one'")
   })
 
+  it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {
+    // Regression: local rebuilds must forward session.filePath so OMP resumes by
+    // path, and queued Windows commands must match the live tab shell.
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+
+    const command = buildAiVaultResumeCommandForWorktree({
+      state,
+      worktreeId: 'repo-1::worktree-1',
+      session: {
+        agent: 'omp',
+        sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+        filePath: 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
+        cwd: 'C:\\Users\\alice\\repo',
+        codexHome: null
+      }
+    })
+
+    expect(command).toBe(
+      "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; omp --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'"
+    )
+    expect(command).not.toContain('019f27cd-4268-7000-96e7-62f42a55c144')
+  })
+
+  it('keeps cmd quoting for local OMP resume when cmd.exe is configured', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      terminalWindowsShell: 'cmd.exe'
+    })
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'omp',
+          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+          filePath: 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe(
+      'cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && omp --resume ""C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"""'
+    )
+  })
+
   it('keeps the cmd wrapper for the copy-to-clipboard command on Windows', () => {
     // Regression guard: the copy path is self-contained for pasting into cmd.exe
     // and must stay cmd-wrapped even though the queued path now follows the shell.
@@ -293,5 +339,112 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
+  })
+
+  it('returns the remote resume command verbatim for non-local host sessions', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null,
+          executionHostId: 'ssh:dev-box',
+          resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
+        }
+      })
+    ).toEqual({ command: "CODEX_HOME='/root/.codex' codex resume 'session one'" })
+  })
+
+  it('bypasses the resume pipeline even when the command override is blank', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        commandOverride: '   ',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null,
+          executionHostId: 'ssh:dev-box',
+          resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
+        }
+      })
+    ).toBe("CODEX_HOME='/root/.codex' codex resume 'session one'")
+  })
+
+  it('rebuilds the command when a non-blank override is supplied for a remote session', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        commandOverride: 'my-codex',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null,
+          executionHostId: 'ssh:dev-box',
+          resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
+        }
+      })
+    ).toBe("cd '/home/alice/repo' && my-codex 'resume' 'session one'")
+  })
+
+  it('rebuilds overridden remote commands with the recorded remote host platform', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        commandOverride: 'my-codex',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: 'C:/Users/alice/repo',
+          codexHome: 'C:/Users/alice/.codex',
+          executionHostId: 'ssh:win-box',
+          executionHostPlatform: 'win32',
+          resumeCommand:
+            'cmd /d /s /c "cd /d ""C:/Users/alice/repo"" && set ""CODEX_HOME=C:/Users/alice/.codex"" && codex resume ""session one"""'
+        }
+      })
+    ).toBe(
+      "Set-Location -LiteralPath 'C:/Users/alice/repo'; $env:CODEX_HOME='C:/Users/alice/.codex'; my-codex 'resume' 'session one'"
+    )
+  })
+
+  it('ignores a stored resume command for local-host sessions', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null,
+          executionHostId: 'local',
+          resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
+        }
+      })
+    ).toBe("cd '/home/alice/repo' && codex 'resume' 'session one'")
   })
 })

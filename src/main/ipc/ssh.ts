@@ -5,7 +5,7 @@ import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-connection'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { SshRelaySession } from '../ssh/ssh-relay-session'
+import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type {
   DetectedPort,
@@ -123,6 +123,23 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
 // scattered Maps/Sets that previously tracked this state independently.
 const activeSessions = new Map<string, SshRelaySession>()
 
+export function getActiveSshAiVaultHostInfo(targetId: string): SshRelayAiVaultHostInfo | null {
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    return null
+  }
+  return activeSessions.get(targetId)?.getAiVaultHostInfo() ?? null
+}
+
+export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
+  return [...activeSessions.values()].flatMap((session) => {
+    if (isRuntimeOwnedSshTargetId(session.targetId)) {
+      return []
+    }
+    const info = session.getAiVaultHostInfo()
+    return info ? [info] : []
+  })
+}
+
 async function detachActiveSshSession(targetId: string): Promise<void> {
   await teardownActiveSshSession(targetId, (session) => session.detach())
 }
@@ -176,11 +193,11 @@ const testingTargets = new Set<string>()
 // both the local main process and the remote sshd in a tight loop. Track
 // per-target reconnect attempts and apply exponential backoff so the loop
 // terminates with a recoverable error instead of running forever. Successful
-// `ready` resets the attempt counter for the next genuine drop.
+// post-ready uptime resets the attempt counter for the next genuine drop.
 type RelayLostBackoffState = {
   attempts: number
-  lastAttemptStartedAt: number
-  pendingTimer: ReturnType<typeof setTimeout> | null
+  reconnectTimer: ReturnType<typeof setTimeout> | null
+  stabilizedTimer: ReturnType<typeof setTimeout> | null
 }
 const relayLostBackoff = new Map<string, RelayLostBackoffState>()
 const relayStateOverrides = new Map<string, SshConnectionState>()
@@ -197,8 +214,11 @@ const RELAY_LOST_STABILIZED_MS = 5_000
 
 function clearRelayLostBackoff(targetId: string): void {
   const state = relayLostBackoff.get(targetId)
-  if (state?.pendingTimer) {
-    clearTimeout(state.pendingTimer)
+  if (state?.reconnectTimer) {
+    clearTimeout(state.reconnectTimer)
+  }
+  if (state?.stabilizedTimer) {
+    clearTimeout(state.stabilizedTimer)
   }
   relayLostBackoff.delete(targetId)
 }
@@ -530,10 +550,14 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
     // tight loop spawning relay deploys until the user force-quits.
     const state = relayLostBackoff.get(tid) ?? {
       attempts: 0,
-      lastAttemptStartedAt: 0,
-      pendingTimer: null
+      reconnectTimer: null,
+      stabilizedTimer: null
     }
-    if (state.pendingTimer) {
+    if (state.stabilizedTimer) {
+      clearTimeout(state.stabilizedTimer)
+      state.stabilizedTimer = null
+    }
+    if (state.reconnectTimer) {
       return
     }
     if (state.attempts >= RELAY_LOST_MAX_ATTEMPTS) {
@@ -562,9 +586,8 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
       'Relay channel lost. Reconnecting...',
       state.attempts
     )
-    state.pendingTimer = setTimeout(() => {
-      state.pendingTimer = null
-      state.lastAttemptStartedAt = Date.now()
+    state.reconnectTimer = setTimeout(() => {
+      state.reconnectTimer = null
       relayLostBackoff.set(tid, state)
       const liveConn = connectionManager?.getConnection(tid)
       if (!liveConn || !activeSessions.has(tid)) {
@@ -584,12 +607,18 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
   session.setOnReady((tid) => {
     const state = relayLostBackoff.get(tid)
     if (state) {
-      const stabilized =
-        state.lastAttemptStartedAt === 0 ||
-        Date.now() - state.lastAttemptStartedAt >= RELAY_LOST_STABILIZED_MS
-      if (stabilized) {
-        relayLostBackoff.delete(tid)
+      if (state.stabilizedTimer) {
+        clearTimeout(state.stabilizedTimer)
       }
+      // Why: stabilization is post-ready uptime. Slow deployment time before
+      // `ready` does not prove the new relay survived user-visible work.
+      state.stabilizedTimer = setTimeout(() => {
+        const current = relayLostBackoff.get(tid)
+        if (current === state && !current.reconnectTimer) {
+          relayLostBackoff.delete(tid)
+        }
+      }, RELAY_LOST_STABILIZED_MS)
+      relayLostBackoff.set(tid, state)
     }
     clearRelayStateOverride(tid)
     if (!testingTargets.has(tid)) {
@@ -685,8 +714,8 @@ export function registerSshHandlers(
     await removeRegisteredSshTarget(args.id)
   })
 
-  ipcMain.handle('ssh:importConfig', () => {
-    return sshStore!.importFromSshConfig()
+  ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
+    return sshStore!.importFromSshConfig(args)
   })
 
   // ── Connection lifecycle ───────────────────────────────────────────

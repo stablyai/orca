@@ -21,7 +21,7 @@ import {
   type WorkspaceCleanupScanProgress,
   type WorkspaceCleanupScanResult
 } from '../../../../shared/workspace-cleanup'
-import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { translate } from '@/i18n/i18n'
 
 export type WorkspaceCleanupFailure = {
@@ -737,7 +737,7 @@ function hasWorkingTitleAgent(state: AppState, tabs: { id: string; title: string
     const titles =
       paneTitles && Object.keys(paneTitles).length > 0 ? Object.values(paneTitles) : [tab.title]
     for (const title of titles) {
-      const status = detectAgentStatusFromTitle(title)
+      const status = classifyTitleActivity(title)
       if (status === 'working' || status === 'permission') {
         return true
       }
@@ -812,7 +812,7 @@ function hasIdleAgentTitleForPty(
 }
 
 function isIdleAgentTitle(title: string): boolean {
-  return detectAgentStatusFromTitle(title) === 'idle'
+  return classifyTitleActivity(title) === 'idle'
 }
 
 function getPaneKeyTabId(paneKey: AgentStatusEntry['paneKey']): string {

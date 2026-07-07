@@ -77,6 +77,7 @@ export type KeybindingActionId =
   | 'tab.nextTerminal'
   | 'tab.previousTerminal'
   | 'tab.selectByIndex'
+  | 'tab.openQuickCommandsMenu'
   | 'browser.find'
   | 'browser.back'
   | 'browser.forward'
@@ -703,6 +704,17 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       linux: ['Alt+1'],
       win32: ['Alt+1']
     }
+  },
+  {
+    id: 'tab.openQuickCommandsMenu',
+    title: 'Toggle Quick Commands menu',
+    group: 'Quick Commands',
+    scope: 'tabs',
+    // Why: this tab-scoped action is also routed through the main window
+    // shortcut allowlist, so Settings must warn when it shadows global chords.
+    conflictGroup: 'global',
+    searchKeywords: ['shortcut', 'quick', 'command', 'menu', 'tab', 'group', 'toggle'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'browser.find',
@@ -1986,12 +1998,44 @@ export function keybindingMatchesInput(
   )
 }
 
+function keybindingConflictIdentityForParsed(
+  parsed: ParsedKeybinding,
+  platform: NodeJS.Platform
+): string {
+  if (parsed.doubleTapModifier) {
+    return `DoubleTap:${resolveModifierToken(parsed.doubleTapModifier, platform)}`
+  }
+  const modifiers = platformModifiers(parsed, platform)
+  return [
+    modifiers.meta ? 'Meta' : '',
+    modifiers.control ? 'Control' : '',
+    modifiers.alt ? 'Alt' : '',
+    modifiers.shift ? 'Shift' : '',
+    parsed.key
+  ].join('+')
+}
+
 function keybindingConflictIdentity(binding: string, platform: NodeJS.Platform): string {
   const parsed = parseKeybinding(binding)
-  if (!parsed?.doubleTapModifier) {
-    return binding
+  return parsed ? keybindingConflictIdentityForParsed(parsed, platform) : binding
+}
+
+function keybindingConflictIdentities(
+  actionId: KeybindingActionId,
+  binding: string,
+  platform: NodeJS.Platform
+): readonly string[] {
+  const exact = keybindingConflictIdentity(binding, platform)
+  if (!isDigitIndexActionId(actionId)) {
+    return [exact]
   }
-  return `DoubleTap:${resolveModifierToken(parsed.doubleTapModifier, platform)}`
+  const parsed = parseKeybinding(binding)
+  if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
+    return [exact]
+  }
+  return Array.from({ length: 9 }, (_, index) =>
+    keybindingConflictIdentityForParsed({ ...parsed, key: String(index + 1) }, platform)
+  )
 }
 
 export function keybindingMatchesAction(
@@ -2175,20 +2219,37 @@ export function findKeybindingConflicts(
         groups.add(definition.scope)
       }
       for (const group of groups) {
-        const conflictKey = `${group}\u0000${keybindingConflictIdentity(binding, platform)}`
-        const current = owners.get(conflictKey) ?? { binding, actionIds: new Set() }
-        current.actionIds.add(definition.id)
-        owners.set(conflictKey, current)
+        for (const identity of keybindingConflictIdentities(definition.id, binding, platform)) {
+          const conflictKey = `${group}\u0000${identity}`
+          const current = owners.get(conflictKey) ?? { binding, actionIds: new Set() }
+          if (
+            !isDigitIndexActionId(definition.id) &&
+            Array.from(current.actionIds).some((actionId) => isDigitIndexActionId(actionId))
+          ) {
+            current.binding = binding
+          }
+          current.actionIds.add(definition.id)
+          owners.set(conflictKey, current)
+        }
       }
     }
   }
 
+  const seenConflictKeys = new Set<string>()
   return Array.from(owners.values())
     .filter(({ actionIds }) => actionIds.size > 1 && setIntersects(actionIds, customizedActions))
     .map(({ binding, actionIds }) => ({
       binding,
       actionIds: Array.from(actionIds)
     }))
+    .filter((conflict) => {
+      const key = `${conflict.binding}\u0000${conflict.actionIds.join('\u0000')}`
+      if (seenConflictKeys.has(key)) {
+        return false
+      }
+      seenConflictKeys.add(key)
+      return true
+    })
 }
 
 function setIntersects<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {

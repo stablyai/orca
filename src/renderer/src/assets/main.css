@@ -478,7 +478,9 @@
 
 .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb {
   background-color: transparent;
-  border-width: 3px 3px 3px 0;
+  /* Why: no right inset — a 3px transparent right border left a visible strip
+     beside the sidebar resize seam that read like a gap in the drag handle. */
+  border-width: 3px 0 3px 0;
 }
 
 .scrollbar-sleek-parent:hover .worktree-sidebar-scrollbar,
@@ -1900,6 +1902,17 @@
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;
+}
+
+/* Why: Monaco's faded scrollbar uses the class `invisible`, which collides with
+   Tailwind's `.invisible` utility (visibility: hidden) — so also restore visibility. */
+.monaco-editor
+  .reference-zone-widget
+  .monaco-scrollable-element
+  > .scrollbar.vertical.invisible.fade {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 /* ── Git conflict decorations ───────────────────────────────────── */

@@ -3848,7 +3848,21 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const sourceSettings = getTaskSourceRuntimeSettings(sourceContext)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(() => {
+    if (sourceContext?.provider !== 'github') {
+      return repoOwnerSettings
+    }
+    const sourceRuntimeSettings = getTaskSourceRuntimeSettings(sourceContext)
+    return sourceRuntimeSettings.activeRuntimeEnvironmentId
+      ? ({
+          ...repoOwnerSettings,
+          ...sourceRuntimeSettings
+        } as typeof repoOwnerSettings)
+      : repoOwnerSettings
+  }, [repoOwnerSettings, sourceContext])
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
@@ -7855,7 +7869,12 @@ export default function GitHubItemDialog({
   ) : null
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+    // Why: GitHub item details render inline (not a Radix dialog), so e2e needs a
+    // stable hook to scope assertions to this detail surface.
+    <div
+      data-testid="github-item-detail"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm"
+    >
       {content}
     </div>
   )

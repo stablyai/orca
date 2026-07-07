@@ -67,8 +67,7 @@ function windowsNamedPipeEndpointName(sockPath: string): string {
     sockPath
       .replace(/^\\\\[.?]\\pipe\\/i, '')
       .split(/[\\/]/)
-      .filter(Boolean)
-      .pop() ?? 'relay'
+      .findLast(Boolean) ?? 'relay'
   )
 }
 

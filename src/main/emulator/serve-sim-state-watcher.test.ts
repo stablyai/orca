@@ -34,7 +34,7 @@ describe('ServeSimStateWatcher', () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-serve-sim-watch-'))
     cleanupPaths.push(parentDir)
     const stateDir = join(parentDir, 'serve-sim')
-    const watcher = new ServeSimStateWatcher({ parentDir, stateDir })
+    const watcher = new ServeSimStateWatcher({ stateDir })
     const events: ServeSimStateDetectedEvent[] = []
 
     watcher.bindPty('pty-1', 'worktree-1')

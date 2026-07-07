@@ -3,8 +3,14 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from './session-scanner-types'
 import {
+  accumulatorFoldResumeState,
   addPreviewContent,
   addPreviewMessage,
   createAccumulator,
@@ -17,14 +23,17 @@ import {
   asRecord,
   extractContentText,
   extractMessageText,
-  extractPreviewContentText,
   extractString,
   firstString,
-  normalizeTitleText,
   parseJsonObject,
   readJsonObjectIfExists,
   tokenTotal
 } from './session-scanner-values'
+
+type ParserSessionOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
 
 export async function parseRovoSessionFile(
   file: FileWithMtime,
@@ -154,119 +163,96 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
   return extractContentText(textParts)
 }
 
+// Agents whose transcripts are append-only message-graph JSONL (session +
+// model_change + message records). OMP is a Pi fork and shares the format.
+export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp'
+
 export async function parseMessageGraphSessionFile(
-  agent: 'openclaw' | 'pi',
+  agent: MessageGraphAgent,
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent,
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
   const lines = createInterface({
     input: createReadStream(file.path, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
-
-  for await (const line of lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-    updateTimeline(accumulator, extractString(record.timestamp))
-    if (record.type === 'session') {
-      const sessionId = extractString(record.id)
-      if (sessionId) {
-        accumulator.sessionId = sessionId
-      }
-      accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
-      continue
-    }
-    if (record.type === 'model_change') {
-      accumulator.model = extractString(record.modelId) ?? accumulator.model
-      continue
-    }
-    if (record.type !== 'message') {
-      continue
-    }
-    const message = asRecord(record.message)
-    const role = extractString(message?.role)
-    if (role === 'user' || role === 'assistant') {
-      accumulator.messageCount++
-      if (role === 'user') {
-        accumulator.title ??= extractMessageText(message)
-      } else {
-        accumulator.model = extractString(message?.model) ?? accumulator.model
-        accumulator.totalTokens += tokenTotal(message?.usage)
-      }
-      addPreviewContent(accumulator, role, message?.content, record.timestamp)
-    }
-  }
-
-  return finalizeSession(accumulator, platform)
+  return parseMessageGraphSessionLines({ agent, file, lines, platform })
 }
 
-export async function parseDroidSessionFile(
+export async function parseMessageGraphSessionContent(
+  agent: MessageGraphAgent,
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  content: string,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {}
 ): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'droid',
+  return parseMessageGraphSessionLines({
+    agent,
     file,
-    sessionId: sessionIdFromFileName(file.path)
+    lines: content.split(/\r?\n/),
+    platform,
+    options
   })
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+}
 
-  for await (const line of lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-    updateTimeline(accumulator, record.timestamp)
-    if (record.type === 'session_start') {
-      accumulator.sessionId = extractString(record.id) ?? accumulator.sessionId
-      accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
-      accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
-      continue
-    }
-    if (record.type === 'system') {
-      accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
-      accumulator.model = extractString(record.model) ?? accumulator.model
-    }
-    const streamSessionId = extractString(record.session_id) ?? extractString(record.sessionId)
-    if (streamSessionId) {
-      accumulator.sessionId = streamSessionId
-    }
-    if (record.type === 'message') {
-      const role = extractString(record.role) ?? extractString(asRecord(record.message)?.role)
-      if (role === 'user' || role === 'assistant') {
-        accumulator.messageCount++
-        if (role === 'user') {
-          accumulator.title ??=
-            normalizeTitleText(extractString(record.text) ?? '') ||
-            extractMessageText(asRecord(record.message))
-        }
-        addPreviewMessage(accumulator, {
-          role,
-          text:
-            extractString(record.text) ??
-            extractPreviewContentText(asRecord(record.message)?.content),
-          timestamp: record.timestamp
-        })
-      }
-    } else if (record.type === 'completion') {
-      accumulator.messageCount++
-      accumulator.totalTokens += tokenTotal(record.usage)
-      addPreviewMessage(accumulator, {
-        role: 'assistant',
-        text: extractString(record.finalText),
-        timestamp: record.timestamp
-      })
-    }
+function consumeMessageGraphRecordLine(accumulator: SessionAccumulator, line: string): void {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
   }
-  return finalizeSession(accumulator, platform)
+  updateTimeline(accumulator, extractString(record.timestamp))
+  if (record.type === 'session') {
+    const sessionId = extractString(record.id)
+    if (sessionId) {
+      accumulator.sessionId = sessionId
+    }
+    accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
+    return
+  }
+  if (record.type === 'model_change') {
+    // Pi writes `modelId`; OMP writes `model`. Prefer either so an in-progress
+    // session shows its model before the first assistant reply lands.
+    accumulator.model =
+      extractString(record.modelId) ?? extractString(record.model) ?? accumulator.model
+    return
+  }
+  if (record.type !== 'message') {
+    return
+  }
+  const message = asRecord(record.message)
+  const role = extractString(message?.role)
+  if (role === 'user' || role === 'assistant') {
+    accumulator.messageCount++
+    if (role === 'user') {
+      accumulator.title ??= extractMessageText(message)
+    } else {
+      accumulator.model = extractString(message?.model) ?? accumulator.model
+      accumulator.totalTokens += tokenTotal(message?.usage)
+    }
+    addPreviewContent(accumulator, role, message?.content, record.timestamp)
+  }
+}
+
+export function createMessageGraphSessionResumeState(
+  agent: MessageGraphAgent,
+  file: FileWithMtime
+): ResumableSessionParseState {
+  return accumulatorFoldResumeState(
+    createAccumulator({ agent, file, sessionId: sessionIdFromFileName(file.path) }),
+    consumeMessageGraphRecordLine
+  )
+}
+
+async function parseMessageGraphSessionLines(args: {
+  agent: MessageGraphAgent
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  options?: ParserSessionOptions
+}): Promise<AiVaultSession | null> {
+  const state = createMessageGraphSessionResumeState(args.agent, args.file)
+  for await (const line of args.lines) {
+    state.consumeLine(line)
+  }
+  return state.finalize(args.platform, args.options)
 }

@@ -5,13 +5,13 @@ import {
   SYNTHETIC_AGENT_TITLE_PROFILES,
   type SyntheticAgentTitleProfile
 } from './synthetic-agent-title'
+import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
 
 type TitleProfileMatch = {
   profile: SyntheticAgentTitleProfile
 }
 
 const COMPATIBLE_IDLE_TITLE_RE = /(?<![\w./\\-])(?:ready|idle|done)(?![\w-])/i
-const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?π\s*(?:[-:]|\s)\s*.+/u
 
 /**
  * Resolves the synthetic title profile matching a given agent label.
@@ -37,10 +37,18 @@ function getProfileForTitle(title: string): TitleProfileMatch | null {
   if (labelProfile) {
     return labelProfile
   }
-  if (LEGACY_PI_COMPATIBLE_TITLE_RE.test(title)) {
+  if (isLegacyPiCompatibleTitle(title)) {
     return getProfileForTitleLabel('Pi')
   }
   return null
+}
+
+/**
+ * Why: unknown-launch remote sessions need to wait for foreground ownership
+ * before publishing title frames whose identity can be re-owned.
+ */
+export function hasCompatibleAgentTitleIdentity(title: string): boolean {
+  return Boolean(getProfileForTitle(title)?.profile.titleIdentityGroup)
 }
 
 /**
@@ -52,7 +60,7 @@ function getSourceTitleStatus(title: string): 'working' | 'permission' | 'idle' 
   if (detectedStatus) {
     return detectedStatus
   }
-  if (LEGACY_PI_COMPATIBLE_TITLE_RE.test(title)) {
+  if (isLegacyPiCompatibleTitle(title)) {
     return 'idle'
   }
   return null

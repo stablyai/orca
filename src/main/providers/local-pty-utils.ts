@@ -3,6 +3,7 @@ import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants }
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists } from '../wsl'
+import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
 
 let didEnsureSpawnHelperExecutable = false
 
@@ -160,6 +161,14 @@ export type ShellSpawnResult = {
  * executables with per-shell args, so when the primary fails we retry with the
  * next safe shell instead of leaving the user with no terminal.
  */
+// Why: match the daemon spawn path (pty-subprocess.ts) — the bundled ConPTY
+// has the modern wrap-marker behavior xterm expects; legacy system ConPTY can
+// corrupt full-width TUI rows in scrollback. Without this, degraded-mode and
+// fresh-local spawns silently behave differently from daemon terminals.
+function windowsConptyDllOptions(): { useConptyDll: true } | Record<string, never> {
+  return process.platform === 'win32' ? { useConptyDll: true } : {}
+}
+
 function spawnWindowsFallbackChain(
   params: ShellSpawnParams,
   primaryError: string
@@ -174,7 +183,8 @@ function spawnWindowsFallbackChain(
         cols,
         rows,
         cwd: attempt.effectiveCwd,
-        env
+        env,
+        ...windowsConptyDllOptions()
       })
       console.warn(
         `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`
@@ -216,8 +226,16 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
 
   if (!primaryError) {
     try {
+      const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
       return {
-        process: ptySpawn(shellPath, shellArgs, { name: termName, cols, rows, cwd, env }),
+        process: ptySpawn(wrapped.file, wrapped.args, {
+          name: termName,
+          cols,
+          rows,
+          cwd,
+          env,
+          ...windowsConptyDllOptions()
+        }),
         shellPath
       }
     } catch (err) {
@@ -244,7 +262,12 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         env.SHELL = fallback
         onBeforeFallbackSpawn?.(env, fallback)
         Object.assign(env, fallbackReady?.env ?? {})
-        const proc = ptySpawn(fallback, fallbackReady?.args ?? ['-l'], {
+        const wrapped = wrapShellSpawnForMacosTccAttribution(
+          fallback,
+          fallbackReady?.args ?? ['-l'],
+          env
+        )
+        const proc = ptySpawn(wrapped.file, wrapped.args, {
           name: termName,
           cols,
           rows,

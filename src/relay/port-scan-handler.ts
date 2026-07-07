@@ -122,8 +122,8 @@ export class PortScanHandler {
         continue
       }
 
-      const inode = parseInt(fields[9], 10)
-      if (isNaN(inode) || inode === 0) {
+      const inode = Number.parseInt(fields[9], 10)
+      if (Number.isNaN(inode) || inode === 0) {
         continue
       }
 
@@ -155,7 +155,7 @@ export class PortScanHandler {
         continue
       }
 
-      const pid = parseInt(pidStr, 10)
+      const pid = Number.parseInt(pidStr, 10)
 
       for (const fd of fds) {
         let link: string
@@ -170,7 +170,7 @@ export class PortScanHandler {
           continue
         }
 
-        const inode = parseInt(match[1], 10)
+        const inode = Number.parseInt(match[1], 10)
         if (inodes.has(inode)) {
           result.set(inode, pid)
         }
@@ -209,18 +209,18 @@ export function parseHexAddress(hexAddr: string): { host: string; port: number }
     return null
   }
 
-  const port = parseInt(parts[1], 16)
-  if (isNaN(port) || port === 0) {
+  const port = Number.parseInt(parts[1], 16)
+  if (Number.isNaN(port) || port === 0) {
     return null
   }
 
   const addrHex = parts[0]
 
   if (addrHex.length === 8) {
-    const b1 = parseInt(addrHex.substring(6, 8), 16)
-    const b2 = parseInt(addrHex.substring(4, 6), 16)
-    const b3 = parseInt(addrHex.substring(2, 4), 16)
-    const b4 = parseInt(addrHex.substring(0, 2), 16)
+    const b1 = Number.parseInt(addrHex.substring(6, 8), 16)
+    const b2 = Number.parseInt(addrHex.substring(4, 6), 16)
+    const b3 = Number.parseInt(addrHex.substring(2, 4), 16)
+    const b4 = Number.parseInt(addrHex.substring(0, 2), 16)
     const host = `${b1}.${b2}.${b3}.${b4}`
     return { host, port }
   }

@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: telemetry schema tests keep related event
-   invariants together so cross-event payload rules stay easy to audit. */
 // Schema round-trip coverage for the event map. Fail-closed invariants that
 // must hold: agent_error is enum-only (error_message / error_stack rejected
 // by `.strict()`), unknown enum values fail, and any well-formed payload

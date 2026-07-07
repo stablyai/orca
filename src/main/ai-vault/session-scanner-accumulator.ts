@@ -6,7 +6,12 @@ import {
   type AiVaultSession,
   type AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
-import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from './session-scanner-types'
 import {
   extractPreviewContentText,
   extractString,
@@ -40,10 +45,39 @@ export function createAccumulator(args: {
   }
 }
 
+export function cloneSessionAccumulator(accumulator: SessionAccumulator): SessionAccumulator {
+  return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
+}
+
+// Resumable fold for parsers whose only parse state is the accumulator itself
+// (cursor, copilot, droid, openclaw/pi, gemini-jsonl). Parsers with extra
+// closure state (claude, codex) build their own ResumableSessionParseState.
+export function accumulatorFoldResumeState(
+  accumulator: SessionAccumulator,
+  consumeRecordLine: (accumulator: SessionAccumulator, line: string) => void
+): ResumableSessionParseState {
+  return {
+    consumeLine: (line) => consumeRecordLine(accumulator, line),
+    clone: () =>
+      accumulatorFoldResumeState(cloneSessionAccumulator(accumulator), consumeRecordLine),
+    touchFile: (file) => {
+      accumulator.modifiedAt = file.modifiedAt
+    },
+    // Finalize a snapshot: the live accumulator (and its preview array) keeps
+    // accumulating appended lines after this session object is handed out.
+    finalize: (platform, options) =>
+      finalizeSession(cloneSessionAccumulator(accumulator), platform, options)
+  }
+}
+
 export function finalizeSession(
   accumulator: SessionAccumulator,
   platform: NodeJS.Platform,
-  options: { codexHome?: string | null } = {}
+  options: {
+    codexHome?: string | null
+    executionHostId?: ExecutionHostId
+    executionHostPlatform?: NodeJS.Platform | null
+  } = {}
 ): AiVaultSession | null {
   const sessionId = accumulator.sessionId.trim()
   if (!sessionId) {
@@ -54,8 +88,14 @@ export function finalizeSession(
     accumulator.fallbackTitle ||
     `${aiVaultAgentLabel(accumulator.agent)} ${sessionId.slice(0, 8)}`
 
+  const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+
   return {
-    id: `${accumulator.agent}:${sessionId}:${accumulator.filePath}`,
+    id: `${executionHostId}:${accumulator.agent}:${sessionId}:${accumulator.filePath}`,
+    executionHostId,
+    ...(options.executionHostPlatform
+      ? { executionHostPlatform: options.executionHostPlatform }
+      : {}),
     agent: accumulator.agent,
     sessionId,
     title,
@@ -73,6 +113,7 @@ export function finalizeSession(
     resumeCommand: buildAiVaultResumeCommand({
       agent: accumulator.agent,
       sessionId,
+      resumeFilePath: accumulator.filePath,
       cwd: accumulator.cwd,
       platform,
       codexHome: options.codexHome

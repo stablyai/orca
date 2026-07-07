@@ -40,7 +40,11 @@ import {
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
-import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+import { startWslCodexSessionBridgeInBackground } from '../codex/wsl-codex-session-bridge'
+import {
+  prepareSystemConfigForFreshRuntimeMirror,
+  syncSystemConfigIntoManagedCodexHome
+} from '../codex/codex-config-mirror'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   getWslSelectionKey,
@@ -131,10 +135,11 @@ export class CodexRuntimeHomeService {
   prepareForCodexLaunch(target?: CodexAccountSelectionTarget): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
-      return (
+      const runtimeHomePath =
         this.syncWslRuntimeForCurrentSelection(wslTarget) ??
         this.getWslSystemCodexHomePath(wslTarget)
-      )
+      this.startWslSessionBridgeForLaunch(wslTarget, runtimeHomePath)
+      return runtimeHomePath
     }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
@@ -143,6 +148,34 @@ export class CodexRuntimeHomeService {
     // setup so starting a fresh Codex TUI never waits on a full tree walk.
     void startSystemCodexSessionBridgeInBackground()
     return this.getRuntimeHomePath()
+  }
+
+  private startWslSessionBridgeForLaunch(
+    target: CodexAccountSelectionTarget,
+    runtimeHomePath: string | null
+  ): void {
+    if (process.platform !== 'win32' || !runtimeHomePath) {
+      return
+    }
+    const runtimeHomeWsl = parseWslUncPath(runtimeHomePath)
+    const distro = target.wslDistro?.trim() || runtimeHomeWsl?.distro || getDefaultWslDistro()
+    if (!distro) {
+      return
+    }
+    const systemCodexHomePath = this.getWslSystemCodexHomePath({
+      runtime: 'wsl',
+      wslDistro: distro
+    })
+    if (!systemCodexHomePath || systemCodexHomePath === runtimeHomePath) {
+      return
+    }
+    // Why: WSL history must be hardlinked inside the distro; host-side links
+    // cannot bridge Windows and WSL filesystems in a resume-visible way.
+    void startWslCodexSessionBridgeInBackground({
+      distro,
+      systemCodexHomePath,
+      managedCodexHomePath: runtimeHomePath
+    })
   }
 
   getHostRuntimeHomePath(): string {
@@ -705,7 +738,10 @@ export class CodexRuntimeHomeService {
     for (const homePath of candidateHomes) {
       const configPath = join(homePath, 'config.toml')
       if (existsSync(configPath)) {
-        copyFileSync(configPath, runtimeConfigPath)
+        writeFileAtomically(
+          runtimeConfigPath,
+          prepareWslRuntimeSeedConfig(readFileSync(configPath, 'utf-8'), homePath)
+        )
         return
       }
     }
@@ -1561,4 +1597,17 @@ export class CodexRuntimeHomeService {
   clearSystemDefaultSnapshot(): void {
     rmSync(this.getSystemDefaultSnapshotPath(), { force: true })
   }
+}
+
+// Why: the seed config is read over UNC but consumed by Codex inside WSL, so
+// relative path-valued settings must anchor to the Linux-side source home; a
+// verbatim copy breaks Codex config load (os error 2).
+export function prepareWslRuntimeSeedConfig(
+  configContents: string,
+  sourceHomePath: string
+): string {
+  return prepareSystemConfigForFreshRuntimeMirror(
+    configContents,
+    parseWslUncPath(sourceHomePath)?.linuxPath ?? sourceHomePath
+  )
 }

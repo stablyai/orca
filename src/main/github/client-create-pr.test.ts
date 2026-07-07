@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: create-PR tests share gh/SSH mocks across
-   template, CLI, and error-path cases; keeping them together prevents drift. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFile } from 'node:fs/promises'
 

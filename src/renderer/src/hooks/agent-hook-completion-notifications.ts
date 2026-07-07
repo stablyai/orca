@@ -16,6 +16,11 @@ type CoordinatorEntry = {
 }
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
+// Why: a paneKey resolves to a tab by id. Prebuilding this index once per prune
+// pass avoids re-flattening tabsByWorktree per coordinator (O(coordinators x
+// tabs)) — the prune runs on every store notify, including every OSC title frame.
+type TabIndex = ReadonlyMap<string, WorktreeTab>
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
@@ -28,16 +33,36 @@ function disposeCoordinatorForPaneKey(paneKey: string): void {
   paneKeysRequiringFreshWorking.delete(paneKey)
 }
 
+function buildTabIndex(state: StoreSnapshot): TabIndex {
+  const index = new Map<string, WorktreeTab>()
+  for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      // Why: first-wins to match the previous Array.flat().find() semantics
+      // exactly, even in the degenerate case of a tab id shared across worktrees.
+      if (!index.has(tab.id)) {
+        index.set(tab.id, tab)
+      }
+    }
+  }
+  return index
+}
+
 function pruneClosedPaneCoordinators(): void {
   // Why: hook-completion coordinators are module-scoped and may outlive a pane
   // unless liveness changes from close/sleep paths evict them here.
+  if (coordinatorsByPaneKey.size === 0 && paneKeysRequiringFreshWorking.size === 0) {
+    return
+  }
+  // Why: build the paneKey->tab index once for the whole pass instead of
+  // re-flattening tabsByWorktree inside paneCanReceiveHookCompletion per entry.
+  const tabIndex = buildTabIndex(useAppStore.getState())
   for (const paneKey of coordinatorsByPaneKey.keys()) {
-    if (!paneCanReceiveHookCompletion(paneKey)) {
+    if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
   for (const paneKey of paneKeysRequiringFreshWorking) {
-    if (!paneCanReceiveHookCompletion(paneKey)) {
+    if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
       paneKeysRequiringFreshWorking.delete(paneKey)
     }
   }
@@ -112,14 +137,33 @@ function paneHasLivePty(paneKey: string): boolean {
   return getPtyIdForPaneKey(paneKey) !== null
 }
 
-function paneKeyHasUnsuppressedPtyHint(state: StoreSnapshot, paneKey: string): boolean {
+function resolveTabById(
+  state: StoreSnapshot,
+  tabId: string,
+  tabIndex?: TabIndex
+): WorktreeTab | undefined {
+  if (tabIndex) {
+    return tabIndex.get(tabId)
+  }
+  for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
+    const found = tabs.find((candidate) => candidate.id === tabId)
+    if (found) {
+      return found
+    }
+  }
+  return undefined
+}
+
+function paneKeyHasUnsuppressedPtyHint(
+  state: StoreSnapshot,
+  paneKey: string,
+  tabIndex?: TabIndex
+): boolean {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
     return false
   }
-  const tab = Object.values(state.tabsByWorktree ?? {})
-    .flat()
-    .find((candidate) => candidate.id === parsed.tabId)
+  const tab = resolveTabById(state, parsed.tabId, tabIndex)
   if (!tab) {
     return false
   }
@@ -135,11 +179,11 @@ function paneKeyHasUnsuppressedPtyHint(state: StoreSnapshot, paneKey: string): b
   return ptyHints.length === 0 || ptyHints.some((ptyId) => !state.suppressedPtyExitIds?.[ptyId])
 }
 
-function paneCanReceiveHookCompletion(paneKey: string): boolean {
+function paneCanReceiveHookCompletion(paneKey: string, tabIndex?: TabIndex): boolean {
   const state = useAppStore.getState()
   // Why: native hook IPC is itself a live status signal. Inactive worktrees can
   // have accepted hook updates before their renderer PTY map catches up.
-  return paneKeyHasUnsuppressedPtyHint(state, paneKey) || paneHasLivePty(paneKey)
+  return paneKeyHasUnsuppressedPtyHint(state, paneKey, tabIndex) || paneHasLivePty(paneKey)
 }
 
 function createCoordinator(paneKey: string, worktreeId: string): AgentCompletionCoordinator {

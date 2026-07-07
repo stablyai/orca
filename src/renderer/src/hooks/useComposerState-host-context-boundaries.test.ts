@@ -159,6 +159,40 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitSection).toContain('runtimeEnvironmentId: folderTargetRuntimeEnvironmentId')
   })
 
+  it('detects composer agents against the repo host: SSH, then runtime, then local (#7082)', () => {
+    // Why: a repo owned by a paired runtime must show the runtime's agents, not
+    // the local machine's. SSH stays first priority; runtime falls through before
+    // local so an SSH repo never double-detects. Regression guard for #7082.
+    const selectorSection = sourceBetween(
+      HOOK_SOURCE,
+      'const detectedAgentList = useAppStore',
+      'const ensureDetectedAgents = useAppStore'
+    )
+    expect(selectorSection).toContain('if (isRemote) {')
+    expect(selectorSection).toContain('s.remoteDetectedAgentIds[connectionId]')
+    expect(selectorSection).toContain('if (runtimeEnvironmentId) {')
+    expect(selectorSection).toContain('s.runtimeDetectedAgentIds[runtimeEnvironmentId]')
+    expect(selectorSection).toContain('return s.detectedAgentIds')
+    // SSH branch is checked before the runtime branch.
+    expect(selectorSection.indexOf('if (isRemote) {')).toBeLessThan(
+      selectorSection.indexOf('if (runtimeEnvironmentId) {')
+    )
+
+    expect(HOOK_SOURCE).toContain(
+      'const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null'
+    )
+
+    // Detection effect fans out to the same three hosts in the same order and
+    // re-runs when the runtime environment changes.
+    const detectSection = sourceBetween(HOOK_SOURCE, 'const detect = isRemote', 'void detect.then')
+    expect(detectSection).toContain('ensureRemoteDetectedAgents(connectionId)')
+    expect(detectSection).toContain('ensureRuntimeDetectedAgents(runtimeEnvironmentId)')
+    expect(detectSection).toContain('ensureDetectedAgents()')
+    expect(HOOK_SOURCE).toContain(
+      '}, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])'
+    )
+  })
+
   it('seeds initial workspace run target from the task source context', () => {
     expect(
       resolveInitialWorkspaceRunSeed({
@@ -209,6 +243,8 @@ describe('useComposerState host-context boundaries', () => {
       'const applyLinkedWorkItem = useCallback'
     )
     expect(directLookup).toContain('sourceContext: selectedRepoGitHubSourceContext')
+    expect(directLookup).toContain('lookupGitHubWorkItemByOwnerRepoForSource')
+    expect(directLookup).toContain('type: normalizedLinkQuery.directLink.type')
 
     const submitLookup = sourceBetween(
       HOOK_SOURCE,
@@ -236,7 +272,11 @@ describe('useComposerState host-context boundaries', () => {
       'const intent = getSmartGitHubSubmitIntent(name)'
     )
     expect(selectedPrSubmitLookup).toContain('smartGitHubPrStartPointSelectionRef.current')
-    expect(selectedPrSubmitLookup).toContain("linkedWorkItem.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain("linkedWorkItemIdentity?.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain("startPointIdentity?.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain(
+      'startPointIdentity.number === linkedWorkItemIdentity.number'
+    )
     expect(selectedPrSubmitLookup).toContain('resolveGitHubPrStartPointForRepo')
     expect(selectedPrSubmitLookup.indexOf('resolveGitHubPrStartPointForRepo')).toBeLessThan(
       selectedPrSubmitLookup.indexOf("return { kind: 'none' }")
@@ -339,6 +379,19 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).not.toContain('folderSourceRequiresConnection')
   })
 
+  it('clears branch reuse state when manually editing the branch name', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleBranchNameOverrideChange = useCallback',
+      'const addComposerAttachments = useCallback'
+    )
+
+    expect(section).toContain('resolveComposerManualBranchNameChange')
+    expect(section).toContain('setReuseEligibleBranch(null)')
+    expect(section).toContain('setReuseSelectedBranch(false)')
+    expect(section).toContain("branchAutoNameRef.current = ''")
+  })
+
   it('forces repo-scoped source reset when returning from folder target to a repo with the same id', () => {
     const handleRepoChange = sourceBetween(
       HOOK_SOURCE,
@@ -408,8 +461,12 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(projectGroupSmartHandlers).toContain('setLinkedGitLabIssue(null)')
     expect(projectGroupSmartHandlers).toContain('setLinkedGitLabMR(null)')
-    expect(projectGroupSmartHandlers).toContain("setLinkedIssue('')")
-    expect(projectGroupSmartHandlers).toContain('setLinkedPR(null)')
+    expect(projectGroupSmartHandlers).toContain(
+      "setLinkedIssue(identity.type === 'issue' ? String(identity.number) : '')"
+    )
+    expect(projectGroupSmartHandlers).toContain(
+      "setLinkedPR(identity.type === 'pr' ? identity.number : null)"
+    )
   })
 
   it('disables repo-backed folder smart lookup when a folder target has no source repos', () => {
@@ -489,8 +546,8 @@ describe('useComposerState host-context boundaries', () => {
 
     expect(section).toContain('resolveWorktreeCreateBaseBranch')
     expect(section).toContain('explicitBaseBranch: smartSubmitBaseBranch')
-    expect(section).toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
-    expect(section).toContain('getRuntimeRepoBaseRefDefault')
+    expect(section).not.toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
+    expect(section).not.toContain('getRuntimeRepoBaseRefDefault')
   })
 
   it('plans new workspace agent startup from the selected repo runtime', () => {

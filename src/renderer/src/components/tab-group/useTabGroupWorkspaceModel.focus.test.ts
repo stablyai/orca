@@ -372,6 +372,43 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.closeBrowserTab).toHaveBeenCalledWith('browser-workspace-1')
   })
 
+  it('preserves the stored session partition when duplicating a local browser tab', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      browserTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-workspace-1',
+            worktreeId: 'wt-1',
+            sessionProfileId: 'profile-1',
+            sessionPartition: 'persist:orca-browser-session-profile-1',
+            activePageId: 'browser-page-1',
+            pageIds: ['browser-page-1'],
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.duplicateBrowserTab('browser-workspace-1')
+
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com', {
+      title: 'Example',
+      sessionProfileId: 'profile-1',
+      sessionPartition: 'persist:orca-browser-session-profile-1',
+      targetGroupId: 'group-1'
+    })
+  })
+
   it('closes a host-mirrored browser with an empty page list via the host (no dead-end)', async () => {
     // Regression: a host-owned browser whose local page list was momentarily
     // empty had no remote-owned PAGES, so the close skipped the host RPC and the

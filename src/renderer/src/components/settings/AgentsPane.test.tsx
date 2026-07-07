@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: Agents pane settings interactions share
-   store-backed queue fixtures that are easier to audit beside the UI helper coverage. */
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

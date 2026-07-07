@@ -179,6 +179,63 @@ describe('getChecksPanelEmptyStateCopy', () => {
       }).title
     ).toBe('Pull request status unavailable')
   })
+
+  // Regression: a local-only branch with an ambiguous GitHub hosted-review card
+  // flip-flopped between "Branch not published" (during an active PR refresh) and
+  // "Pull request status unavailable" (while idle) as background refreshes cycled
+  // the status. The ambiguous copy must stay stable across the whole lifecycle.
+  it('keeps stable ambiguous copy while a PR refresh is queued on an unpublished branch', () => {
+    expect(
+      getChecksPanelEmptyStateCopy({
+        operationLabel: null,
+        prRefreshStatus: 'queued',
+        hostedReviewBlockedReason: 'no_upstream',
+        hasUpstream: false,
+        hasAmbiguousGitHubHostedReview: true
+      }).title
+    ).toBe('Pull request status unavailable')
+  })
+
+  it('keeps stable ambiguous copy while a PR refresh is in-flight on an unpublished branch', () => {
+    expect(
+      getChecksPanelEmptyStateCopy({
+        operationLabel: null,
+        prRefreshStatus: 'in-flight',
+        hostedReviewBlockedReason: undefined,
+        hasUpstream: false,
+        hasAmbiguousGitHubHostedReview: true
+      }).title
+    ).toBe('Pull request status unavailable')
+  })
+
+  it('does not fall back to unpublished-branch copy on refresh error for ambiguous data', () => {
+    expect(
+      getChecksPanelEmptyStateCopy({
+        operationLabel: null,
+        prRefreshStatus: 'error',
+        hostedReviewBlockedReason: 'no_upstream',
+        hasUpstream: false,
+        hasAmbiguousGitHubHostedReview: true
+      }).title
+    ).toBe('Could not refresh pull request')
+  })
+
+  it('renders a single stable title across a full ambiguous refresh cycle', () => {
+    const cycle = ['queued', 'in-flight', undefined, 'skipped', 'paused'] as const
+    const titles = new Set(
+      cycle.map(
+        (prRefreshStatus) =>
+          getChecksPanelEmptyStateCopy({
+            operationLabel: null,
+            prRefreshStatus,
+            hostedReviewBlockedReason: 'no_upstream',
+            hasUpstream: false,
+            hasAmbiguousGitHubHostedReview: true
+          }).title
+      )
+    )
+    expect([...titles]).toEqual(['Pull request status unavailable'])
+  })
 })
 
 describe('shouldShowChecksPanelPublishBranchAction', () => {

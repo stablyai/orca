@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: relay session tests need one shared mocked
-provider/multiplexer harness to cover establish, reconnect, detach, and dispose
-state transitions without duplicating brittle setup. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
@@ -43,6 +40,8 @@ vi.mock('../agent-hooks/remote-managed-hook-installers', () => ({
 vi.mock('../providers/ssh-pty-provider', () => ({
   isSshPtyNotFoundError: (err: unknown) =>
     (err instanceof Error ? err.message : String(err)).includes('not found'),
+  isSshPtyIdentityMismatchError: (err: unknown) =>
+    (err instanceof Error ? err.message : String(err)).includes('identity mismatch'),
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockReturnValue(() => {})
     onReplay = vi.fn().mockReturnValue(() => {})
@@ -458,6 +457,90 @@ describe('SshRelaySession', () => {
     expect(mockAttach).not.toHaveBeenCalledWith('pty-expired')
     expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-live', 'target-1')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-live', 'attached')
+  })
+
+  it('forwards a lease tab identity to reattach so a reset relay cannot cross-wire it', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const mockAttach = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: mockAttach,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      { targetId: 'target-1', ptyId: 'pty-1', state: 'detached', tabId: 'tab-a' }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+
+    expect(mockAttach).toHaveBeenCalledWith('pty-1', { tabId: 'tab-a' })
+  })
+
+  it('forwards a lease pane identity when leaf identity is available', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const mockAttach = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: mockAttach,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      { targetId: 'target-1', ptyId: 'pty-1', state: 'detached', tabId: 'tab-a', leafId }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+
+    expect(mockAttach).toHaveBeenCalledWith('pty-1', {
+      paneKey: `tab-a:${leafId}`,
+      tabId: 'tab-a'
+    })
+  })
+
+  it('does not expire a live reused relay id when attach rejects identity mismatch', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+    vi.clearAllMocks()
+    mockDeploySuccess()
+
+    const { getSshPtyProvider } = await import('../ipc/pty')
+    const mockAttach = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('PTY "pty-1" not found (identity mismatch)'))
+    vi.mocked(getSshPtyProvider).mockReturnValue({
+      attachForReconnect: mockAttach,
+      dispose: vi.fn()
+    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    const staleLeafId = '11111111-1111-4111-8111-111111111111'
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      {
+        targetId: 'target-1',
+        ptyId: 'pty-1',
+        state: 'detached',
+        tabId: 'tab-old',
+        leafId: staleLeafId
+      }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
+
+    await session.reconnect(mockConn)
+
+    expect(mockAttach).toHaveBeenCalledWith('pty-1', {
+      paneKey: `tab-old:${staleLeafId}`,
+      tabId: 'tab-old'
+    })
+    expect(clearProviderPtyState).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
+    expect(deletePtyOwnership).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('target-1', 'pty-1', 'expired')
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', {
+      id: 'ssh:target-1@@pty-1',
+      code: -1
+    })
   })
 
   it('rejects establish if detach wins while reattach is in flight', async () => {

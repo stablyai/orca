@@ -1,17 +1,25 @@
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   addPreviewContent,
+  cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
-import type { CodexUsageSnapshot, FileWithMtime } from './session-scanner-types'
+import type {
+  CodexUsageSnapshot,
+  FileWithMtime,
+  ResumableParseFinalizeOptions,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from './session-scanner-types'
 import {
+  addCodexUsage,
   asRecord,
   extractContentText,
   extractGitBranch,
@@ -23,155 +31,277 @@ import {
   subtractCodexUsage
 } from './session-scanner-values'
 
-const CODEX_SESSION_INDEX_FILE = 'session_index.jsonl'
-
-type CodexSessionIndexTitleCacheEntry = {
-  signature: string
-  titles: Map<string, string>
-}
-
-const codexSessionIndexTitleCache = new Map<string, Promise<CodexSessionIndexTitleCacheEntry>>()
-
 export async function parseCodexSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  codexHome: string | null = null
+  codexHome: string | null = null,
+  executionHostId?: ExecutionHostId
 ): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'codex',
-    file,
-    sessionId: sessionIdFromFileName(file.path)
-  })
-  let previousTotals: CodexUsageSnapshot | null = null
-
   const lines = createInterface({
     input: createReadStream(file.path, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
 
-  for await (const line of lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
+  return parseCodexSessionLines({
+    file,
+    lines,
+    platform,
+    codexHome,
+    executionHostId,
+    titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
+  })
+}
 
-    updateTimeline(accumulator, extractString(record.timestamp))
+export async function parseCodexSessionContent(args: {
+  file: FileWithMtime
+  content: string
+  platform?: NodeJS.Platform
+  codexHome?: string | null
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+  readIndexedTitle?: (sessionId: string) => Promise<string | null>
+}): Promise<AiVaultSession | null> {
+  return parseCodexSessionLines({
+    file: args.file,
+    lines: args.content.split(/\r?\n/),
+    platform: args.platform ?? process.platform,
+    codexHome: args.codexHome ?? null,
+    executionHostId: args.executionHostId,
+    executionHostPlatform: args.executionHostPlatform,
+    titleReader: args.readIndexedTitle
+  })
+}
 
-    const payload = asRecord(record.payload)
-    if (record.type === 'session_meta' && payload) {
-      if (isCodexWorkerSession(payload)) {
-        // Why: Codex writes internal worker/sub-agent transcripts into the same
-        // history tree; AI Vault should show user-started sessions only.
-        return null
-      }
-      const sessionId = extractString(payload.id)
-      if (sessionId) {
-        accumulator.sessionId = sessionId
-      }
-      const indexedTitle =
-        extractCodexSessionMetadataTitle(payload) ??
-        (await readCodexSessionIndexTitle(file.path, codexHome, accumulator.sessionId))
-      if (indexedTitle) {
-        accumulator.title = indexedTitle
-      }
-      const cwd = extractString(payload.cwd)
-      if (cwd) {
-        accumulator.cwd = cwd
-      }
-      accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
-      continue
-    }
+type CodexSessionParseState = {
+  accumulator: SessionAccumulator
+  previousTotals: CodexUsageSnapshot | null
+  rejectedWorkerSession: boolean
+  sawSessionMeta: boolean
+  // Which source set the current title; an index-file title outranks the raw
+  // first user prompt, so finalize must know whether 'meta' already won.
+  titleSource: 'meta' | 'user' | null
+}
 
-    if (record.type === 'turn_context' && payload) {
-      const cwd = extractString(payload.cwd)
-      if (cwd) {
-        accumulator.cwd = cwd
-      }
-      const model = extractModel(payload)
-      if (model) {
-        accumulator.model = model
-      }
-      continue
-    }
+function createCodexParseState(file: FileWithMtime): CodexSessionParseState {
+  return {
+    accumulator: createAccumulator({
+      agent: 'codex',
+      file,
+      sessionId: sessionIdFromFileName(file.path)
+    }),
+    previousTotals: null,
+    rejectedWorkerSession: false,
+    sawSessionMeta: false,
+    titleSource: null
+  }
+}
 
-    if (!payload) {
-      continue
-    }
+function cloneCodexParseState(state: CodexSessionParseState): CodexSessionParseState {
+  return {
+    // previousTotals snapshots are replaced, never mutated, so sharing is safe.
+    ...state,
+    accumulator: cloneSessionAccumulator(state.accumulator)
+  }
+}
 
-    if (record.type === 'response_item' && payload.type === 'message') {
-      accumulator.messageCount++
-      if (payload.role === 'user' && !accumulator.title) {
-        accumulator.title = extractContentText(payload.content)
-      }
-      addPreviewContent(
-        accumulator,
-        payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : 'unknown',
-        payload.content,
-        record.timestamp
-      )
-      continue
-    }
+function consumeCodexRecordLine(state: CodexSessionParseState, line: string): void {
+  if (state.rejectedWorkerSession) {
+    return
+  }
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
+  }
+  const { accumulator } = state
 
-    if (record.type !== 'event_msg') {
-      continue
-    }
+  updateTimeline(accumulator, extractString(record.timestamp))
 
-    if (payload.type === 'user_message') {
-      accumulator.messageCount++
-      if (!accumulator.title) {
-        accumulator.title = extractContentText(payload.message)
-      }
-      addPreviewContent(accumulator, 'user', payload.message, record.timestamp)
-      continue
+  const payload = asRecord(record.payload)
+  if (record.type === 'session_meta' && payload) {
+    if (isCodexWorkerSession(payload)) {
+      // Why: Codex writes internal worker/sub-agent transcripts into the same
+      // history tree; AI Vault should show user-started sessions only.
+      state.rejectedWorkerSession = true
+      return
     }
+    state.sawSessionMeta = true
+    const sessionId = extractString(payload.id)
+    if (sessionId) {
+      accumulator.sessionId = sessionId
+    }
+    const metadataTitle = extractCodexSessionMetadataTitle(payload)
+    if (metadataTitle) {
+      accumulator.title = metadataTitle
+      state.titleSource = 'meta'
+    }
+    const cwd = extractString(payload.cwd)
+    if (cwd) {
+      accumulator.cwd = cwd
+    }
+    accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
+    return
+  }
 
-    if (payload.type === 'agent_message') {
-      accumulator.messageCount++
-      addPreviewContent(accumulator, 'assistant', payload.message, record.timestamp)
-      continue
-    }
-
-    if (payload.type !== 'token_count') {
-      continue
-    }
-
-    const info = asRecord(payload.info)
-    if (!info) {
-      continue
-    }
-    const totalUsage = normalizeCodexUsage(info.total_token_usage)
-    const lastUsage = normalizeCodexUsage(info.last_token_usage)
-    let delta: CodexUsageSnapshot | null = null
-    if (totalUsage) {
-      delta = subtractCodexUsage(totalUsage, previousTotals)
-      previousTotals = totalUsage
-    } else if (lastUsage) {
-      delta = lastUsage
-      previousTotals = previousTotals ? addCodexUsage(previousTotals, lastUsage) : lastUsage
-    }
-    if (delta) {
-      accumulator.totalTokens += delta.totalTokens
+  if (record.type === 'turn_context' && payload) {
+    const cwd = extractString(payload.cwd)
+    if (cwd) {
+      accumulator.cwd = cwd
     }
     const model = extractModel(payload)
     if (model) {
       accumulator.model = model
     }
+    return
   }
 
-  return finalizeSession(accumulator, platform, { codexHome })
+  if (!payload) {
+    return
+  }
+
+  if (record.type === 'response_item' && payload.type === 'message') {
+    accumulator.messageCount++
+    if (payload.role === 'user' && !accumulator.title) {
+      accumulator.title = extractContentText(payload.content)
+      state.titleSource = accumulator.title ? 'user' : state.titleSource
+    }
+    addPreviewContent(
+      accumulator,
+      payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : 'unknown',
+      payload.content,
+      record.timestamp
+    )
+    return
+  }
+
+  if (record.type !== 'event_msg') {
+    return
+  }
+
+  if (payload.type === 'user_message') {
+    accumulator.messageCount++
+    if (!accumulator.title) {
+      accumulator.title = extractContentText(payload.message)
+      state.titleSource = accumulator.title ? 'user' : state.titleSource
+    }
+    addPreviewContent(accumulator, 'user', payload.message, record.timestamp)
+    return
+  }
+
+  if (payload.type === 'agent_message') {
+    accumulator.messageCount++
+    addPreviewContent(accumulator, 'assistant', payload.message, record.timestamp)
+    return
+  }
+
+  if (payload.type !== 'token_count') {
+    return
+  }
+
+  const info = asRecord(payload.info)
+  if (!info) {
+    return
+  }
+  const totalUsage = normalizeCodexUsage(info.total_token_usage)
+  const lastUsage = normalizeCodexUsage(info.last_token_usage)
+  let delta: CodexUsageSnapshot | null = null
+  if (totalUsage) {
+    delta = subtractCodexUsage(totalUsage, state.previousTotals)
+    state.previousTotals = totalUsage
+  } else if (lastUsage) {
+    delta = lastUsage
+    state.previousTotals = state.previousTotals
+      ? addCodexUsage(state.previousTotals, lastUsage)
+      : lastUsage
+  }
+  if (delta) {
+    accumulator.totalTokens += delta.totalTokens
+  }
+  const model = extractModel(payload)
+  if (model) {
+    accumulator.model = model
+  }
 }
 
-function addCodexUsage(
-  base: CodexUsageSnapshot,
-  increment: CodexUsageSnapshot
-): CodexUsageSnapshot {
-  return {
-    inputTokens: base.inputTokens + increment.inputTokens,
-    cachedInputTokens: base.cachedInputTokens + increment.cachedInputTokens,
-    outputTokens: base.outputTokens + increment.outputTokens,
-    reasoningOutputTokens: base.reasoningOutputTokens + increment.reasoningOutputTokens,
-    totalTokens: base.totalTokens + increment.totalTokens
+async function finalizeCodexParseState(
+  state: CodexSessionParseState,
+  platform: NodeJS.Platform,
+  args: {
+    codexHome: string | null
+    titleReader?: (sessionId: string) => Promise<string | null>
+    executionHostId?: ExecutionHostId
+    executionHostPlatform?: NodeJS.Platform | null
   }
+): Promise<AiVaultSession | null> {
+  if (state.rejectedWorkerSession) {
+    return null
+  }
+  // Finalize a snapshot: the live state keeps accumulating appended lines.
+  const snapshot = cloneCodexParseState(state)
+  // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
+  // per finalize (the index read is signature-cached) — a title that appears
+  // after the transcript was first parsed must still replace the raw prompt.
+  if (snapshot.sawSessionMeta && snapshot.titleSource !== 'meta') {
+    const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
+    if (indexedTitle) {
+      snapshot.accumulator.title = indexedTitle
+    }
+  }
+  return finalizeSession(snapshot.accumulator, platform, {
+    codexHome: args.codexHome,
+    executionHostId: args.executionHostId,
+    executionHostPlatform: args.executionHostPlatform
+  })
+}
+
+export function createCodexSessionResumeState(
+  file: FileWithMtime,
+  codexHome: string | null
+): ResumableSessionParseState {
+  return codexResumeStateFromParseState(createCodexParseState(file), codexHome, (sessionId) =>
+    readCodexSessionIndexTitle(file.path, codexHome, sessionId)
+  )
+}
+
+function codexResumeStateFromParseState(
+  state: CodexSessionParseState,
+  codexHome: string | null,
+  titleReader: (sessionId: string) => Promise<string | null>
+): ResumableSessionParseState {
+  return {
+    consumeLine: (line) => consumeCodexRecordLine(state, line),
+    clone: () =>
+      codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
+    touchFile: (file) => {
+      state.accumulator.modifiedAt = file.modifiedAt
+    },
+    finalize: (platform, options?: ResumableParseFinalizeOptions) =>
+      finalizeCodexParseState(state, platform, { codexHome, titleReader, ...options })
+  }
+}
+
+async function parseCodexSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  codexHome: string | null
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+  titleReader?: (sessionId: string) => Promise<string | null>
+}): Promise<AiVaultSession | null> {
+  const state = createCodexParseState(args.file)
+  for await (const line of args.lines) {
+    consumeCodexRecordLine(state, line)
+    if (state.rejectedWorkerSession) {
+      // Worker transcripts are excluded outright; stop reading early.
+      return null
+    }
+  }
+  return finalizeCodexParseState(state, args.platform, {
+    codexHome: args.codexHome,
+    titleReader: args.titleReader,
+    executionHostId: args.executionHostId,
+    executionHostPlatform: args.executionHostPlatform
+  })
 }
 
 function extractCodexThreadSource(payload: Record<string, unknown>): string | null {
@@ -194,80 +324,4 @@ function extractCodexSessionMetadataTitle(payload: Record<string, unknown>): str
     normalizeTitleText(extractString(payload.thread_name) ?? '') ??
     normalizeTitleText(extractString(payload.threadName) ?? '')
   )
-}
-
-async function readCodexSessionIndexTitle(
-  sessionFilePath: string,
-  codexHome: string | null,
-  sessionId: string
-): Promise<string | null> {
-  const resolvedCodexHome = codexHome ?? codexHomeFromSessionFilePath(sessionFilePath)
-  if (!resolvedCodexHome) {
-    return null
-  }
-  const titleBySessionId = await readCodexSessionIndexTitles(resolvedCodexHome)
-  return titleBySessionId.get(sessionId) ?? null
-}
-
-function codexHomeFromSessionFilePath(sessionFilePath: string): string | null {
-  let currentDir = dirname(sessionFilePath)
-  while (currentDir && dirname(currentDir) !== currentDir) {
-    if (basename(currentDir) === 'sessions') {
-      return dirname(currentDir)
-    }
-    currentDir = dirname(currentDir)
-  }
-  return null
-}
-
-async function readCodexSessionIndexTitles(codexHome: string): Promise<Map<string, string>> {
-  const indexPath = join(codexHome, CODEX_SESSION_INDEX_FILE)
-  let signature: string
-  try {
-    const indexStat = await stat(indexPath)
-    signature = `${indexStat.size}:${indexStat.mtimeMs}`
-  } catch {
-    return new Map()
-  }
-
-  const cached = codexSessionIndexTitleCache.get(codexHome)
-  if (cached) {
-    const entry = await cached
-    if (entry.signature === signature) {
-      return entry.titles
-    }
-  }
-
-  const pending = readCodexSessionIndexTitlesFromDisk(indexPath).then((titles) => ({
-    signature,
-    titles
-  }))
-  codexSessionIndexTitleCache.set(codexHome, pending)
-  return (await pending).titles
-}
-
-async function readCodexSessionIndexTitlesFromDisk(
-  indexPath: string
-): Promise<Map<string, string>> {
-  const titleBySessionId = new Map<string, string>()
-  try {
-    const lines = createInterface({
-      input: createReadStream(indexPath, { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
-    for await (const line of lines) {
-      const record = parseJsonObject(line)
-      if (!record) {
-        continue
-      }
-      const sessionId = extractString(record.id)
-      const title = normalizeTitleText(extractString(record.thread_name) ?? '')
-      if (sessionId && title) {
-        titleBySessionId.set(sessionId, title)
-      }
-    }
-  } catch {
-    // Codex creates the index opportunistically; older homes may only have raw transcripts.
-  }
-  return titleBySessionId
 }

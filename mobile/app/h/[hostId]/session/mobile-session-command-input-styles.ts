@@ -141,7 +141,20 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.sm,
+    backgroundColor: colors.bgRaised,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.input,
+    paddingHorizontal: spacing.sm + 2
+  },
+
+  liveInputFocusTargetPressed: {
+    backgroundColor: colors.borderSubtle
+  },
+
+  liveInputFocusTargetDisabled: {
+    opacity: 0.45
   },
 
   liveInputCapture: {

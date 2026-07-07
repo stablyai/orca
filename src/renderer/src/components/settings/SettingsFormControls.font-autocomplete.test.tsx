@@ -34,9 +34,31 @@ describe('FontAutocomplete', () => {
   }
 
   function getOptionLabels(): string[] {
-    return Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).map(
+    // Why: the dropdown portals to document.body so it can escape the settings
+    // section; options are intentionally not descendants of the container.
+    return Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).map(
       (option) => option.textContent?.trim() ?? ''
     )
+  }
+
+  function expectOptionsToBePortaled(): void {
+    expect(container.querySelector('[role="option"]')).toBeNull()
+  }
+
+  function getScrollArea(): HTMLElement {
+    const scrollArea = document.querySelector<HTMLElement>('[data-slot="scroll-area"]')
+    if (!scrollArea) {
+      throw new Error('Font autocomplete scroll area not found')
+    }
+    return scrollArea
+  }
+
+  function getScrollAreaViewport(): HTMLElement {
+    const viewport = document.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    if (!viewport) {
+      throw new Error('Font autocomplete scroll area viewport not found')
+    }
+    return viewport
   }
 
   async function typeIntoInput(input: HTMLInputElement, value: string): Promise<void> {
@@ -76,10 +98,11 @@ describe('FontAutocomplete', () => {
     })
 
     expect(
-      container
+      document
         .querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')
         ?.textContent?.trim()
     ).toBe('JetBrains Mono')
+    expectOptionsToBePortaled()
   })
 
   it('shows the full list on focus when the committed font has multiple matching suggestions', async () => {
@@ -109,6 +132,33 @@ describe('FontAutocomplete', () => {
       'Cascadia Mono PL',
       'Consolas'
     ])
+    expectOptionsToBePortaled()
+  })
+
+  it('bounds the portaled list to the available popover height', async () => {
+    function Harness(): ReactNode {
+      const [value, setValue] = useState('Cascadia Mono')
+      return (
+        <FontAutocomplete
+          value={value}
+          suggestions={['Arial', 'Cascadia Code', 'Cascadia Mono', 'Cascadia Mono PL', 'Consolas']}
+          onChange={setValue}
+        />
+      )
+    }
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    await act(async () => {
+      getInput().focus()
+    })
+
+    expect(getScrollArea().style.maxHeight).toBe('var(--radix-popover-content-available-height)')
+    expect(getScrollAreaViewport().style.maxHeight).toBe(
+      'var(--radix-popover-content-available-height)'
+    )
   })
 
   it('keeps typed searches filtered even after the value updates', async () => {

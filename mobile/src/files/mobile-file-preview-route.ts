@@ -3,7 +3,15 @@ export type MobileFilePreviewParamValue = string | string[] | undefined
 export type MobileFilePreviewRouteParams = {
   hostId: string
   worktreeId: string
-  relativePath: string
+  relativePath?: string
+  source?: 'worktree' | 'terminalArtifact'
+  absolutePath?: string
+  grantId?: string
+  terminal?: string
+  pathText?: string
+  cwd?: string
+  line?: string
+  column?: string
   name?: string
   worktreeName?: string
 }
@@ -21,6 +29,14 @@ type RawPreviewRouteParams = {
   hostId?: MobileFilePreviewParamValue
   worktreeId?: MobileFilePreviewParamValue
   relativePath?: MobileFilePreviewParamValue
+  source?: MobileFilePreviewParamValue
+  absolutePath?: MobileFilePreviewParamValue
+  grantId?: MobileFilePreviewParamValue
+  terminal?: MobileFilePreviewParamValue
+  pathText?: MobileFilePreviewParamValue
+  cwd?: MobileFilePreviewParamValue
+  line?: MobileFilePreviewParamValue
+  column?: MobileFilePreviewParamValue
   name?: MobileFilePreviewParamValue
   worktreeName?: MobileFilePreviewParamValue
 }
@@ -39,7 +55,35 @@ export function normalizeMobileFilePreviewRouteParams(
   const hostId = singleParam(params.hostId)
   const worktreeId = singleParam(params.worktreeId)
   const relativePath = singleParam(params.relativePath)
-  if (!hostId || !worktreeId || !relativePath) {
+  const source = singleParam(params.source)
+  const absolutePath = singleParam(params.absolutePath)
+  const grantId = singleParam(params.grantId)
+  if (!hostId || !worktreeId) {
+    return { ok: false, message: 'Unable to load preview' }
+  }
+  if (source === 'terminalArtifact') {
+    if (!absolutePath || !grantId) {
+      return { ok: false, message: 'Unable to load preview' }
+    }
+    return {
+      ok: true,
+      params: {
+        hostId,
+        worktreeId,
+        source,
+        absolutePath,
+        grantId,
+        terminal: optionalSingleParam(params.terminal),
+        pathText: optionalSingleParam(params.pathText),
+        cwd: optionalSingleParam(params.cwd),
+        line: optionalSingleParam(params.line),
+        column: optionalSingleParam(params.column),
+        name: optionalSingleParam(params.name),
+        worktreeName: optionalSingleParam(params.worktreeName)
+      }
+    }
+  }
+  if (!relativePath) {
     return { ok: false, message: 'Unable to load preview' }
   }
   return {
@@ -48,6 +92,9 @@ export function normalizeMobileFilePreviewRouteParams(
       hostId,
       worktreeId,
       relativePath,
+      source: 'worktree',
+      line: optionalSingleParam(params.line),
+      column: optionalSingleParam(params.column),
       name: optionalSingleParam(params.name),
       worktreeName: optionalSingleParam(params.worktreeName)
     }
@@ -64,5 +111,5 @@ export function createMobileFilePreviewHref(
 }
 
 export function displayNameFromPreviewPath(relativePath: string): string {
-  return relativePath.split(/[\\/]/).filter(Boolean).at(-1) ?? relativePath
+  return relativePath.split(/[\\/]/).findLast(Boolean) ?? relativePath
 }

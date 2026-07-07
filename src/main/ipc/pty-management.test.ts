@@ -1,7 +1,3 @@
-/* eslint-disable max-lines -- Why: covers every pty:management IPC channel
-against shared mocks (electron, fs, daemon-init, DaemonPtyRouter). Splitting
-across files would duplicate the vi.hoisted setup and the shared helpers,
-with no meaningful ownership seam. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
 
