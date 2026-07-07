@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: dispatch guards are interdependent, so these notification liveness and unread regressions stay together with one store mock. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'

@@ -3,6 +3,7 @@ import {
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
+import type { AgentStartupShell } from '../../../shared/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
@@ -24,6 +25,7 @@ export function buildLaunchAgentTabStartupPlan(args: {
   promptDelivery: PromptDelivery
   cmdOverrides: Partial<Record<TuiAgent, string>>
   platform: NodeJS.Platform
+  shell?: AgentStartupShell
   agentArgs: string
   agentEnv: Record<string, string>
   agentProfiles: readonly TuiAgentProfile[]
@@ -40,6 +42,7 @@ export function buildLaunchAgentTabStartupPlan(args: {
     agent: args.agent,
     cmdOverrides: args.cmdOverrides,
     platform: args.platform,
+    shell: args.shell,
     agentArgs: args.agentArgs,
     agentEnv: args.agentEnv,
     agentProfiles: args.agentProfiles,

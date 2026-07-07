@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: notification edge cases share one module-scoped coordinator, so keeping setup and regression cases together prevents brittle cross-file mock resets. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'

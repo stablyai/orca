@@ -2358,7 +2358,14 @@ export function PRCommentsList({
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <div className={presentation.sectionHeader}>
+      <div
+        className={cn(
+          presentation.sectionHeader,
+          // Why: the checks sidebar scrolls as one column; pinning this header keeps
+          // filter and add-comment actions reachable while reading long threads.
+          'sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm'
+        )}
+      >
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="size-3.5 text-muted-foreground" />
           <span className={presentation.sectionHeaderLabel}>

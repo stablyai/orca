@@ -4754,7 +4754,10 @@
           "profileName": "Name",
           "profileBadge": "Profile",
           "duplicateProfile": "Duplicate agent",
-          "deleteProfile": "Delete profile"
+          "deleteProfile": "Delete profile",
+          "codexSessionSource": "Codex home to import from",
+          "codexSessionSourceInfo": "About importing Codex history",
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -8904,7 +8907,8 @@
             "b234ab25b4": "ファイルをクリップボードにコピーできませんでした",
             "f9d7ca753d": "パスのコピー",
             "3161c4e425": "フォルダ",
-            "e887fa4b2e": "ターミナルで開く"
+            "e887fa4b2e": "ターミナルで開く",
+            "1d8e182c32": "ファイルを表示"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git で無視されたファイルを表示",

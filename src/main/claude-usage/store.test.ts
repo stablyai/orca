@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: scan gating, pricing, and automation
-usage attribution share one stateful Claude usage store fixture. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
 

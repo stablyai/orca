@@ -153,6 +153,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.openDiff',
   'files.read',
   'files.readChunk',
+  'files.readDir',
   'files.readPreview',
   'files.readTerminalArtifact',
   'files.readTerminalArtifactPreview',

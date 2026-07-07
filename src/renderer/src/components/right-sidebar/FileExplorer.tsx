@@ -746,6 +746,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 runtimeDownloadContext={runtimeDownloadContext}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
+                onViewFile={handleClick}
                 onContextMenuSelect={preserveSelectionForContextMenu}
                 onCopyPaths={copyPathsForNode}
                 onStartNew={startNew}

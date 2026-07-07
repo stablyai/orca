@@ -1,8 +1,3 @@
-/* eslint-disable max-lines -- Why: pinning every layer that should have
-   caught the original "node-pty not available" bug (chained shell, package
-   ordering, probe shape, channel-failure surfacing, .bashrc-noise immunity,
-   platform-tagged logs) requires keeping these scenarios in one file so the
-   shared mock connection and exec-response fixture stay aligned. */
 // Why: regression coverage for the install-probe contract. The original
 // "node-pty is not available" bug shipped because every layer that should
 // have caught it (chained shell, swallowing catch, dir-only probe) was

@@ -14,7 +14,10 @@ import {
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
   mockPtyInstance: {
-    pid: 12345,
+    // Why: attach now proves the backing pid is alive before replaying, so the
+    // default managed PTY must report a live pid. Reuse the test runner's own
+    // pid — always alive — so unrelated attach tests are not seen as dead.
+    pid: process.pid,
     onData: vi.fn(),
     onExit: vi.fn(),
     write: vi.fn(),
@@ -608,6 +611,71 @@ describe('PtyHandler', () => {
       expect(result).toEqual({ replay: '\x1b]777;orca-shell-ready' })
     }
   )
+
+  it('reports not-found and reaps a reattach whose backing shell is dead', async () => {
+    // Why: a lingering managed entry whose child died without an onExit would
+    // otherwise attach-succeed with an empty replay and strand the pane on a
+    // black shell. A provably-dead pid must surface as not-found so the SSH
+    // provider maps it to SSH_SESSION_EXPIRED and the pane respawns fresh.
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    const exits: { id: string; paneKey?: string }[] = []
+    handler.setExitListener((evt) => exits.push(evt))
+
+    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dead:0' } })
+    expect(handler.activePtyCount).toBe(1)
+    expect(onExitCb).toBeDefined()
+
+    const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+    try {
+      await expect(
+        dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
+      ).rejects.toThrow('PTY "pty-1" not found')
+    } finally {
+      aliveSpy.mockRestore()
+    }
+
+    // The stale entry is reaped: cache-eviction observers fire and the map slot
+    // is freed so a later attach also cleanly reports not-found.
+    expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-dead:0' }])
+    expect(handler.activePtyCount).toBe(0)
+    await expect(
+      dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
+    ).rejects.toThrow('PTY "pty-1" not found')
+  })
+
+  it('replays for a reattach whose backing shell is still alive', async () => {
+    // Guard the other direction: a live pid must never be reaped, so a quiet
+    // but live session still returns its buffered replay on reattach.
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback?.('prompt$ ')
+
+    const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+    try {
+      const result = await dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        suppressReplayNotification: true
+      })
+      expect(result).toEqual({ replay: 'prompt$ ' })
+    } finally {
+      aliveSpy.mockRestore()
+    }
+    expect(handler.activePtyCount).toBe(1)
+  })
 
   it('terminates spawned PTY when request becomes stale before response', async () => {
     const killSpy = vi.fn()

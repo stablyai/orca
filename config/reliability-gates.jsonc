@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-03",
+  "updatedAt": "2026-07-07",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -457,6 +457,97 @@
         "Does not yet inject WebGL dispose/reset throws and active/hidden/resumed pane focus recovery in one component-level oracle."
       ],
       "demotionRule": "Cannot promote while it only checks visual rendering."
+    },
+    {
+      "id": "terminal-scroll.intent-preservation",
+      "title": "Scrollbar drag intent survives tab and visibility resume",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "terminal lifecycle",
+        "hidden-to-visible resume",
+        "tab switching",
+        "xterm scrollbar DOM",
+        "scrollback"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Renderer-unit coverage proves the shared xterm DOM intent path. Live Electron evidence is PR validation evidence for local macOS only until the flow has stable automation; live SSH, WSL, Linux, and Windows paths remain unproved.",
+      "motivatingLinks": [
+        "STA-1341"
+      ],
+      "invariant": "A user-driven xterm scrollbar thumb or track scroll updates the live terminal scroll intent before tab, visibility, or layout resume enforces intent, so resume preserves the latest dragged viewport instead of an older pinned line.",
+      "oracle": "Pointerdown on .xterm-scrollbar or .xterm-slider followed by xterm viewport movement records the new pinned viewport, and enforcing current intent restores that dragged line instead of stale top intent.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
+          "assertions": [
+            "pointer-driven .xterm-scrollbar and .xterm-slider scrolls update terminal scroll intent",
+            "a scrollbar-dragged viewport is restored instead of stale top intent",
+            "terminal body pointer activity is not treated as scrollbar intent"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-scroll-intent.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.3,
+          "summary": "1 test file(s) passed, 17 tests passed in this worktree."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused renderer unit test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental gate; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The new scrollbar DOM target assertions fail when only .xterm-viewport pointerdown is recognized. Needs saved CI/intentional-break artifact before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Runtime fix is limited to constant-time class/closest checks on pointerdown. It must not add polling, output parsing, PTY listing, hidden-pane wakeups, resize calls, or startup awaits."
+      },
+      "promotionCriteria": [
+        "Collect stable CI soak history for the renderer-unit gate.",
+        "Add stable live Electron automation for the scrollbar drag plus tab-switch repro.",
+        "Attach red/green evidence for stale intent restoring the wrong viewport."
+      ],
+      "knownGaps": [
+        "Manifest command is deterministic renderer-unit coverage, not a live Electron scrollbar drag.",
+        "Live daemon, SSH, WSL, remote-runtime, Linux, and Windows validation is not covered by this gate.",
+        "Future xterm scrollbar DOM class changes are only caught if they break the currently modeled class contract."
+      ],
+      "demotionRule": "Demote or quarantine if the unit gate flakes without a product bug or harness bug filed to the owner."
     },
     {
       "id": "startup-upgrade.persisted-session-corpus",
@@ -1182,7 +1273,7 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence on main@1282f5c2d; identical files to the pending stack. Real OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "coverageNotes": "Local macOS evidence on main@1282f5c2d, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy, and a local Electron/CDP live-PTY Sogou-style repro. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
@@ -1190,14 +1281,20 @@
         "https://github.com/stablyai/orca/pull/6999"
       ],
       "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY.",
-      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, and paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures. Real IME paths and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary post-IME typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit candidate selectors submit only the committed Chinese text. Real IME paths and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts"
+        "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+        "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
+        "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -1218,34 +1315,80 @@
           "assertions": [
             "paste/runtime forwarding avoids duplicate terminal payloads"
           ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
+          "assertions": [
+            "empty Sogou-style compositionupdate keeps composition active",
+            "stale composition state expires so editing keys cannot stay suppressed indefinitely",
+            "post-composition candidate guard is armed only by Sogou-style empty updates and clears after real typing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+          "assertions": [
+            "suppressed candidate keydown arms only the matching keypress/keyup release guard",
+            "held-key repeat keydowns stay guarded until their keyup, even past expiry",
+            "fresh keydowns, other keys, modified keys, and expired keypresses are not guarded, and a fresh press drops a stale pending release"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
+          "assertions": [
+            "standalone Linux 229 keydowns reach xterm while Windows 229 keydowns stay suppressed",
+            "candidate Space/digit selectors are suppressed only while candidate guards are active"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+          "assertions": [
+            "macOS standalone Process key behavior and composition-owned key suppression stay intact"
+          ]
+        },
+        {
+          "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "assertions": [
+            "Sogou-style Space candidate selection submits only the committed Chinese character",
+            "Sogou-style digit candidate selection submits only the committed Chinese phrase",
+            "Post-composition Sogou-style digit selection stays out of the PTY after compositionend"
+          ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-03",
+          "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
           "result": "passed",
-          "durationSeconds": 0.9,
-          "summary": "3 test file(s) passed, 63 tests passed on main@1282f5c2d in a clean checkout."
+          "durationSeconds": 0.7,
+          "summary": "7 test file(s) passed, 144 tests passed on the Linux/Sogou candidate-key branch (includes held-key repeat guard coverage)."
+        },
+        {
+          "date": "2026-07-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "result": "passed",
+          "durationSeconds": 72.0,
+          "summary": "Electron/CDP IME repro passed: Sogou candidate selection, post-composition candidate selection, and existing Chinese IME harness passed; real Codex IME test was skipped behind ORCA_E2E_REAL_CODEX_IME."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 30,
-        "scope": "renderer unit plus platform soak"
+        "p95Seconds": 90,
+        "scope": "renderer unit plus focused Electron/CDP IME repro"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Focused renderer input tests are now registered; needs soak history and platform IME evidence before promotion."
+        "evidence": "Focused renderer input tests and the Electron/CDP Sogou-style repro are now registered; needs soak history and true platform IME evidence before promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Focused tests cover existing native-text, input-source, and paste/runtime forwarding contracts. Needs intentional-break proof for duplicate native text forwarding and composition preedit leakage, plus the broader language/platform matrix."
+        "evidence": "Focused tests cover existing native-text, input-source, paste/runtime forwarding, Linux/Sogou candidate selector, post-composition guard contracts, and live-PTY Sogou-style candidate commits. Needs intentional-break proof for duplicate native text forwarding and composition preedit leakage, plus the broader language/platform matrix."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "Required if input forwarding adds polling, repeated event listeners, or renderer hot-path work."
+        "required": true,
+        "evidence": "Terminal IME hot-path audit clean on 2026-07-07: candidate guard adds O(1) boolean checks plus a bounded Space/digit release map; composition listeners are disposed with pane lifecycle; no polling, IPC fan-out, subprocess work, or SSH/remote transport cost added."
       },
       "promotionCriteria": [
         "Cover deterministic byte/cell oracles first.",
@@ -1253,7 +1396,7 @@
         "Pair with Windows ConPTY keyboard reset for Windows standard-key behavior."
       ],
       "knownGaps": [
-        "Current command is a renderer-unit slice; real OS IME automation may need manual or soak evidence.",
+        "Current commands include renderer-unit coverage and a CDP-driven Electron repro; real OS IME automation may need manual or soak evidence.",
         "Backspace/Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage."
       ],
       "demotionRule": "Cannot promote if success is based only on DOM text without PTY byte/cell evidence."

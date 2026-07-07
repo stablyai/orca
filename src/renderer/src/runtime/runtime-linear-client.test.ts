@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: runtime Linear routing cases stay together
-   so local preload fallback and SSH runtime transport parity are reviewed as one boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   linearCreateIssue,

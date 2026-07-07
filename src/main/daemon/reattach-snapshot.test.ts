@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import { HeadlessEmulator } from './headless-emulator'

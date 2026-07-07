@@ -81,7 +81,7 @@ export function filterSkillSuggestions(
   return installed
     .filter((skill) => {
       const name = skill.name.toLowerCase()
-      const dirName = skill.directoryPath.split(/[\\/]/).filter(Boolean).at(-1)?.toLowerCase()
+      const dirName = skill.directoryPath.split(/[\\/]/).findLast(Boolean)?.toLowerCase()
       return name.startsWith(normalized) || dirName?.startsWith(normalized)
     })
     .slice(0, 12)

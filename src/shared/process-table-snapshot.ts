@@ -21,6 +21,35 @@ const PS_TIMEOUT_MS = 3000
 // identically to a fresh fork.
 const DEFAULT_SNAPSHOT_TTL_MS = 500
 
+export type ProcessTableRow = {
+  pid: number
+  ppid: number
+  stat: string
+  command: string
+}
+
+/**
+ * Parse `ps -axo pid=,ppid=,stat=,command=` output into rows. Tolerates CRLF so
+ * a snapshot parsed on any host stays correct; `command` (last field) keeps its
+ * internal spaces because the regex is anchored and greedy on the tail.
+ */
+export function parseProcessTableRows(stdout: string): ProcessTableRow[] {
+  const rows: ProcessTableRow[] = []
+  for (const line of stdout.split(/\r?\n/)) {
+    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/)
+    if (!match) {
+      continue
+    }
+    rows.push({
+      pid: Number(match[1]),
+      ppid: Number(match[2]),
+      stat: match[3],
+      command: match[4]
+    })
+  }
+  return rows
+}
+
 type Snapshot<T> = { value: T; capturedAtMs: number }
 
 type ProcessTableSnapshotReaderDeps<T> = {
@@ -34,8 +63,8 @@ type ProcessTableSnapshotReaderDeps<T> = {
  * near-simultaneous scans behind a single in-flight promise + short TTL.
  * Exposed as a factory so tests can inject the scan and clock; production code
  * uses the shared `getProcessTableSnapshot` instance below. Generic over the
- * scan result so the Windows path can cache parsed rows while POSIX caches the
- * raw `ps` stdout string (the default).
+ * scan result so both the POSIX and Windows readers cache already-parsed rows,
+ * letting a burst of panes share one parse per TTL window.
  */
 export function createProcessTableSnapshotReader<T = string>(
   deps: ProcessTableSnapshotReaderDeps<T>
@@ -83,23 +112,26 @@ export function createProcessTableSnapshotReader<T = string>(
   }
 }
 
-const defaultReader = createProcessTableSnapshotReader({
+const defaultReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
   runPs: async () => {
     const { stdout } = await execFile('ps', [...PS_ARGS], {
       encoding: 'utf-8',
       timeout: PS_TIMEOUT_MS
     })
-    return stdout
+    // Why: parse once inside the deduped scan so a burst of panes sharing the
+    // TTL window reuse one ProcessTableRow[] instead of each re-tokenizing the
+    // identical stdout — matches the Windows reader, which already caches rows.
+    return parseProcessTableRows(stdout)
   },
   now: () => Date.now()
 })
 
 /**
  * Run (or reuse a recent) `ps -axo pid=,ppid=,stat=,command=` scan and return
- * its raw stdout. Per-process singleton: the relay and local main processes
- * each dedupe their own scans.
+ * its parsed rows. Per-process singleton: the relay and local main processes
+ * each dedupe their own scans and share a single parse per TTL window.
  */
-export function getProcessTableSnapshot(): Promise<string> {
+export function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
   return defaultReader.getSnapshot()
 }
 

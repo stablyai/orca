@@ -20,8 +20,11 @@ vi.mock('./pane-helpers', () => ({
   fitPanes: vi.fn(),
   focusActivePane: vi.fn()
 }))
+const scheduleTabRevealWebglAtlasRecovery = vi.fn()
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery: vi.fn()
+  // Why: the light-tab reveal must recover the atlas immediately, decoupled from
+  // the terminal-output debounce (which a background stream could otherwise defer).
+  scheduleTabRevealWebglAtlasRecovery: () => scheduleTabRevealWebglAtlasRecovery()
 }))
 
 type FakeManager = {
@@ -63,6 +66,9 @@ describe('resumeTerminalVisibility reveal repaint', () => {
 
     expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
     expect(manager.resumeRendering).not.toHaveBeenCalled()
+    // Reveal recovery is immediate (not the terminal-output debounce), so a
+    // background stream in another pane cannot defer this tab's atlas rebuild.
+    expect(scheduleTabRevealWebglAtlasRecovery).toHaveBeenCalledTimes(1)
   })
 
   it('schedules the repaint after rendering resumes on a heavy reveal', () => {

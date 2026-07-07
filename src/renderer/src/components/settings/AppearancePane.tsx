@@ -45,6 +45,7 @@ type AppearancePaneProps = {
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
   terminalFontSuggestions: string[]
+  onRequestFontSuggestions?: () => void
   systemPrefersDark: boolean
   ghostty: UseGhosttyImportReturn
   warpThemes: UseWarpThemeImportReturn
@@ -68,6 +69,7 @@ export function AppearancePane({
   applyTheme,
   fontSuggestions,
   terminalFontSuggestions,
+  onRequestFontSuggestions,
   systemPrefersDark,
   ghostty,
   warpThemes
@@ -179,6 +181,7 @@ export function AppearancePane({
             updateSettings={updateSettings}
             applyTheme={applyTheme}
             fontSuggestions={fontSuggestions}
+            onRequestFontSuggestions={onRequestFontSuggestions}
             isDesktopWindows={isDesktopWindows}
             forceVisiblePrimary={interfaceLabelMatches}
           />
@@ -205,6 +208,7 @@ export function AppearancePane({
             updateSettings={updateSettings}
             systemPrefersDark={systemPrefersDark}
             terminalFontSuggestions={terminalFontSuggestions}
+            onRequestFontSuggestions={onRequestFontSuggestions}
             ghostty={ghostty}
             warpThemes={warpThemes}
             forceVisiblePrimary={terminalLabelMatches}

@@ -10,6 +10,7 @@ import {
   resolveProcessCwd,
   processHasChildren,
   getForegroundProcessName,
+  isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
@@ -692,6 +693,22 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found`)
     }
 
+    // Why: a reattach can arrive for a relay PTY whose backing shell already
+    // died without node-pty delivering onExit (e.g. the child was reaped out of
+    // band while the SSH channel was down). The map entry lingers, so attach
+    // would otherwise "succeed" with an empty replay and strand the reattached
+    // pane on a black, unresponsive shell. Prove liveness here; if the pid is
+    // provably gone, reap the stale entry and report not-found so the caller
+    // drops the dead lease and spawns fresh — the same recovery path an expired
+    // grace window already takes.
+    if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
+      this.notifyExitListener(managed)
+      disposeManagedPty(managed)
+      this.ptys.delete(id)
+      this.clearPtyFlowState(id)
+      throw new Error(`PTY "${id}" not found`)
+    }
+
     // Why: PTY ids are a per-relay-process counter (pty-1, pty-2, …). When the
     // relay changes generation — an app update deploys a new content-hashed
     // relay dir, or a grace-expired relay restarts — the counter resets, so an
@@ -1000,7 +1017,7 @@ export class PtyHandler {
       // revived PTY.
       const match = entry.id.match(/^pty-(\d+)$/)
       if (match) {
-        const revivedNum = parseInt(match[1], 10)
+        const revivedNum = Number.parseInt(match[1], 10)
         if (revivedNum >= this.nextId) {
           this.nextId = revivedNum + 1
         }

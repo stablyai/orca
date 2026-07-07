@@ -103,6 +103,7 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
 }
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+import { localhostWorktreeLabelProxy } from '../localhost-worktree-label-proxy'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaLeftoverDirectory,
@@ -161,6 +162,9 @@ function removeWorktreeMetadataAndTransientState(store: Store, worktreeId: strin
   // drop process-local caches before the same ID can point at a new workspace.
   store.removeWorktreeMeta(worktreeId)
   advertisedUrlWatcher.forgetWorktree(worktreeId)
+  // Why: drop this worktree's localhost label routes so they don't accumulate
+  // in the proxy's route maps for the rest of the session.
+  localhostWorktreeLabelProxy.unregisterWorktree(worktreeId)
   deleteWorktreeHistoryDir(worktreeId)
   // Why: release the removed worktree's PR-refresh aliases so coalesced queue
   // entries do not retain it for the rest of the session (memory creep).

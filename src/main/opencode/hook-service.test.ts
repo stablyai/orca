@@ -1,8 +1,3 @@
-/* eslint-disable max-lines -- Why: this suite covers four orthogonal regimes
-   (plugin source, id guards, legacy per-PTY round-trip, and overlay mode for
-   user-set OPENCODE_CONFIG_DIR). Splitting them across files would scatter
-   tightly coupled fixtures (userData mock, hooks/overlay roots) and obscure
-   the docs/opencode-config-dir-collision.md regression matrix. */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,

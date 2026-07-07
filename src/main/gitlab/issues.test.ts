@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: GitLab issue mutation/list coverage shares glab mocks across related endpoint cases. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GlUtils from './gl-utils'
 

@@ -102,6 +102,14 @@ export default function RootLayout() {
         return
       }
       handledNotificationIdsRef.current.add(notificationId)
+      // Why: RootLayout never unmounts, so cap this tap-dedup set (FIFO) rather
+      // than letting it grow one id per notification tapped for the app's life.
+      if (handledNotificationIdsRef.current.size > 256) {
+        const oldest = handledNotificationIdsRef.current.values().next().value
+        if (oldest !== undefined) {
+          handledNotificationIdsRef.current.delete(oldest)
+        }
+      }
 
       const path = await getNavigationPath(response.notification.request.content.data)
       clearLastNotificationResponse()

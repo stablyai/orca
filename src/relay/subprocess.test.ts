@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: subprocess coverage shares one bundled relay artifact; splitting this file would rebuild the same daemon bundle across suites and make these lifecycle tests slower/flakier. */
 import { afterAll, beforeAll, describe, expect, it, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'

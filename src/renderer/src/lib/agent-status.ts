@@ -1,9 +1,5 @@
 import type { TerminalTab, TuiAgent, Worktree } from '../../../shared/types'
-import type {
-  AgentStatusEntry,
-  AgentStatusState,
-  AgentType
-} from '../../../shared/agent-status-types'
+import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
 import { tabHasLivePty } from './tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
 import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
@@ -23,11 +19,8 @@ export {
   isClaudeManagementTitle,
   getAgentLabel
 } from '../../../shared/agent-detection'
-import {
-  type AgentStatus,
-  detectAgentStatusFromTitle,
-  getAgentLabel
-} from '../../../shared/agent-detection'
+import type { AgentStatus } from '../../../shared/agent-detection'
+import { classifyTitleActivity, resolveTitleActivityLabel } from './pane-agent-evidence'
 
 type AgentQueryArgs = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -84,8 +77,8 @@ export function getWorkingAgentsPerWorktree({
       const paneTitles = runtimePaneTitlesByTabId[tab.id]
       if (paneTitles && Object.keys(paneTitles).length > 0) {
         for (const [paneIdStr, title] of Object.entries(paneTitles)) {
-          if (detectAgentStatusFromTitle(title) === 'working') {
-            const label = getAgentLabel(title)
+          if (classifyTitleActivity(title) === 'working') {
+            const label = resolveTitleActivityLabel(title)
             if (label) {
               agents.push({
                 label,
@@ -96,8 +89,8 @@ export function getWorkingAgentsPerWorktree({
             }
           }
         }
-      } else if (detectAgentStatusFromTitle(tab.title) === 'working') {
-        const label = getAgentLabel(tab.title)
+      } else if (classifyTitleActivity(tab.title) === 'working') {
+        const label = resolveTitleActivityLabel(tab.title)
         if (label) {
           agents.push({ label, status: 'working', tabId: tab.id, paneId: null })
         }
@@ -210,16 +203,9 @@ export function agentKindForAgentType(agentType: AgentType | null | undefined): 
   return tuiAgent ? tuiAgentToAgentKind(tuiAgent) : 'other'
 }
 
-// Why: explicit agent status entries (from hook-based reports) can go stale if
-// the agent process exits without sending a final update. This helper lets
-// callers decide whether to trust the entry based on a configurable TTL.
-export function isExplicitAgentStatusFresh(
-  entry: Pick<AgentStatusEntry, 'updatedAt'>,
-  now: number,
-  staleAfterMs: number
-): boolean {
-  return now - entry.updatedAt <= staleAfterMs
-}
+// Why: the freshness gate moved into the pane-agent-evidence resolvers; the
+// re-export keeps this module's many existing importers unchanged.
+export { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 
 /**
  * Map an explicit AgentStatusState to the visual Status used by
@@ -297,13 +283,13 @@ function countWorkingAgentsForTab(
   // (for example restored-but-unvisited worktrees).
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     for (const title of Object.values(paneTitles)) {
-      if (detectAgentStatusFromTitle(title) === 'working') {
+      if (classifyTitleActivity(title) === 'working') {
         count += 1
       }
     }
     return count
   }
-  if (detectAgentStatusFromTitle(tab.title) === 'working') {
+  if (classifyTitleActivity(tab.title) === 'working') {
     count += 1
   }
   return count

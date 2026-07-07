@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session, type SubprocessHandle } from './session'
 import { TerminalHost } from './terminal-host'

@@ -133,7 +133,7 @@ export function AddRepoLocalStartStep({
     if (buttons.length === 0) {
       return
     }
-    const currentIndex = buttons.findIndex((button) => button === document.activeElement)
+    const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
     const delta = event.key === 'ArrowDown' ? 1 : -1
     const nextIndex = (currentIndex + delta + buttons.length) % buttons.length
     event.preventDefault()

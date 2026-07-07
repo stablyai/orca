@@ -1,4 +1,4 @@
-import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
 import type {
@@ -91,7 +91,7 @@ function tabHasStatus(
       ) {
         continue
       }
-      if (detectAgentStatusFromTitle(title) === status) {
+      if (classifyTitleActivity(title) === status) {
         return true
       }
     }
@@ -103,7 +103,7 @@ function tabHasStatus(
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
-  return detectAgentStatusFromTitle(tab.title) === status
+  return classifyTitleActivity(tab.title) === status
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {

@@ -63,6 +63,8 @@ export type LinearClientForWorkspace = {
   apiKey: string
 }
 
+export const LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS = 60 * 60
+
 let cachedTokens = new Map<string, string>()
 // Why: decrypt failures are recorded per workspace so getStatus can explain
 // failing reads without re-touching the keychain on every status poll.
@@ -547,6 +549,15 @@ export function getClients(
     clients.push({ workspace, client: new LinearClient({ apiKey: token }), apiKey: token })
   }
   return clients
+}
+
+export function getPublicFileUrlClient(entry: LinearClientForWorkspace): LinearClient {
+  return new LinearClient({
+    apiKey: entry.apiKey,
+    headers: {
+      'public-file-urls-expire-in': String(LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
+    }
+  })
 }
 
 // ── Auth error detection ─────────────────────────────────────────────

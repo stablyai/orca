@@ -137,7 +137,7 @@ type StoreState = {
       | { kind: 'windows-host' }
       | { kind: 'wsl'; distro: string }
   }[]
-  sshConnectionStates: Map<string, { status: string; remotePlatform?: NodeJS.Platform }>
+  sshConnectionStates: Map<string, { status: string }>
   cacheTimerByKey: Record<string, number | null>
   settings: {
     theme?: 'system' | 'dark' | 'light'
@@ -968,6 +968,34 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('drops keystrokes while the replay guard is engaged, then forwards once it releases', async () => {
+    // Regression for the cold-restore reattach lockout: handleReattachResult's
+    // replay writes engaged the per-pane replay guard, and because xterm's parse
+    // callback never fired for the just-mounted pane the counter stuck non-zero.
+    // The onData handler then dropped EVERY keystroke — a live but unresponsive
+    // pane ("can't type after reconnecting"). This locks in the drop-site
+    // contract: engaged guard suppresses input, released guard forwards it.
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('ssh:ssh-1@@pty-1')
+    transportFactoryQueue.push(transport)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, createManager(1, 1) as never, deps as never)
+    await flushAsyncTicks()
+
+    transport.sendInput.mockClear()
+    // Engaged (as a stuck reattach would leave it): input must be suppressed.
+    deps.replayingPanesRef.current.set(pane.id, 3)
+    sendTerminalInputThroughPane(pane, 'echo hi\r')
+    expect(transport.sendInput).not.toHaveBeenCalled()
+
+    // Released (via the guard's fallback or parse completion): input flows again.
+    deps.replayingPanesRef.current.delete(pane.id)
+    sendTerminalInputThroughPane(pane, 'echo hi\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r')
+  })
+
   it('normalizes Pi-compatible remote runtime status to OMP after typed omp command', async () => {
     const { connectPanePty } = await import('./pty-connection')
     enableActiveRuntimeEnvironment()
@@ -1005,6 +1033,221 @@ describe('connectPanePty', () => {
       agentType: 'omp',
       terminalTitle: 'OMP ready'
     })
+  })
+
+  it('drives runtime title, tab title, and renderer policy from one title decision', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-gemini')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1, 1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!onTitleChange) {
+      throw new Error('missing title callback')
+    }
+    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
+
+    // Display/runtime/tab title and the GPU gate all come from the same decision.
+    expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '✦ Gemini CLI')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '✦ Gemini CLI')
+    // Genuine Gemini under the default `auto` setting takes the DOM fallback.
+    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
+  })
+
+  it('keeps GPU enabled when a pane-scoped OMP owner emits a Gemini-looking title', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          agentType: 'omp',
+          state: 'working',
+          prompt: '',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          stateHistory: []
+        }
+      }
+    } as StoreState
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-omp-gemini-cwd')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1, 1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!onTitleChange) {
+      throw new Error('missing title callback')
+    }
+    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
+
+    // Pane-scoped owner evidence outranks the raw title, so the fallback cannot fire.
+    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, true)
+    expect(manager.setPaneGpuRendering).not.toHaveBeenCalledWith(1, false)
+  })
+
+  it('does not let one split pane title change another pane GPU state', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane1 = createPane(1)
+    const pane2 = createPane(2)
+    const transport1 = createMockTransport('pty-split-1')
+    const transport2 = createMockTransport('pty-split-2')
+    transportFactoryQueue.push(transport1, transport2)
+    const manager = createManager(2, 1)
+
+    connectPanePty(pane1 as never, manager as never, createDeps() as never)
+    connectPanePty(pane2 as never, manager as never, createDeps() as never)
+    await flushAsyncTicks()
+    const onTitleChange1 = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!onTitleChange1) {
+      throw new Error('missing title callback for split pane 1')
+    }
+    onTitleChange1('✦ Gemini CLI', '✦ Gemini CLI')
+
+    const gpuCalls = manager.setPaneGpuRendering.mock.calls as [number, boolean][]
+    expect(gpuCalls.some(([paneId]) => paneId === 1)).toBe(true)
+    expect(gpuCalls.every(([paneId]) => paneId !== 2)).toBe(true)
+  })
+
+  it('DOM-gates a genuine Gemini split pane even when the tab launched a non-Gemini agent', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    // The shared tab.launchAgent must not veto the renderer for a sibling pane.
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', launchAgent: 'omp' }]
+      }
+    } as StoreState
+    const pane1 = createPane(1)
+    const pane2 = createPane(2)
+    const transport1 = createMockTransport('pty-split-owner-1')
+    const transport2 = createMockTransport('pty-split-owner-2')
+    transportFactoryQueue.push(transport1, transport2)
+    const manager = createManager(2, 2)
+
+    connectPanePty(pane1 as never, manager as never, createDeps() as never)
+    connectPanePty(pane2 as never, manager as never, createDeps() as never)
+    await flushAsyncTicks()
+    const onTitleChange2 = createdTransportOptions[1]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!onTitleChange2) {
+      throw new Error('missing title callback for split pane 2')
+    }
+    onTitleChange2('✦ Gemini CLI', '✦ Gemini CLI')
+
+    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(2, false)
+  })
+
+  it('DOM-gates a genuine Gemini title in a pane whose launch agent was non-Gemini', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-reused-gemini')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1, 1)
+    // Stale, never-cleared launch identity must not veto the renderer.
+    const deps = createDeps({ startup: { command: 'claude', launchAgent: 'claude' } })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!onTitleChange) {
+      throw new Error('missing title callback')
+    }
+    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
+
+    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
+  })
+
+  it('DOM-gates a genuine Gemini title when the only pane row is a done non-Gemini agent', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          agentType: 'claude',
+          state: 'done',
+          prompt: '',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          stateHistory: []
+        }
+      }
+    } as StoreState
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-reused-done-row')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1, 1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!onTitleChange) {
+      throw new Error('missing title callback')
+    }
+    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
+
+    // A `done` row is a leftover from a prior agent, so it must not veto.
+    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
+  })
+
+  it('DOM-gates a genuine Gemini title when the only pane row is a stale non-Gemini agent', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const staleAt = Date.now() - 60 * 60 * 1000
+    mockStoreState = {
+      ...mockStoreState,
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          agentType: 'claude',
+          state: 'working',
+          prompt: '',
+          updatedAt: staleAt,
+          stateStartedAt: staleAt,
+          stateHistory: []
+        }
+      }
+    } as StoreState
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-reused-stale-row')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1, 1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onTitleChange = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!onTitleChange) {
+      throw new Error('missing title callback')
+    }
+    onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
+
+    // A stale working row (older than AGENT_STATUS_STALE_AFTER_MS) must not veto.
+    expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
   })
 
   it('normalizes after shell word deletion edits a typed command to omp', async () => {
@@ -3885,7 +4128,11 @@ describe('connectPanePty', () => {
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }]
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }],
+        // Why: startup delivery assumes a live connection; a disconnected
+        // target now routes through the deferred-connect gate instead of
+        // spawning synchronously.
+        sshConnectionStates: new Map([['ssh-conn-1', { status: 'connected' }]])
       }
 
       const pane = createPane(1)
@@ -3935,7 +4182,11 @@ describe('connectPanePty', () => {
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }]
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }],
+        // Why: startup delivery assumes a live connection; a disconnected
+        // target now routes through the deferred-connect gate instead of
+        // spawning synchronously.
+        sshConnectionStates: new Map([['ssh-conn-1', { status: 'connected' }]])
       }
 
       const pane = createPane(1)
@@ -4073,7 +4324,11 @@ describe('connectPanePty', () => {
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }]
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }],
+        // Why: startup delivery assumes a live connection; a disconnected
+        // target now routes through the deferred-connect gate instead of
+        // spawning synchronously.
+        sshConnectionStates: new Map([['ssh-conn-1', { status: 'connected' }]])
       }
 
       const pane = createPane(1)
@@ -4128,7 +4383,11 @@ describe('connectPanePty', () => {
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }]
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }],
+        // Why: startup delivery assumes a live connection; a disconnected
+        // target now routes through the deferred-connect gate instead of
+        // spawning synchronously.
+        sshConnectionStates: new Map([['ssh-conn-1', { status: 'connected' }]])
       }
 
       const pane = createPane(1)
@@ -4183,7 +4442,11 @@ describe('connectPanePty', () => {
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }]
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }],
+        // Why: startup delivery assumes a live connection; a disconnected
+        // target now routes through the deferred-connect gate instead of
+        // spawning synchronously.
+        sshConnectionStates: new Map([['ssh-conn-1', { status: 'connected' }]])
       }
 
       const pane = createPane(1)
@@ -4235,7 +4498,11 @@ describe('connectPanePty', () => {
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }]
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }],
+        // Why: startup delivery assumes a live connection; a disconnected
+        // target now routes through the deferred-connect gate instead of
+        // spawning synchronously.
+        sshConnectionStates: new Map([['ssh-conn-1', { status: 'connected' }]])
       }
 
       const wrapperCommand = 'bash -lc wait-for-setup-wrapper'
@@ -4704,6 +4971,67 @@ describe('connectPanePty', () => {
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'stale-pty')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-pty')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
+  })
+
+  it('reattaches via the tab-level SSH pty id when deferred bookkeeping missed the tab', async () => {
+    // Why: restore can miss the deferred maps (e.g. activeConnectionIdsAtShutdown
+    // wasn't persisted). The tab's own app SSH pty id must still drive a
+    // connect-then-reattach instead of a fresh spawn into a missing provider.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-7' }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map()
+    } as StoreState
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(12)
+
+    const windowApi = (globalThis as unknown as { window: { api: { ssh: { connect: unknown } } } })
+      .window.api
+    expect(windowApi.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'ssh:conn-1@@pty-7' })
+    )
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+  })
+
+  it('connects a disconnected SSH target before fresh-spawning instead of erroring', async () => {
+    // Why: spawning against a disconnected target throws "No PTY provider"
+    // and strands the pane behind a toast that never retries.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-ssh-pty')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map()
+    } as StoreState
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    // Why: no spawn may fire before the SSH connection is established.
+    expect(transport.connect).not.toHaveBeenCalled()
+    await flushAsyncTicks(12)
+
+    const windowApi = (globalThis as unknown as { window: { api: { ssh: { connect: unknown } } } })
+      .window.api
+    expect(windowApi.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sessionId: expect.any(String) })
+    )
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
   it('spawns a fresh PTY when a non-deferred SSH reattach reports expired via onError', async () => {
@@ -5618,285 +5946,6 @@ describe('connectPanePty', () => {
     // Why: consuming the record prevents a later worktree activation from
     // launching a duplicate resume tab for the same session.
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
-  })
-
-  // #4557: an agent terminal that can't be resumed should come back as a fresh
-  // agent (prior agent, else default) instead of a blank shell.
-  const findReattachConnect = (transport: ReturnType<typeof createMockTransport>) => {
-    const call = transport.connect.mock.calls.find(
-      (args) => (args[0] as { sessionId?: string })?.sessionId === 'lost-pty'
-    )
-    return call?.[0] as
-      | {
-          command?: string
-          launchAgent?: string
-          launchConfig?: {
-            agentCommand?: string
-            agentArgs?: string
-            agentEnv?: Record<string, string>
-          }
-          env?: Record<string, string>
-        }
-      | undefined
-  }
-
-  const mountColdRestore = async (
-    transport: ReturnType<typeof createMockTransport>,
-    depsOverrides: Record<string, unknown> = {}
-  ) => {
-    const { connectPanePty } = await import('./pty-connection')
-    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-      if (sessionId) {
-        return { id: 'fresh-pty', coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' } }
-      }
-      return 'fresh-pty'
-    })
-    transportFactoryQueue.push(transport)
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' },
-      ...depsOverrides
-    })
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(20)
-    await new Promise((resolve) => setTimeout(resolve, 70))
-    return deps
-  }
-
-  it('cold-restores a fresh agent from the sleeping record when its session is unresumable', async () => {
-    const transport = createMockTransport('fresh-pty')
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
-      agentStatusByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {
-        // Agent known, but no resumable provider session id.
-        [paneKey]: {
-          paneKey,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          agent: 'codex',
-          prompt: 'finish the task',
-          state: 'working',
-          capturedAt: 1,
-          updatedAt: 1
-        }
-      }
-    } as StoreState
-
-    await mountColdRestore(transport)
-
-    const reattach = findReattachConnect(transport)
-    expect(reattach?.command).toMatch(/^codex /)
-    expect(reattach?.command).not.toContain('resume')
-    expect(reattach?.launchAgent).toBe('codex')
-    expect(reattach?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(new RegExp(`^${UUID_RE}$`))
-  })
-
-  it('cold-restores a fresh agent with the sleeping record launch config when resume is unavailable', async () => {
-    const transport = createMockTransport('fresh-pty')
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
-      settings: {
-        ...mockStoreState.settings,
-        agentCmdOverrides: { codex: 'current-codex' },
-        agentDefaultArgs: { codex: '--current-args' }
-      },
-      agentStatusByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          agent: 'codex',
-          prompt: 'finish the task',
-          state: 'working',
-          capturedAt: 1,
-          updatedAt: 1,
-          launchConfig: {
-            agentCommand: 'sleeping-codex --stored-args',
-            agentArgs: '--stored-args',
-            agentEnv: { CODEX_HOME: '/tmp/orca-stored-codex' }
-          }
-        }
-      }
-    } as StoreState
-
-    await mountColdRestore(transport)
-
-    const reattach = findReattachConnect(transport)
-    expect(reattach?.command).toBe('sleeping-codex --stored-args')
-    expect(reattach?.launchAgent).toBe('codex')
-    expect(reattach?.launchConfig).toMatchObject({
-      agentCommand: 'sleeping-codex --stored-args',
-      agentArgs: '--stored-args',
-      agentEnv: { CODEX_HOME: '/tmp/orca-stored-codex' }
-    })
-    expect(reattach?.env).toMatchObject({
-      CODEX_HOME: '/tmp/orca-stored-codex',
-      ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
-    })
-  })
-
-  it('uses the known SSH remote platform when fresh-launching an unresumable agent', async () => {
-    const transport = createMockTransport('fresh-pty')
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: {
-        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty', launchAgent: 'claude-agent-teams' }]
-      },
-      repos: [{ id: 'repo1', connectionId: 'ssh-win' }],
-      sshConnectionStates: new Map([['ssh-win', { status: 'connected', remotePlatform: 'win32' }]]),
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
-      agentStatusByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {}
-    } as StoreState
-
-    await mountColdRestore(transport)
-
-    const reattach = findReattachConnect(transport)
-    expect(reattach?.command).toMatch(/^orca\.cmd claude-teams/)
-    expect(reattach?.command).not.toContain('orca-ide')
-    expect(reattach?.launchAgent).toBe('claude-agent-teams')
-  })
-
-  it('cold-restores the prior agent from the persisted tab launchAgent after a restart', async () => {
-    const transport = createMockTransport('fresh-pty')
-    mockStoreState = {
-      ...mockStoreState,
-      // After a restart there is no live status nor sleeping record — only the
-      // persisted tab.launchAgent tells us this terminal ran an agent.
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty', launchAgent: 'claude' }] },
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
-      agentStatusByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {}
-    } as StoreState
-
-    await mountColdRestore(transport)
-
-    const reattach = findReattachConnect(transport)
-    expect(reattach?.command).toContain('claude')
-    expect(reattach?.command).not.toContain('resume')
-    expect(reattach?.launchAgent).toBe('claude')
-  })
-
-  it('cold-restores the default agent when an agent terminal has no recoverable agent', async () => {
-    const transport = createMockTransport('fresh-pty')
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {}, defaultTuiAgent: 'codex' },
-      agentStatusByPaneKey: {},
-      // A record exists (it was an agent terminal) but carries no usable agent id.
-      sleepingAgentSessionsByPaneKey: {
-        [paneKey]: { paneKey, tabId: 'tab-1', worktreeId: 'wt-1', capturedAt: 1, updatedAt: 1 }
-      }
-    } as StoreState
-
-    await mountColdRestore(transport)
-
-    const reattach = findReattachConnect(transport)
-    expect(reattach?.command).toMatch(/^codex /)
-    expect(reattach?.command).not.toContain('resume')
-    expect(reattach?.launchAgent).toBe('codex')
-  })
-
-  it('does not cold-restore a fresh agent from only a completed live status row', async () => {
-    const transport = createMockTransport('fresh-pty')
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {}, defaultTuiAgent: 'codex' },
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          agentType: 'codex',
-          paneKey,
-          prompt: 'done task',
-          state: 'done',
-          stateHistory: [],
-          stateStartedAt: 1,
-          updatedAt: 1
-        }
-      },
-      sleepingAgentSessionsByPaneKey: {}
-    } as StoreState
-
-    await mountColdRestore(transport)
-
-    const reattach = findReattachConnect(transport)
-    expect(reattach?.command).toBeUndefined()
-    expect(reattach?.launchAgent).toBeUndefined()
-  })
-
-  it('ignores malformed sleeping launch config when a live resumable status exists', async () => {
-    const transport = createMockTransport('fresh-pty')
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          agentType: 'codex',
-          paneKey,
-          prompt: 'live task',
-          providerSession: { key: 'session_id', id: 'live-session' },
-          state: 'working',
-          stateHistory: [],
-          stateStartedAt: 1,
-          updatedAt: 1
-        }
-      },
-      sleepingAgentSessionsByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          agent: 'codex',
-          prompt: 'malformed sleeping task',
-          state: 'working',
-          capturedAt: 1,
-          updatedAt: 1,
-          launchConfig: {
-            agentCommand: 'malformed-sleeping-codex',
-            agentArgs: '',
-            agentEnv: {}
-          }
-        }
-      }
-    } as StoreState
-
-    await mountColdRestore(transport)
-
-    const reattach = findReattachConnect(transport)
-    expect(reattach?.command).toContain("'resume' 'live-session'")
-    expect(reattach?.command).not.toBe('malformed-sleeping-codex')
-    expect(reattach?.launchAgent).toBe('codex')
-  })
-
-  it('leaves a plain shell blank on cold restore (no prior agent, no default)', async () => {
-    const transport = createMockTransport('fresh-pty')
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
-      settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
-      agentStatusByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {}
-    } as StoreState
-
-    await mountColdRestore(transport)
-
-    const reattach = findReattachConnect(transport)
-    expect(reattach?.command).toBeUndefined()
-    expect(reattach?.launchAgent).toBeUndefined()
   })
 
   it('resumes from an unambiguous legacy sleeping record when cold-restoring a preserved pane', async () => {

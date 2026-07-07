@@ -16,6 +16,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/types'
@@ -103,6 +104,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
+  const queuedShell = resolveLocalWindowsAgentStartupShell({
+    platform: resolvedLaunchPlatform,
+    isRemote,
+    terminalWindowsShell: store.settings?.terminalWindowsShell
+  })
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const agentProfiles = store.settings?.agentProfiles ?? []
   const variables = { repoPath: repo?.path, worktreePath: worktree?.path }
@@ -130,6 +136,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     promptDelivery,
     cmdOverrides,
     platform: resolvedLaunchPlatform,
+    shell: queuedShell,
     agentArgs: effectiveAgentArgs,
     agentEnv,
     agentProfiles,

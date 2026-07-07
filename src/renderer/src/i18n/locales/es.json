@@ -4769,7 +4769,10 @@
           "profileName": "Name",
           "profileBadge": "Profile",
           "duplicateProfile": "Duplicate agent",
-          "deleteProfile": "Delete profile"
+          "deleteProfile": "Delete profile",
+          "codexSessionSource": "Codex home to import from",
+          "codexSessionSourceInfo": "About importing Codex history",
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -8904,7 +8907,8 @@
             "b234ab25b4": "No se pudo copiar el archivo en el portapapeles",
             "f9d7ca753d": "Copiar rutas",
             "3161c4e425": "carpeta",
-            "e887fa4b2e": "Abrir en terminal"
+            "e887fa4b2e": "Abrir en terminal",
+            "1d8e182c32": "Ver archivo"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados por Git",

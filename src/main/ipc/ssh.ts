@@ -714,8 +714,8 @@ export function registerSshHandlers(
     await removeRegisteredSshTarget(args.id)
   })
 
-  ipcMain.handle('ssh:importConfig', () => {
-    return sshStore!.importFromSshConfig()
+  ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
+    return sshStore!.importFromSshConfig(args)
   })
 
   // ── Connection lifecycle ───────────────────────────────────────────

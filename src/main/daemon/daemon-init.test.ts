@@ -38,6 +38,7 @@ const {
   spawnerInstances,
   ensureRunningOverrides,
   adapterInstances,
+  defaultListSessionsSessions,
   getLocalPtyProviderMock,
   localFallbackProvider,
   setLocalPtyProviderMock,
@@ -103,6 +104,9 @@ const {
   // Same for DaemonPtyAdapter. The test asserts the replacement adapter is a
   // fresh instance whose respawn closure targets the *original* spawner.
   const adapterInstances: MockAdapter[] = []
+  // Why: adapters are constructed inside initDaemonPtyProvider, so tests that
+  // need listSessions to report live sessions set this before calling init.
+  const defaultListSessionsSessions: { sessionId: string }[] = []
 
   const localFallbackProvider = {
     routesFreshSpawnsToLocalProvider: undefined,
@@ -154,6 +158,7 @@ const {
     spawnerInstances,
     ensureRunningOverrides,
     adapterInstances,
+    defaultListSessionsSessions,
     getLocalPtyProviderMock,
     localFallbackProvider,
     setLocalPtyProviderMock,
@@ -303,7 +308,7 @@ vi.mock('./daemon-pty-adapter', () => ({
         this.callOrder.push('fanoutSyntheticExits')
       })
       this.listProcesses = vi.fn(async () => [])
-      this.listSessions = vi.fn(async () => [])
+      this.listSessions = vi.fn(async () => [...defaultListSessionsSessions])
       this.shutdown = vi.fn(async () => {})
       this.dispose = vi.fn()
       this.disconnectOnly = vi.fn(async () => {})
@@ -326,6 +331,7 @@ async function importFresh() {
   spawnerInstances.length = 0
   ensureRunningOverrides.length = 0
   adapterInstances.length = 0
+  defaultListSessionsSessions.length = 0
   getLocalPtyProviderMock.mockClear()
   localFallbackProvider.spawn.mockClear()
   localFallbackProvider.write.mockClear()
@@ -395,6 +401,28 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(rebindLocalProviderListenersMock.mock.invocationCallOrder[0]).toBeGreaterThan(
       setLocalPtyProviderMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('prunes seeded Claude live-PTY ids against daemon sessions after init', async () => {
+    const mod = await importFresh()
+    // Why: live-pty-gate is intentionally unmocked — import from the same fresh
+    // module registry so the module-level gate state matches daemon-init's.
+    const gate = await import('../claude-accounts/live-pty-gate')
+    defaultListSessionsSessions.push({ sessionId: 'claude-alive' })
+    gate.seedLiveClaudePtysFromPersistence(['claude-alive', 'claude-dead'])
+    try {
+      await mod.initDaemonPtyProvider()
+
+      expect(gate.hasLiveClaudePtys()).toBe(true)
+
+      gate.markClaudePtyExited('claude-alive')
+      // Why: proves 'claude-dead' was released by the daemon reconcile — the
+      // surviving session was the only id still holding the gate.
+      expect(gate.hasLiveClaudePtys()).toBe(false)
+    } finally {
+      gate.markClaudePtyExited('claude-alive')
+      gate.markClaudePtyExited('claude-dead')
+    }
   })
 
   it('does not install a late daemon provider after startup fallback aborts the init attempt', async () => {

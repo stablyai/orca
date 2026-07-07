@@ -112,10 +112,11 @@ import {
 } from './lib/workspace-session'
 import { createSessionWriteSubscriber } from './lib/session-write-subscriber'
 import {
-  fetchWorkspaceSessionFromHosts,
+  fetchWorkspaceSessionWithRuntimeHostOwners,
   patchWorkspaceSessionByHost,
   persistWorkspaceSessionByHostSync
 } from './lib/workspace-session-host-persistence'
+import { collectFolderWorkspaceKeysFromSession } from './lib/workspace-session-hydration-keys'
 import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
@@ -158,6 +159,7 @@ import {
   type KeybindingContext,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -179,6 +181,17 @@ const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
   platform: shortcutPlatform,
   isWebClient: isPairedWebClientWindow()
 })
+
+async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
+  try {
+    return (await window.api.runtimeEnvironments.list()).map((environment) =>
+      toRuntimeExecutionHostId(environment.id)
+    )
+  } catch (err) {
+    console.warn('Failed to list runtime session hosts for startup:', err)
+    return []
+  }
+}
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -855,17 +868,15 @@ function App(): React.JSX.Element {
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
-        // Why: these three reads are main-side store/file reads with no
-        // dependency on anything fetched below, so start them now and await
-        // them at their original positions — the round-trips overlap the
-        // repo/worktree scans instead of queuing after them. Browser session
-        // profiles are deliberately NOT started early: on a remote runtime
-        // they route through a runtime RPC that may not be connected this
-        // early, and a failed fetch clears the profile list. The floating
-        // .catch marks the rejection handled if an earlier awaited step
-        // throws first; each await still rethrows its own failure.
-        const uiGetPromise = timeRendererStartupStep('ui-get', () => window.api.ui.get())
-        uiGetPromise.catch(() => {})
+        // Why: keybindings + onboarding are main-side reads with no dependency
+        // on the catalog/session steps below, so start them now and await them
+        // at their original positions — the round-trips overlap the local
+        // catalog scans instead of queuing after them. Browser session profiles
+        // are deliberately NOT started early: on a remote runtime they route
+        // through a runtime RPC that may not be connected this early, and a
+        // failed fetch clears the profile list. The floating .catch marks the
+        // rejection handled if an earlier awaited step throws first; each await
+        // still rethrows its own failure.
         const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
           actions.fetchKeybindings()
         )
@@ -874,36 +885,11 @@ function App(): React.JSX.Element {
           window.api.onboarding.get()
         )
         onboardingPromise.catch(() => {})
-        // Why: load local + every configured runtime environment (not just the
-        // active one) so a cold start that restored a remote workspace doesn't
-        // hide local repos. The sidebar "All hosts" scope then shows them all.
-        await timeRendererStartupStep('fetch-repos', () => actions.fetchReposForAllHosts())
-        // Why: project-groups/folder-workspaces read neither the repos store nor
-        // worktrees, so once repos land they can overlap the per-repo
-        // `git worktree list` fan-out (#7225) instead of queuing ahead of it — a
-        // slow remote host's 15s scope RPCs no longer block the scan. folders
-        // still follow project-groups (they read projectGroups); all settle
-        // before the hydrate steps below.
-        const projectScopeChain = (async () => {
-          await timeRendererStartupStep('fetch-project-groups', () =>
-            actions.fetchProjectGroupsForAllHosts()
-          )
-          await timeRendererStartupStep('fetch-folder-workspaces', () =>
-            actions.fetchFolderWorkspacesForAllHosts()
-          )
-        })()
-        // Why: worktrees + lineage both fan out `git worktree list` per repo on
-        // the main process. Running them concurrently lets it share one
-        // in-flight scan per repo instead of paying the process-spawn fan-out
-        // twice back-to-back — the dominant renderer-chain cost on Windows
-        // (issue #7225). Lineage only reads settings + its own slice, so it
-        // does not depend on the worktrees fetch having landed.
-        await Promise.all([
-          projectScopeChain,
-          timeRendererStartupStep('fetch-worktrees', () => actions.fetchAllWorktrees()),
-          timeRendererStartupStep('fetch-worktree-lineage', () => actions.fetchWorktreeLineage())
-        ])
-        const persistedUI = await uiGetPromise
+        // Why: hydrate persisted UI immediately after ui.get() so first paint
+        // reflects saved view settings before the catalog scans below. ui.get()
+        // is awaited (not overlapped) because the hydrate must land before the
+        // local-first catalog/session steps run.
+        const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
         uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
           hydratePersistedUIAfterStartupRead({
             persistedUI,
@@ -911,20 +897,49 @@ function App(): React.JSX.Element {
             hydratePersistedUI: actions.hydratePersistedUI
           })
         )
+        const startupRuntimeHostIds = await timeRendererStartupStep(
+          'list-runtime-session-hosts',
+          listRuntimeSessionHostIdsForStartup
+        )
+        // Why: first paint needs local data and persisted view settings, but
+        // saved remote runtimes can spend the full connect timeout. Load only
+        // the local catalog here; remotes refresh after hydration below.
+        await timeRendererStartupStep('fetch-repos-local', () =>
+          actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-project-groups-local', () =>
+          actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
+          actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+        )
+        await timeRendererStartupStep('fetch-worktrees', () =>
+          actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
+        )
         // Why: runtime-owned worktree slices live in per-host partitions.
-        // Repos were fetched above, so the known runtime hosts are derivable
-        // here; merge their slices into the unified session the hydrators
-        // expect. An unreadable host partition is skipped (fail-soft).
-        const session = await timeRendererStartupStep('session-get', () =>
-          fetchWorkspaceSessionFromHosts(window.api.session, useAppStore.getState().repos)
+        // Remote catalogs now load after first paint, so include saved runtime
+        // host ids from local settings to restore their persisted session slices
+        // without waiting on network reachability. Unreadable partitions skip.
+        const sessionRead = await timeRendererStartupStep('session-get', () =>
+          fetchWorkspaceSessionWithRuntimeHostOwners(
+            window.api.session,
+            useAppStore.getState().repos,
+            startupRuntimeHostIds
+          )
         )
         await keybindingsPromise
         if (!cancelled) {
+          const sessionHydrationOptions = {
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+          }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
-            actions.hydrateWorkspaceSession(session)
-            actions.hydrateTabsSession(session)
-            actions.hydrateEditorSession(session)
-            actions.hydrateBrowserSession(session)
+            actions.hydrateWorkspaceSession(sessionRead.session, {
+              ...sessionHydrationOptions,
+              runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey
+            })
+            actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
           })
           // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
           // no longer exist. Must run AFTER hydration — before this point,
@@ -952,7 +967,7 @@ function App(): React.JSX.Element {
           // tabs through pty.attach on the relay. Passphrase-protected targets
           // are deferred to tab focus to avoid stacking credential dialogs at
           // startup before the user has context.
-          const connectionIds = session.activeConnectionIdsAtShutdown ?? []
+          const connectionIds = sessionRead.session.activeConnectionIdsAtShutdown ?? []
           if (connectionIds.length > 0) {
             try {
               const SSH_RECONNECT_TIMEOUT_MS = 15_000
@@ -1064,6 +1079,23 @@ function App(): React.JSX.Element {
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })
+          void (async () => {
+            try {
+              await timeRendererStartupStep('remote-catalog-refresh', async () => {
+                await actions.fetchReposForAllHosts()
+                await actions.fetchProjectGroupsForAllHosts()
+                await actions.fetchFolderWorkspacesForAllHosts()
+              })
+              if (!cancelled) {
+                await timeRendererStartupStep('remote-worktree-refresh', async () => {
+                  await actions.fetchAllWorktrees()
+                  await actions.fetchWorktreeLineage()
+                })
+              }
+            } catch (err) {
+              console.warn('Remote startup catalog refresh failed:', err)
+            }
+          })()
         }
       } catch (error) {
         // Why (issue #1158): previously this catch called hydrateWorkspaceSession

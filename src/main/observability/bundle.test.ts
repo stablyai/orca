@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: diagnostics bundle fixtures cover collection, preview deletion, upload URL hardening, and byte caps as one contract surface. Splitting would duplicate the temp-file/server harness and make edge-case coverage harder to audit. */
 // Bundle collection + upload tests. Upload helpers live outside bundle.ts, but
 // this suite keeps the diagnostic bundle contract in one place.
 
@@ -70,8 +69,7 @@ describe('bundle — collection', () => {
       osRelease: '24.0.0',
       orcaChannel: 'dev'
     })
-    const lines = bundle.payload.split('\n').filter(Boolean)
-    const header = JSON.parse(lines[0])
+    const header = JSON.parse(bundle.payload.split('\n').find(Boolean) ?? '')
     expect(header.type).toBe('bundle-header')
     expect(header.bundle_submission_id).toBe(bundle.bundleSubmissionId)
     expect(header.app_version).toBe('1.2.3')

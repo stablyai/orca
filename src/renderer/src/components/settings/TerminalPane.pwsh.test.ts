@@ -1,6 +1,3 @@
-/* oxlint-disable max-lines -- Why: TerminalPane tests share a large mocked
-   settings harness; splitting the new Windows-shell cases would duplicate
-   brittle React/store mocks without improving coverage. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockStateValues: unknown[] = []

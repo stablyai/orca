@@ -41,6 +41,11 @@ import {
 } from '../codex/codex-home-paths'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
 import {
+  resolveHostCodexSessionSourceHome,
+  resolveWslCodexSessionSourceHome
+} from '../codex/codex-session-source-home'
+import { startWslCodexSessionBridgeInBackground } from '../codex/wsl-codex-session-bridge'
+import {
   prepareSystemConfigForFreshRuntimeMirror,
   syncSystemConfigIntoManagedCodexHome
 } from '../codex/codex-config-mirror'
@@ -134,18 +139,51 @@ export class CodexRuntimeHomeService {
   prepareForCodexLaunch(target?: CodexAccountSelectionTarget): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
-      return (
+      const runtimeHomePath =
         this.syncWslRuntimeForCurrentSelection(wslTarget) ??
         this.getWslSystemCodexHomePath(wslTarget)
-      )
+      this.startWslSessionBridgeForLaunch(wslTarget, runtimeHomePath)
+      return runtimeHomePath
     }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     // Why: historical Codex sessions can be large; bridge them after launch
     // setup so starting a fresh Codex TUI never waits on a full tree walk.
-    void startSystemCodexSessionBridgeInBackground()
+    void startSystemCodexSessionBridgeInBackground(
+      {},
+      resolveHostCodexSessionSourceHome(this.store.getSettings())
+    )
     return this.getRuntimeHomePath()
+  }
+
+  private startWslSessionBridgeForLaunch(
+    target: CodexAccountSelectionTarget,
+    runtimeHomePath: string | null
+  ): void {
+    if (process.platform !== 'win32' || !runtimeHomePath) {
+      return
+    }
+    const runtimeHomeWsl = parseWslUncPath(runtimeHomePath)
+    const distro = target.wslDistro?.trim() || runtimeHomeWsl?.distro || getDefaultWslDistro()
+    if (!distro) {
+      return
+    }
+    // Why: history-only override lets custom-CODEX_HOME users bridge from their
+    // real home; falls back to <wslHome>/.codex, which auth/config still use.
+    const systemCodexHomePath =
+      resolveWslCodexSessionSourceHome(this.store.getSettings(), distro) ??
+      this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+    if (!systemCodexHomePath || systemCodexHomePath === runtimeHomePath) {
+      return
+    }
+    // Why: WSL history must be hardlinked inside the distro; host-side links
+    // cannot bridge Windows and WSL filesystems in a resume-visible way.
+    void startWslCodexSessionBridgeInBackground({
+      distro,
+      systemCodexHomePath,
+      managedCodexHomePath: runtimeHomePath
+    })
   }
 
   getHostRuntimeHomePath(): string {

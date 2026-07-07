@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: cookie import tests share import-time Electron mocks plus
-   browser-specific cookie fixtures; splitting would duplicate brittle setup. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({

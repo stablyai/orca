@@ -14,6 +14,7 @@ vi.mock('./ssh-config-parser', () => ({
 
 function createMockStore() {
   const targets: SshTarget[] = []
+  let deletedAliases: string[] = []
 
   return {
     getSshTargets: vi.fn(() => [...targets]),
@@ -32,6 +33,18 @@ function createMockStore() {
       if (idx !== -1) {
         targets.splice(idx, 1)
       }
+    }),
+    getDeletedSshConfigAliases: vi.fn(() => [...deletedAliases]),
+    addDeletedSshConfigAlias: vi.fn((alias: string) => {
+      if (!deletedAliases.includes(alias)) {
+        deletedAliases.push(alias)
+      }
+    }),
+    removeDeletedSshConfigAlias: vi.fn((alias: string) => {
+      deletedAliases = deletedAliases.filter((entry) => entry !== alias)
+    }),
+    clearDeletedSshConfigAliases: vi.fn(() => {
+      deletedAliases = []
     })
   }
 }
@@ -322,6 +335,108 @@ describe('SshConnectionStore', () => {
 
       const result = sshStore.importFromSshConfig()
       expect(result).toEqual([])
+    })
+  })
+
+  describe('deleted config host tombstones', () => {
+    function candidate(overrides: Partial<SshTarget> & { configHost: string }): SshTarget {
+      return {
+        id: `tmp-${overrides.configHost}`,
+        label: overrides.configHost,
+        host: `${overrides.configHost}.example.com`,
+        port: 22,
+        username: '',
+        ...overrides
+      }
+    }
+
+    // PRIMARY regression: deleting a config-sourced host must not let the next
+    // ~/.ssh/config sync resurrect it.
+    it('tombstones a deleted config-sourced host so re-import skips it', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'mini',
+        configHost: 'mini',
+        host: 'mini.example.com',
+        port: 22,
+        username: 'ping',
+        source: 'ssh-config'
+      })
+
+      sshStore.removeTarget('ssh-1')
+      expect(mockStore.addDeletedSshConfigAlias).toHaveBeenCalledWith('mini')
+
+      loadUserSshConfigMock.mockReturnValue([{ host: 'mini' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'mini' })])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1) // only the seed insert
+      expect(result).toEqual([])
+    })
+
+    it('does not tombstone a manual target on delete', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'mini',
+        configHost: 'mini',
+        host: 'mini.example.com',
+        port: 22,
+        username: 'ping',
+        source: 'manual'
+      })
+
+      sshStore.removeTarget('ssh-1')
+      expect(mockStore.addDeletedSshConfigAlias).not.toHaveBeenCalled()
+    })
+
+    it('re-adding a deleted host reclaims its alias so sync stops suppressing it', () => {
+      mockStore.addDeletedSshConfigAlias('mini')
+
+      sshStore.addTarget({
+        label: 'mini',
+        configHost: 'mini',
+        host: '10.0.0.2',
+        port: 22,
+        username: 'ping'
+      })
+      expect(mockStore.removeDeletedSshConfigAlias).toHaveBeenCalledWith('mini')
+
+      loadUserSshConfigMock.mockReturnValue([{ host: 'mini' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'mini' })])
+      // Alias reclaimed, but it is now a manual target — still not re-inserted.
+      const result = sshStore.importFromSshConfig()
+      expect(result).toEqual([])
+    })
+
+    it('editing a target reclaims its alias from the deleted set', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'mini',
+        configHost: 'mini',
+        host: 'mini.example.com',
+        port: 22,
+        username: 'ping',
+        source: 'ssh-config'
+      })
+      mockStore.addDeletedSshConfigAlias('mini')
+
+      sshStore.updateTarget('ssh-1', { port: 2222, source: 'manual' })
+      expect(mockStore.removeDeletedSshConfigAlias).toHaveBeenCalledWith('mini')
+    })
+
+    it('reAdopt clears all tombstones and re-imports the deleted host', () => {
+      mockStore.addDeletedSshConfigAlias('mini')
+      loadUserSshConfigMock.mockReturnValue([{ host: 'mini' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'mini' })])
+
+      const result = sshStore.importFromSshConfig({ reAdopt: true })
+
+      expect(mockStore.clearDeletedSshConfigAliases).toHaveBeenCalled()
+      expect(mockStore.addSshTarget).toHaveBeenCalledWith(
+        expect.objectContaining({ configHost: 'mini', source: 'ssh-config' })
+      )
+      expect(result).toHaveLength(1)
     })
   })
 })

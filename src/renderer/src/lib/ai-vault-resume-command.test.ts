@@ -123,6 +123,52 @@ describe('ai vault resume command runtime', () => {
     ).toBe("cd 'C:\\Users\\alice\\repo' && claude '--resume' 'session one'")
   })
 
+  it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {
+    // Regression: local rebuilds must forward session.filePath so OMP resumes by
+    // path, and queued Windows commands must match the live tab shell.
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+
+    const command = buildAiVaultResumeCommandForWorktree({
+      state,
+      worktreeId: 'repo-1::worktree-1',
+      session: {
+        agent: 'omp',
+        sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+        filePath: 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
+        cwd: 'C:\\Users\\alice\\repo',
+        codexHome: null
+      }
+    })
+
+    expect(command).toBe(
+      "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; omp --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'"
+    )
+    expect(command).not.toContain('019f27cd-4268-7000-96e7-62f42a55c144')
+  })
+
+  it('keeps cmd quoting for local OMP resume when cmd.exe is configured', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      terminalWindowsShell: 'cmd.exe'
+    })
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'omp',
+          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+          filePath: 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe(
+      'cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && omp --resume ""C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"""'
+    )
+  })
+
   it('keeps the cmd wrapper for the copy-to-clipboard command on Windows', () => {
     // Regression guard: the copy path is self-contained for pasting into cmd.exe
     // and must stay cmd-wrapped even though the queued path now follows the shell.

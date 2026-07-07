@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: SSH filesystem provider coverage keeps relay fallback,
-SFTP binary writes, watch fan-out, and provider lifecycle tests together so
-transport parity regressions are visible in one suite. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'

@@ -1364,6 +1364,10 @@ export function registerPtyHandlers(
     data: string
     startSeq?: number
     containsBackgroundOutput?: boolean
+    /** Set once this pty's unsent backlog was trimmed past the cap; rides the
+     *  next payload so the renderer rebuilds the dropped span from the main
+     *  headless snapshot (see appendPendingPtyData / dataCallback). */
+    droppedBacklog?: boolean
   }
 
   type PtyDataPayload = {
@@ -1372,6 +1376,7 @@ export function registerPtyHandlers(
     seq?: number
     rawLength?: number
     background?: boolean
+    droppedBacklog?: boolean
   }
 
   const pendingData = new Map<string, PendingPtyData>()
@@ -1385,6 +1390,15 @@ export function registerPtyHandlers(
   const PTY_BATCH_FLUSH_MAX_WRITES = 2
   const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 512 * 1024
   const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 8 * 1024 * 1024
+  // Why: the in-flight caps above bound only SENT-but-unacked bytes; the unsent
+  // `pendingData` backlog is drained only when the renderer ACKs. A background-
+  // throttled/frozen renderer (Win/Linux — macOS disables throttling) stops
+  // ACKing while a busy pane keeps producing, so without this the per-pty queue
+  // grows at raw PTY throughput (MB->GB). Cap it (matching the daemon 2 MB
+  // pendingOutput and renderer 2 MB scheduler caps); the trimmed span is
+  // recovered from the main headless buffer via the renderer's hidden-output
+  // snapshot restore, flagged by droppedBacklog — so no output is lost.
+  const PENDING_DATA_MAX_CHARS = 2 * 1024 * 1024
   const PTY_RENDERER_INTERACTIVE_RESERVE_CHARS = 256 * 1024
   // Why: active panes need a bounded lane through old hidden bulk output so a
   // keystroke redraw can reach the renderer before every background ACK lands.
@@ -1435,13 +1449,24 @@ export function registerPtyHandlers(
   }
 
   function recordPtyRendererDeliveryPressure(): void {
-    const current = readCurrentPtyRendererDeliveryDebugSnapshot()
-    peakPendingChars = Math.max(peakPendingChars, current.pendingChars)
-    peakMaxPendingCharsByPty = Math.max(peakMaxPendingCharsByPty, current.maxPendingCharsByPty)
-    peakRendererInFlightChars = Math.max(peakRendererInFlightChars, current.rendererInFlightChars)
+    // Why: this fires on every PTY delivery event (per send, per flush, per
+    // onData append). Update the four diagnostic peaks directly instead of
+    // allocating a full 13-field debug snapshot object per call — that object
+    // is only needed when the debug getter is actually read. Peak values are
+    // computed identically to readCurrentPtyRendererDeliveryDebugSnapshot.
+    let pendingChars = 0
+    let maxPendingCharsByPty = 0
+    for (const pending of pendingData.values()) {
+      const chars = pending.data.length
+      pendingChars += chars
+      maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
+    }
+    peakPendingChars = Math.max(peakPendingChars, pendingChars)
+    peakMaxPendingCharsByPty = Math.max(peakMaxPendingCharsByPty, maxPendingCharsByPty)
+    peakRendererInFlightChars = Math.max(peakRendererInFlightChars, rendererInFlightTotalChars)
     peakMaxRendererInFlightCharsByPty = Math.max(
       peakMaxRendererInFlightCharsByPty,
-      current.maxRendererInFlightCharsByPty
+      getMaxMapValue(rendererInFlightCharsByPty.values())
     )
   }
 
@@ -1492,7 +1517,8 @@ export function registerPtyHandlers(
     id: string,
     data: string,
     startSeq: number | undefined,
-    containsBackgroundOutput: boolean | undefined
+    containsBackgroundOutput: boolean | undefined,
+    droppedBacklog?: boolean
   ): PtyDataPayload {
     const payload: PtyDataPayload = { id, data }
     if (typeof startSeq === 'number') {
@@ -1501,6 +1527,9 @@ export function registerPtyHandlers(
     }
     if (containsBackgroundOutput === true) {
       payload.background = true
+    }
+    if (droppedBacklog === true) {
+      payload.droppedBacklog = true
     }
     return payload
   }
@@ -1573,6 +1602,28 @@ export function registerPtyHandlers(
     return [...active, ...background]
   }
 
+  // Why: bound the unsent backlog to the most-recent PENDING_DATA_MAX_CHARS,
+  // advancing startSeq by the dropped-char count (same arithmetic flushPendingData
+  // uses when it slices) so the remaining tail's seq stays correct. Flags
+  // droppedBacklog so the next payload tells the renderer to rebuild the dropped
+  // span from the main headless snapshot. A no-op when under the cap (the common
+  // case: the renderer is ACKing and pendingData stays tiny).
+  function capPendingPtyData(pending: PendingPtyData): PendingPtyData {
+    if (pending.data.length <= PENDING_DATA_MAX_CHARS) {
+      return pending
+    }
+    const trimmed = pending.data.slice(pending.data.length - PENDING_DATA_MAX_CHARS)
+    const droppedChars = pending.data.length - trimmed.length
+    const next: PendingPtyData = { data: trimmed, droppedBacklog: true }
+    if (typeof pending.startSeq === 'number') {
+      next.startSeq = pending.startSeq + droppedChars
+    }
+    if (pending.containsBackgroundOutput === true) {
+      next.containsBackgroundOutput = true
+    }
+    return next
+  }
+
   function appendPendingPtyData(
     existing: PendingPtyData | undefined,
     data: string,
@@ -1582,27 +1633,29 @@ export function registerPtyHandlers(
   ): PendingPtyData {
     const nextContainsBackgroundOutput =
       existing?.containsBackgroundOutput === true || containsBackgroundOutput
+    // Carry a prior drop flag forward until it actually rides an outgoing payload.
+    const inheritedDropped = existing?.droppedBacklog === true
+    const base: PendingPtyData = { data: '' }
     if (!preservesSeq) {
-      return {
-        data: (existing?.data ?? '') + data,
-        ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+      base.data = (existing?.data ?? '') + data
+    } else if (!existing) {
+      base.data = data
+      if (typeof startSeq === 'number') {
+        base.startSeq = startSeq
+      }
+    } else {
+      base.data = existing.data + data
+      if (typeof existing.startSeq === 'number') {
+        base.startSeq = existing.startSeq
       }
     }
-    if (!existing) {
-      return {
-        data,
-        ...(typeof startSeq === 'number' ? { startSeq } : {}),
-        ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
-      }
+    if (nextContainsBackgroundOutput) {
+      base.containsBackgroundOutput = true
     }
-    const next: PendingPtyData = {
-      data: existing.data + data,
-      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+    if (inheritedDropped) {
+      base.droppedBacklog = true
     }
-    if (typeof existing.startSeq === 'number') {
-      next.startSeq = existing.startSeq
-    }
-    return next
+    return capPendingPtyData(base)
   }
 
   function schedulePendingDataFlush(delayMs: number): void {
@@ -1643,9 +1696,18 @@ export function registerPtyHandlers(
         }
         pendingData.set(id, nextPending)
       }
+      // Why: the drop flag rides the first emitted chunk (renderer restore is
+      // idempotent) and is intentionally not copied onto `remaining` above, so a
+      // single backlog trim signals the renderer exactly once.
       sendPtyDataToRenderer(
         id,
-        makePtyDataPayload(id, chunk, pending.startSeq, pending.containsBackgroundOutput)
+        makePtyDataPayload(
+          id,
+          chunk,
+          pending.startSeq,
+          pending.containsBackgroundOutput,
+          pending.droppedBacklog
+        )
       )
       writes++
     }
@@ -1709,7 +1771,8 @@ export function registerPtyHandlers(
           payload.id,
           remaining.data,
           remaining.startSeq,
-          remaining.containsBackgroundOutput
+          remaining.containsBackgroundOutput,
+          remaining.droppedBacklog
         )
       )
       pendingData.delete(payload.id)
@@ -1822,7 +1885,8 @@ export function registerPtyHandlers(
           ...(typeof pending.startSeq === 'number'
             ? { seq: pending.startSeq + nextData.length, rawLength: nextData.length }
             : {}),
-          ...(pending.containsBackgroundOutput === true ? { background: true } : {})
+          ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
+          ...(pending.droppedBacklog === true ? { droppedBacklog: true } : {})
         })
         return
       }
