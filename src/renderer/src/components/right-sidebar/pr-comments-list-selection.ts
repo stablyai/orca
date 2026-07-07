@@ -26,10 +26,23 @@ type PRCommentsListSelectionState = {
 }
 
 const EMPTY_SELECTED_GROUP_IDS = new Set<string>()
+// Why: queued selections need to survive sidebar remounts, but old PR/MR
+// contexts can disappear without another clear signal in a long renderer run.
+export const MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS = 256
 const persistedSelectionByContextKey = new Map<
   string,
   { isSelectingForAI: boolean; selectedGroupIds: Set<string> }
 >()
+
+function trimPersistedSelectionContexts(): void {
+  while (persistedSelectionByContextKey.size > MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS) {
+    const oldestContextKey = persistedSelectionByContextKey.keys().next().value
+    if (oldestContextKey === undefined) {
+      break
+    }
+    persistedSelectionByContextKey.delete(oldestContextKey)
+  }
+}
 
 function persistSelectionState(state: PRCommentsListSelectionState): void {
   if (!state.contextKey) {
@@ -39,14 +52,20 @@ function persistSelectionState(state: PRCommentsListSelectionState): void {
     persistedSelectionByContextKey.delete(state.contextKey)
     return
   }
+  persistedSelectionByContextKey.delete(state.contextKey)
   persistedSelectionByContextKey.set(state.contextKey, {
     isSelectingForAI: state.isSelectingForAI,
     selectedGroupIds: new Set(state.selectedGroupIds)
   })
+  trimPersistedSelectionContexts()
 }
 
 function createSelectionState(contextKey: string | undefined): PRCommentsListSelectionState {
   const persisted = contextKey ? persistedSelectionByContextKey.get(contextKey) : undefined
+  if (contextKey && persisted) {
+    persistedSelectionByContextKey.delete(contextKey)
+    persistedSelectionByContextKey.set(contextKey, persisted)
+  }
   return {
     contextKey,
     isSelectingForAI: persisted?.isSelectingForAI ?? false,
@@ -58,6 +77,14 @@ export function clearPRCommentsListSelection(contextKey: string | undefined): vo
   if (contextKey) {
     persistedSelectionByContextKey.delete(contextKey)
   }
+}
+
+export function clearPRCommentsListSelectionsForTests(): void {
+  persistedSelectionByContextKey.clear()
+}
+
+export function getPRCommentsListSelectionCountForTests(): number {
+  return persistedSelectionByContextKey.size
 }
 
 export function usePRCommentsListSelection(

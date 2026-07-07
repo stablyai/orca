@@ -46,7 +46,9 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 import type { PRComment } from '../../../../shared/types'
 import type { PRCommentGroup } from '@/lib/pr-comment-groups'
 import {
-  clearPRCommentsListSelection,
+  MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS,
+  clearPRCommentsListSelectionsForTests,
+  getPRCommentsListSelectionCountForTests,
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
 import { PRCommentsList } from './checks-panel-content'
@@ -55,7 +57,7 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
-  clearPRCommentsListSelection('review:42')
+  clearPRCommentsListSelectionsForTests()
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -66,6 +68,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
+  clearPRCommentsListSelectionsForTests()
 })
 
 function comment(overrides: Partial<PRComment>): PRComment {
@@ -378,5 +381,34 @@ describe('PRCommentsList comment resolution selection', () => {
     })
 
     expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+  })
+
+  it('bounds persisted review contexts while retaining recently restored selections', () => {
+    const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    const queueContext = (contextKey: string): void => {
+      renderList({ comments, contextKey })
+      clickButton('Queue for agent')
+      expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+    }
+
+    queueContext('review:keep')
+    for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
+      queueContext(`review:stale-${i}`)
+    }
+
+    renderList({ comments, contextKey: 'review:keep' })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
+
+    queueContext('review:new')
+
+    expect(getPRCommentsListSelectionCountForTests()).toBe(
+      MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS
+    )
+
+    renderList({ comments, contextKey: 'review:stale-0' })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(false)
+
+    renderList({ comments, contextKey: 'review:keep' })
+    expect(hasButton('Send 1 queued comments to AI')).toBe(true)
   })
 })
