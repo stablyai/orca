@@ -2221,6 +2221,7 @@ export type PreservedWorktreeBranch = {
 
 export type RemoveWorktreeResult = {
   preservedBranch?: PreservedWorktreeBranch
+  serviceDestroyErrors?: string[]
 }
 
 export type ForceDeleteWorktreeBranchResult = {

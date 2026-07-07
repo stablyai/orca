@@ -3386,6 +3386,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // an old toast cannot mutate a same-path replacement during UI teardown.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
 
+      if (removalResult?.serviceDestroyErrors?.length) {
+        toast.warning(
+          translate(
+            'auto.store.slices.worktrees.serviceDestroyFailed',
+            'Isolated services cleanup failed'
+          ),
+          {
+            description: translate(
+              'auto.store.slices.worktrees.serviceDestroyFailedDescription',
+              'Some services could not be destroyed and may still be running: {{value0}}',
+              { value0: removalResult.serviceDestroyErrors.join('; ').slice(0, 300) }
+            )
+          }
+        )
+      }
+
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
         try {

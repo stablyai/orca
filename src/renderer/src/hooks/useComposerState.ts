@@ -4327,6 +4327,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       isProjectGroupTarget,
       submitFolderTarget,
       createMultiple,
+      provisionServices,
+      repoHasServiceRecipes,
       resetForNextCreate
     ]
   )

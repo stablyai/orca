@@ -1405,12 +1405,16 @@ function ServiceRecipeDiagnostics({
     return null
   }
   return (
-    <ul className="space-y-1 text-xs text-destructive">
+    <ul className="space-y-1 text-xs">
       {diagnostics.map((diagnostic, index) => (
-        <li key={`service-diagnostic-${index}`}>{diagnostic.message}</li>
+        <li key={`service-diagnostic-${index}`} className="text-destructive">
+          {diagnostic.message}
+        </li>
       ))}
       {missingDestroyWarnings.map((warning) => (
-        <li key={warning}>{warning}</li>
+        <li key={warning} className="text-amber-700 dark:text-amber-300">
+          {warning}
+        </li>
       ))}
     </ul>
   )

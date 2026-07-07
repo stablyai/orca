@@ -224,7 +224,12 @@ async function executeWorktreeCreation(
   // Why: refresh the worktreeId→env map so the new worktree's terminals get
   // their service env, and the sidebar badge reflects provisioning status.
   if (preparedRequest.provisionServices) {
-    await useAppStore.getState().hydrateWorktreeServices()
+    // Why: hydration failure must not derail the rest of post-create wiring
+    // (terminals, agent startup) for a worktree that was created successfully.
+    await useAppStore
+      .getState()
+      .hydrateWorktreeServices()
+      .catch(() => {})
   }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 

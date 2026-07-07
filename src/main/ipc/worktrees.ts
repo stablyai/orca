@@ -1721,7 +1721,9 @@ export function registerWorktreeHandlers(
         }
 
         // Why: destroy isolated services before git removal, local repos only (v1
-        // scope). Never blocks removal — destroyWorktreeServices collects errors.
+        // scope). Never blocks removal — destroyWorktreeServices collects errors,
+        // which travel back on the result so the renderer can warn the user.
+        let serviceDestroyErrors: string[] | undefined
         if (!repo.connectionId) {
           const servicesRecord = getWorktreeServicesRecord(app.getPath('userData'), args.worktreeId)
           if (servicesRecord) {
@@ -1733,6 +1735,7 @@ export function registerWorktreeHandlers(
               services: loadHooks(repo.path)?.services ?? []
             })
             if (!destroyResult.success) {
+              serviceDestroyErrors = destroyResult.errors
               console.error(
                 `[services] destroy failed for ${canonicalWorktreePath}:`,
                 destroyResult.errors.join('; ')
@@ -1934,7 +1937,7 @@ export function registerWorktreeHandlers(
               invalidateAuthorizedRootsCache()
               notifyWorktreesChanged(mainWindow, repoId)
               removalCompleted = true
-              return {}
+              return serviceDestroyErrors ? { serviceDestroyErrors } : {}
             } else {
               throw new Error(
                 formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
@@ -1963,7 +1966,7 @@ export function registerWorktreeHandlers(
         invalidateAuthorizedRootsCache()
 
         notifyWorktreesChanged(mainWindow, repoId)
-        return removalResult ?? {}
+        return { ...removalResult, ...(serviceDestroyErrors ? { serviceDestroyErrors } : {}) }
       })()
       worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: removal })
       try {
