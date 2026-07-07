@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: cleanup store tests share a Zustand store
-   harness and mocked window API; splitting would obscure the state transitions. */
 import { create } from 'zustand'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'

@@ -1,5 +1,5 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import { getProcessTableSnapshot } from '../../shared/process-table-snapshot'
+import { getProcessTableSnapshot, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground,
@@ -7,30 +7,6 @@ import {
 } from './windows-agent-foreground-process'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
-
-type ProcessRow = {
-  pid: number
-  ppid: number
-  stat: string
-  command: string
-}
-
-function parsePsRows(stdout: string): ProcessRow[] {
-  const rows: ProcessRow[] = []
-  for (const line of stdout.split('\n')) {
-    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/)
-    if (!match) {
-      continue
-    }
-    rows.push({
-      pid: Number(match[1]),
-      ppid: Number(match[2]),
-      stat: match[3],
-      command: match[4]
-    })
-  }
-  return rows
-}
 
 function collectDescendants<Row extends { pid: number; ppid: number }>(
   rows: Row[],
@@ -55,7 +31,7 @@ function collectDescendants<Row extends { pid: number; ppid: number }>(
   return descendants
 }
 
-function candidateScore(row: ProcessRow & { depth: number }): number {
+function candidateScore(row: ProcessTableRow & { depth: number }): number {
   // Why: foreground descendants carry `+` in `ps stat` on Unix PTYs. Prefer
   // them, then prefer leaf/deeper wrappers so `node /path/bin/codex` beats the
   // parent shell but still lets the native child confirm the same identity.
@@ -82,8 +58,8 @@ export async function resolveAgentForegroundProcess(
   }
 
   try {
-    const stdout = await getProcessTableSnapshot()
-    return resolveAgentForegroundProcessFromPs(stdout, shellPid) ?? fallbackProcess
+    const rows = await getProcessTableSnapshot()
+    return resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
   } catch {
     // Fall through to node-pty's process name. Foreground process inspection is
     // best-effort because terminal identity should never break PTY operation.
@@ -92,8 +68,10 @@ export async function resolveAgentForegroundProcess(
   return fallbackProcess
 }
 
-function resolveAgentForegroundProcessFromPs(stdout: string, shellPid: number): string | null {
-  const rows = parsePsRows(stdout)
+function resolveAgentForegroundProcessFromPs(
+  rows: ProcessTableRow[],
+  shellPid: number
+): string | null {
   const shellRow = rows.find((row) => row.pid === shellPid)
   const candidates = collectDescendants(rows, shellPid).sort(
     (a, b) => candidateScore(b) - candidateScore(a)

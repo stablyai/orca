@@ -4,9 +4,14 @@ import type {
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
-import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
+import {
+  createSessionParseStats,
+  parseAgentSessionFileCached,
+  type SessionParseStats
+} from './session-scanner-parse-cache'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
 import {
   DEFAULT_CODEX_HOME_DIR,
@@ -39,54 +44,69 @@ const SCOPE_PARSE_LIMIT = 2000
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
-  const limit = clampPositiveInteger(options.limit, DEFAULT_LIMIT)
-  const limitPerAgent = clampPositiveInteger(options.limitPerAgent, DEFAULT_SCAN_LIMIT_PER_AGENT)
-  const platform = options.platform ?? process.platform
-  const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-  const issues: AiVaultScanIssue[] = []
-  const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
+  // The span makes scan cost visible in the local trace file: STA-1278-style
+  // "one core pegged" reports need to show whether transcript scanning is the
+  // subsystem burning CPU, and how much of each scan the cache absorbed.
+  return withSpan('aiVault.scan', async (span) => {
+    const limit = clampPositiveInteger(options.limit, DEFAULT_LIMIT)
+    const limitPerAgent = clampPositiveInteger(options.limitPerAgent, DEFAULT_SCAN_LIMIT_PER_AGENT)
+    const platform = options.platform ?? process.platform
+    const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+    const issues: AiVaultScanIssue[] = []
+    const parseStats = createSessionParseStats()
+    const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
 
-  const candidates = discoveries
-    .flatMap((discovery) =>
-      discovery.files.map(
-        (file): SessionFileCandidate => ({
-          agent: discovery.agent,
-          file,
-          codexHome:
-            discovery.agent === 'codex'
-              ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
-              : null
-        })
+    const candidates = discoveries
+      .flatMap((discovery) =>
+        discovery.files.map(
+          (file): SessionFileCandidate => ({
+            agent: discovery.agent,
+            file,
+            codexHome:
+              discovery.agent === 'codex'
+                ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
+                : null
+          })
+        )
       )
-    )
-    .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
 
-  const parsedSessions = await parseSessionCandidates({
-    candidates,
-    limit,
-    platform,
-    executionHostId,
-    issues
+    const parsedSessions = await parseSessionCandidates({
+      candidates,
+      limit,
+      platform,
+      executionHostId,
+      issues,
+      parseStats
+    })
+
+    const cappedSessions = parsedSessions
+      .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
+      .slice(0, limit)
+
+    const scopeSessions = await scanInScopeSessions({
+      discoveries,
+      scopePaths: options.scopePaths ?? [],
+      alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
+      platform,
+      executionHostId,
+      issues,
+      parseStats
+    })
+
+    span.setAttribute('candidates', candidates.length)
+    span.setAttribute('reused', parseStats.reused)
+    span.setAttribute('incremental', parseStats.incremental)
+    span.setAttribute('fullParses', parseStats.fullParses)
+    span.setAttribute('bytesRead', parseStats.bytesRead)
+    span.setAttribute('issues', issues.length)
+
+    return {
+      sessions: mergeSessions(cappedSessions, scopeSessions),
+      issues: issues.map((issue) => ({ executionHostId, ...issue })),
+      scannedAt: new Date().toISOString()
+    }
   })
-
-  const cappedSessions = parsedSessions
-    .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-    .slice(0, limit)
-
-  const scopeSessions = await scanInScopeSessions({
-    discoveries,
-    scopePaths: options.scopePaths ?? [],
-    alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
-    platform,
-    executionHostId,
-    issues
-  })
-
-  return {
-    sessions: mergeSessions(cappedSessions, scopeSessions),
-    issues: issues.map((issue) => ({ executionHostId, ...issue })),
-    scannedAt: new Date().toISOString()
-  }
 }
 
 // In-scope sessions are guaranteed regardless of the recency cap, so the global
@@ -116,6 +136,7 @@ async function scanInScopeSessions(args: {
   platform: NodeJS.Platform
   executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
+  parseStats: SessionParseStats
 }): Promise<AiVaultSession[]> {
   if (args.scopePaths.length === 0) {
     return []
@@ -142,7 +163,8 @@ async function scanInScopeSessions(args: {
     limit: candidates.length,
     platform: args.platform,
     executionHostId: args.executionHostId,
-    issues: args.issues
+    issues: args.issues,
+    parseStats: args.parseStats
   })
 }
 
@@ -152,6 +174,7 @@ async function parseSessionCandidates(args: {
   platform: NodeJS.Platform
   executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
+  parseStats: SessionParseStats
 }): Promise<AiVaultSession[]> {
   const sessions: AiVaultSession[] = []
   let index = 0
@@ -167,7 +190,7 @@ async function parseSessionCandidates(args: {
     const batch = args.candidates.slice(index, index + batchSize)
     const results = await Promise.all(
       batch.map((candidate) =>
-        parseSessionCandidate(candidate, args.platform, args.executionHostId)
+        parseSessionCandidate(candidate, args.platform, args.executionHostId, args.parseStats)
       )
     )
 
@@ -189,10 +212,11 @@ async function parseSessionCandidates(args: {
 async function parseSessionCandidate(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
-  executionHostId: ExecutionHostId
+  executionHostId: ExecutionHostId,
+  parseStats: SessionParseStats
 ): Promise<SessionParseResult> {
   try {
-    const session = await parseAgentSessionFile(candidate, platform)
+    const session = await parseAgentSessionFileCached(candidate, platform, parseStats)
     return {
       session: session ? withSessionExecutionHost(session, executionHostId) : null,
       issue: null

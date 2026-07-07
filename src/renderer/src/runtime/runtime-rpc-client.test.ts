@@ -136,6 +136,133 @@ describe('runtime RPC client routing', () => {
     ])
   })
 
+  it('reuses recent remote compatibility failures during startup catalog bursts', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'status',
+      ok: false,
+      error: { code: 'runtime_unavailable', message: 'offline' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const target = { kind: 'environment', environmentId: 'env-offline' } as const
+
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).rejects.toThrow('offline')
+    await expect(
+      callRuntimeRpc(target, 'projectGroup.list', undefined, {
+        reuseRecentCompatibilityFailure: true
+      })
+    ).rejects.toThrow('offline')
+    await expect(
+      callRuntimeRpc(target, 'folderWorkspace.list', undefined, {
+        reuseRecentCompatibilityFailure: true
+      })
+    ).rejects.toThrow('offline')
+
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual(['status.get'])
+  })
+
+  it('expires startup compatibility failures at the TTL boundary', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(0))
+    try {
+      let statusCalls = 0
+      runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+        if (method === 'status.get') {
+          statusCalls += 1
+          if (statusCalls === 1) {
+            return Promise.resolve({
+              id: 'status',
+              ok: false,
+              error: { code: 'runtime_unavailable', message: 'offline' },
+              _meta: { runtimeId: 'remote-runtime' }
+            })
+          }
+          return Promise.resolve({
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeId: 'remote-runtime',
+              graphStatus: 'ready',
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+            },
+            _meta: { runtimeId: 'remote-runtime' }
+          })
+        }
+        return Promise.resolve({
+          id: method,
+          ok: true,
+          result: { ok: true },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      })
+      const target = { kind: 'environment', environmentId: 'env-ttl' } as const
+
+      await expect(
+        callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+      ).rejects.toThrow('offline')
+      vi.setSystemTime(new Date(60_000))
+      await expect(
+        callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+      ).resolves.toEqual({ ok: true })
+
+      expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
+        'status.get',
+        'status.get',
+        'repo.list'
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries normal remote calls after a catalog-burst compatibility failure', async () => {
+    let statusCalls = 0
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        statusCalls += 1
+        if (statusCalls === 1) {
+          return Promise.resolve({
+            id: 'status',
+            ok: false,
+            error: { code: 'runtime_unavailable', message: 'offline' },
+            _meta: { runtimeId: 'remote-runtime' }
+          })
+        }
+        return Promise.resolve({
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'remote-runtime',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+          },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result: { ok: true },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+    const target = { kind: 'environment', environmentId: 'env-recovers' } as const
+
+    await expect(
+      callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
+    ).rejects.toThrow('offline')
+    await expect(callRuntimeRpc(target, 'git.status')).resolves.toEqual({ ok: true })
+
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
+      'status.get',
+      'status.get',
+      'git.status'
+    ])
+  })
+
   it('checks advertised runtime capabilities after protocol compatibility', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'status',

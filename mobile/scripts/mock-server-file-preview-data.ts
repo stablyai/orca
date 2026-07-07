@@ -21,6 +21,31 @@ const MOCK_FILE_LIST = [
   { relativePath: 'dist/archive.zip', basename: 'archive.zip', kind: 'binary' }
 ]
 
+function readMockDirectory(relativePath: string): Array<{ name: string; isDirectory: boolean }> {
+  const prefix = relativePath ? `${relativePath}/` : ''
+  const children = new Map<string, boolean>()
+  for (const file of MOCK_FILE_LIST) {
+    if (!file.relativePath.startsWith(prefix)) {
+      continue
+    }
+    const rest = file.relativePath.slice(prefix.length)
+    if (!rest) {
+      continue
+    }
+    const [name, ...descendants] = rest.split('/')
+    if (!name) {
+      continue
+    }
+    children.set(name, children.get(name) === true || descendants.length > 0)
+  }
+  return Array.from(children, ([name, isDirectory]) => ({ name, isDirectory })).sort((a, b) => {
+    if (a.isDirectory !== b.isDirectory) {
+      return a.isDirectory ? -1 : 1
+    }
+    return a.name.localeCompare(b.name)
+  })
+}
+
 export function handleMockFilePreviewRequest(
   request: RpcRequest,
   respond: Respond,
@@ -38,6 +63,10 @@ export function handleMockFilePreviewRequest(
           truncated: false
         })
       )
+      return true
+
+    case 'files.readDir':
+      respond(success(request.id, readMockDirectory(String(request.params?.relativePath ?? ''))))
       return true
 
     case 'files.read': {

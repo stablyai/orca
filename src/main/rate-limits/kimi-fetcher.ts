@@ -142,7 +142,7 @@ function parseResetDescription(isoString: string | undefined): string | null {
     return null
   }
   const date = new Date(isoString)
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return null
   }
   const isToday = date.toDateString() === new Date().toDateString()

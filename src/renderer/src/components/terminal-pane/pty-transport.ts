@@ -57,6 +57,12 @@ export type {
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+// Why: an app SSH PTY id embeds the connection it was created under. When a pane
+// restored after a workspace/host change reattaches a session that belongs to a
+// *different* connection, the main-side id router rejects it with this phrase.
+// That session is unreachable from this pane, so it is stale like an expired one
+// — recover by spawning fresh rather than surfacing a red "file an issue" crash.
+const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
 const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
 
@@ -677,7 +683,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return spawnResult.id
       } catch (err) {
         const msg = extractIpcErrorMessage(err, err instanceof Error ? err.message : String(err))
-        if (connectionId && options.sessionId && msg.includes(SSH_SESSION_EXPIRED_ERROR)) {
+        if (
+          connectionId &&
+          options.sessionId &&
+          (msg.includes(SSH_SESSION_EXPIRED_ERROR) ||
+            msg.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER))
+        ) {
           return {
             id: options.sessionId,
             sessionExpired: true

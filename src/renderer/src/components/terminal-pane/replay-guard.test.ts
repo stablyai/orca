@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import { isPaneReplaying, replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
+import {
+  isPaneReplaying,
+  replayIntoTerminal,
+  replayIntoTerminalAsync,
+  type ReplayingPanesRef
+} from './replay-guard'
 
 function makeRef(): ReplayingPanesRef {
   return { current: new Map() } as ReplayingPanesRef
@@ -134,6 +139,72 @@ describe('replay-guard', () => {
     replayIntoTerminal(pane, ref, 'x')
     terminal.flush()
     expect(ref.current.has(1)).toBe(false)
+  })
+
+  it('auto-releases the guard when xterm never fires the parse callback', () => {
+    // Repro of the cold-restore reattach lockout: handleReattachResult replays
+    // three chunks into a just-mounted / offscreen pane whose terminal never
+    // flushes, so xterm's parse callback never runs and the counter would stay
+    // pinned at 3 — isPaneReplaying() stuck true drops EVERY keystroke. The
+    // fallback must release the guard so input is not swallowed forever.
+    vi.useFakeTimers()
+    try {
+      const ref = makeRef()
+      const { pane } = makeFakePane(1)
+      replayIntoTerminal(pane, ref, '\x1b[2J\x1b[3J\x1b[H')
+      replayIntoTerminal(pane, ref, 'scrollback bytes')
+      replayIntoTerminal(pane, ref, '--- session restored ---')
+      expect(isPaneReplaying(ref, 1)).toBe(true)
+
+      // Never flush — simulate the missing parse callback for an unflushed pane.
+      vi.advanceTimersByTime(1000)
+
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(ref.current.has(1)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('parse completion cancels the fallback without over-releasing', () => {
+    vi.useFakeTimers()
+    try {
+      const ref = makeRef()
+      const { pane, terminal } = makeFakePane(1)
+      replayIntoTerminal(pane, ref, 'a')
+      replayIntoTerminal(pane, ref, 'b')
+
+      terminal.flush()
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+
+      // The already-cancelled fallback must not fire and underflow the counter.
+      vi.advanceTimersByTime(1000)
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(ref.current.has(1)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('async replay resolves even when the parse callback never fires', async () => {
+    vi.useFakeTimers()
+    try {
+      const ref = makeRef()
+      const { pane } = makeFakePane(1)
+      let resolved = false
+      const promise = replayIntoTerminalAsync(pane, ref, 'x').then(() => {
+        resolved = true
+      })
+      expect(isPaneReplaying(ref, 1)).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(1000)
+      await promise
+
+      expect(resolved).toBe(true)
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('schedules a follow-up repaint for replayed cursor restores', () => {

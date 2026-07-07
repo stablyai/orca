@@ -279,6 +279,7 @@ type FileExplorerRowProps = {
   selectionSize: number
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: () => void
+  onViewFile: () => void
   onContextMenuSelect: () => void
   onCopyPaths: (pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
@@ -308,6 +309,10 @@ export function shouldShowFindInFolderAction(node: TreeNode): boolean {
 
 export function shouldShowOpenInTerminalAction(node: TreeNode): boolean {
   return node.isDirectory
+}
+
+export function shouldShowViewFileAction(node: TreeNode): boolean {
+  return !node.isDirectory
 }
 
 export function shouldShowRemoteDownloadAction(
@@ -421,6 +426,7 @@ export function FileExplorerRow({
   selectionSize,
   onClick,
   onDoubleClick,
+  onViewFile,
   onContextMenuSelect,
   onCopyPaths,
   onStartNew,
@@ -710,6 +716,12 @@ export function FileExplorerRow({
               'auto.components.right.sidebar.FileExplorerRow.e887fa4b2e',
               'Open in Terminal'
             )}
+          </ContextMenuItem>
+        )}
+        {shouldShowViewFileAction(node) && (
+          <ContextMenuItem onSelect={onViewFile}>
+            <File />
+            {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && (

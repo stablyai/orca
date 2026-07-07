@@ -1,7 +1,3 @@
-/* eslint-disable max-lines -- Why: history scoping touches shell detection, env
-injection, fallback patching, WSL translation, cleanup, and GC with a TOCTOU age
-guard — covering each path in one test file keeps assertions co-located with the
-shared mock harness rather than splitting across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

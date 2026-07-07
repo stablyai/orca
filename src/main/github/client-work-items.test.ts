@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: work-items coverage stays in one file so
-the fan-out mock plumbing (issue + PR gh calls, allSettled handling) does
-not drift across split files. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -66,7 +63,8 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
-  noteRateLimitSpend: noteRateLimitSpendMock
+  noteRateLimitSpend: noteRateLimitSpendMock,
+  getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' }))
 }))
 
 import {
@@ -75,6 +73,7 @@ import {
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
+import { _resetGhCwdRepoNegativeCache } from './gh-cwd-repo-negative-cache'
 import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github-work-items-query-bounds'
 
 describe('listWorkItems', () => {
@@ -102,6 +101,25 @@ describe('listWorkItems', () => {
     getOwnerRepoForRemoteMock.mockResolvedValue(null)
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
+    _resetGhCwdRepoNegativeCache()
+  })
+
+  it('stops re-spawning gh for a repo whose cwd resolution already failed with no remotes', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue(null)
+    ghExecFileAsyncMock.mockRejectedValue(
+      Object.assign(new Error('Command failed: gh pr list\nno git remotes found'), {
+        stderr: 'no git remotes found'
+      })
+    )
+
+    await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
+    // The first refresh pays the two cwd-fallback spawns (issue + pr list).
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+
+    await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
+    // The second refresh is served from the negative cache — zero new spawns.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('runs both issue and PR GitHub searches for a mixed query and merges the results by recency', async () => {
@@ -538,6 +556,22 @@ describe('listWorkItems', () => {
     const apiPath = decodeURIComponent(ghExecFileAsyncMock.mock.calls[0][0][3] as string)
     expect(apiPath).toContain('is:issue is:closed')
     expect(apiPath).not.toContain('-is:merged')
+  })
+
+  it('returns zero without spawning gh when the search bucket is rate-limit blocked', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    rateLimitGuardMock.mockReturnValue({
+      blocked: true,
+      remaining: 0,
+      limit: 30,
+      resetAt: Math.floor(Date.now() / 1000) + 60
+    } as unknown as { blocked: boolean })
+
+    await expect(countWorkItems('/repo-root', 'is:issue is:open')).resolves.toBe(0)
+
+    expect(rateLimitGuardMock).toHaveBeenCalledWith('search')
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('returns zero for oversized count queries before resolving repo sources', async () => {

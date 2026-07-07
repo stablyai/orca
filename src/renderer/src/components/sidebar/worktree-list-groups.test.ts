@@ -3096,8 +3096,8 @@ describe('buildRows workspace lineage nesting', () => {
       true
     )
 
-    const items = rows.filter((row) => row.type === 'item')
-    expect(items[0]).toMatchObject({
+    const item = rows.find((row) => row.type === 'item')
+    expect(item).toMatchObject({
       type: 'item',
       worktree: { id: child.id },
       depth: 0

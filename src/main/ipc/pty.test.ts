@@ -3311,6 +3311,124 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  // Why: the unsent main->renderer backlog was only bounded by renderer ACKs. A
+  // background-throttled/frozen renderer (Win/Linux) stops ACKing while a busy
+  // pane keeps producing, so the per-pty pending string grew at raw PTY rate
+  // (MB->GB). The cap trims it to the most-recent span and flags droppedBacklog
+  // exactly once so the renderer rebuilds the dropped span from the main snapshot.
+  it('caps the unsent pending backlog and flags droppedBacklog once when the renderer never acks', async () => {
+    vi.useFakeTimers()
+    let seq = 0
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn((_id: string, data: string) => {
+        seq += data.length
+        return seq
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-cap'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { awaitLocalPtyStartup: () => Promise.resolve() }
+      )
+      const pendingSpawn = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'backlog-cap-session'
+      }) as Promise<{ id: string }>
+      await Promise.resolve()
+      const daemon = installObservableDaemonTestProvider()
+      rebindLocalProviderListeners()
+      const result = await pendingSpawn
+
+      // Never ack: in-flight pins at the high-water and the flush gates, so the
+      // unsent backlog would grow unbounded. Emit far more than the 2 MB cap.
+      const HUGE = 'x'.repeat(5 * 1024 * 1024)
+      daemon.emitData(result.id, HUGE)
+      await vi.advanceTimersByTimeAsync(50)
+
+      const dataSends = mainWindow.webContents.send.mock.calls.filter(
+        (call) => call[0] === 'pty:data' && (call[1] as { id: string }).id === result.id
+      )
+      expect(dataSends.length).toBeGreaterThan(0)
+      // Sanity bound only: with no acks the sent total is already gated by the
+      // pre-existing in-flight high-water caps, so this holds independent of the
+      // trim. The actual retained-backlog cap is proven by droppedBacklog below.
+      const totalChars = dataSends.reduce(
+        (sum, call) => sum + (call[1] as { data: string }).data.length,
+        0
+      )
+      expect(totalChars).toBeLessThan(3 * 1024 * 1024)
+      // The trim signals the renderer exactly once, on the first emitted chunk.
+      expect((dataSends[0][1] as { droppedBacklog?: boolean }).droppedBacklog).toBe(true)
+      expect(
+        dataSends.filter(
+          (call) => (call[1] as { droppedBacklog?: boolean }).droppedBacklog === true
+        )
+      ).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: the cap and its flag must never fire in the common case (renderer keeps
+  // up), so ordinary small output carries no droppedBacklog.
+  it('does not flag droppedBacklog for ordinary small output under the cap', async () => {
+    vi.useFakeTimers()
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn(() => 12),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-small'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { awaitLocalPtyStartup: () => Promise.resolve() }
+      )
+      const pendingSpawn = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'small-output-session'
+      }) as Promise<{ id: string }>
+      await Promise.resolve()
+      const daemon = installObservableDaemonTestProvider()
+      rebindLocalProviderListeners()
+      const result = await pendingSpawn
+
+      daemon.emitData(result.id, 'small output')
+      await vi.advanceTimersByTimeAsync(50)
+
+      const dataSends = mainWindow.webContents.send.mock.calls.filter(
+        (call) => call[0] === 'pty:data' && (call[1] as { id: string }).id === result.id
+      )
+      expect(dataSends.length).toBeGreaterThan(0)
+      for (const call of dataSends) {
+        expect((call[1] as { droppedBacklog?: boolean }).droppedBacklog).toBeUndefined()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('waits for the desktop startup barrier before runtime local spawns resolve the provider', async () => {
     const barrier = makeDeferred()
     const runtime = {

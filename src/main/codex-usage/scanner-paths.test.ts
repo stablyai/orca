@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: path discovery and legacy bridge scan preference cases need shared mocked homes to keep filesystem behavior realistic. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { linkSync, lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

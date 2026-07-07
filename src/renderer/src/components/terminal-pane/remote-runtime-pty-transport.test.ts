@@ -99,8 +99,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   function latestFrameForOpcode(opcode: TerminalStreamOpcode) {
     return subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
-      .filter((frame) => frame?.opcode === opcode)
-      .at(-1)
+      .findLast((frame) => frame?.opcode === opcode)
   }
 
   function emitSnapshotFrame(

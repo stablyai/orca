@@ -2,11 +2,15 @@ import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from './session-scanner-types'
 import {
+  accumulatorFoldResumeState,
   addPreviewMessage,
   createAccumulator,
-  finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
@@ -50,51 +54,57 @@ export async function parseDroidSessionContent(
   })
 }
 
+function consumeDroidRecordLine(accumulator: SessionAccumulator, line: string): void {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
+  }
+  updateTimeline(accumulator, record.timestamp)
+  if (record.type === 'session_start') {
+    accumulator.sessionId = extractString(record.id) ?? accumulator.sessionId
+    accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
+    accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
+    return
+  }
+  if (record.type === 'system') {
+    accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
+    accumulator.model = extractString(record.model) ?? accumulator.model
+  }
+  const streamSessionId = extractString(record.session_id) ?? extractString(record.sessionId)
+  if (streamSessionId) {
+    accumulator.sessionId = streamSessionId
+  }
+  if (record.type === 'message') {
+    consumeDroidMessage(accumulator, record)
+  } else if (record.type === 'completion') {
+    accumulator.messageCount++
+    accumulator.totalTokens += tokenTotal(record.usage)
+    addPreviewMessage(accumulator, {
+      role: 'assistant',
+      text: extractString(record.finalText),
+      timestamp: record.timestamp
+    })
+  }
+}
+
+export function createDroidSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
+  return accumulatorFoldResumeState(
+    createAccumulator({ agent: 'droid', file, sessionId: sessionIdFromFileName(file.path) }),
+    consumeDroidRecordLine
+  )
+}
+
 async function parseDroidSessionLines(args: {
   file: FileWithMtime
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
 }): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'droid',
-    file: args.file,
-    sessionId: sessionIdFromFileName(args.file.path)
-  })
-
+  const state = createDroidSessionResumeState(args.file)
   for await (const line of args.lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-    updateTimeline(accumulator, record.timestamp)
-    if (record.type === 'session_start') {
-      accumulator.sessionId = extractString(record.id) ?? accumulator.sessionId
-      accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
-      accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
-      continue
-    }
-    if (record.type === 'system') {
-      accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
-      accumulator.model = extractString(record.model) ?? accumulator.model
-    }
-    const streamSessionId = extractString(record.session_id) ?? extractString(record.sessionId)
-    if (streamSessionId) {
-      accumulator.sessionId = streamSessionId
-    }
-    if (record.type === 'message') {
-      consumeDroidMessage(accumulator, record)
-    } else if (record.type === 'completion') {
-      accumulator.messageCount++
-      accumulator.totalTokens += tokenTotal(record.usage)
-      addPreviewMessage(accumulator, {
-        role: 'assistant',
-        text: extractString(record.finalText),
-        timestamp: record.timestamp
-      })
-    }
+    state.consumeLine(line)
   }
-  return finalizeSession(accumulator, args.platform, args.options)
+  return state.finalize(args.platform, args.options)
 }
 
 function consumeDroidMessage(

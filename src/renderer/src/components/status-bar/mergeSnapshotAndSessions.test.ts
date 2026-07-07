@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: this file co-locates tightly-coupled scenario
-   tests for the resource-usage merge function. Splitting them weakens the
-   single-source view of how snapshot + daemon-session inputs combine. */
 import { describe, expect, it } from 'vitest'
 import type { MemorySnapshot, TerminalTab, WorktreeMemory } from '../../../../shared/types'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'

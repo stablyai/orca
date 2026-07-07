@@ -3241,6 +3241,29 @@ describe('removeWorktree state cleanup', () => {
     expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
   })
 
+  it('cleans up expandedPaneByTabId/canExpandPaneByTabId for removed worktree tabs', async () => {
+    const store = createTestStore()
+    const removed = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const surviving = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [removed, surviving] },
+      tabsByWorktree: {
+        [removed.id]: [makeTerminalTab({ id: 'removed-tab', worktreeId: removed.id })],
+        [surviving.id]: [makeTerminalTab({ id: 'surviving-tab', worktreeId: surviving.id })]
+      },
+      // Split panes write these even when false; only closeTab deleted them
+      // before, so removeWorktree used to strand them for the whole session.
+      expandedPaneByTabId: { 'removed-tab': true, 'surviving-tab': false },
+      canExpandPaneByTabId: { 'removed-tab': false, 'surviving-tab': true }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree(removed.id)
+
+    expect(store.getState().expandedPaneByTabId).toEqual({ 'surviving-tab': false })
+    expect(store.getState().canExpandPaneByTabId).toEqual({ 'surviving-tab': true })
+  })
+
   it('cleans up automatic agent resume claims for removed worktree tabs', async () => {
     const store = createTestStore()
     const removed = makeWorktree({
@@ -5470,6 +5493,8 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const store = createTestStore()
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
     const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-keep' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
 
     mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
       repoId === 'repoA' ? [wtA] : [wtB]
@@ -5477,15 +5502,18 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
     store.setState({
       repos: [repoA, repoB],
+      folderWorkspaces: [folderWorkspace],
       tabsByWorktree: {
         'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
         'repoA::/a/zombie': [{ id: 'tab-zombie', worktreeId: 'repoA::/a/zombie' }],
-        'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+        'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }],
+        [folderKey]: [{ id: 'tab-folder', worktreeId: folderKey }]
       },
       gitIgnoredPathsByWorktree: {
         'repoA::/a/wt1': ['dist/'],
         'repoA::/a/zombie': ['coverage/'],
-        'repoB::/b/wt1': ['build/']
+        'repoB::/b/wt1': ['build/'],
+        [folderKey]: ['tmp/']
       }
     } as unknown as Partial<AppState>)
 
@@ -5495,11 +5523,13 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(mockApi.worktrees.list).toHaveBeenCalledTimes(2)
     expect(store.getState().tabsByWorktree).toEqual({
       'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
-      'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+      'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }],
+      [folderKey]: [{ id: 'tab-folder', worktreeId: folderKey }]
     })
     expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
       'repoA::/a/wt1': ['dist/'],
-      'repoB::/b/wt1': ['build/']
+      'repoB::/b/wt1': ['build/'],
+      [folderKey]: ['tmp/']
     })
 
     // Second call must not re-run the purge even if new stale ids appear.
@@ -5514,6 +5544,79 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
     expect(mockApi.worktrees.list).toHaveBeenCalledTimes(4)
     expect(store.getState().tabsByWorktree['repoA::/a/new-zombie']).toBeDefined()
+  })
+
+  it('can defer the first successful purge during local-only startup refresh', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+    const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+      repoId === 'repoA' ? [wtA] : [wtB]
+    )
+
+    store.setState({
+      repos: [repoA, repoB],
+      tabsByWorktree: {
+        'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
+        'repoA::/a/zombie': [{ id: 'tab-zombie', worktreeId: 'repoA::/a/zombie' }],
+        'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees({ hydrationPurge: 'defer' })
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(false)
+    expect(store.getState().tabsByWorktree['repoA::/a/zombie']).toBeDefined()
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+    expect(store.getState().tabsByWorktree).toEqual({
+      'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
+      'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+    })
+  })
+
+  it('does not consume the one-shot purge before clean workspace session hydration', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+    const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+      repoId === 'repoA' ? [wtA] : [wtB]
+    )
+
+    store.setState({
+      workspaceSessionReady: false,
+      hydrationSucceeded: false,
+      repos: [repoA, repoB],
+      tabsByWorktree: {
+        'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
+        'repoA::/a/zombie': [{ id: 'tab-zombie', worktreeId: 'repoA::/a/zombie' }],
+        'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(false)
+    expect(store.getState().tabsByWorktree['repoA::/a/zombie']).toBeDefined()
+
+    store.setState({ workspaceSessionReady: true } as Partial<AppState>)
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(false)
+    expect(store.getState().tabsByWorktree['repoA::/a/zombie']).toBeDefined()
+
+    store.setState({ hydrationSucceeded: true } as Partial<AppState>)
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+    expect(store.getState().tabsByWorktree).toEqual({
+      'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
+      'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+    })
   })
 
   // Why: multi-host regression — once hydration has fired, a mid-session
@@ -5849,6 +5952,8 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         'tab-3': { panes: [] }
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-2': ['pty-2'], 'tab-3': ['pty-3'] },
+      expandedPaneByTabId: { 'tab-1': true, 'tab-2': false, 'tab-3': true },
+      canExpandPaneByTabId: { 'tab-1': true, 'tab-2': true, 'tab-3': false },
       runtimePaneTitlesByTabId: { 'tab-1': 'claude', 'tab-3': 'bash' },
       automaticAgentResumeClaimsByTabId: {
         'tab-1': {
@@ -5914,6 +6019,8 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     })
     expect(s.terminalLayoutsByTabId).toEqual({ 'tab-3': { panes: [] } })
     expect(s.ptyIdsByTabId).toEqual({ 'tab-3': ['pty-3'] })
+    expect(s.expandedPaneByTabId).toEqual({ 'tab-3': true })
+    expect(s.canExpandPaneByTabId).toEqual({ 'tab-3': false })
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
     expect(s.automaticAgentResumeClaimsByTabId).toEqual({
       'tab-3': {

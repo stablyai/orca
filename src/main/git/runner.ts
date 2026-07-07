@@ -19,6 +19,15 @@ import {
 } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
+import { recordSubprocessSpawn } from '../diagnostics/main-thread-churn-probe'
+import {
+  classifyGhRateLimitBucket,
+  createGhRateLimitBlockedError,
+  getGhRateLimitBlockedUntilMs,
+  isGhPrimaryRateLimitStderr,
+  isGhRateLimitProbe,
+  notifyGhPrimaryRateLimit
+} from './gh-rate-limit-breaker'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
 import {
@@ -381,6 +390,7 @@ function execFileCapture(
     }
 
     try {
+      const spawnStartedAt = performance.now()
       child = execFile(
         command,
         args,
@@ -399,6 +409,7 @@ function execFileCapture(
           finish(error, stdout, stderr)
         }
       )
+      recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
       return
@@ -441,12 +452,14 @@ async function spawnCommandCapture(
     let stderr = ''
     let stdoutBytes = 0
     let stderrBytes = 0
+    const spawnStartedAt = performance.now()
     const child = spawn(spawnCmd, spawnArgs, {
       cwd: options.cwd,
       env: options.env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
+    recordSubprocessSpawn(spawnCmd, spawnArgs, performance.now() - spawnStartedAt)
     let timer: NodeJS.Timeout | null = null
     const onAbort = (): void => {
       killSpawnedCommandTree(child)
@@ -1033,12 +1046,19 @@ export function gitExecFileSync(
   }
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
-  return execFileSync(resolved.binary, resolved.args, {
-    cwd: resolved.cwd,
-    encoding: options.encoding ?? 'utf-8',
-    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
-    timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
-  }) as string
+  const spawnStartedAt = performance.now()
+  try {
+    return execFileSync(resolved.binary, resolved.args, {
+      cwd: resolved.cwd,
+      encoding: options.encoding ?? 'utf-8',
+      stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
+      timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
+    }) as string
+  } finally {
+    // Sync exec holds the main thread for its whole duration, so the entire
+    // call is main-thread block time — the cost issue #7576 flags.
+    recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  }
 }
 
 /**
@@ -1053,10 +1073,13 @@ export function gitSpawn(
   const resolved = resolveCommand('git', args, options.cwd, wslDistro, {
     useWslLoginShell: Boolean(wslDistro)
   })
-  return spawn(resolved.binary, resolved.args, {
+  const spawnStartedAt = performance.now()
+  const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
     cwd: resolved.cwd
   })
+  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  return child
 }
 
 // ─── gh CLI runners ─────────────────────────────────────────────────
@@ -1356,6 +1379,16 @@ export async function ghExecFileAsync(
   args: string[],
   options: GhExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
+  // Why: while a bucket's primary rate limit is exhausted, every spawn would
+  // return the same 403 — fail fast without paying the subprocess cost. The
+  // rate_limit probe itself is exempt so the breaker can learn the reset time.
+  const rateLimitBucket = classifyGhRateLimitBucket(args)
+  if (!isGhRateLimitProbe(args)) {
+    const blockedUntilMs = getGhRateLimitBlockedUntilMs(rateLimitBucket)
+    if (blockedUntilMs !== null) {
+      throw createGhRateLimitBlockedError(rateLimitBucket, blockedUntilMs)
+    }
+  }
   let resolved = resolveCommand('gh', args, options.cwd, options.wslDistro)
   let lastError: unknown
   let attemptedHostFallback = false
@@ -1375,6 +1408,9 @@ export async function ghExecFileAsync(
     } catch (err) {
       lastError = err
       const { stderr } = extractExecError(err)
+      if (isGhPrimaryRateLimitStderr(stderr)) {
+        notifyGhPrimaryRateLimit(rateLimitBucket)
+      }
       if (
         process.platform === 'win32' &&
         !attemptedDefaultWslFallback &&
@@ -1554,10 +1590,13 @@ export function wslAwareSpawn(
   const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
     useWslLoginShell
   })
-  return spawn(resolved.binary, resolved.args, {
+  const spawnStartedAt = performance.now()
+  const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
     cwd: resolved.cwd
   })
+  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+  return child
 }
 
 // ─── Path translation helpers ───────────────────────────────────────

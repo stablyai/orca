@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
+import { shouldRetryPaneSpawnOnSshReconnect } from './ssh-reconnect-pane-retry'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -2615,8 +2616,10 @@ export function useIpcEvents(): void {
         void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(async () => {
           await useAppStore.getState().fetchWorktreeLineage()
           // Why: terminal panes that failed to spawn (no PTY provider on cold
-          // start) sit inert. Bumping generation forces TerminalPane to remount
-          // and retry pty:spawn. Only bump tabs with no live ptyId.
+          // start) or whose deferred reattach never ran sit inert. Bumping
+          // generation forces TerminalPane to remount and retry; the remount
+          // routes through the deferred-connect gate, which reattaches the
+          // stranded session or spawns fresh now that the provider exists.
           const freshStore = useAppStore.getState()
           const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
           const worktreeIds = Object.values(freshStore.worktreesByRepo)
@@ -2626,13 +2629,18 @@ export function useIpcEvents(): void {
 
           for (const worktreeId of worktreeIds) {
             const tabs = freshStore.tabsByWorktree[worktreeId] ?? []
-            const hasDead = tabs.some((t) => !t.ptyId)
-            if (hasDead) {
+            const needsRetry = (t: { id: string; ptyId?: string | null }): boolean =>
+              shouldRetryPaneSpawnOnSshReconnect({
+                targetId,
+                tabPtyId: t.ptyId,
+                deferredSessionId: freshStore.deferredSshSessionIdsByTabId[t.id]
+              })
+            if (tabs.some(needsRetry)) {
               useAppStore.setState((s) => ({
                 tabsByWorktree: {
                   ...s.tabsByWorktree,
                   [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
-                    t.ptyId ? t : { ...t, generation: (t.generation ?? 0) + 1 }
+                    needsRetry(t) ? { ...t, generation: (t.generation ?? 0) + 1 } : t
                   )
                 }
               }))

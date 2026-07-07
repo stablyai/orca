@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: terminal subscribe buffering tests share a live dispatcher harness; splitting would duplicate stream setup and weaken lifecycle coverage. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'

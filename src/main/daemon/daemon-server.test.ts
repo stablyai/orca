@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: daemon server RPC, auth, stream batching, and shutdown behavior share one socket/client harness; splitting would duplicate setup. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'

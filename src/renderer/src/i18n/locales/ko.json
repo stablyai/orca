@@ -4743,7 +4743,10 @@
           "agentPermissionsDescription": "Orca가 agents를 실행할 때 권한 프롬프트를 줄일지, 수동 확인을 유지할지 선택합니다.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "수동",
-          "3f1bdf3cb4": "환경 텍스트가 너무 커서 안전하게 파싱할 수 없습니다."
+          "3f1bdf3cb4": "환경 텍스트가 너무 커서 안전하게 파싱할 수 없습니다.",
+          "codexSessionSource": "Codex home to import from",
+          "codexSessionSourceInfo": "About importing Codex history",
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -8893,7 +8896,8 @@
             "b234ab25b4": "파일을 클립보드에 복사하지 못했습니다",
             "f9d7ca753d": "경로 복사",
             "3161c4e425": "폴더",
-            "e887fa4b2e": "터미널에서 열기"
+            "e887fa4b2e": "터미널에서 열기",
+            "1d8e182c32": "파일 보기"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git이 무시한 파일 표시",

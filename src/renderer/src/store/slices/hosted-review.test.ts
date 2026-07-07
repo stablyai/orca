@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: hosted-review tests cover runtime routing,
-hinted cache revalidation, provider discovery, and PR cache reconciliation. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'

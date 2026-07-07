@@ -3848,7 +3848,21 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const sourceSettings = getTaskSourceRuntimeSettings(sourceContext)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(() => {
+    if (sourceContext?.provider !== 'github') {
+      return repoOwnerSettings
+    }
+    const sourceRuntimeSettings = getTaskSourceRuntimeSettings(sourceContext)
+    return sourceRuntimeSettings.activeRuntimeEnvironmentId
+      ? ({
+          ...repoOwnerSettings,
+          ...sourceRuntimeSettings
+        } as typeof repoOwnerSettings)
+      : repoOwnerSettings
+  }, [repoOwnerSettings, sourceContext])
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'

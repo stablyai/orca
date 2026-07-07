@@ -1805,6 +1805,7 @@ function createGitHubApi(): WebGitHubApi {
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        currentHeadOid: candidate.currentHeadOid ?? null,
         ...(acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {})
       })
       return pr

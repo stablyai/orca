@@ -154,7 +154,10 @@ export function AiVaultSessionVirtualList({
   })
 
   return (
-    <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+    <div
+      ref={listScrollRef}
+      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-sleek"
+    >
       {loading && sessionsCount === 0 ? <SessionLoadingState /> : null}
 
       {!loading && sessionsCount === 0 && !error ? (

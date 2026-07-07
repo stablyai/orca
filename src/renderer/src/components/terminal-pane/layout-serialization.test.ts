@@ -1,5 +1,3 @@
-/* oxlint-disable max-lines -- Why: this test keeps split layout replay fixtures together so
- * stable leaf-id migration regressions are visible in one focused suite. */
 import { describe, expect, it, beforeAll, vi } from 'vitest'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 

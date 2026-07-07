@@ -67,6 +67,7 @@ async function renderFrame(isActive: boolean): Promise<void> {
         wsUrl="ws://127.0.0.1:3100/ws"
         loading={false}
         isLive={true}
+        visualOrientation="portrait"
         isActive={isActive}
         onTap={vi.fn()}
         onGesture={vi.fn()}

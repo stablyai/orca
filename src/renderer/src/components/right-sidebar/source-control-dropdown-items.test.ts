@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: the dropdown priority table is easier to audit when the row-state cases live together. */
 import { describe, expect, it } from 'vitest'
 import { resolveDropdownItems, type DropdownActionInputs } from './source-control-dropdown-items'
 

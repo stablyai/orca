@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: dispatcher behavior is stateful across
-   primary, socket, timeout, and cancellation paths; keeping fixtures shared
-   makes regression tests easier to audit. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 import {
@@ -397,5 +394,120 @@ describe('RelayDispatcher', () => {
     dispatcher.invalidateClient()
 
     expect(listener).toHaveBeenCalledWith(1)
+  })
+
+  describe('notifyBulk (bulk lane backpressure)', () => {
+    it('resolves immediately when the sink accepts the frame', async () => {
+      const frames: Buffer[] = []
+      const bulkDispatcher = new RelayDispatcher((data) => {
+        frames.push(Buffer.from(data))
+        return true
+      })
+      try {
+        await bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
+        expect(frames).toHaveLength(1)
+        const frame = decodeFirstFrame(frames[0])
+        const msg = JSON.parse(frame.payload.toString()) as JsonRpcNotification
+        expect(msg.method).toBe('bulk.event')
+      } finally {
+        bulkDispatcher.dispose()
+      }
+    })
+
+    it('holds the next bulk frame until the saturated sink drains', async () => {
+      const frames: Buffer[] = []
+      const drainWaiters = new Set<() => void>()
+      const bulkDispatcher = new RelayDispatcher(
+        (data) => {
+          frames.push(Buffer.from(data))
+          return false
+        },
+        { waitWriteDrain: (cb) => drainWaiters.add(cb) }
+      )
+      try {
+        let firstSettled = false
+        const first = bulkDispatcher.notifyBulk('bulk.event', { seq: 0 }).then(() => {
+          firstSettled = true
+        })
+        void bulkDispatcher.notifyBulk('bulk.event', { seq: 1 })
+        await vi.advanceTimersByTimeAsync(0)
+
+        // First frame written, but its send has not settled and the second
+        // frame is not admitted while the sink stays saturated.
+        expect(frames).toHaveLength(1)
+        expect(firstSettled).toBe(false)
+
+        for (const cb of Array.from(drainWaiters)) {
+          drainWaiters.delete(cb)
+          cb()
+        }
+        await first
+        await vi.advanceTimersByTimeAsync(0)
+        expect(frames).toHaveLength(2)
+      } finally {
+        bulkDispatcher.dispose()
+      }
+    })
+
+    it('interactive notify() frames are not gated behind a stalled bulk lane', async () => {
+      const frames: Buffer[] = []
+      const bulkDispatcher = new RelayDispatcher(
+        (data) => {
+          frames.push(Buffer.from(data))
+          return false
+        },
+        { waitWriteDrain: () => {} }
+      )
+      try {
+        void bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
+        void bulkDispatcher.notifyBulk('bulk.event', { seq: 1 })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(frames).toHaveLength(1)
+
+        bulkDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
+        expect(frames).toHaveLength(2)
+        const msg = JSON.parse(
+          decodeFirstFrame(frames[1]).payload.toString()
+        ) as JsonRpcNotification
+        expect(msg.method).toBe('pty.data')
+      } finally {
+        bulkDispatcher.dispose()
+      }
+    })
+
+    it('releases a parked bulk send when the dispatcher is disposed', async () => {
+      const bulkDispatcher = new RelayDispatcher(() => false, { waitWriteDrain: () => {} })
+      const pending = bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
+      await vi.advanceTimersByTimeAsync(0)
+      bulkDispatcher.dispose()
+      await expect(pending).resolves.toBeUndefined()
+    })
+
+    it('targets only the requested client and resolves for missing clients', async () => {
+      const primaryFrames: Buffer[] = []
+      const secondaryFrames: Buffer[] = []
+      const bulkDispatcher = new RelayDispatcher((data) => {
+        primaryFrames.push(Buffer.from(data))
+        return true
+      })
+      try {
+        const secondaryId = bulkDispatcher.attachClient((data) => {
+          secondaryFrames.push(Buffer.from(data))
+          return true
+        })
+
+        await bulkDispatcher.notifyBulk('bulk.event', { seq: 0 }, { clientId: secondaryId })
+        expect(primaryFrames).toHaveLength(0)
+        expect(secondaryFrames).toHaveLength(1)
+
+        await expect(
+          bulkDispatcher.notifyBulk('bulk.event', { seq: 1 }, { clientId: 999 })
+        ).resolves.toBeUndefined()
+        expect(primaryFrames).toHaveLength(0)
+        expect(secondaryFrames).toHaveLength(1)
+      } finally {
+        bulkDispatcher.dispose()
+      }
+    })
   })
 })

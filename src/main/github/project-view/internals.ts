@@ -1,7 +1,3 @@
-/* eslint-disable max-lines -- Why: shared infrastructure for project-view —
-slug validation, error classification, runGraphql/runRest, and rate-limit
-synthesis. Co-located so the read and write paths observe identical
-classification semantics. */
 // Why: `ghExecFileAsync` (WSL-aware, retry-enabled) is the single spawn site
 // for gh calls. The legacy plain `execFileAsync` is NOT used here — routing
 // every gh call through the runner gives us transient-5xx retry, WSL path

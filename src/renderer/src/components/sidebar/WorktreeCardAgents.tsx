@@ -1,13 +1,12 @@
-/* eslint-disable max-lines -- Why: this component keeps compact/full inline
-   agent rendering and lineage disclosure behavior together; splitting during
-   this bug fix would risk divergent parent-child row behavior. */
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
+import { selectSendTargetInputs } from './worktree-card-send-target-inputs'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -89,12 +88,15 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  // Why: these five maps are read only to derive send-target eligibility, which
+  // matters only while the send-target popover targets THIS card. Two of them
+  // (runtimePaneTitlesByTabId, agentStatusByPaneKey) churn on every pane-title
+  // and agent-status write app-wide, so subscribing to them unconditionally made
+  // every mounted agent body re-render on unrelated terminals. Gate the
+  // subscription: return a stable empty constant when the popover isn't ours, so
+  // useShallow keeps the same result and idle bodies stop reacting to the churn.
+  const sendTargetInputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
   const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
@@ -134,16 +136,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
 
     return new Map(
-      deriveRunningAgentSendTargets(
-        {
-          agentStatusByPaneKey,
-          tabsByWorktree,
-          terminalLayoutsByTabId,
-          ptyIdsByTabId,
-          runtimePaneTitlesByTabId
-        },
-        worktreeId
-      ).map((target) => [
+      deriveRunningAgentSendTargets(sendTargetInputs, worktreeId).map((target) => [
         target.paneKey,
         agentSendPopoverTargetMode?.status === 'sending' &&
         agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
@@ -159,12 +152,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     agentStatusEpoch,
     agentSendPopoverTargetMode?.sendingPaneKey,
     agentSendPopoverTargetMode?.status,
-    agentStatusByPaneKey,
     isAgentSendTargetModeActive,
-    ptyIdsByTabId,
-    runtimePaneTitlesByTabId,
-    tabsByWorktree,
-    terminalLayoutsByTabId,
+    // sendTargetInputs is a stable empty constant while inactive and a
+    // shallow-compared bundle of the five maps while active, so it covers all
+    // five former deps in one reference.
+    sendTargetInputs,
     worktreeId
   ])
 

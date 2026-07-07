@@ -17,6 +17,36 @@ const REPRESENTATIVE_CWD_LINE_LIMIT = 200
 const REPRESENTATIVE_FILE_LIMIT = 3
 const CLAUDE_EXTENSIONS = new Set(['.jsonl'])
 
+// A Claude project dir encodes exactly one cwd, so a resolved cwd never
+// changes; caching it spares each rescan the transcript-head reads.
+const PROJECT_DIR_CWD_CACHE_MAX = 2048
+const projectDirCwdCache = new Map<string, string>()
+
+export function resetProjectDirCwdCacheForTests(): void {
+  projectDirCwdCache.clear()
+}
+
+async function cachedProjectDirCwd(projectDir: string): Promise<string | null> {
+  const cached = projectDirCwdCache.get(projectDir)
+  if (cached !== undefined) {
+    // Refresh recency so hot in-scope dirs outlive one-off ones at the cap.
+    projectDirCwdCache.delete(projectDir)
+    projectDirCwdCache.set(projectDir, cached)
+    return cached
+  }
+  const cwd = await readProjectDirCwd(projectDir)
+  if (cwd) {
+    if (projectDirCwdCache.size >= PROJECT_DIR_CWD_CACHE_MAX) {
+      const oldest = projectDirCwdCache.keys().next()
+      if (!oldest.done) {
+        projectDirCwdCache.delete(oldest.value)
+      }
+    }
+    projectDirCwdCache.set(projectDir, cwd)
+  }
+  return cwd
+}
+
 /**
  * Fully include the transcripts of Claude project directories whose cwd falls
  * inside the active workspace/project paths.
@@ -41,7 +71,7 @@ export async function discoverInScopeClaudeFiles(args: {
   const collected = new Map<string, FileWithMtime>()
   for (const rootDir of args.rootDirs) {
     for (const projectDir of await listProjectDirs(rootDir, scopeProjectPrefixes)) {
-      const cwd = await readProjectDirCwd(projectDir)
+      const cwd = await cachedProjectDirCwd(projectDir)
       if (!cwd || !args.scopePaths.some((scopePath) => isCwdInsideScopePath(scopePath, cwd))) {
         continue
       }
@@ -205,7 +235,8 @@ async function collectClaudeFiles(args: {
       addBoundedFile(args.collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,
-        modifiedAt: fileStat.mtime.toISOString()
+        modifiedAt: fileStat.mtime.toISOString(),
+        sizeBytes: fileStat.size
       })
     } catch (err) {
       args.issues.push({ agent: 'claude', path, message: errorMessage(err) })

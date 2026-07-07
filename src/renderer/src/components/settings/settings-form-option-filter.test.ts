@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalThemeOption } from '@/lib/terminal-theme'
 import {
+  FONT_SUGGESTION_RENDER_LIMIT,
   SETTINGS_FORM_OPTION_QUERY_MAX_BYTES,
   filterFontSuggestions,
   filterTerminalThemeOptions,
+  getRenderedFontSuggestions,
   isSettingsFormOptionQueryTooLarge
 } from './settings-form-option-filter'
 
@@ -85,5 +87,38 @@ describe('settings-form-option-filter', () => {
 
     expect(filterTerminalThemeOptions([createThemeOption('Solarized Dark')], query)).toEqual([])
     expect(filterFontSuggestions(['Fira Code'], query)).toEqual([])
+  })
+
+  it('caps rendered font suggestions without changing the searchable source list', () => {
+    const suggestions = Array.from(
+      { length: FONT_SUGGESTION_RENDER_LIMIT + 40 },
+      (_value, index) => `System Font ${index}`
+    )
+
+    const rendered = getRenderedFontSuggestions(suggestions, 0)
+
+    expect(rendered).toHaveLength(FONT_SUGGESTION_RENDER_LIMIT)
+    expect(rendered.map((option) => option.font)).not.toContain(
+      `System Font ${FONT_SUGGESTION_RENDER_LIMIT + 39}`
+    )
+    expect(
+      filterFontSuggestions(suggestions, `System Font ${FONT_SUGGESTION_RENDER_LIMIT + 39}`)
+    ).toEqual([`System Font ${FONT_SUGGESTION_RENDER_LIMIT + 39}`])
+  })
+
+  it('keeps a highlighted late font visible inside the render cap', () => {
+    const lateFontIndex = FONT_SUGGESTION_RENDER_LIMIT + 12
+    const suggestions = Array.from(
+      { length: lateFontIndex + 1 },
+      (_value, index) => `System Font ${index}`
+    )
+
+    const rendered = getRenderedFontSuggestions(suggestions, lateFontIndex)
+
+    expect(rendered).toHaveLength(FONT_SUGGESTION_RENDER_LIMIT)
+    expect(rendered.at(-1)).toEqual({
+      font: `System Font ${lateFontIndex}`,
+      sourceIndex: lateFontIndex
+    })
   })
 })

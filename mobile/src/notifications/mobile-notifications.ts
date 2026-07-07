@@ -31,8 +31,40 @@ type ScheduledNotificationState = {
 
 const scheduledNotificationsByHostAndNotificationId = new Map<string, ScheduledNotificationState>()
 
+// Why: notificationId embeds a per-completion timestamp (buildAgentNotificationId),
+// so every agent-task-complete inserts a new, never-reused key. Entries are only
+// removed when the desktop sends a matching dismiss — which a remote mobile user
+// (not at the desktop) frequently never gets — so the map grew for the app's whole
+// life. Bound it; a settled entry only retains a small identifier used for later
+// programmatic dismissal, unnecessary for long-past completions.
+const MAX_SCHEDULED_NOTIFICATIONS = 256
+let maxScheduledNotifications = MAX_SCHEDULED_NOTIFICATIONS
+
 function getStoredNotificationKey(hostId: string, notificationId: string): string {
   return `${encodeURIComponent(hostId)}:${encodeURIComponent(notificationId)}`
+}
+
+// Evict the oldest SETTLED entries (never one mid-schedule) until within the cap.
+// Map iteration is insertion order, so the first match is the oldest.
+function boundScheduledNotifications(): void {
+  while (scheduledNotificationsByHostAndNotificationId.size > maxScheduledNotifications) {
+    let evicted = false
+    for (const [key, state] of scheduledNotificationsByHostAndNotificationId) {
+      if (!state.pending) {
+        scheduledNotificationsByHostAndNotificationId.delete(key)
+        evicted = true
+        break
+      }
+    }
+    if (!evicted) {
+      break
+    }
+  }
+}
+
+/** Test-only: override the cap (pass no arg to restore the default). */
+export function setScheduledNotificationsMaxForTests(max?: number): void {
+  maxScheduledNotifications = max ?? MAX_SCHEDULED_NOTIFICATIONS
 }
 
 export type NotificationPermissionState = {
@@ -155,6 +187,7 @@ async function showLocalNotification(event: NotificationEvent, hostId: string): 
       return
     }
     notificationState.identifier = scheduledIdentifier
+    boundScheduledNotifications()
   } finally {
     if (notificationState.pending === pending) {
       notificationState.pending = undefined

@@ -91,8 +91,8 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(source).toContain('sourceContext,')
     expect(cacheKeySection).toContain('sourceCacheScope')
     expect(source).toContain('getTaskSourceCacheScope(sourceContext)')
-    expect(matchInvalidationSection).toContain(
-      'if (removed) {\n    workItemDetailsCacheGeneration += 1'
+    expect(matchInvalidationSection).toMatch(
+      /if \(removed\) {\s+workItemDetailsCacheGeneration \+= 1/
     )
   })
 
@@ -190,7 +190,13 @@ describe('GitHubItemDialog source host boundaries', () => {
       'function CommentReactions'
     )
 
-    expect(actionsSection).toContain('getTaskSourceRuntimeSettings(sourceContext)')
+    expect(actionsSection).toContain('getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId')
+    expect(actionsSection).toContain('...repoOwnerSettings')
+    expect(actionsSection).toContain(
+      'const sourceRuntimeSettings = getTaskSourceRuntimeSettings(sourceContext)'
+    )
+    expect(actionsSection).toContain('sourceRuntimeSettings.activeRuntimeEnvironmentId')
+    expect(actionsSection).toContain('...sourceRuntimeSettings')
     expect(actionsSection).toContain('getActiveRuntimeTarget(sourceSettings)')
     expect(actionsSection).toContain(
       'const canMergeWithRepoContext = !!repoPath || mergeTarget.kind ==='

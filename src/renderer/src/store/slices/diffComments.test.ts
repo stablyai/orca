@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this test file owns the diff-comments
-slice's persistence, runtime routing, rollback, and compatibility behavior. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'

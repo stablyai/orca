@@ -20,7 +20,13 @@ const runtimeEnvironmentsSubscribe = vi.fn()
 const ENV = 'env-1'
 
 function message(id: string): NativeChatMessage {
-  return { id, role: 'assistant', blocks: [{ type: 'text', text: id }], timestamp: 1, source: 'transcript' }
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'text', text: id }],
+    timestamp: 1,
+    source: 'transcript'
+  }
 }
 
 function okEnvelope(result: unknown): { ok: true; result: unknown } {
@@ -224,7 +230,11 @@ describe('runtime readSession error mapping', () => {
 
     expect(
       toRuntimeNativeChatErrorMessage(
-        new RuntimeRpcCallError({ id: 'r-1', ok: false, error: { code: 'method_not_found', message: 'x' } })
+        new RuntimeRpcCallError({
+          id: 'r-1',
+          ok: false,
+          error: { code: 'method_not_found', message: 'x' }
+        })
       )
     ).toEqual(tooOld)
 

@@ -118,7 +118,7 @@ export function mapGhosttyToOrca(
         }
         const idxStr = entry.slice(0, eqIdx).trim()
         const color = entry.slice(eqIdx + 1).trim()
-        const index = parseInt(idxStr, 10)
+        const index = Number.parseInt(idxStr, 10)
         if (Number.isNaN(index) || !HEX_COLOR_RE.test(color)) {
           continue
         }
