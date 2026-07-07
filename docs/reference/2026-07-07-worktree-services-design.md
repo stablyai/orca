@@ -90,3 +90,7 @@ Unit tests only — no Docker-dependent e2e:
 - Provisioning services on an existing worktree after creation (beyond retry-after-failure).
 - Dynamic port probing (ports are deterministic from the slot via `ORCA_PORT_*`; Orca does not check whether a port is actually free).
 - Data seeding/cloning (a recipe's `create` command owns that).
+
+## Implementation Notes
+
+- **Remote (SSH) provisioning is deferred to a follow-up.** v1 provisions only local and WSL worktrees; the opt-in is hidden and lifecycle skipped whenever `repo.connectionId` is set. To extend to remote repos, run each service command on the connection host by following the `runRemoteArchiveHook` pattern (`src/main/ipc/worktrees.ts:322`, invoked at the archive-hook site near line 1591) instead of the local `exec` / WSL `wsl.exe` branches in `src/main/worktree-services.ts`. The slot store, slug/port derivation, and env-injection paths are provider-agnostic and can be reused as-is.
