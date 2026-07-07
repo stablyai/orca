@@ -17,9 +17,24 @@ import type { RequestContext } from './dispatcher'
 const RELAY_FS_CONCURRENCY = 48
 const DU_TIMEOUT_MS = 120_000
 const DU_MAX_BUFFER_BYTES = 16 * 1024 * 1024
+// Why: the du-based sizing path (below) walks the whole tree in one native `du`
+// process, but the node fallback lstat()s every entry and builds an in-memory
+// tree. On very large worktrees (an ML repo with millions of files, a Rust
+// `target/`, etc.) — and especially when several worktrees are scanned at once —
+// that fallback pins the single-threaded relay and starves unrelated
+// fs.readDir/fs.stat requests past their 30s timeout, surfacing as "Could not
+// load files for this workspace". Cap how many entries the node walk visits so
+// it degrades to a partial result instead of a meltdown. The accurate `du` path
+// is not affected by this cap.
+const MAX_NODE_SCAN_ENTRIES = 200_000
 const execFileAsync = promisify(execFile)
 
 type AsyncLimiter = <T>(task: () => Promise<T>) => Promise<T>
+
+// Why: a shared, mutable entry budget threaded through the recursive node walk
+// so the total number of directory entries it visits stays bounded regardless
+// of how deep or wide the tree is.
+type ScanBudget = { entriesRemaining: number }
 
 type ScanStats = {
   name: string
@@ -182,7 +197,8 @@ async function scanEntryAggregate(
   entryPath: string,
   name: string,
   limit: AsyncLimiter,
-  context: RequestContext
+  context: RequestContext,
+  budget: ScanBudget
 ): Promise<ScanStats> {
   throwIfCancelled(context)
   const stats = await limit(() => lstat(entryPath))
@@ -208,6 +224,20 @@ async function scanEntryAggregate(
     }
   }
 
+  // Why: the entry budget is exhausted — stop descending so an oversized tree
+  // can't pin the relay. Report this directory's own size and mark its
+  // un-walked subtree as skipped so the result is flagged partial rather than
+  // silently undercounted.
+  if (budget.entriesRemaining <= 0) {
+    return {
+      name,
+      path: entryPath,
+      kind: 'directory',
+      sizeBytes: stats.size,
+      skippedEntryCount: 1
+    }
+  }
+
   let entries: Dirent[]
   try {
     entries = await limit(() => readdir(entryPath, { withFileTypes: true }))
@@ -221,10 +251,18 @@ async function scanEntryAggregate(
     }
   }
 
+  budget.entriesRemaining -= entries.length
+
   const childStats = await Promise.all(
     entries.map(async (entry): Promise<ScanStats | null> => {
       try {
-        return await scanEntryAggregate(join(entryPath, entry.name), entry.name, limit, context)
+        return await scanEntryAggregate(
+          join(entryPath, entry.name),
+          entry.name,
+          limit,
+          context,
+          budget
+        )
       } catch (error) {
         if (error instanceof RelayWorkspaceSpaceScanCancelledError) {
           throw error
@@ -256,13 +294,14 @@ async function scanEntryAggregate(
 
 async function scanDirectoryWithDu(
   rootPath: string,
-  context: RequestContext
+  context: RequestContext,
+  maxNodeScanEntries: number
 ): Promise<WorkspaceSpaceDirectoryScanResult> {
   throwIfCancelled(context)
   const rootStats = await lstat(rootPath)
   throwIfCancelled(context)
   if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
-    return scanDirectoryWithNode(rootPath, context)
+    return scanDirectoryWithNode(rootPath, context, maxNodeScanEntries)
   }
 
   const [entries, duSizes] = await Promise.all([
@@ -303,14 +342,16 @@ async function scanDirectoryWithDu(
 
 async function scanDirectoryWithNode(
   rootPath: string,
-  context: RequestContext
+  context: RequestContext,
+  maxNodeScanEntries: number
 ): Promise<WorkspaceSpaceDirectoryScanResult> {
   throwIfCancelled(context)
   const limit = createAsyncLimiter(RELAY_FS_CONCURRENCY, context)
+  const budget: ScanBudget = { entriesRemaining: maxNodeScanEntries }
   const rootStats = await lstat(rootPath)
   throwIfCancelled(context)
   if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
-    const root = await scanEntryAggregate(rootPath, basename(rootPath), limit, context)
+    const root = await scanEntryAggregate(rootPath, basename(rootPath), limit, context, budget)
     return {
       sizeBytes: root.sizeBytes,
       skippedEntryCount: root.skippedEntryCount,
@@ -336,7 +377,13 @@ async function scanDirectoryWithNode(
   const childStats = await Promise.all(
     entries.map(async (entry): Promise<ScanStats | null> => {
       try {
-        return await scanEntryAggregate(join(rootPath, entry.name), entry.name, limit, context)
+        return await scanEntryAggregate(
+          join(rootPath, entry.name),
+          entry.name,
+          limit,
+          context,
+          budget
+        )
       } catch (error) {
         if (error instanceof RelayWorkspaceSpaceScanCancelledError) {
           throw error
@@ -360,16 +407,20 @@ async function scanDirectoryWithNode(
 
 export async function scanWorkspaceSpaceDirectory(
   rootPath: string,
-  context: RequestContext
+  context: RequestContext,
+  options?: { maxNodeScanEntries?: number }
 ): Promise<WorkspaceSpaceDirectoryScanResult> {
+  // Why: overridable so tests can exercise the budget with a small cap; defaults
+  // to MAX_NODE_SCAN_ENTRIES in production.
+  const maxNodeScanEntries = options?.maxNodeScanEntries ?? MAX_NODE_SCAN_ENTRIES
   if (platform !== 'win32') {
     try {
-      return await scanDirectoryWithDu(rootPath, context)
+      return await scanDirectoryWithDu(rootPath, context, maxNodeScanEntries)
     } catch (error) {
       if (error instanceof RelayWorkspaceSpaceScanCancelledError) {
         throw error
       }
     }
   }
-  return scanDirectoryWithNode(rootPath, context)
+  return scanDirectoryWithNode(rootPath, context, maxNodeScanEntries)
 }
