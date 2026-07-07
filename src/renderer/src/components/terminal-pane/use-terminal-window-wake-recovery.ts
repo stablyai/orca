@@ -66,12 +66,18 @@ export function useTerminalWindowWakeRecovery({
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('visibilitychange', onVisibilityChange)
     }
+    // Why: a focus-preserving display wake fires neither focus nor
+    // visibilitychange, so main relays powerMonitor resume over IPC. Same
+    // recovery path — it resumes pane rendering and clears the WebGL latch.
+    const unsubscribeSystemResumed =
+      window.api?.ui.onSystemResumed?.(() => recoverVisibleWake()) ?? null
     return () => {
       cancelScheduledWakeRecovery()
       window.removeEventListener('focus', onFocus)
       if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
         document.removeEventListener('visibilitychange', onVisibilityChange)
       }
+      unsubscribeSystemResumed?.()
     }
   }, [isActiveRef, isVisible, isVisibleRef, managerRef])
 }

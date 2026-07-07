@@ -6,7 +6,12 @@
  * and the eager-buffer reconnection logic share.
  */
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
-import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
+import {
+  ackPtyData,
+  clearProcessedPtyCharTotal,
+  exposeE2eTerminalPtyAckGate,
+  getProcessedPtyCharTotals
+} from './terminal-pty-ack-gate'
 import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
 import {
   bufferPreHandlerPtyData,
@@ -158,6 +163,9 @@ export function ensurePtyDispatcher(): void {
     ptyReplayHandlers.get(payload.id)?.(payload.data)
   })
   window.api.pty.onExit((payload) => {
+    // Why: main drops its delivery accounting for this pty on exit; drop the
+    // cumulative total too so a reused id restarts at zero on both sides.
+    clearProcessedPtyCharTotal(payload.id)
     const handler = ptyExitHandlers.get(payload.id)
     if (handler) {
       clearPreHandlerPtyState(payload.id)
@@ -173,6 +181,15 @@ export function ensurePtyDispatcher(): void {
         sidecar(payload.code)
       }
     }
+  })
+  // Why: main probes when delivery looks stuck on lost ACKs (data arriving
+  // for a fully gated PTY). Replying with the cumulative processed totals
+  // lets main reconcile verified state instead of resetting blindly.
+  window.api.pty.onDeliveryResyncRequest?.((payload) => {
+    window.api.pty.respondDeliveryResync?.({
+      requestId: payload.requestId,
+      processedCharsByPty: getProcessedPtyCharTotals()
+    })
   })
 }
 

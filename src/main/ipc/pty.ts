@@ -1128,6 +1128,10 @@ let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
 let rendererLifecycleResetWebContents: WebContents | null = null
 let rendererLifecycleResetHandler: (() => void) | null = null
+// Why: the ACK in-flight counters live in the registerPtyHandlers closure, but
+// renderer lifecycle events are handled at module scope. This indirection lets
+// the lifecycle reset zero the closure-owned delivery gate.
+let resetRendererInFlightDeliveryGate: () => void = () => {}
 
 // Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
 // against the freshly-created adapter after replaceDaemonProvider swaps the
@@ -1199,6 +1203,10 @@ function markRendererPtysHiddenForRendererLifecycleReset(): void {
   // surviving daemon/SSH PTYs fail closed until the new renderer reports again.
   activeRendererPtys.clear()
   visibleRendererPtys.clear()
+  // Why: a reload/navigation destroys the renderer-side dispatcher, so ACKs
+  // for already-sent data can never arrive. Stale in-flight counters would
+  // gate every PTY (including newly created ones) in the fresh renderer.
+  resetRendererInFlightDeliveryGate()
 }
 
 function clearRendererLifecycleResetHandlers(): void {
@@ -1290,6 +1298,7 @@ export function registerPtyHandlers(
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:ackData')
+  ipcMain.removeAllListeners('pty:deliveryResyncResponse')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
 
   // Configure the local provider with app-specific hooks.
@@ -1380,10 +1389,20 @@ export function registerPtyHandlers(
   }
 
   const pendingData = new Map<string, PendingPtyData>()
-  const rendererInFlightCharsByPty = new Map<string, number>()
+  // Why: TCP-style cumulative delivery accounting. Relative in-flight counters
+  // make every lost ACK a permanent debt; monotonic sent/acked totals self-heal
+  // as soon as any later ACK (or resync reply) reports the renderer's full
+  // processed count.
+  type RendererPtyDeliveryAccounting = { sentChars: number; ackedChars: number }
+  const rendererDeliveryAccountingByPty = new Map<string, RendererPtyDeliveryAccounting>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let rendererInFlightTotalChars = 0
+  let deliveryResyncRequestSerial = 0
+  let deliveryResyncOutstandingRequestId: number | null = null
+  let deliveryResyncTimer: ReturnType<typeof setTimeout> | null = null
+  let deliveryResyncUnansweredWarnLogged = false
+  let lastAckReceivedAtMs: number | null = null
   const PTY_BATCH_INTERVAL_MS = 8
   const PTY_BATCH_DRAIN_CONTINUE_MS = 1
   const PTY_BATCH_FLUSH_CHUNK_CHARS = 16 * 1024
@@ -1403,6 +1422,10 @@ export function registerPtyHandlers(
   // Why: active panes need a bounded lane through old hidden bulk output so a
   // keystroke redraw can reach the renderer before every background ACK lands.
   const PTY_RENDERER_ACTIVE_PTY_IN_FLIGHT_RESERVE_CHARS = 512 * 1024
+  // Why: request/response hygiene only — this timeout never mutates delivery
+  // state. It clears the outstanding-probe flag so a later gated arrival can
+  // probe again, and logs once per silent streak for field diagnosis.
+  const PTY_DELIVERY_RESYNC_TIMEOUT_MS = 5_000
   // Why: keep the immediate path bounded to keystroke-sized TUI redraws;
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
@@ -1415,12 +1438,9 @@ export function registerPtyHandlers(
   let peakMaxRendererInFlightCharsByPty = 0
   let ackGatedFlushSkipCount = 0
 
-  function getMaxMapValue(values: Iterable<number>): number {
-    let max = 0
-    for (const value of values) {
-      max = Math.max(max, value)
-    }
-    return max
+  function getRendererInFlightCharsForPty(id: string): number {
+    const accounting = rendererDeliveryAccountingByPty.get(id)
+    return accounting ? accounting.sentChars - accounting.ackedChars : 0
   }
 
   function readCurrentPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
@@ -1431,13 +1451,22 @@ export function registerPtyHandlers(
       pendingChars += chars
       maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
     }
+    let rendererInFlightPtyCount = 0
+    let maxRendererInFlightCharsByPty = 0
+    for (const accounting of rendererDeliveryAccountingByPty.values()) {
+      const inFlight = accounting.sentChars - accounting.ackedChars
+      if (inFlight > 0) {
+        rendererInFlightPtyCount++
+      }
+      maxRendererInFlightCharsByPty = Math.max(maxRendererInFlightCharsByPty, inFlight)
+    }
     return {
       pendingPtyCount: pendingData.size,
       pendingChars,
       maxPendingCharsByPty,
-      rendererInFlightPtyCount: rendererInFlightCharsByPty.size,
+      rendererInFlightPtyCount,
       rendererInFlightChars: rendererInFlightTotalChars,
-      maxRendererInFlightCharsByPty: getMaxMapValue(rendererInFlightCharsByPty.values()),
+      maxRendererInFlightCharsByPty,
       activeRendererPtyCount: activeRendererPtys.size,
       flushScheduled: flushTimer !== null,
       peakPendingChars,
@@ -1547,15 +1576,86 @@ export function registerPtyHandlers(
     const ptyLimit =
       PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS +
       (options.interactive === true ? PTY_RENDERER_ACTIVE_PTY_IN_FLIGHT_RESERVE_CHARS : 0)
-    return (
-      (rendererInFlightCharsByPty.get(id) ?? 0) < ptyLimit &&
-      rendererInFlightTotalChars < totalLimit
+    return getRendererInFlightCharsForPty(id) < ptyLimit && rendererInFlightTotalChars < totalLimit
+  }
+
+  // Why: max-merge on cumulative totals is idempotent and reorder-tolerant —
+  // a replayed or out-of-order ACK can never double-credit, and a lost ACK
+  // self-heals when any later ACK reports the full processed count. Returns
+  // the newly acknowledged delta so provider (SSH/daemon) backpressure is only
+  // credited for bytes main actually tracked in flight, never negative.
+  function applyCumulativeAck(id: string, processedChars: number): number {
+    const accounting = rendererDeliveryAccountingByPty.get(id)
+    if (!accounting) {
+      return 0
+    }
+    // Clamped to sentChars so a corrupt payload cannot drive in-flight negative.
+    const nextAckedChars = Math.min(
+      accounting.sentChars,
+      Math.max(accounting.ackedChars, processedChars)
     )
+    const acknowledged = nextAckedChars - accounting.ackedChars
+    accounting.ackedChars = nextAckedChars
+    rendererInFlightTotalChars = Math.max(0, rendererInFlightTotalChars - acknowledged)
+    return acknowledged
+  }
+
+  function clearDeliveryResyncProbe(): void {
+    deliveryResyncOutstandingRequestId = null
+    if (deliveryResyncTimer) {
+      clearTimeout(deliveryResyncTimer)
+      deliveryResyncTimer = null
+    }
+  }
+
+  // Why: event-triggered verified-state recovery. Data arriving for a fully
+  // gated PTY is the deterministic signal that delivery may be stuck on lost
+  // ACKs (e.g. dropped across a system suspend); ask the renderer for its
+  // authoritative processed totals instead of resetting on a wall-clock guess.
+  function requestDeliveryResyncForGatedPty(): void {
+    if (deliveryResyncOutstandingRequestId !== null || mainWindow.isDestroyed()) {
+      return
+    }
+    deliveryResyncRequestSerial += 1
+    const requestId = deliveryResyncRequestSerial
+    deliveryResyncOutstandingRequestId = requestId
+    deliveryResyncTimer = setTimeout(() => {
+      if (deliveryResyncOutstandingRequestId !== requestId) {
+        return
+      }
+      clearDeliveryResyncProbe()
+      // Why: no state mutation on timeout — a renderer that cannot answer has
+      // dead IPC, and only a reload cures that. Log once per silent streak so
+      // field diagnosis is captured without spamming every probe cycle.
+      if (deliveryResyncUnansweredWarnLogged) {
+        return
+      }
+      deliveryResyncUnansweredWarnLogged = true
+      console.warn('[pty] delivery resync probe unanswered — renderer IPC unresponsive', {
+        msSinceLastAck: lastAckReceivedAtMs === null ? null : Date.now() - lastAckReceivedAtMs,
+        ...readCurrentPtyRendererDeliveryDebugSnapshot()
+      })
+    }, PTY_DELIVERY_RESYNC_TIMEOUT_MS)
+    deliveryResyncTimer.unref?.()
+    mainWindow.webContents.send('pty:requestDeliveryResync', { requestId })
+  }
+
+  resetRendererInFlightDeliveryGate = () => {
+    clearDeliveryResyncProbe()
+    deliveryResyncUnansweredWarnLogged = false
+    rendererDeliveryAccountingByPty.clear()
+    rendererInFlightTotalChars = 0
+    recordPtyRendererDeliveryPressure()
   }
 
   function sendPtyDataToRenderer(id: string, payload: PtyDataPayload): void {
     const charCount = getPtyPayloadCharCount(payload)
-    rendererInFlightCharsByPty.set(id, (rendererInFlightCharsByPty.get(id) ?? 0) + charCount)
+    const accounting = rendererDeliveryAccountingByPty.get(id)
+    if (accounting) {
+      accounting.sentChars += charCount
+    } else {
+      rendererDeliveryAccountingByPty.set(id, { sentChars: charCount, ackedChars: 0 })
+    }
     rendererInFlightTotalChars += charCount
     recordPtyRendererDeliveryPressure()
     mainWindow.webContents.send('pty:data', payload)
@@ -1668,8 +1768,9 @@ export function registerPtyHandlers(
   function flushPendingData(): void {
     flushTimer = null
     if (mainWindow.isDestroyed()) {
+      clearDeliveryResyncProbe()
       pendingData.clear()
-      rendererInFlightCharsByPty.clear()
+      rendererDeliveryAccountingByPty.clear()
       rendererInFlightTotalChars = 0
       recordPtyRendererDeliveryPressure()
       return
@@ -1781,9 +1882,11 @@ export function registerPtyHandlers(
     interactiveOutputCharsByPty.delete(payload.id)
     rendererInFlightTotalChars = Math.max(
       0,
-      rendererInFlightTotalChars - (rendererInFlightCharsByPty.get(payload.id) ?? 0)
+      rendererInFlightTotalChars - getRendererInFlightCharsForPty(payload.id)
     )
-    rendererInFlightCharsByPty.delete(payload.id)
+    // Why: the renderer also drops its cumulative total on pty:exit, so a
+    // reused id restarts aligned at zero on both sides.
+    rendererDeliveryAccountingByPty.delete(payload.id)
     recordPtyRendererDeliveryPressure()
     mainWindow.webContents.send('pty:exit', payload)
   }
@@ -1838,8 +1941,9 @@ export function registerPtyHandlers(
           clearTimeout(flushTimer)
           flushTimer = null
         }
+        clearDeliveryResyncProbe()
         pendingData.clear()
-        rendererInFlightCharsByPty.clear()
+        rendererDeliveryAccountingByPty.clear()
         rendererInFlightTotalChars = 0
         recordPtyRendererDeliveryPressure()
         return
@@ -1871,6 +1975,7 @@ export function registerPtyHandlers(
         // terminal output already handed to the renderer. The reserve is
         // bounded, and the per-PTY cap still prevents an active TUI runaway.
         if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
+          requestDeliveryResyncForGatedPty()
           pendingData.set(payload.id, pending)
           recordPtyRendererDeliveryPressure()
           return
@@ -1892,6 +1997,13 @@ export function registerPtyHandlers(
       }
       pendingData.set(payload.id, pending)
       recordPtyRendererDeliveryPressure()
+      // Why: probe on data arrival, not on flush skips — new output for a
+      // fully gated PTY is the moment stuck delivery becomes observable.
+      if (
+        !canSendPtyDataToRenderer(payload.id, { interactive: activeRendererPtys.has(payload.id) })
+      ) {
+        requestDeliveryResyncForGatedPty()
+      }
       if (!flushTimer) {
         schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
       }
@@ -3567,23 +3679,60 @@ export function registerPtyHandlers(
   // Why: renderer ACKs bound main→renderer terminal delivery without stopping
   // PTY ingestion. Agent/status consumers still see every chunk through the
   // provider/runtime path while background renderer writes wait their turn.
-  ipcMain.on('pty:ackData', (_event, args: { id: string; charCount: number }) => {
-    const charCount = Number.isFinite(args.charCount) ? Math.max(0, args.charCount) : 0
-    const current = rendererInFlightCharsByPty.get(args.id) ?? 0
-    const acknowledged = Math.min(current, charCount)
-    const next = Math.max(0, current - charCount)
-    rendererInFlightTotalChars = Math.max(0, rendererInFlightTotalChars - acknowledged)
-    if (next === 0) {
-      rendererInFlightCharsByPty.delete(args.id)
-    } else {
-      rendererInFlightCharsByPty.set(args.id, next)
+  ipcMain.on(
+    'pty:ackData',
+    (_event, args: { id: string; charCount?: number; processedChars?: number }) => {
+      lastAckReceivedAtMs = Date.now()
+      // Why: a live ACK channel means a future unanswered probe is a fresh
+      // diagnostic event, not a continuation of the last silent streak.
+      deliveryResyncUnansweredWarnLogged = false
+      let acknowledged = 0
+      if (typeof args.processedChars === 'number' && Number.isFinite(args.processedChars)) {
+        acknowledged = applyCumulativeAck(args.id, Math.max(0, args.processedChars))
+      } else {
+        // Why: tolerate legacy per-chunk delta payloads — dev hot-reload can
+        // pair an old renderer with a new main. Keyed by field presence.
+        const accounting = rendererDeliveryAccountingByPty.get(args.id)
+        const delta = Number.isFinite(args.charCount) ? Math.max(0, args.charCount ?? 0) : 0
+        acknowledged = accounting ? applyCumulativeAck(args.id, accounting.ackedChars + delta) : 0
+      }
+      tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, acknowledged)
+      recordPtyRendererDeliveryPressure()
+      if (pendingData.size > 0 && !flushTimer) {
+        schedulePendingDataFlush(0)
+      }
     }
-    tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, acknowledged)
-    recordPtyRendererDeliveryPressure()
-    if (pendingData.size > 0 && !flushTimer) {
-      schedulePendingDataFlush(0)
+  )
+
+  ipcMain.on(
+    'pty:deliveryResyncResponse',
+    (_event, args: { requestId: number; processedCharsByPty: Record<string, number> }) => {
+      if (
+        deliveryResyncOutstandingRequestId === null ||
+        args?.requestId !== deliveryResyncOutstandingRequestId
+      ) {
+        return
+      }
+      clearDeliveryResyncProbe()
+      deliveryResyncUnansweredWarnLogged = false
+      // Why: max-merge — the renderer's cumulative totals are authoritative
+      // for what it processed; reconciling them drains exactly the in-flight
+      // debt left by lost ACKs, nothing more.
+      for (const [id, processedChars] of Object.entries(args.processedCharsByPty ?? {})) {
+        if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
+          continue
+        }
+        const acknowledged = applyCumulativeAck(id, Math.max(0, processedChars))
+        if (acknowledged > 0) {
+          tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
+        }
+      }
+      recordPtyRendererDeliveryPressure()
+      if (pendingData.size > 0 && !flushTimer) {
+        schedulePendingDataFlush(0)
+      }
     }
-  })
+  )
 
   ipcMain.removeAllListeners('pty:setActiveRendererPty')
   ipcMain.on('pty:setActiveRendererPty', (_event, args: { id: string; active: boolean }) => {

@@ -2231,6 +2231,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     setShortcutRecorderFocused: () => {},
     onRichMarkdownContextCommand: () => noopUnsubscribe,
     onFullscreenChanged: () => noopUnsubscribe,
+    // Why: web clients run in a browser tab; the host OS resume signal only
+    // exists in the Electron shell.
+    onSystemResumed: () => noopUnsubscribe,
     minimize: () => {},
     maximize: () => {},
     onMaximizeChanged: () => noopUnsubscribe,
@@ -2558,6 +2561,8 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
     ackData: () => {},
+    onDeliveryResyncRequest: () => noopUnsubscribe,
+    respondDeliveryResync: () => {},
     setActiveRendererPty: () => {},
     setRendererPtyVisible: () => {},
     hasChildProcesses: () => Promise.resolve(false),
