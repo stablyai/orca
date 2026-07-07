@@ -489,10 +489,7 @@ function AgentRow({
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
   const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) ||
-      argsOverride !== defaultArgs ||
-      envSummary !== defaultEnvSummary ||
-      Boolean(sessionSourceHome?.value.trim())
+    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
   )
 
   return (
