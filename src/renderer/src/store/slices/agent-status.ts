@@ -241,6 +241,28 @@ function capRetainedAgents(
   return capped
 }
 
+// Why: recentlyClosedAgentStatusTabIds is a grown-only tombstone set that
+// rejects late agent-hook replays for closed tabs. tabIds never recur and
+// nothing purges it, so without a bound it plants one permanent entry per
+// closed agent tab for the whole renderer session. Cap FIFO — only the most
+// recently closed tabs can still be racing a late replay.
+const MAX_RECENTLY_CLOSED_AGENT_STATUS_TABS = 500
+
+function capRecentlyClosedAgentStatusTabs(
+  closedTabs: Record<string, true>,
+  maxEntries = MAX_RECENTLY_CLOSED_AGENT_STATUS_TABS
+): Record<string, true> {
+  const keys = Object.keys(closedTabs)
+  if (keys.length <= maxEntries) {
+    return closedTabs
+  }
+  const capped: Record<string, true> = {}
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    capped[key] = true
+  }
+  return capped
+}
+
 function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
   for (const prefix of tabPrefixes) {
     if (paneKey.startsWith(prefix)) {
@@ -1632,10 +1654,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             delete nextAck[k]
           }
         }
-        const nextClosedTabs: Record<string, true> = {
+        const nextClosedTabs = capRecentlyClosedAgentStatusTabs({
           ...s.recentlyClosedAgentStatusTabIds,
           [tabIdPrefix]: true
-        }
+        })
 
         if (
           liveKeys.length === 0 &&
