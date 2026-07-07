@@ -1,15 +1,17 @@
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
+import { isBobHeadlessOneShotCommand } from './bob-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TuiAgent } from './types'
 
 // Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share
-// the same `--print` one-shot contract, Ante's `--prompt` form needs its own matcher.
+// the same `--print` one-shot contract, Ante's `--prompt` and Bob's positional form need their own.
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   Record<TuiAgent, (tokens: readonly string[]) => boolean>
 > = {
   claude: isPrintModeHeadlessOneShotCommand,
   trae: isPrintModeHeadlessOneShotCommand,
-  ante: isAnteHeadlessOneShotCommand
+  ante: isAnteHeadlessOneShotCommand,
+  bob: isBobHeadlessOneShotCommand
 }
 
 export function isHeadlessOneShotAgentCommand(agent: TuiAgent, tokens: readonly string[]): boolean {

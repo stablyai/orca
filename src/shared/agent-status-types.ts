@@ -28,6 +28,7 @@ export type WellKnownAgentType =
   | 'mimo-code'
   | 'cursor'
   | 'copilot'
+  | 'bob'
   | 'aider'
   | 'pi'
   | 'omp'

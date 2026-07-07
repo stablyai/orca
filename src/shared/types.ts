@@ -2554,6 +2554,7 @@ export type TuiAgent =
   | 'hermes' // Hermes Agent
   | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI
+  | 'bob' // IBM Bob Shell
   | 'grok' // xAI Grok CLI
   | 'devin' // Devin CLI
   | 'ante' // Ante (Antigma Labs)

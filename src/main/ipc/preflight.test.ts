@@ -820,6 +820,20 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
   })
 
+  it('detects IBM Bob from the installed bob executable', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'bob') {
+        return { stdout: '/home/test/.local/bin/bob\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+  })
+
   it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {

@@ -85,6 +85,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli'
   },
   {
+    id: 'bob',
+    label: translate('auto.lib.agent.catalog.ibm_bob_label', 'IBM Bob'),
+    cmd: 'bob',
+    faviconDomain: 'bob.ibm.com',
+    homepageUrl: 'https://bob.ibm.com/docs/shell/getting-started/bobshell-examples'
+  },
+  {
     id: 'opencode',
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',

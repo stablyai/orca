@@ -526,6 +526,23 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('launches IBM Bob with its interactive prompt flag', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'bob',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'bob',
+      launchCommand: "bob --prompt-interactive 'fix it'",
+      expectedProcess: 'bob',
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'bob', agentArgs: '', agentEnv: {} }
+    })
+  })
+
   it('launches Mistral Vibe through the installed vibe executable', () => {
     const plan = buildAgentStartupPlan({
       agent: 'mistral-vibe',

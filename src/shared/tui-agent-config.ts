@@ -289,6 +289,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: first-launch trust menu swallows the bracketed paste; pre-write trust so it skips (see agent-trust-presets.ts).
     preflightTrust: 'copilot'
   },
+  bob: {
+    detectCmd: 'bob',
+    launchCmd: 'bob',
+    expectedProcess: 'bob',
+    // Why: Bob's `--prompt` and positional prompts are one-shot modes.
+    // `--prompt-interactive` executes the initial prompt and keeps the hosted
+    // shell alive for follow-up work.
+    promptInjectionMode: 'flag-prompt-interactive'
+  },
   grok: {
     detectCmd: 'grok',
     launchCmd: 'grok',
