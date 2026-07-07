@@ -163,6 +163,7 @@ export type JiraSlice = {
     siteUrl: string
     email: string
     apiToken: string
+    authType?: 'cloud' | 'server'
   }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
   testJiraConnection: (
     siteId?: string | null

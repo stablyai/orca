@@ -402,6 +402,100 @@ describe('Jira client credential storage', () => {
     expect(jira.isAuthError(new jira.JiraApiError('Forbidden', 403))).toBe(false)
   })
 
+  it('connects to self-hosted Jira with a Bearer PAT against REST v2', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          name: 'wquintal',
+          key: 'JIRAUSER10101',
+          displayName: 'William',
+          emailAddress: 'william@example.com'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        siteUrl: 'jira.example.com',
+        email: '',
+        apiToken: 'pat-token',
+        authType: 'server'
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      // Server /myself has no accountId; the username stands in for it.
+      viewer: { displayName: 'William', accountId: 'wquintal' }
+    })
+
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://jira.example.com/rest/api/2/myself',
+      expect.objectContaining({ headers: expect.any(Headers) })
+    )
+    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Authorization')).toBe('Bearer pat-token')
+  })
+
+  it('requires a token but not an email for self-hosted connections', async () => {
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        siteUrl: 'jira.example.com',
+        email: '',
+        apiToken: '',
+        authType: 'server'
+      })
+    ).resolves.toEqual({ ok: false, error: 'Personal access token is required.' })
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('uses Bearer auth and REST v2 for stored self-hosted sites', async () => {
+    const siteId = 'site-server'
+    const orcaDir = join(tempHome, '.orca')
+    mkdirSync(join(orcaDir, 'jira-tokens'), { recursive: true })
+    writeFileSync(
+      join(orcaDir, 'jira-sites.json'),
+      JSON.stringify({
+        version: 1,
+        activeSiteId: siteId,
+        selectedSiteId: siteId,
+        sites: [
+          {
+            id: siteId,
+            siteUrl: 'https://jira.example.com',
+            email: '',
+            displayName: 'William',
+            accountId: 'wquintal',
+            authType: 'server'
+          }
+        ]
+      }),
+      { encoding: 'utf-8' }
+    )
+    writeFileSync(tokenPathForSite(siteId), 'pat-token')
+    netFetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ name: 'wquintal', displayName: 'William' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+    const jira = await loadClientModule()
+
+    await expect(jira.testConnection(siteId)).resolves.toMatchObject({
+      ok: true,
+      viewer: { displayName: 'William' }
+    })
+
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://jira.example.com/rest/api/2/myself',
+      expect.objectContaining({ headers: expect.any(Headers) })
+    )
+    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Authorization')).toBe('Bearer pat-token')
+  })
+
   it('bridges proxy environment settings before Jira connect requests', async () => {
     netFetchMock.mockResolvedValueOnce(
       new Response(

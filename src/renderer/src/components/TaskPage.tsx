@@ -27,7 +27,6 @@ import {
   GitPullRequestDraft,
   List,
   LoaderCircle,
-  Lock,
   Minus,
   Plus,
   RefreshCw,
@@ -90,6 +89,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
+import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
@@ -3069,7 +3069,6 @@ export default function TaskPage(): React.JSX.Element {
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
-  const connectJira = useAppStore((s) => s.connectJira)
   const selectJiraSite = useAppStore((s) => s.selectJiraSite)
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
@@ -5616,11 +5615,6 @@ export default function TaskPage(): React.JSX.Element {
     Record<string, string>
   >({})
   const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
-  const [jiraSiteUrlDraft, setJiraSiteUrlDraft] = useState('')
-  const [jiraEmailDraft, setJiraEmailDraft] = useState('')
-  const [jiraApiTokenDraft, setJiraApiTokenDraft] = useState('')
-  const [jiraConnectState, setJiraConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
-  const [jiraConnectError, setJiraConnectError] = useState<string | null>(null)
   const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
   const previousProviderRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
 
@@ -7778,33 +7772,6 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForJiraItem]
   )
 
-  const handleJiraConnect = useCallback(async (): Promise<void> => {
-    const siteUrl = jiraSiteUrlDraft.trim()
-    const email = jiraEmailDraft.trim()
-    const apiToken = jiraApiTokenDraft.trim()
-    if (!siteUrl || !email || !apiToken) {
-      return
-    }
-    setJiraConnectState('connecting')
-    setJiraConnectError(null)
-    try {
-      const result = await connectJira({ siteUrl, email, apiToken })
-      if (result.ok) {
-        setJiraSiteUrlDraft('')
-        setJiraEmailDraft('')
-        setJiraApiTokenDraft('')
-        setJiraConnectState('idle')
-        setJiraConnectOpen(false)
-      } else {
-        setJiraConnectState('error')
-        setJiraConnectError(result.error)
-      }
-    } catch (error) {
-      setJiraConnectState('error')
-      setJiraConnectError(error instanceof Error ? error.message : 'Connection failed')
-    }
-  }, [connectJira, jiraApiTokenDraft, jiraEmailDraft, jiraSiteUrlDraft])
-
   const taskPageListChromeHidden = shouldHideTaskPageListChrome({
     taskSource,
     hasGitHubDetail: Boolean(dialogWorkItem),
@@ -9722,16 +9689,7 @@ export default function TaskPage(): React.JSX.Element {
                   )}
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    onClick={() => {
-                      setJiraSiteUrlDraft('')
-                      setJiraEmailDraft('')
-                      setJiraApiTokenDraft('')
-                      setJiraConnectState('idle')
-                      setJiraConnectError(null)
-                      setJiraConnectOpen(true)
-                    }}
-                  >
+                  <Button onClick={() => setJiraConnectOpen(true)}>
                     {translate('auto.components.TaskPage.83bce6be5c', 'Connect Jira')}
                   </Button>
                   <Button variant="outline" onClick={() => hideTaskSource('jira', 'Jira')}>
@@ -12465,137 +12423,7 @@ export default function TaskPage(): React.JSX.Element {
         onConnected={handleLinearAccessConnected}
       />
 
-      <Dialog
-        open={jiraConnectOpen}
-        onOpenChange={(open) => {
-          if (jiraConnectState !== 'connecting') {
-            setJiraConnectOpen(open)
-          }
-        }}
-      >
-        <DialogContent
-          className="sm:max-w-md"
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Enter' &&
-              jiraSiteUrlDraft.trim() &&
-              jiraEmailDraft.trim() &&
-              jiraApiTokenDraft.trim() &&
-              jiraConnectState !== 'connecting'
-            ) {
-              e.preventDefault()
-              void handleJiraConnect()
-            }
-          }}
-        >
-          <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">
-              {translate('auto.components.TaskPage.60f806ce99', 'Connect Jira site')}
-            </DialogTitle>
-            <DialogDescription>
-              {translate(
-                'auto.components.TaskPage.33fc2bcb30',
-                'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <Input
-              autoFocus
-              placeholder={translate(
-                'auto.components.TaskPage.163df31e0e',
-                'https://example.atlassian.net'
-              )}
-              value={jiraSiteUrlDraft}
-              onChange={(e) => {
-                setJiraSiteUrlDraft(e.target.value)
-                if (jiraConnectState === 'error') {
-                  setJiraConnectState('idle')
-                  setJiraConnectError(null)
-                }
-              }}
-              disabled={jiraConnectState === 'connecting'}
-            />
-            <Input
-              type="email"
-              placeholder={translate('auto.components.TaskPage.68df347677', 'you@example.com')}
-              value={jiraEmailDraft}
-              onChange={(e) => {
-                setJiraEmailDraft(e.target.value)
-                if (jiraConnectState === 'error') {
-                  setJiraConnectState('idle')
-                  setJiraConnectError(null)
-                }
-              }}
-              disabled={jiraConnectState === 'connecting'}
-            />
-            <Input
-              type="password"
-              placeholder={translate('auto.components.TaskPage.b95623e93f', 'Atlassian API token')}
-              value={jiraApiTokenDraft}
-              onChange={(e) => {
-                setJiraApiTokenDraft(e.target.value)
-                if (jiraConnectState === 'error') {
-                  setJiraConnectState('idle')
-                  setJiraConnectError(null)
-                }
-              }}
-              disabled={jiraConnectState === 'connecting'}
-            />
-            {jiraConnectState === 'error' && jiraConnectError && (
-              <p className="text-xs text-destructive">{jiraConnectError}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {translate('auto.components.TaskPage.59c14d34a2', 'Create a token in')}{' '}
-              <button
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  window.api.shell.openUrl(
-                    'https://id.atlassian.com/manage-profile/security/api-tokens'
-                  )
-                }
-              >
-                {translate('auto.components.TaskPage.246c2b3dd3', 'Atlassian account settings')}
-              </button>
-              .
-            </p>
-            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-              <Lock className="size-3 shrink-0" />
-              {translate(
-                'auto.components.TaskPage.2abe22ef76',
-                'Your token is encrypted via the OS keychain and stored locally.'
-              )}
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setJiraConnectOpen(false)}
-              disabled={jiraConnectState === 'connecting'}
-            >
-              {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
-            </Button>
-            <Button
-              onClick={() => void handleJiraConnect()}
-              disabled={
-                !jiraSiteUrlDraft.trim() ||
-                !jiraEmailDraft.trim() ||
-                !jiraApiTokenDraft.trim() ||
-                jiraConnectState === 'connecting'
-              }
-            >
-              {jiraConnectState === 'connecting' ? (
-                <>
-                  <LoaderCircle className="size-4 animate-spin" />
-                  {translate('auto.components.TaskPage.513cddfa7a', 'Verifying…')}
-                </>
-              ) : (
-                translate('auto.components.TaskPage.887efe9140', 'Connect')
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <JiraConnectDialog open={jiraConnectOpen} onOpenChange={setJiraConnectOpen} />
     </div>
   )
 }

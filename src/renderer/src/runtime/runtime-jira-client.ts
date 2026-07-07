@@ -56,7 +56,7 @@ export async function jiraStatus(settings: RuntimeJiraSettings): Promise<JiraCon
 
 export async function jiraConnect(
   settings: RuntimeJiraSettings,
-  args: { siteUrl: string; email: string; apiToken: string }
+  args: { siteUrl: string; email: string; apiToken: string; authType?: 'cloud' | 'server' }
 ): Promise<JiraConnectResult> {
   const target = getJiraRuntimeTarget(settings)
   return target.kind === 'environment'
