@@ -79,8 +79,9 @@ which the reconnecting tunnel keeps failing to re-bind the port.
 Validate the config before restarting so a typo cannot lock you out:
 
 ```bash
-# Linux
-sudo sshd -t && sudo systemctl restart sshd
+# Linux. The sshd binary is `sshd` everywhere, but the systemd unit is
+# `ssh` on Debian/Ubuntu and `sshd` on RHEL/Fedora/Arch — use yours.
+sudo sshd -t && sudo systemctl restart ssh
 ```
 
 ```powershell
@@ -238,8 +239,9 @@ and use a trusted machine.
   sessions are reaped promptly.
 - Config changes not applying after an sshd restart: service managers
   sometimes report success without restarting the process. Compare the
-  sshd PID before and after with `systemctl show sshd -p MainPID`
-  (Linux) or `sc.exe queryex sshd` (Windows).
+  sshd PID before and after with `systemctl show ssh -p MainPID`
+  (Linux; the unit is `sshd` on RHEL/Fedora/Arch) or
+  `sc.exe queryex sshd` (Windows).
 - Windows relay with WSL2 mirrored networking: `netsh portproxy` rules
   silently do nothing under `networkingMode=mirrored`; the sshd reverse
   tunnel above is the working alternative. Mirrored mode can also
