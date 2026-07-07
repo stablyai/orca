@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -28,6 +28,8 @@ if (parsed.serveArgs.includes('--recipe-json')) {
   process.exit(2)
 }
 
+ensureElectronRuntime()
+
 const profileDir =
   fixedProfileDir ?? mkdtempSync(path.join(tmpdir(), 'orca-headless-pairing-profile-'))
 const ownsProfileDir = !fixedProfileDir
@@ -36,6 +38,15 @@ mkdirSync(profileDir, { recursive: true })
 let cleanedUp = false
 let child = null
 let sawPairingUrl = false
+// Why: temp dev worktrees do not have a root-owned chrome-sandbox; this script
+// is only for local headless testing, not packaged production.
+const childEnv = {
+  ...process.env,
+  ORCA_DEV_USER_DATA_PATH: profileDir,
+  ...(process.platform === 'linux'
+    ? { ELECTRON_DISABLE_SANDBOX: process.env.ELECTRON_DISABLE_SANDBOX ?? '1' }
+    : {})
+}
 
 console.error(`[headless-pairing] userData=${profileDir}`)
 console.error(
@@ -44,10 +55,8 @@ console.error(
 
 child = spawn(process.execPath, [orcaDevScript, 'serve', '--json', ...parsed.serveArgs], {
   cwd: repoRoot,
-  env: {
-    ...process.env,
-    ORCA_DEV_USER_DATA_PATH: profileDir
-  },
+  detached: process.platform !== 'win32',
+  env: childEnv,
   stdio: ['inherit', 'pipe', 'inherit']
 })
 
@@ -107,7 +116,7 @@ function parseArgs(args) {
 function printHelp() {
   console.log(`Usage: node config/scripts/serve-headless-fresh-profile-pairing.mjs [--keep] [orca serve flags]
 
-Starts \`orca-dev serve --json\` with a fresh isolated userData profile and prints the pairing URL.
+Starts orca-dev serve --json with a fresh isolated userData profile, ensures Electron's dev runtime is usable, and prints the pairing URL.
 
 Wrapper flags:
   --keep        Keep the fresh profile after the server exits.
@@ -144,6 +153,28 @@ function formatShellArg(value) {
 }
 
 /**
+ * Runs the same Electron runtime preflight used by dev/start package scripts.
+ */
+function ensureElectronRuntime() {
+  console.error('[headless-pairing] ensuring Electron runtime...')
+  const result = spawnSync(
+    process.execPath,
+    ['config/scripts/ensure-native-runtime.mjs', '--runtime=electron'],
+    {
+      cwd: repoRoot,
+      stdio: 'inherit'
+    }
+  )
+  if (result.error) {
+    console.error(`[headless-pairing] Electron runtime preflight failed: ${result.error.message}`)
+    process.exit(1)
+  }
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
+}
+
+/**
  * Rewrites the CLI JSON readiness line into the pairing URL testers need.
  */
 function printReadyLine(line) {
@@ -176,6 +207,16 @@ function printReadyLine(line) {
 function stopChild(signal) {
   if (!child || child.killed) {
     return
+  }
+  if (process.platform !== 'win32' && child.pid) {
+    // Why: orca-dev synchronously owns the CLI child, which owns Electron; kill
+    // the spawned process group so programmatic shutdown does not orphan serve.
+    try {
+      process.kill(-child.pid, signal)
+      return
+    } catch {
+      // Fall back to the direct child below if the process group already exited.
+    }
   }
   child.kill(signal)
 }
