@@ -1208,7 +1208,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // carrying a persistent rebase chip while preserving other interruption cues.
   const showConflictOperationBadge =
     !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
-  const hasMetadataBadge = showConflictOperationBadge
+  const hasMetadataBadge = showConflictOperationBadge || Boolean(servicesStatus)
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the tiny unread/status lane; legacy keeps the bell
   // toggle, while the experimental card keeps the status glyph passive.
@@ -1227,6 +1227,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     showIdentityInNewCard ||
     showDetachedHeadInMetaRow ||
     showConflictOperationBadge ||
+    Boolean(servicesStatus) ||
     cacheStartedAt != null ||
     showMetaRowDetails
   )

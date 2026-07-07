@@ -2589,7 +2589,10 @@ export async function createLocalWorktree(
     // resolved service env can be injected into the setup runner. A failed
     // provision must not abort creation — the worktree stays, retry is offered.
     let serviceEnv: Record<string, string> = {}
-    const serviceRecipes = createdEffectiveHooks?.services ?? []
+    // Why: services come from the raw parsed yaml (like defaultTabs) —
+    // getEffectiveHooksFromConfig only carries setup/archive scripts and
+    // returns null when both are absent, which would drop services entirely.
+    const serviceRecipes = createdYamlHooks?.services ?? []
     if (args.provisionServices && serviceRecipes.length > 0) {
       try {
         const record = await provisionWorktreeServices({
