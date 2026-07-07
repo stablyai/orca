@@ -5,10 +5,10 @@ import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shar
 
 const executionHostIdSchema = z
   .string()
-  .refine((value) => normalizeExecutionHostId(value) !== null, {
+  .transform((value) => normalizeExecutionHostId(value))
+  .refine((value): value is ExecutionHostId => value !== null, {
     message: 'Invalid execution host id'
   })
-  .transform((value) => normalizeExecutionHostId(value) as ExecutionHostId)
 
 const listSessionsParamsSchema = z.object({
   limit: z.number().int().positive().optional(),

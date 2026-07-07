@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  getPathMock,
+  listEnvironmentsMock,
+  callRuntimeEnvironmentMock,
   registerCliHandlersMock,
   registerPreflightHandlersMock,
   registerClaudeUsageHandlersMock,
@@ -57,6 +60,9 @@ const {
   registerEmulatorFrameStreamHandlersMock,
   registerEmulatorVideoStreamHandlersMock
 } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/test/user-data'),
+  listEnvironmentsMock: vi.fn(() => []),
+  callRuntimeEnvironmentMock: vi.fn(),
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
   registerClaudeUsageHandlersMock: vi.fn(),
@@ -112,6 +118,20 @@ const {
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
   registerEmulatorVideoStreamHandlersMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: getPathMock
+  }
+}))
+
+vi.mock('../../shared/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
+}))
+
+vi.mock('./runtime-environment-transport-routing', () => ({
+  callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 
 vi.mock('./onboarding', () => ({
@@ -326,6 +346,11 @@ import { registerCoreHandlers } from './register-core-handlers'
 
 describe('registerCoreHandlers', () => {
   beforeEach(() => {
+    getPathMock.mockReset()
+    getPathMock.mockReturnValue('/test/user-data')
+    listEnvironmentsMock.mockReset()
+    listEnvironmentsMock.mockReturnValue([])
+    callRuntimeEnvironmentMock.mockReset()
     registerCliHandlersMock.mockReset()
     registerPreflightHandlersMock.mockReset()
     registerClaudeUsageHandlersMock.mockReset()
@@ -415,6 +440,14 @@ describe('registerCoreHandlers', () => {
       { getAdditionalAiVaultCodexHomePaths, onBeforeRelaunch }
     )
 
+    const aiVaultOptions = registerAiVaultHandlersMock.mock.calls[0]?.[0]
+    expect(aiVaultOptions).toBeDefined()
+
+    callRuntimeEnvironmentMock.mockResolvedValueOnce({
+      ok: true,
+      result: { sessions: 'bad-shape' }
+    })
+
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
@@ -458,6 +491,7 @@ describe('registerCoreHandlers', () => {
         scanRuntimeAiVaultSessions: expect.any(Function)
       })
     )
+    expect(aiVaultOptions.getActiveRuntimeAiVaultHostInfos()).toEqual([])
     expect(registerNativeChatHandlersMock).toHaveBeenCalled()
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
@@ -470,6 +504,24 @@ describe('registerCoreHandlers', () => {
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
     expect(registerSpeechHandlersMock).toHaveBeenCalledWith(store)
+
+    return expect(
+      aiVaultOptions.scanRuntimeAiVaultSessions('env-123', {
+        limit: 10,
+        scopePaths: ['/workspace']
+      })
+    ).resolves.toEqual({
+      sessions: [],
+      issues: [
+        {
+          executionHostId: 'runtime:env-123',
+          agent: 'codex',
+          path: 'env-123',
+          message: 'Invalid aiVault.listSessions response: Invalid input: expected array, received string'
+        }
+      ],
+      scannedAt: expect.any(String)
+    })
   })
 
   it('only registers IPC handlers once but always updates web contents id', () => {
