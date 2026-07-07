@@ -492,6 +492,12 @@ export class SshConnection {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
 
+        // Why: a concurrent disconnect() already set 'disconnected'; a cancelled
+        // attempt's late error must not overwrite it with auth-failed/error.
+        if (this.disposed) {
+          throw lastError
+        }
+
         if (isAuthError(lastError) || isPassphraseError(lastError)) {
           this.setState('auth-failed', lastError.message)
           throw lastError
@@ -540,8 +546,12 @@ export class SshConnection {
         }
       }
     }
+    // Why: a synchronous spawn throw (no system ssh binary) bypasses the probe's
+    // own catch, so the ssh2 fall-through must clear all system-transport state
+    // itself — otherwise exec/sftp keep routing through the failed transport.
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.useSystemSshTransport = false
 
     const config = buildConnectConfig(this.target, resolved)
 
@@ -619,7 +629,15 @@ export class SshConnection {
               throw keyErr
             }
             authError = keyErr
-            if (isPassphraseError(authError) && !this.cachedPassphrase) {
+            // Why: when the effective config enables GSSAPI, let the reactive
+            // system-ssh probe (below) try a Kerberos ticket before prompting
+            // for the key passphrase; the general passphrase prompt still runs
+            // if that probe fails, since passphrasePromptHandled stays false.
+            if (
+              isPassphraseError(authError) &&
+              !this.cachedPassphrase &&
+              !isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)
+            ) {
               passphrasePromptHandled = true
               const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
               const val = await this.callbacks.onCredentialRequest?.(
@@ -652,8 +670,11 @@ export class SshConnection {
           this.systemSshControlMasterDisabledForSession = false
           this.useSystemSshTransport = false
         }
+        // Why: if a disconnect/reconnect superseded this attempt mid-probe, throw
+        // the cancellation error — not the stale ssh2 authError — so connect()
+        // does not post auth-failed after the target was deliberately disconnected.
         if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
-          throw authError
+          throw this.createCancelledConnectAttemptError()
         }
       }
 
