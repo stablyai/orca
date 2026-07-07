@@ -113,6 +113,11 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock,
     removeHandler: removeHandlerMock
+  },
+  // Why: worktrees:remove reads the worktree-services store via app.getPath;
+  // no store file exists under this dir, so the destroy path is a no-op here.
+  app: {
+    getPath: () => tmpdir()
   }
 }))
 
