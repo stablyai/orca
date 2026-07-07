@@ -84,42 +84,47 @@ export function AgentSessionSourceHomeInput({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-xs text-muted-foreground">
-        {translate('auto.components.settings.AgentsPane.codexSessionSource', 'Session history')}
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
+        {translate(
+          'auto.components.settings.AgentsPane.codexSessionSource',
+          'Codex home to import from'
+        )}
       </span>
-      <Input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            commit()
-            e.currentTarget.blur()
-          }
-          if (e.key === 'Escape') {
-            setDraft(value)
-            e.currentTarget.blur()
-          }
-        }}
-        placeholder={runtimeLabel}
-        spellCheck={false}
-        className="h-7 flex-1 font-mono text-xs"
-      />
-      {value.trim() && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => {
-            onSave('')
-            setDraft('')
+      <div className="flex items-center gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commit()
+              e.currentTarget.blur()
+            }
+            if (e.key === 'Escape') {
+              setDraft(value)
+              e.currentTarget.blur()
+            }
           }}
-          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
-        </Button>
-      )}
+          placeholder={runtimeLabel}
+          spellCheck={false}
+          className="h-7 flex-1 font-mono text-xs"
+        />
+        {value.trim() && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              onSave('')
+              setDraft('')
+            }}
+            className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
