@@ -284,42 +284,44 @@ function AgentCommandOverrideInput({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-xs text-muted-foreground">
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
         {translate('auto.components.settings.AgentsPane.2e45ca29b6', 'Command')}
       </span>
-      <Input
-        value={cmdDraft}
-        onChange={(e) => setCmdDraft(e.target.value)}
-        onBlur={commitCmd}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            commitCmd()
-            e.currentTarget.blur()
-          }
-          if (e.key === 'Escape') {
-            setCmdDraft(draftSeed)
-            e.currentTarget.blur()
-          }
-        }}
-        placeholder={defaultCmd}
-        spellCheck={false}
-        className="h-7 flex-1 font-mono text-xs"
-      />
-      {cmdOverride && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => {
-            onSaveOverride('')
-            setCmdDraft(defaultCmd)
+      <div className="flex items-center gap-2">
+        <Input
+          value={cmdDraft}
+          onChange={(e) => setCmdDraft(e.target.value)}
+          onBlur={commitCmd}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commitCmd()
+              e.currentTarget.blur()
+            }
+            if (e.key === 'Escape') {
+              setCmdDraft(draftSeed)
+              e.currentTarget.blur()
+            }
           }}
-          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
-        </Button>
-      )}
+          placeholder={defaultCmd}
+          spellCheck={false}
+          className="h-7 flex-1 font-mono text-xs"
+        />
+        {cmdOverride && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              onSaveOverride('')
+              setCmdDraft(defaultCmd)
+            }}
+            className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -337,45 +339,47 @@ function AgentDefaultArgsInput({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-xs text-muted-foreground">
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
         {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
       </span>
-      <Input
-        value={argsDraft}
-        onChange={(e) => setArgsDraft(e.target.value)}
-        onBlur={commitArgs}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            commitArgs()
-            e.currentTarget.blur()
-          }
-          if (e.key === 'Escape') {
-            setArgsDraft(draftSeed)
-            e.currentTarget.blur()
-          }
-        }}
-        placeholder={
-          defaultArgs ||
-          translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
-        }
-        spellCheck={false}
-        className="h-7 flex-1 font-mono text-xs"
-      />
-      {argsOverride !== defaultArgs && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => {
-            onSaveArgs(defaultArgs)
-            setArgsDraft(defaultArgs)
+      <div className="flex items-center gap-2">
+        <Input
+          value={argsDraft}
+          onChange={(e) => setArgsDraft(e.target.value)}
+          onBlur={commitArgs}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commitArgs()
+              e.currentTarget.blur()
+            }
+            if (e.key === 'Escape') {
+              setArgsDraft(draftSeed)
+              e.currentTarget.blur()
+            }
           }}
-          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
-        </Button>
-      )}
+          placeholder={
+            defaultArgs ||
+            translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
+          }
+          spellCheck={false}
+          className="h-7 flex-1 font-mono text-xs"
+        />
+        {argsOverride !== defaultArgs && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              onSaveArgs(defaultArgs)
+              setArgsDraft(defaultArgs)
+            }}
+            className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -401,11 +405,11 @@ function AgentDefaultEnvInput({
   }
 
   return (
-    <div>
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
+        {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
+      </span>
       <div className="flex items-center gap-2">
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
-        </span>
         <Input
           value={envDraft}
           onChange={(e) => {
