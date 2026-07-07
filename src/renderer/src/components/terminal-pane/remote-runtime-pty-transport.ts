@@ -391,11 +391,16 @@ export function createRemoteRuntimePtyTransport(
             outputProcessor.processData(data, storedCallbacks, undefined, meta)
           }
         },
-        onSnapshot: (data) => {
-          if (data && isCurrentSubscription()) {
+        onSnapshot: (data, meta) => {
+          // Why: a snapshot with no body can still carry a pending mid-escape
+          // tail that must be replayed so the next live chunk completes it.
+          if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {
             outputProcessor.processData(data, storedCallbacks, {
               replayingBufferedData: true,
-              suppressAttentionEvents: true
+              suppressAttentionEvents: true,
+              ...(meta?.pendingEscapeTailAnsi
+                ? { pendingEscapeTailAnsi: meta.pendingEscapeTailAnsi }
+                : {})
             })
           }
         },
@@ -614,6 +619,36 @@ export function createRemoteRuntimePtyTransport(
       // Why: callers use \r or terminal.send's enter flag for semantic Enter;
       // literal LF bytes from paste/programmatic input must survive the stream.
       return inputBatcher.push(data)
+    },
+
+    // Why: terminal query replies (CPR/DSR/DA/OSC color/pixel size) are read by
+    // the querying program in raw mode with a short timeout. The 8ms input
+    // debounce makes the reply miss that window, so it lands on the shell prompt
+    // and is echoed literally / spliced into typed input (#7329). Flush any
+    // pending batched input first so byte order is preserved, then send the
+    // reply immediately without arming the debounce timer.
+    sendInputImmediate(data: string): boolean {
+      const targetHandle = handle
+      if (!connected || !targetHandle) {
+        return false
+      }
+      if (!data) {
+        return true
+      }
+      const pending = inputBatcher.takePending()
+      const text = `${pending}${data}`
+      const stream = getCurrentMultiplexedStream(targetHandle)
+      if (stream?.sendInput(text)) {
+        return true
+      }
+      void callRuntime('terminal.send', {
+        terminal: targetHandle,
+        text,
+        client: { id: clientId, type: 'desktop' }
+      }).catch((error) => {
+        storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+      })
+      return true
     },
 
     sendInputAccepted: sendInputAcceptedToRuntime,

@@ -79,6 +79,10 @@ type ProcessPtyOutputOptions = {
   replayingBufferedData?: boolean
   suppressAttentionEvents?: boolean
   clearBeforeReplay?: boolean
+  // Why: a mid-escape tail the daemon could not serialize. The replay consumer
+  // must write it LAST, after the post-replay reset, so the next live chunk
+  // completes it instead of rendering literally (#7329).
+  pendingEscapeTailAnsi?: string
 }
 
 type PendingPtySideEffect = {
@@ -396,8 +400,16 @@ export function createPtyOutputProcessor({
     // session into the live store. The parser still consumes the bytes so they
     // do not leak into xterm, we just suppress the callback.
     if (options.replayingBufferedData && callbacks.onReplayData) {
-      if (options.clearBeforeReplay === false) {
-        callbacks.onReplayData(data, { clearBeforeReplay: false })
+      const replayMeta = {
+        ...(options.clearBeforeReplay === false ? { clearBeforeReplay: false } : {}),
+        ...(options.pendingEscapeTailAnsi
+          ? { pendingEscapeTailAnsi: options.pendingEscapeTailAnsi }
+          : {})
+      }
+      // Why: preserve the bare-data call shape when there is no replay metadata,
+      // so eager-buffer replay (which passes neither) is unchanged.
+      if (Object.keys(replayMeta).length > 0) {
+        callbacks.onReplayData(data, replayMeta)
       } else {
         callbacks.onReplayData(data)
       }
@@ -832,6 +844,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data: string): boolean {
+      if (!connected || !ptyId) {
+        return false
+      }
+      return inputWriteQueue.enqueue(ptyId, data)
+    },
+
+    // Why: the local write queue already drains a lone item in the same turn
+    // (no wall-clock debounce), so query replies are prompt without special
+    // handling. Kept as a distinct method so callers express intent and the
+    // remote transport can override with its flush-then-send behavior (#7329).
+    sendInputImmediate(data: string): boolean {
       if (!connected || !ptyId) {
         return false
       }

@@ -1174,6 +1174,7 @@ export type PreloadApi = {
       seq?: number
       source?: 'headless' | 'renderer'
       alternateScreen?: boolean
+      pendingEscapeTailAnsi?: string
     } | null>
     getRendererDeliveryDebugSnapshot: () => Promise<{
       pendingPtyCount: number

@@ -205,6 +205,7 @@ type MockTransport = {
     ) => unknown
   }
   sendInput: ReturnType<typeof vi.fn>
+  sendInputImmediate: ReturnType<typeof vi.fn>
   sendInputAccepted?: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
   getPtyId: ReturnType<typeof vi.fn>
@@ -353,6 +354,9 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
     serializeBuffer: undefined
   } as MockTransport
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
+  // Why: query replies now route through sendInputImmediate; delegate to the
+  // same spy so assertions on reply delivery still observe them (#7329).
+  transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
   transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
   return transport
 }

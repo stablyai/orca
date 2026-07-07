@@ -850,6 +850,7 @@ const api = {
       seq?: number
       source?: 'headless' | 'renderer'
       alternateScreen?: boolean
+      pendingEscapeTailAnsi?: string
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{

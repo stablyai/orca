@@ -25,6 +25,12 @@ export type TerminalSnapshot = {
   scrollbackAnsi: string
   oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
+  /** The trailing partial escape sequence left unparsed in the emulator when a
+   *  PTY read ended mid-escape. serialize() cannot carry it (it lives in the
+   *  parser, not the buffer), so the restorer must write it LAST — after any
+   *  post-snapshot reset — so the next live chunk's continuation completes the
+   *  sequence instead of rendering literally (#7329). */
+  pendingEscapeTailAnsi?: string
   cwd: string | null
   modes: TerminalModes
   cols: number
