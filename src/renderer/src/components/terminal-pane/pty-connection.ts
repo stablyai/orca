@@ -2899,8 +2899,11 @@ export function connectPanePty(
     // querying program reads them in raw mode with a short timeout — so send
     // them immediately, skipping the remote input debounce that would corrupt
     // them (#7329). They are not user input, so they bypass intent inference and
-    // activity recording below.
-    if (!pendingTerminalInputIntent && isTerminalQueryReply(data)) {
+    // activity recording below. No pending-intent guard: the only intents are
+    // plain-escape (`\x1b`) and ctrl-c (`\x03`), neither of which can satisfy
+    // isTerminalQueryReply (it requires length >= 3 and a full reply grammar),
+    // so a real keystroke never reaches this branch.
+    if (isTerminalQueryReply(data)) {
       transport.sendInputImmediate(data)
       return
     }
@@ -5449,6 +5452,12 @@ export function connectPanePty(
         // reset. We only drop renderer-owned state that should not leak from
         // replay bytes into the restored renderer terminal.
         writeReplayData(reattachReplayResetSequence())
+        if (connectResult.pendingEscapeTailAnsi) {
+          // Why last: re-arm the daemon's dangling mid-escape sequence AFTER the
+          // reset (whose ESC would abort it) so the racing live continuation
+          // completes it instead of rendering literally (#7329).
+          writeReplayData(connectResult.pendingEscapeTailAnsi)
+        }
         sendFocusedReattachFocusInAfterReplay()
         if (connectResult.coldRestore) {
           // Snapshot superseded the cold-restore payload — ack it so the

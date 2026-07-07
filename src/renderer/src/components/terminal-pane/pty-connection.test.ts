@@ -5193,6 +5193,53 @@ describe('connectPanePty', () => {
     expect(resizeToSnapshotCall as number).toBeLessThan(snapshotWriteCall as number)
   })
 
+  it('writes the daemon pendingEscapeTailAnsi after the reset on local reattach (#7329)', async () => {
+    // Why: the mid-escape tail must be re-armed LAST — after the reattach reset,
+    // whose ESC would abort it — so the racing live continuation completes it
+    // instead of rendering literally. Covers the local daemon reattach path,
+    // which previously dropped the field the remote path already honored.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          snapshot: 'restored snapshot',
+          snapshotCols: 80,
+          snapshotRows: 24,
+          pendingEscapeTailAnsi: '\x1b[3'
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }] }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const tailWriteCall = pane.terminal.write.mock.invocationCallOrder.find(
+      (_order, index) => pane.terminal.write.mock.calls[index][0] === '\x1b[3'
+    )
+    const resetWriteCall = pane.terminal.write.mock.invocationCallOrder.find((_order, index) =>
+      String(pane.terminal.write.mock.calls[index][0]).includes(POST_REPLAY_REATTACH_RESET)
+    )
+    expect(tailWriteCall).toBeDefined()
+    expect(resetWriteCall).toBeDefined()
+    // The dangling tail is written AFTER the reset.
+    expect(resetWriteCall as number).toBeLessThan(tailWriteCall as number)
+  })
+
   it('preserves live modes and injects focus-in after focused agent reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

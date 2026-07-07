@@ -677,7 +677,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             isAlternateScreen: spawnResult.isAlternateScreen,
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
-            replay: spawnResult.replay
+            replay: spawnResult.replay,
+            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi
           } satisfies PtyConnectResult
         }
         if (spawnResult.launchConfig) {

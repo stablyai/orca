@@ -22,7 +22,8 @@ const ESC = String.fromCharCode(0x1b)
 const CPR_OR_DSR_RE = new RegExp('^\\u001b\\[[0-9;]*[Rn]$')
 const DEVICE_ATTRIBUTES_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c$')
 const PIXEL_SIZE_RE = new RegExp('^\\u001b\\[[46];[0-9]+;[0-9]+t$')
-const DECRPM_RE = new RegExp('^\\u001b\\[\\?[0-9;]*\\$y$')
+// `?` optional: private-mode reports carry it (DECRPM), ANSI-mode reports don't.
+const DECRPM_RE = new RegExp('^\\u001b\\[\\??[0-9;]*\\$y$')
 // OSC color/title responses: ESC ] Ps ; body ST (ST = BEL or ESC backslash).
 const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)$')
 /* oxlint-enable no-control-regex */

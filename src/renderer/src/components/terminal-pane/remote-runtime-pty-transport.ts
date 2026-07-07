@@ -635,6 +635,19 @@ export function createRemoteRuntimePtyTransport(
       if (!data) {
         return true
       }
+      // Why: earlier input (e.g. a large paste) may still be in async byte-length
+      // validation, so it is captured in the batcher's validationTail and NOT in
+      // takePending(). Bypassing the queue here would send the reply ahead of it
+      // and reorder bytes on the wire. In that rare window, route the reply
+      // through the batcher's ordered queue and flush what is already validated;
+      // the reply lands right after the pending input once its validation
+      // resolves. Order correctness beats the immediacy that the debounce
+      // normally trades away.
+      if (inputBatcher.hasPendingValidation()) {
+        const accepted = inputBatcher.push(data)
+        inputBatcher.flush()
+        return accepted
+      }
       const pending = inputBatcher.takePending()
       const text = `${pending}${data}`
       const stream = getCurrentMultiplexedStream(targetHandle)

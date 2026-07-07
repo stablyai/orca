@@ -15,8 +15,9 @@ describe('isTerminalQueryReply', () => {
     // Window/cell pixel-size reports.
     expect(isTerminalQueryReply('\x1b[6;16;8t')).toBe(true)
     expect(isTerminalQueryReply('\x1b[4;384;640t')).toBe(true)
-    // DECRPM mode report.
+    // DECRPM mode report — private (with ?) and ANSI (without ?).
     expect(isTerminalQueryReply('\x1b[?2026;2$y')).toBe(true)
+    expect(isTerminalQueryReply('\x1b[4;1$y')).toBe(true)
     // OSC 10/11 color responses (the #7329 culprit) — BEL and ST terminated.
     expect(isTerminalQueryReply('\x1b]11;rgb:2828/2c2c/3434\x1b\\')).toBe(true)
     expect(isTerminalQueryReply('\x1b]10;rgb:c0c0/c0c0/c0c0\x07')).toBe(true)

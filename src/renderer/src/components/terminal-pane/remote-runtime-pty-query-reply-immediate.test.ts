@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
 
 // Regression for #7329: terminal query replies must NOT sit behind the remote
 // input debounce (REMOTE_TERMINAL_INPUT_FLUSH_MS). transport.sendInputImmediate
@@ -101,5 +102,39 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('does not reorder a query reply ahead of a large paste still in async validation', async () => {
+    // #7736 review: a paste over the deferred-measurement threshold sits in the
+    // batcher's async validationTail (not in `pending`). sendInputImmediate must
+    // not send the reply ahead of it and reorder bytes on the wire.
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+
+    // A paste above CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS forces the async
+    // validation path, so its bytes are captured in validationTail, not pending.
+    const paste = 'p'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+    expect(transport.sendInput(paste)).toBe(true)
+    // Immediately (validation still pending) a TUI emits a CPR reply.
+    expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true)
+
+    // Let validation + flush settle.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    const sends = terminalSendCalls() as { params: { text: string } }[]
+    const combined = sends.map((s) => s.params.text).join('')
+    // The paste bytes must come before the reply — no reordering.
+    expect(combined.indexOf('p')).toBeLessThan(combined.indexOf('\x1b[3;1R'))
+    expect(combined).toContain(`${paste}\x1b[3;1R`)
   })
 })
