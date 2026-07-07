@@ -3,8 +3,13 @@ import { readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from './session-scanner-types'
 import {
+  accumulatorFoldResumeState,
   addPreviewContent,
   createAccumulator,
   finalizeSession,
@@ -27,6 +32,133 @@ import {
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
+}
+
+// Parse state kept resumable so the scan cache can append newly written
+// transcript lines without re-reading the whole (potentially huge) file.
+export type ClaudeSessionParseState = {
+  accumulator: SessionAccumulator
+  metaTitle: string | null
+  generatedTitle: string | null
+  firstUserTitle: string | null
+}
+
+export function createClaudeSessionParseState(file: FileWithMtime): ClaudeSessionParseState {
+  return {
+    accumulator: createAccumulator({
+      agent: 'claude',
+      file,
+      sessionId: sessionIdFromFileName(file.path)
+    }),
+    metaTitle: null,
+    generatedTitle: null,
+    firstUserTitle: null
+  }
+}
+
+export function cloneClaudeSessionParseState(
+  state: ClaudeSessionParseState
+): ClaudeSessionParseState {
+  return {
+    accumulator: {
+      ...state.accumulator,
+      previewMessages: [...state.accumulator.previewMessages]
+    },
+    metaTitle: state.metaTitle,
+    generatedTitle: state.generatedTitle,
+    firstUserTitle: state.firstUserTitle
+  }
+}
+
+export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: string): void {
+  const { accumulator } = state
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
+  }
+
+  if (typeof record.sessionId === 'string' && record.sessionId.trim()) {
+    accumulator.sessionId = record.sessionId.trim()
+  }
+  updateTimeline(accumulator, extractString(record.timestamp))
+  updateLatestLocation(accumulator, record)
+
+  if (record.type === 'custom-title') {
+    accumulator.title = normalizeTitleText(extractString(record.customTitle) ?? '')
+    return
+  }
+
+  if (record.type === 'ai-title') {
+    const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
+    if (title) {
+      // Claude can revise generated names; AI Vault should mirror the current one.
+      state.generatedTitle = title
+    }
+    return
+  }
+
+  if (record.type === 'agent-name' && !state.generatedTitle) {
+    state.metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
+    return
+  }
+
+  if (record.type === 'user') {
+    accumulator.messageCount++
+    const title = extractMessageText(record.message)
+    addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
+    if (title) {
+      // Meta prompts (injected context) only seed the last-resort title.
+      if (record.isMeta === true) {
+        state.metaTitle ??= title
+      } else {
+        state.firstUserTitle ??= title
+      }
+    }
+    return
+  }
+
+  if (record.type === 'assistant') {
+    accumulator.messageCount++
+    const message = asRecord(record.message)
+    addPreviewContent(accumulator, 'assistant', message?.content, record.timestamp)
+    const model = extractString(message?.model)
+    if (model) {
+      accumulator.model = model
+    }
+    accumulator.totalTokens += claudeUsageTotal(message?.usage)
+  }
+}
+
+export function finalizeClaudeSessionParseState(
+  state: ClaudeSessionParseState,
+  platform: NodeJS.Platform,
+  options: ParserSessionOptions = {}
+): AiVaultSession | null {
+  // Finalize a snapshot: the live state (and its preview array) may keep
+  // accumulating appended lines after this session object is handed out.
+  const snapshot = cloneClaudeSessionParseState(state)
+  // Why: a user-set custom-title (accumulator.title) wins, but Claude's generated
+  // session name (ai-title) should outrank the raw first prompt when present.
+  snapshot.accumulator.fallbackTitle =
+    snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
+  return finalizeSession(snapshot.accumulator, platform, options)
+}
+
+export function createClaudeSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
+  return claudeResumeStateFromParseState(createClaudeSessionParseState(file))
+}
+
+function claudeResumeStateFromParseState(
+  state: ClaudeSessionParseState
+): ResumableSessionParseState {
+  return {
+    consumeLine: (line) => consumeClaudeSessionLine(state, line),
+    clone: () => claudeResumeStateFromParseState(cloneClaudeSessionParseState(state)),
+    touchFile: (file) => {
+      state.accumulator.modifiedAt = file.modifiedAt
+    },
+    finalize: (platform, options) => finalizeClaudeSessionParseState(state, platform, options)
+  }
 }
 
 export async function parseClaudeSessionFile(
@@ -60,77 +192,11 @@ async function parseClaudeSessionLines(args: {
   platform: NodeJS.Platform
   options?: ParserSessionOptions
 }): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'claude',
-    file: args.file,
-    sessionId: sessionIdFromFileName(args.file.path)
-  })
-  let metaTitle: string | null = null
-  let generatedTitle: string | null = null
-  let firstUserTitle: string | null = null
-
+  const state = createClaudeSessionParseState(args.file)
   for await (const line of args.lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-
-    if (typeof record.sessionId === 'string' && record.sessionId.trim()) {
-      accumulator.sessionId = record.sessionId.trim()
-    }
-    updateTimeline(accumulator, extractString(record.timestamp))
-    updateLatestLocation(accumulator, record)
-
-    if (record.type === 'custom-title') {
-      accumulator.title = normalizeTitleText(extractString(record.customTitle) ?? '')
-      continue
-    }
-
-    if (record.type === 'ai-title') {
-      const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
-      if (title) {
-        // Claude can revise generated names; AI Vault should mirror the current one.
-        generatedTitle = title
-      }
-      continue
-    }
-
-    if (record.type === 'agent-name' && !generatedTitle) {
-      metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
-      continue
-    }
-
-    if (record.type === 'user') {
-      accumulator.messageCount++
-      const title = extractMessageText(record.message)
-      addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
-      if (title) {
-        // Meta prompts (injected context) only seed the last-resort title.
-        if (record.isMeta === true) {
-          metaTitle ??= title
-        } else {
-          firstUserTitle ??= title
-        }
-      }
-      continue
-    }
-
-    if (record.type === 'assistant') {
-      accumulator.messageCount++
-      const message = asRecord(record.message)
-      addPreviewContent(accumulator, 'assistant', message?.content, record.timestamp)
-      const model = extractString(message?.model)
-      if (model) {
-        accumulator.model = model
-      }
-      accumulator.totalTokens += claudeUsageTotal(message?.usage)
-    }
+    consumeClaudeSessionLine(state, line)
   }
-
-  // Why: a user-set custom-title (accumulator.title) wins, but Claude's generated
-  // session name (ai-title) should outrank the raw first prompt when present.
-  accumulator.fallbackTitle = generatedTitle ?? firstUserTitle ?? metaTitle
-  return finalizeSession(accumulator, args.platform, args.options)
+  return finalizeClaudeSessionParseState(state, args.platform, args.options)
 }
 
 export async function parseGeminiSessionFile(
@@ -195,38 +261,47 @@ export async function parseGeminiJsonlSessionFile(
   return parseGeminiJsonlSessionLines({ file, lines, platform })
 }
 
+function consumeGeminiJsonlRecordLine(accumulator: SessionAccumulator, line: string): void {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
+  }
+  const setRecord = asRecord(record.$set)
+  if (setRecord) {
+    updateTimeline(accumulator, extractString(setRecord.lastUpdated))
+    return
+  }
+  const sessionId = extractString(record.sessionId)
+  if (sessionId) {
+    accumulator.sessionId = sessionId
+  }
+  updateTimeline(accumulator, extractString(record.startTime))
+  updateTimeline(accumulator, extractString(record.lastUpdated))
+  consumeGeminiMessage(accumulator, record)
+}
+
+// Resumable only for the JSONL log format; Gemini's legacy single-JSON
+// session documents are rewritten in place and must be re-read whole.
+export function createGeminiJsonlSessionResumeState(
+  file: FileWithMtime
+): ResumableSessionParseState {
+  return accumulatorFoldResumeState(
+    createAccumulator({ agent: 'gemini', file, sessionId: sessionIdFromFileName(file.path) }),
+    consumeGeminiJsonlRecordLine
+  )
+}
+
 async function parseGeminiJsonlSessionLines(args: {
   file: FileWithMtime
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
 }): Promise<AiVaultSession | null> {
-  const accumulator = createAccumulator({
-    agent: 'gemini',
-    file: args.file,
-    sessionId: sessionIdFromFileName(args.file.path)
-  })
-
+  const state = createGeminiJsonlSessionResumeState(args.file)
   for await (const line of args.lines) {
-    const record = parseJsonObject(line)
-    if (!record) {
-      continue
-    }
-    const setRecord = asRecord(record.$set)
-    if (setRecord) {
-      updateTimeline(accumulator, extractString(setRecord.lastUpdated))
-      continue
-    }
-    const sessionId = extractString(record.sessionId)
-    if (sessionId) {
-      accumulator.sessionId = sessionId
-    }
-    updateTimeline(accumulator, extractString(record.startTime))
-    updateTimeline(accumulator, extractString(record.lastUpdated))
-    consumeGeminiMessage(accumulator, record)
+    state.consumeLine(line)
   }
-
-  return finalizeSession(accumulator, args.platform, args.options)
+  return state.finalize(args.platform, args.options)
 }
 
 export function consumeGeminiMessage(

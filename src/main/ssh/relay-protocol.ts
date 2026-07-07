@@ -127,7 +127,13 @@ export type DecodedFrame = {
  * Incremental frame parser. Feed it chunks of data; it emits complete frames.
  */
 export class FrameDecoder {
-  private buffer = Buffer.alloc(0)
+  // Why: feed() runs on the Electron main thread for every SSH channel data
+  // event. Rebuilding one contiguous buffer per feed (Buffer.concat) re-copies
+  // every already-buffered byte for each incoming ~32KB TCP chunk — O(n²) per
+  // large frame (a 340KB fs.streamChunk frame cost ~2MB of memcpy). A chunk
+  // list assembles each frame exactly once instead.
+  private chunks: Buffer[] = []
+  private bufferedLength = 0
   private onFrame: (frame: DecodedFrame) => void
   private onError: ((err: Error) => void) | null
 
@@ -137,21 +143,31 @@ export class FrameDecoder {
   }
 
   feed(chunk: Buffer | Uint8Array): void {
-    this.buffer = Buffer.concat([this.buffer, chunk])
+    const buf = Buffer.isBuffer(chunk)
+      ? chunk
+      : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+    if (buf.length > 0) {
+      this.chunks.push(buf)
+      this.bufferedLength += buf.length
+    }
 
-    while (this.buffer.length >= HEADER_LENGTH) {
-      const length = this.buffer.readUInt32BE(9)
+    while (this.bufferedLength >= HEADER_LENGTH) {
+      const header = this.peekBytes(HEADER_LENGTH)
+      const length = header.readUInt32BE(9)
       const totalLength = HEADER_LENGTH + length
+
+      if (this.bufferedLength < totalLength) {
+        // Not fully received yet (also holds oversized frames until they can
+        // be skipped whole, keeping the decoder synchronized).
+        break
+      }
 
       // Why: throwing here would leave the buffer in a partially consumed
       // state — subsequent feed() calls would try to parse leftover payload
       // bytes as a new header, corrupting every future frame. Instead we
       // skip the entire oversized frame so the decoder stays synchronized.
       if (length > MAX_MESSAGE_SIZE) {
-        if (this.buffer.length < totalLength) {
-          break
-        }
-        this.buffer = this.buffer.subarray(totalLength)
+        this.discardBytes(totalLength)
         const err = new Error(`Frame payload too large: ${length} bytes — discarded`)
         if (this.onError) {
           this.onError(err)
@@ -159,24 +175,83 @@ export class FrameDecoder {
         continue
       }
 
-      if (this.buffer.length < totalLength) {
-        break
-      }
-
+      const framed = this.takeBytes(totalLength)
       const frame: DecodedFrame = {
-        type: this.buffer[0],
-        id: this.buffer.readUInt32BE(1),
-        ack: this.buffer.readUInt32BE(5),
-        payload: this.buffer.subarray(HEADER_LENGTH, totalLength)
+        type: framed[0],
+        id: framed.readUInt32BE(1),
+        ack: framed.readUInt32BE(5),
+        payload: framed.subarray(HEADER_LENGTH, totalLength)
       }
-
-      this.buffer = this.buffer.subarray(totalLength)
       this.onFrame(frame)
     }
   }
 
   reset(): void {
-    this.buffer = Buffer.alloc(0)
+    this.chunks = []
+    this.bufferedLength = 0
+  }
+
+  /** View of the first `count` buffered bytes without consuming them. */
+  private peekBytes(count: number): Buffer {
+    const first = this.chunks[0]
+    if (first.length >= count) {
+      return first
+    }
+    const out = Buffer.allocUnsafe(count)
+    let copied = 0
+    for (const part of this.chunks) {
+      copied += part.copy(out, copied, 0, Math.min(part.length, count - copied))
+      if (copied >= count) {
+        break
+      }
+    }
+    return out
+  }
+
+  /** Consume and return the first `count` buffered bytes (single copy). */
+  private takeBytes(count: number): Buffer {
+    const first = this.chunks[0]
+    if (first.length === count) {
+      this.chunks.shift()
+      this.bufferedLength -= count
+      return first
+    }
+    if (first.length > count) {
+      this.chunks[0] = first.subarray(count)
+      this.bufferedLength -= count
+      return first.subarray(0, count)
+    }
+    const out = Buffer.allocUnsafe(count)
+    let copied = 0
+    while (copied < count) {
+      const part = this.chunks[0]
+      const take = Math.min(part.length, count - copied)
+      part.copy(out, copied, 0, take)
+      copied += take
+      if (take === part.length) {
+        this.chunks.shift()
+      } else {
+        this.chunks[0] = part.subarray(take)
+      }
+    }
+    this.bufferedLength -= count
+    return out
+  }
+
+  /** Consume the first `count` buffered bytes without assembling them. */
+  private discardBytes(count: number): void {
+    let remaining = count
+    while (remaining > 0) {
+      const part = this.chunks[0]
+      if (part.length <= remaining) {
+        this.chunks.shift()
+        remaining -= part.length
+      } else {
+        this.chunks[0] = part.subarray(remaining)
+        remaining = 0
+      }
+    }
+    this.bufferedLength -= count
   }
 }
 

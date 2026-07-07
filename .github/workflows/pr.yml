@@ -69,6 +69,14 @@ jobs:
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates
 
+      # Why: oxlint fails any file over max-lines that is NOT suppressed, so this
+      # ratchet forbids ADDING a new suppression (inline disable or mobile max
+      # bump). Existing oversized files are grandfathered in
+      # config/max-lines-baseline.txt, which may only shrink — new bypasses fail
+      # here with a clear message instead of silently growing the debt.
+      - name: Enforce max-lines ratchet (no new bypasses)
+        run: pnpm run check:max-lines-ratchet
+
       # Why: project-owned type declarations must live in .ts so tsc
       # actually checks them. TypeScript's skipLibCheck: true (inherited
       # from @electron-toolkit/tsconfig) silently widens unresolved names

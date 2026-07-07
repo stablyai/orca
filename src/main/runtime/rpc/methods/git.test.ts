@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: git RPC methods share one dispatcher fixture, and keeping the contract cases together makes method coverage easy to audit. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'

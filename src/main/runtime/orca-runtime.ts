@@ -188,6 +188,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
+import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import {
   getTuiAgentLaunchCommand,
   isTuiAgent,
@@ -787,6 +788,7 @@ type RuntimeStore = {
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
+    terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
@@ -12353,6 +12355,11 @@ export class OrcaRuntimeService {
     // Linux over SSH. Startup command quoting must target the shell that runs it.
     const agentLaunchPlatform = this.getAgentLaunchPlatformForRepo(repo)
     const isRemote = repoIsRemote(repo)
+    const queuedShell = resolveLocalWindowsAgentStartupShell({
+      platform: agentLaunchPlatform,
+      isRemote,
+      terminalWindowsShell: settings.terminalWindowsShell
+    })
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
       agent,
       draft: content,
@@ -12360,6 +12367,7 @@ export class OrcaRuntimeService {
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
+      shell: queuedShell,
       isRemote
     })
     if (draftLaunchPlan) {
@@ -12383,6 +12391,7 @@ export class OrcaRuntimeService {
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
+      shell: queuedShell,
       isRemote,
       allowEmptyPromptLaunch: true
     })
@@ -12418,6 +12427,12 @@ export class OrcaRuntimeService {
     // Why: CLI clients may target SSH runtimes from macOS/Windows, so quote for
     // the workspace shell rather than the client shell.
     const agentLaunchPlatform = this.getAgentLaunchPlatformForRepo(repo)
+    const isRemote = repoIsRemote(repo)
+    const queuedShell = resolveLocalWindowsAgentStartupShell({
+      platform: agentLaunchPlatform,
+      isRemote,
+      terminalWindowsShell: settings.terminalWindowsShell
+    })
     const startupPlan = buildAgentStartupPlan({
       agent,
       prompt: prompt ?? '',
@@ -12425,7 +12440,8 @@ export class OrcaRuntimeService {
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
-      isRemote: repoIsRemote(repo),
+      shell: queuedShell,
+      isRemote,
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
@@ -15632,6 +15648,11 @@ export class OrcaRuntimeService {
     const settings = this.store.getSettings()
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
     const isRemote = repoIsRemote(workspace.repo)
+    const queuedShell = resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote,
+      terminalWindowsShell: settings.terminalWindowsShell
+    })
     const agent = resolveBareAgentLaunchCommand({
       command: opts.command,
       settings,
@@ -15649,6 +15670,7 @@ export class OrcaRuntimeService {
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform,
+      shell: queuedShell,
       isRemote,
       allowEmptyPromptLaunch: true
     })
@@ -16193,6 +16215,11 @@ export class OrcaRuntimeService {
     // Why: an SSH workspace runs the CLI through the relay shim (plain `orca`),
     // so the Linux-only `orca-ide` rename must not be applied.
     const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : repoIsRemote(workspace)
+    const queuedShell = resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote,
+      terminalWindowsShell: settings.terminalWindowsShell
+    })
     const startupPlan = buildAgentStartupPlan({
       agent: opts.agent,
       prompt: '',
@@ -16200,6 +16227,7 @@ export class OrcaRuntimeService {
       agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
       platform,
+      shell: queuedShell,
       isRemote,
       allowEmptyPromptLaunch: true
     })
@@ -19908,6 +19936,12 @@ export class OrcaRuntimeService {
       return
     }
 
+    // The active coordinator prompt is user-owned input, so push-on-idle must not synthesize Enter.
+    if (this._orchestrationDb.getActiveCoordinatorRun()?.coordinator_handle === handle) {
+      this._orchestrationDb.markAsDelivered(unread.map((m) => m.id))
+      return
+    }
+
     const tabTitle = this.tabs.get(leaf.tabId)?.title
     if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
       // Why: Cursor Agent treats injected PTY text as editable prompt input.
@@ -21520,7 +21554,7 @@ export class OrcaRuntimeService {
   }
 
   private defaultLinearAttachmentTitle(url: URL): string {
-    const tail = url.pathname.split('/').filter(Boolean).at(-1)
+    const tail = url.pathname.split('/').findLast(Boolean)
     return tail ? `${url.host}/${tail}` : url.host
   }
 

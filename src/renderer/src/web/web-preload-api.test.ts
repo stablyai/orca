@@ -2490,6 +2490,7 @@ describe('web GitHub preload API', () => {
         repoId: 'repo-1',
         repoPath,
         branch: 'feature',
+        currentHeadOid: 'head-oid',
         linkedPRNumber: null,
         fallbackPRNumber: 9,
         fallbackPRSource: 'pr-cache'
@@ -2510,6 +2511,7 @@ describe('web GitHub preload API', () => {
           branch: 'feature',
           linkedPRNumber: null,
           fallbackPRNumber: 9,
+          currentHeadOid: 'head-oid',
           acceptMergedFallbackPR: true
         }
       }

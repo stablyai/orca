@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: daemon connection, RPC, event, and disconnect behavior share one socket test harness. */
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type Server, type Socket } from 'node:net'

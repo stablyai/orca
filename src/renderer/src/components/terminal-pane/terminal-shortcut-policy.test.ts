@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: terminal keyboard policy covers platform
- * readline compatibility, pane management, and Option-as-Alt translation in
- * one pure function; the cases need to stay adjacent. */
 import { describe, expect, it } from 'vitest'
 import {
   resolveTerminalShortcutAction,

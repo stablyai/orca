@@ -2,7 +2,7 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.22",
+    "version": "0.0.24",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -75,7 +75,7 @@
       "allowBackup": false,
       "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
       "package": "com.stably.orca.mobile",
-      "versionCode": 4
+      "versionCode": 5
     },
     "plugins": [
       "expo-router",

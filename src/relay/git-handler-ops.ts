@@ -203,7 +203,7 @@ export async function branchCompare(
       worktreePath
     )
     summary.changedFiles = entries.length
-    summary.commitsAhead = parseInt(countOut.trim(), 10) || 0
+    summary.commitsAhead = Number.parseInt(countOut.trim(), 10) || 0
     summary.status = 'ready'
     return { summary, entries }
   } catch (error) {

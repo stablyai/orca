@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this test mirrors the complete core IPC handler registry so
-   duplicate-registration coverage stays tied to the one production entry point. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

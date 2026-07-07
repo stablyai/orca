@@ -3,12 +3,8 @@ import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IBuffer, IDisposable } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
-import {
-  detectAgentStatusFromTitle,
-  agentTypeToIconAgent,
-  isGeminiTerminalTitle,
-  isClaudeAgent
-} from '@/lib/agent-status'
+import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
+import { resolvePaneTitleDecision } from './terminal-title-evidence'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
@@ -92,6 +88,7 @@ import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stabl
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { resolveSshPaneConnectGate } from './ssh-pane-connect-gate'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -149,24 +146,23 @@ import {
   getRuntimeEnvironmentIdForWorktree
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
+  type ResumableTuiAgent,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import {
   isExpectedAgentProcess,
   recognizeAgentProcessFromCommandLine
@@ -373,9 +369,7 @@ type FreshSpawnOptions = {
 }
 
 type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
-  // TuiAgent (not just ResumableTuiAgent): the fresh-launch fallback can spawn any
-  // agent the terminal previously ran, including ones without resume support.
-  agent: TuiAgent
+  agent: ResumableTuiAgent
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
   launchToken: string
   useLiveEntry: boolean
@@ -1129,34 +1123,32 @@ export function connectPanePty(
         )
       }
     )
-    const legacyProviderSessionKeys = legacyMatches.map(([, record]) => {
-      const providerSession = normalizeAgentProviderSession(record.providerSession)
-      return providerSession
-        ? [record.worktreeId, record.agent, providerSession.key, providerSession.id].join('\0')
-        : null
-    })
     const exactLegacyMatch = legacyMatches.find(([paneKey]) => {
       const legacy = parseLegacyNumericPaneKey(paneKey)
       return legacy?.numericPaneId === String(pane.id)
     })
     const providerSessionKeys = new Set(
-      legacyProviderSessionKeys.filter((key): key is string => key !== null)
+      legacyMatches.map(([, record]) =>
+        [
+          record.worktreeId,
+          record.agent,
+          record.providerSession.key,
+          record.providerSession.id
+        ].join('\0')
+      )
     )
     const oldestLegacyMatch = legacyMatches
       .slice()
       .sort(([, a], [, b]) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)[0]
     // Why: duplicate legacy aliases can point at one provider session; consume
     // the oldest capture as canonical and clear its aliases after resume.
-    const allLegacyMatchesHaveProviderSession = legacyProviderSessionKeys.every(
-      (key) => key !== null
-    )
     const selectedLegacyMatch =
       exactLegacyMatch ??
-      (legacyMatches.length === 1
-        ? legacyMatches[0]
-        : allLegacyMatchesHaveProviderSession && providerSessionKeys.size === 1
-          ? oldestLegacyMatch
-          : null)
+      (providerSessionKeys.size === 1
+        ? legacyMatches.length === 1
+          ? legacyMatches[0]
+          : oldestLegacyMatch
+        : null)
     if (!selectedLegacyMatch) {
       return null
     }
@@ -1168,19 +1160,13 @@ export function connectPanePty(
     consumed: { paneKey: string; record: SleepingAgentSessionRecord }
   ): void => {
     state.clearSleepingAgentSession(consumed.paneKey)
-    const consumedSession = normalizeAgentProviderSession(consumed.record.providerSession)
-    // No provider session (e.g. a fresh-launch fallback record) means there is no
-    // shared session to alias, so there is nothing else to clear.
-    if (!consumedSession) {
-      return
-    }
     for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
       if (
         paneKey !== consumed.paneKey &&
         record.worktreeId === consumed.record.worktreeId &&
         record.agent === consumed.record.agent &&
-        record.providerSession?.key === consumedSession.key &&
-        record.providerSession?.id === consumedSession.id
+        record.providerSession.key === consumed.record.providerSession.key &&
+        record.providerSession.id === consumed.record.providerSession.id
       ) {
         // Why: legacy pane aliases can leave multiple sleeping rows for one
         // provider session; once this pane resumes it, every alias is stale.
@@ -1401,15 +1387,22 @@ export function connectPanePty(
     )?.title
     return runtimeTitle ?? tabTitle ?? null
   }
-  const hasFreshPaneAgentSurface = (): boolean => {
-    const state = useAppStore.getState()
-    const entry = state.agentStatusByPaneKey[cacheKey]
-    const now = Date.now()
-    const entryIsFresh =
-      entry &&
+  // Why: a pane-scoped explicit row only counts as current ownership evidence
+  // when it is fresh and not already `done` — a stale or completed row is a
+  // leftover from a prior agent that may no longer own the shell.
+  const isFreshActivePaneAgentEntry = (
+    entry: AgentStatusEntry | undefined
+  ): entry is AgentStatusEntry => {
+    return (
+      !!entry &&
       typeof entry.updatedAt === 'number' &&
-      now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
-    if (entryIsFresh && entry.state !== 'done') {
+      Date.now() - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS &&
+      entry.state !== 'done'
+    )
+  }
+  const hasFreshPaneAgentSurface = (): boolean => {
+    const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    if (isFreshActivePaneAgentEntry(entry)) {
       return true
     }
     const liveTitle = getLivePaneAgentTitle()
@@ -1502,6 +1495,23 @@ export function connectPanePty(
       paneStartup?.initialAgentStatus?.agent ??
       commandInferredPaneAgent ??
       state.agentStatusByPaneKey[cacheKey]?.agentType
+    )
+  }
+  // Why: the renderer veto (owner evidence beating a Gemini-looking title) must
+  // use only pane-scoped, CURRENT ownership. getAuthoritativePaneAgent leads
+  // with the tab-shared `tab.launchAgent` and a never-cleared
+  // `paneStartup.launchAgent`, which would let a sibling split pane or a reused
+  // pane keep WebGL for a genuine Gemini terminal (#7428 regression class).
+  // Launch identity is excluded, and the never-clearing startup seed
+  // (`paneStartup.initialAgentStatus`) too; a stale or `done` explicit row is
+  // ignored via the freshness predicate so a reused pane cannot inherit a prior
+  // agent's veto. Only live foreground command inference and a fresh, active
+  // hook row count. A genuine OMP/Pi pane stays protected owner-independently by
+  // the isPiAgentTitle guard inside isGeminiTerminalTitle.
+  const getPaneScopedRendererOwner = (): AgentType | undefined => {
+    const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    return (
+      commandInferredPaneAgent ?? (isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)
     )
   }
   const clearInferredInterruptWorkingTitle = (): void => {
@@ -1801,7 +1811,7 @@ export function connectPanePty(
       (entry) => entry.id === deps.tabId
     )
     const title = currentTitle ?? tab?.title
-    if (!title || resolveExplicitTerminalTitleAgentType(title) === null) {
+    if (!title || resolveCommittedTitleAgentType(title) === null) {
       return
     }
     const neutralTitle = neutralTerminalTitle()
@@ -2177,7 +2187,17 @@ export function connectPanePty(
   let allowInitialIdleCacheSeed = false
 
   const onTitleChange = (title: string, rawTitle: string): void => {
-    const paneTitle = normalizeCompatibleAgentTitleForOwner(title, getAuthoritativePaneAgent())
+    // Why: one owner-aware decision drives the display label, the runtime/tab
+    // title, task-completion tracking, and the renderer gate, so raw title text
+    // can no longer disable GPU behind stronger owner evidence (#7428/#7447).
+    const decision = resolvePaneTitleDecision({
+      normalizedTitle: title,
+      rawTitle,
+      displayOwnerAgentType: getAuthoritativePaneAgent(),
+      rendererOwnerAgentType: getPaneScopedRendererOwner(),
+      userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
+    })
+    const paneTitle = decision.displayTitle
     if (
       shouldSuppressCodexAutoApprovalSyntheticTitle(paneTitle, {
         paneKey: cacheKey,
@@ -2187,10 +2207,10 @@ export function connectPanePty(
     ) {
       return
     }
-    manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
+    manager.setPaneGpuRendering(pane.id, decision.rendererPolicy.gpuEnabled)
     deps.setRuntimePaneTitle(deps.tabId, pane.id, paneTitle)
     if (syncAgentTaskCompleteTrackingEnabled()) {
-      agentCompletionCoordinator.observeTitle(rawTitle)
+      agentCompletionCoordinator.observeTitle(decision.rawTitle)
     }
     // Why: only the focused pane should drive the tab title — otherwise two
     // agents in split panes cause rapid title flickering as each emits OSC
@@ -3495,10 +3515,6 @@ export function connectPanePty(
       if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
         return 'linux'
       }
-      const sshRemotePlatform = getTerminalPasteSshRemotePlatform(connectionId)
-      if (sshRemotePlatform) {
-        return sshRemotePlatform
-      }
       if (connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
         return 'linux'
       }
@@ -3512,123 +3528,27 @@ export function connectPanePty(
       const entry = state.agentStatusByPaneKey[cacheKey]
       const sleepingRecordEntry = getSleepingRecordForPane(state)
       const sleepingRecord = sleepingRecordEntry?.record
-      const liveEntry = entry && entry.state !== 'done' ? entry : null
-      const useLiveEntry = Boolean(liveEntry)
-
-      // When the provider session can't be resumed, an agent terminal should still
-      // come back as its agent (or the default), not a blank shell (#4557). A plain
-      // shell - no agent ever ran here - stays blank (buildFreshFallback returns null).
-      const buildFreshFallback = (): ColdRestoreAgentResumeStartup | null => {
-        const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
-          (candidate) => candidate.id === deps.tabId
-        )
-        const liveAgent =
-          liveEntry && isTuiAgent(liveEntry.agentType) ? liveEntry.agentType : undefined
-        const priorAgent =
-          liveAgent ?? sleepingRecord?.agent ?? tab?.launchAgent ?? paneStartup?.launchAgent
-        const defaultPref = state.settings?.defaultTuiAgent
-        const defaultAgent =
-          defaultPref &&
-          defaultPref !== 'blank' &&
-          isTuiAgentEnabled(defaultPref, state.settings?.disabledTuiAgents)
-            ? defaultPref
-            : undefined
-        // Fall back to the default agent only when this was an active/sleeping
-        // agent terminal whose specific agent is unrecoverable - never for a
-        // genuine plain shell or a stale completed live row.
-        const fallbackAgent = priorAgent ?? (liveEntry || sleepingRecord ? defaultAgent : undefined)
-        if (!fallbackAgent) {
-          return null
-        }
-        const liveLaunchConfig =
-          liveEntry && liveAgent === fallbackAgent
-            ? state.getAgentLaunchConfigForStatusEntry(liveEntry)
-            : undefined
-        const fallbackLaunchConfig =
-          liveLaunchConfig ??
-          (sleepingRecord?.agent === fallbackAgent ? sleepingRecord.launchConfig : undefined) ??
-          (paneStartup?.launchAgent === fallbackAgent ? paneStartup.launchConfig : undefined)
-        if (fallbackLaunchConfig?.agentCommand?.trim()) {
-          const freshLaunchToken = createBrowserUuid()
-          return {
-            agent: fallbackAgent,
-            command: fallbackLaunchConfig.agentCommand.trim(),
-            env: {
-              ...fallbackLaunchConfig.agentEnv,
-              ORCA_AGENT_LAUNCH_TOKEN: freshLaunchToken
-            },
-            launchConfig: {
-              agentCommand: fallbackLaunchConfig.agentCommand.trim(),
-              agentArgs: fallbackLaunchConfig.agentArgs,
-              agentEnv: { ...fallbackLaunchConfig.agentEnv }
-            },
-            launchToken: freshLaunchToken,
-            useLiveEntry,
-            // A fresh launch is a new session, not a restored one, so no
-            // "restored" banner; the stale sleeping record is still cleared
-            // after the spawn.
-            hasSleepingRecord: false,
-            sleepingRecordEntry
-          }
-        }
-        const freshPlan = buildAgentStartupPlan({
-          agent: fallbackAgent,
-          prompt: '',
-          cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-          agentArgs:
-            fallbackLaunchConfig !== undefined
-              ? fallbackLaunchConfig.agentArgs
-              : resolveTuiAgentLaunchArgs(fallbackAgent, state.settings?.agentDefaultArgs),
-          agentEnv:
-            fallbackLaunchConfig !== undefined
-              ? fallbackLaunchConfig.agentEnv
-              : resolveTuiAgentLaunchEnv(fallbackAgent, state.settings?.agentDefaultEnv),
-          platform: getColdRestoreAgentResumePlatform(),
-          allowEmptyPromptLaunch: true
-        })
-        if (!freshPlan) {
-          return null
-        }
-        const freshLaunchToken = createBrowserUuid()
-        return {
-          agent: fallbackAgent,
-          command: freshPlan.launchCommand,
-          env: {
-            ...freshPlan.env,
-            ORCA_AGENT_LAUNCH_TOKEN: freshLaunchToken
-          },
-          launchConfig: freshPlan.launchConfig,
-          launchToken: freshLaunchToken,
-          useLiveEntry,
-          // A fresh launch is a new session, not a restored one, so no
-          // "restored" banner; the stale sleeping record is still cleared after
-          // the spawn.
-          hasSleepingRecord: false,
-          sleepingRecordEntry
-        }
-      }
-
-      const agent = liveEntry ? liveEntry.agentType : sleepingRecord?.agent
+      const useLiveEntry = entry && entry.state !== 'done'
+      const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
       if (!agent || !isResumableTuiAgent(agent)) {
-        return buildFreshFallback()
+        return null
       }
       const providerSession = normalizeAgentProviderSession(
-        liveEntry ? liveEntry.providerSession : sleepingRecord?.providerSession
+        useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
       )
       if (!providerSession) {
-        return buildFreshFallback()
+        return null
       }
-      const sleepingProviderSession = normalizeAgentProviderSession(sleepingRecord?.providerSession)
       const matchingSleepingLaunchConfig =
         sleepingRecord?.launchConfig &&
         (!useLiveEntry ||
           (sleepingRecord.agent === agent &&
-            sleepingProviderSession?.key === providerSession.key &&
-            sleepingProviderSession?.id === providerSession.id))
+            sleepingRecord.providerSession.key === providerSession.key &&
+            sleepingRecord.providerSession.id === providerSession.id))
           ? sleepingRecord.launchConfig
           : undefined
       const launchConfig =
-        (liveEntry ? state.getAgentLaunchConfigForStatusEntry(liveEntry) : undefined) ??
+        (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
         matchingSleepingLaunchConfig
       const resumePlatform = getColdRestoreAgentResumePlatform()
       const startupPlan = buildAgentResumeStartupPlan({
@@ -3647,7 +3567,7 @@ export function connectPanePty(
         platform: resumePlatform
       })
       if (!startupPlan) {
-        return buildFreshFallback()
+        return null
       }
       const coldRestoreLaunchToken = createBrowserUuid()
       // Why: cold restore means the PTY process is gone but the agent provider
@@ -5274,6 +5194,13 @@ export function connectPanePty(
       }
       observeStartupDraftPasteReadiness(data)
       resetHiddenOutputRestoreIfPtyChanged()
+      if (meta?.droppedBacklog === true) {
+        // Why: main trimmed this pty's unsent backlog (the renderer was
+        // background-throttled/frozen and stopped ACKing). Rebuild the dropped
+        // span from the main headless snapshot — same recovery the renderer's
+        // own 2 MB scheduler overflow uses. No-op cost when already visible+synced.
+        markHiddenOutputRestoreNeeded()
+      }
       respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {
@@ -5544,13 +5471,23 @@ export function connectPanePty(
         deps.restoredLeafId && deps.restoredPtyIdByLeafId
           ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
           : null
-      const pendingSessionId =
-        restoredLeafSessionId ?? storeState.deferredSshSessionIdsByTabId[deps.tabId]
-      const isDeferredTarget = storeState.deferredSshReconnectTargets.includes(connectionId)
+      const gate = resolveSshPaneConnectGate({
+        connectionId,
+        sshStatus: storeState.sshConnectionStates.get(connectionId)?.status,
+        isDeferredTarget: storeState.deferredSshReconnectTargets.includes(connectionId),
+        restoredLeafSessionId,
+        deferredTabSessionId: storeState.deferredSshSessionIdsByTabId[deps.tabId],
+        tabPtyId: storeState.tabsByWorktree[deps.worktreeId]?.find((t) => t.id === deps.tabId)
+          ?.ptyId,
+        hasLeafSessionMap: Boolean(
+          deps.restoredPtyIdByLeafId && Object.keys(deps.restoredPtyIdByLeafId).length > 0
+        )
+      })
+      const pendingSessionId = gate.pendingSessionId
       console.warn(
-        `[pty-connection] SSH tab=${deps.tabId} connectionId=${connectionId} pendingSessionId=${pendingSessionId} isDeferredTarget=${isDeferredTarget}`
+        `[pty-connection] SSH tab=${deps.tabId} connectionId=${connectionId} pendingSessionId=${pendingSessionId} sshConnected=${gate.sshConnected}`
       )
-      if (pendingSessionId || isDeferredTarget) {
+      if (gate.enterDeferredFlow) {
         void (async () => {
           // Why: if the target requires a passphrase/password and no credential
           // is cached yet, auto-firing ssh.connect would surprise the user —

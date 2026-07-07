@@ -13,8 +13,6 @@ import {
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
-export { resolveExplicitTerminalTitleAgentType as resolveTabAgentFromTitle } from '../../../shared/terminal-title-agent-type'
-
 // A shell name, or the tab's neutral default title — where Orca's
 // inferred-interrupt reset parks it. Blank titles are no evidence either way.
 function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {

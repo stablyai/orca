@@ -162,8 +162,8 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
   // We read the computed flex-grow values to derive the first-child proportion.
   let ratio: number | undefined
   if (first && second) {
-    const firstGrow = parseFloat(first.style.flex) || 1
-    const secondGrow = parseFloat(second.style.flex) || 1
+    const firstGrow = Number.parseFloat(first.style.flex) || 1
+    const secondGrow = Number.parseFloat(second.style.flex) || 1
     const total = firstGrow + secondGrow
     if (total > 0) {
       const r = firstGrow / total

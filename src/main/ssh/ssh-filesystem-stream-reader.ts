@@ -148,6 +148,10 @@ export async function readFileViaStream(
       expectedSeq += 1
       receivedChunks += 1
       bytesReceived += decoded.length
+      // Why: credit-based flow control — the relay caps unacked chunks so bulk
+      // stream frames cannot queue unbounded ahead of interactive pty.data
+      // frames on the shared SSH channel. Old relays ignore this notification.
+      mux.notify('fs.streamAck', { streamId: id, seq })
     }
 
     const handleEnd = (params: Record<string, unknown>): void => {
@@ -260,7 +264,9 @@ export async function readFileViaStream(
     unsubscribers.push(onDispose)
 
     void mux
-      .request('fs.readFileStream', { filePath })
+      // Why: flowControl declares this client acks each chunk, letting a new
+      // relay pace the pump. Old relays ignore the extra param and flood.
+      .request('fs.readFileStream', { filePath, flowControl: 'ack' })
       .then((rawMetadata) => {
         if (settled) {
           return

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, and upload controls. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BellRing, FileAudio, Settings, Upload } from 'lucide-react'
 import { toast } from 'sonner'

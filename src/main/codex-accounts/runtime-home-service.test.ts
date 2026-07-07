@@ -484,6 +484,184 @@ describe('CodexRuntimeHomeService', () => {
     }
   })
 
+  it('starts WSL session bridging after materializing the WSL launch home', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
+    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+      startWslCodexSessionBridgeInBackground
+    }))
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
+    const store = createStore(
+      createSettings({
+        activeCodexManagedAccountId: null,
+        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+      })
+    )
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const wslRuntimeHomePath = join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home'
+      )
+
+      expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
+        wslRuntimeHomePath
+      )
+      expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledTimes(1)
+      expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledWith({
+        distro: 'Ubuntu',
+        systemCodexHomePath: join(wslHome, '.codex'),
+        managedCodexHomePath: wslRuntimeHomePath
+      })
+    } finally {
+      vi.doUnmock('../codex/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl')
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('bridges WSL history from a configured per-distro source-home override', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
+    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+      startWslCodexSessionBridgeInBackground
+    }))
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
+    const store = createStore(
+      createSettings({
+        activeCodexManagedAccountId: null,
+        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } },
+        // Why: the override is a Linux path inside the distro, not <wslHome>/.codex.
+        codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.config/codex' } }
+      })
+    )
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const wslRuntimeHomePath = join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home'
+      )
+
+      service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+      expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledTimes(1)
+      expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledWith({
+        distro: 'Ubuntu',
+        systemCodexHomePath: '/home/me/.config/codex',
+        managedCodexHomePath: wslRuntimeHomePath
+      })
+    } finally {
+      vi.doUnmock('../codex/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl')
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('starts WSL session bridging for the distro used by the materialized runtime home', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const startWslCodexSessionBridgeInBackground = vi.fn(() => Promise.resolve())
+    vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+      startWslCodexSessionBridgeInBackground
+    }))
+    const wslHome = join(testState.userDataDir, 'debian-wsl-home')
+    const wslRuntimeHomePath = join(
+      wslHome,
+      '.local',
+      'share',
+      'orca',
+      'codex-runtime-home',
+      'home'
+    )
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => null,
+      getWslHome: (distro: string) => (distro === 'Debian' ? wslHome : null)
+    }))
+    vi.doMock('../../shared/wsl-paths', () => ({
+      parseWslUncPath: (candidate: string) =>
+        candidate === wslRuntimeHomePath
+          ? {
+              distro: 'Debian',
+              linuxPath: '/home/alice/.local/share/orca/codex-runtime-home/home'
+            }
+          : null
+    }))
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'debian-account',
+      '{"account":"debian"}\n'
+    )
+    const store = createStore(
+      createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'debian-account',
+            email: 'debian@example.com',
+            managedHomePath,
+            managedHomeRuntime: 'wsl',
+            wslDistro: 'Debian',
+            wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/debian/home',
+            providerAccountId: null,
+            workspaceLabel: null,
+            workspaceAccountId: null,
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: null,
+        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Debian: 'debian-account' } }
+      })
+    )
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+
+      expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: null })).toBe(
+        wslRuntimeHomePath
+      )
+      expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledWith({
+        distro: 'Debian',
+        systemCodexHomePath: join(wslHome, '.codex'),
+        managedCodexHomePath: wslRuntimeHomePath
+      })
+    } finally {
+      vi.doUnmock('../codex/wsl-codex-session-bridge')
+      vi.doUnmock('../wsl')
+      vi.doUnmock('../../shared/wsl-paths')
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
   it('restores the system-default snapshot when no managed account is selected', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')

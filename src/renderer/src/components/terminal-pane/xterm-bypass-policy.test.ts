@@ -1,23 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   shouldBypassXtermKeyboardEvent,
-  shouldSuppressTerminalImeKeyboardEvent,
-  type XtermBypassEvent
+  shouldPreventDefaultTerminalImeCandidateKey,
+  shouldSuppressTerminalImeKeyboardEvent
 } from './xterm-bypass-policy'
-
-function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
-  return {
-    type: 'keydown',
-    key: '',
-    code: '',
-    defaultPrevented: false,
-    metaKey: false,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    ...overrides
-  }
-}
+import { event } from './xterm-bypass-event-fixture'
 
 describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   const opts = { isMac: true, hasSelection: true }
@@ -164,8 +151,20 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
 })
 
 describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
-  const idle = { isMac: true, compositionActive: false }
-  const composing = { isMac: true, compositionActive: true }
+  const idle = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: false,
+    candidateKeyGuardActive: false,
+    pendingCandidateKeyReleaseActive: false
+  }
+  const composing = {
+    isMac: true,
+    isLinux: false,
+    compositionActive: true,
+    candidateKeyGuardActive: true,
+    pendingCandidateKeyReleaseActive: false
+  }
 
   it('suppresses keyboard events while Chromium reports active IME composition', () => {
     expect(
@@ -236,6 +235,21 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
         event({ type: 'keypress', key: '中', code: '', isComposing: true }),
         idle
       )
+    ).toBe(false)
+  })
+
+  it('does not apply the Linux/Sogou candidate guard to macOS', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: ' ', code: 'Space' }), composing)
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keypress', key: '2', code: 'Digit2' }),
+        composing
+      )
+    ).toBe(false)
+    expect(
+      shouldPreventDefaultTerminalImeCandidateKey(event({ key: ' ', code: 'Space' }), composing)
     ).toBe(false)
   })
 })

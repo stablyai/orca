@@ -26,7 +26,9 @@ type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
   'agent' | 'sessionId' | 'cwd' | 'codexHome'
 > &
-  Partial<Pick<AiVaultSession, 'executionHostId' | 'executionHostPlatform' | 'resumeCommand'>>
+  Partial<
+    Pick<AiVaultSession, 'executionHostId' | 'executionHostPlatform' | 'resumeCommand' | 'filePath'>
+  >
 
 export type AiVaultResumeStartup = {
   command: string
@@ -127,10 +129,15 @@ export function buildAiVaultResumeStartupForWorktree(args: {
     command: buildAiVaultResumeCommand({
       agent: args.session.agent,
       sessionId: args.session.sessionId,
+      // Why: OMP resumes by absolute transcript path, so local rebuilds must
+      // forward it too — otherwise a custom OMP_CODING_AGENT_DIR / WSL-store
+      // session would resume by id against the default store and miss.
+      resumeFilePath: args.session.filePath,
       cwd: args.session.cwd,
       platform,
       commandOverride: args.commandOverride,
-      codexHome
+      codexHome,
+      shell: queuedShell
     })
   }
 }

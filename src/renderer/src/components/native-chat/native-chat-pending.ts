@@ -5,6 +5,7 @@
 
 import { isTextBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
 import { stripImagePromptMarker } from './native-chat-image-transcript-markers'
+import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 
 /** An optimistic, not-yet-confirmed composer send. */
@@ -44,7 +45,10 @@ export function writePendingSendCache(
   if (next.length === 0) {
     pendingSendCache.delete(key)
   } else {
-    pendingSendCache.set(key, next)
+    // Why: the empty-drain path above clears keys on the normal confirm flow,
+    // but a pane closed with an unconfirmed send (agent crash / early close)
+    // would strand its entry forever. LRU-bound the key count too.
+    setBoundedScopeCacheEntry(pendingSendCache, key, next)
   }
   return [...next]
 }
@@ -233,7 +237,11 @@ export function appendCommandMarkerCache(
     ...(commandMarkerCache.get(key) ?? []),
     { id: `${sentAt}-${commandMarkerCounter}`, command, sentAt }
   ].slice(-COMMAND_MARKER_LIMIT)
-  commandMarkerCache.set(key, next)
+  // Why: the per-key array is capped at 8, but the KEY (paneKey\0agent\0sessionId,
+  // sessionId changes on every /clear) is ephemeral and was never evicted, so it
+  // grew one entry per (pane, session) for the renderer's whole life. LRU-bound
+  // the key count (mirrors the #7566 draft/attachment caches in this folder).
+  setBoundedScopeCacheEntry(commandMarkerCache, key, next)
   return [...next]
 }
 

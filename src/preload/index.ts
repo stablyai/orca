@@ -897,6 +897,7 @@ const api = {
         seq?: number
         rawLength?: number
         background?: boolean
+        droppedBacklog?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
@@ -907,6 +908,7 @@ const api = {
           seq?: number
           rawLength?: number
           background?: boolean
+          droppedBacklog?: boolean
         }
       ) => callback(data)
       ipcRenderer.on('pty:data', listener)
@@ -3846,7 +3848,8 @@ const api = {
     removeTarget: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:removeTarget', args),
 
-    importConfig: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:importConfig'),
+    importConfig: (args?: { reAdopt?: boolean }): Promise<SshTarget[]> =>
+      ipcRenderer.invoke('ssh:importConfig', args),
 
     connect: (args: { targetId: string }): Promise<SshConnectionState | null> =>
       ipcRenderer.invoke('ssh:connect', args),

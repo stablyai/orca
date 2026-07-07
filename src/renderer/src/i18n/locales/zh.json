@@ -4754,7 +4754,10 @@
           "agentPermissionsDescription": "选择 Orca 是以更少的权限提示启动智能体，还是手动检查。",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手动",
-          "3f1bdf3cb4": "环境文本过长，无法安全解析。"
+          "3f1bdf3cb4": "环境文本过长，无法安全解析。",
+          "codexSessionSource": "Codex home to import from",
+          "codexSessionSourceInfo": "About importing Codex history",
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -8904,7 +8907,8 @@
             "b234ab25b4": "无法将文件复制到剪贴板",
             "f9d7ca753d": "复制路径",
             "3161c4e425": "文件夹",
-            "e887fa4b2e": "在终端中打开"
+            "e887fa4b2e": "在终端中打开",
+            "1d8e182c32": "查看文件"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",

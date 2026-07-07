@@ -347,3 +347,42 @@ describe('applyCommandMarkerBoundaries', () => {
     ).toEqual(['new'])
   })
 })
+
+describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
+  // The per-key arrays were capped at 8, but the KEY count (paneKey/agent/session,
+  // all ephemeral) was unbounded, so distinct panes/sessions accumulated forever.
+  // Both caches now LRU-bound the key count at 128 (shared helper, #7566).
+  const CAP = 128
+
+  it('appendCommandMarkerCache evicts the oldest scope key past the cap', () => {
+    clearCommandMarkerCacheForTests()
+    for (let i = 0; i < CAP + 5; i++) {
+      appendCommandMarkerCache(
+        { paneKey: 'tab:leaf', agent: 'claude', sessionId: `s${i}` },
+        '/clear'
+      )
+    }
+    // Oldest sessions evicted; the most-recent CAP survive.
+    expect(
+      readCommandMarkerCache({ paneKey: 'tab:leaf', agent: 'claude', sessionId: 's0' })
+    ).toEqual([])
+    expect(
+      readCommandMarkerCache({ paneKey: 'tab:leaf', agent: 'claude', sessionId: 's4' })
+    ).toEqual([])
+    expect(
+      readCommandMarkerCache({ paneKey: 'tab:leaf', agent: 'claude', sessionId: `s${CAP + 4}` })
+    ).toHaveLength(1)
+  })
+
+  it('writePendingSendCache evicts the oldest scope key past the cap', () => {
+    clearPendingSendCacheForTests()
+    const send = (id: string): NativeChatPendingSend => ({ id, text: id, sentAt: 1 })
+    for (let i = 0; i < CAP + 5; i++) {
+      writePendingSendCache({ paneKey: `tab-${i}:leaf`, agent: 'claude' }, [send(`m${i}`)])
+    }
+    expect(readPendingSendCache({ paneKey: 'tab-0:leaf', agent: 'claude' })).toEqual([])
+    expect(readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude' })).toHaveLength(
+      1
+    )
+  })
+})

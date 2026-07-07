@@ -2177,6 +2177,33 @@ function remapAcknowledgedAgentPaneKeys(
   return { acknowledgements: next, changed }
 }
 
+// Why: bounds a corrupt/bloated persisted list — the gate only ever needs the
+// handful of Claude sessions a daemon can realistically keep alive.
+const MAX_CLAUDE_LIVE_PTY_SESSION_IDS = 200
+
+function normalizeClaudeLivePtySessionIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  // Why: scan newest-first so the cap keeps the most recent ids, matching
+  // addClaudeLivePtySessionId's eviction policy while bounding the work done
+  // on an oversized/corrupt list.
+  const ids: string[] = []
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    const entry = value[index]
+    if (typeof entry !== 'string' || entry.length === 0 || entry.length > 512) {
+      continue
+    }
+    if (!ids.includes(entry)) {
+      ids.push(entry)
+    }
+    if (ids.length >= MAX_CLAUDE_LIVE_PTY_SESSION_IDS) {
+      break
+    }
+  }
+  return ids.toReversed()
+}
+
 function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {
   if (!Array.isArray(value)) {
     return []
@@ -3312,9 +3339,15 @@ export class Store {
             defaults.workspaceSession
           ),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          deletedSshConfigAliases: Array.isArray(parsed.deletedSshConfigAliases)
+            ? parsed.deletedSshConfigAliases.filter(
+                (alias): alias is string => typeof alias === 'string'
+              )
+            : [],
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          claudeLivePtySessionIds: normalizeClaudeLivePtySessionIds(parsed.claudeLivePtySessionIds),
           migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
             parsed.migrationUnsupportedPtyEntries
           ),
@@ -5912,6 +5945,65 @@ export class Store {
     }
     this.state.sshTargets = this.state.sshTargets.filter((t) => t.id !== id)
     this.scheduleSave()
+  }
+
+  // ── Live Claude PTY sessions ───────────────────────────────────────
+
+  getClaudeLivePtySessionIds(): string[] {
+    return [...(this.state.claudeLivePtySessionIds ?? [])]
+  }
+
+  addClaudeLivePtySessionId(sessionId: string): void {
+    if (sessionId.length === 0 || sessionId.length > 512) {
+      return
+    }
+    const ids = this.state.claudeLivePtySessionIds ?? []
+    if (ids.includes(sessionId)) {
+      return
+    }
+    // Why: drop the oldest entry at the cap — stale ids are pruned against the
+    // daemon at startup anyway, so recency is the only thing worth keeping.
+    this.state.claudeLivePtySessionIds = [...ids, sessionId].slice(-MAX_CLAUDE_LIVE_PTY_SESSION_IDS)
+    // Why: flush synchronously — a force-quit right after a Claude spawn must
+    // still seed the live-PTY gate on the next launch.
+    this.flush()
+  }
+
+  removeClaudeLivePtySessionId(sessionId: string): void {
+    const ids = this.state.claudeLivePtySessionIds ?? []
+    if (!ids.includes(sessionId)) {
+      return
+    }
+    this.state.claudeLivePtySessionIds = ids.filter((id) => id !== sessionId)
+    this.scheduleSave()
+  }
+
+  getDeletedSshConfigAliases(): string[] {
+    return [...(this.state.deletedSshConfigAliases ?? [])]
+  }
+
+  addDeletedSshConfigAlias(alias: string): void {
+    this.state.deletedSshConfigAliases ??= []
+    if (!this.state.deletedSshConfigAliases.includes(alias)) {
+      this.state.deletedSshConfigAliases.push(alias)
+      this.scheduleSave()
+    }
+  }
+
+  removeDeletedSshConfigAlias(alias: string): void {
+    const current = this.state.deletedSshConfigAliases
+    if (!current || !current.includes(alias)) {
+      return
+    }
+    this.state.deletedSshConfigAliases = current.filter((entry) => entry !== alias)
+    this.scheduleSave()
+  }
+
+  clearDeletedSshConfigAliases(): void {
+    if (this.state.deletedSshConfigAliases && this.state.deletedSshConfigAliases.length > 0) {
+      this.state.deletedSshConfigAliases = []
+      this.scheduleSave()
+    }
   }
 
   // ── SSH Remote PTY Leases ──────────────────────────────────────────

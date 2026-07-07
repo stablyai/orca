@@ -20,6 +20,21 @@ Orchestration is Orca's structured coordination layer for agent messages, task o
 
 Use this skill when coordination state matters. For lightweight terminal prompts or basic worktree/terminal/built-in-browser control, use `orca-cli`.
 
+## Tool Boundary
+
+If a task says to use Orca orchestration, the coordinator must create Orca runtime state with `orca orchestration task-create` and `orca orchestration dispatch --inject` or `orca orchestration run`.
+
+Do not substitute non-Orca subagent tools, generic agent-spawn APIs, or chat-only parallel worker features. Those may create useful workers, but they do not create Orca task/dispatch provenance, injected lifecycle preambles, `worker_done` authority, or decision gates.
+
+Before claiming a worker was orchestrated, verify the task/dispatch exists:
+
+```bash
+orca orchestration task-list --json
+orca orchestration dispatch-show --task <task_id> --json
+```
+
+If the work was accidentally run outside Orca orchestration, say so plainly. To repair provenance, rerun or revalidate the needed work through a fresh Orca terminal plus injected dispatch; do not retroactively describe the external worker as orchestrated.
+
 ## When To Use
 
 - Send/reply/ask between agent terminals with persistent messages.
@@ -134,6 +149,8 @@ New top-level worktree handoff:
 orca worktree create --name <task-name> --no-parent --agent codex --prompt "<task brief>" --json
 ```
 
+Before creating a new worktree from an active feature branch, decide and state whether the desired Orca lineage is child or top-level. Use child worktree lineage only when the new work is conceptually stacked under or dependent on the active worktree. For independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks, create a top-level worktree with `--no-parent`.
+
 Existing terminal handoff:
 
 ```bash
@@ -153,7 +170,7 @@ orca terminal send --terminal <handle> --text "<task brief>" --enter --json
 
 Wait only for `tui-idle` when needed to avoid losing the prompt. Do not monitor task completion.
 
-`--no-parent` only controls Orca lineage; it does not choose the Git base. For an independent top-level worktree, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base (`origin/main`, `origin/master`, or the `orca repo show --repo <selector> --json` value); never base it on the current feature branch unless the user explicitly asks for stacked work or "branch from current". Put current-branch context in the prompt instead.
+`--no-parent` only controls Orca lineage; it does not choose the Git base. If the work should start from the repo default base, omit `--base-branch` so Orca uses that default, or explicitly pass the repo default base (`origin/main`, `origin/master`, or the `orca repo show --repo <selector> --json` value); never base it on the current feature branch unless the user explicitly asks for stacked work or "branch from current". Put current-branch context in the prompt instead.
 
 ## Worker Terminals
 
@@ -165,7 +182,7 @@ orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 ```
 
-Reuse an idle agent in the required worktree only if the prompt allows reuse; otherwise create a fresh terminal there. Use a new worktree only when explicitly requested or when independent isolated checkout state is intended. For supervised new-worktree workers, decide the Git base separately from lineage: `--no-parent` makes the worktree top-level in Orca, while omitted `--base-branch` uses the repo default base.
+Reuse an idle agent in the required worktree only if the prompt allows reuse; otherwise create a fresh terminal there. Use a new worktree only when explicitly requested or when independent isolated checkout state is intended. For supervised new-worktree workers, decide the desired Orca lineage before creation: use child lineage only when the work is conceptually stacked under or dependent on the active worktree, and use `--no-parent` for independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks. Decide the Git base separately from lineage: `--no-parent` makes the worktree top-level in Orca, while omitted `--base-branch` uses the repo default base.
 
 ```bash
 orca worktree create --name <task-name> --agent codex --json
@@ -177,6 +194,8 @@ orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 For new-worktree workers, read the id from `worktree create`, then use `terminal list` to get the agent handle. Omit `--repo` only inside an Orca-managed worktree; otherwise pass `--repo <selector>`. `--agent` reveals the new worktree and launches the selected agent in its first terminal, so do not create a separate startup terminal. Do not run `worktree create` when the task must stay in the current worktree.
 
 Use `orca worktree create --prompt ...` or `orca terminal send ...` for full handoffs or untracked/lightweight prompts. Those paths do not attach `taskId`/`dispatchId`; the worker should not send lifecycle messages unless the prompt supplies a live orchestration preamble.
+
+Sidebar lineage and orchestration lifecycle are related but not identical. A same-worktree worker created with `orca terminal create --worktree active` may appear as a peer terminal/agent under the same worktree in the sidebar even though it is a child dispatch in Orca orchestration state. A visible parent/child worktree relationship requires creating a child worktree, but do that only when the task can safely run from an isolated checkout and does not need uncommitted artifacts from the current working tree.
 
 Other terminal commands coordinators often need:
 

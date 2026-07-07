@@ -856,6 +856,8 @@ function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High
 class InMemoryOrchestrationMessages {
   private sequence = 0
 
+  private activeCoordinatorRun: { coordinator_handle: string } | null = null
+
   private messages: MessageRow[] = []
 
   insertMessage(msg: {
@@ -901,6 +903,14 @@ class InMemoryOrchestrationMessages {
 
   getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
     return this.getUnreadMessages(toHandle, types).filter((message) => !message.delivered_at)
+  }
+
+  setActiveCoordinatorRun(run: { coordinator_handle: string } | null): void {
+    this.activeCoordinatorRun = run
+  }
+
+  getActiveCoordinatorRun(): { coordinator_handle: string } | null {
+    return this.activeCoordinatorRun
   }
 
   markAsDelivered(ids: string[]): void {
@@ -3538,6 +3548,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getSettings: () => ({
         ...store.getSettings(),
+        terminalWindowsShell: 'cmd.exe',
         agentCmdOverrides: {}
       }),
       getRepos: () => [remoteRepo],
@@ -7264,6 +7275,94 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('quotes local Windows bare agent command defaults for cmd.exe terminal creates', async () => {
+    setPlatform('win32')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        terminalWindowsShell: 'cmd.exe',
+        agentCmdOverrides: {},
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude',
+      title: 'worker'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+    expect(spawnCall?.command).toBe('claude "--dangerously-skip-permissions"')
+  })
+
+  it('does not use the local Windows shell setting for remote Windows bare agent creates', async () => {
+    const remoteRepo = {
+      id: TEST_REPO_ID,
+      path: 'C:/remote/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const remoteStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        terminalWindowsShell: 'cmd.exe',
+        agentCmdOverrides: {},
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
+        agentDefaultEnv: {}
+      })
+    }
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: 'C:/remote/repo',
+          head: 'abc',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
+    }
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-windows-bare' })
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    try {
+      await runtime.createTerminal('path:C:/remote/repo', {
+        command: 'claude',
+        title: 'worker'
+      })
+
+      const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+      expect(spawnCall?.command).toBe("claude '--dangerously-skip-permissions'")
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
+  })
+
   it('matches canonical bare agent commands when a command override is configured', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtimeStore = {
@@ -10791,6 +10890,7 @@ describe('OrcaRuntimeService', () => {
       const [terminal] = (await runtime.listTerminals()).terminals
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      db.setActiveCoordinatorRun({ coordinator_handle: 'term_other' })
       db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
@@ -10806,6 +10906,52 @@ describe('OrcaRuntimeService', () => {
       // (the agent) is authorized to consume messages from its queue. The
       // injected banner is a courtesy; the rows stay unread so the agent can
       // still observe them via `check` and resolve the consumption race.
+      const unread = db.getUnreadMessages(terminal.handle)
+      expect(unread).toHaveLength(1)
+      expect(unread[0].read).toBe(0)
+      expect(unread[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('injects pending orchestration messages into the active coordinator without auto-submitting', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      db.setActiveCoordinatorRun({ coordinator_handle: terminal.handle })
+      db.insertMessage({
+        from: 'term_sender',
+        to: terminal.handle,
+        subject: 'hello coordinator'
+      })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('Subject: hello coordinator')
+      )
+      await vi.advanceTimersByTimeAsync(500)
+      const submitWrites = write.mock.calls.filter(
+        ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
+      )
+      expect(submitWrites).toHaveLength(0)
+
       const unread = db.getUnreadMessages(terminal.handle)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
@@ -17177,6 +17323,53 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           command: "command-code --profile mobile '--note' 'can''t'",
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID
+        })
+      )
+    })
+  })
+
+  it('uses cmd.exe quoting for mobile agent launch commands in local Windows host runtimes', async () => {
+    await withPlatform('win32', async () => {
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-cmd' })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getProjects: () => [
+          {
+            id: 'project-1',
+            displayName: 'repo',
+            badgeColor: 'blue',
+            sourceRepoIds: [TEST_REPO_ID],
+            localWindowsRuntimePreference: { kind: 'windows-host' },
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: { 'command-code': 'command-code --profile mobile' },
+          agentDefaultArgs: { 'command-code': '--note "can\'t"' },
+          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
+          terminalWindowsShell: 'cmd.exe'
+        })
+      } as never)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+      await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'command-code'
+      })
+
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'command-code --profile mobile "--note" "can\'t"',
           cwd: TEST_WORKTREE_PATH,
           worktreeId: TEST_WORKTREE_ID
         })

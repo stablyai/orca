@@ -21,8 +21,7 @@ function pathBasename(pathValue: string): string {
     pathValue
       .replace(/[\\/]+$/, '')
       .split(/[\\/]/)
-      .filter(Boolean)
-      .at(-1) ?? ''
+      .findLast(Boolean) ?? ''
   )
 }
 

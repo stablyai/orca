@@ -1,6 +1,13 @@
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  agentStartupDeliveryKey as deliveryKey,
+  clearConsumedAgentStartupDeliveriesForTests,
+  isAgentStartupDeliveryConsumed,
+  markAgentStartupDeliveryConsumed,
+  releaseAgentStartupDeliveryConsumed
+} from './agent-startup-delivery-guards'
 
 type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -13,7 +20,6 @@ type PendingAgentStartupDelivery = {
 }
 
 const pendingAgentStartupDeliveries = new Map<string, PendingAgentStartupDelivery>()
-const consumedAgentStartupDeliveries = new Set<string>()
 const staleStartupRecheckTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>()
 let unsubscribePendingAgentStartupDeliveries: (() => void) | null = null
 
@@ -99,7 +105,7 @@ function stopPendingAgentStartupSubscriptionIfIdle(): void {
 
 export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDelivery): void {
   const key = deliveryKey(delivery)
-  if (consumedAgentStartupDeliveries.has(key)) {
+  if (isAgentStartupDeliveryConsumed(key)) {
     return
   }
   pendingAgentStartupDeliveries.set(key, delivery)
@@ -109,7 +115,7 @@ export function queuePendingAgentStartupDelivery(delivery: PendingAgentStartupDe
 
 export function resetAgentStartupDelayedDeliveryForTests(): void {
   pendingAgentStartupDeliveries.clear()
-  consumedAgentStartupDeliveries.clear()
+  clearConsumedAgentStartupDeliveriesForTests()
   for (const timer of staleStartupRecheckTimers.values()) {
     globalThis.clearTimeout(timer)
   }
@@ -124,10 +130,10 @@ export function beginAgentStartupDeliveryAttempt(args: {
   launchToken: string
 }): boolean {
   const key = deliveryKey(args)
-  if (consumedAgentStartupDeliveries.has(key)) {
+  if (isAgentStartupDeliveryConsumed(key)) {
     return false
   }
-  consumedAgentStartupDeliveries.add(key)
+  markAgentStartupDeliveryConsumed(key)
   pendingAgentStartupDeliveries.delete(key)
   clearStaleStartupRecheck(key)
   return true
@@ -138,13 +144,7 @@ export function releaseAgentStartupDeliveryAttempt(args: {
   tabId: string
   launchToken: string
 }): void {
-  consumedAgentStartupDeliveries.delete(deliveryKey(args))
-}
-
-function deliveryKey(
-  delivery: Pick<PendingAgentStartupDelivery, 'worktreeId' | 'tabId' | 'launchToken'>
-): string {
-  return `${delivery.worktreeId}\0${delivery.tabId}\0${delivery.launchToken}`
+  releaseAgentStartupDeliveryConsumed(deliveryKey(args))
 }
 
 function flushPendingAgentStartupDeliveries(): void {

@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: crash-reporting IPC tests share mocked Electron/observability handler setup; splitting would duplicate brittle IPC wiring. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CrashReportRecord } from '../../shared/crash-reporting'
 

@@ -101,7 +101,7 @@ function buildSshResolvedConfig(
   return {
     hostname: map.get('hostname') ?? '',
     user: map.get('user') || undefined,
-    port: parseInt(map.get('port') ?? '22', 10),
+    port: Number.parseInt(map.get('port') ?? '22', 10),
     identityFile: identityFiles,
     identityAgent,
     identitiesOnly: map.get('identitiesonly') === 'yes',

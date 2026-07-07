@@ -22,6 +22,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
@@ -119,12 +120,26 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
+  const queuedShell = resolveLocalWindowsAgentStartupShell({
+    platform: resolvedLaunchPlatform,
+    isRemote,
+    terminalWindowsShell: store.settings?.terminalWindowsShell
+  })
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const effectiveAgentArgs =
     agentArgs !== undefined
       ? agentArgs
       : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
   const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const startupPlanBase = {
+    agent,
+    cmdOverrides,
+    platform: resolvedLaunchPlatform,
+    shell: queuedShell,
+    isRemote,
+    agentArgs: effectiveAgentArgs,
+    agentEnv
+  }
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -143,13 +158,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     // Why: generated multi-line prompts are too large to echo through a shell
     // argv/prefill command. Launch cleanly, then paste+submit inside the TUI.
     startupPlan = buildAgentStartupPlan({
-      agent,
+      ...startupPlanBase,
       prompt: '',
-      cmdOverrides,
-      platform: resolvedLaunchPlatform,
-      isRemote,
-      agentArgs: effectiveAgentArgs,
-      agentEnv,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -157,13 +167,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     forcePasteAfterLaunch = true
   } else if (hasPrompt && promptDelivery === 'draft') {
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
-      agent,
-      draft: trimmedPrompt,
-      cmdOverrides,
-      platform: resolvedLaunchPlatform,
-      isRemote,
-      agentArgs: effectiveAgentArgs,
-      agentEnv
+      ...startupPlanBase,
+      draft: trimmedPrompt
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -179,38 +184,23 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       }
     } else {
       startupPlan = buildAgentStartupPlan({
-        agent,
+        ...startupPlanBase,
         prompt: '',
-        cmdOverrides,
-        platform: resolvedLaunchPlatform,
-        isRemote,
-        agentArgs: effectiveAgentArgs,
-        agentEnv,
         allowEmptyPromptLaunch: true
       })
       pasteDraftAfterLaunch = trimmedPrompt
     }
   } else if (hasPrompt && isFollowupPath) {
     startupPlan = buildAgentStartupPlan({
-      agent,
+      ...startupPlanBase,
       prompt: '',
-      cmdOverrides,
-      platform: resolvedLaunchPlatform,
-      isRemote,
-      agentArgs: effectiveAgentArgs,
-      agentEnv,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
   } else {
     startupPlan = buildAgentStartupPlan({
-      agent,
+      ...startupPlanBase,
       prompt: hasPrompt ? trimmedPrompt : '',
-      cmdOverrides,
-      platform: resolvedLaunchPlatform,
-      isRemote,
-      agentArgs: effectiveAgentArgs,
-      agentEnv,
       allowEmptyPromptLaunch: !hasPrompt
     })
   }
