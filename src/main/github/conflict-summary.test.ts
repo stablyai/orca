@@ -154,6 +154,41 @@ describe('getPRConflictSummary caching', () => {
     expect(spawnCount()).toBe(5)
   })
 
+  it('dedupes overlapping derivations after resolving the same live base tip', async () => {
+    let releaseFetch: ((value: GitResult) => void) | undefined
+    mockGitDispatch({
+      fetch: () =>
+        new Promise<GitResult>((resolve) => {
+          releaseFetch = resolve
+        })
+    })
+
+    const backgroundRefresh = getPRConflictSummary(
+      '/repo-root',
+      'main',
+      'older-github-base-oid',
+      'head-oid-1',
+      {}
+    )
+    const manualRefresh = getPRConflictSummary(
+      '/repo-root',
+      'main',
+      'newer-github-base-oid',
+      'head-oid-1',
+      {}
+    )
+    releaseFetch?.({ stdout: '' })
+    const [backgroundSummary, manualSummary] = await Promise.all([backgroundRefresh, manualRefresh])
+
+    expect(backgroundSummary).toEqual(expectedSummary)
+    expect(manualSummary).toEqual(expectedSummary)
+    expect(spawnCount('fetch')).toBe(1)
+    expect(spawnCount('rev-parse')).toBe(1)
+    expect(spawnCount('merge-base')).toBe(1)
+    expect(spawnCount('rev-list')).toBe(1)
+    expect(spawnCount('merge-tree')).toBe(1)
+  })
+
   it('shares one base fetch across concurrent PRs on the same base branch', async () => {
     let releaseFetch: ((value: GitResult) => void) | undefined
     mockGitDispatch({
@@ -172,6 +207,45 @@ describe('getPRConflictSummary caching', () => {
     expect(summaryB).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(1)
     expect(spawnCount('rev-parse')).toBe(1)
+    expect(spawnCount('merge-base')).toBe(2)
+  })
+
+  it('keeps concurrent fallback base OIDs isolated per PR when the base ref is unavailable', async () => {
+    let releaseFetch: ((value: GitResult) => void) | undefined
+    mockGitDispatch({
+      fetch: () =>
+        new Promise<GitResult>((resolve) => {
+          releaseFetch = resolve
+        }),
+      'rev-parse': () => Promise.reject(new Error('missing remote-tracking ref')),
+      'rev-list': async (argv) => ({
+        stdout: argv[2]?.includes('bbbb2222-base') ? '7\n' : '4\n'
+      }),
+      'merge-tree': async (argv) => ({
+        stdout: argv.includes('bbbb2222-base')
+          ? 'tree-oid\u0000src/b.ts\u0000'
+          : 'tree-oid\u0000src/a.ts\u0000'
+      })
+    })
+
+    const prA = getPRConflictSummary('/repo-root', 'main', 'aaaa1111-base', 'head-oid-a', {})
+    const prB = getPRConflictSummary('/repo-root', 'main', 'bbbb2222-base', 'head-oid-b', {})
+    releaseFetch?.({ stdout: '' })
+    const [summaryA, summaryB] = await Promise.all([prA, prB])
+
+    expect(summaryA).toEqual({
+      baseRef: 'main',
+      baseCommit: 'aaaa111',
+      commitsBehind: 4,
+      files: ['src/a.ts']
+    })
+    expect(summaryB).toEqual({
+      baseRef: 'main',
+      baseCommit: 'bbbb222',
+      commitsBehind: 7,
+      files: ['src/b.ts']
+    })
+    expect(spawnCount('fetch')).toBe(1)
     expect(spawnCount('merge-base')).toBe(2)
   })
 
@@ -222,6 +296,18 @@ describe('getPRConflictSummary caching', () => {
           argv[0] === 'fetch' && (options as { wslDistro?: string })?.wslDistro === 'Ubuntu'
       )
     ).toHaveLength(1)
+  })
+
+  it('keeps identities distinct when paths or ref names contain a joiner character', async () => {
+    mockGitDispatch()
+
+    // Why: these two calls alias under naive pipe-joined keys — the segment
+    // boundary shifts between repoPath and baseRefName.
+    await getPRConflictSummary('/repo|x', 'main', 'github-base-oid', 'head-oid-1', {})
+    await getPRConflictSummary('/repo', 'x|main', 'github-base-oid', 'head-oid-1', {})
+
+    expect(spawnCount('fetch')).toBe(2)
+    expect(spawnCount('merge-base')).toBe(2)
   })
 
   it('caches failed derivations only until the throttle window expires', async () => {

@@ -2,12 +2,14 @@ import type { PRConflictSummary } from '../../shared/types'
 import { gitExecFileAsync } from '../git/runner'
 import {
   __resetPRConflictSummaryDerivationCachesForTests,
+  buildConflictSummaryCacheKey,
   dedupeBaseOidResolve,
   dedupeSummaryDerivation,
   getConflictSummaryGitRuntimeKey,
   readCachedSummary,
-  readFreshBaseOid,
-  storeBaseOid,
+  readFreshBaseTipResolution,
+  rememberUnresolvedBaseTip,
+  storeResolvedBaseTip,
   storeCachedSummary
 } from './conflict-summary-cache'
 
@@ -29,22 +31,6 @@ export async function getPRConflictSummary(
   headRefOid: string,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRConflictSummary | undefined> {
-  const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
-  // Why: PR-refresh ticks and event-driven kicks overlap for the same PR;
-  // concurrent identical requests must share one subprocess chain.
-  const derivationKey = `${runtimeKey}|${repoPath}|${baseRefName}|${baseRefOid}|${headRefOid}`
-  return dedupeSummaryDerivation(derivationKey, () =>
-    derivePRConflictSummary(repoPath, baseRefName, baseRefOid, headRefOid, localGitOptions)
-  )
-}
-
-async function derivePRConflictSummary(
-  repoPath: string,
-  baseRefName: string,
-  baseRefOid: string,
-  headRefOid: string,
-  localGitOptions: LocalGitExecOptions
-): Promise<PRConflictSummary | undefined> {
   // Why: the renderer only needs a read-only merge-conflict snapshot. We
   // derive it from local git state so the PR card can show GitHub-style
   // detail without spending additional gh API calls on every refresh. We use
@@ -62,7 +48,41 @@ async function derivePRConflictSummary(
   // Why: the summary is a pure function of the two commit OIDs, so a key hit
   // can skip the whole merge-base/rev-list/merge-tree subprocess chain.
   const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
-  const summaryKey = `${runtimeKey}|${repoPath}|${baseRefName}|${headRefOid}|${latestBaseOid}`
+  const summaryKey = buildConflictSummaryCacheKey(
+    runtimeKey,
+    repoPath,
+    baseRefName,
+    headRefOid,
+    latestBaseOid
+  )
+  const cached = readCachedSummary(summaryKey)
+  if (cached) {
+    return cached.value
+  }
+
+  // Why: different GitHub reads can report different pinned baseRefOid values
+  // while still resolving to the same live base tip; dedupe the expensive
+  // local derivation on the actual summary identity.
+  return dedupeSummaryDerivation(summaryKey, () =>
+    derivePRConflictSummary(
+      repoPath,
+      baseRefName,
+      headRefOid,
+      latestBaseOid,
+      summaryKey,
+      localGitOptions
+    )
+  )
+}
+
+async function derivePRConflictSummary(
+  repoPath: string,
+  baseRefName: string,
+  headRefOid: string,
+  latestBaseOid: string,
+  summaryKey: string,
+  localGitOptions: LocalGitExecOptions
+): Promise<PRConflictSummary | undefined> {
   const cached = readCachedSummary(summaryKey)
   if (cached) {
     return cached.value
@@ -97,33 +117,36 @@ async function resolveLatestBaseOidThrottled(
   localGitOptions: LocalGitExecOptions
 ): Promise<string> {
   const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
-  const baseKey = `${runtimeKey}|${repoPath}|${baseRefName}`
-  const cachedOid = readFreshBaseOid(baseKey)
-  if (cachedOid) {
-    return cachedOid
+  const baseKey = buildConflictSummaryCacheKey(runtimeKey, repoPath, baseRefName)
+  const cachedResolution = readFreshBaseTipResolution(baseKey)
+  if (cachedResolution) {
+    return cachedResolution.kind === 'resolved' ? cachedResolution.oid : fallbackBaseOid
   }
   return dedupeBaseOidResolve(baseKey, async () => {
     // Why re-check inside the dedupe slot: a sibling caller may have finished
     // resolving between our cache read and this factory starting.
-    const freshOid = readFreshBaseOid(baseKey)
-    if (freshOid) {
-      return freshOid
+    const freshResolution = readFreshBaseTipResolution(baseKey)
+    if (freshResolution) {
+      return freshResolution
     }
-    const oid = await resolveLatestBaseOid(repoPath, baseRefName, fallbackBaseOid, localGitOptions)
-    // Why cache even the fallback OID: the fetch attempt (up to its 10s
-    // timeout) is the expensive part; offline machines especially must not
-    // retry it on every refresh tick.
-    storeBaseOid(baseKey, oid)
-    return oid
-  })
+    const oid = await resolveLatestBaseOid(repoPath, baseRefName, localGitOptions)
+    if (oid) {
+      storeResolvedBaseTip(baseKey, oid)
+      return { kind: 'resolved', oid }
+    }
+    // Why cache the unresolved probe, not the caller fallback: the fetch
+    // attempt is branch-wide expensive work, but GitHub's baseRefOid is
+    // PR-specific and must not leak to sibling PRs on the same base branch.
+    rememberUnresolvedBaseTip(baseKey)
+    return { kind: 'fallback-unresolved' }
+  }).then((resolution) => (resolution.kind === 'resolved' ? resolution.oid : fallbackBaseOid))
 }
 
 async function resolveLatestBaseOid(
   repoPath: string,
   baseRefName: string,
-  fallbackBaseOid: string,
   localGitOptions: LocalGitExecOptions
-): Promise<string> {
+): Promise<string | null> {
   const remoteName = 'origin'
 
   try {
@@ -155,7 +178,7 @@ async function resolveLatestBaseOid(
     }
   }
 
-  return fallbackBaseOid
+  return null
 }
 
 async function resolveMergeBase(

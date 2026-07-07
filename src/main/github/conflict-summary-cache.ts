@@ -14,8 +14,12 @@ export const CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS = 60_000
 const BASE_OID_CACHE_MAX = 64
 const SUMMARY_CACHE_MAX = 128
 
-type CachedBaseOid = {
-  oid: string
+export type FreshBaseTipResolution =
+  | { kind: 'resolved'; oid: string }
+  | { kind: 'fallback-unresolved' }
+
+type CachedBaseTipResolution = {
+  oid: string | null
   resolvedAt: number
 }
 
@@ -27,9 +31,9 @@ type CachedSummary = {
   staleAt: number | null
 }
 
-const baseOidCache = new Map<string, CachedBaseOid>()
+const baseOidCache = new Map<string, CachedBaseTipResolution>()
 const summaryCache = new Map<string, CachedSummary>()
-const inFlightBaseOidResolves = new Map<string, Promise<string>>()
+const inFlightBaseOidResolves = new Map<string, Promise<FreshBaseTipResolution>>()
 const inFlightSummaryDerivations = new Map<string, Promise<PRConflictSummary | undefined>>()
 
 // Why: WSL distros have their own git binary, filesystem view, and remote
@@ -38,7 +42,14 @@ export function getConflictSummaryGitRuntimeKey(wslDistro: string | undefined): 
   return wslDistro ? `wsl:${wslDistro}` : 'local:host'
 }
 
-export function readFreshBaseOid(baseKey: string): string | null {
+// Why JSON: repo paths and git ref names may contain any printable joiner
+// character (git allows `|` in branch names), so a delimiter-joined key could
+// alias distinct identities onto one cache entry.
+export function buildConflictSummaryCacheKey(...parts: string[]): string {
+  return JSON.stringify(parts)
+}
+
+export function readFreshBaseTipResolution(baseKey: string): FreshBaseTipResolution | null {
   const entry = baseOidCache.get(baseKey)
   if (!entry) {
     return null
@@ -47,11 +58,20 @@ export function readFreshBaseOid(baseKey: string): string | null {
     baseOidCache.delete(baseKey)
     return null
   }
-  return entry.oid
+  return entry.oid ? { kind: 'resolved', oid: entry.oid } : { kind: 'fallback-unresolved' }
 }
 
-export function storeBaseOid(baseKey: string, oid: string): void {
+export function storeResolvedBaseTip(baseKey: string, oid: string): void {
   setBoundedMapEntry(baseOidCache, baseKey, { oid, resolvedAt: Date.now() }, BASE_OID_CACHE_MAX)
+}
+
+export function rememberUnresolvedBaseTip(baseKey: string): void {
+  setBoundedMapEntry(
+    baseOidCache,
+    baseKey,
+    { oid: null, resolvedAt: Date.now() },
+    BASE_OID_CACHE_MAX
+  )
 }
 
 export function readCachedSummary(summaryKey: string): CachedSummary | null {
@@ -78,7 +98,10 @@ export function storeCachedSummary(summaryKey: string, value: PRConflictSummary 
   )
 }
 
-export function dedupeBaseOidResolve(key: string, factory: () => Promise<string>): Promise<string> {
+export function dedupeBaseOidResolve(
+  key: string,
+  factory: () => Promise<FreshBaseTipResolution>
+): Promise<FreshBaseTipResolution> {
   return dedupeInFlight(inFlightBaseOidResolves, key, factory)
 }
 
