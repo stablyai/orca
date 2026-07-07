@@ -1337,7 +1337,7 @@ git commit -m "feat(services): surface service recipe diagnostics in repository 
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Full test + lint pass**
+- [x] **Step 1: Full test + lint pass**
 
 Run: `pnpm typecheck && pnpm lint && pnpm vitest run && pnpm check:max-lines-ratchet`
 Expected: all green; zero new baseline entries.

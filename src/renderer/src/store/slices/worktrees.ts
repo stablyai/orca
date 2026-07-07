@@ -2521,7 +2521,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
     // Why: hydrate per-worktree service env/status alongside the boot worktree
     // refresh so PTY spawns and the sidebar badge see ready services. Idempotent.
-    void get().hydrateWorktreeServices()
+    // Best-effort — a failed IPC round-trip here must never block worktree refresh.
+    void get()
+      .hydrateWorktreeServices()
+      .catch(() => {})
 
     // Why: once the one-shot hydration-time purge has fired, subsequent
     // calls just need to refresh each repo's cached list. No need to
