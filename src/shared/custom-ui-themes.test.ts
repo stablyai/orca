@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCssTheme, parseJsonTheme } from './custom-ui-themes'
+import { parseCssTheme, parseJsonTheme, parseTheme } from './custom-ui-themes'
 
 describe('custom ui themes parser', () => {
   it('parses raw Tailwind v4 CSS string successfully', () => {
@@ -85,5 +85,28 @@ describe('custom ui themes parser', () => {
     expect(darkTheme.name).toBe('Catppuccin Dark')
     expect(darkTheme.variables['--background']).toBe('hsl(240 10% 3.9%)')
     expect(darkTheme.variables['--primary']).toBe('hsl(0 0% 98%)')
+  })
+
+  it('parseTheme auto-detects CSS input', () => {
+    const themes = parseTheme('Auto', ':root { --primary: red; }')
+    expect(themes).toHaveLength(1)
+    const theme = themes[0]!
+    expect(theme.mode).toBe('light')
+    expect(theme.name).toBe('Auto Light')
+    expect(theme.variables['--primary']).toBe('red')
+  })
+
+  it('parseTheme auto-detects JSON input', () => {
+    const jsonInput = JSON.stringify({
+      name: 'Test',
+      cssVars: { dark: { primary: '0 0% 10%' } }
+    })
+    const themes = parseTheme('Ignored', jsonInput)
+    expect(themes).toHaveLength(1)
+
+    const theme = themes[0]!
+    expect(theme.mode).toBe('dark')
+    expect(theme.name).toBe('Test Dark')
+    expect(theme.variables['--primary']).toBe('hsl(0 0% 10%)')
   })
 })
