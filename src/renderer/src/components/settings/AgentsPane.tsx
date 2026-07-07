@@ -13,7 +13,11 @@ import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
-import { normalizeGlobalWindowsRuntimeDefault } from '../../../../shared/project-execution-runtime'
+import {
+  AgentSessionSourceHomeInput,
+  buildCodexSessionSourceHomeControl,
+  type AgentSessionSourceHomeControl
+} from './codex-session-source-home-control'
 import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
@@ -84,12 +88,6 @@ type AgentRowProps = {
   onSaveEnv: (value: Record<string, string>) => void
   /** Codex-only: current runtime scope label + persisted history-source override. */
   sessionSourceHome?: AgentSessionSourceHomeControl
-}
-
-type AgentSessionSourceHomeControl = {
-  runtimeLabel: string
-  value: string
-  onSave: (value: string) => void
 }
 
 type AgentCommandOverrideInputProps = {
@@ -687,58 +685,6 @@ function AgentRow({
   )
 }
 
-function AgentSessionSourceHomeInput({
-  runtimeLabel,
-  value,
-  onSave
-}: AgentSessionSourceHomeControl): React.JSX.Element {
-  const [draft, setDraft] = useState(value)
-
-  const commit = (): void => {
-    onSave(draft.trim())
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-xs text-muted-foreground">
-        {translate('auto.components.settings.AgentsPane.codexSessionSource', 'Session history')}
-      </span>
-      <Input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            commit()
-            e.currentTarget.blur()
-          }
-          if (e.key === 'Escape') {
-            setDraft(value)
-            e.currentTarget.blur()
-          }
-        }}
-        placeholder={runtimeLabel}
-        spellCheck={false}
-        className="h-7 flex-1 font-mono text-xs"
-      />
-      {value.trim() && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => {
-            onSave('')
-            setDraft('')
-          }}
-          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
-        </Button>
-      )}
-    </div>
-  )
-}
-
 type DefaultAgentPillProps = {
   active: boolean
   onClick: () => void
@@ -832,57 +778,6 @@ export function AgentsPane({
       agentDefaultEnv: {
         ...agentDefaultEnv,
         [id]: value
-      }
-    })
-  }
-
-  // Why: the source-home override is scoped to the runtime the pane is showing
-  // (host or the selected WSL distro), mirroring how detected agents are scoped.
-  const codexRuntimeScope = normalizeGlobalWindowsRuntimeDefault(
-    settings.localWindowsRuntimeDefault
-  )
-  const codexSessionSourceHome = settings.codexSessionSourceHome
-  const buildCodexSessionSourceHomeControl = (): AgentSessionSourceHomeControl => {
-    // Why: a WSL scope with no selected distro can't target a per-distro history
-    // home, so fall back to the host control rather than a null distro key.
-    const wslDistro =
-      codexRuntimeScope.kind === 'wsl' ? codexRuntimeScope.distro?.trim() : undefined
-    if (wslDistro) {
-      return {
-        runtimeLabel: `${wslDistro}: ~/.codex`,
-        value: codexSessionSourceHome?.wsl?.[wslDistro] ?? '',
-        onSave: (value: string) =>
-          saveCodexSessionSourceHome({ runtime: 'wsl', distro: wslDistro, value })
-      }
-    }
-    return {
-      runtimeLabel: '~/.codex',
-      value: codexSessionSourceHome?.host ?? '',
-      onSave: (value: string) => saveCodexSessionSourceHome({ runtime: 'host', value })
-    }
-  }
-
-  const saveCodexSessionSourceHome = (
-    args: { runtime: 'host'; value: string } | { runtime: 'wsl'; distro: string; value: string }
-  ): void => {
-    const current = settings.codexSessionSourceHome ?? {}
-    const trimmed = args.value.trim()
-    if (args.runtime === 'host') {
-      updateSettings({
-        codexSessionSourceHome: { ...current, host: trimmed || undefined }
-      })
-      return
-    }
-    const nextWsl = { ...current.wsl }
-    if (trimmed) {
-      nextWsl[args.distro] = trimmed
-    } else {
-      delete nextWsl[args.distro]
-    }
-    updateSettings({
-      codexSessionSourceHome: {
-        ...current,
-        wsl: Object.keys(nextWsl).length > 0 ? nextWsl : undefined
       }
     })
   }
@@ -1037,7 +932,9 @@ export function AgentsPane({
                 onSaveArgs={(v) => saveAgentArgs(agent.id, v)}
                 onSaveEnv={(v) => saveAgentEnv(agent.id, v)}
                 sessionSourceHome={
-                  agent.id === 'codex' ? buildCodexSessionSourceHomeControl() : undefined
+                  agent.id === 'codex'
+                    ? buildCodexSessionSourceHomeControl(settings, updateSettings)
+                    : undefined
                 }
               />
             ))}
