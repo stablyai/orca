@@ -209,6 +209,42 @@ describe('registerSshBrowseHandler', () => {
     expect(script).toContain('$dir = $HOME')
   })
 
+  // The renderer rebuilds forward-slash Windows paths with POSIX helpers: the
+  // breadcrumb prepends a spurious leading '/' before the drive, and "Up" from a
+  // first-level dir yields a bare drive letter. Both must be rooted for
+  // Set-Location, or navigation lands in the drive-relative cwd / errors.
+  it.each([
+    { dirPath: '/C:/Users', expected: "$dir = 'C:/Users'" },
+    { dirPath: 'C:', expected: "$dir = 'C:/'" }
+  ])(
+    'roots the Windows drive path $dirPath in the PowerShell fallback',
+    async ({ dirPath, expected }) => {
+      const posixChannel = createMockChannel()
+      const windowsChannel = createMockChannel()
+      const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+      const getConnectionManager = () => ({
+        getConnection: () => ({ exec })
+      })
+      registerSshBrowseHandler(getConnectionManager as never)
+
+      const resultPromise = handler(null, { targetId: 'ssh-1', dirPath })
+      await Promise.resolve()
+      posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
+      posixChannel.emit('exit', 9009)
+      posixChannel.emit('close')
+      await vi.waitFor(() => {
+        expect(windowsChannel.listenerCount('close')).toBe(1)
+      })
+      windowsChannel.emit('data', Buffer.from('C:/Users\r\n'))
+      windowsChannel.emit('exit', 0)
+      windowsChannel.emit('close')
+
+      await expect(resultPromise).resolves.toEqual({ resolvedPath: 'C:/Users', entries: [] })
+      const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
+      expect(script).toContain(expected)
+    }
+  )
+
   it('does not retry with PowerShell for an ordinary POSIX browse failure', async () => {
     const channel = createMockChannel()
     const exec = vi.fn().mockResolvedValue(channel)

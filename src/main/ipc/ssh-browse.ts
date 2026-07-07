@@ -313,5 +313,16 @@ function powerShellPathExpression(s: string): string {
   if (s.startsWith('~/') || s.startsWith('~\\')) {
     return `Join-Path $HOME ${powerShellLiteral(s.slice(2))}`
   }
-  return powerShellLiteral(s)
+  return powerShellLiteral(normalizeWindowsDrivePath(s))
+}
+
+// Why: browse emits forward-slash Windows paths, so the renderer rebuilds them
+// with POSIX helpers — the breadcrumb prepends a spurious leading '/' before the
+// drive (/C:/Users) and "Up" from a first-level dir yields a bare drive letter
+// (C:). Both are wrong for Set-Location: a leading '/' means the current drive's
+// root, and 'C:' is drive-relative (the process cwd), not 'C:\'. Normalize both
+// back to a rooted drive path here so navigation lands where the user clicked.
+function normalizeWindowsDrivePath(s: string): string {
+  const stripped = s.replace(/^\/(?=[A-Za-z]:(?:[/\\]|$))/, '')
+  return /^[A-Za-z]:$/.test(stripped) ? `${stripped}/` : stripped
 }
