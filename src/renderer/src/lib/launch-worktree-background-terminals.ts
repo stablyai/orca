@@ -4,6 +4,7 @@ import {
 } from '@/components/terminal-pane/pty-dispatcher'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { getWorktreeServiceEnv } from '@/lib/worktree-service-env-injection'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
@@ -54,6 +55,7 @@ function buildPaneEnv(
 ): Record<string, string> {
   return {
     ...env,
+    ...getWorktreeServiceEnv(worktreeId),
     ORCA_PANE_KEY: makePaneKey(tabId, leafId),
     ORCA_TAB_ID: tabId,
     ORCA_WORKTREE_ID: worktreeId

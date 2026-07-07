@@ -19,6 +19,7 @@ import type {
   WorktreeMeta
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
+import type { WorktreeServicesStatus } from '../../../../shared/worktree-services'
 import {
   findWorktreeById,
   applyWorktreeUpdates,
@@ -2305,6 +2306,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   everActivatedWorktreeIds: new Set<string>(),
   lastVisitedAtByWorktreeId: {},
   hasHydratedWorktreePurge: false,
+  worktreeServicesEnv: {},
+  worktreeServicesStatus: {},
+
+  hydrateWorktreeServices: async () => {
+    const records = await window.api.worktreeServices.list()
+    const worktreeServicesEnv: Record<string, Record<string, string>> = {}
+    const worktreeServicesStatus: Record<string, WorktreeServicesStatus> = {}
+    for (const record of records) {
+      worktreeServicesStatus[record.worktreeId] = record.status
+      if (record.status === 'ready') {
+        worktreeServicesEnv[record.worktreeId] = record.env
+      }
+    }
+    set({ worktreeServicesEnv, worktreeServicesStatus })
+  },
 
   fetchDetectedWorktrees: async (repoId) => {
     try {
@@ -2502,6 +2518,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   fetchAllWorktrees: async (options) => {
     const { repos } = get()
+
+    // Why: hydrate per-worktree service env/status alongside the boot worktree
+    // refresh so PTY spawns and the sidebar badge see ready services. Idempotent.
+    void get().hydrateWorktreeServices()
 
     // Why: once the one-shot hydration-time purge has fired, subsequent
     // calls just need to refresh each repo's cached list. No need to
