@@ -2,7 +2,7 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
 
@@ -28,6 +28,8 @@ if (parsed.serveArgs.includes('--recipe-json')) {
   process.exit(2)
 }
 
+const serveArgs = withDefaultPairingAddress(parsed.serveArgs)
+
 ensureElectronRuntime()
 
 const profileDir =
@@ -49,11 +51,9 @@ const childEnv = {
 }
 
 console.error(`[headless-pairing] userData=${profileDir}`)
-console.error(
-  `[headless-pairing] starting: orca-dev serve --json${formatForwardedArgs(parsed.serveArgs)}`
-)
+console.error(`[headless-pairing] starting: orca-dev serve --json${formatForwardedArgs(serveArgs)}`)
 
-child = spawn(process.execPath, [orcaDevScript, 'serve', '--json', ...parsed.serveArgs], {
+child = spawn(process.execPath, [orcaDevScript, 'serve', '--json', ...serveArgs], {
   cwd: repoRoot,
   detached: process.platform !== 'win32',
   env: childEnv,
@@ -128,8 +128,66 @@ Forwarded examples:
   node config/scripts/serve-headless-fresh-profile-pairing.mjs --mobile-pairing
 
 Environment:
-  ORCA_HEADLESS_PAIRING_PROFILE_DIR=/path/to/profile  Use a fixed profile directory.
+  ORCA_HEADLESS_PAIRING_ADDRESS=<host|host:port|ws://...>  Override the auto pairing address.
+  ORCA_HEADLESS_PAIRING_PROFILE_DIR=/path/to/profile       Use a fixed profile directory.
 `)
+}
+
+/**
+ * Adds a reachable pairing address unless the caller provided one explicitly.
+ */
+function withDefaultPairingAddress(args) {
+  if (hasPairingAddress(args)) {
+    return args
+  }
+  const address = resolveDefaultPairingAddress()
+  if (!address) {
+    return args
+  }
+  console.error(`[headless-pairing] pairingAddress=${address} (auto)`)
+  return [...args, '--pairing-address', address]
+}
+
+/**
+ * Checks both supported CLI forms for an explicit pairing address.
+ */
+function hasPairingAddress(args) {
+  return args.some((arg) => arg === '--pairing-address' || arg.startsWith('--pairing-address='))
+}
+
+/**
+ * Prefers an override, then Tailscale, then the OS hostname over loopback.
+ */
+function resolveDefaultPairingAddress() {
+  const configured = process.env.ORCA_HEADLESS_PAIRING_ADDRESS?.trim()
+  if (configured) {
+    return configured
+  }
+  const tailscaleAddress = readTailscaleAddress()
+  if (tailscaleAddress) {
+    return tailscaleAddress
+  }
+  const host = hostname().trim()
+  return host && host !== 'localhost' ? host : null
+}
+
+/**
+ * Reads the first Tailscale IPv4 address when Tailscale is installed.
+ */
+function readTailscaleAddress() {
+  const result = spawnSync('tailscale', ['ip', '-4'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore']
+  })
+  if (result.error || result.status !== 0) {
+    return null
+  }
+  return (
+    result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? null
+  )
 }
 
 /**
@@ -188,6 +246,9 @@ function printReadyLine(line) {
     return false
   }
   console.log(`Orca server ready: ${payload.endpoint ?? 'websocket unavailable'}`)
+  if (payload.pairing?.endpoint) {
+    console.log(`Pairing endpoint: ${payload.pairing.endpoint}`)
+  }
   if (payload.pairing?.webClientUrl) {
     console.log(`Web client URL: ${payload.pairing.webClientUrl}`)
   }
