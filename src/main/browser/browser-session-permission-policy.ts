@@ -9,7 +9,13 @@ const AUTO_GRANTED_BROWSER_PERMISSIONS = new Set([
   'notifications',
   // Chromium can request this at runtime even though Electron's TS union does
   // not list it; chatgpt.com uses it to keep browser storage from eviction.
-  'persistent-storage'
+  'persistent-storage',
+  // Pointer lock is a user-gesture-gated API for immersive web apps (3D
+  // editors, FPS-style games); deny-by-default surfaces a confusing "asked
+  // for pointer lock, and Orca denied it" toast with no in-app toggle to
+  // allow it. Chromium still requires a user gesture before
+  // requestPointerLock() can engage, so granting here only lifts Orca's gate.
+  'pointerLock'
 ])
 
 export function isAutoGrantedBrowserSessionPermission(permission: string): boolean {

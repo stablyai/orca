@@ -219,6 +219,7 @@ describe('BrowserSessionRegistry', () => {
     expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
     expect(checkHandler(null, 'notifications', '', {})).toBe(true)
     expect(checkHandler(null, 'persistent-storage', '', {})).toBe(true)
+    expect(checkHandler(null, 'pointerLock', '', {})).toBe(true)
     expect(checkHandler(null, 'geolocation', '', {})).toBe(false)
   })
 
