@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-npx pnpm exec lint-staged
+pnpm exec lint-staged

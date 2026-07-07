@@ -86,6 +86,10 @@ export function parseCssTheme(name: string, cssContent: string): CustomUiTheme[]
           const key = decl.slice(0, idx).trim()
           const val = decl.slice(idx + 1).trim()
           if (key.startsWith('--') && val) {
+            if (/url\s*\(/i.test(val)) {
+              // Security block: skip url(...) to prevent unsolicited tracking requests.
+              return
+            }
             vars[key] = val
           }
         }
@@ -128,6 +132,10 @@ export function parseJsonTheme(jsonContent: string): CustomUiTheme[] {
         if (typeof val !== 'string') {
           continue
         }
+        if (/url\s*\(/i.test(val)) {
+          // Security block: skip url(...) to prevent unsolicited tracking requests.
+          continue
+        }
         const cssKey = key.startsWith('--') ? key : `--${key}`
         const trimmed = val.trim()
         output[cssKey] = BARE_HSL.test(trimmed) ? `hsl(${trimmed})` : trimmed
@@ -135,14 +143,24 @@ export function parseJsonTheme(jsonContent: string): CustomUiTheme[] {
       return output
     }
 
+    const themeVars =
+      cssVars.theme && typeof cssVars.theme === 'object' && !Array.isArray(cssVars.theme)
+        ? cssVars.theme
+        : {}
+    const lightSource =
+      cssVars.light && typeof cssVars.light === 'object' && !Array.isArray(cssVars.light)
+        ? cssVars.light
+        : {}
+    const darkSource =
+      cssVars.dark && typeof cssVars.dark === 'object' && !Array.isArray(cssVars.dark)
+        ? cssVars.dark
+        : {}
+
+    const lightMerged = { ...themeVars, ...lightSource }
+    const darkMerged = { ...themeVars, ...darkSource }
+
     const themes: CustomUiTheme[] = []
-    pushModeThemes(
-      themes,
-      slugify(name),
-      name,
-      mapVariables(cssVars.light),
-      mapVariables(cssVars.dark)
-    )
+    pushModeThemes(themes, slugify(name), name, mapVariables(lightMerged), mapVariables(darkMerged))
     return themes
   } catch {
     return []

@@ -65,6 +65,20 @@
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
+      },
+      "customUiTheme": {
+        "title": "Custom UI Theme",
+        "description": "Customize the shell theme beyond light/dark presets",
+        "activeLabel": "Active Theme",
+        "defaultTheme": "Default",
+        "customThemesList": "Custom Themes",
+        "deleteTheme": "Delete theme",
+        "importTheme": "Import Theme",
+        "themeNamePlaceholder": "Theme Name (e.g. Claude)",
+        "fallbackThemeName": "Custom Theme",
+        "importErrorDescription": "Could not parse any variables. Make sure it has :root or .dark blocks, or matches Shadcn theme JSON.",
+        "importButton": "Import",
+        "textareaPlaceholder": "Paste CSS theme code (Tweakcn output) or Shadcn theme JSON..."
       }
     }
   },

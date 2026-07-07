@@ -38,6 +38,20 @@
       "menuBarIcon": {
         "title": "显示菜单栏图标",
         "description": "在 macOS 菜单栏中保留 Orca 快捷方式和活动指示器。"
+      },
+      "customUiTheme": {
+        "title": "自定义 UI 主题",
+        "description": "在浅色/深色预设之外自定义外壳主题",
+        "activeLabel": "活动主题",
+        "defaultTheme": "默认",
+        "customThemesList": "自定义主题",
+        "deleteTheme": "删除主题",
+        "importTheme": "导入主题",
+        "themeNamePlaceholder": "主题名称 (例如 Claude)",
+        "fallbackThemeName": "自定义主题",
+        "importErrorDescription": "无法解析任何变量。请确保其包含 :root 或 .dark 块，或与 Shadcn 主题 JSON 匹配。",
+        "importButton": "导入",
+        "textareaPlaceholder": "粘贴 CSS 主题代码 (Tweakcn 输出) 或 Shadcn 主题 JSON..."
       }
     }
   },

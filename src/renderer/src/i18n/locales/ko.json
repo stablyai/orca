@@ -38,6 +38,20 @@
       "menuBarIcon": {
         "title": "메뉴 바 아이콘 표시",
         "description": "macOS 메뉴 바에 Orca 바로가기 및 활동 표시기를 유지합니다."
+      },
+      "customUiTheme": {
+        "title": "사용자 정의 UI 테마",
+        "description": "밝은/어두운 사전 설정 이외의 쉘 테마 사용자 정의",
+        "activeLabel": "활성 테마",
+        "defaultTheme": "기본값",
+        "customThemesList": "사용자 정의 테마",
+        "deleteTheme": "테마 삭제",
+        "importTheme": "테마 가져오기",
+        "themeNamePlaceholder": "테마 이름 (예: Claude)",
+        "fallbackThemeName": "사용자 정의 테마",
+        "importErrorDescription": "변수를 파싱할 수 없습니다. :root 또는 .dark 블록이 포함되어 있거나 Shadcn 테마 JSON과 일치하는지 확인하세요.",
+        "importButton": "가져오기",
+        "textareaPlaceholder": "CSS 테마 코드(Tweakcn 출력) 또는 Shadcn 테마 JSON을 붙여넣으세요..."
       }
     }
   },

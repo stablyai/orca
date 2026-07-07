@@ -109,4 +109,65 @@ describe('custom ui themes parser', () => {
     expect(theme.name).toBe('Test Dark')
     expect(theme.variables['--primary']).toBe('hsl(0 0% 10%)')
   })
+
+  it('parses JSON themes with shared cssVars.theme block', () => {
+    const jsonInput = `
+{
+  "name": "Shared",
+  "cssVars": {
+    "theme": {
+      "radius": "0.55rem",
+      "font-sans": "Inter"
+    },
+    "light": {
+      "background": "0 0% 100%"
+    },
+    "dark": {
+      "background": "0 0% 0%"
+    }
+  }
+}
+`
+    const themes = parseJsonTheme(jsonInput)
+    expect(themes).toHaveLength(2)
+
+    const lightTheme = themes.find((t) => t.mode === 'light')!
+    expect(lightTheme.variables['--radius']).toBe('0.55rem')
+    expect(lightTheme.variables['--font-sans']).toBe('Inter')
+    expect(lightTheme.variables['--background']).toBe('hsl(0 0% 100%)')
+
+    const darkTheme = themes.find((t) => t.mode === 'dark')!
+    expect(darkTheme.variables['--radius']).toBe('0.55rem')
+    expect(darkTheme.variables['--font-sans']).toBe('Inter')
+    expect(darkTheme.variables['--background']).toBe('hsl(0 0% 0%)')
+  })
+
+  it('filters out values containing url() for safety', () => {
+    const jsonInput = `
+{
+  "name": "Unsafe JSON",
+  "cssVars": {
+    "light": {
+      "background": "0 0% 100%",
+      "malicious": "url('http://malicious.com/pixel.png')"
+    }
+  }
+}
+`
+    const jsonThemes = parseJsonTheme(jsonInput)
+    expect(jsonThemes).toHaveLength(1)
+    expect(jsonThemes[0]!.variables['--background']).toBe('hsl(0 0% 100%)')
+    expect(jsonThemes[0]!.variables['--malicious']).toBeUndefined()
+
+    const cssInput = `
+:root {
+  --background: hsl(0 0% 100%);
+  --unsafe-bg: url("http://unsafe.com/pixel.png");
+}
+`
+    const cssThemes = parseCssTheme('Unsafe CSS', cssInput)
+    expect(cssThemes).toHaveLength(1)
+    expect(cssThemes[0]!.variables['--background']).toBe('hsl(0 0% 100%)')
+    expect(cssThemes[0]!.variables['--unsafe-bg']).toBeUndefined()
+  })
 })

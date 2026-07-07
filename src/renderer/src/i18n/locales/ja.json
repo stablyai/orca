@@ -38,6 +38,20 @@
       "menuBarIcon": {
         "title": "メニューバーアイコンを表示",
         "description": "macOS メニューバーに Orca のショートカットとアクティビティインジケーターを表示します。"
+      },
+      "customUiTheme": {
+        "title": "カスタムUIテーマ",
+        "description": "ライト/ダークプリセット以外のシェルテーマをカスタマイズする",
+        "activeLabel": "有効なテーマ",
+        "defaultTheme": "デフォルト",
+        "customThemesList": "カスタムテーマ",
+        "deleteTheme": "テーマを削除",
+        "importTheme": "テーマのインポート",
+        "themeNamePlaceholder": "テーマ名 (例: Claude)",
+        "fallbackThemeName": "カスタムテーマ",
+        "importErrorDescription": "変数を解析できませんでした。:root または .dark ブロックが含まれているか、ShadcnテーマJSONと一致していることを確認してください。",
+        "importButton": "インポート",
+        "textareaPlaceholder": "CSSテーマコード（Tweakcnの出力）またはShadcnテーマのJSONを貼り付けてください..."
       }
     }
   },
