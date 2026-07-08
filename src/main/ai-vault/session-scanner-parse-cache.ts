@@ -5,10 +5,8 @@ import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
-import {
-  createClaudeSessionResumeState,
-  createGeminiJsonlSessionResumeState
-} from './session-scanner-primary-parsers'
+import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
+import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parser'
 import {
   createCopilotSessionResumeState,
   createCursorSessionResumeState

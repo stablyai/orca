@@ -9652,7 +9652,9 @@
             "runtimeWorkspacesUnsupported": "在远程运行时托管的工作区中无法从历史记录恢复会话。",
             "openSupportedWorkspace": "在恢复会话之前，请先打开一个本地或 SSH 工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",
-            "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。"
+            "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。",
+            "promptCount": "{{value0}} 条提示词",
+            "searchPrompts": "搜索我的提示词"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -9683,7 +9685,11 @@
             "currentProjectLower": "当前项目",
             "project": "项目",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
-            "host": "Host"
+            "host": "Host",
+            "mainAgentOnly": "仅主智能体",
+            "viewModeAriaLabel": "会话历史视图",
+            "sessionsView": "会话",
+            "promptsView": "我的提示词"
           },
           "AiVaultSessionDetails": {
             "updated": "更新时间",
@@ -9816,6 +9822,15 @@
             "archivedJumpUnavailable": "此会话位于已归档的工作树中。",
             "noActiveWorktreeMatch": "没有与此会话匹配的活动工作树。",
             "noActiveWorktreeTarget": "没有可用的活动工作树。"
+          },
+          "AiVaultPromptTimeline": {
+            "loading": "正在加载提示词…",
+            "noMatches": "没有与搜索匹配的提示词",
+            "empty": "尚未向主智能体发送提示词",
+            "resumeHint": "恢复此对话",
+            "today": "今天",
+            "yesterday": "昨天",
+            "truncated": "显示 {{value1}} 条中最近的 {{value0}} 条 · 用搜索缩小范围"
           }
         }
       },
