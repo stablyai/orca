@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { ChevronLeft, RefreshCw, X } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
-import { styles } from './mobile-source-control-styles'
+import { createMobileSourceControlStyles } from './mobile-source-control-styles'
+import { useThemedStyles, useTheme } from '../theme/theme-context'
 
 type Props = {
   embedded: boolean
@@ -18,6 +18,8 @@ export function MobileSourceControlHeader({
   onBack,
   onRefresh
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileSourceControlStyles)
   return (
     <View style={styles.topBar}>
       <Pressable

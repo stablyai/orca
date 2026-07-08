@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 
 type Props = {
   source: string
@@ -14,9 +15,11 @@ type Props = {
 // height so we can size to content. On any failure (no network, parse error,
 // render error) we fall back to the raw source in a labeled mono code box.
 export function MermaidDiagram({ source, base }: Props) {
+  const styles = useThemedStyles(createStyles)
+  const { colors } = useTheme()
   const [height, setHeight] = useState(0)
   const [failed, setFailed] = useState(false)
-  const html = useMemo(() => buildHtml(source), [source])
+  const html = useMemo(() => buildHtml(source, colors), [colors, source])
 
   if (failed) {
     return <MermaidFallback source={source} base={base} />
@@ -61,6 +64,7 @@ export function MermaidDiagram({ source, base }: Props) {
 }
 
 function MermaidFallback({ source, base }: Props) {
+  const styles = useThemedStyles(createStyles)
   return (
     <View style={styles.frame}>
       <View style={styles.label}>
@@ -75,7 +79,7 @@ function MermaidFallback({ source, base }: Props) {
 
 // Self-contained HTML: load mermaid from CDN, render the graph, post the body
 // height (or "error") back to RN. Theme variables match the dark sidebar palette.
-function buildHtml(source: string): string {
+function buildHtml(source: string, colors: ThemeColors): string {
   // JSON.stringify safely escapes the user's diagram source for embedding.
   const encoded = JSON.stringify(source)
   return `<!DOCTYPE html>
@@ -124,28 +128,29 @@ function buildHtml(source: string): string {
 </html>`
 }
 
-const styles = StyleSheet.create({
-  frame: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    marginBottom: spacing.sm,
-    overflow: 'hidden',
-    backgroundColor: colors.bgRaised
-  },
-  label: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  labelText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontFamily: typography.monoFamily
-  },
-  webview: { backgroundColor: colors.bgRaised },
-  fallbackScroll: { padding: spacing.sm },
-  fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    frame: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      marginBottom: spacing.sm,
+      overflow: 'hidden',
+      backgroundColor: colors.bgRaised
+    },
+    label: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel
+    },
+    labelText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontFamily: typography.monoFamily
+    },
+    webview: { backgroundColor: colors.bgRaised },
+    fallbackScroll: { padding: spacing.sm },
+    fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
+  })

@@ -1,7 +1,7 @@
 // xterm.js WebView document + default Tokyonight theme. Extracted from
 // TerminalWebView.tsx to keep that file within the max-lines budget.
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
-import { colors } from '../theme/mobile-theme'
+import { darkColors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
@@ -10,10 +10,10 @@ import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-inject
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
-  background: colors.terminalBg,
+  background: darkColors.terminalBg,
   foreground: '#c0caf5',
   cursor: '#c0caf5',
-  cursorAccent: colors.terminalBg,
+  cursorAccent: darkColors.terminalBg,
   selectionBackground: '#33467c',
   selectionForeground: '#c0caf5',
   black: '#15161e',
@@ -60,7 +60,7 @@ window.onerror = function(msg) {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
-    background: ${colors.terminalBg};
+    background: ${darkColors.terminalBg};
     overflow: hidden;
     width: 100%;
     height: 100%;
@@ -113,7 +113,7 @@ window.onerror = function(msg) {
     width: 3px;
     min-height: 24px;
     border-radius: 999px;
-    background: ${colors.textSecondary};
+    background: ${darkColors.textSecondary};
     will-change: transform, height;
   }
   /* Why: selection overlay sits in unscaled viewport coords, above the
@@ -396,7 +396,7 @@ window.onerror = function(msg) {
 
   function applyTerminalTheme(input) {
     terminalTheme = normalizeTerminalTheme(input);
-    var background = terminalTheme.background || '${colors.terminalBg}';
+    var background = terminalTheme.background || '${darkColors.terminalBg}';
     document.documentElement.style.background = background;
     document.body.style.background = background;
     if (term) term.options.theme = terminalTheme;

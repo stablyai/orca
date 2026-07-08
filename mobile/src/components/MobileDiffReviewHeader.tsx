@@ -1,10 +1,10 @@
 import { FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
 import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
 import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { createMobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
+import { useThemedStyles, useTheme } from '../theme/theme-context'
 
 type Props = {
   filter: MobileDiffReviewQueueFilter
@@ -35,6 +35,8 @@ export function MobileDiffReviewHeader({
   onOpenPRSidebar,
   onSelectFilter
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileDiffReviewStyles)
   // The dedicated PR icon appears on any GitHub repo in narrow/overlay mode; in wide
   // mode the sidebar is docked, so it is hidden (not disabled).
   const showPRTrigger = shouldShowTrigger({

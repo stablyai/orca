@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitMerge, Link2Off } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
@@ -10,7 +9,8 @@ import { ConfirmModal } from '../ConfirmModal'
 import { PRSection } from './PRSection'
 import { canShowMobilePRAutoMergeControl } from './pr-auto-merge-availability'
 import { resolveMobilePrMergeMethod, resolvePrActionAvailability } from './pr-actions-state'
-import { prActionsStyles as styles } from './pr-actions-styles'
+import { createPrActionsStyles } from './pr-actions-styles'
+import { useThemedStyles, useTheme } from '../../theme/theme-context'
 
 type Props = {
   pr: PRInfo
@@ -29,6 +29,8 @@ type Confirm =
 // ConfirmModal first (R5). The firing row shows a spinner in place of its icon
 // and disables; other rows stay interactive (uniform visual).
 export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createPrActionsStyles)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [unlinking, setUnlinking] = useState(false)
 

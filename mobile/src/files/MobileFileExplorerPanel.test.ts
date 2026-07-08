@@ -83,6 +83,14 @@ vi.mock('../transport/client-context', () => ({
   })
 }))
 
+vi.mock('../theme/theme-context', async () => {
+  const { darkColors } = await import('../theme/mobile-theme')
+  return {
+    useTheme: () => ({ colors: darkColors, preference: 'dark', setPreference: () => undefined }),
+    useThemedStyles: <T>(factory: (colors: typeof darkColors) => T): T => factory(darkColors)
+  }
+})
+
 function suppressReactTestRendererDeprecationWarning(): () => void {
   const originalConsoleError = console.error
   const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {

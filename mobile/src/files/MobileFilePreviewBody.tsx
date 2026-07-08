@@ -1,11 +1,11 @@
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { createFilePreviewStyles } from './mobile-file-preview-styles'
+import { useThemedStyles, useTheme } from '../theme/theme-context'
 
 type Props = {
   preview: MobileFilePreviewResult
@@ -23,6 +23,8 @@ type Props = {
 }
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createFilePreviewStyles)
   if (preview.status === 'loading') {
     return (
       <View style={styles.state}>

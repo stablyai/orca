@@ -1,9 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing, type ThemeColors } from '../theme/mobile-theme'
 import { agentDisplayLabel, agentDotState, formatTimeAgo } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
+import { useThemedStyles } from '../theme/theme-context'
 
 const INDENT_PER_DEPTH = 14
 
@@ -19,6 +20,7 @@ type Props = {
 // One inline agent row: state dot → identity → last message/prompt → time ago.
 // Mirrors desktop DashboardAgentRow's compact in-card layout.
 export function WorktreeAgentRow({ agent, depth, now, unvisited }: Props) {
+  const styles = useThemedStyles(createStyles)
   const dotState = agentDotState(agent, now)
   const label = agentDisplayLabel(agent, now)
   const ts = formatTimeAgo(agent.stateStartedAt, now)
@@ -37,24 +39,25 @@ export function WorktreeAgentRow({ agent, depth, now, unvisited }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: 3
-  },
-  label: {
-    flex: 1,
-    fontSize: 11,
-    color: colors.textMuted
-  },
-  labelUnvisited: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  time: {
-    fontSize: 10,
-    color: colors.textMuted
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginTop: 3
+    },
+    label: {
+      flex: 1,
+      fontSize: 11,
+      color: colors.textMuted
+    },
+    labelUnvisited: {
+      color: colors.textPrimary,
+      fontWeight: '600'
+    },
+    time: {
+      fontSize: 10,
+      color: colors.textMuted
+    }
+  })

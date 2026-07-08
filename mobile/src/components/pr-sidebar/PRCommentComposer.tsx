@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
 import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
-import { prCommentComposerStyles as styles } from './pr-comment-composer-styles'
+import { createPrCommentComposerStyles } from './pr-comment-composer-styles'
+import { useThemedStyles, useTheme } from '../../theme/theme-context'
 
 type Props = {
   // Plain-text composer shared by the reply affordance, the root-comment box, and
@@ -27,6 +27,8 @@ export function PRCommentComposer({
   onCancel,
   autoFocus
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createPrCommentComposerStyles)
   const [body, setBody] = useState(initialBody ?? '')
   // Why: parent `submitting` flips async; a fast double-tap can fire onSubmit
   // twice before it flips, so guard locally in the same synchronous tick.

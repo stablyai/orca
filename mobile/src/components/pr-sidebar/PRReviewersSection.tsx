@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { UserPlus, X } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { getPRReviewerRows } from './pr-checks-presentation'
 import { ReviewerPickerDrawer } from './ReviewerPickerDrawer'
 import { PRSection } from './PRSection'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
+import { useThemedStyles, useTheme } from '../../theme/theme-context'
 
 type Props = {
   details: GitHubWorkItemDetails | null
@@ -20,6 +20,8 @@ type Props = {
 // Requested reviewers + their latest review status, with a picker to request /
 // remove (optimistic add/remove via the actions hook).
 export function PRReviewersSection({ details, actions, client, worktreeId }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   const authoritativeRows = useMemo(
     () => (details?.item ? getPRReviewerRows(details.item) : []),
     [details]

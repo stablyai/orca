@@ -1,6 +1,6 @@
 import { ActivityIndicator, Pressable, type StyleProp, type ViewStyle } from 'react-native'
 import { ImagePlus, Mic } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme } from '../theme/theme-context'
 
 type DictationState = {
   readonly isStarting: boolean
@@ -41,6 +41,7 @@ export function MobileTerminalInputActions({
   onDictationPressOut,
   onDictationCancel
 }: MobileTerminalInputActionsProps) {
+  const { colors } = useTheme()
   const dictationActive = dictation.isStarting || dictation.isRecording
   return (
     <>

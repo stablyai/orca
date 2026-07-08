@@ -1,4 +1,4 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
 // Exercises the in-WebView touch dispatcher end-to-end: a surface tap on a
 // printed http(s) URL must post an `open-url` message (which RN routes to the
 // in-app/phone browser). Regression guard for taps that jitter a few pixels —

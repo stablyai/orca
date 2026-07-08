@@ -5,19 +5,22 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { useHostClient } from '../../../../src/transport/client-context'
 import type { RpcSuccess } from '../../../../src/transport/types'
-import { colors, spacing, typography } from '../../../../src/theme/mobile-theme'
+import { spacing, typography, type ThemeColors } from '../../../../src/theme/mobile-theme'
 import {
   fetchMobileGitHistory,
   mapMobileCommitRows,
   type MobileCommitRow
 } from '../../../../src/source-control/mobile-git-history'
 import type { GitBranchChangeEntry } from '../../../../../src/shared/types'
+import { useTheme, useThemedStyles } from '../../../../src/theme/theme-context'
 
 function firstParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
 }
 
 export default function HistoryScreen() {
+  const styles = useThemedStyles(createStyles)
+  const { colors } = useTheme()
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -162,46 +165,47 @@ export default function HistoryScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm
-  },
-  back: { padding: spacing.xs },
-  title: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
-  stateText: { color: colors.textMuted, fontSize: typography.bodySize },
-  commit: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-  commitHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2
-  },
-  commitHeaderPressed: { backgroundColor: colors.bgRaised },
-  commitMain: { flex: 1, minWidth: 0 },
-  commitSubject: { color: colors.textPrimary, fontSize: typography.bodySize },
-  commitMeta: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
-    marginTop: 2
-  },
-  files: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: 4 },
-  fileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  filePath: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  fileStat: { fontSize: typography.metaSize, fontFamily: typography.monoFamily },
-  add: { color: colors.gitDecorationAdded },
-  del: { color: colors.gitDecorationDeleted },
-  empty: { color: colors.textMuted, fontSize: typography.metaSize }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bgBase },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      gap: spacing.sm
+    },
+    back: { padding: spacing.xs },
+    title: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
+    state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+    stateText: { color: colors.textMuted, fontSize: typography.bodySize },
+    commit: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+    commitHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2
+    },
+    commitHeaderPressed: { backgroundColor: colors.bgRaised },
+    commitMain: { flex: 1, minWidth: 0 },
+    commitSubject: { color: colors.textPrimary, fontSize: typography.bodySize },
+    commitMeta: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize,
+      fontFamily: typography.monoFamily,
+      marginTop: 2
+    },
+    files: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: 4 },
+    fileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    filePath: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontFamily: typography.monoFamily
+    },
+    fileStat: { fontSize: typography.metaSize, fontFamily: typography.monoFamily },
+    add: { color: colors.gitDecorationAdded },
+    del: { color: colors.gitDecorationDeleted },
+    empty: { color: colors.textMuted, fontSize: typography.metaSize }
+  })

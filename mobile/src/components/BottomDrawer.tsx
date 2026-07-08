@@ -21,9 +21,10 @@ import Animated, {
   interpolate,
   Extrapolation
 } from 'react-native-reanimated'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing, type ThemeColors } from '../theme/mobile-theme'
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useThemedStyles } from '../theme/theme-context'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -94,6 +95,7 @@ function MountedBottomDrawer({
   contentScrollable = true,
   zIndex = 1000
 }: MountedBottomDrawerProps) {
+  const styles = useThemedStyles(createStyles)
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
@@ -357,62 +359,63 @@ function MountedBottomDrawer({
   )
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000
-  },
-  root: {
-    flex: 1
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)'
-  },
-  anchor: {
-    flex: 1,
-    justifyContent: 'flex-end'
-  },
-  anchorWide: {
-    alignItems: 'center'
-  },
-  drawer: {
-    backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingHorizontal: spacing.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10
-      },
-      android: { elevation: 8 }
-    })
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.textMuted,
-    opacity: 0.4
-  },
-  handleHitArea: {
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md
-  },
-  staticContent: {
-    minHeight: 0
-  },
-  bottomExtension: {
-    position: 'absolute',
-    bottom: -500,
-    left: 0,
-    right: 0,
-    height: 500,
-    backgroundColor: colors.bgBase
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    overlay: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 1000
+    },
+    root: {
+      flex: 1
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.5)'
+    },
+    anchor: {
+      flex: 1,
+      justifyContent: 'flex-end'
+    },
+    anchorWide: {
+      alignItems: 'center'
+    },
+    drawer: {
+      backgroundColor: colors.bgBase,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      paddingHorizontal: spacing.md,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 10
+        },
+        android: { elevation: 8 }
+      })
+    },
+    handle: {
+      alignSelf: 'center',
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.textMuted,
+      opacity: 0.4
+    },
+    handleHitArea: {
+      alignItems: 'center',
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.md
+    },
+    staticContent: {
+      minHeight: 0
+    },
+    bottomExtension: {
+      position: 'absolute',
+      bottom: -500,
+      left: 0,
+      right: 0,
+      height: 500,
+      backgroundColor: colors.bgBase
+    }
+  })

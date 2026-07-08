@@ -1,6 +1,5 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { RotateCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -16,7 +15,7 @@ import {
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
-import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
+import { createMobilePrSidebarStyles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
 import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
@@ -25,6 +24,7 @@ import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
 import { PRChecksSection } from './pr-sidebar/PRChecksSection'
 import { PRCommentsSection } from './pr-sidebar/PRCommentsSection'
 import { PrSidebarCreateEmptyState } from './pr-sidebar/PrSidebarCreateEmptyState'
+import { useThemedStyles, useTheme } from '../theme/theme-context'
 
 type Props = {
   state: PrSidebarState
@@ -54,6 +54,7 @@ export function MobilePRSidebar({
   headSha,
   bottomInset = 0
 }: Props) {
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   const branch = prSidebarRenderBranch(state)
   // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
@@ -145,6 +146,8 @@ function PrSidebarContent({
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   if (branch === 'loading') {
     return (
       <View style={styles.stateArea}>

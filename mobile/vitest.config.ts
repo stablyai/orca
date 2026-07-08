@@ -1,6 +1,6 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, type ViteUserConfig } from 'vitest/config'
 
-const tsconfigRaw = JSON.stringify({
+const tsconfig = {
   compilerOptions: {
     jsx: 'react-jsx',
     module: 'esnext',
@@ -8,13 +8,19 @@ const tsconfigRaw = JSON.stringify({
     strict: true,
     target: 'es2022'
   }
-})
+}
+
+const tsconfigRaw = JSON.stringify(tsconfig)
+type OxcTransformOptionsWithTsconfig = NonNullable<ViteUserConfig['oxc']> & {
+  tsconfig: typeof tsconfig
+}
+const oxcTransformOptions = { tsconfig } as OxcTransformOptionsWithTsconfig
 
 export default defineConfig({
+  // Why: Vitest/Vite 8's OXC transform does not find this package tsconfig
+  // when running through the generated test server, so pass it explicitly.
+  oxc: oxcTransformOptions,
   root: import.meta.dirname,
-  esbuild: {
-    tsconfigRaw
-  },
   optimizeDeps: {
     esbuildOptions: {
       tsconfigRaw

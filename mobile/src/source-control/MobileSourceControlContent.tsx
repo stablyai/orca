@@ -1,12 +1,13 @@
 import { ActivityIndicator, Pressable, SectionList, Text, TextInput, View } from 'react-native'
 import { GitBranch, Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
-import { styles } from './mobile-source-control-styles'
+import { createMobileSourceControlStyles } from './mobile-source-control-styles'
+import { useThemedStyles, useTheme } from '../theme/theme-context'
 
 type Props = {
   state: MobileSourceControlState
@@ -14,6 +15,8 @@ type Props = {
 
 // The ready-state body: summary card, changed-files list, and commit bar.
 export function MobileSourceControlContent({ state }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileSourceControlStyles)
   const {
     insets,
     busyAction,
@@ -161,14 +164,18 @@ export function MobileSourceControlContent({ state }: Props) {
       ) : (
         <SectionList
           sections={sections}
-          renderItem={makeRenderFileRow({
-            busyAction,
-            openingPath,
-            openingBranchPath,
-            openFile,
-            runGitAction,
-            setDiscardTarget
-          })}
+          renderItem={makeRenderFileRow(
+            {
+              busyAction,
+              openingPath,
+              openingBranchPath,
+              openFile,
+              runGitAction,
+              setDiscardTarget
+            },
+            colors,
+            styles
+          )}
           keyExtractor={(item) => `${item.area}:${item.path}:${item.oldPath ?? ''}`}
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeader}>

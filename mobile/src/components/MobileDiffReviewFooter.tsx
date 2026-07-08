@@ -11,8 +11,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import type { GitMutationMethod } from '../session/mobile-diff-review-screen-model'
-import { colors, spacing } from '../theme/mobile-theme'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { spacing } from '../theme/mobile-theme'
+import { createMobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
+import { useThemedStyles, useTheme } from '../theme/theme-context'
 
 type Props = {
   busyAction: string | null
@@ -33,6 +34,8 @@ export function MobileDiffReviewFooter({
   onMarkReviewed,
   onMoveFile
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileDiffReviewStyles)
   const insets = useSafeAreaInsets()
   return (
     <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>

@@ -1,14 +1,15 @@
 import { CircleDot, GitMerge, StickyNote } from 'lucide-react-native'
 import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import type { ThemeColors } from '../theme/mobile-theme'
 import { prStateToken } from './pr-state-token'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 // PR chip color by state, resolved through the shared prStateToken so it always
 // matches the PR sidebar's state badge: merged = purple, open = green, closed =
 // red, draft/unknown = muted.
-export function prStateColor(state: string): string {
-  return statusColor(prStateToken(state))
+export function prStateColor(state: string, colors: ThemeColors): string {
+  return statusColor(prStateToken(state), colors)
 }
 
 type Props = {
@@ -29,6 +30,8 @@ export function WorktreeMetaGlyphs({
   linkedIssue,
   linkedGitLabIssue
 }: Props) {
+  const styles = useThemedStyles(createStyles)
+  const { colors } = useTheme()
   const hasNotes = (comment ?? '').trim().length > 0
   const hasLinear = Boolean(linkedLinearIssue)
   const hasGitLabMR = linkedGitLabMR != null
@@ -46,16 +49,17 @@ export function WorktreeMetaGlyphs({
   )
 }
 
-const styles = StyleSheet.create({
-  metaGlyphs: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginLeft: 2
-  },
-  linearGlyph: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    metaGlyphs: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginLeft: 2
+    },
+    linearGlyph: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.textMuted
+    }
+  })
