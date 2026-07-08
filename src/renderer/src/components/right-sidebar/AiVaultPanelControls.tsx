@@ -240,22 +240,26 @@ export function VaultViewMenu({
   sort,
   group,
   hideEmptySessions,
+  mainAgentOnly,
   adjustmentCount,
   onAgentEnabledChange,
   onSortChange,
   onGroupChange,
   onHideEmptySessionsChange,
+  onMainAgentOnlyChange,
   onReset
 }: {
   agents: readonly AiVaultAgent[]
   sort: AiVaultSort
   group: AiVaultGroup
   hideEmptySessions: boolean
+  mainAgentOnly: boolean
   adjustmentCount: number
   onAgentEnabledChange: (agent: AiVaultAgent, enabled: boolean) => void
   onSortChange: (sort: AiVaultSort) => void
   onGroupChange: (group: AiVaultGroup) => void
   onHideEmptySessionsChange: (hideEmptySessions: boolean) => void
+  onMainAgentOnlyChange: (mainAgentOnly: boolean) => void
   onReset: () => void
 }): React.JSX.Element {
   return (
@@ -357,6 +361,16 @@ export function VaultViewMenu({
           {translate(
             'auto.components.right.sidebar.AiVaultPanelControls.hideEmptySessions',
             'Hide empty sessions'
+          )}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={mainAgentOnly}
+          onCheckedChange={(checked) => onMainAgentOnlyChange(checked === true)}
+          onSelect={(event) => event.preventDefault()}
+        >
+          {translate(
+            'auto.components.right.sidebar.AiVaultPanelControls.mainAgentOnly',
+            'Main agent only'
           )}
         </DropdownMenuCheckboxItem>
         {adjustmentCount > 0 ? (

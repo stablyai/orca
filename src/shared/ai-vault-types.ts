@@ -72,6 +72,11 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // How the session is being driven (Claude Code's transcript `entrypoint`):
+  // 'cli' for an interactive main-agent conversation, 'sdk'-prefixed for a
+  // subagent/workflow the main agent spawned. Undefined for agents that don't
+  // record it, which the filter then treats as main-agent sessions.
+  entrypoint?: string | null
   resumeCommand: string
 }
 

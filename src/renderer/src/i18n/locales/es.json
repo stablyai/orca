@@ -9683,7 +9683,8 @@
             "currentProjectLower": "proyecto actual",
             "project": "Proyecto",
             "hostScopeAriaLabel": "Host del historial de sesiones: {{value0}}",
-            "host": "Host"
+            "host": "Host",
+            "mainAgentOnly": "Solo agente principal"
           },
           "AiVaultSessionDetails": {
             "updated": "Actualizado",

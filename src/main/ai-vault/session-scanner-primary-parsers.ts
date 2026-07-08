@@ -82,6 +82,13 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   }
   updateTimeline(accumulator, extractString(record.timestamp))
   updateLatestLocation(accumulator, record)
+  // Track how the session is being driven ('cli' = interactive main agent,
+  // 'sdk-*' = SDK-spawned subagent/workflow) for the Main-agent-only filter.
+  // Last-wins so an SDK session later resumed interactively reads as main-agent.
+  const entrypoint = extractString(record.entrypoint)
+  if (entrypoint) {
+    accumulator.entrypoint = entrypoint
+  }
 
   if (record.type === 'custom-title') {
     accumulator.title = normalizeTitleText(extractString(record.customTitle) ?? '')

@@ -67,6 +67,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const [sort, setSort] = useState<AiVaultSort>('updated')
   const [group, setGroup] = useState<AiVaultGroup>('project')
   const [hideEmptySessions, setHideEmptySessions] = useState(true)
+  const [mainAgentOnly, setMainAgentOnly] = useState(true)
   const [agents, setAgents] = useState<AiVaultAgent[]>([...AI_VAULT_AGENTS])
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const userChangedScopeRef = useRef(false)
@@ -145,7 +146,8 @@ export default function AiVaultPanel(): React.JSX.Element {
     (hasAllAgentsSelected ? 0 : 1) +
     (sort === 'updated' ? 0 : 1) +
     (group === 'project' ? 0 : 1) +
-    (hideEmptySessions ? 0 : 1)
+    (hideEmptySessions ? 0 : 1) +
+    (mainAgentOnly ? 0 : 1)
 
   // Workspace is the preferred default, but unavailable context still falls back to All.
   useEffect(() => {
@@ -183,13 +185,15 @@ export default function AiVaultPanel(): React.JSX.Element {
         activeProjectKey,
         sessionProjectById,
         projectLabelByKey,
-        hideEmptySessions
+        hideEmptySessions,
+        mainAgentOnly
       }),
     [
       activeProjectKey,
       activeWorktreePaths,
       agents,
       hideEmptySessions,
+      mainAgentOnly,
       projectLabelByKey,
       query,
       scope,
@@ -274,6 +278,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     setSort('updated')
     setGroup('project')
     setHideEmptySessions(true)
+    setMainAgentOnly(true)
   }, [])
 
   const handleScopeChange = useCallback((nextScope: AiVaultScope) => {
@@ -311,6 +316,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         sort={sort}
         group={group}
         hideEmptySessions={hideEmptySessions}
+        mainAgentOnly={mainAgentOnly}
         adjustmentCount={viewAdjustmentCount}
         onQueryChange={setQuery}
         onScopeChange={handleScopeChange}
@@ -319,6 +325,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         onSortChange={setSort}
         onGroupChange={setGroup}
         onHideEmptySessionsChange={setHideEmptySessions}
+        onMainAgentOnlyChange={setMainAgentOnly}
         onReset={resetViewOptions}
         onRefresh={() => void refresh({ force: true })}
       />

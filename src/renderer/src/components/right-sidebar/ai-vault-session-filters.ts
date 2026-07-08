@@ -25,6 +25,17 @@ export type AiVaultSessionFilterState = {
   sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
   projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
+  // When true, hide sessions the main agent spawned (subagents / workflows),
+  // keeping only the interactive main-agent conversations.
+  mainAgentOnly: boolean
+}
+
+// A session spawned by a subagent/workflow the main agent created, detected via
+// Claude Code's `entrypoint` ('sdk'-prefixed for SDK-spawned sessions). Sessions
+// launched or resumed interactively ('cli') and agents that don't record an
+// entrypoint are treated as main-agent conversations.
+export function isMainAgentSession(session: AiVaultSession): boolean {
+  return !(typeof session.entrypoint === 'string' && session.entrypoint.startsWith('sdk'))
 }
 
 export type AiVaultSessionGroup = {
@@ -62,6 +73,9 @@ export function filterAiVaultSessions(
   return sessions
     .filter((session) => {
       if (!agentSet.has(session.agent)) {
+        return false
+      }
+      if (filters.mainAgentOnly && !isMainAgentSession(session)) {
         return false
       }
       if (filters.hideEmptySessions && session.messageCount === 0) {

@@ -41,6 +41,7 @@ export function createAccumulator(args: {
     messageCount: 0,
     totalTokens: 0,
     previewMessages: [],
+    entrypoint: null,
     latestTimestampMs: 0
   }
 }
@@ -110,6 +111,7 @@ export function finalizeSession(
     messageCount: accumulator.messageCount,
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
+    entrypoint: accumulator.entrypoint,
     resumeCommand: buildAiVaultResumeCommand({
       agent: accumulator.agent,
       sessionId,
