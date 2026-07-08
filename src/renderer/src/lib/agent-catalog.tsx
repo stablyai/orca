@@ -104,6 +104,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
   },
   {
+    id: 'gjc',
+    label: translate('auto.lib.agent.catalog.777dd08de3', 'Gajae Code'),
+    cmd: 'gjc',
+    faviconDomain: 'gajae-code.com',
+    homepageUrl: 'https://github.com/Yeachan-Heo/gajae-code'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',

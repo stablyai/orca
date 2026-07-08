@@ -123,6 +123,38 @@ describe('agent process recognition', () => {
     })
   })
 
+  it('recognizes Gajae Code without classifying gjc-prefixed path fragments as the agent', () => {
+    expect(recognizeAgentProcess('gjc')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/gjc')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/gjc', 'gjc')).toBe(true)
+    expect(isRecognizedAgentType('gjc')).toBe(true)
+    // Why: Gajae Code release artifacts ship as `gjc-<platform>-<arch>`; only
+    // the exact normalized basename may classify as the agent.
+    expect(recognizeAgentProcess('gjc-darwin-arm64')).toBeNull()
+    expect(isExpectedAgentProcess('gjc-darwin-arm64', 'gjc')).toBe(false)
+  })
+
+  it('does not recognize Gajae Code headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('gjc -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('gjc --print "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('gjc --mode rpc')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('gjc --mode=json -p "review"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('gjc --mode text')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(recognizeAgentProcessFromCommandLine('gjc --continue "what did we discuss?"')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+  })
+
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
       agent: 'mistral-vibe',

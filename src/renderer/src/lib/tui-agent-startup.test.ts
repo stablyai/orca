@@ -115,6 +115,23 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('passes Gajae Code prompts as a positional interactive argument', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'gjc',
+        prompt: 'List the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'gjc',
+      launchCommand: "gjc 'List the failing tests'",
+      expectedProcess: 'gjc',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('gjc')
+    })
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({
