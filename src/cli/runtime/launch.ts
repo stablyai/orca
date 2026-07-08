@@ -232,7 +232,12 @@ function resolveForegroundOrcaExecutable(): string {
   )
 }
 
-function stripElectronRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+// Why: ELECTRON_RUN_AS_NODE is set by the `orca` CLI launcher so Orca's Electron
+// binary runs as plain Node for the CLI itself (see cli-installer.ts). That flag
+// must not leak into user-facing children (claude, the Orca app re-exec, serve)
+// or nested Electron commands run as plain Node. Exported so the claude-teams
+// handler reuses the same strip as the open/serve paths (#7768, sibling of #2414).
+export function stripElectronRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const next = { ...env }
   delete next.ELECTRON_RUN_AS_NODE
   return next

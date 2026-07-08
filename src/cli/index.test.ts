@@ -317,6 +317,7 @@ describe('orca cli worktree awareness', () => {
   const originalEnvironment = process.env.ORCA_ENVIRONMENT
   const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
   const originalWorktreeId = process.env.ORCA_WORKTREE_ID
+  const originalElectronRunAsNode = process.env.ELECTRON_RUN_AS_NODE
 
   beforeEach(() => {
     callMock.mockReset()
@@ -387,6 +388,11 @@ describe('orca cli worktree awareness', () => {
       delete process.env.ORCA_WORKTREE_ID
     } else {
       process.env.ORCA_WORKTREE_ID = originalWorktreeId
+    }
+    if (originalElectronRunAsNode === undefined) {
+      delete process.env.ELECTRON_RUN_AS_NODE
+    } else {
+      process.env.ELECTRON_RUN_AS_NODE = originalElectronRunAsNode
     }
   })
 
@@ -467,6 +473,40 @@ describe('orca cli worktree awareness', () => {
           TMUX_PANE: '%1'
         })
       })
+    }
+  )
+
+  // Why: the `orca` CLI launcher re-injects ELECTRON_RUN_AS_NODE=1 so the CLI
+  // itself runs as plain Node. If that flag leaks into the spawned `claude`
+  // child, any nested Electron command (e.g. `pnpm dev`) runs as plain Node and
+  // never opens a window. Regression for #7768, sibling of #2414's daemon→PTY fix.
+  it.skipIf(process.platform === 'win32')(
+    'does not leak ELECTRON_RUN_AS_NODE into the spawned claude process',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      process.env.ELECTRON_RUN_AS_NODE = '1'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(['claude-teams'], '/tmp/repo')
+
+      const [, , { env }] = spawnMock.mock.calls[0] as unknown as [
+        string,
+        string[],
+        { env: Record<string, string> }
+      ]
+      expect(env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
     }
   )
 

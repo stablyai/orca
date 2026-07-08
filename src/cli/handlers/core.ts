@@ -2,10 +2,17 @@ import { spawn } from 'node:child_process'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
+import { stripElectronRunAsNode } from '../runtime/launch'
 
 function envRecord(): Record<string, string> {
+  // Why: the `orca` CLI launcher sets ELECTRON_RUN_AS_NODE=1 so Orca's Electron
+  // binary runs as plain Node for the CLI itself (cli-installer.ts). That flag
+  // must not leak into the `claude` child or nested Electron commands run as
+  // plain Node. Strip it here so both the prepareLaunch request and the spawn
+  // build a clean base env. Sibling of #2414's daemon→PTY fix (#7768).
+  const env = stripElectronRunAsNode(process.env)
   return Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
 }
 
