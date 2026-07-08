@@ -4,11 +4,12 @@ import {
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_SPANISH_LATAM,
   UI_LANGUAGE_SYSTEM,
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es', 'es-419'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -25,6 +26,11 @@ export function normalizeSupportedUiLocale(locale: string | undefined): Supporte
       return DEFAULT_UI_LOCALE
     }
     return 'zh'
+  }
+  if (primary === 'es') {
+    // Spain and region-less Spanish use the base `es` catalog; every other
+    // Spanish region (es-419, es-MX, es-AR, …) uses the Latin American catalog.
+    return tag === 'es' || tag.startsWith('es-es') ? 'es' : 'es-419'
   }
   return SUPPORTED_UI_LOCALES.includes(primary as SupportedUiLocale)
     ? (primary as SupportedUiLocale)
@@ -49,6 +55,9 @@ export function resolveUiLocale(
   }
   if (language === UI_LANGUAGE_SPANISH) {
     return 'es'
+  }
+  if (language === UI_LANGUAGE_SPANISH_LATAM) {
+    return 'es-419'
   }
   return normalizeSupportedUiLocale(systemLocale)
 }

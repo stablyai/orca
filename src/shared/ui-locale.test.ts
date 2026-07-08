@@ -7,6 +7,7 @@ import {
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_SPANISH_LATAM,
   UI_LANGUAGE_SYSTEM
 } from './ui-language'
 
@@ -28,10 +29,14 @@ describe('ui-locale', () => {
     expect(normalizeSupportedUiLocale('ja')).toBe('ja')
   })
 
-  it('normalizes Spanish locale prefixes', () => {
+  it('routes Spanish locales to Spain or Latin America by region', () => {
+    // Spain and region-less Spanish use the base `es` catalog.
     expect(normalizeSupportedUiLocale('es-ES')).toBe('es')
-    expect(normalizeSupportedUiLocale('es-MX')).toBe('es')
     expect(normalizeSupportedUiLocale('es')).toBe('es')
+    // Every other Spanish region uses the Latin American catalog.
+    expect(normalizeSupportedUiLocale('es-MX')).toBe('es-419')
+    expect(normalizeSupportedUiLocale('es-AR')).toBe('es-419')
+    expect(normalizeSupportedUiLocale('es-419')).toBe('es-419')
   })
 
   it('falls back unsupported locales to English', () => {
@@ -64,12 +69,18 @@ describe('ui-locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_SPANISH, 'en-US')).toBe('es')
   })
 
+  it('resolves explicit Latin American Spanish independently of system locale', () => {
+    expect(resolveUiLocale(UI_LANGUAGE_SPANISH_LATAM, 'en-US')).toBe('es-419')
+    expect(resolveUiLocale(UI_LANGUAGE_SPANISH_LATAM, 'es-ES')).toBe('es-419')
+  })
+
   it('maps system locale to the closest supported locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'en-GB')).toBe('en')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'zh-CN')).toBe('zh')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'ko-KR')).toBe('ko')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'ja-JP')).toBe('ja')
-    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'es-MX')).toBe('es')
+    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'es-ES')).toBe('es')
+    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'es-MX')).toBe('es-419')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'fr-FR')).toBe('en')
   })
 
@@ -79,5 +90,6 @@ describe('ui-locale', () => {
     expect(resolveRendererUiLocale(UI_LANGUAGE_KOREAN)).toBe('ko')
     expect(resolveRendererUiLocale(UI_LANGUAGE_JAPANESE)).toBe('ja')
     expect(resolveRendererUiLocale(UI_LANGUAGE_SPANISH)).toBe('es')
+    expect(resolveRendererUiLocale(UI_LANGUAGE_SPANISH_LATAM)).toBe('es-419')
   })
 })

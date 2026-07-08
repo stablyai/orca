@@ -25,6 +25,7 @@ const NON_DEFAULT_LOCALE_LOADERS: Record<
   () => Promise<{ default: Record<string, unknown> }>
 > = {
   es: () => import('./locales/es.json'),
+  'es-419': () => import('./locales/es-419.json'),
   ja: () => import('./locales/ja.json'),
   ko: () => import('./locales/ko.json'),
   zh: () => import('./locales/zh.json')

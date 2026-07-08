@@ -22,6 +22,7 @@ const LAZY_LOCALE_LOADERS: Record<
   () => Promise<{ default: Record<string, unknown> }>
 > = {
   es: () => import('../../renderer/src/i18n/locales/es.json'),
+  'es-419': () => import('../../renderer/src/i18n/locales/es-419.json'),
   ja: () => import('../../renderer/src/i18n/locales/ja.json'),
   ko: () => import('../../renderer/src/i18n/locales/ko.json'),
   zh: () => import('../../renderer/src/i18n/locales/zh.json')
