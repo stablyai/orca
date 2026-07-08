@@ -1,4 +1,6 @@
 import React from 'react'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
 
@@ -89,5 +91,15 @@ describe('BrowserAnnotationSendMenuContent', () => {
       launchSource: 'notes_send',
       onPromptDelivered
     })
+  })
+
+  it('is wired into both browser annotation send surfaces', () => {
+    const browserPaneSource = readFileSync(
+      fileURLToPath(new URL('./BrowserPane.tsx', import.meta.url)),
+      'utf8'
+    )
+
+    expect(browserPaneSource.match(/<BrowserAnnotationSendMenuContent\b/g)).toHaveLength(2)
+    expect(browserPaneSource).not.toContain('<QuickLaunchAgentMenuItems')
   })
 })
