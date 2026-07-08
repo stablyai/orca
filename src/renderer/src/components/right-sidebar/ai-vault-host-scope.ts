@@ -6,6 +6,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
+import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 
 export function useAiVaultExecutionHostScope(args: {
@@ -13,6 +14,7 @@ export function useAiVaultExecutionHostScope(args: {
   resumeTargetState: AiVaultSessionResumeTargetState
 }): {
   executionHostScope: ExecutionHostScope
+  workspaceExecutionHostScope: ExecutionHostScope
   activeSshExecutionHostScope: ExecutionHostScope | null
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
 } {
@@ -58,7 +60,16 @@ export function useAiVaultExecutionHostScope(args: {
 
   return {
     executionHostScope,
+    workspaceExecutionHostScope: defaultExecutionHostScope,
     activeSshExecutionHostScope,
     onExecutionHostScopeChange: handleExecutionHostScopeChange
   }
+}
+
+export function getAiVaultScanExecutionHostScope(args: {
+  scope: AiVaultScope
+  executionHostScope: ExecutionHostScope
+  workspaceExecutionHostScope: ExecutionHostScope
+}): ExecutionHostScope {
+  return args.scope === 'all' ? args.executionHostScope : args.workspaceExecutionHostScope
 }

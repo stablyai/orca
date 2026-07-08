@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   getAiVaultWslHomeDirs: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
   getActiveSshAiVaultHostInfo: vi.fn(),
-  getActiveSshAiVaultHostInfos: vi.fn()
+  getActiveSshAiVaultHostInfos: vi.fn(),
+  syncSystemCodexSessionsIntoManagedHomeIncrementally: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -23,6 +24,11 @@ vi.mock('../ai-vault/session-scanner', () => ({
 
 vi.mock('../ai-vault/remote-session-scanner', () => ({
   scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
+}))
+
+vi.mock('../codex/codex-session-bridge', () => ({
+  syncSystemCodexSessionsIntoManagedHomeIncrementally:
+    mocks.syncSystemCodexSessionsIntoManagedHomeIncrementally
 }))
 
 vi.mock('../wsl', () => ({
@@ -120,6 +126,28 @@ describe('listAiVaultSessions host routing', () => {
 
     expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
     expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('bridges system Codex sessions before a forced local scan', async () => {
+    await _internals.listAiVaultSessions({ executionHostScope: 'local', force: true })
+
+    expect(mocks.syncSystemCodexSessionsIntoManagedHomeIncrementally).toHaveBeenCalledTimes(1)
+    expect(mocks.scanAiVaultSessions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionHostId: 'local'
+      })
+    )
+  })
+
+  it('does not request a remote copy bridge on forced SSH scans', async () => {
+    await _internals.listAiVaultSessions({ executionHostScope: 'ssh:dev-box', force: true })
+
+    expect(mocks.syncSystemCodexSessionsIntoManagedHomeIncrementally).not.toHaveBeenCalled()
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        bridgeSystemCodexSessions: expect.anything()
+      })
+    )
   })
 })
 

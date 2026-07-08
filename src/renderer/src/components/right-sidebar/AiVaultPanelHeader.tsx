@@ -106,11 +106,13 @@ export function AiVaultPanelHeader({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
-          <VaultHostScopeMenu
-            executionHostScope={executionHostScope}
-            activeSshExecutionHostScope={activeSshExecutionHostScope}
-            onExecutionHostScopeChange={onExecutionHostScopeChange}
-          />
+          {scope === 'all' ? (
+            <VaultHostScopeMenu
+              executionHostScope={executionHostScope}
+              activeSshExecutionHostScope={activeSshExecutionHostScope}
+              onExecutionHostScopeChange={onExecutionHostScopeChange}
+            />
+          ) : null}
           <VaultViewMenu
             agents={agents}
             sort={sort}

@@ -41,7 +41,10 @@ import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
-import { useAiVaultExecutionHostScope } from './ai-vault-host-scope'
+import {
+  getAiVaultScanExecutionHostScope,
+  useAiVaultExecutionHostScope
+} from './ai-vault-host-scope'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -78,11 +81,15 @@ export default function AiVaultPanel(): React.JSX.Element {
       'runtime',
     [activeWorktreeId, resumeTargetState]
   )
-  const { executionHostScope, activeSshExecutionHostScope, onExecutionHostScopeChange } =
-    useAiVaultExecutionHostScope({
-      activeWorktreeId: activeWorktreeId ?? null,
-      resumeTargetState
-    })
+  const {
+    executionHostScope,
+    workspaceExecutionHostScope,
+    activeSshExecutionHostScope,
+    onExecutionHostScopeChange
+  } = useAiVaultExecutionHostScope({
+    activeWorktreeId: activeWorktreeId ?? null,
+    resumeTargetState
+  })
   const activeWorktreePath = activeWorktree?.path ?? null
   // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
   const activeWorktreePaths = useMemo(
@@ -112,9 +119,14 @@ export default function AiVaultPanel(): React.JSX.Element {
       }),
     [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection]
   )
+  const scanExecutionHostScope = getAiVaultScanExecutionHostScope({
+    scope,
+    executionHostScope,
+    workspaceExecutionHostScope
+  })
   const { error, loading, refresh, scanResult, sessions } = useAiVaultSessionRefresh(
     scopePaths,
-    executionHostScope
+    scanExecutionHostScope
   )
   const sessionProjectById = useMemo(
     () =>

@@ -17,6 +17,7 @@ import {
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
+import { remoteOrcaManagedCodexHome } from './remote-codex-runtime-paths'
 import type {
   RemoteParserOptions,
   RemoteScannerContext,
@@ -136,40 +137,32 @@ function remoteCodexSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform
 ): RemoteSessionSource[] {
+  const codexHome = remoteOrcaManagedCodexHome(remoteHome, hostPlatform)
   return [
-    joinRemotePath(hostPlatform, remoteHome, '.codex'),
-    joinRemotePath(
-      hostPlatform,
-      remoteHome,
-      '.local',
-      'share',
-      'orca',
-      'codex-runtime-home',
-      'home'
-    )
-  ].map((codexHome) => ({
-    agent: 'codex',
-    rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
-    extensions: ['.jsonl'],
-    parse: (file, content, context) =>
-      parseCodexSessionContent({
-        file,
-        content,
-        platform: context.hostPlatform.os,
-        codexHome,
-        executionHostId: context.executionHostId,
-        executionHostPlatform: context.hostPlatform.os,
-        readIndexedTitle: async (sessionId) =>
-          (
-            await remoteCodexIndexTitles({
-              provider: context.provider,
-              codexHome,
-              hostPlatform,
-              titleCaches: context.titleCaches
-            })
-          ).get(sessionId) ?? null
-      })
-  }))
+    {
+      agent: 'codex',
+      rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
+      extensions: ['.jsonl'],
+      parse: (file, content, context) =>
+        parseCodexSessionContent({
+          file,
+          content,
+          platform: context.hostPlatform.os,
+          codexHome,
+          executionHostId: context.executionHostId,
+          executionHostPlatform: context.hostPlatform.os,
+          readIndexedTitle: async (sessionId) =>
+            (
+              await remoteCodexIndexTitles({
+                provider: context.provider,
+                codexHome,
+                hostPlatform,
+                titleCaches: context.titleCaches
+              })
+            ).get(sessionId) ?? null
+        })
+    }
+  ]
 }
 
 function remoteOpenClawSources(

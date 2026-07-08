@@ -81,12 +81,32 @@ function jsonLines(records: unknown[]): string {
 }
 
 describe('scanRemoteAiVaultSessions', () => {
-  it('parses remote default and Orca-managed Codex homes with SSH host ids', async () => {
+  it('parses remote Orca-managed Codex homes with SSH host ids', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
-      '/home/ada/.codex/session_index.jsonl',
-      jsonLines([{ id: 'default-session', thread_name: 'Indexed remote title' }]),
+      '/home/ada/.config/orca/codex-runtime-home/home/session_index.jsonl',
+      jsonLines([{ id: 'runtime-session', thread_name: 'Indexed runtime title' }]),
       1
+    )
+    provider.addFile(
+      '/home/ada/.config/orca/codex-runtime-home/home/sessions/runtime.jsonl',
+      jsonLines([
+        {
+          timestamp: '2026-07-04T02:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'runtime-session', cwd: '/home/ada/runtime-repo' }
+        },
+        {
+          timestamp: '2026-07-04T02:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Managed remote title' }]
+          }
+        }
+      ]),
+      20
     )
     provider.addFile(
       '/home/ada/.codex/sessions/2026/07/04/default.jsonl',
@@ -108,25 +128,51 @@ describe('scanRemoteAiVaultSessions', () => {
       ]),
       10
     )
-    provider.addFile(
-      '/home/ada/.local/share/orca/codex-runtime-home/home/sessions/runtime.jsonl',
-      jsonLines([
-        {
-          timestamp: '2026-07-04T02:00:00.000Z',
-          type: 'session_meta',
-          payload: { id: 'runtime-session', cwd: '/home/ada/runtime-repo' }
-        },
-        {
-          timestamp: '2026-07-04T02:00:01.000Z',
-          type: 'response_item',
-          payload: {
-            type: 'message',
-            role: 'user',
-            content: [{ type: 'text', text: 'Managed remote title' }]
-          }
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions.map((session) => session.title)).toEqual(['Indexed runtime title'])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions.every((session) => session.executionHostId === 'ssh:dev-box')).toBe(true)
+    expect(result.sessions.every((session) => session.executionHostPlatform === 'linux')).toBe(true)
+    expect(
+      result.sessions.find((session) => session.sessionId === 'runtime-session')
+    ).toMatchObject({
+      codexHome: '/home/ada/.config/orca/codex-runtime-home/home',
+      resumeCommand:
+        "cd '/home/ada/runtime-repo' && CODEX_HOME='/home/ada/.config/orca/codex-runtime-home/home' codex resume 'runtime-session'"
+    })
+  })
+
+  it('ignores remote system Codex sessions as a display source', async () => {
+    const provider = new MemoryRemoteProvider()
+    const sessionContent = jsonLines([
+      {
+        timestamp: '2026-07-06T03:17:18.000Z',
+        type: 'session_meta',
+        payload: { id: 'remote-duplicated-session', cwd: '/home/ada/repo' }
+      },
+      {
+        timestamp: '2026-07-06T03:17:19.000Z',
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'text', text: 'Remote duplicate title' }]
         }
-      ]),
-      20
+      }
+    ])
+    provider.addFile('/home/ada/.codex/sessions/2026/07/06/duplicate.jsonl', sessionContent, 10)
+    provider.addFile(
+      '/home/ada/.config/orca/codex-runtime-home/home/sessions/2026/07/06/duplicate.jsonl',
+      sessionContent,
+      10
     )
 
     const result = await scanRemoteAiVaultSessions({
@@ -137,26 +183,18 @@ describe('scanRemoteAiVaultSessions', () => {
     })
 
     expect(result.issues).toEqual([])
-    expect(result.sessions.map((session) => session.title)).toEqual([
-      'Managed remote title',
-      'Indexed remote title'
-    ])
-    expect(new Set(result.sessions.map((session) => session.id)).size).toBe(2)
-    expect(result.sessions.every((session) => session.executionHostId === 'ssh:dev-box')).toBe(true)
-    expect(result.sessions.every((session) => session.executionHostPlatform === 'linux')).toBe(true)
-    expect(
-      result.sessions.find((session) => session.sessionId === 'default-session')
-    ).toMatchObject({
-      codexHome: '/home/ada/.codex',
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      executionHostId: 'ssh:dev-box',
+      agent: 'codex',
+      sessionId: 'remote-duplicated-session',
+      title: 'Remote duplicate title',
+      cwd: '/home/ada/repo',
+      filePath:
+        '/home/ada/.config/orca/codex-runtime-home/home/sessions/2026/07/06/duplicate.jsonl',
+      codexHome: '/home/ada/.config/orca/codex-runtime-home/home',
       resumeCommand:
-        "cd '/home/ada/repo' && CODEX_HOME='/home/ada/.codex' codex resume 'default-session'"
-    })
-    expect(
-      result.sessions.find((session) => session.sessionId === 'runtime-session')
-    ).toMatchObject({
-      codexHome: '/home/ada/.local/share/orca/codex-runtime-home/home',
-      resumeCommand:
-        "cd '/home/ada/runtime-repo' && CODEX_HOME='/home/ada/.local/share/orca/codex-runtime-home/home' codex resume 'runtime-session'"
+        "cd '/home/ada/repo' && CODEX_HOME='/home/ada/.config/orca/codex-runtime-home/home' codex resume 'remote-duplicated-session'"
     })
   })
 
@@ -204,7 +242,7 @@ describe('scanRemoteAiVaultSessions', () => {
   it('builds resume commands with the remote host platform', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
-      'C:/Users/Ada/.codex/sessions/win.jsonl',
+      'C:/Users/Ada/AppData/Roaming/orca/codex-runtime-home/home/sessions/win.jsonl',
       jsonLines([
         {
           timestamp: '2026-07-04T03:00:00.000Z',
@@ -234,14 +272,53 @@ describe('scanRemoteAiVaultSessions', () => {
     expect(result.issues).toEqual([])
     expect(result.sessions[0]?.executionHostPlatform).toBe('win32')
     expect(result.sessions[0]?.resumeCommand).toBe(
-      'cmd /d /s /c "cd /d ""C:/repo/app"" && set ""CODEX_HOME=C:/Users/Ada/.codex"" && codex resume ""win-session"""'
+      'cmd /d /s /c "cd /d ""C:/repo/app"" && set ""CODEX_HOME=C:/Users/Ada/AppData/Roaming/orca/codex-runtime-home/home"" && codex resume ""win-session"""'
     )
+  })
+
+  it('uses the macOS Orca runtime home for remote Codex sessions', async () => {
+    const provider = new MemoryRemoteProvider()
+    provider.addFile(
+      '/Users/ada/Library/Application Support/orca/codex-runtime-home/home/sessions/mac.jsonl',
+      jsonLines([
+        {
+          timestamp: '2026-07-04T03:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'mac-session', cwd: '/Users/ada/repo/app' }
+        },
+        {
+          timestamp: '2026-07-04T03:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'macOS remote title' }]
+          }
+        }
+      ]),
+      30
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:mac-box',
+      remoteHome: '/Users/ada',
+      hostPlatform: getRemoteHostPlatform('darwin-arm64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions[0]).toMatchObject({
+      executionHostPlatform: 'darwin',
+      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home',
+      resumeCommand:
+        "cd '/Users/ada/repo/app' && CODEX_HOME='/Users/ada/Library/Application Support/orca/codex-runtime-home/home' codex resume 'mac-session'"
+    })
   })
 
   it('continues past skipped candidates to fill the remote scan limit', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
-      '/home/ada/.codex/sessions/worker.jsonl',
+      '/home/ada/.config/orca/codex-runtime-home/home/sessions/worker.jsonl',
       codexTranscript({
         sessionId: 'worker-session',
         title: 'Internal worker',
@@ -252,7 +329,7 @@ describe('scanRemoteAiVaultSessions', () => {
       40
     )
     provider.addFile(
-      '/home/ada/.codex/sessions/user.jsonl',
+      '/home/ada/.config/orca/codex-runtime-home/home/sessions/user.jsonl',
       codexTranscript({
         sessionId: 'user-session',
         title: 'Visible user session',
@@ -277,7 +354,7 @@ describe('scanRemoteAiVaultSessions', () => {
   it('keeps scoped remote sessions even when they are older than the recency cap', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
-      '/home/ada/.codex/sessions/other.jsonl',
+      '/home/ada/.config/orca/codex-runtime-home/home/sessions/other.jsonl',
       codexTranscript({
         sessionId: 'other-session',
         title: 'Other workspace',
@@ -287,7 +364,7 @@ describe('scanRemoteAiVaultSessions', () => {
       50
     )
     provider.addFile(
-      '/home/ada/.codex/sessions/scoped.jsonl',
+      '/home/ada/.config/orca/codex-runtime-home/home/sessions/scoped.jsonl',
       codexTranscript({
         sessionId: 'scoped-session',
         title: 'Scoped workspace',
