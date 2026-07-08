@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings, SourceControlGroupOrder } from '../../../../shared/types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../../shared/source-control-group-order'
@@ -7,7 +8,6 @@ import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
 import { BranchPrefixFeedback } from './BranchPrefixFeedback'
-import { selectBranchPrefixInput } from '../../../../shared/branch-prefix'
 import { matchesSettingsSearch } from './settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
 import {
@@ -147,7 +147,22 @@ export function GitPane({
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
 
   const isBranchPrefixInputMode = settings.branchPrefix !== 'none'
-  const branchPrefixInputValue = selectBranchPrefixInput(settings, displayedGitUsername) ?? ''
+  // Local draft for the editable custom prefix: updateSettings persists through
+  // an async IPC round-trip, so a directly-controlled value would only reflect
+  // the edit a tick later and React would then re-assign it, snapping the caret
+  // to the end. The draft keeps the caret put; the ref guard adopts only genuine
+  // external changes (settings reloaded/reset), not the async echo of our own
+  // keystrokes, which would clobber fast typing on slow (SSH) round-trips.
+  const [customPrefixDraft, setCustomPrefixDraft] = useState(settings.branchPrefixCustom)
+  const lastCommittedPrefixRef = useRef(settings.branchPrefixCustom)
+  useEffect(() => {
+    if (settings.branchPrefixCustom !== lastCommittedPrefixRef.current) {
+      lastCommittedPrefixRef.current = settings.branchPrefixCustom
+      setCustomPrefixDraft(settings.branchPrefixCustom)
+    }
+  }, [settings.branchPrefixCustom])
+  const branchPrefixInputValue =
+    settings.branchPrefix === 'git-username' ? displayedGitUsername : customPrefixDraft
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
@@ -203,7 +218,12 @@ export function GitPane({
         {isBranchPrefixInputMode && (
           <Input
             value={branchPrefixInputValue}
-            onChange={(e) => updateSettings({ branchPrefixCustom: e.target.value })}
+            onChange={(e) => {
+              const next = e.target.value
+              lastCommittedPrefixRef.current = next
+              setCustomPrefixDraft(next)
+              updateSettings({ branchPrefixCustom: next })
+            }}
             placeholder={
               settings.branchPrefix === 'git-username'
                 ? translate(
