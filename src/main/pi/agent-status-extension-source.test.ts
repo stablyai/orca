@@ -6,9 +6,18 @@ import { getPiAgentStatusExtensionSource } from './agent-status-extension-source
 
 type HookHandler = (event?: unknown) => Promise<void> | void
 
+type FakeCurlChild = {
+  on: ReturnType<typeof vi.fn>
+  stdin: {
+    on: ReturnType<typeof vi.fn>
+    end: ReturnType<typeof vi.fn>
+  }
+}
+
 type Harness = {
   fetchMock: ReturnType<typeof vi.fn>
-  spawnSyncMock: ReturnType<typeof vi.fn>
+  spawnMock: ReturnType<typeof vi.fn>
+  spawnedChildren: FakeCurlChild[]
   fsMock: {
     existsSync: ReturnType<typeof vi.fn>
     readFileSync: ReturnType<typeof vi.fn>
@@ -36,14 +45,6 @@ function createHarness(args: {
   existsSync?: (path: string) => boolean
   readFileSync?: (path: string, encoding: string) => string
   fetchImpl?: (...params: Parameters<typeof fetch>) => Promise<unknown>
-  spawnSyncImpl?: (
-    command: string,
-    params: string[],
-    options: { input?: string; encoding?: string }
-  ) => {
-    status?: number | null
-    error?: Error | null
-  }
 }): Harness {
   const fetchMock = vi.fn(
     args.fetchImpl ??
@@ -52,13 +53,18 @@ function createHarness(args: {
       }))
   )
 
-  const spawnSyncMock = vi.fn(
-    args.spawnSyncImpl ??
-      (() => ({
-        status: 0,
-        error: null
-      }))
-  )
+  const spawnedChildren: FakeCurlChild[] = []
+  const spawnMock = vi.fn(() => {
+    const child: FakeCurlChild = {
+      on: vi.fn(),
+      stdin: {
+        on: vi.fn(),
+        end: vi.fn()
+      }
+    }
+    spawnedChildren.push(child)
+    return child
+  })
 
   const fsMock = {
     existsSync: vi.fn(args.existsSync ?? (() => false)),
@@ -78,7 +84,7 @@ function createHarness(args: {
       return fsMock
     }
     if (specifier === 'child_process') {
-      return { spawnSync: spawnSyncMock }
+      return { spawn: spawnMock }
     }
     throw new Error(`unexpected require(${specifier})`)
   })
@@ -134,7 +140,8 @@ function createHarness(args: {
 
   return {
     fetchMock,
-    spawnSyncMock,
+    spawnMock,
+    spawnedChildren,
     fsMock,
     handlers,
     callHook: async (name, event) => {
@@ -155,7 +162,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
     expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
-    expect(harness.spawnSyncMock).not.toHaveBeenCalled()
+    expect(harness.spawnMock).not.toHaveBeenCalled()
   })
 
   it('keeps native fetch as the only path even when the runtime looks like WSL', async () => {
@@ -168,7 +175,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_start')
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.spawnSyncMock).not.toHaveBeenCalled()
+    expect(harness.spawnMock).not.toHaveBeenCalled()
   })
 
   it('falls back to Windows curl from WSL when fetch fails', async () => {
@@ -184,9 +191,9 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_start')
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.spawnSyncMock).toHaveBeenCalledTimes(1)
+    expect(harness.spawnMock).toHaveBeenCalledTimes(1)
 
-    const [command, args, options] = harness.spawnSyncMock.mock.calls[0] ?? []
+    const [command, args, options] = harness.spawnMock.mock.calls[0] ?? []
     expect(command).toBe('/mnt/c/Windows/System32/curl.exe')
     expect(args).toEqual([
       '-sS',
@@ -194,6 +201,8 @@ describe('getPiAgentStatusExtensionSource', () => {
       '0.5',
       '--max-time',
       '1.5',
+      '--noproxy',
+      '127.0.0.1',
       '-o',
       'NUL',
       '-X',
@@ -206,9 +215,14 @@ describe('getPiAgentStatusExtensionSource', () => {
       '@-',
       'http://127.0.0.1:4321/hook/omp'
     ])
-    expect(options).toMatchObject({
-      encoding: 'utf8',
-      input: JSON.stringify({
+    // Why: delivery must be fire-and-forget off the pi event loop — no
+    // blocking wait — with the payload fed via stdin, never argv.
+    expect(options).toEqual({ stdio: ['pipe', 'ignore', 'ignore'] })
+    const child = harness.spawnedChildren[0]
+    expect(child?.on).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(child?.stdin.on).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(child?.stdin.end).toHaveBeenCalledWith(
+      JSON.stringify({
         paneKey: 'pane-1',
         launchToken: 'launch-1',
         tabId: 'tab-1',
@@ -217,7 +231,35 @@ describe('getPiAgentStatusExtensionSource', () => {
         version: '1.2.3',
         payload: { hook_event_name: 'agent_start' }
       })
+    )
+  })
+
+  it('probes WSL evidence and the curl path once per process', async () => {
+    const harness = createHarness({
+      kind: 'omp',
+      existsSync: (path) => path === '/mnt/c/Windows/System32/curl.exe',
+      readFileSync: (path) => {
+        if (path === '/proc/sys/kernel/osrelease') {
+          return 'microsoft-standard-WSL2'
+        }
+        throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
+      },
+      fetchImpl: vi.fn(async () => {
+        throw new Error('loopback unreachable')
+      })
     })
+
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end')
+
+    expect(harness.spawnMock).toHaveBeenCalledTimes(2)
+    // Why: WSL-ness and curl.exe presence are process-lifetime constants;
+    // the per-event failure path must not re-probe /proc or /mnt/c.
+    const procReads = harness.fsMock.readFileSync.mock.calls.filter(([path]) =>
+      String(path).startsWith('/proc/')
+    )
+    expect(procReads).toHaveLength(1)
+    expect(harness.fsMock.existsSync).toHaveBeenCalledTimes(1)
   })
 
   it('stays fail-open on ordinary Linux', async () => {
@@ -232,7 +274,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_start')
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.spawnSyncMock).not.toHaveBeenCalled()
+    expect(harness.spawnMock).not.toHaveBeenCalled()
   })
 
   it('does not treat WSLENV alone as WSL evidence', async () => {
@@ -254,7 +296,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_start')
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.spawnSyncMock).not.toHaveBeenCalled()
+    expect(harness.spawnMock).not.toHaveBeenCalled()
   })
 
   it('remains fail-open when the Windows curl bridge is missing', async () => {
@@ -269,6 +311,6 @@ describe('getPiAgentStatusExtensionSource', () => {
 
     await expect(harness.callHook('agent_start')).resolves.toBeUndefined()
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.spawnSyncMock).not.toHaveBeenCalled()
+    expect(harness.spawnMock).not.toHaveBeenCalled()
   })
 })
