@@ -290,8 +290,9 @@ export class PtyHandler {
     // (Grok, Claude, Codex) feature-gate correctly. SSH/relay spawns previously
     // inherited a bare remote env — Grok then falls back to XTVERSION probing
     // and can paint `xterm.js(...)` into the prompt on slow remote paths (#7839).
-    // Match local-pty-provider / daemon pty-subprocess identity.
-    baseEnv.TERM = baseEnv.TERM || 'xterm-256color'
+    // Match daemon pty-subprocess: set TERM unconditionally so ambient
+    // TERM=dumb on a headless relay host cannot poison the shell.
+    baseEnv.TERM = 'xterm-256color'
     baseEnv.COLORTERM = 'truecolor'
     baseEnv.TERM_PROGRAM = 'Orca'
     baseEnv.TERM_PROGRAM_VERSION =

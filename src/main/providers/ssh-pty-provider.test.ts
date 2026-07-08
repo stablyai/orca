@@ -20,10 +20,13 @@ function createMockMux(): MockMultiplexer {
   }
 }
 
-/** Identity env #7839 always injects for remote PTY parity with local. */
+/** Identity env #7839 always injects for remote PTY parity with local/daemon. */
 const ORCA_TERMINAL_IDENTITY_ENV = {
+  TERM: 'xterm-256color',
   TERM_PROGRAM: 'Orca',
   COLORTERM: 'truecolor',
+  // Match production: ORCA_APP_VERSION when set, else dev fallback.
+  TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION || '0.0.0-dev',
   FORCE_HYPERLINK: '1'
 } as const
 

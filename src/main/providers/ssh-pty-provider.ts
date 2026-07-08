@@ -183,10 +183,11 @@ export class SshPtyProvider implements IPtyProvider {
       delete merged[key]
     }
     seedPowerlevel10kWizardEnv(merged, { envToDelete })
-    // Why: parity with local-pty-provider / daemon. Without TERM_PROGRAM=Orca,
-    // remote Grok probes XTVERSION and can show `xterm.js(...)` as the prompt
-    // when the reply is late or partially echoed (#7839).
-    merged.TERM = merged.TERM || 'xterm-256color'
+    // Why: parity with local-pty-provider / daemon (unconditional TERM). Without
+    // TERM_PROGRAM=Orca, remote Grok probes XTVERSION and can show `xterm.js(...)`
+    // as the prompt when the reply is late or partially echoed (#7839). Do not
+    // preserve ambient TERM=dumb from service hosts.
+    merged.TERM = 'xterm-256color'
     merged.COLORTERM = 'truecolor'
     merged.TERM_PROGRAM = 'Orca'
     merged.TERM_PROGRAM_VERSION =
