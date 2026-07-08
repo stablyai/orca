@@ -63,24 +63,32 @@ function getPushFailureNormalizedLines(normalized: string): string[] {
 }
 
 export function isPushHookFailure(raw: string): boolean {
-  const normalized = normalizePushFailure(raw)
-  if (!normalized) {
+  const lines = getMeaningfulLines(raw)
+  if (lines.length === 0) {
     return false
   }
+
+  const normalized = lines.join('\n')
 
   if (/hook declined to push/i.test(normalized)) {
     return true
   }
 
-  if (PUSH_HOOK_PATTERN.test(normalized)) {
+  if (lines.some((line) => PUSH_HOOK_PATTERN.test(line))) {
     return true
   }
 
-  if (PUSH_HOOK_RUNNER_PATTERN.test(normalized) && PUSH_CONTEXT_PATTERN.test(normalized)) {
+  if (
+    lines.some((line) => PUSH_HOOK_RUNNER_PATTERN.test(line)) &&
+    lines.some((line) => PUSH_CONTEXT_PATTERN.test(line))
+  ) {
     return true
   }
 
-  if (LINT_PATTERN.test(normalized) && PUSH_CONTEXT_PATTERN.test(normalized)) {
+  if (
+    lines.some((line) => LINT_PATTERN.test(line)) &&
+    lines.some((line) => PUSH_CONTEXT_PATTERN.test(line))
+  ) {
     return true
   }
 

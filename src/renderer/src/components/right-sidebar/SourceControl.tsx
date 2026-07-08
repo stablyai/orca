@@ -226,11 +226,8 @@ import {
   type CommitFailureDialogState
 } from './commit-failure-dialog-state'
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
-import {
-  hasExpandedPushFailureDetails,
-  isPushHookFailure,
-  summarizePushFailure
-} from './push-failure-summary'
+import { hasExpandedPushFailureDetails, summarizePushFailure } from './push-failure-summary'
+import { resolvePushFailureRawError } from './source-control-push-failure-context'
 import {
   isSourceControlSplitOpenModifier,
   shouldOpenSourceControlRowAsPreview,
@@ -1896,6 +1893,14 @@ function SourceControlInner(): React.JSX.Element {
       })),
     [unresolvedConflicts]
   )
+  const pushFailureEntries = useMemo(
+    () => [...grouped.staged, ...grouped.unstaged, ...grouped.untracked],
+    [grouped.staged, grouped.unstaged, grouped.untracked]
+  )
+  const pushFailureRawError = useMemo(
+    () => resolvePushFailureRawError(remoteActionError),
+    [remoteActionError]
+  )
   const {
     sourceControlAiDiscoveryHostKey,
     sourceControlAiActionsVisible,
@@ -1935,16 +1940,8 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath,
     commitMessage,
     commitError,
-    pushFailureRawError:
-      remoteActionError &&
-      isPushHookFailure(remoteActionError.rawError ?? remoteActionError.message) &&
-      (remoteActionError.kind === 'push' ||
-        remoteActionError.kind === 'publish' ||
-        remoteActionError.kind === 'force_push' ||
-        remoteActionError.kind === 'sync')
-        ? (remoteActionError.rawError ?? remoteActionError.message)
-        : null,
-    pushFailureEntries: [...grouped.staged, ...grouped.unstaged, ...grouped.untracked],
+    pushFailureRawError,
+    pushFailureEntries,
     branchName: branchName || null,
     updateSettings,
     updateRepo,
@@ -5796,26 +5793,10 @@ function SourceControlInner(): React.JSX.Element {
                 commitMessage={commitMessage}
                 commitError={commitError}
                 commitFailureRecoveryPrompt={commitFailureRecoveryPrompt}
-                pushFailureRawError={
-                  remoteActionError &&
-                  isPushHookFailure(remoteActionError.rawError ?? remoteActionError.message) &&
-                  (remoteActionError.kind === 'push' ||
-                    remoteActionError.kind === 'publish' ||
-                    remoteActionError.kind === 'force_push' ||
-                    remoteActionError.kind === 'sync')
-                    ? (remoteActionError.rawError ?? remoteActionError.message)
-                    : null
-                }
+                pushFailureRawError={pushFailureRawError}
                 pushFailureRecoveryPrompt={pushFailureRecoveryPrompt}
                 remoteActionError={
-                  remoteActionError &&
-                  isPushHookFailure(remoteActionError.rawError ?? remoteActionError.message) &&
-                  (remoteActionError.kind === 'push' ||
-                    remoteActionError.kind === 'publish' ||
-                    remoteActionError.kind === 'force_push' ||
-                    remoteActionError.kind === 'sync')
-                    ? null
-                    : (remoteActionError?.message ?? null)
+                  pushFailureRawError ? null : (remoteActionError?.message ?? null)
                 }
                 createPrIntentNotice={createPrIntentNotice}
                 isCommitting={isCommitting}

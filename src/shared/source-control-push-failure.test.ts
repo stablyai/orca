@@ -38,6 +38,13 @@ describe('push failure detection and summary', () => {
     expect(isPushHookFailure(raw)).toBe(false)
   })
 
+  it('ignores low-signal husky notices without hook failure output', () => {
+    const raw =
+      "remote: error: failed to push some refs to 'origin'\ngit push\nhusky - deprecated husky@4"
+
+    expect(isPushHookFailure(raw)).toBe(false)
+  })
+
   it('reports whether expanded details add information beyond the summary', () => {
     expect(
       hasExpandedPushFailureDetails(
