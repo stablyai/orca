@@ -5407,6 +5407,48 @@ describe('OrcaRuntimeService', () => {
     expect(repos[0]).not.toHaveProperty('executionHostId')
   })
 
+  it('only a runtime host adopts an unstamped repo; local/ssh imports never stamp it', async () => {
+    // A genuine local repo is indistinguishable from a legacy runtime repo (both have null
+    // executionHostId and connectionId). Only a runtime host may backfill it — a local or ssh
+    // import at the same path must leave it untouched rather than re-attribute it to that host.
+    for (const importHostId of ['local', 'ssh:ssh-target-9'] as const) {
+      const repos: Record<string, unknown>[] = [
+        {
+          id: 'repo-local-1',
+          path: '/workspace',
+          displayName: 'workspace',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'folder'
+        }
+      ]
+      const runtimeStore = {
+        ...store,
+        getRepos: () => [...repos] as never,
+        addRepo: (repo: Record<string, unknown>) => {
+          repos.push(repo)
+        },
+        getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+        updateRepo: (id: string, updates: Record<string, unknown>) => {
+          const index = repos.findIndex((repo) => repo.id === id)
+          if (index === -1) {
+            return null
+          }
+          repos[index] = { ...repos[index], ...updates }
+          return repos[index] as never
+        }
+      }
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+      const repo = await runtime.addRepo('/workspace', 'folder', importHostId)
+
+      // The matched repo is returned unchanged — no new repo, no executionHostId stamped.
+      expect(repos).toHaveLength(1)
+      expect(repo.id).toBe('repo-local-1')
+      expect(repos[0]).not.toHaveProperty('executionHostId')
+    }
+  })
+
   it('keeps project clone setup on the cloned host-qualified repo', async () => {
     const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')

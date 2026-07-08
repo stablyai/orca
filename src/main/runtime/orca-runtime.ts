@@ -126,7 +126,7 @@ import type {
   WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
@@ -10354,7 +10354,15 @@ export class OrcaRuntimeService {
       return runtimeRepoMatchesExecutionHost(repo, executionHostId)
     })
     if (existing) {
-      if (executionHostId != null && existing.executionHostId == null) {
+      // Only a runtime host backfills a legacy unstamped repo. An unstamped repo is
+      // indistinguishable from a genuine local repo (both have null executionHostId and
+      // connectionId), so we never stamp local/ssh onto it — that would re-attribute a
+      // real local project to the wrong host. Runtime is the only host that lost its
+      // identity to the pre-#7018 path-only import and needs the backfill.
+      if (
+        existing.executionHostId == null &&
+        parseExecutionHostId(executionHostId)?.kind === 'runtime'
+      ) {
         const adopted =
           this.store.updateRepo(existing.id, { executionHostId }) ??
           ({ ...existing, executionHostId } as Repo)
