@@ -32,6 +32,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
+import { ProjectScopedTodoSchema } from '../runtime/rpc/methods/worktree-schemas'
 import { normalizeRepoSourceControlAiOverrides } from '../../shared/source-control-ai'
 import {
   isRuntimePathAbsolute,
@@ -1969,6 +1970,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'importedExternalWorktreePaths'
             | 'projectGroupId'
             | 'projectGroupOrder'
+            | 'todos'
           >
         > & {
           sourceControlAi?: Repo['sourceControlAi'] | null
@@ -2099,6 +2101,20 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           delete updates.sourceControlAi
         } else {
           updates.sourceControlAi = normalizedSourceControlAi
+        }
+      }
+      // Why: validate each todo item at the IPC boundary so a skewed renderer or
+      // other caller cannot persist malformed todos. Filter invalid items rather
+      // than rejecting the whole batch; drop a non-array shape so existing todos
+      // survive, mirroring how `symlinkPaths` strips invalid shapes above.
+      if ('todos' in updates && updates.todos !== undefined) {
+        const v = updates.todos as unknown
+        if (Array.isArray(v)) {
+          updates.todos = (v as unknown[]).filter(
+            (item) => ProjectScopedTodoSchema.safeParse(item).success
+          ) as Repo['todos']
+        } else {
+          delete updates.todos
         }
       }
       const updated = store.updateRepo(args.repoId, updates)

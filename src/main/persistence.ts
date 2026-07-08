@@ -814,7 +814,8 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     tab === 'workspaces' ||
     tab === 'source-control' ||
     tab === 'checks' ||
-    tab === 'ports'
+    tab === 'ports' ||
+    tab === 'todos'
   ) {
     return tab
   }
@@ -4287,6 +4288,7 @@ export class Store {
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
+        | 'todos'
       >
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null

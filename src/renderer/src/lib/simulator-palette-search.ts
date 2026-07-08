@@ -1,4 +1,4 @@
-import type { Tab, TabGroup, Worktree } from '../../../shared/types'
+import type { Tab, TabGroup, WorkspaceVisibleTabType, Worktree } from '../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import type { MatchRange } from './worktree-palette-search'
 
@@ -28,7 +28,9 @@ export type SimulatorPaletteSearchResult = {
   score: number
 }
 
-type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+// Why: equality-compared only; accept the full union so a 'todo' active type
+// (full-page todo view) flows through harmlessly.
+type SimulatorPaletteActiveTabType = WorkspaceVisibleTabType
 
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 

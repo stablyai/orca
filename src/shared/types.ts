@@ -285,6 +285,8 @@ export type Repo = {
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
+  /** Native per-project (repo-level) todo list. See {@link WorktreeTodo}. */
+  todos?: WorktreeTodo[]
 }
 
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
@@ -508,6 +510,7 @@ export type Worktree = {
   priorWorktreeIds?: string[]
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
+  todos?: WorktreeTodo[]
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
 } & GitWorktreeInfo
@@ -613,6 +616,8 @@ export type WorktreeMeta = {
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
+  /** Native per-worktree todo list. See {@link WorktreeTodo}. */
+  todos?: WorktreeTodo[]
   /** Path-derived worktree ids this worktree had before its folder was renamed
    *  on disk (the id embeds the path). Lets the daemon's session GC and registry
    *  hydration recognize sessions minted under an old id instead of reaping
@@ -744,6 +749,59 @@ export type DiffComment = {
   side: 'modified'
 }
 
+// ─── Native todo lists ───────────────────────────────────────────────
+// Why: lightweight per-workspace and per-project checklists. Stored on
+// WorktreeMeta (worktree scope) and Repo (project scope) so the existing
+// persistence layer writes them to orca-data.json automatically, exactly like
+// DiffComment. `authorRole` distinguishes user-authored items from items an
+// agent will later be able to add (no agent wiring yet — the field reserves it).
+export type WorktreeTodoScope = 'worktree' | 'project'
+export type WorktreeTodoAuthorRole = 'user' | 'agent'
+
+// Why: one entry in a todo's notes timeline. `authorRole` mirrors the todo's
+// own role field and distinguishes user-written context from notes an agent
+// will later be able to append (no agent wiring yet — the field reserves it).
+export type TodoNote = {
+  id: string
+  body: string
+  authorRole: WorktreeTodoAuthorRole
+  createdAt: number
+  updatedAt?: number
+}
+
+export type WorktreeTodo = {
+  id: string
+  scope: WorktreeTodoScope
+  /** Set when scope is 'worktree'. Owning worktree id. */
+  worktreeId?: string
+  /** Set when scope is 'project'. Owning repo id. */
+  repoId?: string
+  body: string
+  /** Internal notes timeline for this item — a chronological list of "what this
+   *  means" / progress entries. Local and persisted inside the todos array (no
+   *  separate IPC). Empty/all-malformed lists normalize to undefined so the row
+   *  shows the add-note affordance instead of the has-notes icon. */
+  notes?: TodoNote[]
+  /** Freeform markdown "page" body for this item — the durable context document
+   *  (headings, nested lists, links, bold/italic) shown above the updates
+   *  timeline. Optional; empty/whitespace normalizes to undefined. Persisted in
+   *  the todos array like the rest (no separate IPC). */
+  notesDoc?: string
+  /** Who last edited {@link notesDoc}. Reserves the agent case (no agent wiring
+   *  yet). Only meaningful when notesDoc is set. */
+  notesDocAuthorRole?: WorktreeTodoAuthorRole
+  /** When {@link notesDoc} was last edited, for the quiet "last edited by X ·
+   *  <time>" meta. Only meaningful when notesDoc is set. */
+  notesDocUpdatedAt?: number
+  /** Set when the item is checked off; cleared when re-opened. */
+  completedAt?: number
+  /** Manual ordering key; lower renders first. */
+  order: number
+  authorRole: WorktreeTodoAuthorRole
+  createdAt: number
+  updatedAt?: number
+}
+
 // ─── Tab Group Layout ───────────────────────────────────────────────
 export type TabGroupSplitDirection = 'horizontal' | 'vertical'
 
@@ -768,7 +826,7 @@ export type TabContentType =
   | 'browser'
   | 'simulator'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator' | 'todo'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 export type Tab = {
@@ -3171,6 +3229,7 @@ export type RightSidebarTab =
   | 'source-control'
   | 'checks'
   | 'ports'
+  | 'todos'
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 

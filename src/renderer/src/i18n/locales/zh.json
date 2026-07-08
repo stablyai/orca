@@ -9467,7 +9467,8 @@
             "fc3095d2ed": "资源管理器",
             "aiVaultSessionHistory": "智能体",
             "folderWorkspaces": "已附加的工作树",
-            "parentPrChecks": "PR 检查"
+            "parentPrChecks": "PR 检查",
+            "todosTab": "Todos"
           },
           "right": {
             "panel": {
@@ -9816,6 +9817,46 @@
             "archivedJumpUnavailable": "此会话位于已归档的工作树中。",
             "noActiveWorktreeMatch": "没有与此会话匹配的活动工作树。",
             "noActiveWorktreeTarget": "没有可用的活动工作树。"
+          },
+          "TodosPanel": {
+            "worktreeSection": "This worktree",
+            "worktreeEmpty": "No todos for this worktree yet.",
+            "addPlaceholder": "Add a todo…",
+            "noWorktree": "Open a worktree to track todos.",
+            "projectSection": "Project",
+            "projectEmpty": "No project todos yet."
+          },
+          "todos": {
+            "TodoRow": {
+              "toggle": "Toggle todo",
+              "delete": "Delete todo",
+              "notesToggle": "Toggle notes",
+              "addNote": "Add note",
+              "openPage": "Open full page"
+            },
+            "TodoNoteItem": {
+              "authorAgent": "agent",
+              "authorUser": "user",
+              "edited": "edited",
+              "delete": "Delete note"
+            },
+            "TodoNotesSection": {
+              "addPlaceholder": "Add a note…",
+              "send": "Add note"
+            },
+            "TodoNotesDoc": {
+              "placeholder": "Add details — markdown supported (headings, lists, links)…",
+              "addPage": "Add details…",
+              "authorAgent": "agent",
+              "authorUser": "user",
+              "lastEdited": "edited by {{author}} · {{time}}"
+            },
+            "TodoNotesPanel": {
+              "updates": "Updates"
+            },
+            "TodoNotesDocEditor": {
+              "link": "Insert link"
+            }
           }
         }
       },
@@ -12385,6 +12426,10 @@
             "later": "稍后"
           }
         }
+      },
+      "TodoPage": {
+        "back": "Back to workspace",
+        "heading": "Todo"
       },
       "nativeChat": {
         "contextMenu": {

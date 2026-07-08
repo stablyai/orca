@@ -291,6 +291,7 @@ const WorktreeCreationPanel = lazy(
   () => import('./components/worktree-creation/WorktreeCreationPanel')
 )
 const TaskPage = lazy(() => import('./components/TaskPage'))
+const TodoPage = lazy(() => import('./components/TodoPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
@@ -453,6 +454,7 @@ function App(): React.JSX.Element {
   )
 
   const activeView = useAppStore((s) => s.activeView)
+  const activeTabType = useAppStore((s) => s.activeTabType)
   const activeModal = useAppStore((s) => s.activeModal)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
@@ -513,8 +515,15 @@ function App(): React.JSX.Element {
   })
   const workspaceChromeActive =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+  // Why: the full-page todo view replaces the workbench in the main pane (a
+  // sibling overlay), so hide the workbench while it's up — like switching to
+  // the editor/browser surface, but at the page level.
+  const todoPageActive = workspaceChromeActive && activeTabType === 'todo'
   const terminalWorkbenchVisible =
-    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+    activeView === 'terminal' &&
+    activeWorktreeId !== null &&
+    !creationLayoutActive &&
+    !todoPageActive
   // Why: a closed empty floating workspace is not startup-critical. Once it owns
   // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
   // retain their local state.
@@ -2382,6 +2391,7 @@ function App(): React.JSX.Element {
                               !creationLayoutActive ? (
                                 <Landing />
                               ) : null}
+                              {todoPageActive ? <TodoPage /> : null}
                             </RecoverableRenderErrorBoundary>
                           </Suspense>
                         </div>

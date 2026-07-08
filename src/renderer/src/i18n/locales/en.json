@@ -9467,7 +9467,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "todosTab": "Todos"
           },
           "right": {
             "panel": {
@@ -9816,6 +9817,46 @@
             "archivedJumpUnavailable": "This session is in an archived worktree.",
             "noActiveWorktreeMatch": "No active worktree matches this session.",
             "noActiveWorktreeTarget": "No active worktree is available."
+          },
+          "TodosPanel": {
+            "worktreeSection": "This worktree",
+            "worktreeEmpty": "No todos for this worktree yet.",
+            "addPlaceholder": "Add a todo…",
+            "noWorktree": "Open a worktree to track todos.",
+            "projectSection": "Project",
+            "projectEmpty": "No project todos yet."
+          },
+          "todos": {
+            "TodoRow": {
+              "toggle": "Toggle todo",
+              "delete": "Delete todo",
+              "notesToggle": "Toggle notes",
+              "addNote": "Add note",
+              "openPage": "Open full page"
+            },
+            "TodoNoteItem": {
+              "authorAgent": "agent",
+              "authorUser": "user",
+              "edited": "edited",
+              "delete": "Delete note"
+            },
+            "TodoNotesSection": {
+              "addPlaceholder": "Add a note…",
+              "send": "Add note"
+            },
+            "TodoNotesDoc": {
+              "placeholder": "Add details — markdown supported (headings, lists, links)…",
+              "addPage": "Add details…",
+              "authorAgent": "agent",
+              "authorUser": "user",
+              "lastEdited": "edited by {{author}} · {{time}}"
+            },
+            "TodoNotesPanel": {
+              "updates": "Updates"
+            },
+            "TodoNotesDocEditor": {
+              "link": "Insert link"
+            }
           }
         }
       },
@@ -12385,6 +12426,10 @@
             "later": "Later"
           }
         }
+      },
+      "TodoPage": {
+        "back": "Back to workspace",
+        "heading": "Todo"
       },
       "nativeChat": {
         "contextMenu": {

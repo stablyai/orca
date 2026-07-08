@@ -4,7 +4,14 @@ import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
-import type { Tab, TabContentType, TabGroup, TerminalTab, Worktree } from '../../../shared/types'
+import type {
+  Tab,
+  TabContentType,
+  TabGroup,
+  TerminalTab,
+  WorkspaceVisibleTabType,
+  Worktree
+} from '../../../shared/types'
 import {
   collectAgentMetadataForTerminal,
   type AgentMetadata,
@@ -38,7 +45,10 @@ export type SearchableWorkspaceTab = {
   isCurrentWorktree: boolean
 }
 
-type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+// Why: accepts the full union ('todo' included) since callers pass the live
+// activeTabType; it's only equality-compared against real tab types, so a 'todo'
+// value simply matches nothing.
+type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType
 
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]

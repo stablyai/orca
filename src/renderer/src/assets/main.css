@@ -1565,6 +1565,15 @@
   }
 }
 
+/* Why: respect reduced-motion — open/close instantly instead of animating
+   height. Radix still mounts/unmounts the content, so behavior is unchanged. */
+@media (prefers-reduced-motion: reduce) {
+  .collapsible-height-content[data-state='open'],
+  .collapsible-height-content[data-state='closed'] {
+    animation: none;
+  }
+}
+
 .sidebar.collapsed {
   width: 0;
   border-right: none;

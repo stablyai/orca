@@ -1,3 +1,5 @@
+import type { WorkspaceVisibleTabType } from '../../../../shared/types'
+
 export type TabCycleType = 'terminal' | 'editor' | 'browser' | 'simulator'
 
 export type TypeCyclableTab = {
@@ -6,9 +8,12 @@ export type TypeCyclableTab = {
   tabId?: string
 }
 
+// Why: the active type can be 'todo' (the full-page todo view), which is not a
+// cyclable tab. Accept the full union here — it simply matches no tab, so the
+// cycle helpers no-op, while TypeCyclableTab.type stays the real-tab subset.
 type GetNextTabWithinActiveTypeParams = {
   tabs: TypeCyclableTab[]
-  activeTabType: TabCycleType
+  activeTabType: WorkspaceVisibleTabType
   activeTabId: string | null
   activeFileId: string | null
   activeBrowserTabId: string | null
@@ -17,7 +22,7 @@ type GetNextTabWithinActiveTypeParams = {
 }
 
 export function getActiveEntityIdForTabType(
-  activeTabType: TabCycleType,
+  activeTabType: WorkspaceVisibleTabType,
   activeTabId: string | null,
   activeFileId: string | null,
   activeBrowserTabId: string | null
@@ -36,7 +41,7 @@ export function getActiveEntityIdForTabType(
 
 type GetNextTabAcrossAllTypesParams = {
   tabs: TypeCyclableTab[]
-  activeTabType: TabCycleType
+  activeTabType: WorkspaceVisibleTabType
   activeTabId: string | null
   activeFileId: string | null
   activeBrowserTabId: string | null

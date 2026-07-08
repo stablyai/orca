@@ -1,3 +1,5 @@
+import type { WorkspaceVisibleTabType } from '../../../shared/types'
+
 /**
  * Determine which zoom domain (terminal, editor, simulator, or UI) should be adjusted
  * based on current view, tab type, and focused element.
@@ -12,7 +14,9 @@ export function resolveZoomTarget(args: {
     | 'space'
     | 'skills'
     | 'mobile'
-  activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator'
+  // Why: 'todo' (full-page todo view) is accepted but falls through to the UI
+  // zoom target since it's neither a terminal, editor, nor simulator surface.
+  activeTabType: WorkspaceVisibleTabType
   activeElement: unknown
 }): 'terminal' | 'editor' | 'simulator' | 'ui' {
   const { activeView, activeTabType, activeElement } = args
