@@ -1,5 +1,6 @@
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
+import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
 import {
   getTerminalWebglAutoDecision,
   resetTerminalWebglAutoDecision
@@ -126,9 +127,16 @@ export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
     // context-loss event. Clearing the atlas preserves GPU rendering and forces
     // a fresh paint when the pane becomes visible/focused again.
     pane.webglAddon?.clearTextureAtlas()
-    // Why: refresh even without a WebGL addon so recovery never silently
-    // no-ops — a DOM-rendered pane can hold stale pixels after reveal too.
-    pane.terminal.refresh(0, pane.terminal.rows - 1)
+    // Why: on reveal xterm's IntersectionObserver can still report the pane as
+    // not intersecting, so a plain refresh() is swallowed by RenderService's
+    // paused-render gate and the cleared model never repaints (stale bottom rows
+    // until a drag-select forces a redraw). Force the paused render through
+    // first; only fall back to refresh() when the terminal was not gated.
+    if (!forceRepaintThroughRenderPause(pane.terminal)) {
+      // Why: refresh even without a WebGL addon so recovery never silently
+      // no-ops — a DOM-rendered pane can hold stale pixels after reveal too.
+      pane.terminal.refresh(0, pane.terminal.rows - 1)
+    }
   } catch {
     /* ignore — pane may have been disposed in the meantime */
   }

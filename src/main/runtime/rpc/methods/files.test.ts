@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: file RPC routing coverage stays together so
-the dispatcher contract for read, write, mutation, and watch methods is easy to audit. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'

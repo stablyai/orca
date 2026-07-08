@@ -6,11 +6,16 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 
 type TerminalSshReconnectOverlayProps = {
   targetId: string
   targetLabel: string
   status: SshConnectionStatus
+  // The SSH target was removed entirely — reconnect is impossible, so offer to
+  // remove the workspace instead of a Connect button that can only fail.
+  targetRemoved?: boolean
+  worktreeId?: string
 }
 
 // Why: relay deployment/reconnect are host-driven transient states; the
@@ -63,13 +68,16 @@ function messageForStatus(status: SshConnectionStatus, targetLabel: string): str
 export function TerminalSshReconnectOverlay({
   targetId,
   targetLabel,
-  status
+  status,
+  targetRemoved = false,
+  worktreeId
 }: TerminalSshReconnectOverlayProps): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
   const mountedRef = useMountedRef()
   const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
   const isConnecting = connecting || isConnectingStatus(status)
-  const showConnect = canConnectStatus(status)
+  // Why: a removed target can never reconnect, so never offer Connect for it.
+  const showConnect = !targetRemoved && canConnectStatus(status)
 
   const handleConnect = useCallback(async () => {
     if (isConnecting) {
@@ -115,13 +123,23 @@ export function TerminalSshReconnectOverlay({
           </div>
           <div className="min-w-0 space-y-1">
             <div className="text-sm font-semibold">
-              {translate(
-                'auto.components.terminal.pane.TerminalSshReconnectOverlay.title',
-                'SSH connection required'
-              )}
+              {targetRemoved
+                ? translate(
+                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedTitle',
+                    'SSH host removed'
+                  )
+                : translate(
+                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.title',
+                    'SSH connection required'
+                  )}
             </div>
             <div className="text-xs leading-5 text-muted-foreground">
-              {messageForStatus(status, targetLabel)}
+              {targetRemoved
+                ? translate(
+                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedBody',
+                    'The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.'
+                  )
+                : messageForStatus(status, targetLabel)}
             </div>
           </div>
         </div>
@@ -130,26 +148,40 @@ export function TerminalSshReconnectOverlay({
             <Server className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate text-xs font-medium">{targetLabel}</span>
           </div>
-          <Button
-            size="sm"
-            onClick={showConnect ? () => void handleConnect() : undefined}
-            disabled={!showConnect || isConnecting}
-          >
-            {!showConnect || isConnecting ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" />
-                {translate(
-                  'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectingButton',
-                  'Connecting...'
-                )}
-              </>
-            ) : (
-              translate(
-                'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectButton',
-                'Connect'
-              )
-            )}
-          </Button>
+          {targetRemoved ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={worktreeId ? () => runWorktreeDelete(worktreeId) : undefined}
+              disabled={!worktreeId}
+            >
+              {translate(
+                'auto.components.terminal.pane.TerminalSshReconnectOverlay.removeWorkspaceButton',
+                'Remove workspace'
+              )}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={showConnect ? () => void handleConnect() : undefined}
+              disabled={!showConnect || isConnecting}
+            >
+              {!showConnect || isConnecting ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {translate(
+                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectingButton',
+                    'Connecting...'
+                  )}
+                </>
+              ) : (
+                translate(
+                  'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectButton',
+                  'Connect'
+                )
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>

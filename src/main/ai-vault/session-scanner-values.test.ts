@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   extractPreviewContentText,
+  normalizeAgentSessionsDir,
   normalizePreviewText,
   normalizeTitleText
 } from './session-scanner-values'
@@ -50,5 +51,21 @@ describe('AI Vault session scanner text values', () => {
     const result = normalizePreviewText(`${'a'.repeat(216)}😀tail`)
 
     expect(result).toBe(`${'a'.repeat(216)}...`)
+  })
+
+  it('expands Pi and OMP agent homes to their session directories', () => {
+    expect(normalizeAgentSessionsDir('/agents/.pi', '.pi')).toBe('/agents/.pi/agent/sessions')
+    expect(normalizeAgentSessionsDir('/agents/.pi/agent', '.pi')).toBe('/agents/.pi/agent/sessions')
+    expect(normalizeAgentSessionsDir('/agents/.pi/agent/sessions', '.pi')).toBe(
+      '/agents/.pi/agent/sessions'
+    )
+
+    expect(normalizeAgentSessionsDir('/agents/.omp', '.omp')).toBe('/agents/.omp/agent/sessions')
+    expect(normalizeAgentSessionsDir('/agents/.omp/agent', '.omp')).toBe(
+      '/agents/.omp/agent/sessions'
+    )
+    expect(normalizeAgentSessionsDir('/agents/.omp/agent/sessions', '.omp')).toBe(
+      '/agents/.omp/agent/sessions'
+    )
   })
 })

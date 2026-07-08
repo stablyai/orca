@@ -51,6 +51,7 @@ let currentRuntime: OrcaRuntimeService | undefined
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
+  'ssh:listRemovedTargetLabels',
   'ssh:addTarget',
   'ssh:updateTarget',
   'ssh:removeTarget',
@@ -695,12 +696,35 @@ export function registerSshHandlers(
 
   // ── Target CRUD ────────────────────────────────────────────────────
 
+  // Why: SSH target add/import can re-adopt workspaces orphaned on a removed
+  // target id (see ssh-target-readoption). When that re-points repos, the
+  // renderer must refresh its repo list to surface the reattached workspaces.
+  function notifyReposChangedIfReadopted(): void {
+    if (!sshStore || sshStore.lastReadoptedRepoCount <= 0) {
+      return
+    }
+    sshStore.lastReadoptedRepoCount = 0
+    const win = getCurrentMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('repos:changed')
+    }
+  }
+
   ipcMain.handle('ssh:listTargets', () => {
     return sshStore!.listTargets()
   })
 
+  ipcMain.handle('ssh:listRemovedTargetLabels', () => {
+    return sshStore!.listRemovedTargetLabels()
+  })
+
   ipcMain.handle('ssh:addTarget', (_event, args: { target: Omit<SshTarget, 'id'> }) => {
-    return sshStore!.addTarget(args.target)
+    const target = sshStore!.addTarget(args.target)
+    // Why: re-adding a removed host can re-adopt orphaned workspaces (re-point
+    // repos/worktrees off the dead id). Refresh the renderer's repo list so the
+    // reattached workspaces move from grey ghosts back onto the live host.
+    notifyReposChangedIfReadopted()
+    return target
   })
 
   ipcMain.handle(
@@ -714,8 +738,10 @@ export function registerSshHandlers(
     await removeRegisteredSshTarget(args.id)
   })
 
-  ipcMain.handle('ssh:importConfig', () => {
-    return sshStore!.importFromSshConfig()
+  ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
+    const result = sshStore!.importFromSshConfig(args)
+    notifyReposChangedIfReadopted()
+    return result
   })
 
   // ── Connection lifecycle ───────────────────────────────────────────

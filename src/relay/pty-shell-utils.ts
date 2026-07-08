@@ -147,6 +147,19 @@ export async function processHasChildren(pid: number): Promise<boolean> {
   }
 }
 
+// Why: signal 0 probes existence without delivering a signal. Only ESRCH ("no
+// such process") proves the pid is gone; EPERM means it exists but is
+// unsignalable, so treat every non-ESRCH outcome as alive. Kept conservative so
+// a liveness check can only ever declare a *provably* dead process dead.
+export function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== 'ESRCH'
+  }
+}
+
 function collectDescendants(
   rows: ProcessTableRow[],
   rootPid: number

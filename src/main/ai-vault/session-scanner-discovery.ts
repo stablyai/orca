@@ -25,7 +25,8 @@ export async function discoverFiles(args: {
       files.push({
         path,
         mtimeMs: fileStat.mtimeMs,
-        modifiedAt: fileStat.mtime.toISOString()
+        modifiedAt: fileStat.mtime.toISOString(),
+        sizeBytes: fileStat.size
       })
     } catch (err) {
       args.issues.push({ agent: args.agent, path, message: errorMessage(err) })

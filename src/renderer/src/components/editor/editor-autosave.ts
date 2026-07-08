@@ -77,6 +77,16 @@ export function canAutoSaveOpenFile(file: OpenFile): boolean {
   return file.mode === 'edit' || (file.mode === 'diff' && file.diffSource === 'unstaged')
 }
 
+// Why: autosave must not resolve a changed-on-disk conflict by overwriting
+// the newer external content, nor write over a restored tab whose disk
+// baseline is still unverified (the conflict may simply not be marked YET).
+// One predicate so the save-queue gate and the timer scheduler cannot drift.
+export function isAutosaveSuspendedForFile(
+  file: Pick<OpenFile, 'externalMutation' | 'pendingDiskBaselineVerification'>
+): boolean {
+  return file.externalMutation === 'changed' || file.pendingDiskBaselineVerification === true
+}
+
 export function normalizeAutoSaveDelayMs(value: unknown): number {
   // Why: settings are persisted locally and can be missing or hand-edited.
   // Clamp the delay at the write site so autosave never degenerates into an
@@ -176,6 +186,9 @@ export function requestEditorFileClose(fileId: string): void {
   )
 }
 
+// CONTRACT: this event fires even when some tabs of the path are dirty —
+// every consumer MUST skip dirty files per-file. Reloading a dirty tab's
+// content destroys its unsaved draft (the data-loss half of issue #7265).
 export function notifyEditorExternalFileChange(target: EditorPathMutationTarget): void {
   window.dispatchEvent(
     new CustomEvent<EditorPathMutationTarget>(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {

@@ -1026,6 +1026,51 @@ describe('createIpcPtyTransport', () => {
     })
   })
 
+  it('threads the daemon pendingEscapeTailAnsi through the reattach connect result (#7329)', async () => {
+    // Why: the local daemon ships the mid-escape tail on the spawn/reattach
+    // result; dropping it here silently regressed the local half of #7329
+    // (the consumer test injects at the transport boundary, so only this
+    // asserts the IPC threading).
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi.fn().mockResolvedValue({
+      id: 'pty-reattach-tail',
+      isReattach: true,
+      snapshot: 'snapshot data',
+      snapshotCols: 80,
+      snapshotRows: 24,
+      pendingEscapeTailAnsi: '\x1b[3'
+    })
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport()
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'pty-reattach-tail',
+      callbacks: {}
+    })
+
+    expect(result).toMatchObject({
+      id: 'pty-reattach-tail',
+      pendingEscapeTailAnsi: '\x1b[3'
+    })
+  })
+
   it('kills a PTY that finishes spawning after the transport was destroyed', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnControls: { resolve: ((value: { id: string }) => void) | null } = { resolve: null }
@@ -1322,6 +1367,50 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('recovers a stale cross-connection SSH reattach as expired instead of a red error toast', async () => {
+    // Why: a restored SSH pty id embeds the connection it was created under. If
+    // the pane reattaches under a different connection the main-side router
+    // rejects with "belongs to SSH connection" — that session is unreachable, so
+    // we drop it (sessionExpired) and spawn fresh rather than surfacing a crash.
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          'PTY ssh:ssh-1779863656395-57g1q1@@pty-3 belongs to SSH connection "ssh-1779863656395-57g1q1"'
+        )
+      )
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const onError = vi.fn()
+    const result = await createIpcPtyTransport({ connectionId: 'ssh-other' }).connect({
+      url: '',
+      sessionId: 'ssh:ssh-1779863656395-57g1q1@@pty-3',
+      callbacks: { onError }
+    })
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      id: 'ssh:ssh-1779863656395-57g1q1@@pty-3',
+      sessionExpired: true
+    })
   })
 
   it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {

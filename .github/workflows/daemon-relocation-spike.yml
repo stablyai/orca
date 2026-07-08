@@ -1,0 +1,97 @@
+name: Daemon Relocation Spike
+
+# Why: Phase 1 of the Windows update-survival work relocates the terminal
+# daemon's file closure out of the install dir so it survives an update. Before
+# implementing it in the app, this spike finds the MINIMAL set of packaged files
+# that a copied Orca.exe (run as node) needs to start the daemon and drive a
+# ConPTY session from a relocated directory, holding no install-dir file locks.
+# Runs from the feature branch via push (workflow_dispatch only works on the
+# default branch); main is never touched.
+
+on:
+  push:
+    branches:
+      - Jinwoo-H/windows-update-survival
+    paths:
+      - 'tools/daemon-relocation-spike/**'
+      - '.github/workflows/daemon-relocation-spike.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daemon-relocation-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spike:
+    name: relocation file-set spike
+    runs-on: windows-2022
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # This job only reads the repo to build/run the spike; it never pushes.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Why: cache the unpacked build keyed on the inputs that affect it, so
+      # spike-script-only edits skip the ~15 min electron-builder build.
+      - name: Cache unpacked build
+        id: cache-unpacked
+        uses: actions/cache@v4
+        with:
+          path: dist/win-unpacked
+          key: win-unpacked-${{ hashFiles('src/**', 'config/**', 'package.json', 'pnpm-lock.yaml') }}
+
+      - name: Build unpacked app
+        if: steps.cache-unpacked.outputs.cache-hit != 'true'
+        run: pnpm run build:unpack
+
+      - name: Run relocation spike (all tiers)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $log = "artifacts/spike-output.log"
+          $tiers = @('full', 'no-gpu', 'minimal')
+          $any = $false
+          foreach ($tier in $tiers) {
+            "===== TIER: $tier =====" | Tee-Object -FilePath $log -Append
+            $work = Join-Path $env:RUNNER_TEMP "spike-$tier"
+            # --keep-work-dir so the per-tier daemon stdout/stderr logs survive
+            # for the artifact upload (the spike otherwise removes work-dir),
+            # which is what diagnoses a tier that fails to reach ready.
+            node tools/daemon-relocation-spike/spike.mjs `
+              --app-dir dist/win-unpacked `
+              --work-dir "$work" `
+              --tier $tier `
+              --keep-work-dir 2>&1 | Tee-Object -FilePath $log -Append
+            if ($LASTEXITCODE -eq 0) { $any = $true }
+          }
+          if (-not $any) { throw "No tier passed the relocation spike" }
+
+      - name: Upload spike output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: daemon-relocation-spike-output
+          path: |
+            artifacts/spike-output.log
+            ${{ runner.temp }}/spike-*/**/*.log
+          retention-days: 7
+          if-no-files-found: warn

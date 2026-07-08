@@ -62,6 +62,7 @@ import {
   patchPackagedProcessPath,
   shouldInstallManagedHooks
 } from './startup/configure-process'
+import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
   readActiveGpuFallbackMarker,
@@ -91,6 +92,7 @@ import {
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
+import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
@@ -109,6 +111,7 @@ import {
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { createSystemTray, destroySystemTray } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
+import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import {
@@ -119,6 +122,10 @@ import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selec
 import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
+import {
+  attachClaudeLivePtyPersistence,
+  seedLiveClaudePtysFromPersistence
+} from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
@@ -145,6 +152,7 @@ import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
+import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import {
   getCrashBreadcrumbSnapshot,
   recordCoalescedCrashBreadcrumb,
@@ -206,6 +214,7 @@ let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
+let unsubscribeSystemResumeBroadcast: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
@@ -427,6 +436,9 @@ if (startupDiagnosticsEnabled) {
   })
   startEventLoopStallProbe()
 }
+// Self-gated on ORCA_MAIN_THREAD_DIAGNOSTICS; unlike the startup probe it
+// runs for the whole session to catch steady-state churn (issue #7576).
+startMainThreadChurnProbe()
 
 function focusExistingWindow(): void {
   focusExistingMainWindow({
@@ -581,6 +593,7 @@ if (hasSingleInstanceLock) {
     platform: process.platform
   })
   configureElectronNetworkCompatibility()
+  enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
   if (!gpuFallbackActiveThisLaunch) {
     enableMainProcessGpuFeatures()
@@ -974,6 +987,11 @@ function openMainWindow(): BrowserWindow {
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
   window.on('minimize', stopSyntheticTitleSpinnerTimer)
+  // Why: visibility-gated main-process pollers (SSH port scanner) park while
+  // hidden and rely on this signal to resume; re-wired per window because
+  // macOS dock re-activation recreates the BrowserWindow.
+  window.on('show', notifyMainWindowBecameVisible)
+  window.on('restore', notifyMainWindowBecameVisible)
   agentHookServer.setListener(
     ({
       paneKey,
@@ -1616,6 +1634,18 @@ app.whenReady().then(async () => {
 
   store = new Store()
   logStartupMilestone('store-loaded')
+  // Why: must run before ClaudeRuntimeAuthService's constructor sync — a Claude
+  // CLI that survived the restart inside the daemon still holds the current
+  // single-use refresh token, and an unguarded early refresh would rotate it
+  // out from under that process (it then shows "Not logged in" mid-session).
+  attachClaudeLivePtyPersistence(store)
+  const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
+  seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
+  if (persistedClaudePtyIds.length > 0) {
+    console.log(
+      `[claude-live-pty] Seeded ${persistedClaudePtyIds.length} persisted Claude session id(s) into the refresh gate`
+    )
+  }
   selfHealRuntimeEnvironmentFocus({ store, userDataPath: app.getPath('userData') })
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
@@ -1631,6 +1661,7 @@ app.whenReady().then(async () => {
   // Why: browser sessions are used by desktop webviews and runtime profile
   // commands, so initialize them at app startup instead of a renderer IPC path.
   initializeBrowserSessionsForApp()
+  unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
   agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
   // Why: disk-hydrated status rows are UI continuity only. The service starts
@@ -2148,6 +2179,8 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  unsubscribeSystemResumeBroadcast?.()
+  unsubscribeSystemResumeBroadcast = null
   unsubscribeAgentAwakeStatusChanges?.()
   unsubscribeAgentAwakeStatusChanges = null
   agentAwakeService?.dispose()

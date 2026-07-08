@@ -129,7 +129,10 @@ function createWarpThemesStub() {
 
 async function renderAppearancePane(
   settings: GlobalSettings,
-  updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn()
+  updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn(),
+  options: {
+    onRequestFontSuggestions?: () => void
+  } = {}
 ): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -146,6 +149,7 @@ async function renderAppearancePane(
             applyTheme={vi.fn()}
             fontSuggestions={[]}
             terminalFontSuggestions={[]}
+            onRequestFontSuggestions={options.onRequestFontSuggestions}
             systemPrefersDark={false}
             ghostty={createGhosttyStub() as never}
             warpThemes={createWarpThemesStub() as never}
@@ -294,6 +298,25 @@ describe('AppearancePane', () => {
     // Code & Markdown is intentionally omitted — Orca has no Appearance-level
     // code/markdown settings, so the row would be empty.
     expect(container.textContent).not.toContain('Code & Markdown')
+  })
+
+  it('requests installed font suggestions only after the IDE font picker is used', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const requestFontSuggestions = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), vi.fn(), {
+      onRequestFontSuggestions: requestFontSuggestions
+    })
+
+    expect(requestFontSuggestions).not.toHaveBeenCalled()
+
+    const input = container.querySelector<HTMLInputElement>('input[role="combobox"]')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      input?.focus()
+    })
+
+    expect(requestFontSuggestions).toHaveBeenCalledOnce()
   })
 
   it('keeps the app icon control at the bottom of the pane, after the section rows', async () => {

@@ -103,6 +103,7 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
 }
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+import { localhostWorktreeLabelProxy } from '../localhost-worktree-label-proxy'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaLeftoverDirectory,
@@ -161,6 +162,9 @@ function removeWorktreeMetadataAndTransientState(store: Store, worktreeId: strin
   // drop process-local caches before the same ID can point at a new workspace.
   store.removeWorktreeMeta(worktreeId)
   advertisedUrlWatcher.forgetWorktree(worktreeId)
+  // Why: drop this worktree's localhost label routes so they don't accumulate
+  // in the proxy's route maps for the rest of the session.
+  localhostWorktreeLabelProxy.unregisterWorktree(worktreeId)
   deleteWorktreeHistoryDir(worktreeId)
   // Why: release the removed worktree's PR-refresh aliases so coalesced queue
   // entries do not retain it for the rest of the session (memory creep).
@@ -927,6 +931,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:resolvePrBase')
   ipcMain.removeHandler('worktrees:resolveMrBase')
   ipcMain.removeHandler('worktrees:remove')
+  ipcMain.removeHandler('worktrees:forgetLocal')
   ipcMain.removeHandler('worktrees:forceDeletePreservedBranch')
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:listLineage')
@@ -1797,6 +1802,67 @@ export function registerWorktreeHandlers(
         return await removal
       } finally {
         if (worktreeRemovalsInFlight.get(args.worktreeId)?.promise === removal) {
+          worktreeRemovalsInFlight.delete(args.worktreeId)
+        }
+      }
+    }
+  )
+
+  // Why: forget-locally drops a workspace from Orca without any remote Git or
+  // filesystem work. It exists so a workspace pinned to a removed/disconnected
+  // SSH target — whose provider is gone and whose `worktrees:remove` therefore
+  // throws at requireSshGitProvider before any cleanup runs — can still be
+  // cleared from the app. It never touches the remote: no worktree registration,
+  // no branches, no files are deleted there.
+  ipcMain.handle(
+    'worktrees:forgetLocal',
+    async (_event, args: { worktreeId: string }): Promise<RemoveWorktreeResult> => {
+      // Why: share the removal in-flight map (not a separate one) so a concurrent
+      // worktrees:remove and worktrees:forgetLocal on the same id cannot both
+      // mutate metadata. A forget takes no force/skipArchive options.
+      const optionsKey = 'forget-local'
+      const inFlight = worktreeRemovalsInFlight.get(args.worktreeId)
+      if (inFlight) {
+        if (inFlight.optionsKey === optionsKey) {
+          return inFlight.promise
+        }
+        throw new Error(`Worktree deletion already in progress: ${args.worktreeId}`)
+      }
+
+      const forget = (async (): Promise<RemoveWorktreeResult> => {
+        const { repoId } = parseWorktreeId(args.worktreeId)
+        const repo = store.getRepo(repoId)
+        if (!repo) {
+          throw new Error(`Repo not found: ${repoId}`)
+        }
+        if (isFolderRepo(repo) && args.worktreeId === getFolderWorkspaceRootId(repo)) {
+          throw new Error(
+            'Cannot delete the project root workspace. Remove the folder project instead.'
+          )
+        }
+
+        // Why: best-effort PTY sweep. killAllProcessesForWorktree resolves
+        // synchronously for a dead SSH relay (the provider tombstones the lease
+        // and returns without awaiting the remote), so this never hangs.
+        await killAllProcessesForWorktree(args.worktreeId, {
+          runtime,
+          localProvider: getLocalPtyProvider(),
+          onPtyStopped: clearProviderPtyState
+        }).catch((err) => {
+          console.warn(`[worktree-teardown] forget-local failed for ${args.worktreeId}:`, err)
+        })
+
+        runtime.clearOptimisticReconcileToken(args.worktreeId)
+        removeWorktreeMetadataAndTransientState(store, args.worktreeId)
+        preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
+        notifyWorktreesChanged(mainWindow, repoId)
+        return {}
+      })()
+      worktreeRemovalsInFlight.set(args.worktreeId, { optionsKey, promise: forget })
+      try {
+        return await forget
+      } finally {
+        if (worktreeRemovalsInFlight.get(args.worktreeId)?.promise === forget) {
           worktreeRemovalsInFlight.delete(args.worktreeId)
         }
       }

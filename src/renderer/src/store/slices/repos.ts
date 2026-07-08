@@ -48,7 +48,9 @@ import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
+import { pruneSupersededSshRepoRows } from './superseded-ssh-repo-rows'
 import { splitRepoReorderByHost } from './repo-reorder-host-split'
+import { omitSparsePresetsForRepos } from './sparse-presets'
 import {
   findRepoForHost,
   getRepoHostIdentity,
@@ -73,10 +75,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 
 const ERROR_TOAST_DURATION = 60_000
@@ -124,6 +127,10 @@ export type FolderWorkspacePathStatusCacheEntry = {
 
 export type DeleteProjectGroupWithContainedProjectsOptions = {
   removeContainedProjects: boolean
+}
+
+type AllHostCatalogFetchOptions = {
+  remoteHosts?: 'include' | 'skip'
 }
 
 export type ProjectRemovalFailure = {
@@ -830,6 +837,93 @@ function mergeFetchedFolderWorkspacesForHost({
   return mergeById(preserved, fetched)
 }
 
+type FetchedRepoCatalog = {
+  repos: Repo[]
+  projectHostSetupCompatibility: ProjectHostSetupProjection
+  hostId: ReturnType<typeof getRuntimeTargetHostId>
+}
+
+type FetchedProjectGroupCatalog = {
+  projectGroups: ProjectGroup[]
+  hostId: ReturnType<typeof getRuntimeTargetHostId>
+}
+
+type FetchedFolderWorkspaceCatalog = {
+  folderWorkspaces: FolderWorkspace[]
+  hostId: ReturnType<typeof getRuntimeTargetHostId>
+}
+
+async function fetchRepoCatalogForTarget(
+  target: ReturnType<typeof getActiveRuntimeTarget>
+): Promise<FetchedRepoCatalog> {
+  const fetchedRepos =
+    target.kind === 'local'
+      ? await window.api.repos.list()
+      : (
+          await callRuntimeRpc<{ repos: Repo[] }>(target, 'repo.list', undefined, {
+            timeoutMs: 15_000,
+            reuseRecentCompatibilityFailure: true
+          })
+        ).repos
+  const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
+  return {
+    repos,
+    projectHostSetupCompatibility: await fetchProjectHostSetupCompatibility(target, repos),
+    hostId: getRuntimeTargetHostId(target)
+  }
+}
+
+function mergeFetchedRepoCatalog(
+  catalog: FetchedRepoCatalog,
+  currentRepos: readonly Repo[]
+): {
+  repos: Repo[]
+  projectCompatibility: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
+  hostId: ReturnType<typeof getRuntimeTargetHostId>
+} {
+  const repos = mergeFetchedReposForHost(currentRepos, catalog.repos, catalog.hostId)
+  const projectCompatibility = mergeProjectHostSetupCompatibility(
+    projectCompatibilityFromRepos(repos),
+    catalog.projectHostSetupCompatibility
+  )
+  return { repos, projectCompatibility, hostId: catalog.hostId }
+}
+
+function filterTrustedOrcaHooksToValidRepos(
+  trust: AppState['trustedOrcaHooks'],
+  validRepoIds: Set<string>
+): AppState['trustedOrcaHooks'] {
+  const next: AppState['trustedOrcaHooks'] = {}
+  for (const [repoId, entry] of Object.entries(trust)) {
+    if (validRepoIds.has(repoId)) {
+      next[repoId] = entry
+    }
+  }
+  return next
+}
+
+function clearRestoredFolderWorkspaceSessionOwners(
+  owners: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] | undefined,
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>
+): AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] {
+  const next: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] = {}
+  for (const [key, hostId] of Object.entries(owners ?? {})) {
+    const scope = parseWorkspaceKey(key)
+    if (scope?.type !== 'folder') {
+      next[key] = hostId
+      continue
+    }
+    const workspace = state.folderWorkspaces.find((entry) => entry.id === scope.folderWorkspaceId)
+    if (workspace && !state.projectGroups.some((group) => group.id === workspace.projectGroupId)) {
+      // Why: folder workspace ownership is resolved through its project group.
+      // If that catalog is still missing, keep the restored host owner so a
+      // session write before the next retry does not move runtime tabs local.
+      next[key] = hostId
+    }
+  }
+  return next
+}
+
 async function fetchReposForTarget(
   target: ReturnType<typeof getActiveRuntimeTarget>,
   currentRepos: readonly Repo[]
@@ -838,49 +932,87 @@ async function fetchReposForTarget(
   projectCompatibility: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 }> {
-  const fetchedRepos =
-    target.kind === 'local'
-      ? await window.api.repos.list()
-      : (
-          await callRuntimeRpc<{ repos: Repo[] }>(target, 'repo.list', undefined, {
-            timeoutMs: 15_000
-          })
-        ).repos
-  const hostId = getRuntimeTargetHostId(target)
-  const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
-  const fetchedProjectCompatibility = await fetchProjectHostSetupCompatibility(target, repos)
-  const reconciledRepos = mergeFetchedReposForHost(currentRepos, repos, hostId)
-  const projectCompatibility =
-    target.kind === 'local'
-      ? mergeProjectHostSetupCompatibility(
-          projectCompatibilityFromRepos(reconciledRepos),
-          fetchedProjectCompatibility
-        )
-      : mergeProjectHostSetupCompatibility(
-          projectCompatibilityFromRepos(reconciledRepos),
-          fetchedProjectCompatibility
-        )
+  return mergeFetchedRepoCatalog(await fetchRepoCatalogForTarget(target), currentRepos)
+}
 
-  return { repos: reconciledRepos, projectCompatibility, hostId }
+async function fetchProjectGroupCatalogForTarget(
+  target: ReturnType<typeof getActiveRuntimeTarget>
+): Promise<FetchedProjectGroupCatalog> {
+  const fetchedGroups =
+    target.kind === 'local'
+      ? await window.api.projectGroups.list()
+      : (
+          await callRuntimeRpc<{ groups: ProjectGroup[] }>(target, 'projectGroup.list', undefined, {
+            timeoutMs: 15_000,
+            reuseRecentCompatibilityFailure: true
+          })
+        ).groups
+  return {
+    projectGroups: fetchedGroups.map((group) => projectGroupWithFetchedOwner(group, target)),
+    hostId: getRuntimeTargetHostId(target)
+  }
+}
+
+function mergeFetchedProjectGroupCatalog(
+  catalog: FetchedProjectGroupCatalog,
+  currentProjectGroups: readonly ProjectGroup[]
+): { projectGroups: ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> } {
+  return {
+    projectGroups: mergeFetchedProjectGroupsForHost(
+      currentProjectGroups,
+      catalog.projectGroups,
+      catalog.hostId
+    ),
+    hostId: catalog.hostId
+  }
 }
 
 async function fetchProjectGroupsForTarget(
   target: ReturnType<typeof getActiveRuntimeTarget>,
   currentProjectGroups: readonly ProjectGroup[]
 ): Promise<{ projectGroups: ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> }> {
-  const fetchedGroups =
+  return mergeFetchedProjectGroupCatalog(
+    await fetchProjectGroupCatalogForTarget(target),
+    currentProjectGroups
+  )
+}
+
+async function fetchFolderWorkspaceCatalogForTarget(
+  target: ReturnType<typeof getActiveRuntimeTarget>
+): Promise<FetchedFolderWorkspaceCatalog> {
+  const fetchedFolderWorkspaces =
     target.kind === 'local'
-      ? await window.api.projectGroups.list()
+      ? await window.api.folderWorkspaces.list()
       : (
-          await callRuntimeRpc<{ groups: ProjectGroup[] }>(target, 'projectGroup.list', undefined, {
-            timeoutMs: 15_000
-          })
-        ).groups
-  const hostId = getRuntimeTargetHostId(target)
-  const ownedGroups = fetchedGroups.map((group) => projectGroupWithFetchedOwner(group, target))
+          await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
+            target,
+            'folderWorkspace.list',
+            undefined,
+            { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
+          )
+        ).folderWorkspaces
   return {
-    projectGroups: mergeFetchedProjectGroupsForHost(currentProjectGroups, ownedGroups, hostId),
-    hostId
+    folderWorkspaces: fetchedFolderWorkspaces,
+    hostId: getRuntimeTargetHostId(target)
+  }
+}
+
+function mergeFetchedFolderWorkspaceCatalog(
+  catalog: FetchedFolderWorkspaceCatalog,
+  currentFolderWorkspaces: readonly FolderWorkspace[],
+  projectGroups: readonly ProjectGroup[]
+): {
+  folderWorkspaces: FolderWorkspace[]
+  hostId: ReturnType<typeof getRuntimeTargetHostId>
+} {
+  return {
+    folderWorkspaces: mergeFetchedFolderWorkspacesForHost({
+      previous: currentFolderWorkspaces,
+      fetched: catalog.folderWorkspaces,
+      projectGroups,
+      hostId: catalog.hostId
+    }),
+    hostId: catalog.hostId
   }
 }
 
@@ -892,27 +1024,11 @@ async function fetchFolderWorkspacesForTarget(
   folderWorkspaces: FolderWorkspace[]
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 }> {
-  const fetchedFolderWorkspaces =
-    target.kind === 'local'
-      ? await window.api.folderWorkspaces.list()
-      : (
-          await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
-            target,
-            'folderWorkspace.list',
-            undefined,
-            { timeoutMs: 15_000 }
-          )
-        ).folderWorkspaces
-  const hostId = getRuntimeTargetHostId(target)
-  return {
-    folderWorkspaces: mergeFetchedFolderWorkspacesForHost({
-      previous: currentFolderWorkspaces,
-      fetched: fetchedFolderWorkspaces,
-      projectGroups,
-      hostId
-    }),
-    hostId
-  }
+  return mergeFetchedFolderWorkspaceCatalog(
+    await fetchFolderWorkspaceCatalogForTarget(target),
+    currentFolderWorkspaces,
+    projectGroups
+  )
 }
 
 async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]> {
@@ -924,8 +1040,12 @@ async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]
   }
 }
 
-function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
-  const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
+function settingsForRepoOwner(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  repoId: string,
+  hostId?: ExecutionHostId
+) {
+  const repo = findRepoForHost(state.repos, repoId, { settings: state.settings, hostId })
   if (!repo) {
     return state.settings
   }
@@ -1155,12 +1275,12 @@ export type RepoSlice = {
   // Monotonic sequence so an overlapping fetchRepos can drop its own stale result (#7020).
   reposFetchGeneration: number
   fetchRepos: () => Promise<void>
-  fetchReposForAllHosts: () => Promise<void>
+  fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
   fetchProjectGroups: () => Promise<void>
-  fetchProjectGroupsForAllHosts: () => Promise<void>
+  fetchProjectGroupsForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   fetchFolderWorkspaces: () => Promise<void>
-  fetchFolderWorkspacesForAllHosts: () => Promise<void>
+  fetchFolderWorkspacesForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   addRepo: () => Promise<Repo | null>
   addRepoPath: (
     path: string,
@@ -1257,7 +1377,9 @@ export type RepoSlice = {
     groupId: string | null,
     order?: number
   ) => Promise<boolean>
-  removeProject: (projectId: string) => Promise<void>
+  // options.hostId disambiguates which host's row to remove when the same repo
+  // id exists on multiple hosts; without it the focused host is assumed.
+  removeProject: (projectId: string, options?: { hostId?: ExecutionHostId }) => Promise<void>
   updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
   updateRepo: (projectId: string, updates: RepoUpdate) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void
@@ -1294,18 +1416,26 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       set((s) => {
-        const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
+        // Why: after re-adoption re-points a repo onto a re-added SSH target, the
+        // per-host merge leaves the stale row on the old (removed) target id — a
+        // ghost a terminal pane can bind to and fail with "SSH target not found".
+        // Drop rows on unknown SSH targets that a live-host sibling supersedes.
+        const prunedRepos = pruneSupersededSshRepoRows(
+          reconciledRepos,
+          new Set(s.sshTargetLabels.keys())
+        )
+        const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
           previous: {
             projects: s.projects,
             projectHostSetups: s.projectHostSetups
           },
           fetched: projectCompatibility,
-          repos: reconciledRepos,
+          repos: prunedRepos,
           hostId
         })
         return {
-          repos: reconciledRepos,
+          repos: prunedRepos,
           ...mergedProjectCompatibility,
           folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
@@ -1366,7 +1496,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  fetchReposForAllHosts: async () => {
+  fetchReposForAllHosts: async (options) => {
     // Why: a cold start that restores a remote workspace re-activates that
     // remote runtime environment, and fetching only the active host hides every
     // other host's repos (notably all local repos), which reads as "my projects
@@ -1374,9 +1504,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // sidebar "All hosts" scope shows them together regardless of which
     // environment is active. Each host fails soft: an unreachable/disconnected
     // host is skipped without blocking the others.
-    const applyResult = (result: Awaited<ReturnType<typeof fetchReposForTarget>>): void => {
-      const validRepoIds = new Set(result.repos.map((repo) => repo.id))
+    const applyCatalog = (catalog: FetchedRepoCatalog): void => {
+      let hostRepos: Repo[] = []
       set((s) => {
+        const result = mergeFetchedRepoCatalog(catalog, s.repos)
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
           previous: {
             projects: s.projects,
@@ -1386,48 +1517,71 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           repos: result.repos,
           hostId: result.hostId
         })
+        hostRepos = result.repos.filter((repo) => getRepoExecutionHostId(repo) === result.hostId)
         return {
           repos: result.repos,
           ...mergedProjectCompatibility,
           folderWorkspacePathStatuses: {},
-          activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-          filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
-          setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
-            s.setupScriptPromptDismissedRepoIds,
-            validRepoIds
-          )
+          activeRepoId: s.activeRepoId,
+          filterRepoIds: s.filterRepoIds,
+          setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
         }
       })
       // Why: preserve the safe-auto fork sync that fetchRepos /
       // fetchRuntimeEnvironmentRepos schedule after merging each host, so
       // cold-start (which now routes through here) keeps updating safe-auto forks.
-      scheduleSafeAutoForkSync(
-        get,
-        result.repos.filter((repo) => getRepoExecutionHostId(repo) === result.hostId)
-      )
+      scheduleSafeAutoForkSync(get, hostRepos)
+    }
+    const validateRepoScopedUi = (): void => {
+      set((s) => {
+        const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+        return {
+          activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+          filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
+          setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            s.setupScriptPromptDismissedRepoIds,
+            validRepoIds
+          ),
+          trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(s.trustedOrcaHooks, validRepoIds)
+        }
+      })
     }
 
     // Local first so local repos are present even if a remote fetch stalls.
+    let failed = false
     try {
-      applyResult(await fetchReposForTarget({ kind: 'local' }, get().repos))
+      applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }))
     } catch (err) {
+      failed = true
       console.error('Failed to fetch local repos for all-host load:', err)
+    }
+    if (options?.remoteHosts === 'skip') {
+      return
     }
 
     const environments = await listRuntimeEnvironmentsForAllHostLoad()
-
-    // Sequential to avoid concurrent set() races on the merged repos array.
-    for (const environment of environments) {
-      try {
-        applyResult(
-          await fetchReposForTarget(
-            { kind: 'environment', environmentId: environment.id },
-            get().repos
+    // Why: unreachable remotes can spend the full connect timeout; merge each
+    // resolved host through the state updater so parallel loads do not clobber.
+    await Promise.all(
+      environments.map(async (environment) => {
+        try {
+          applyCatalog(
+            await fetchRepoCatalogForTarget({
+              kind: 'environment',
+              environmentId: environment.id
+            })
           )
-        )
-      } catch (err) {
-        console.warn(`Skipped repos for runtime environment ${environment.id}:`, err)
-      }
+        } catch (err) {
+          failed = true
+          console.warn(`Skipped repos for runtime environment ${environment.id}:`, err)
+        }
+      })
+    )
+    // Why: first-paint startup intentionally loads only local repos before
+    // remotes answer. Validate repo-scoped UI only once every configured host has
+    // answered; otherwise an offline runtime would erase its saved filters.
+    if (!failed) {
+      validateRepoScopedUi()
     }
   },
 
@@ -1444,35 +1598,40 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  fetchProjectGroupsForAllHosts: async () => {
+  fetchProjectGroupsForAllHosts: async (options) => {
     // Why: startup renders an all-host sidebar; replacing groups with only the
     // active host would leave repos from other hosts visible but ungrouped.
-    const applyResult = (result: Awaited<ReturnType<typeof fetchProjectGroupsForTarget>>): void => {
-      set({
-        projectGroups: result.projectGroups,
+    const applyCatalog = (catalog: FetchedProjectGroupCatalog): void => {
+      set((s) => ({
+        projectGroups: mergeFetchedProjectGroupCatalog(catalog, s.projectGroups).projectGroups,
         folderWorkspacePathStatuses: {}
-      })
+      }))
     }
 
     try {
-      applyResult(await fetchProjectGroupsForTarget({ kind: 'local' }, get().projectGroups))
+      applyCatalog(await fetchProjectGroupCatalogForTarget({ kind: 'local' }))
     } catch (err) {
       console.error('Failed to fetch local project groups for all-host load:', err)
     }
+    if (options?.remoteHosts === 'skip') {
+      return
+    }
 
     const environments = await listRuntimeEnvironmentsForAllHostLoad()
-    for (const environment of environments) {
-      try {
-        applyResult(
-          await fetchProjectGroupsForTarget(
-            { kind: 'environment', environmentId: environment.id },
-            get().projectGroups
+    await Promise.all(
+      environments.map(async (environment) => {
+        try {
+          applyCatalog(
+            await fetchProjectGroupCatalogForTarget({
+              kind: 'environment',
+              environmentId: environment.id
+            })
           )
-        )
-      } catch (err) {
-        console.warn(`Skipped project groups for runtime environment ${environment.id}:`, err)
-      }
-    }
+        } catch (err) {
+          console.warn(`Skipped project groups for runtime environment ${environment.id}:`, err)
+        }
+      })
+    )
   },
 
   fetchFolderWorkspaces: async () => {
@@ -1489,43 +1648,54 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  fetchFolderWorkspacesForAllHosts: async () => {
+  fetchFolderWorkspacesForAllHosts: async (options) => {
     // Why: folder workspaces are owned through their project groups, so startup
     // must fetch groups first and then merge each host's folder slice.
-    const applyResult = (
-      result: Awaited<ReturnType<typeof fetchFolderWorkspacesForTarget>>
-    ): void => {
-      set({
-        folderWorkspaces: result.folderWorkspaces,
+    const applyCatalog = (catalog: FetchedFolderWorkspaceCatalog): void => {
+      set((s) => ({
+        folderWorkspaces: mergeFetchedFolderWorkspaceCatalog(
+          catalog,
+          s.folderWorkspaces,
+          s.projectGroups
+        ).folderWorkspaces,
         folderWorkspacePathStatuses: {}
-      })
+      }))
     }
 
+    let failed = false
     try {
-      applyResult(
-        await fetchFolderWorkspacesForTarget(
-          { kind: 'local' },
-          get().folderWorkspaces,
-          get().projectGroups
-        )
-      )
+      applyCatalog(await fetchFolderWorkspaceCatalogForTarget({ kind: 'local' }))
     } catch (err) {
+      failed = true
       console.error('Failed to fetch local folder workspaces for all-host load:', err)
+    }
+    if (options?.remoteHosts === 'skip') {
+      return
     }
 
     const environments = await listRuntimeEnvironmentsForAllHostLoad()
-    for (const environment of environments) {
-      try {
-        applyResult(
-          await fetchFolderWorkspacesForTarget(
-            { kind: 'environment', environmentId: environment.id },
-            get().folderWorkspaces,
-            get().projectGroups
+    await Promise.all(
+      environments.map(async (environment) => {
+        try {
+          applyCatalog(
+            await fetchFolderWorkspaceCatalogForTarget({
+              kind: 'environment',
+              environmentId: environment.id
+            })
           )
+        } catch (err) {
+          failed = true
+          console.warn(`Skipped folder workspaces for runtime environment ${environment.id}:`, err)
+        }
+      })
+    )
+    if (!failed) {
+      set((s) => ({
+        restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
+          s.restoredRuntimeHostIdByWorkspaceSessionKey,
+          s
         )
-      } catch (err) {
-        console.warn(`Skipped folder workspaces for runtime environment ${environment.id}:`, err)
-      }
+      }))
     }
   },
 
@@ -2251,7 +2421,14 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           repo && !projectHostSetups.some((setup) => setup.projectId === result.project.id)
             ? s.projects.filter((project) => project.id !== result.project.id)
             : s.projects
-        return { repos, projects, projectHostSetups }
+        const survivingRepoIds = new Set(repos.map((r) => r.id))
+        const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
+        return {
+          repos,
+          projects,
+          projectHostSetups,
+          ...omitSparsePresetsForRepos(s, removedRepoIds)
+        }
       })
       return { ...result, repo }
     } catch (err) {
@@ -2378,9 +2555,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  removeProject: async (projectId) => {
+  removeProject: async (projectId, options) => {
     try {
-      const ownerRepo = findRepoForHost(get().repos, projectId, { settings: get().settings })
+      // Why: pass an explicit hostId (e.g. when removing an SSH host's root repo)
+      // so a duplicate id across hosts resolves to the intended row instead of
+      // falling back to the focused host.
+      const ownerRepo = findRepoForHost(get().repos, projectId, {
+        settings: get().settings,
+        hostId: options?.hostId
+      })
       if (!ownerRepo) {
         return
       }
@@ -2395,9 +2578,23 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
         })
       }
-      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
+      // Why: derive the runtime target from the owner's own settings, passing the
+      // explicit options.hostId so a duplicate repo id across hosts resolves to the
+      // intended row. settingsForRepoOwner clears the focused runtime for SSH/local
+      // owners (routing local) and pins runtime owners to their environment, so an
+      // SSH host removal never routes repo.rm to the focused runtime.
+      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
+      // Why: the same repo id can exist on multiple hosts (local + an SSH target,
+      // or a re-added SSH target). Main's repos:remove is repo-id-only and would
+      // delete every host's row. Scope the local-side removal to the owning host
+      // so a cross-host duplicate id keeps its other rows.
+      const idExistsOnOtherHost = get().repos.some(
+        (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
+      )
       await (target.kind === 'local'
-        ? window.api.repos.remove({ repoId: projectId })
+        ? idExistsOnOtherHost
+          ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
+          : window.api.repos.remove({ repoId: projectId })
         : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
 
       get().clearOrcaHookTrustForRepo(projectId)
@@ -2516,8 +2713,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             delete nextLastVisitedAtByWorktreeId[id]
           }
         }
+        const survivingRepoIds = new Set(nextRepos.map((r) => r.id))
+        const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
         return {
           repos: nextRepos,
+          // Why: drop the removed repos' sparse-preset maps so they don't outlive
+          // the repo for the renderer's whole session.
+          ...omitSparsePresetsForRepos(s, removedRepoIds),
           ...mergeProjectCompatibilityForHostRepoChange({
             previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
             nextRepos,

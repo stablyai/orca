@@ -10,6 +10,7 @@ import {
 } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
+import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
@@ -51,7 +52,26 @@ type UseEditorPanelContentStateParams = {
 type UseEditorPanelContentStateResult = {
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
-  reloadFileContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile) => void
+}
+
+// Why: a clean load re-baselines what this tab's future edits are based on; a
+// dirty tab keeps its baseline (its draft still derives from the older content
+// the signature was taken over). Best-effort metadata — a failure here must
+// not convert an already-delivered load into an error view, hence the guard.
+function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
+  if (result.isBinary || result.loadError) {
+    return
+  }
+  try {
+    const state = useAppStore.getState()
+    const loadedFile = state.openFiles.find((file) => file.id === id)
+    if (loadedFile && !loadedFile.isDirty) {
+      state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
+    }
+  } catch (err) {
+    console.warn('[editor] failed to stamp disk baseline', err)
+  }
 }
 
 function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
@@ -171,6 +191,7 @@ export function useEditorPanelContentState({
         }
         delete fileLoadRetryAttemptsRef.current[id]
         setFileContents((prev) => ({ ...prev, [id]: result }))
+        stampCleanTabDiskBaseline(id, result)
       } catch (err) {
         if (fileReadGenerationRef.current[id] !== generation) {
           return
@@ -304,8 +325,23 @@ export function useEditorPanelContentState({
     []
   )
 
-  const reloadFileContent = useCallback(
+  // Why: the changed-on-disk banner's explicit reload on an unstaged diff tab
+  // must refetch the diff body, not the plain file content — one entry point
+  // branches on the tab mode so every consumer reloads the right store.
+  const reloadContent = useCallback(
     (file: OpenFile): void => {
+      if (file.mode === 'diff') {
+        setDiffContents((prev) => {
+          if (!prev[file.id]) {
+            return prev
+          }
+          const next = { ...prev }
+          delete next[file.id]
+          return next
+        })
+        void loadDiffContent(file, { force: true })
+        return
+      }
       delete fileLoadRetryAttemptsRef.current[file.id]
       setFileContents((prev) => {
         if (!prev[file.id]) {
@@ -319,7 +355,7 @@ export function useEditorPanelContentState({
         force: true
       })
     },
-    [loadFileContent]
+    [loadDiffContent, loadFileContent]
   )
 
   useEffect(() => {
@@ -507,5 +543,5 @@ export function useEditorPanelContentState({
     setDiffContents
   )
 
-  return { fileContents, diffContents, reloadFileContent }
+  return { fileContents, diffContents, reloadContent }
 }

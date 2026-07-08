@@ -7,7 +7,11 @@ import {
   type AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from './session-scanner-types'
 import {
   extractPreviewContentText,
   extractString,
@@ -38,6 +42,31 @@ export function createAccumulator(args: {
     totalTokens: 0,
     previewMessages: [],
     latestTimestampMs: 0
+  }
+}
+
+export function cloneSessionAccumulator(accumulator: SessionAccumulator): SessionAccumulator {
+  return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
+}
+
+// Resumable fold for parsers whose only parse state is the accumulator itself
+// (cursor, copilot, droid, openclaw/pi, gemini-jsonl). Parsers with extra
+// closure state (claude, codex) build their own ResumableSessionParseState.
+export function accumulatorFoldResumeState(
+  accumulator: SessionAccumulator,
+  consumeRecordLine: (accumulator: SessionAccumulator, line: string) => void
+): ResumableSessionParseState {
+  return {
+    consumeLine: (line) => consumeRecordLine(accumulator, line),
+    clone: () =>
+      accumulatorFoldResumeState(cloneSessionAccumulator(accumulator), consumeRecordLine),
+    touchFile: (file) => {
+      accumulator.modifiedAt = file.modifiedAt
+    },
+    // Finalize a snapshot: the live accumulator (and its preview array) keeps
+    // accumulating appended lines after this session object is handed out.
+    finalize: (platform, options) =>
+      finalizeSession(cloneSessionAccumulator(accumulator), platform, options)
   }
 }
 
@@ -84,6 +113,7 @@ export function finalizeSession(
     resumeCommand: buildAiVaultResumeCommand({
       agent: accumulator.agent,
       sessionId,
+      resumeFilePath: accumulator.filePath,
       cwd: accumulator.cwd,
       platform,
       codexHome: options.codexHome

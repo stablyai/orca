@@ -271,6 +271,9 @@ describe('PullRequestPage host boundaries', () => {
     expect(editHelperSection).toContain("args.sourceContext?.provider === 'github'")
     expect(editHelperSection).toContain('getTaskSourceRuntimeSettings(args.sourceContext)')
     expect(editHelperSection).toContain(
+      'getGitHubMutationRoutingSettings(useAppStore.getState(), args.repoId, args.sourceContext)'
+    )
+    expect(editHelperSection).toContain(
       "repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? '')"
     )
     expect(editHelperSection).toContain('{ local: false }')
@@ -278,7 +281,7 @@ describe('PullRequestPage host boundaries', () => {
     expect(editSection).toContain('sourceContext,')
   })
 
-  it('routes merge actions through the PR source context', () => {
+  it('routes merge actions through the repo owner host (#6957)', () => {
     const source = componentSource('PullRequestPage.tsx')
     const actionsSection = sourceBetween(
       source,
@@ -286,7 +289,9 @@ describe('PullRequestPage host boundaries', () => {
       'function CommentReactions'
     )
 
-    expect(actionsSection).toContain('getTaskSourceRuntimeSettings(sourceContext)')
+    expect(actionsSection).toContain(
+      'getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)'
+    )
     expect(actionsSection).toContain('getActiveRuntimeTarget(sourceSettings)')
     expect(actionsSection).toContain(
       'const canMergeWithRepoContext = !!repoPath || mergeTarget.kind ==='

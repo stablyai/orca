@@ -265,9 +265,85 @@ describe('resolveTabAgentFromSignals', () => {
         isRemote: false,
         title: '✳ Claude Code',
         hookAgent: null,
+
         launchAgent: 'codex'
       })
     ).toBe('codex')
+  })
+
+  it('keeps OMP launch identity over Pi-compatible wrapper titles after activity', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: '⠋ Pi',
+        hookAgent: null,
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: '⠋ Pi',
+        hookAgent: 'pi',
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠋ Pi',
+        hookAgent: 'pi',
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: 'Terminal 1',
+        hookAgent: null,
+        siblingHookAgent: 'pi',
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: '⠋ OMP',
+        hookAgent: 'omp',
+        launchAgent: 'pi'
+      })
+    ).toBe('pi')
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: 'zsh',
+        hookAgent: null,
+        focusedCompletedHookAgent: 'pi',
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        siblingCompletedHookAgent: 'pi',
+        launchAgent: 'omp'
+      })
+    ).toBe('omp')
   })
 
   it('prefers explicit hook identity over a conflicting title mention', () => {

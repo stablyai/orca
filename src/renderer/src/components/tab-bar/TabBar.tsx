@@ -4,6 +4,7 @@
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { SortableContext } from '@dnd-kit/sortable'
 import {
   ChevronLeft,
@@ -78,8 +79,8 @@ import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
-import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
-import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
+import { selectTabAgentTypesByTabId } from './tab-agent-types-by-tab-id'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -454,7 +455,13 @@ function TabBarInner({
   // eligible when it launched an agent or has a live agent-status entry on any of
   // its panes (paneKey = `${unifiedTabId}:…`), mirroring the toggle button's gate.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  // Why: the strip only needs each tab's stable agent identity, but the whole
+  // agentStatusByPaneKey map churns on every working↔idle transition app-wide.
+  // Select a shallow-stable { tabId: agentType } projection so the strip
+  // re-renders only when a tab gains/loses/changes its agent, not on status flips.
+  const tabAgentTypesByTabId = useAppStore(
+    useShallow((s) => selectTabAgentTypesByTabId(s.agentStatusByPaneKey ?? {}))
+  )
   const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
 
   // Why: Electron <webview> elements run in a separate process, so clicking
@@ -1103,13 +1110,12 @@ function TabBarInner({
                 // Carry the agent *identity* (not just "an agent exists") so the
                 // native-chat gate can reject unsupported agents like Grok.
                 const resolvedAgent =
-                  resolveTabAgentFromTitle(unifiedTabForItem?.label ?? '') ??
-                  resolveTabAgentFromTitle(terminalTab.title)
+                  resolveCommittedTitleAgentType(unifiedTabForItem?.label ?? '') ??
+                  resolveCommittedTitleAgentType(terminalTab.title)
                 // Key the live-agent lookup by the backing terminal tab id —
                 // agent-status pane keys are `${terminalTab.id}:${leafId}`, and
                 // the unified tab id can differ from it.
-                const detectedAgent =
-                  findTabAgentEntry(agentStatusByPaneKey ?? {}, terminalTab.id)?.agentType ?? null
+                const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
                 const canToggleViewMode =
                   unifiedTabForItem !== undefined &&
                   canToggleNativeChat({

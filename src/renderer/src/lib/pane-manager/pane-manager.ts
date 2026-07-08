@@ -41,7 +41,7 @@ import {
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
-import { schedulePaneRevealRepaint } from './pane-reveal-repaint'
+import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import {
   closeManagedPane,
@@ -327,6 +327,12 @@ export class PaneManager {
     // disposed panes could throw in attach and latch the global WebGL
     // attach backoff, downgrading unrelated new panes to the DOM renderer.
     schedulePaneRevealRepaint(() => (this.destroyed ? [] : this.panes.values()))
+  }
+
+  scheduleRevealPresent(): void {
+    // Why: same destroy guard as scheduleRevealRepaint, but presents without
+    // clearing the shared glyph atlas — used by the plain-refocus recovery.
+    schedulePaneRevealPresent(() => (this.destroyed ? [] : this.panes.values()))
   }
 
   suspendRendering(): void {

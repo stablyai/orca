@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this file keeps terminal session publication
- * fixtures together so split-pane and split-tab parity assertions do not drift. */
 import { describe, expect, it } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph'
 import type { AppState } from '../store/types'

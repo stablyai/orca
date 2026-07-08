@@ -62,11 +62,46 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
     expect(getExecutionHostIdForWorktree(state, 'folder:runtime-folder')).toBe('runtime:folder-env')
   })
 
+  it('routes restored runtime folder workspaces before their catalog loads', () => {
+    const restoredFolderState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      folderWorkspaces: [],
+      projectGroups: [],
+      restoredRuntimeHostIdByWorkspaceSessionKey: {
+        'folder:restored-folder': 'runtime:restored-env'
+      }
+    }
+
+    expect(
+      getSettingsForWorktreeRuntimeOwner(restoredFolderState, 'folder:restored-folder')
+    ).toEqual({
+      activeRuntimeEnvironmentId: 'restored-env'
+    })
+    expect(getRuntimeEnvironmentIdForWorktree(restoredFolderState, 'folder:restored-folder')).toBe(
+      'restored-env'
+    )
+    expect(
+      getExplicitRuntimeEnvironmentIdForWorktree(restoredFolderState, 'folder:restored-folder')
+    ).toBe('restored-env')
+    expect(getExecutionHostIdForWorktree(restoredFolderState, 'folder:restored-folder')).toBe(
+      'runtime:restored-env'
+    )
+  })
+
   it('keeps explicit-local folder workspaces local even while a runtime is focused', () => {
     expect(getSettingsForWorktreeRuntimeOwner(state, 'folder:local-folder')).toEqual({
       activeRuntimeEnvironmentId: null
     })
     expect(getExecutionHostIdForWorktree(state, 'folder:local-folder')).toBe('local')
+
+    const restoredOwnerState: WorktreeRuntimeOwnerState = {
+      ...state,
+      restoredRuntimeHostIdByWorkspaceSessionKey: {
+        'folder:local-folder': 'runtime:stale-env'
+      }
+    }
+    expect(getRuntimeEnvironmentIdForWorktree(restoredOwnerState, 'folder:local-folder')).toBeNull()
+    expect(getExecutionHostIdForWorktree(restoredOwnerState, 'folder:local-folder')).toBe('local')
   })
 
   it('keeps folder workspaces with their own SSH target off the focused runtime', () => {
@@ -186,6 +221,17 @@ describe('getRuntimeSessionMirrorEnvironmentIds', () => {
       'owner-env',
       'worktree-env'
     ])
+  })
+
+  it('includes restored runtime folder owners before their catalog loads', () => {
+    expect(
+      getRuntimeSessionMirrorEnvironmentIds({
+        settings: { activeRuntimeEnvironmentId: 'focused-env' },
+        restoredRuntimeHostIdByWorkspaceSessionKey: {
+          'folder:restored-folder': 'runtime:restored-env'
+        }
+      })
+    ).toEqual(['focused-env', 'restored-env'])
   })
 
   it('does not include local or SSH owners', () => {

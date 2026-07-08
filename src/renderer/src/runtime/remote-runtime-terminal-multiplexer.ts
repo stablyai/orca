@@ -37,7 +37,7 @@ type TerminalMultiplexEvent =
 
 export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onData: (data: string, meta?: { seq?: number; rawLength?: number }) => void
-  onSnapshot: (data: string) => void
+  onSnapshot: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
   onSubscribed?: () => void
   onEnd?: () => void
   onError?: (message: string) => void
@@ -86,6 +86,10 @@ type RemoteRuntimeSnapshotInfo = {
   source?: 'headless' | 'renderer'
   requestId?: number
   truncated?: boolean
+  // Why: a mid-escape tail the emulator could not serialize; the transport
+  // must write it AFTER the replay reset so the next live chunk completes it
+  // instead of rendering literally (#7329).
+  pendingEscapeTailAnsi?: string
 }
 
 type RemoteRuntimeSnapshotRequest = {
@@ -97,6 +101,7 @@ type RemoteRuntimeSnapshotRequest = {
       rows: number
       seq?: number
       source?: 'headless' | 'renderer'
+      pendingEscapeTailAnsi?: string
     } | null
   ) => void
   reject: (error: Error) => void
@@ -381,11 +386,14 @@ class RemoteRuntimeTerminalMultiplexer {
             cols: info?.cols ?? 80,
             rows: info?.rows ?? 24,
             seq: info?.seq,
-            source: info?.source
+            source: info?.source,
+            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
           })
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
-          stream.callbacks.onSnapshot(data ?? '')
+          stream.callbacks.onSnapshot(data ?? '', {
+            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+          })
         }
       } else if (matchesPendingRequest) {
         pendingRequest.resolve(null)
@@ -608,6 +616,7 @@ function decodeSnapshotInfo(
     source?: unknown
     requestId?: unknown
     truncated?: unknown
+    pendingEscapeTailAnsi?: unknown
   }>(payload)
   if (!raw) {
     return null
@@ -618,7 +627,9 @@ function decodeSnapshotInfo(
     seq: typeof raw.seq === 'number' ? raw.seq : undefined,
     source: raw.source === 'headless' || raw.source === 'renderer' ? raw.source : undefined,
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
-    truncated: raw.truncated === true
+    truncated: raw.truncated === true,
+    pendingEscapeTailAnsi:
+      typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined
   }
 }
 

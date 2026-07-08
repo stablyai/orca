@@ -2771,6 +2771,9 @@
           "EditorFileTabCloseButton": {
             "4655cf570e": "关闭选项卡",
             "a768f428f1": "关闭选项卡"
+          },
+          "TerminalTabSplitMenuSection": {
+            "splitTerminal": "Split terminal"
           }
         }
       },
@@ -4743,7 +4746,10 @@
           "agentPermissionsDescription": "选择 Orca 是以更少的权限提示启动智能体，还是手动检查。",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手动",
-          "3f1bdf3cb4": "环境文本过长，无法安全解析。"
+          "3f1bdf3cb4": "环境文本过长，无法安全解析。",
+          "codexSessionSource": "Codex home to import from",
+          "codexSessionSourceInfo": "About importing Codex history",
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -8893,7 +8899,8 @@
             "b234ab25b4": "无法将文件复制到剪贴板",
             "f9d7ca753d": "复制路径",
             "3161c4e425": "文件夹",
-            "e887fa4b2e": "在终端中打开"
+            "e887fa4b2e": "在终端中打开",
+            "1d8e182c32": "查看文件"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",
@@ -11523,6 +11530,24 @@
           "3e6c9a2b71": "等待中",
           "4f7d0c3e88": "步骤失败",
           "5a8e1d4f23": " · "
+        },
+        "ExternalFileChangeBanner": {
+          "7c41e90d12": "This file changed on disk while you have unsaved edits. Saving will overwrite the newer disk content.",
+          "3fa2b8d417": "Reload from Disk",
+          "a95d02c644": "Keep My Edits",
+          "5c02de9b31": "Reloaded from disk",
+          "d1e830fa22": "Undo",
+          "90b2ce7d43": "Compare"
+        },
+        "ExternalFileChangeCompareDialog": {
+          "4b8de20a11": "File changed on disk",
+          "90cc31e4d7": "Disk version on the left, your unsaved edits on the right.",
+          "8fe30ab254": "Reading file from disk...",
+          "e2b1cd0393": "Could not read the file from disk: {{value0}}",
+          "b6cf20d514": "The file on disk is binary — no text comparison available.",
+          "3fa2b8d417": "Reload from Disk",
+          "a95d02c644": "Keep My Edits",
+          "2c8f1e07b9": "Loading comparison..."
         }
       },
       "diff": {

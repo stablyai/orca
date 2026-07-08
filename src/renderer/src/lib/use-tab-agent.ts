@@ -11,15 +11,27 @@ import {
   resolveSiblingTabAgent
 } from './tab-agent'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
+import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
-
-export { resolveExplicitTerminalTitleAgentType as resolveTabAgentFromTitle } from '../../../shared/terminal-title-agent-type'
 
 // A shell name, or the tab's neutral default title — where Orca's
 // inferred-interrupt reset parks it. Blank titles are no evidence either way.
 function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
   const trimmed = title.trim()
   return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
+}
+
+/**
+ * Resolves wrapper-compatible signal identity against the launch owner.
+ */
+function resolveSignalAgentForLaunchOwner(
+  signalAgent: TuiAgent | null | undefined,
+  launchAgent: TuiAgent | null
+): TuiAgent | null {
+  if (!signalAgent) {
+    return null
+  }
+  return (resolveCompatibleAgentTypeForOwner(signalAgent, launchAgent) ?? signalAgent) as TuiAgent
 }
 
 /**
@@ -70,11 +82,13 @@ export function resolveTabAgentFromSignals(args: {
   launchAgent?: TuiAgent
 }): TuiAgent | null {
   const launchAgent = args.launchAgent ?? null
-  const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(args.title)
-  // Why: when a pane is reused for a different agent, its launchAgent goes stale.
-  // A live title that explicitly names a *different* agent, once the pane has
-  // shown any activity, overrides that stale launch identity so the tab icon
-  // tracks what is actually running (codex launch reused for claude, etc.).
+  const explicitTitleAgent = resolveSignalAgentForLaunchOwner(
+    resolveExplicitTerminalTitleAgentType(args.title),
+    launchAgent
+  )
+  // Why: explicit titles can override stale launches after activity, but
+  // Pi-compatible wrapper signals first resolve through the launch owner so
+  // OMP-created sessions do not repaint as Pi.
   // Why: OSC 133;D proved this local pane's foreground is back at the shell,
   // so any title-derived identity is stale by definition — a TUI that died
   // with a stuck title must not keep painting the tab through the title layer.
@@ -98,16 +112,20 @@ export function resolveTabAgentFromSignals(args: {
   const completedHookAgent =
     !args.isRemote && (noAgentTitle || processProvesShell) && hasCompletedHook
       ? null
-      : (args.focusedCompletedHookAgent ?? args.siblingCompletedHookAgent ?? null)
-  const focusedHookAgent = args.hookAgent ?? null
-  const fallbackHookAgent = args.siblingHookAgent ?? completedHookAgent ?? null
+      : resolveSignalAgentForLaunchOwner(
+          args.focusedCompletedHookAgent ?? args.siblingCompletedHookAgent,
+          launchAgent
+        )
+  const focusedHookAgent = resolveSignalAgentForLaunchOwner(args.hookAgent, launchAgent)
+  const siblingHookAgent = resolveSignalAgentForLaunchOwner(args.siblingHookAgent, launchAgent)
+  const fallbackHookAgent = siblingHookAgent ?? completedHookAgent
   const launchedAgentExited = resolveLaunchedAgentExitEvidence({
     title: args.title,
     defaultTitle: args.defaultTitle,
     isRemote: args.isRemote,
     hasObservedAgentSignal: args.hasObservedAgentSignal,
     hookAgent: focusedHookAgent,
-    siblingHookAgent: args.siblingHookAgent,
+    siblingHookAgent,
     hasCompletedHook,
     processAgent: args.processAgent,
     processShellForeground: args.processShellForeground

@@ -50,6 +50,10 @@ export type ShellReadySignal = {
 // ── Shell wrapper files ─────────────────────────────────────────────
 
 function getShellReadyWrapperRoot(): string {
+  // Why: this instance's userData must win over an inherited
+  // ORCA_USER_DATA_PATH (Orca launched from another Orca's terminal), so the
+  // wrapper writer root always matches the root buildPtyHostEnv hands to
+  // WSL children.
   const userDataPath = app?.getPath?.('userData') ?? process.env.ORCA_USER_DATA_PATH ?? tmpdir()
   return `${userDataPath}/shell-ready`
 }
@@ -64,8 +68,8 @@ function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): s
   ]
 }
 
-function shellReadyWrappersExist(): boolean {
-  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+function shellReadyWrappersExist(root = getShellReadyWrapperRoot()): boolean {
+  return getRequiredShellReadyWrapperPaths(root).every((path) => existsSync(path))
 }
 
 // Why: if our own process inherited ZDOTDIR from a parent shell that was
@@ -288,16 +292,12 @@ fi
 `
 }
 
-function ensureShellReadyWrappers(): void {
-  if (process.platform === 'win32') {
-    return
-  }
-  if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
+export function ensureShellReadyWrappersAt(root = getShellReadyWrapperRoot()): void {
+  if (didEnsureShellReadyWrappers && shellReadyWrappersExist(root)) {
     return
   }
   didEnsureShellReadyWrappers = true
 
-  const root = getShellReadyWrapperRoot()
   const zshDir = `${root}/zsh`
   const bashDir = `${root}/bash`
 
@@ -363,6 +363,13 @@ ${getZshFinalZdotdirRestoreBlock()}
     // Reset the flag so next attempt will try again
     didEnsureShellReadyWrappers = false
   }
+}
+
+function ensureShellReadyWrappers(): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  ensureShellReadyWrappersAt()
 }
 
 // ── Shell launch config ─────────────────────────────────────────────

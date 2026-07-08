@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
-import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 
@@ -72,8 +72,8 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         agentStatusByPaneKey: state.agentStatusByPaneKey
       })
       const titleFallbackAgent = isNativeChatShortcutTitleFallbackSafe(terminalLayout?.root)
-        ? (resolveTabAgentFromTitle(tab.label ?? '') ??
-          (terminalTab ? resolveTabAgentFromTitle(terminalTab.title) : null))
+        ? (resolveCommittedTitleAgentType(tab.label ?? '') ??
+          (terminalTab ? resolveCommittedTitleAgentType(terminalTab.title) : null))
         : null
       if (
         !canToggleNativeChat({

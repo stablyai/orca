@@ -52,6 +52,7 @@ import {
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
+import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
 import { joinRemotePath, isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
@@ -982,7 +983,13 @@ export class SshRelaySession {
     if (!this.mux || this.isDisposed()) {
       return
     }
-    const scanner = new PortScanner()
+    // Why: each scan walks /proc/*/fd on the remote host, so the scanner skips
+    // ticks entirely while no window can show the results (hidden to tray or
+    // minimized overnight) and rescans immediately when the window returns.
+    const scanner = new PortScanner({
+      isWindowVisible: () => isMainWindowVisible(this.getMainWindow()),
+      onWindowBecameVisible: onMainWindowBecameVisible
+    })
     this.portScanner = scanner
     // Why: capture the scanner instance so that a late ports.detect callback
     // from a previous relay session (before reconnect replaced it) is silently

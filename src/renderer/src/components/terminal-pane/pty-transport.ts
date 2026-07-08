@@ -57,6 +57,12 @@ export type {
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+// Why: an app SSH PTY id embeds the connection it was created under. When a pane
+// restored after a workspace/host change reattaches a session that belongs to a
+// *different* connection, the main-side id router rejects it with this phrase.
+// That session is unreachable from this pane, so it is stale like an expired one
+// — recover by spawning fresh rather than surfacing a red "file an issue" crash.
+const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
 const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
 
@@ -79,6 +85,10 @@ type ProcessPtyOutputOptions = {
   replayingBufferedData?: boolean
   suppressAttentionEvents?: boolean
   clearBeforeReplay?: boolean
+  // Why: a mid-escape tail the daemon could not serialize. The replay consumer
+  // must write it LAST, after the post-replay reset, so the next live chunk
+  // completes it instead of rendering literally (#7329).
+  pendingEscapeTailAnsi?: string
 }
 
 type PendingPtySideEffect = {
@@ -396,8 +406,16 @@ export function createPtyOutputProcessor({
     // session into the live store. The parser still consumes the bytes so they
     // do not leak into xterm, we just suppress the callback.
     if (options.replayingBufferedData && callbacks.onReplayData) {
-      if (options.clearBeforeReplay === false) {
-        callbacks.onReplayData(data, { clearBeforeReplay: false })
+      const replayMeta = {
+        ...(options.clearBeforeReplay === false ? { clearBeforeReplay: false } : {}),
+        ...(options.pendingEscapeTailAnsi
+          ? { pendingEscapeTailAnsi: options.pendingEscapeTailAnsi }
+          : {})
+      }
+      // Why: preserve the bare-data call shape when there is no replay metadata,
+      // so eager-buffer replay (which passes neither) is unchanged.
+      if (Object.keys(replayMeta).length > 0) {
+        callbacks.onReplayData(data, replayMeta)
       } else {
         callbacks.onReplayData(data)
       }
@@ -665,7 +683,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             isAlternateScreen: spawnResult.isAlternateScreen,
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
-            replay: spawnResult.replay
+            replay: spawnResult.replay,
+            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi
           } satisfies PtyConnectResult
         }
         if (spawnResult.launchConfig) {
@@ -677,7 +696,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return spawnResult.id
       } catch (err) {
         const msg = extractIpcErrorMessage(err, err instanceof Error ? err.message : String(err))
-        if (connectionId && options.sessionId && msg.includes(SSH_SESSION_EXPIRED_ERROR)) {
+        if (
+          connectionId &&
+          options.sessionId &&
+          (msg.includes(SSH_SESSION_EXPIRED_ERROR) ||
+            msg.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER))
+        ) {
           return {
             id: options.sessionId,
             sessionExpired: true
@@ -832,6 +856,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data: string): boolean {
+      if (!connected || !ptyId) {
+        return false
+      }
+      return inputWriteQueue.enqueue(ptyId, data)
+    },
+
+    // Why: the local write queue already drains a lone item in the same turn
+    // (no wall-clock debounce), so query replies are prompt without special
+    // handling. Kept as a distinct method so callers express intent and the
+    // remote transport can override with its flush-then-send behavior (#7329).
+    sendInputImmediate(data: string): boolean {
       if (!connected || !ptyId) {
         return false
       }

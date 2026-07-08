@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
-import type { SshRemotePtyLease, SshTarget } from './ssh-types'
+import type { RemovedSshTargetTombstone, SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
 import type { GitHubProjectSettings } from './github-project-types'
@@ -1022,6 +1022,9 @@ export type PersistedOpenFile = {
   runtimeEnvironmentId?: string | null
   /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
   dirtyDraftContent?: string
+  /** Signature of the disk content the dirty draft is based on; lets restore
+   *  re-derive a changed-on-disk conflict from ground truth. */
+  lastKnownDiskSignature?: string
 }
 
 export type WorkspaceSessionState = {
@@ -1137,6 +1140,13 @@ export type PRInfo = {
   // of the PR's own commits (behind update-branch/web commits). Cache staleness
   // checks must honor that confirmation without re-querying GitHub.
   confirmedContainedHeadOid?: string
+  // Why: the worktree HEAD OID this merged linked PR was confirmed to have
+  // diverged from (a definite not-contained probe). Head-scoped, not a bare
+  // boolean, so a PR-number-coalesced refresh broadcast cannot clear a sibling
+  // worktree whose own head is still on the PR's line of work. Clearing a
+  // durable linked PR requires this positive signal for that exact head, never
+  // the mere absence of a containment confirmation after a rate-limit/error.
+  headDivergedFromMergedPRAtOid?: string
   /** Target branch name for PR-created worktree compare-base repair. */
   baseRefName?: string
   prRepo?: GitHubRepositoryIdentity
@@ -1179,6 +1189,10 @@ export type GitHubPRRefreshAlias = {
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
+  // Why: request-time worktree HEAD. Merged branch-matched PRs are only visible
+  // for heads that belong to the PR, and refresh consumers need this snapshot to
+  // clear a durable linked PR once main confirms the head diverged.
+  currentHeadOid?: string | null
 }
 
 export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
@@ -1196,10 +1210,6 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedMergeable?: PRMergeableState | null
   cachedMergeStateStatus?: string | null
   localGitOptions?: { wslDistro?: string }
-  // Why: merged branch-matched PRs are only visible for heads that belong to
-  // the PR; without the worktree head, a panel-supplied fallback number would
-  // keep a merged PR alive head-blind after the branch moves on.
-  currentHeadOid?: string | null
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -2777,6 +2787,16 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Why: Orca bridges Codex session history from the user's real Codex home into
+   *  its managed home so /resume finds it, but defaults to ~/.codex. Users who run
+   *  Codex with a custom CODEX_HOME can point history discovery at that folder here.
+   *  History-only: this does not change which account/config/hooks Orca uses. */
+  codexSessionSourceHome?: {
+    /** Absolute host path; empty/undefined falls back to ~/.codex. */
+    host?: string
+    /** Per-WSL-distro absolute Linux path; missing distro falls back to <wslHome>/.codex. */
+    wsl?: Record<string, string>
+  }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
@@ -3491,7 +3511,18 @@ export type PersistedState = {
    *  pre-partition builds keep working. Optional/absent on legacy files. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
   sshTargets: SshTarget[]
+  /** SSH config aliases the user explicitly deleted. Suppresses re-import of the
+   *  matching ~/.ssh/config host on the next sync so a deleted host does not
+   *  reappear. Cleared for an alias when the user re-adds it or re-adopts config. */
+  deletedSshConfigAliases: string[]
+  /** Identity records for removed SSH targets. Lets a re-added host re-adopt
+   *  workspaces that were orphaned on the old target id. Pruned by age/count. */
+  removedSshTargetTombstones?: RemovedSshTargetTombstone[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  /** Daemon session ids of live local Claude launches. Seeds the Claude
+   *  live-PTY gate on startup so an early OAuth refresh cannot rotate the
+   *  single-use refresh token out from under a still-running daemon CLI. */
+  claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]

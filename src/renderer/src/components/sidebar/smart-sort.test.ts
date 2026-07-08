@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { describe, expect, it } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import {

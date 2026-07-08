@@ -13,10 +13,18 @@ const toastMocks = vi.hoisted(() => ({
   error: vi.fn()
 }))
 
+const deleteFlowMocks = vi.hoisted(() => ({
+  runWorktreeDelete: vi.fn()
+}))
+
 vi.mock('sonner', () => ({
   toast: {
     error: toastMocks.error
   }
+}))
+
+vi.mock('../sidebar/delete-worktree-flow', () => ({
+  runWorktreeDelete: deleteFlowMocks.runWorktreeDelete
 }))
 
 vi.mock('@/i18n/i18n', () => ({
@@ -39,6 +47,7 @@ describe('TerminalSshReconnectOverlay', () => {
   beforeEach(() => {
     useAppStore.setState(useAppStore.getInitialState(), true)
     toastMocks.error.mockReset()
+    deleteFlowMocks.runWorktreeDelete.mockReset()
   })
 
   afterEach(() => {
@@ -99,6 +108,30 @@ describe('TerminalSshReconnectOverlay', () => {
 
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith('Passphrase rejected'))
     expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled()
+  })
+
+  it('offers to remove the workspace (not Connect) when the SSH target was removed', async () => {
+    const connect = vi.fn().mockResolvedValue(undefined)
+    installSshConnect(connect)
+    const user = userEvent.setup()
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-dead"
+        targetLabel="ssh-dead"
+        status="disconnected"
+        targetRemoved
+        worktreeId="repo::/work/wt"
+      />
+    )
+
+    expect(screen.getByText('SSH host removed')).toBeInTheDocument()
+    // No Connect button — reconnect is impossible for a removed target.
+    expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Remove workspace' }))
+    expect(deleteFlowMocks.runWorktreeDelete).toHaveBeenCalledWith('repo::/work/wt')
+    expect(connect).not.toHaveBeenCalled()
   })
 
   it('publishes the returned SSH state so deferred terminal reattach can resume', async () => {

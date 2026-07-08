@@ -1,5 +1,17 @@
 import type { PRConflictSummary } from '../../shared/types'
 import { gitExecFileAsync } from '../git/runner'
+import {
+  __resetPRConflictSummaryDerivationCachesForTests,
+  buildConflictSummaryCacheKey,
+  dedupeBaseOidResolve,
+  dedupeSummaryDerivation,
+  getConflictSummaryGitRuntimeKey,
+  readCachedSummary,
+  readFreshBaseTipResolution,
+  rememberUnresolvedBaseTip,
+  storeResolvedBaseTip,
+  storeCachedSummary
+} from './conflict-summary-cache'
 
 type LocalGitExecOptions = {
   wslDistro?: string
@@ -7,8 +19,9 @@ type LocalGitExecOptions = {
 
 const mergeTreeMergeBaseUnsupportedRuntimes = new Set<string>()
 
-export function __resetPRConflictSummaryGitCapabilityCacheForTests(): void {
+export function __resetPRConflictSummaryCachesForTests(): void {
   mergeTreeMergeBaseUnsupportedRuntimes.clear()
+  __resetPRConflictSummaryDerivationCachesForTests()
 }
 
 export async function getPRConflictSummary(
@@ -18,45 +31,122 @@ export async function getPRConflictSummary(
   headRefOid: string,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRConflictSummary | undefined> {
-  try {
-    // Why: the renderer only needs a read-only merge-conflict snapshot. We
-    // derive it from local git state so the PR card can show GitHub-style
-    // detail without spending additional gh API calls on every refresh. We use
-    // GitHub's head OID directly because the registered repo path may not have
-    // a matching local branch name for the PR head. For the base side, prefer a
-    // freshly-fetched remote-tracking ref so Orca matches GitHub's portal,
-    // which compares against the latest base branch tip rather than the PR's
-    // older pinned baseRefOid snapshot.
-    const latestBaseOid = await resolveLatestBaseOid(
+  // Why: the renderer only needs a read-only merge-conflict snapshot. We
+  // derive it from local git state so the PR card can show GitHub-style
+  // detail without spending additional gh API calls on every refresh. We use
+  // GitHub's head OID directly because the registered repo path may not have
+  // a matching local branch name for the PR head. For the base side, prefer a
+  // freshly-fetched remote-tracking ref so Orca matches GitHub's portal,
+  // which compares against the latest base branch tip rather than the PR's
+  // older pinned baseRefOid snapshot.
+  const latestBaseOid = await resolveLatestBaseOidThrottled(
+    repoPath,
+    baseRefName,
+    baseRefOid,
+    localGitOptions
+  )
+  // Why: the summary is a pure function of the two commit OIDs, so a key hit
+  // can skip the whole merge-base/rev-list/merge-tree subprocess chain.
+  const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
+  const summaryKey = buildConflictSummaryCacheKey(
+    runtimeKey,
+    repoPath,
+    baseRefName,
+    headRefOid,
+    latestBaseOid
+  )
+  const cached = readCachedSummary(summaryKey)
+  if (cached) {
+    return cached.value
+  }
+
+  // Why: different GitHub reads can report different pinned baseRefOid values
+  // while still resolving to the same live base tip; dedupe the expensive
+  // local derivation on the actual summary identity.
+  return dedupeSummaryDerivation(summaryKey, () =>
+    derivePRConflictSummary(
       repoPath,
       baseRefName,
-      baseRefOid,
+      headRefOid,
+      latestBaseOid,
+      summaryKey,
       localGitOptions
     )
+  )
+}
+
+async function derivePRConflictSummary(
+  repoPath: string,
+  baseRefName: string,
+  headRefOid: string,
+  latestBaseOid: string,
+  summaryKey: string,
+  localGitOptions: LocalGitExecOptions
+): Promise<PRConflictSummary | undefined> {
+  const cached = readCachedSummary(summaryKey)
+  if (cached) {
+    return cached.value
+  }
+
+  try {
     const mergeBase = await resolveMergeBase(repoPath, headRefOid, latestBaseOid, localGitOptions)
     const [commitsBehind, files] = await Promise.all([
       countCommits(repoPath, `${headRefOid}..${latestBaseOid}`, localGitOptions),
       loadConflictingFiles(repoPath, mergeBase, headRefOid, latestBaseOid, localGitOptions)
     ])
 
-    return {
+    const summary = {
       baseRef: baseRefName,
       baseCommit: latestBaseOid.slice(0, 7),
       commitsBehind,
       files,
       ...(files.length === 0 ? { localMergeState: 'clean' as const } : {})
     }
+    storeCachedSummary(summaryKey, summary)
+    return summary
   } catch {
+    storeCachedSummary(summaryKey, undefined)
     return undefined
   }
 }
 
-async function resolveLatestBaseOid(
+async function resolveLatestBaseOidThrottled(
   repoPath: string,
   baseRefName: string,
   fallbackBaseOid: string,
   localGitOptions: LocalGitExecOptions
 ): Promise<string> {
+  const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
+  const baseKey = buildConflictSummaryCacheKey(runtimeKey, repoPath, baseRefName)
+  const cachedResolution = readFreshBaseTipResolution(baseKey)
+  if (cachedResolution) {
+    return cachedResolution.kind === 'resolved' ? cachedResolution.oid : fallbackBaseOid
+  }
+  return dedupeBaseOidResolve(baseKey, async () => {
+    // Why re-check inside the dedupe slot: a sibling caller may have finished
+    // resolving between our cache read and this factory starting.
+    const freshResolution = readFreshBaseTipResolution(baseKey)
+    if (freshResolution) {
+      return freshResolution
+    }
+    const oid = await resolveLatestBaseOid(repoPath, baseRefName, localGitOptions)
+    if (oid) {
+      storeResolvedBaseTip(baseKey, oid)
+      return { kind: 'resolved', oid }
+    }
+    // Why cache the unresolved probe, not the caller fallback: the fetch
+    // attempt is branch-wide expensive work, but GitHub's baseRefOid is
+    // PR-specific and must not leak to sibling PRs on the same base branch.
+    rememberUnresolvedBaseTip(baseKey)
+    return { kind: 'fallback-unresolved' }
+  }).then((resolution) => (resolution.kind === 'resolved' ? resolution.oid : fallbackBaseOid))
+}
+
+async function resolveLatestBaseOid(
+  repoPath: string,
+  baseRefName: string,
+  localGitOptions: LocalGitExecOptions
+): Promise<string | null> {
   const remoteName = 'origin'
 
   try {
@@ -88,7 +178,7 @@ async function resolveLatestBaseOid(
     }
   }
 
-  return fallbackBaseOid
+  return null
 }
 
 async function resolveMergeBase(
@@ -123,7 +213,7 @@ async function loadConflictingFiles(
   baseOid: string,
   localGitOptions: LocalGitExecOptions
 ): Promise<string[]> {
-  const capabilityKey = getMergeTreeCapabilityKey(localGitOptions)
+  const capabilityKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
   const modernArgs = [
     'merge-tree',
     '--write-tree',
@@ -191,10 +281,6 @@ async function loadConflictingFilesWithLegacyMergeTree(
     }
     throw fallbackError
   }
-}
-
-function getMergeTreeCapabilityKey(localGitOptions: LocalGitExecOptions): string {
-  return localGitOptions.wslDistro ? `wsl:${localGitOptions.wslDistro}` : 'local:host'
 }
 
 function parseMergeTreeNameOnlyOutput(stdout: string): string[] {

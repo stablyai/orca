@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: integration tests cover the full mobile subscribe lifecycle across many scenarios; splitting would scatter related assertions. */
 /**
  * Integration tests for the server-authoritative mobile subscribe lifecycle.
  * Tests handleMobileSubscribe, handleMobileUnsubscribe, applyMobileDisplayMode,

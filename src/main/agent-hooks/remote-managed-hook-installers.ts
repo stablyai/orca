@@ -7,7 +7,9 @@ import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
+import { copilotHookService } from '../copilot/hook-service'
 import { devinHookService } from '../devin/hook-service'
+import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
@@ -27,11 +29,19 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],
   ['cursor', (sftp, remoteHome) => cursorHookService.installRemote(sftp, remoteHome)],
   ['command-code', (sftp, remoteHome) => commandCodeHookService.installRemote(sftp, remoteHome)],
+  ['copilot', (sftp, remoteHome) => copilotHookService.installRemote(sftp, remoteHome)],
   ['grok', (sftp, remoteHome) => grokHookService.installRemote(sftp, remoteHome)],
+  ['droid', (sftp, remoteHome) => droidHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
   ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)]
 ]
+
+/** Agents wired into the remote (SSH) hook installer. Exported so an invariant
+ *  test can assert every locally-managed agent that implements `installRemote`
+ *  is registered here — the omission that hid Droid/Copilot status over SSH. */
+export const REMOTE_MANAGED_HOOK_INSTALLER_AGENTS: readonly AgentHookInstallStatus['agent'][] =
+  REMOTE_MANAGED_HOOK_INSTALLERS.map(([agent]) => agent)
 
 export async function installRemoteManagedAgentHooks(
   sftp: SFTPWrapper,

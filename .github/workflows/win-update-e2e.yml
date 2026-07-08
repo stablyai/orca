@@ -1,0 +1,145 @@
+name: Windows Update-Survival E2E
+
+# Why: proves what happens to terminal sessions across a real Windows app update
+# by installing one released version, updating to another, and asserting on the
+# packaged artifacts (daemon survival, terminal interactivity, zero console
+# flashes). This MUST run on a disposable CI Windows: electron-builder's oneClick
+# installer uninstalls the registry-registered copy of the app before every
+# install, so running the harness on a machine with a real Orca install would
+# delete it. A fresh runner has no Orca registered, so it is the only safe home
+# for install-based testing. Manual dispatch only.
+
+# Why: workflow_dispatch only works once a workflow is on the default branch.
+# To exercise this from the unmerged feature branch WITHOUT touching main, a
+# push trigger scoped to that exact branch runs the workflow from the branch's
+# own tree. The paths filter keeps it to harness/workflow edits so ordinary
+# commits don't spend 30 min of Windows runner time. Push runs have no inputs,
+# so every parameter falls back to a default below.
+on:
+  push:
+    branches:
+      - Jinwoo-H/windows-update-survival
+    paths:
+      - 'tools/win-update-e2e/**'
+      - '.github/workflows/win-update-e2e.yml'
+  workflow_dispatch:
+    inputs:
+      from_tag:
+        description: Release tag to install first (e.g. v1.4.124-rc.8)
+        required: true
+        type: string
+      to_tag:
+        description: Release tag to update to (e.g. v1.4.124-rc.9)
+        required: true
+        type: string
+      expect:
+        description: Expected outcome profile
+        required: true
+        type: choice
+        default: cold-restore
+        options:
+          - cold-restore
+          - survival
+      asset_pattern:
+        description: Installer asset glob
+        required: false
+        type: string
+        default: '*windows-setup.exe'
+      soak_seconds:
+        description: Post-relaunch console-window watch duration
+        required: false
+        type: string
+        default: '60'
+
+permissions:
+  contents: read
+
+# Why: cancel a superseded run when iterating — a new push to the branch makes
+# the in-flight Windows job obsolete, so free the runner immediately.
+concurrency:
+  group: win-update-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-e2e:
+    name: update ${{ inputs.from_tag || 'v1.4.124-rc.8' }} -> ${{ inputs.to_tag || 'v1.4.124-rc.9' }} (${{ inputs.expect || 'cold-restore' }})
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      FROM_TAG: ${{ inputs.from_tag || 'v1.4.124-rc.8' }}
+      TO_TAG: ${{ inputs.to_tag || 'v1.4.124-rc.9' }}
+      EXPECT: ${{ inputs.expect || 'cold-restore' }}
+      ASSET_PATTERN: ${{ inputs.asset_pattern || '*windows-setup.exe' }}
+      SOAK_SECONDS: ${{ inputs.soak_seconds || '60' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # This job only reads the repo and downloads a release; it never pushes.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: the harness only needs its runtime deps (the Playwright Electron
+      # driver); it drives already-built installer artifacts, so no app build.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Why: fail fast with a readable message if a tag has no matching Windows
+      # installer, rather than deep inside the harness.
+      - name: Download installers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/from | Out-Null
+          New-Item -ItemType Directory -Force artifacts/to | Out-Null
+          gh release download "$env:FROM_TAG" --repo "${{ github.repository }}" --pattern "$env:ASSET_PATTERN" --dir artifacts/from
+          gh release download "$env:TO_TAG" --repo "${{ github.repository }}" --pattern "$env:ASSET_PATTERN" --dir artifacts/to
+          $from = Get-ChildItem artifacts/from -Filter *.exe | Select-Object -First 1
+          $to = Get-ChildItem artifacts/to -Filter *.exe | Select-Object -First 1
+          if (-not $from) { throw "No installer matching '$env:ASSET_PATTERN' in $env:FROM_TAG" }
+          if (-not $to) { throw "No installer matching '$env:ASSET_PATTERN' in $env:TO_TAG" }
+          "FROM_EXE=$($from.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "TO_EXE=$($to.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      # Why: no --install-dir here. A CI runner has no real Orca registered, so
+      # the harness installs to the default per-user location and owns it — the
+      # isolated-install machinery exists only to (imperfectly) protect a real
+      # developer install, which does not apply on a throwaway runner.
+      - name: Run update-survival harness
+        id: harness
+        shell: pwsh
+        env:
+          # Why: on a driving failure the harness dumps a screenshot + DOM state
+          # here so the actual post-onboarding UI is visible in the artifacts.
+          ORCA_E2E_DIAG_DIR: artifacts/diag
+        run: |
+          $log = "artifacts/harness-output.log"
+          node tools/win-update-e2e/run.mjs `
+            --from "$env:FROM_EXE" `
+            --to "$env:TO_EXE" `
+            --expect "$env:EXPECT" `
+            --soak-seconds "$env:SOAK_SECONDS" 2>&1 | Tee-Object -FilePath $log
+          exit $LASTEXITCODE
+
+      - name: Upload harness output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-update-e2e-output
+          # Why: log + diagnostics only, never the multi-hundred-MB installers.
+          path: |
+            artifacts/harness-output.log
+            artifacts/diag/**
+          retention-days: 7
+          if-no-files-found: warn

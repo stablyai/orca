@@ -5,6 +5,8 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
+import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -249,6 +251,39 @@ export function runWorktreeDelete(worktreeId: string): void {
     return
   }
   state.clearWorktreeDeleteState(worktreeId)
+
+  // Why: a workspace on a removed/disconnected SSH host cannot go through the
+  // normal remote removal — its provider is gone, so worktrees:remove throws
+  // before any cleanup. Route to a dialog that offers reconnect-and-delete
+  // (when the target still exists) or a local-only forget.
+  //
+  // Skip this on paired web/mobile clients: SSH targets/labels/connection state
+  // are desktop-only, so those clients have empty sshTargetLabels and would
+  // misclassify every SSH repo as a ghost, routing to a forget dialog whose
+  // local-only backend is unavailable there. Their normal worktree.rm RPC path
+  // already handles the delete against the desktop runtime.
+  const repo = state.repos.find((entry) => entry.id === target.repoId) ?? null
+  const sshResolution = isPairedWebClientWindow()
+    ? { kind: 'not-ssh' as const }
+    : resolveSshWorkspaceForget({
+        repo,
+        sshConnectionStates: state.sshConnectionStates,
+        sshTargetLabels: state.sshTargetLabels
+      })
+  if (sshResolution.kind === 'ghost' || sshResolution.kind === 'disconnected') {
+    // Why no lineage-children warning here (unlike the normal path below):
+    // forget-local is metadata-only and per-worktree, so it can't fail on a
+    // still-registered child the way a remote git removal would. Any descendants
+    // live on the same ghost host and remain independently visible/forgettable —
+    // they are not orphaned unrecoverably.
+    state.openModal('forget-ssh-workspace', {
+      worktreeId,
+      displayName: target.displayName,
+      resolution: sshResolution
+    })
+    return
+  }
+
   const hasLineageChildren =
     getWorkspaceDeleteLineage(target, state.allWorktrees(), state.worktreeLineageById).descendants
       .length > 0

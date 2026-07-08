@@ -520,6 +520,8 @@ const api = {
 
     remove: (args) => ipcRenderer.invoke('repos:remove', args),
 
+    removeForHost: (args) => ipcRenderer.invoke('repos:removeForHost', args),
+
     reorder: (args) => ipcRenderer.invoke('repos:reorder', args),
 
     update: (args) => ipcRenderer.invoke('repos:update', args),
@@ -651,6 +653,8 @@ const api = {
     resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
     remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
+
+    forgetLocal: (args) => ipcRenderer.invoke('worktrees:forgetLocal', args),
 
     forceDeletePreservedBranch: (args) =>
       ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', args),
@@ -850,6 +854,7 @@ const api = {
       seq?: number
       source?: 'headless' | 'renderer'
       alternateScreen?: boolean
+      pendingEscapeTailAnsi?: string
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -897,6 +902,7 @@ const api = {
         seq?: number
         rawLength?: number
         background?: boolean
+        droppedBacklog?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
@@ -907,6 +913,7 @@ const api = {
           seq?: number
           rawLength?: number
           background?: boolean
+          droppedBacklog?: boolean
         }
       ) => callback(data)
       ipcRenderer.on('pty:data', listener)
@@ -3452,6 +3459,11 @@ const api = {
       ipcRenderer.on('terminal:zoom', listener)
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
+    onSystemResumed: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('system:resumed', listener)
+      return () => ipcRenderer.removeListener('system:resumed', listener)
+    },
     readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
       ipcRenderer.invoke('clipboard:readText', options),
     readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
@@ -3828,6 +3840,9 @@ const api = {
   ssh: {
     listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
 
+    listRemovedTargetLabels: (): Promise<Record<string, string>> =>
+      ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
+
     addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTarget> =>
       ipcRenderer.invoke('ssh:addTarget', args),
 
@@ -3839,7 +3854,8 @@ const api = {
     removeTarget: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:removeTarget', args),
 
-    importConfig: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:importConfig'),
+    importConfig: (args?: { reAdopt?: boolean }): Promise<SshTarget[]> =>
+      ipcRenderer.invoke('ssh:importConfig', args),
 
     connect: (args: { targetId: string }): Promise<SshConnectionState | null> =>
       ipcRenderer.invoke('ssh:connect', args),

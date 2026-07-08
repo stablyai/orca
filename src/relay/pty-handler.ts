@@ -10,6 +10,7 @@ import {
   resolveProcessCwd,
   processHasChildren,
   getForegroundProcessName,
+  isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
@@ -689,6 +690,22 @@ export class PtyHandler {
     // would hit a neutralized no-op on POSIX. The explicit check converts a
     // silent failure into the existing error callers already handle.
     if (!managed || managed.disposed) {
+      throw new Error(`PTY "${id}" not found`)
+    }
+
+    // Why: a reattach can arrive for a relay PTY whose backing shell already
+    // died without node-pty delivering onExit (e.g. the child was reaped out of
+    // band while the SSH channel was down). The map entry lingers, so attach
+    // would otherwise "succeed" with an empty replay and strand the reattached
+    // pane on a black, unresponsive shell. Prove liveness here; if the pid is
+    // provably gone, reap the stale entry and report not-found so the caller
+    // drops the dead lease and spawns fresh — the same recovery path an expired
+    // grace window already takes.
+    if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
+      this.notifyExitListener(managed)
+      disposeManagedPty(managed)
+      this.ptys.delete(id)
+      this.clearPtyFlowState(id)
       throw new Error(`PTY "${id}" not found`)
     }
 

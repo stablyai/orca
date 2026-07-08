@@ -119,6 +119,12 @@ const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 // not resurrect on hydrate.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
+// Why: closed-tab suppression only needs to cover recently closed tabs — a
+// status event for a long-closed tab cannot arrive once its process/hooks are
+// gone. Bound the set so it can't grow one entry per tab close for the whole
+// session (it is otherwise only cleared at app quit).
+export const CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
+
 type LastStatusFile = {
   version: number
   entries: Record<string, EnrichedAgentHookEventPayload>
@@ -596,7 +602,17 @@ export class AgentHookServer {
   }
 
   private markTabClosedForAgentStatus(tabId: string): void {
+    // Delete-then-add keeps recently closed tabs most-recent so eviction only
+    // sheds the oldest ids, which can no longer receive status events.
+    this.closedAgentStatusTabIds.delete(tabId)
     this.closedAgentStatusTabIds.add(tabId)
+    while (this.closedAgentStatusTabIds.size > CLOSED_AGENT_STATUS_TAB_IDS_MAX) {
+      const oldest = this.closedAgentStatusTabIds.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.closedAgentStatusTabIds.delete(oldest)
+    }
   }
 
   private shouldSuppressClosedTabStatus(paneKey: string): boolean {

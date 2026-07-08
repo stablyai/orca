@@ -17,70 +17,53 @@ describe('resolveTerminalStartupCwd', () => {
     expect(resolveTerminalStartupCwd('/repo/app', 'packages/web')).toBe('/repo/app/packages/web')
   })
 
-  it('rejects sibling paths outside the worktree', () => {
-    expect(() => resolveTerminalStartupCwd('/repo/app', '/repo/app-other')).toThrow(
-      'Terminal cwd must be inside the selected worktree.'
-    )
+  it('allows absolute cwds outside the worktree (#7685)', () => {
+    // Why: opening/splitting a terminal outside the worktree (e.g. after
+    // `cd ..`) is allowed; the cwd is resolved, not constrained.
+    expect(resolveTerminalStartupCwd('/repo/app', '/repo/app-other')).toBe('/repo/app-other')
   })
 
-  it('rejects parent traversal outside the worktree', () => {
-    expect(() => resolveTerminalStartupCwd('/repo/app', '../other')).toThrow(
-      'Terminal cwd must be inside the selected worktree.'
-    )
+  it('resolves parent traversal to a path outside the worktree (#7685)', () => {
+    expect(resolveTerminalStartupCwd('/repo/app', '../other')).toBe('/repo/other')
   })
 
   it('trims whitespace-padded requested cwds before resolving', () => {
     expect(resolveTerminalStartupCwd('/repo/app', ' packages/web ')).toBe('/repo/app/packages/web')
   })
 
-  it('falls back to the default cwd when a symlink escapes the worktree', () => {
-    const canonicalize = (path: string): string | null =>
-      path === '/repo/app/link' ? '/outside/target' : path
-    expect(
-      resolveTerminalStartupCwd('/repo/app', 'link', { canonicalizePath: canonicalize })
-    ).toBeUndefined()
+  it('returns undefined for an empty requested cwd', () => {
+    expect(resolveTerminalStartupCwd('/repo/app', '')).toBeUndefined()
+    expect(resolveTerminalStartupCwd('/repo/app', '   ')).toBeUndefined()
+    expect(resolveTerminalStartupCwd('/repo/app', null)).toBeUndefined()
   })
 
-  it('accepts cwds under a symlinked worktree root', () => {
-    const canonicalize = (path: string): string | null => path.replace(/^\/tmp\//, '/private/tmp/')
-    expect(
-      resolveTerminalStartupCwd('/tmp/repo', 'packages/web', { canonicalizePath: canonicalize })
-    ).toBe('/tmp/repo/packages/web')
-  })
-
-  it('skips the symlink re-check when a path cannot be canonicalized', () => {
-    expect(
-      resolveTerminalStartupCwd('/repo/app', 'missing', { canonicalizePath: () => null })
-    ).toBe('/repo/app/missing')
-  })
-
-  it('handles Windows path containment without case drift', () => {
+  it('normalizes Windows separators and allows out-of-worktree drives', () => {
     expect(resolveTerminalStartupCwd('C:\\Repo\\App', 'packages\\web')).toBe(
       'C:/Repo/App/packages/web'
     )
-    expect(() => resolveTerminalStartupCwd('C:\\Repo\\App', 'C:\\Repo\\AppOther')).toThrow(
-      'Terminal cwd must be inside the selected worktree.'
+    expect(resolveTerminalStartupCwd('C:\\Repo\\App', 'C:\\Repo\\AppOther')).toBe(
+      'C:/Repo/AppOther'
     )
   })
 
-  it('validates renderer PTY cwd values against raw worktree IDs', () => {
+  it('resolves renderer PTY cwd values against raw worktree IDs', () => {
     expect(
       resolveTerminalStartupCwdForWorkspace({
         workspaceId: 'repo-1::/repo/app',
         requestedCwd: '/repo/app/packages/web'
       })
     ).toBe('/repo/app/packages/web')
-    expect(() =>
+    expect(
       resolveTerminalStartupCwdForWorkspace({
         workspaceId: 'repo-1::/repo/app',
         requestedCwd: '/repo/app-other'
       })
-    ).toThrow('Terminal cwd must be inside the selected worktree.')
+    ).toBe('/repo/app-other')
   })
 
   it('passes floating terminal cwds through untouched', () => {
     // Why: floating terminal cwds are validated against trusted-directory
-    // grants in main and have no worktree root to contain within.
+    // grants in main and have no worktree root to resolve against.
     expect(
       resolveTerminalStartupCwdForWorkspace({
         workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -89,7 +72,7 @@ describe('resolveTerminalStartupCwd', () => {
     ).toBe('/Volumes/work/notes')
   })
 
-  it('refuses the requested cwd when no workspace root is resolvable', () => {
+  it('falls back to the provider default when no workspace root is resolvable', () => {
     expect(
       resolveTerminalStartupCwdForWorkspace({
         workspaceId: undefined,
@@ -104,7 +87,7 @@ describe('resolveTerminalStartupCwd', () => {
     ).toBeUndefined()
   })
 
-  it('validates renderer PTY cwd values against folder workspace keys', () => {
+  it('resolves renderer PTY cwd values against folder workspace keys', () => {
     expect(
       resolveTerminalStartupCwdForWorkspace({
         workspaceId: folderWorkspaceKey('folder-1'),
@@ -112,12 +95,12 @@ describe('resolveTerminalStartupCwd', () => {
         resolveFolderWorkspacePath: (id) => (id === 'folder-1' ? '/repo/app' : null)
       })
     ).toBe('/repo/app/packages/web')
-    expect(() =>
+    expect(
       resolveTerminalStartupCwdForWorkspace({
         workspaceId: folderWorkspaceKey('folder-1'),
         requestedCwd: '../other',
         resolveFolderWorkspacePath: (id) => (id === 'folder-1' ? '/repo/app' : null)
       })
-    ).toThrow('Terminal cwd must be inside the selected worktree.')
+    ).toBe('/repo/other')
   })
 })

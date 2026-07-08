@@ -123,6 +123,12 @@ vi.mock('react', async () => {
   }
 })
 
+// The headless React mock above stubs hooks, so zustand's useShallow (which
+// calls useRef) has no dispatcher; make it a pass-through like the store mock.
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: (selector: unknown) => selector
+}))
+
 vi.mock('lucide-react', () => ({
   FilePlus: function FilePlus() {
     return null

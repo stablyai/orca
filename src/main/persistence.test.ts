@@ -2988,6 +2988,16 @@ describe('Store', () => {
     expect(updated?.projectGroupOrder).toBe(1)
   })
 
+  it('updates repo execution host identity', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+
+    const updated = store.updateRepo('r1', { executionHostId: 'runtime:env-1' })
+
+    expect(updated?.executionHostId).toBe('runtime:env-1')
+    expect(store.getRepo('r1')?.executionHostId).toBe('runtime:env-1')
+  })
+
   it('getRepo returns undefined for nonexistent id', async () => {
     const store = await createStore()
     expect(store.getRepo('nonexistent')).toBeUndefined()
@@ -3056,6 +3066,136 @@ describe('Store', () => {
     expect(store.getWorktreeLineage('r1::/path/child')).toBeUndefined()
     expect(store.getWorktreeLineage('r2::/other-child')).toBeUndefined()
     expect(store.getWorktreeLineage('r2::/other')).toBeDefined()
+  })
+
+  // ── 6b. removeProjectForHost is host-scoped ───────────────────────────
+
+  it('removeProjectForHost removes only the target host row for a shared repo id', async () => {
+    const store = await createStore()
+    // Same repo id on both local and an SSH host.
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/remote/repo',
+        connectionId: 'ssh-old',
+        executionHostId: 'ssh:ssh-old'
+      })
+    )
+    store.setWorktreeMeta('shared::/local/repo/wt', { displayName: 'local-wt', hostId: 'local' })
+    store.setWorktreeMeta('shared::/remote/repo/wt', {
+      displayName: 'remote-wt',
+      hostId: 'ssh:ssh-old'
+    })
+
+    store.removeProjectForHost('shared', 'ssh:ssh-old')
+
+    const remaining = store.getRepos().filter((r) => r.id === 'shared')
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0].path).toBe('/local/repo')
+    // Local worktree meta survives; the SSH host's meta is pruned.
+    expect(store.getWorktreeMeta('shared::/local/repo/wt')).toBeDefined()
+    expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
+  })
+
+  it('removeProjectForHost prunes the SSH host meta (tagged hostId) for a shared id', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/remote/repo',
+        connectionId: 'ssh-old',
+        executionHostId: 'ssh:ssh-old'
+      })
+    )
+    // SSH worktree meta correctly carries hostId (the normal, stamped case).
+    store.setWorktreeMeta('shared::/remote/repo/wt', {
+      displayName: 'remote-wt',
+      hostId: 'ssh:ssh-old'
+    })
+    // A hostId-less meta under the same id is treated as local and left behind
+    // (conservative: never deletes the wrong host's meta).
+    store.setWorktreeMeta('shared::/local/repo/wt', { displayName: 'local-wt' })
+
+    store.removeProjectForHost('shared', 'ssh:ssh-old')
+
+    expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
+    expect(store.getWorktreeMeta('shared::/local/repo/wt')).toBeDefined()
+  })
+
+  it('removeProjectForHost prunes everything when the id exists on no other host', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'only', connectionId: 'ssh-x', executionHostId: 'ssh:ssh-x' }))
+    store.setWorktreeMeta('only::/repo/wt', { displayName: 'wt', hostId: 'ssh:ssh-x' })
+
+    store.removeProjectForHost('only', 'ssh:ssh-x')
+
+    expect(store.getRepo('only')).toBeUndefined()
+    expect(store.getWorktreeMeta('only::/repo/wt')).toBeUndefined()
+  })
+
+  // ── 6c. reassignSshTargetId re-adopts orphaned workspaces ─────────────
+
+  it('reassignSshTargetId re-points repos and worktree metas onto the new id', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old', executionHostId: 'ssh:ssh-old' }))
+    store.setWorktreeMeta('r1::/repo/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
+
+    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+
+    expect(count).toBe(1)
+    const repo = store.getRepo('r1')!
+    expect(repo.connectionId).toBe('ssh-new')
+    expect(repo.executionHostId).toBe('ssh:ssh-new')
+    expect(store.getWorktreeMeta('r1::/repo/wt')!.hostId).toBe('ssh:ssh-new')
+  })
+
+  it('reassignSshTargetId leaves repos on other hosts untouched', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'local-repo', path: '/local' }))
+    store.addRepo(
+      makeRepo({
+        id: 'ssh-repo',
+        path: '/remote',
+        connectionId: 'ssh-old',
+        executionHostId: 'ssh:ssh-old'
+      })
+    )
+
+    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+
+    expect(count).toBe(1)
+    expect(store.getRepo('local-repo')!.connectionId).toBeUndefined()
+    expect(store.getRepo('ssh-repo')!.connectionId).toBe('ssh-new')
+  })
+
+  it('reassignSshTargetId re-points a repo that only carries connectionId (no executionHostId)', async () => {
+    const store = await createStore()
+    // SSH repos created via addRemoteRepoFromPath leave executionHostId unset.
+    store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old' }))
+
+    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+
+    expect(count).toBe(1)
+    const repo = store.getRepo('r1')!
+    expect(repo.connectionId).toBe('ssh-new')
+    // Must not stamp an executionHostId where there wasn't one.
+    expect(repo.executionHostId).toBeUndefined()
+  })
+
+  it('reassignSshTargetId persists a worktree-meta-only re-point (no matching repo)', async () => {
+    const store = await createStore()
+    // A meta on the old SSH host with no corresponding repo row — the re-point
+    // must still be saved, not left in memory only.
+    store.setWorktreeMeta('r1::/remote/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
+
+    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    expect(count).toBe(0) // no repo matched
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorktreeMeta('r1::/remote/wt')?.hostId).toBe('ssh:ssh-new')
   })
 
   // ── 7. updateRepo ──────────────────────────────────────────────────
@@ -8444,6 +8584,69 @@ describe('Store', () => {
 
     expect(store.getWorkspaceLineage(folderLineage.childWorkspaceKey)).toBeUndefined()
     expect(store.getWorkspaceLineage(unrelatedLineage.childWorkspaceKey)).toEqual(unrelatedLineage)
+  })
+
+  // ── Live Claude PTY session ids (STA-1246) ─────────────────────────
+
+  describe('claudeLivePtySessionIds', () => {
+    it('persists added ids across reloads and removes them durably', async () => {
+      const store = await createStore()
+
+      store.addClaudeLivePtySessionId('claude-session-1')
+      store.addClaudeLivePtySessionId('claude-session-2')
+      store.addClaudeLivePtySessionId('claude-session-1')
+
+      expect(store.getClaudeLivePtySessionIds()).toEqual(['claude-session-1', 'claude-session-2'])
+
+      const reloaded = await createStore()
+      expect(reloaded.getClaudeLivePtySessionIds()).toEqual([
+        'claude-session-1',
+        'claude-session-2'
+      ])
+
+      reloaded.removeClaudeLivePtySessionId('claude-session-1')
+      reloaded.flush()
+
+      const reloadedAgain = await createStore()
+      expect(reloadedAgain.getClaudeLivePtySessionIds()).toEqual(['claude-session-2'])
+    })
+
+    it('drops malformed persisted entries on load', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        claudeLivePtySessionIds: ['valid-id', '', 42, null, 'valid-id', 'x'.repeat(513)]
+      })
+
+      const store = await createStore()
+
+      expect(store.getClaudeLivePtySessionIds()).toEqual(['valid-id'])
+    })
+
+    it('keeps the newest ids when an oversized persisted list is loaded', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        claudeLivePtySessionIds: Array.from({ length: 205 }, (_, index) => `claude-${index}`)
+      })
+
+      const store = await createStore()
+
+      const ids = store.getClaudeLivePtySessionIds()
+      expect(ids).toHaveLength(200)
+      expect(ids[0]).toBe('claude-5')
+      expect(ids[199]).toBe('claude-204')
+    })
+
+    it('caps the persisted id list', async () => {
+      const store = await createStore()
+      for (let index = 0; index < 205; index += 1) {
+        store.addClaudeLivePtySessionId(`claude-session-${index}`)
+      }
+
+      const ids = store.getClaudeLivePtySessionIds()
+      expect(ids).toHaveLength(200)
+      expect(ids[0]).toBe('claude-session-5')
+      expect(ids[199]).toBe('claude-session-204')
+    })
   })
 
   // ── Rolling backups (issue #1158) ──────────────────────────────────

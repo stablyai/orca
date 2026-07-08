@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: filesystem watcher tests share module-level
-state across local, WSL, and SSH lifecycle paths; keeping them together makes
-closeAllWatchers cleanup regressions visible in one suite. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, getSshFilesystemProviderMock } = vi.hoisted(() => ({

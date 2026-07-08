@@ -27,8 +27,55 @@ import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-f
 
 export type ReplayingPanesRef = React.RefObject<Map<number, number>>
 
+// Why: the guard normally releases in xterm's write-completion callback, but
+// that callback never fires for a pane whose terminal has not been flushed —
+// e.g. a cold-restore reattach that replays into a just-mounted / offscreen
+// pane. Without a ceiling the counter leaks, isPaneReplaying() stays true, and
+// the onData handler silently drops EVERY keystroke (the pane looks alive but
+// ignores input). Release deterministically after this bound so the guard
+// always clears; in the normal path onParsed fires within milliseconds and
+// cancels it first. Tradeoff: if the callback is lost and the pane parses the
+// replayed buffer only after this bound elapses (e.g. rendering resumes long
+// after restore), xterm's auto-replies to any device queries in that buffer can
+// leak to the shell as input. Accepted as strictly preferable to a permanent
+// input lockout, and bounded by the ~100 KB replay cap.
+const REPLAY_GUARD_RELEASE_FALLBACK_MS = 1000
+
 export function isPaneReplaying(ref: ReplayingPanesRef, paneId: number): boolean {
   return (ref.current.get(paneId) ?? 0) > 0
+}
+
+/** Engage the per-pane replay guard and return a `finish` callback that
+ *  releases it exactly once. The guard also auto-releases after
+ *  REPLAY_GUARD_RELEASE_FALLBACK_MS so a missing xterm parse callback can never
+ *  strand it engaged. `onReleased` runs once when the guard actually releases
+ *  (via `finish` or the fallback), so async callers can settle either way. */
+function engageReplayGuard(
+  replayingPanesRef: ReplayingPanesRef,
+  paneId: number,
+  onReleased?: () => void
+): () => void {
+  const map = replayingPanesRef.current
+  map.set(paneId, (map.get(paneId) ?? 0) + 1)
+  let released = false
+  const release = (): void => {
+    if (released) {
+      return
+    }
+    released = true
+    const remaining = (map.get(paneId) ?? 1) - 1
+    if (remaining <= 0) {
+      map.delete(paneId)
+    } else {
+      map.set(paneId, remaining)
+    }
+    onReleased?.()
+  }
+  const fallback = setTimeout(release, REPLAY_GUARD_RELEASE_FALLBACK_MS)
+  return () => {
+    clearTimeout(fallback)
+    release()
+  }
 }
 
 /** Writes `data` into the pane's terminal with the replay guard engaged,
@@ -43,22 +90,13 @@ export function replayIntoTerminal(
   if (!data) {
     return
   }
-  const map = replayingPanesRef.current
-  map.set(pane.id, (map.get(pane.id) ?? 0) + 1)
-  const onParsed = (): void => {
-    const remaining = (map.get(pane.id) ?? 1) - 1
-    if (remaining <= 0) {
-      map.delete(pane.id)
-    } else {
-      map.set(pane.id, remaining)
-    }
-  }
+  const finishReplay = engageReplayGuard(replayingPanesRef, pane.id)
   // Why: hidden/snapshot replay bypasses the live foreground write path, but
   // WebGL/canvas renderers still need a post-parse repaint to drop stale cells.
   writeForegroundTerminalChunk(pane.terminal, data, {
     forceViewportRefresh: true,
     followupViewportRefresh: true,
-    onParsed
+    onParsed: finishReplay
   })
 }
 
@@ -70,21 +108,15 @@ export function replayIntoTerminalAsync(
   if (!data) {
     return Promise.resolve()
   }
-  const map = replayingPanesRef.current
-  map.set(pane.id, (map.get(pane.id) ?? 0) + 1)
   return new Promise((resolve) => {
+    // Why: settle the promise when the guard releases — via parse completion or
+    // the fallback — so an awaiting caller never hangs if xterm's callback for a
+    // just-mounted/offscreen pane never arrives.
+    const finishReplay = engageReplayGuard(replayingPanesRef, pane.id, resolve)
     writeForegroundTerminalChunk(pane.terminal, data, {
       forceViewportRefresh: true,
       followupViewportRefresh: true,
-      onParsed: () => {
-        const remaining = (map.get(pane.id) ?? 1) - 1
-        if (remaining <= 0) {
-          map.delete(pane.id)
-        } else {
-          map.set(pane.id, remaining)
-        }
-        resolve()
-      }
+      onParsed: finishReplay
     })
   })
 }

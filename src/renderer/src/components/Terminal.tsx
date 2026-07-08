@@ -57,7 +57,7 @@ import {
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
-import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
+import { resolveRepairedActiveTerminalTabId } from './terminal/active-terminal-repair'
 import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
@@ -224,6 +224,7 @@ function Terminal(): React.JSX.Element | null {
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
@@ -692,19 +693,38 @@ function Terminal(): React.JSX.Element | null {
   }, [queueEditorCloseRequests])
 
   useEffect(() => {
-    if (!shouldRepairActiveTerminalTab({ activeTabType, activeTabId, tabs })) {
+    const rememberedTabId = renderedActiveWorktreeId
+      ? (activeTabIdByWorktree[renderedActiveWorktreeId] ?? null)
+      : null
+    // Why: prefer the worktree's remembered active tab over the first tab so a
+    // repair firing on a transient worktree-switch render restores the tab the
+    // user left on instead of permanently resetting the selection to Terminal 1.
+    const repairedTabId = resolveRepairedActiveTerminalTabId({
+      activeTabType,
+      activeTabId,
+      rememberedTabId,
+      tabs
+    })
+    if (!repairedTabId) {
       return
     }
     // Why: mutating Zustand during render trips React's "Cannot update a
     // component while rendering a different component" warning. Keep the repair
     // terminal-only so inactive CLI-created tabs cannot steal editor/browser focus.
-    setActiveTab(tabs[0].id)
+    setActiveTab(repairedTabId)
     // Why: `tabs` is intentionally the dependency here because the repair must
     // react to tab-order/content changes, not just scalar IDs. The list comes
     // from Zustand selectors and is small in practice, so this explicit repair
     // effect is preferred over duplicating reconciliation state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTabId, activeTabType, setActiveTab, tabs])
+  }, [
+    activeTabId,
+    activeTabType,
+    setActiveTab,
+    tabs,
+    activeTabIdByWorktree,
+    renderedActiveWorktreeId
+  ])
 
   // Track which worktrees have been activated during this app session.
   // Only mount TerminalPanes for visited worktrees to prevent mass PTY

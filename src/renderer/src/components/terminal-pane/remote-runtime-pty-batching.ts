@@ -8,6 +8,7 @@ import {
 
 export type RemoteRuntimePtyBatcher = {
   push: (data: string) => boolean
+  hasPendingValidation: () => boolean
   drain: () => Promise<void>
   takePending: () => string
   flush: () => void
@@ -145,6 +146,10 @@ export function createRemoteRuntimePtyTextBatcher(
       enqueueValidatedInput(data, tooLarge)
       return true
     },
+    // Why: earlier input can be mid async byte-length validation and not yet in
+    // `pending`. `takePending()` cannot see it, so callers that must preserve
+    // byte order (sendInputImmediate) check this before bypassing the queue.
+    hasPendingValidation: (): boolean => validationTail !== null,
     drain,
     takePending,
     flush,

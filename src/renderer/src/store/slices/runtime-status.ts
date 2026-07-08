@@ -2,7 +2,10 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import {
+  clearRecentRuntimeCompatibilityFailure,
+  unwrapRuntimeRpcResult
+} from '@/runtime/runtime-rpc-client'
 
 /** Live status for one saved runtime environment, as last observed by the
  * renderer. `status === null` records a probe that failed or timed out so the
@@ -65,12 +68,19 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
   },
 
-  setRuntimeEnvironmentStatus: (environmentId, status) =>
+  setRuntimeEnvironmentStatus: (environmentId, status) => {
+    // Why: a non-null status proves the runtime just answered, so drop any stale
+    // "offline" compat failure before this online transition fires the
+    // reuse-flagged background refetches — a recovered host must re-probe.
+    if (status.status !== null) {
+      clearRecentRuntimeCompatibilityFailure(environmentId)
+    }
     set((s) => {
       const next = new Map(s.runtimeStatusByEnvironmentId)
       next.set(environmentId, status)
       return { runtimeStatusByEnvironmentId: next }
-    }),
+    })
+  },
 
   clearRuntimeEnvironmentStatus: (environmentId) =>
     set((s) => {
@@ -103,6 +113,8 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         timeoutMs
       })
       const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+      // setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
+      // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
       get().setRuntimeEnvironmentStatus(environmentId, { status, checkedAt: Date.now() })
       return true
     } catch {

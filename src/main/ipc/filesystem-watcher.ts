@@ -13,6 +13,7 @@ import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
+import { disposeWatcherProcess, subscribeViaWatcherProcess } from './parcel-watcher-process'
 // Why: high-churn directories are suppressed at the native watcher level so
 // events never leave the OS/daemon. This list is separate from the File
 // Explorer display filter (which only hides rows). Directories like `dist`
@@ -278,10 +279,6 @@ function scheduleBatchFlush(rootKey: string, root: WatchedRoot): void {
 // ── Watcher creation ─────────────────────────────────────────────────
 
 async function createWatcher(rootKey: string, rootPath: string): Promise<WatchedRoot> {
-  // Why: @parcel/watcher is a native module that may not load in all
-  // environments. Dynamic import keeps the require() lazy.
-  const watcher = await import('@parcel/watcher')
-
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
@@ -303,7 +300,11 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
       ...(process.platform === 'win32' ? { backend: 'windows' as const } : {})
     }
 
-    root.subscription = await watcher.subscribe(
+    // Why: subscriptions run in a forked watcher process (issue #7547 —
+    // watcher.node teardown races fail-fast the hosting process). A watcher
+    // crash there is recovered by resubscribing; onInterruption marks the
+    // batch overflowed so the renderer refreshes past the event gap.
+    root.subscription = await subscribeViaWatcherProcess(
       rootPath,
       (err, events) => {
         if (err) {
@@ -334,7 +335,13 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
         queueWatcherEvents(root.batch, events)
         scheduleBatchFlush(rootKey, root)
       },
-      watcherOptions
+      watcherOptions,
+      () => {
+        // The watcher process crashed and this root was resubscribed; events
+        // during the gap are lost, so hand the renderer an overflow refresh.
+        root.batch.overflowed = true
+        scheduleBatchFlush(rootKey, root)
+      }
     )
 
     // Why: if the error callback already fired and cleaned up watchedRoots
@@ -929,6 +936,10 @@ export async function closeAllWatchers(): Promise<void> {
   }
   watchedRoots.clear()
   await Promise.allSettled(Array.from(pendingLocalUnsubscribes))
+  // Why: with every local subscription released, drop the forked watcher
+  // process outright — process death frees any remaining native handles
+  // without running watcher.node's crash-prone async teardown in this process.
+  disposeWatcherProcess()
 
   // Why: remote watchers are tracked separately from local @parcel/watcher
   // subscriptions. Without cleaning them up here, their unwatch callbacks

@@ -69,6 +69,14 @@ describe('electron-builder config', () => {
     )
   })
 
+  // Why: without the unpacked entry the watcher client silently falls back to
+  // in-process @parcel/watcher, reintroducing the #7547 main-process crash.
+  it('unpacks the forked parcel-watcher process entry', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/main/parcel-watcher-process-entry.js'])
+    )
+  })
+
   it('uses the multi-size icon source for Linux packages', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
   })

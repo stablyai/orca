@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: coordinator tests cover dispatch, DAG ordering, escalation, decision gates, concurrency, and stop — splitting by category would scatter shared setup without improving clarity. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
@@ -41,8 +40,8 @@ function createMockRuntime(): CoordinatorRuntime & {
     setProbeDrift(result: DriftResult): void {
       mock.probeDriftResult = result
     },
-    async sendTerminal(handle: string, action: { text?: string }) {
-      mock.sentMessages.push({ handle, text: action.text ?? '' })
+    async sendTerminalAgentPrompt(handle: string, prompt: string) {
+      mock.sentMessages.push({ handle, text: prompt })
       return { handle, accepted: true, bytesWritten: 0 }
     },
     async listTerminals() {
@@ -276,7 +275,7 @@ describe('Coordinator', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-    runtime.sendTerminal = async () => {
+    runtime.sendTerminalAgentPrompt = async () => {
       throw new Error('terminal_not_writable')
     }
 
@@ -691,8 +690,8 @@ describe('Coordinator', () => {
       const result = await runPromise
 
       // Why: silent-skip must NOT burn the circuit-breaker budget. Task must
-      // stay in `ready`; failDispatch must NOT be called; sendTerminal must
-      // NOT be called; no dispatch context should exist.
+      // stay in `ready`; failDispatch must NOT be called; no prompt injection
+      // should happen; no dispatch context should exist.
       expect(runtime.sentMessages).toHaveLength(0)
       expect(db.getTask(task.id)?.status).toBe('ready')
       expect(db.getDispatchContext(task.id)).toBeUndefined()

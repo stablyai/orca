@@ -11,6 +11,7 @@ vi.mock('child_process', () => ({
 import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot'
 import {
   getForegroundProcessName,
+  isProcessAlive,
   resolveDefaultCwd,
   resolveWindowsDefaultShell
 } from './pty-shell-utils'
@@ -49,6 +50,40 @@ async function withProcessPlatform<T>(
 beforeEach(() => {
   execFileMock.mockReset()
   resetProcessTableSnapshotForTests()
+})
+
+describe('isProcessAlive', () => {
+  it('reports the test runner process as alive', () => {
+    expect(isProcessAlive(process.pid)).toBe(true)
+  })
+
+  it('reports a process as dead ONLY on ESRCH', () => {
+    // Why: attach() reaps a lingering managed PTY based on this, so a false
+    // positive would kill a live remote shell. Only "no such process" counts.
+    const spy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const err = new Error('no such process') as NodeJS.ErrnoException
+      err.code = 'ESRCH'
+      throw err
+    })
+    try {
+      expect(isProcessAlive(2147483646)).toBe(false)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('treats an unsignalable process (EPERM) as alive', () => {
+    const spy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const err = new Error('operation not permitted') as NodeJS.ErrnoException
+      err.code = 'EPERM'
+      throw err
+    })
+    try {
+      expect(isProcessAlive(1)).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })
 
 describe('resolveWindowsDefaultShell', () => {

@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this suite shares a broad mocked sidebar
-   harness across compact/full mode, lineage, and image-note cases. */
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

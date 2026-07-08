@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: integration test covering the full browser automation pipeline end-to-end. */
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

@@ -313,8 +313,18 @@ export default function TerminalPane({
   )
   const sshReconnectTargetLabel = useAppStore((store) =>
     sshReconnectTargetId
-      ? (store.sshTargetLabels.get(sshReconnectTargetId) ?? sshReconnectTargetId)
+      ? (store.sshTargetLabels.get(sshReconnectTargetId) ??
+        // Fall back to the removed target's last known label (ghost host) before
+        // the raw id, so a removed host shows its name instead of ssh-<ts>-<rand>.
+        store.removedSshTargetLabels.get(sshReconnectTargetId) ??
+        sshReconnectTargetId)
       : ''
+  )
+  // Why: the target was removed entirely (a ghost) when it's no longer a known
+  // SSH target. Reconnecting to it can only fail ("SSH target not found"), so
+  // the overlay must offer to remove the workspace instead of Connect.
+  const sshReconnectTargetRemoved = useAppStore((store) =>
+    sshReconnectTargetId ? !store.sshTargetLabels.has(sshReconnectTargetId) : false
   )
 
   useVisibleTerminalTabClaim({ isVisible, tabId })
@@ -2972,6 +2982,8 @@ export default function TerminalPane({
           targetId={sshReconnectTargetId}
           targetLabel={sshReconnectTargetLabel}
           status={sshReconnectStatus}
+          targetRemoved={sshReconnectTargetRemoved}
+          worktreeId={worktreeId}
         />
       ) : null}
       <DaemonActionDialog api={daemonActions} />
