@@ -25,6 +25,14 @@ function isJiraIssueUrl(url: string): boolean {
   }
 }
 
+// Why: GitHub/GitLab sources live inside a repo and become meaningless after
+// a repo switch, while Linear/Jira issues are workspace-scoped context that
+// must survive choosing the implementation project.
+export function isRepoScopedLinkedWorkItem(item: LinkedWorkItemSummary): boolean {
+  const provider = getLinkedWorkItemProvider(item)
+  return provider === 'github' || provider === 'gitlab'
+}
+
 export function getLinkedWorkItemProvider(
   item: LinkedWorkItemSummary
 ): NonNullable<LinkedWorkItemSummary['provider']> {

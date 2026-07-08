@@ -65,6 +65,7 @@ import {
   getSetupConfig,
   getWorkspaceSeedName,
   isGitLabIssueUrl,
+  isRepoScopedLinkedWorkItem,
   PER_REPO_FETCH_LIMIT,
   renderIssueCommandTemplate,
   type LinkedWorkItemSummary,
@@ -75,10 +76,7 @@ import {
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import {
-  buildLinearIssueLinkedWorkItem,
-  isLinearLinkedWorkItem
-} from '@/lib/linear-linked-work-item'
+import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import {
   getFullComposerCreateDisabled,
@@ -2631,7 +2629,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           hint = `was ${baseBranch}`
         }
       }
-      const preserveLinearLinkedWorkItem = isLinearLinkedWorkItem(linkedWorkItem)
       setRepoId(value)
       if (!options.preserveStartFrom) {
         smartGitHubPrStartPointSelectionRef.current = null
@@ -2640,9 +2637,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
         // Why: repo changes invalidate repo-scoped sources (GitHub/GitLab/branch),
-        // but a selected Linear issue is workspace-scoped source context and
-        // must survive choosing the implementation project.
-        if (!preserveLinearLinkedWorkItem) {
+        // but a selected Linear or Jira issue is workspace-scoped source context
+        // and must survive choosing the implementation project.
+        if (linkedWorkItem && isRepoScopedLinkedWorkItem(linkedWorkItem)) {
           setLinkedWorkItem(null)
         }
       }
@@ -2677,10 +2674,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setRepoId(value)
       smartGitHubPrStartPointSelectionRef.current = null
-      setLinkedWorkItem((current) => {
-        const provider = current ? getLinkedWorkItemProvider(current) : null
-        return provider === 'github' || provider === 'gitlab' ? null : current
-      })
+      setLinkedWorkItem((current) =>
+        current && isRepoScopedLinkedWorkItem(current) ? null : current
+      )
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
@@ -2726,8 +2722,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
-        const linkedProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
-        if (linkedWorkItem && linkedProvider !== 'linear' && linkedProvider !== 'jira') {
+        if (linkedWorkItem && isRepoScopedLinkedWorkItem(linkedWorkItem)) {
           setLinkedWorkItem(null)
         }
         setSparseEnabled(false)
