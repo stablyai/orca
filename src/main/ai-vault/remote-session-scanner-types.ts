@@ -7,6 +7,9 @@ import type { FileWithMtime } from './session-scanner-types'
 export type RemoteScannerContext = {
   provider: IFilesystemProvider
   executionHostId: ExecutionHostId
+  // Connect-time machine identity for the parse cache; entries cached under a
+  // different identity (a repointed target id) are never served.
+  connectionIdentity: string | null
   hostPlatform: RemoteHostPlatform
   titleCaches: Map<string, Promise<Map<string, string>>>
 }

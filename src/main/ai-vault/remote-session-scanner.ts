@@ -1,18 +1,22 @@
 import { extname } from 'node:path'
 import type {
-  AiVaultAgent,
   AiVaultListResult,
   AiVaultScanIssue,
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FileStat, IFilesystemProvider } from '../providers/types'
+import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { sessionSortTime } from './session-scanner-accumulator'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { statRemoteFile } from './remote-session-scanner-file-stat'
+import {
+  readCachedRemoteSessionParse,
+  storeRemoteSessionParse
+} from './remote-session-scanner-parse-cache'
 import { remoteSessionSources } from './remote-session-scanner-sources'
 import type {
   RemoteScannerContext,
@@ -29,6 +33,7 @@ export async function scanRemoteAiVaultSessions(args: {
   executionHostId: ExecutionHostId
   remoteHome: string
   hostPlatform: RemoteHostPlatform
+  connectionIdentity?: string | null
   limit?: number
   scopePaths?: readonly string[]
 }): Promise<AiVaultListResult> {
@@ -37,6 +42,7 @@ export async function scanRemoteAiVaultSessions(args: {
   const context: RemoteScannerContext = {
     provider: args.provider,
     executionHostId: args.executionHostId,
+    connectionIdentity: args.connectionIdentity ?? null,
     hostPlatform: args.hostPlatform,
     titleCaches: new Map()
   }
@@ -194,13 +200,39 @@ async function parseRemoteSessionCandidate(
   context: RemoteScannerContext,
   issues: AiVaultScanIssue[]
 ): Promise<AiVaultSession | null> {
+  // A (mtime,size)-unchanged file skips the SSH body transfer and re-parse
+  // entirely; rescans previously re-read every candidate in full. Like the
+  // local cache, an unchanged Codex transcript keeps its cached index title.
+  const cached = readCachedRemoteSessionParse(
+    context.executionHostId,
+    context.connectionIdentity,
+    candidate.file
+  )
+  if (cached) {
+    return cached.session
+  }
   try {
     const read = await context.provider.readFile(candidate.file.path)
     if (read.isBinary) {
+      storeRemoteSessionParse(
+        context.executionHostId,
+        context.connectionIdentity,
+        candidate.file,
+        null
+      )
       return null
     }
-    return candidate.source.parse(candidate.file, read.content, context)
+    const session = await candidate.source.parse(candidate.file, read.content, context)
+    storeRemoteSessionParse(
+      context.executionHostId,
+      context.connectionIdentity,
+      candidate.file,
+      session
+    )
+    return session
   } catch (err) {
+    // Failures stay uncached so the issue resurfaces on every scan and a
+    // transient read error retries next time.
     issues.push({
       executionHostId: context.executionHostId,
       agent: candidate.source.agent,
@@ -235,30 +267,6 @@ function isRemoteSessionInScope(session: AiVaultSession, scopePaths: readonly st
 
 function normalizeRemoteScopePaths(scopePaths: readonly string[]): string[] {
   return scopePaths.map((scopePath) => scopePath.trim()).filter(Boolean)
-}
-
-async function statRemoteFile(
-  provider: IFilesystemProvider,
-  path: string,
-  agent: AiVaultAgent,
-  executionHostId: ExecutionHostId,
-  issues: AiVaultScanIssue[]
-): Promise<FileWithMtime | null> {
-  try {
-    const stat = await provider.stat(path)
-    const mtimeMs = remoteStatMtimeMs(stat)
-    return { path, mtimeMs, modifiedAt: new Date(mtimeMs).toISOString() }
-  } catch (err) {
-    issues.push({ executionHostId, agent, path, message: errorMessage(err) })
-    return null
-  }
-}
-
-function remoteStatMtimeMs(stat: FileStat): number {
-  if (typeof stat.mtimeMs === 'number' && Number.isFinite(stat.mtimeMs)) {
-    return stat.mtimeMs
-  }
-  return stat.mtime > 10_000_000_000 ? stat.mtime : stat.mtime * 1000
 }
 
 function canStopParsingRemoteSessions(

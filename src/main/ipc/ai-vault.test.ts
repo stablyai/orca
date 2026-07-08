@@ -87,6 +87,7 @@ describe('listAiVaultSessions host routing', () => {
         provider,
         executionHostId: 'ssh:dev-box',
         remoteHome: '/home/ada',
+        connectionIdentity: 'identity-dev-box',
         scopePaths: ['/home/ada/repo']
       })
     )
@@ -203,7 +204,8 @@ function hostInfo(targetId: string) {
     targetId,
     executionHostId: `ssh:${targetId}` as const,
     remoteHome: '/home/ada',
-    hostPlatform: getRemoteHostPlatform('linux-x64')
+    hostPlatform: getRemoteHostPlatform('linux-x64'),
+    connectionIdentity: `identity-${targetId}`
   }
 }
 

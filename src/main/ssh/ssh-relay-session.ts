@@ -62,7 +62,8 @@ import {
   type DetectedPort,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
+  SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD,
+  type SshTarget
 } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -114,6 +115,25 @@ export type SshRelayAiVaultHostInfo = {
   executionHostId: ExecutionHostId
   remoteHome: string
   hostPlatform: RemoteHostPlatform
+  /** Opaque connect-time machine identity; null while no connection is live. */
+  connectionIdentity: string | null
+}
+
+// Identifies the machine an AI-vault scan actually reads from: the target
+// snapshot the live connection dialed. Store edits (ssh:updateTarget, config
+// import, runtime reprovision) don't take effect until reconnect, so the
+// stored target may describe a different machine than the active provider.
+// Auth-only fields (identityFile/agent/identitiesOnly) are excluded — they
+// change how we authenticate, not whose files we read.
+function aiVaultConnectionIdentity(target: SshTarget): string {
+  return JSON.stringify([
+    target.configHost ?? null,
+    target.host,
+    target.port,
+    target.username,
+    target.proxyCommand ?? null,
+    target.jumpHost ?? null
+  ])
 }
 
 const RECONNECT_REPLAY_DUPLICATE_WINDOW_MS = 1000
@@ -231,11 +251,13 @@ export class SshRelaySession {
     if (!env) {
       return null
     }
+    const connectionTarget = this.currentConnection?.getTarget() ?? null
     return {
       targetId: this.targetId,
       executionHostId: toSshExecutionHostId(this.targetId),
       remoteHome: env.remoteHome,
-      hostPlatform: env.hostPlatform
+      hostPlatform: env.hostPlatform,
+      connectionIdentity: connectionTarget ? aiVaultConnectionIdentity(connectionTarget) : null
     }
   }
 

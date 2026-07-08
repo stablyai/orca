@@ -16,7 +16,8 @@ import type {
   SshConnectionState
 } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
-import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId, toSshExecutionHostId } from '../../shared/execution-host'
+import { evictRemoteSessionParseCache } from '../ai-vault/remote-session-scanner-parse-cache'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
@@ -126,6 +127,9 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
     )
   }
   persistedStore?.removeSshRemotePtyLeases(targetId)
+  // Why: reconnects keep cached session parses (paths/mtimes stay valid), but
+  // a removed target must not pin its parsed transcripts in main-process memory.
+  evictRemoteSessionParseCache(toSshExecutionHostId(targetId))
   sshStore.removeTarget(targetId)
 }
 
