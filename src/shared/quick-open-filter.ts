@@ -358,11 +358,33 @@ export type GitLsFilesArgs = {
   ignoredPass: string[]
 }
 
+function addGitExcludePathspecs(out: string[], relPath: string): void {
+  const escaped = escapeGlobPath(relPath)
+  out.push(`:(exclude,glob)${escaped}`)
+  out.push(`:(exclude,glob)${escaped}/**`)
+  out.push(`:(exclude,glob)**/${escaped}`)
+  out.push(`:(exclude,glob)**/${escaped}/**`)
+}
+
+function buildGeneratedGitExcludePathspecs(): string[] {
+  const out: string[] = []
+  // Why: the ignored git pass can otherwise enumerate huge generated trees
+  // (node_modules, build caches) before the later Quick Open output filter runs.
+  for (const relPath of [NON_DOTTED_PRUNE, ...HIDDEN_DIR_BLOCKLIST]) {
+    addGitExcludePathspecs(out, relPath)
+  }
+  for (const relPath of HIDDEN_PATH_BLOCKLIST) {
+    addGitExcludePathspecs(out, relPath)
+  }
+  return out
+}
+
 /**
  * Build the two `git ls-files` arg arrays for Quick Open. Exclude prefixes
  * are encoded as `:(exclude,glob)` pathspecs; a positive `.` pathspec is
  * prepended so exclude-only pathspecs do not depend on git's edge-case
- * defaults.
+ * defaults. Generated cache directories use the same pathspec form so git can
+ * avoid walking them in the no-ripgrep fallback.
  *
  * The ignored pass asks git for ignored untracked files. Non-git roots keep
  * their existing non-git fallback limits in the callers.
@@ -370,12 +392,12 @@ export type GitLsFilesArgs = {
 export function buildGitLsFilesArgsForQuickOpen(
   excludePathPrefixes: readonly string[] = []
 ): GitLsFilesArgs {
-  const excludeSpecs: string[] = []
+  const excludeSpecs = buildGeneratedGitExcludePathspecs()
   for (const prefix of excludePathPrefixes) {
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}`)
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}/**`)
   }
-  const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
+  const trailingPathspecs = ['--', '.', ...excludeSpecs]
 
   // Why: NUL preserves real Git paths; stage mode identifies gitlinks without
   // lstat probes for ordinary tracked files.

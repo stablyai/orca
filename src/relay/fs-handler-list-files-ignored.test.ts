@@ -128,18 +128,20 @@ describe('relay quick open ignored file listing', () => {
     await expect(promise).resolves.toEqual(['src/index.ts', 'tab\tfile.txt', 'dist/generated.js'])
 
     const ignoredArgs = spawnMock.mock.calls[1][1] as string[]
-    expect(ignoredArgs).toEqual([
+    expect(ignoredArgs.slice(0, 6)).toEqual([
       'ls-files',
       '-z',
       '-s',
       '--others',
       '--ignored',
-      '--exclude-standard',
-      '--',
-      '.',
-      ':(exclude,glob)packages/other',
-      ':(exclude,glob)packages/other/**'
+      '--exclude-standard'
     ])
+    expect(ignoredArgs).toContain('--')
+    expect(ignoredArgs).toContain('.')
+    expect(ignoredArgs).toContain(':(exclude,glob)**/node_modules/**')
+    expect(ignoredArgs).toContain(':(exclude,glob)**/.cache/**')
+    expect(ignoredArgs).toContain(':(exclude,glob)packages/other')
+    expect(ignoredArgs).toContain(':(exclude,glob)packages/other/**')
   })
 
   it('git fallback fills nested git repos returned as root-relative placeholders', async () => {
