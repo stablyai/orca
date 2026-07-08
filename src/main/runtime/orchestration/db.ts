@@ -690,14 +690,28 @@ export class OrchestrationDb {
       | undefined
   }
 
-  getActiveDispatchForTerminal(handle: string): DispatchContextRow | undefined {
-    return this.findActiveDispatchForAssignee(handle)
+  getActiveDispatchForTerminal(handle: string, paneKey?: string): DispatchContextRow | undefined {
+    return this.findActiveDispatchForAssignee(handle, paneKey)
   }
 
   private findActiveDispatchForAssignee(
     assigneeHandle: string,
     assigneePaneKey?: string
   ): DispatchContextRow | undefined {
+    if (assigneePaneKey) {
+      const actives = this.db
+        .prepare(
+          "SELECT * FROM dispatch_contexts WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched')"
+        )
+        .all() as DispatchContextRow[]
+
+      for (const row of actives) {
+        if (row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)) {
+          return row
+        }
+      }
+    }
+
     const byHandle = this.db
       .prepare(
         "SELECT * FROM dispatch_contexts WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 1"
@@ -705,22 +719,6 @@ export class OrchestrationDb {
       .get(assigneeHandle) as DispatchContextRow | undefined
     if (byHandle) {
       return byHandle
-    }
-
-    if (!assigneePaneKey) {
-      return undefined
-    }
-
-    const actives = this.db
-      .prepare(
-        "SELECT * FROM dispatch_contexts WHERE assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched')"
-      )
-      .all() as DispatchContextRow[]
-
-    for (const row of actives) {
-      if (row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)) {
-        return row
-      }
     }
     return undefined
   }

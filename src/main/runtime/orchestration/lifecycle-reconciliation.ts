@@ -47,17 +47,24 @@ type LogFn = (msg: string) => void
 
 const noopLog: LogFn = () => {}
 
-function parseObjectPayload(msg: MessageRow, onInvalidJson: () => void): Record<string, unknown> {
+function parseObjectPayload(
+  msg: MessageRow,
+  onInvalidPayload: () => void
+): Record<string, unknown> | undefined {
   if (!msg.payload) {
     return {}
   }
 
   try {
     const parsed: unknown = JSON.parse(msg.payload)
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      onInvalidPayload()
+      return undefined
+    }
+    return parsed as Record<string, unknown>
   } catch {
-    onInvalidJson()
-    return {}
+    onInvalidPayload()
+    return undefined
   }
 }
 
@@ -113,8 +120,11 @@ function reconcileHeartbeatMessage(
   }
 
   const payload = parseObjectPayload(msg, () => {
-    onLog(`Heartbeat from ${msg.from_handle} has invalid JSON payload; ignored`)
+    onLog(`Heartbeat from ${msg.from_handle} has invalid payload; ignored`)
   })
+  if (!payload) {
+    return { action: 'ignored' }
+  }
   const persistedRejection = getPersistedLifecycleRejection(payload)
   if (persistedRejection) {
     // Why: the send-path reconcile converts with a no-op logger, so the
@@ -162,6 +172,9 @@ function reconcileWorkerDoneMessage(
   const payload = parseObjectPayload(msg, () => {
     onLog(`Warning: invalid payload in worker_done from ${msg.from_handle}`)
   })
+  if (!payload) {
+    return { action: 'ignored' }
+  }
   const persistedRejection = getPersistedLifecycleRejection(payload)
   if (persistedRejection) {
     // Why: the send-path reconcile converts with a no-op logger, so the
@@ -170,16 +183,38 @@ function reconcileWorkerDoneMessage(
     return persistedRejection
   }
 
-  const taskId = payload.taskId
-  if (typeof taskId !== 'string' || taskId.length === 0) {
-    onLog(`Warning: worker_done without taskId from ${msg.from_handle}`)
-    return { action: 'ignored' }
-  }
+  const suppliedTaskId =
+    typeof payload.taskId === 'string' && payload.taskId.length > 0 ? payload.taskId : undefined
+  const suppliedDispatchId =
+    typeof payload.dispatchId === 'string' && payload.dispatchId.length > 0
+      ? payload.dispatchId
+      : undefined
+  let taskId = suppliedTaskId
+  let dispatchId = suppliedDispatchId
 
-  const dispatchId = payload.dispatchId
-  if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
-    onLog(`Warning: worker_done without dispatchId from ${msg.from_handle}`)
-    return { action: 'ignored' }
+  if (!taskId || !dispatchId) {
+    // Why: the authenticated sender pane already owns one active dispatch, so
+    // it is the authoritative fallback when custom workers omit payload ids.
+    const active = db.getActiveDispatchForTerminal(
+      msg.from_handle,
+      msg.sender_pane_key ?? undefined
+    )
+    if (!active) {
+      onLog(`Warning: worker_done from ${msg.from_handle} has no active dispatch; ignored`)
+      return { action: 'ignored' }
+    }
+    if (taskId && taskId !== active.task_id) {
+      onLog(`Warning: worker_done taskId ${taskId} does not match active task ${active.task_id}`)
+      return { action: 'ignored' }
+    }
+    if (dispatchId && dispatchId !== active.id) {
+      onLog(
+        `Warning: worker_done dispatchId ${dispatchId} does not match active dispatch ${active.id}`
+      )
+      return { action: 'ignored' }
+    }
+    taskId = active.task_id
+    dispatchId = active.id
   }
 
   const task = db.getTask(taskId)
@@ -263,7 +298,7 @@ function suppressEarlierHeartbeats(
         return false
       }
       const payload = parseObjectPayload(message, () => undefined)
-      return payload.dispatchId === dispatchId
+      return payload?.dispatchId === dispatchId
     })
     .map((message) => message.id)
   db.markAsReadAndDelivered(heartbeatIds)
