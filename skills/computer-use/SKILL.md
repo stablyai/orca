@@ -102,6 +102,22 @@ Prefer element indexes or element frames from the tree when available. Use raw s
 
 On Linux and Windows, screenshots may come from the visible desktop region for the target window bounds. If visual pixels matter, use `--restore-window` so another window does not cover the target region; if you cannot take focus, trust the tree over potentially occluded pixels.
 
+## Response Structure
+
+`get-app-state --json` returns the accessibility tree under `result.snapshot`:
+
+| Field | Content |
+|-------|---------|
+| `result.snapshot.elementCount` | Total AX elements in the tree |
+| `result.snapshot.treeText` | Indented text tree; each line starts with the element index usable in `--element-index` |
+| `result.snapshot.focusedElementId` | Element index of the currently focused element |
+| `result.screenshot.path` | Screenshot file path (bytes omitted from JSON) |
+| `result.screenshotStatus.state` | Screenshot capture status |
+| `result.elements` | May be empty; use `result.snapshot.*` for the actual tree |
+
+Read `treeText` for element indexes and roles. Use those indexes directly in
+`click --element-index`, `set-value --element-index`, etc.
+
 ## App Notes
 
 Browsers: for Edge, Chrome, Safari, and similar browser windows, set the address/search field directly, then press Return. Do not assume raw typing went to the address bar. Use `--restore-window` when the browser is not already frontmost. Large tab strips may show only the active tab plus an "inactive browser tabs omitted" marker; treat that as intentional noise reduction and operate on the current page/address bar unless the user asked to manage tabs.
