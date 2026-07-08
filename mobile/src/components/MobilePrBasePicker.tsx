@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Check, ChevronDown } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
 import type { RpcClient } from '../transport/rpc-client'
 import { searchBaseRefs } from '../source-control/mobile-base-ref-search'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 type Props = {
   client: RpcClient | null
@@ -24,6 +25,8 @@ export function MobilePrBasePicker({
   onChange,
   editable = true
 }: Props) {
+  const styles = useThemedStyles(createStyles)
+  const { colors } = useTheme()
   const [results, setResults] = useState<string[]>([])
   const [focused, setFocused] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -119,52 +122,53 @@ export function MobilePrBasePicker({
   )
 }
 
-const styles = StyleSheet.create({
-  inputShell: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs
-  },
-  inputShellDisabled: {
-    opacity: 0.6
-  },
-  input: {
-    flex: 1,
-    minWidth: 0,
-    padding: 0,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontFamily: typography.monoFamily
-  },
-  results: {
-    marginTop: spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgPanel,
-    overflow: 'hidden'
-  },
-  resultRow: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  resultRowPressed: { backgroundColor: colors.bgRaised },
-  resultText: {
-    flex: 1,
-    minWidth: 0,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontFamily: typography.monoFamily
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    inputShell: {
+      minHeight: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs
+    },
+    inputShellDisabled: {
+      opacity: 0.6
+    },
+    input: {
+      flex: 1,
+      minWidth: 0,
+      padding: 0,
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontFamily: typography.monoFamily
+    },
+    results: {
+      marginTop: spacing.xs,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.input,
+      backgroundColor: colors.bgPanel,
+      overflow: 'hidden'
+    },
+    resultRow: {
+      minHeight: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle
+    },
+    resultRowPressed: { backgroundColor: colors.bgRaised },
+    resultText: {
+      flex: 1,
+      minWidth: 0,
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontFamily: typography.monoFamily
+    }
+  })

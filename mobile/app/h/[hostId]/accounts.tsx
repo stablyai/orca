@@ -14,8 +14,8 @@ import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import type { RpcSuccess } from '../../../src/transport/types'
-import { colors, spacing } from '../../../src/theme/mobile-theme'
-import { styles } from './accounts-screen-styles'
+import { spacing } from '../../../src/theme/mobile-theme'
+import { createAccountsScreenStyles } from './accounts-screen-styles'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
@@ -26,8 +26,11 @@ import {
   hasActiveProviderUsage,
   UsageBar
 } from '../../../src/components/AccountUsage'
+import { useThemedStyles, useTheme } from '../../../src/theme/theme-context'
 
 export default function AccountsScreen() {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createAccountsScreenStyles)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()

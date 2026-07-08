@@ -2,6 +2,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
+const THEME_PREFERENCE_KEY = 'orca:themePreference'
+
+type StoredThemePreference = 'system' | 'light' | 'dark'
+
+export async function loadThemePreference(): Promise<StoredThemePreference> {
+  try {
+    const raw = await AsyncStorage.getItem(THEME_PREFERENCE_KEY)
+    return raw === 'system' || raw === 'light' || raw === 'dark' ? raw : 'dark'
+  } catch {
+    return 'dark'
+  }
+}
+
+export async function saveThemePreference(preference: StoredThemePreference): Promise<void> {
+  await AsyncStorage.setItem(THEME_PREFERENCE_KEY, preference)
+}
 
 // Why: default-off so the iOS notification permission prompt never
 // fires until the user explicitly opts in via Settings → Notifications.

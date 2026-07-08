@@ -1,11 +1,11 @@
-import { colors } from '../theme/mobile-theme'
 import { MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT } from './mobile-rich-markdown-editor-keyboard-inset-script'
+import type { ThemeColors } from '../theme/mobile-theme'
 
 export function escapeInjectedJavaScriptString(value: string): string {
   return JSON.stringify(value).replace(/<\/script/gi, '<\\/script')
 }
 
-export function buildMobileRichMarkdownEditorHtml(): string {
+export function buildMobileRichMarkdownEditorHtml(colors: ThemeColors): string {
   return `<!doctype html>
 <html>
 <head>

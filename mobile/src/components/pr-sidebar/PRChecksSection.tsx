@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { PRCheckDetail } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchPRCheckDetails, type GitHubPrRepoSlug } from '../../session/github-pr-rpc'
@@ -18,8 +17,9 @@ import {
 import { statusColor } from './pr-sidebar-status-color'
 import { PRSection } from './PRSection'
 import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
-import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
+import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
+import { createPrAiTriageStyles } from './pr-ai-triage-styles'
+import { useThemedStyles, useTheme } from '../../theme/theme-context'
 
 // Launches the "Fix checks with AI" agent. Absent for display-only usages.
 export type PrChecksTriage = {
@@ -42,6 +42,9 @@ type Props = {
 // fetch github.prCheckDetails, cached per check key (U5). Display-only; the
 // rerun action is U6.
 export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, triage }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
+  const triageStyles = useThemedStyles(createPrAiTriageStyles)
   const sorted = sortPRChecks(checks)
   const summary = summarizePRChecks(checks)
   const rerunBusy = actions?.isBusy({ kind: 'rerun' }) ?? false
@@ -139,7 +142,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
           <Text
             style={[
               styles.summaryLabel,
-              { color: statusColor(checkOutcomeToken(summary.outcome)) }
+              { color: statusColor(checkOutcomeToken(summary.outcome), colors) }
             ]}
           >
             {summary.label}
@@ -207,7 +210,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
               accessibilityLabel={`${check.name} check details`}
             >
               <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
-              <View style={[styles.statusDot, { backgroundColor: statusColor(token) }]} />
+              <View style={[styles.statusDot, { backgroundColor: statusColor(token, colors) }]} />
               <View style={styles.rowMain}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
                   {check.name}
@@ -215,7 +218,10 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
               </View>
               {/* Status word + open-on-host icon (desktop ChecksList row), so the
                   outcome reads without expanding. */}
-              <Text style={[styles.rowStatus, { color: statusColor(token) }]} numberOfLines={1}>
+              <Text
+                style={[styles.rowStatus, { color: statusColor(token, colors) }]}
+                numberOfLines={1}
+              >
                 {checkStatusLabel(check)}
               </Text>
               {url ? (

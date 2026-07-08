@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
@@ -23,6 +23,7 @@ import {
   saveTerminalAutocompleteEnabled,
   saveTerminalTextScale
 } from '../src/storage/preferences'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
@@ -103,6 +104,8 @@ function HostFitRow({
   ms: number | null | undefined
   onPress: () => void
 }): React.JSX.Element {
+  const styles = useThemedStyles(createStyles)
+  const { colors } = useTheme()
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -120,6 +123,8 @@ function HostFitRow({
 }
 
 export default function TerminalSettingsScreen() {
+  const styles = useThemedStyles(createStyles)
+  const { colors } = useTheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [hosts, setHosts] = useState<HostProfile[]>([])
@@ -381,91 +386,92 @@ export default function TerminalSettingsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg,
-    paddingTop: 0
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl
-  },
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    overflow: 'hidden'
-  },
-  sectionTopGap: {
-    marginTop: spacing.sm
-  },
-  inputGroupGap: {
-    marginTop: spacing.xl
-  },
-  emptyText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    padding: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowContent: {
-    flex: 1
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowSublabel: {
-    fontSize: typography.bodySize - 2,
-    color: colors.textSecondary,
-    marginTop: 2
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgBase,
+      paddingHorizontal: spacing.lg,
+      paddingTop: 0
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: spacing.sm,
+      marginBottom: spacing.lg
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.sm
+    },
+    heading: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.textPrimary
+    },
+    scrollContent: {
+      paddingBottom: spacing.xl
+    },
+    groupHeading: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textMuted,
+      letterSpacing: 0.5,
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.xs
+    },
+    groupDescription: {
+      fontSize: typography.bodySize - 1,
+      color: colors.textSecondary,
+      lineHeight: 20,
+      paddingHorizontal: spacing.xs
+    },
+    section: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.card,
+      overflow: 'hidden'
+    },
+    sectionTopGap: {
+      marginTop: spacing.sm
+    },
+    inputGroupGap: {
+      marginTop: spacing.xl
+    },
+    emptyText: {
+      fontSize: typography.bodySize,
+      color: colors.textSecondary,
+      padding: spacing.md
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    rowContent: {
+      flex: 1
+    },
+    rowLabel: {
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    rowSublabel: {
+      fontSize: typography.bodySize - 2,
+      color: colors.textSecondary,
+      marginTop: 2
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    }
+  })

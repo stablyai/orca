@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../../theme/mobile-theme'
 import { MermaidDiagram } from './MermaidDiagram'
 import { isAllowedMarkdownLinkUrl } from './markdown-link-scheme'
 import {
@@ -11,6 +11,7 @@ import {
   type InlineToken,
   type MarkdownBlock
 } from './markdown-blocks'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 
 type Props = {
   content: string
@@ -23,6 +24,7 @@ type Props = {
 // on mount; this renders a small block model and falls back to plain text on any
 // parse error, so it can never crash the comment list.
 export function CommentMarkdown({ content, variant = 'comment' }: Props) {
+  const styles = useThemedStyles(createStyles)
   const base = variant === 'document' ? typography.bodySize : 13
   const blocks = useMemo<MarkdownBlock[] | null>(() => {
     try {
@@ -56,6 +58,8 @@ function DetailsBlock({
   body: MarkdownBlock[]
   base: number
 }) {
+  const styles = useThemedStyles(createStyles)
+  const { colors } = useTheme()
   const [open, setOpen] = useState(false)
   const Chevron = open ? ChevronDown : ChevronRight
   return (
@@ -80,6 +84,7 @@ function DetailsBlock({
 }
 
 function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
+  const styles = useThemedStyles(createStyles)
   switch (block.kind) {
     case 'details':
       return <DetailsBlock summary={block.summary} body={block.body} base={base} />
@@ -167,6 +172,7 @@ function TableBlock({
   block: Extract<MarkdownBlock, { kind: 'table' }>
   base: number
 }) {
+  const styles = useThemedStyles(createStyles)
   const columnCount = Math.max(block.headers.length, ...block.rows.map((r) => r.length), 1)
   const columns = Array.from({ length: columnCount }, (_, c) => c)
   return (
@@ -203,6 +209,7 @@ function TableBlock({
 }
 
 function Inline({ text, base }: { text: string; base: number }) {
+  const styles = useThemedStyles(createStyles)
   const tokens = useMemo<InlineToken[]>(() => {
     try {
       return parseInline(text)
@@ -247,76 +254,77 @@ function Inline({ text, base }: { text: string; base: number }) {
   )
 }
 
-const styles = StyleSheet.create({
-  paragraph: { color: colors.textPrimary, marginBottom: spacing.sm },
-  heading: { color: colors.textPrimary, fontWeight: '700', marginBottom: spacing.xs },
-  bold: { fontWeight: '700' },
-  italic: { fontStyle: 'italic' },
-  link: { color: colors.textPrimary, textDecorationLine: 'underline' },
-  codeInline: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    backgroundColor: colors.bgRaised
-  },
-  codeBlock: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    padding: spacing.sm,
-    marginBottom: spacing.sm
-  },
-  codeText: { color: colors.textPrimary, fontFamily: typography.monoFamily },
-  quote: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.sm
-  },
-  hr: { height: 1, backgroundColor: colors.borderSubtle, marginVertical: spacing.sm },
-  list: { marginBottom: spacing.sm },
-  listItem: { flexDirection: 'row', gap: spacing.xs },
-  listItemText: { flex: 1, marginBottom: 2 },
-  bullet: { color: colors.textSecondary },
-  details: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    marginBottom: spacing.sm,
-    overflow: 'hidden'
-  },
-  detailsSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.bgRaised
-  },
-  detailsSummaryText: { color: colors.textPrimary, fontWeight: '600', flexShrink: 1 },
-  detailsBody: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
-  tableScroll: { marginBottom: spacing.sm },
-  table: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    overflow: 'hidden'
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  tableHeaderRow: { borderTopWidth: 0, backgroundColor: colors.bgRaised },
-  tableCell: {
-    minWidth: 96,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle
-  },
-  tableHeaderText: { color: colors.textPrimary, fontWeight: '700' },
-  tableCellText: { color: colors.textPrimary }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    paragraph: { color: colors.textPrimary, marginBottom: spacing.sm },
+    heading: { color: colors.textPrimary, fontWeight: '700', marginBottom: spacing.xs },
+    bold: { fontWeight: '700' },
+    italic: { fontStyle: 'italic' },
+    link: { color: colors.textPrimary, textDecorationLine: 'underline' },
+    codeInline: {
+      color: colors.textPrimary,
+      fontFamily: typography.monoFamily,
+      backgroundColor: colors.bgRaised
+    },
+    codeBlock: {
+      backgroundColor: colors.bgRaised,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      padding: spacing.sm,
+      marginBottom: spacing.sm
+    },
+    codeText: { color: colors.textPrimary, fontFamily: typography.monoFamily },
+    quote: {
+      borderLeftWidth: 3,
+      borderLeftColor: colors.borderSubtle,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      marginBottom: spacing.sm
+    },
+    hr: { height: 1, backgroundColor: colors.borderSubtle, marginVertical: spacing.sm },
+    list: { marginBottom: spacing.sm },
+    listItem: { flexDirection: 'row', gap: spacing.xs },
+    listItemText: { flex: 1, marginBottom: 2 },
+    bullet: { color: colors.textSecondary },
+    details: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      marginBottom: spacing.sm,
+      overflow: 'hidden'
+    },
+    detailsSummary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      backgroundColor: colors.bgRaised
+    },
+    detailsSummaryText: { color: colors.textPrimary, fontWeight: '600', flexShrink: 1 },
+    detailsBody: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
+    tableScroll: { marginBottom: spacing.sm },
+    table: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      overflow: 'hidden'
+    },
+    tableRow: {
+      flexDirection: 'row',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle
+    },
+    tableHeaderRow: { borderTopWidth: 0, backgroundColor: colors.bgRaised },
+    tableCell: {
+      minWidth: 96,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: colors.borderSubtle
+    },
+    tableHeaderText: { color: colors.textPrimary, fontWeight: '700' },
+    tableCellText: { color: colors.textPrimary }
+  })

@@ -20,12 +20,13 @@ import Animated, {
   interpolate,
   Extrapolation
 } from 'react-native-reanimated'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing, type ThemeColors } from '../theme/mobile-theme'
 // Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
 // the exact same gate as BottomDrawer rather than duplicating it.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useThemedStyles } from '../theme/theme-context'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -84,6 +85,7 @@ function MountedRightDrawer({
   zIndex = 1000,
   widthPx
 }: MountedRightDrawerProps) {
+  const styles = useThemedStyles(createStyles)
   const translateX = useSharedValue(0)
   const progress = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
@@ -213,39 +215,40 @@ function MountedRightDrawer({
   )
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000
-  },
-  root: {
-    flex: 1
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)'
-  },
-  anchor: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'flex-end'
-  },
-  drawer: {
-    height: '100%',
-    backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    paddingHorizontal: spacing.md,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: -2, height: 0 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10
-      },
-      android: { elevation: 8 }
-    })
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    overlay: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 1000
+    },
+    root: {
+      flex: 1
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.5)'
+    },
+    anchor: {
+      flex: 1,
+      flexDirection: 'row',
+      justifyContent: 'flex-end'
+    },
+    drawer: {
+      height: '100%',
+      backgroundColor: colors.bgBase,
+      borderTopLeftRadius: 16,
+      borderBottomLeftRadius: 16,
+      paddingHorizontal: spacing.md,
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: colors.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: -2, height: 0 },
+          shadowOpacity: 0.2,
+          shadowRadius: 10
+        },
+        android: { elevation: 8 }
+      })
+    }
+  })

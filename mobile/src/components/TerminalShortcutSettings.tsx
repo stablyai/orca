@@ -1,20 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  AppState,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Switch,
-  type AppStateStatus
-} from 'react-native'
+import { AppState, View, Text, Pressable, Switch, type AppStateStatus } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { ChevronRight, X } from 'lucide-react-native'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
 import { CustomKeyModal, loadCustomKeys, saveCustomKeys, type CustomKey } from './CustomKeyModal'
 import { DragReorderList } from './DragReorderList'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
@@ -27,6 +18,8 @@ import {
   setTerminalAccessoryBuiltInVisible,
   type TerminalAccessoryLayout
 } from '../terminal/terminal-accessory-layout'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { createTerminalShortcutSettingsStyles } from './terminal-shortcut-settings-styles'
 
 // Why: DragReorderList absolutely positions rows, so every row in a
 // reorderable section must share one fixed height.
@@ -41,6 +34,8 @@ function ShortcutBarRow({
   visible: boolean
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
+  const styles = useThemedStyles(createTerminalShortcutSettingsStyles)
+  const { colors } = useTheme()
   return (
     <View style={styles.reorderRowContent}>
       <View style={styles.keycap}>
@@ -72,6 +67,8 @@ export function TerminalShortcutSettings({
   scrollContentHeight,
   onDragActiveChange
 }: Props): React.JSX.Element {
+  const styles = useThemedStyles(createTerminalShortcutSettingsStyles)
+  const { colors } = useTheme()
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [shortcutLayout, setShortcutLayout] = useState<TerminalAccessoryLayout>(
@@ -326,103 +323,3 @@ export function TerminalShortcutSettings({
     </>
   )
 }
-
-const styles = StyleSheet.create({
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  groupTopGap: {
-    marginTop: spacing.xl
-  },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    overflow: 'hidden'
-  },
-  sectionTopGap: {
-    marginTop: spacing.sm
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  // Why: rows inside DragReorderList get a fixed height and a trailing grip
-  // handle from the list itself, so content only pads on the left.
-  reorderRowContent: {
-    flex: 1,
-    height: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingLeft: spacing.md + 2
-  },
-  rowContent: {
-    flex: 1
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowSublabel: {
-    fontSize: typography.bodySize - 2,
-    color: colors.textSecondary,
-    marginTop: 2
-  },
-  keycap: {
-    minWidth: 62,
-    alignItems: 'center',
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  keycapText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  emptyContainer: {
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    padding: spacing.md
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)'
-  },
-  deleteButtonPressed: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)'
-  }
-})

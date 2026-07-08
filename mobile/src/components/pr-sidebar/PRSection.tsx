@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
+import { useThemedStyles } from '../../theme/theme-context'
 
 type Props = {
   title: string
@@ -13,6 +14,7 @@ type Props = {
 // Shared card shell for the titled PR sections (Actions/Reviewers/Checks). Mirrors
 // the desktop PR page's card-with-header-divider so the sections read consistently.
 export function PRSection({ title, trailing, children }: Props) {
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>

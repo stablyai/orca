@@ -1,8 +1,8 @@
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { PRCheckRunDetails } from '../../../../src/shared/types'
 import { presentCheckDetail, type CheckDetailJob } from './pr-check-detail-content'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
+import { useThemedStyles, useTheme } from '../../theme/theme-context'
 
 // Per-check lazily-fetched detail. `loading`/`error` track the in-flight fetch;
 // `details` (once set) is the cache so collapse/re-expand never re-fetches.
@@ -16,6 +16,8 @@ export type DetailEntry =
 // (parity with the desktop ChecksPanel detail). Muted/monochrome and scrollable
 // so long CI output never breaks the sidebar layout.
 export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   if (!entry || entry.status === 'loading') {
     return (
       <View style={styles.checkDetailArea}>
@@ -93,6 +95,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
 }
 
 function JobRow({ job }: { job: CheckDetailJob }) {
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   return (
     <View>
       <View style={styles.checkDetailStepRow}>

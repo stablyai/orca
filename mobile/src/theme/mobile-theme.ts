@@ -1,7 +1,7 @@
 // Orca mobile design tokens — matches desktop graphite/dark palette.
 // All screen files should import from here instead of using inline hex values.
 
-export const colors = {
+export const darkColors = {
   bgBase: '#111111',
   bgPanel: '#1a1a1a',
   bgRaised: '#242424',
@@ -16,6 +16,9 @@ export const colors = {
   // worktree FAB). Brighter than textPrimary so it reads as a solid button, not
   // disabled chrome, while staying monochrome (STYLEGUIDE: color is for state).
   surfaceBright: '#f5f5f5',
+  // Why: light mode surfaceBright matches textPrimary, so pressed feedback needs its own token.
+  surfaceBrightPressed: '#e0e0e0',
+  onSurfaceBright: '#111111',
 
   accentBlue: '#3b82f6',
 
@@ -45,6 +48,50 @@ export const colors = {
   // Terminal WebView background (Tokyonight) — separate from app chrome
   terminalBg: '#1a1b26'
 } as const
+
+export type ThemeColors = {
+  readonly [Key in keyof typeof darkColors]: string
+}
+
+export const lightColors = {
+  bgBase: '#ffffff',
+  bgPanel: '#f5f5f5',
+  bgRaised: '#eaeaea',
+  borderSubtle: '#e5e5e5',
+  editorSurface: '#ffffff',
+
+  textPrimary: '#171717',
+  textSecondary: '#737373',
+  textMuted: '#a3a3a3',
+
+  surfaceBright: '#171717',
+  surfaceBrightPressed: '#404040',
+  onSurfaceBright: '#fafafa',
+
+  accentBlue: '#2563eb',
+
+  statusGreen: '#15803d',
+  statusAmber: '#b45309',
+  statusRed: '#e40014',
+  mergeGreen: '#16a34a',
+  onMergeGreen: '#ffffff',
+  statusPurple: '#7c3aed',
+  gitDecorationAdded: '#587c0c',
+  gitDecorationDeleted: '#ad0707',
+  diffAddedBg: 'rgba(88, 124, 12, 0.10)',
+  diffDeletedBg: 'rgba(173, 7, 7, 0.08)',
+
+  syntaxComment: '#008000',
+  syntaxKeyword: '#0000ff',
+  syntaxString: '#a31515',
+  syntaxNumber: '#098658',
+  syntaxType: '#267f99',
+  syntaxFunction: '#795e26',
+  syntaxVariable: '#001080',
+  syntaxMeta: '#af00db',
+
+  terminalBg: '#1a1b26'
+} as const satisfies ThemeColors
 
 export const spacing = {
   xs: 4,

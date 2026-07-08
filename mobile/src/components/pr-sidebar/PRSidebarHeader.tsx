@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowRight, Pencil } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { GitHubWorkItemDetails, PRInfo } from '../../../../src/shared/types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
 import { prStateBadge } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
 import { canEditPRTitle } from '../../session/pr-title-edit'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
-import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
+import { createMobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
+import { createPrCommentComposerStyles } from './pr-comment-composer-styles'
+import { useThemedStyles, useTheme } from '../../theme/theme-context'
 
 type Props = {
   pr: PRInfo
@@ -21,9 +21,11 @@ type Props = {
 // Header: state badge (incl. draft — display-only), title, author, head->base.
 // The title is inline-editable on an open/draft PR (desktop parity).
 export function PRSidebarHeader({ pr, details, titleAction }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
   const item = details?.item
   const badge = prStateBadge(pr.state)
-  const badgeColor = statusColor(badge.token)
+  const badgeColor = statusColor(badge.token, colors)
   const title = item?.title ?? pr.title
   const author = item?.author ?? null
   const baseRef = item?.baseRefName ?? null
@@ -83,6 +85,9 @@ function PRTitle({
   openPr: (() => void) | undefined
   titleAction: MobilePrTitleAction
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobilePrSidebarStyles)
+  const composerStyles = useThemedStyles(createPrCommentComposerStyles)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 

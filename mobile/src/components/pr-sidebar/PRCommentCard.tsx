@@ -2,13 +2,13 @@ import { memo, useState } from 'react'
 import { Image, Linking, Pressable, Text, View } from 'react-native'
 import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
 import type { GitHubReaction, GitHubReactionContent, PRComment } from '../../../../src/shared/types'
-import { colors } from '../../theme/mobile-theme'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { formatPrCommentRelativeTime } from './pr-comment-time'
-import { prCommentsStyles as styles } from './pr-comments-styles'
+import { createPrCommentsStyles } from './pr-comments-styles'
+import { useThemedStyles, useTheme } from '../../theme/theme-context'
 
 export type PRCommentRepoSlug = { owner: string; repo: string }
 
@@ -39,6 +39,7 @@ const REACTION_EMOJI: Record<GitHubReactionContent, string> = {
 }
 
 function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
+  const styles = useThemedStyles(createPrCommentsStyles)
   const visible = (reactions ?? []).filter((r) => r.count > 0)
   if (visible.length === 0) {
     return null
@@ -68,6 +69,8 @@ export const PRCommentCard = memo(function PRCommentCard({
   isReply?: boolean
   actions?: PRCommentCardActions
 }) {
+  const styles = useThemedStyles(createPrCommentsStyles)
+  const { colors } = useTheme()
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { ConnectionState } from '../../transport/types'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
@@ -20,7 +19,8 @@ import {
 import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
-import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
+import { createPrCreateEmptyStateStyles } from './pr-create-empty-state-styles'
+import { useThemedStyles, useTheme } from '../../theme/theme-context'
 
 type Props = {
   client: RpcClient | null
@@ -45,6 +45,8 @@ export function PrSidebarCreateEmptyState({
   connState,
   onCreated
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createPrCreateEmptyStateStyles)
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   const [createWarning, setCreateWarning] = useState<string | null>(null)

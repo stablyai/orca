@@ -1,7 +1,8 @@
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography, type ThemeColors } from '../theme/mobile-theme'
 import type { CompatVerdict } from '../transport/protocol-compat'
+import { useThemedStyles } from '../theme/theme-context'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
@@ -11,6 +12,7 @@ type Props = {
 }
 
 export function ProtocolBlockScreen({ verdict }: Props) {
+  const styles = useThemedStyles(createStyles)
   const isMobileTooOld = verdict.reason === 'mobile-too-old'
   const mobileUpdateTarget =
     Platform.OS === 'ios'
@@ -62,62 +64,63 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg
-  },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm
-  },
-  body: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.lg
-  },
-  primaryButton: {
-    backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    marginBottom: spacing.sm
-  },
-  primaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.bgBase
-  },
-  secondaryButton: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  recoveryNote: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 17,
-    marginTop: spacing.md
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgBase,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg
+    },
+    card: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.card,
+      padding: spacing.lg,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    title: {
+      fontSize: typography.titleSize,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      marginBottom: spacing.sm
+    },
+    body: {
+      fontSize: typography.bodySize,
+      color: colors.textSecondary,
+      lineHeight: 20,
+      marginBottom: spacing.lg
+    },
+    primaryButton: {
+      backgroundColor: colors.textPrimary,
+      paddingVertical: spacing.sm + 2,
+      borderRadius: radii.button,
+      alignItems: 'center',
+      marginBottom: spacing.sm
+    },
+    primaryButtonText: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.bgBase
+    },
+    secondaryButton: {
+      backgroundColor: colors.bgRaised,
+      paddingVertical: spacing.sm + 2,
+      borderRadius: radii.button,
+      alignItems: 'center'
+    },
+    secondaryButtonText: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    recoveryNote: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      lineHeight: 17,
+      marginTop: spacing.md
+    },
+    pressed: {
+      opacity: 0.7
+    }
+  })

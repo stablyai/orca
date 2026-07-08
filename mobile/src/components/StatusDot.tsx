@@ -1,15 +1,23 @@
 import { View, StyleSheet } from 'react-native'
-import { colors } from '../theme/mobile-theme'
 import type { ConnectionState } from '../transport/types'
 import type { ConnectionVerdict } from '../transport/connection-health'
+import { useTheme } from '../theme/theme-context'
+import type { ThemeColors } from '../theme/mobile-theme'
 
-const stateColors: Record<ConnectionState, string> = {
-  connected: colors.statusGreen,
-  connecting: colors.statusAmber,
-  handshaking: colors.statusAmber,
-  reconnecting: colors.statusAmber,
-  disconnected: colors.textMuted,
-  'auth-failed': colors.statusRed
+function stateColor(state: ConnectionState, colors: ThemeColors): string {
+  switch (state) {
+    case 'connected':
+      return colors.statusGreen
+    case 'connecting':
+    case 'handshaking':
+    case 'reconnecting':
+      return colors.statusAmber
+    case 'auth-failed':
+      return colors.statusRed
+    case 'disconnected':
+    default:
+      return colors.textMuted
+  }
 }
 
 // Why: when caller passes a verdict, the dot color reflects the verdict's
@@ -24,12 +32,13 @@ export function StatusDot({
   state: ConnectionState
   verdict?: ConnectionVerdict
 }) {
+  const { colors } = useTheme()
   const color =
     verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed'
       ? colors.statusRed
       : verdict?.kind === 'warning'
         ? colors.statusAmber
-        : (stateColors[state] ?? colors.textMuted)
+        : stateColor(state, colors)
   return <View style={[styles.dot, { backgroundColor: color }]} />
 }
 

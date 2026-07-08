@@ -1,13 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  ActivityIndicator,
-  Platform
-} from 'react-native'
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
@@ -22,15 +14,18 @@ import {
   Activity,
   CheckCircle2,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  type LucideIcon
 } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { spacing } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
 } from '../src/diagnostics/diagnostic-fetch-timeout'
 import { formatEndpoint, testHostReachability } from '../src/diagnostics/host-reachability'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
+import { createTroubleshootStyles } from './troubleshoot-styles'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -42,7 +37,7 @@ type CheckResult = {
 
 type TroubleshootSection = {
   id: string
-  icon: React.ReactNode
+  icon: LucideIcon
   title: string
   steps: string[]
 }
@@ -50,7 +45,7 @@ type TroubleshootSection = {
 const sections: TroubleshootSection[] = [
   {
     id: 'wifi',
-    icon: <WifiOff size={16} color={colors.textSecondary} />,
+    icon: WifiOff,
     title: 'Different WiFi Networks',
     steps: [
       'Both devices must be on the same local network.',
@@ -60,7 +55,7 @@ const sections: TroubleshootSection[] = [
   },
   {
     id: 'firewall',
-    icon: <Shield size={16} color={colors.textSecondary} />,
+    icon: Shield,
     title: 'Firewall Blocking Port 6768',
     steps: [
       'macOS: System Settings → Network → Firewall — allow Orca.',
@@ -71,7 +66,7 @@ const sections: TroubleshootSection[] = [
   },
   {
     id: 'desktop',
-    icon: <Monitor size={16} color={colors.textSecondary} />,
+    icon: Monitor,
     title: 'Desktop App Not Running',
     steps: [
       'Orca must be open on your desktop to accept connections.',
@@ -81,7 +76,7 @@ const sections: TroubleshootSection[] = [
   },
   {
     id: 'timeout',
-    icon: <Clock size={16} color={colors.textSecondary} />,
+    icon: Clock,
     title: 'Connection Timeout',
     steps: [
       'Check WiFi signal strength on your phone.',
@@ -91,7 +86,7 @@ const sections: TroubleshootSection[] = [
   },
   {
     id: 'vpn',
-    icon: <Globe size={16} color={colors.textSecondary} />,
+    icon: Globe,
     title: 'VPN Interference',
     steps: [
       'VPNs can route local traffic through a remote server.',
@@ -101,6 +96,7 @@ const sections: TroubleshootSection[] = [
 ]
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
+  const { colors } = useTheme()
   switch (status) {
     case 'pass':
       return <CheckCircle2 size={14} color={colors.statusGreen} />
@@ -112,6 +108,8 @@ function StatusIcon({ status }: { status: CheckResult['status'] }) {
 }
 
 export default function TroubleshootScreen() {
+  const styles = useThemedStyles(createTroubleshootStyles)
+  const { colors } = useTheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -295,33 +293,36 @@ export default function TroubleshootScreen() {
         <Text style={styles.sectionHeading}>Common issues</Text>
 
         <View style={styles.section}>
-          {sections.map((section, i) => (
-            <View key={section.id}>
-              {i > 0 && <View style={styles.separator} />}
-              <Pressable
-                style={({ pressed }) => [styles.accordionHeader, pressed && styles.rowPressed]}
-                onPress={() => toggleSection(section.id)}
-              >
-                {section.icon}
-                <Text style={styles.accordionTitle}>{section.title}</Text>
-                {expandedId === section.id ? (
-                  <ChevronUp size={16} color={colors.textMuted} />
-                ) : (
-                  <ChevronDown size={16} color={colors.textMuted} />
+          {sections.map((section, i) => {
+            const Icon = section.icon
+            return (
+              <View key={section.id}>
+                {i > 0 && <View style={styles.separator} />}
+                <Pressable
+                  style={({ pressed }) => [styles.accordionHeader, pressed && styles.rowPressed]}
+                  onPress={() => toggleSection(section.id)}
+                >
+                  <Icon size={16} color={colors.textSecondary} />
+                  <Text style={styles.accordionTitle}>{section.title}</Text>
+                  {expandedId === section.id ? (
+                    <ChevronUp size={16} color={colors.textMuted} />
+                  ) : (
+                    <ChevronDown size={16} color={colors.textMuted} />
+                  )}
+                </Pressable>
+                {expandedId === section.id && (
+                  <View style={styles.accordionBody}>
+                    {section.steps.map((step, j) => (
+                      <View key={j} style={styles.stepRow}>
+                        <Text style={styles.bullet}>•</Text>
+                        <Text style={styles.stepText}>{step}</Text>
+                      </View>
+                    ))}
+                  </View>
                 )}
-              </Pressable>
-              {expandedId === section.id && (
-                <View style={styles.accordionBody}>
-                  {section.steps.map((step, j) => (
-                    <View key={j} style={styles.stepRow}>
-                      <Text style={styles.bullet}>•</Text>
-                      <Text style={styles.stepText}>{step}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          ))}
+              </View>
+            )
+          })}
         </View>
 
         <View style={{ height: spacing.xl }} />
@@ -329,135 +330,3 @@ export default function TroubleshootScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  scroll: {
-    flex: 1
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl
-  },
-  diagnosticButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: 10,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg
-  },
-  diagnosticButtonPressed: {
-    opacity: 0.7
-  },
-  diagnosticButtonDisabled: {
-    opacity: 0.5
-  },
-  diagnosticButtonLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md + 2
-  },
-  checkLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  checkDetail: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  checkDetailFail: {
-    color: colors.statusRed
-  },
-  sectionHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: spacing.lg
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  accordionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  accordionTitle: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  accordionBody: {
-    paddingHorizontal: spacing.md + 2,
-    paddingBottom: spacing.md,
-    gap: spacing.xs + 2
-  },
-  stepRow: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  bullet: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  },
-  stepText: {
-    flex: 1,
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  }
-})

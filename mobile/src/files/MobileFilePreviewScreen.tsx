@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Save } from 'lucide-react-native'
 import { getWorktreeLabel } from '../session/worktree-label'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
 import {
   loadMobileFilePreview,
@@ -25,13 +25,16 @@ import {
   isEditableMobileTerminalArtifactPreview,
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { createFilePreviewStyles } from './mobile-file-preview-styles'
+import { useThemedStyles, useTheme } from '../theme/theme-context'
 
 type Props = {
   route: MobileFilePreviewRouteState
 }
 
 export function MobileFilePreviewScreen({ route }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createFilePreviewStyles)
   const router = useRouter()
   const previewParams = route.ok ? route.params : null
   const { client, state: connState } = useHostClient(previewParams?.hostId)

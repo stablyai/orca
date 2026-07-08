@@ -1,12 +1,13 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
 import type { SectionListRenderItem } from 'react-native'
-import { colors } from '../theme/mobile-theme'
 import { MOBILE_GIT_STATUS_LABELS, type MobileSourceControlSection } from './mobile-git-status'
 import { formatMobileBranchEntryMeta } from './mobile-branch-entry-format'
 import { statusColor, type MobileGitStatusEntryView } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
-import { styles } from './mobile-source-control-styles'
+import { createMobileSourceControlStyles } from './mobile-source-control-styles'
+import { useThemedStyles, useTheme } from '../theme/theme-context'
+import type { ThemeColors } from '../theme/mobile-theme'
 
 type RowState = Pick<
   MobileSourceControlState,
@@ -18,8 +19,12 @@ type RowState = Pick<
   | 'setDiscardTarget'
 >
 
+type MobileSourceControlStyles = ReturnType<typeof createMobileSourceControlStyles>
+
 export function makeRenderFileRow(
-  state: RowState
+  state: RowState,
+  colors: ThemeColors,
+  styles: MobileSourceControlStyles
 ): SectionListRenderItem<
   MobileGitStatusEntryView,
   MobileSourceControlSection<MobileGitStatusEntryView>
@@ -48,7 +53,7 @@ export function makeRenderFileRow(
         accessibilityLabel={`Open changed file ${item.path}`}
       >
         <View style={styles.statusBadge}>
-          <Text style={[styles.statusBadgeText, { color: statusColor(item.status) }]}>
+          <Text style={[styles.statusBadgeText, { color: statusColor(item.status, colors) }]}>
             {MOBILE_GIT_STATUS_LABELS[item.status]}
           </Text>
         </View>
@@ -150,6 +155,8 @@ type FooterState = Pick<
 >
 
 export function BranchCompareFooter({ state }: { state: FooterState }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createMobileSourceControlStyles)
   const {
     shouldShowBranchCompareSection,
     branchCompareSummaryText,
@@ -216,7 +223,9 @@ export function BranchCompareFooter({ state }: { state: FooterState }) {
               accessibilityLabel={`Open committed change ${entry.path}`}
             >
               <View style={styles.statusBadge}>
-                <Text style={[styles.statusBadgeText, { color: statusColor(entry.status) }]}>
+                <Text
+                  style={[styles.statusBadgeText, { color: statusColor(entry.status, colors) }]}
+                >
                   {MOBILE_GIT_STATUS_LABELS[entry.status]}
                 </Text>
               </View>

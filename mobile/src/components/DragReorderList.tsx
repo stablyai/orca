@@ -13,7 +13,7 @@ import Animated, {
   type AnimatedRef,
   type SharedValue
 } from 'react-native-reanimated'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing, type ThemeColors } from '../theme/mobile-theme'
 import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
 import {
   clampDragReorderIndex,
@@ -22,6 +22,7 @@ import {
   orderedKeysFromDragReorderPositions,
   type DragReorderPositions
 } from './drag-reorder-positions'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 const ROW_SPRING = { damping: 28, stiffness: 350 }
 const LONG_PRESS_ACTIVATION_MS = 200
@@ -227,6 +228,8 @@ function DragReorderRow({
   onAccessibilityMove: (key: string, delta: number) => void
   children: ReactNode
 }): React.JSX.Element {
+  const styles = useThemedStyles(createStyles)
+  const { colors } = useTheme()
   const {
     positions,
     activeKey,
@@ -319,31 +322,32 @@ function DragReorderRow({
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8
-  },
-  rowContent: {
-    flex: 1
-  },
-  handle: {
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md
-  },
-  rowSeparator: {
-    position: 'absolute',
-    bottom: 0,
-    left: spacing.md,
-    right: spacing.md,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  }
-})
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 8
+    },
+    rowContent: {
+      flex: 1
+    },
+    handle: {
+      alignSelf: 'stretch',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md
+    },
+    rowSeparator: {
+      position: 'absolute',
+      bottom: 0,
+      left: spacing.md,
+      right: spacing.md,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle
+    }
+  })

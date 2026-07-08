@@ -5,10 +5,11 @@ import type { RpcClient } from '../transport/rpc-client'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
 import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
 import { MobilePrViewPanel } from '../components/pr-sidebar/MobilePrViewPanel'
-import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
+import { createMobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
 import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { ActivePanel } from './session-panel-host'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
+import { useThemedStyles } from '../theme/theme-context'
 
 type Props = {
   activePanel: Exclude<ActivePanel, null>
@@ -52,9 +53,10 @@ export function SessionDockColumn({
   onFileOpenStart,
   onOpenedFileDiff
 }: Props) {
+  const prSidebarStyles = useThemedStyles(createMobilePrSidebarStyles)
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
   return (
-    <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>
+    <View style={[prSidebarStyles.dockColumn, { width: dockWidth }]}>
       {/* Dedicated drag handle over the dock's left border — a leaf overlay so the
           inner ScrollView can't intercept the gesture on Android. */}
       <View style={styles.resizeHandle} {...panHandlers} />

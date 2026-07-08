@@ -1,5 +1,5 @@
 import Svg, { Path } from 'react-native-svg'
-import { colors } from '../theme/mobile-theme'
+import { useTheme } from '../theme/theme-context'
 
 // Why: SVG paths sourced from the desktop codebase
 // (src/renderer/src/components/status-bar/icons.tsx) so mobile and desktop
@@ -18,6 +18,7 @@ export function ClaudeIcon({ size = 16 }: { size?: number }) {
 }
 
 export function OpenAIIcon({ size = 16, color }: { size?: number; color?: string }) {
+  const { colors } = useTheme()
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path

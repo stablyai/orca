@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { darkColors } from '../theme/mobile-theme'
 
 export type NativeWebViewEngineEvent = {
   readonly nativeEvent?: object
@@ -85,7 +85,7 @@ export function TerminalWebViewEngineErrorOverlay({
         {message}
       </Text>
       <Pressable accessibilityRole="button" style={styles.reloadButton} onPress={onReload}>
-        <RefreshCw size={16} color={colors.terminalBg} />
+        <RefreshCw size={16} color={darkColors.onSurfaceBright} />
         <Text style={styles.reloadButtonText}>Reload</Text>
       </Pressable>
     </View>
@@ -99,16 +99,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
     padding: 24,
-    backgroundColor: colors.terminalBg
+    backgroundColor: darkColors.terminalBg
   },
   errorTitle: {
-    color: colors.textPrimary,
+    color: darkColors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center'
   },
   errorDetail: {
-    color: colors.textSecondary,
+    color: darkColors.textSecondary,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center'
@@ -120,10 +120,10 @@ const styles = StyleSheet.create({
     minHeight: 36,
     paddingHorizontal: 14,
     borderRadius: 6,
-    backgroundColor: colors.surfaceBright
+    backgroundColor: darkColors.surfaceBright
   },
   reloadButtonText: {
-    color: colors.terminalBg,
+    color: darkColors.onSurfaceBright,
     fontSize: 14,
     fontWeight: '700'
   }
