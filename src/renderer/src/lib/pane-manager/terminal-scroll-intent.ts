@@ -232,6 +232,15 @@ export function enforceTerminalWriteScrollIntent(
     }
     return
   }
+  // Why: a remounted/replayed terminal briefly reports an empty or shorter
+  // scrollback (xterm parses writes asynchronously). Enforcing a pinned
+  // viewport against that transient would clamp to row 0 AND overwrite the
+  // durable intent with the empty-buffer state — mirror the down-shrink guard
+  // in syncTerminalScrollIntentFromViewport and wait for a full-height buffer.
+  const existing = readStoredIntent(terminal)
+  if (existing?.kind === 'pinnedViewport' && current.baseY < existing.baseY) {
+    return
+  }
   const targetY = clampViewportY(snapshot.viewportY, current.baseY)
   if (current.viewportY !== targetY) {
     safeScrollCall(() => terminal.scrollToLine?.(targetY))

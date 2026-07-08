@@ -2612,6 +2612,17 @@ export type GlobalSettings = {
    *  usable without the setup output crowding the initial pane. */
   setupScriptLaunchMode: SetupScriptLaunchMode
   terminalScrollbackRows: number
+  /** Experimental: bound the number of live-mounted terminal panes: evict hidden
+   *  xterm instances that overflow the warm budget or age past the dwell window,
+   *  keeping their PTY + status feed alive and replaying the main mirror on
+   *  re-show. Opt-in, default OFF. See STA-1282. */
+  experimentalTerminalPaneEviction?: boolean
+  /** Most-recently-visible hidden panes kept mounted (warm) before eviction.
+   *  Clamped 4-64. */
+  terminalPaneEvictionWarmBudget?: number
+  /** Minutes a pane must stay hidden before it is eligible for eviction.
+   *  Clamped 1-120. */
+  terminalPaneEvictionAfterMinutes?: number
   /** Optional app-level proxy for Electron networking and locally spawned PTYs.
    *  Empty preserves system proxy settings plus inherited proxy env behavior. */
   httpProxyUrl?: string

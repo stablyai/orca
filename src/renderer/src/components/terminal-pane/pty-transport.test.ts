@@ -184,6 +184,54 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('park() retains the title/exit feed but stops xterm writes (STA-1282 gate #3)', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onPtyExit = vi.fn()
+    const onBell = vi.fn()
+    const onDataCallback = vi.fn()
+    const transport = createIpcPtyTransport({ onTitleChange, onPtyExit, onBell })
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    // Pre-park (mounted pane): a title feeds the live feed and data reaches xterm.
+    onData?.({ id: 'pty-1', data: '\x1b]0;live-title\x07body' })
+    expect(onDataCallback).toHaveBeenCalledWith('\x1b]0;live-title\x07body')
+    await flushPtySideEffects()
+    expect(onTitleChange).toHaveBeenCalledWith('live-title', 'live-title')
+    onTitleChange.mockClear()
+    onDataCallback.mockClear()
+
+    // Evict: park re-points title/bell/exit to the parked registry feed. The PTY
+    // and its data handler stay alive (still parsing OSC titles), but nothing
+    // writes to the torn-down xterm anymore (storedCallbacks cleared).
+    const parkedTitle = vi.fn()
+    const parkedExit = vi.fn()
+    const parkedBell = vi.fn()
+    transport.park?.({ onTitleChange: parkedTitle, onPtyExit: parkedExit, onBell: parkedBell })
+
+    onData?.({ id: 'pty-1', data: '\x1b]0;parked-title\x07more' })
+    expect(onDataCallback).not.toHaveBeenCalled()
+    await flushPtySideEffects()
+    // The renderer-only title feed survives, now driving the parked sink…
+    expect(parkedTitle).toHaveBeenCalledWith('parked-title', 'parked-title')
+    // …and the original (unmounted) pane's feed is silent.
+    expect(onTitleChange).not.toHaveBeenCalled()
+
+    // A standalone BEL while parked is an attention signal (unread marks) and
+    // must route to the parked bell sink, never the original pane's.
+    onData?.({ id: 'pty-1', data: 'ready\x07' })
+    await flushPtySideEffects()
+    expect(parkedBell).toHaveBeenCalled()
+    expect(onBell).not.toHaveBeenCalled()
+
+    // A real exit while parked routes to the parked exit observer (gate #8 hook),
+    // never the original pane's observer.
+    onExit?.({ id: 'pty-1', code: 0 })
+    expect(parkedExit).toHaveBeenCalledWith('pty-1')
+    expect(onPtyExit).not.toHaveBeenCalled()
+  })
+
   it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
     vi.useFakeTimers()
     try {

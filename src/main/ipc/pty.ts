@@ -19,6 +19,7 @@ import type { Store } from '../persistence'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { PtyMainBufferSnapshotPayload } from '../../shared/pty-main-buffer-snapshot'
 import {
   isWslShellName,
   resolveLocalWindowsTerminalRuntimeOptions
@@ -2604,26 +2605,17 @@ export function registerPtyHandlers(
     async (
       _event,
       args: { id?: unknown; opts?: { scrollbackRows?: unknown } }
-    ): Promise<{
-      data: string
-      cols: number
-      rows: number
-      cwd?: string | null
-      lastTitle?: string
-      seq?: number
-      source?: 'headless' | 'renderer'
-      alternateScreen?: boolean
-      pendingEscapeTailAnsi?: string
-    } | null> => {
+    ): Promise<PtyMainBufferSnapshotPayload | null> => {
       if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
+        // Why: no runtime / bad id is a nil mirror, not a failure — resolves null
+        // so the STA-1282 eviction remount fail-open counter is not charged.
         return null
       }
       const scrollbackRows = normalizeSnapshotScrollbackRows(args.opts?.scrollbackRows)
-      try {
-        return await runtime.serializeHiddenOutputRecoveryBuffer(args.id, { scrollbackRows })
-      } catch {
-        return null
-      }
+      // Why: STA-1282 gate #5 — do NOT swallow serialization/RPC errors to null.
+      // A real error must REJECT so the renderer can tell a structural replay
+      // failure from a nil mirror; the old try/catch made both indistinguishable.
+      return await runtime.serializeHiddenOutputRecoveryBuffer(args.id, { scrollbackRows })
     }
   )
 

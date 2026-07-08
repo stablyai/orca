@@ -483,21 +483,37 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   // unread marks, or notifications for unrelated worktrees just because Orca
   // is reconnecting background terminals on launch.
   let suppressAttentionEvents = false
+  // Why: STA-1282 — side-effect callbacks are routed through this mutable holder
+  // so park() can re-point title/status/exit to the parked feed without
+  // rebuilding the outputProcessor. Wrappers are installed only when the
+  // corresponding opt was provided so construction-time gating (e.g. status
+  // ownership) is preserved exactly.
+  const sinks = {
+    onTitleChange,
+    onBell,
+    onAgentBecameIdle,
+    onAgentBecameWorking,
+    onAgentExited,
+    onAgentStatus,
+    onPtyExit
+  }
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => connected && ptyId === id,
     write: (id, data) => window.api.pty.write(id, data)
   })
   const outputProcessor = createPtyOutputProcessor({
-    onTitleChange,
-    onBell,
-    onAgentBecameIdle: (title) => {
-      if (!suppressAttentionEvents) {
-        onAgentBecameIdle?.(title)
-      }
-    },
-    onAgentBecameWorking,
-    onAgentExited,
-    onAgentStatus
+    onTitleChange: onTitleChange ? (title, raw) => sinks.onTitleChange?.(title, raw) : undefined,
+    onBell: onBell ? () => sinks.onBell?.() : undefined,
+    onAgentBecameIdle: onAgentBecameIdle
+      ? (title) => {
+          if (!suppressAttentionEvents) {
+            sinks.onAgentBecameIdle?.(title)
+          }
+        }
+      : undefined,
+    onAgentBecameWorking: onAgentBecameWorking ? () => sinks.onAgentBecameWorking?.() : undefined,
+    onAgentExited: onAgentExited ? () => sinks.onAgentExited?.() : undefined,
+    onAgentStatus: onAgentStatus ? (payload) => sinks.onAgentStatus?.(payload) : undefined
   })
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
 
@@ -595,7 +611,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       unregisterPtyHandlers(id)
       storedCallbacks.onExit?.(code)
       storedCallbacks.onDisconnect?.()
-      onPtyExit?.(id)
+      sinks.onPtyExit?.(id)
     }
     ptyExitHandlers.set(id, exitHandler)
     // Why: shutdownWorktreeTerminals bypasses the transport layer — it
@@ -853,6 +869,24 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       connected = false
       ptyId = null
       storedCallbacks = {}
+    },
+
+    park(parkedSinks) {
+      // Why: STA-1282 eviction. Keep the PTY + its registered data/exit handlers
+      // alive, but stop writing to the torn-down xterm and re-point the
+      // renderer-only title/status feed + exit observer to the parked registry.
+      // No backlog is retained — the main mirror is the replay source of truth.
+      inputWriteQueue.clear()
+      // Drop onData/onReplayData: the data handler still runs (parsing OSC
+      // titles/status for the parked feed) but nothing is written to xterm.
+      storedCallbacks = {}
+      sinks.onTitleChange = parkedSinks.onTitleChange
+      sinks.onBell = parkedSinks.onBell
+      sinks.onAgentBecameIdle = undefined
+      sinks.onAgentBecameWorking = undefined
+      sinks.onAgentExited = undefined
+      sinks.onAgentStatus = parkedSinks.onAgentStatus
+      sinks.onPtyExit = parkedSinks.onPtyExit
     },
 
     sendInput(data: string): boolean {

@@ -10,6 +10,7 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
+import type { PtyMainBufferSnapshotPayload } from '../shared/pty-main-buffer-snapshot'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -1172,16 +1173,7 @@ export type PreloadApi = {
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
-    ) => Promise<{
-      data: string
-      cols: number
-      rows: number
-      cwd?: string | null
-      seq?: number
-      source?: 'headless' | 'renderer'
-      alternateScreen?: boolean
-      pendingEscapeTailAnsi?: string
-    } | null>
+    ) => Promise<PtyMainBufferSnapshotPayload | null>
     getRendererDeliveryDebugSnapshot: () => Promise<{
       pendingPtyCount: number
       pendingChars: number

@@ -3600,6 +3600,223 @@ describe('connectPanePty', () => {
     expect(remountDeps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-main')
   })
 
+  it('drives the mirror replay for a claimed eviction remount adopting via direct attach (STA-1282 gate #5)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest, registerEvictedPane } =
+      await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    const remountTransport = createMockTransport()
+    transportFactoryQueue.push(remountTransport)
+
+    // A live eager buffer + current-tab ownership routes adoption to the DIRECT
+    // attach branch (eagerLivePtyId), which never passes handleReattachResult —
+    // the codex P1-A path (e.g. a background automation agent's PTY).
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === 'pty-main' ? { flush: () => '', dispose: () => {} } : undefined
+    )
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-main' }] },
+      ptyIdsByTabId: { 'tab-1': ['pty-main'] },
+      repos: [{ id: 'repo1', connectionId: null }]
+    }
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue({ data: 'parked-history\r\n', cols: 100, rows: 30 })
+
+    // Evicted state: a parked registry entry owns the live PTY.
+    registerEvictedPane({
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'pty-main',
+      destroy: vi.fn(),
+      releaseForClaim: vi.fn()
+    })
+
+    // Remount: adopts the live PTY via the DIRECT attach path (no
+    // handleReattachResult). The claimed remount must proactively request the
+    // mirror snapshot even though the PTY emits nothing (silent pane).
+    const remountPane = createPane(1)
+    const remountBinding = connectPanePty(
+      remountPane as never,
+      createManager(2) as never,
+      createDeps() as never
+    )
+    try {
+      await flushAsyncTicks(30)
+      expect(remountTransport.attach).toHaveBeenCalledWith(
+        expect.objectContaining({ existingPtyId: 'pty-main' })
+      )
+      expect(getMainBufferSnapshot).toHaveBeenCalled()
+      expect(remountPane.terminal.write).toHaveBeenCalledWith(
+        'parked-history\r\n',
+        expect.any(Function)
+      )
+    } finally {
+      remountBinding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('re-applies the durable pinned scroll position on a claimed eviction remount instead of pinning to row 0 (#7472)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest, registerEvictedPane } =
+      await import('./evicted-pane-registry')
+    const { attachTerminalScrollIntentTracking, markTerminalPinnedViewport } =
+      await import('@/lib/pane-manager/terminal-scroll-intent')
+    __resetEvictedPaneRegistryForTest()
+    const remountTransport = createMockTransport()
+    transportFactoryQueue.push(remountTransport)
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === 'pty-main' ? { flush: () => '', dispose: () => {} } : undefined
+    )
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-main' }] },
+      ptyIdsByTabId: { 'tab-1': ['pty-main'] },
+      repos: [{ id: 'repo1', connectionId: null }]
+    }
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue({ data: 'parked-history\r\n', cols: 100, rows: 30 })
+
+    // Pre-eviction pane: the user scrolled up (viewportY 5 of 40), recording a
+    // durable pinnedViewport intent under the leaf-stable scroll-intent key —
+    // exactly what the real pane lifecycle persists across an unmount.
+    const scrollIntentKey = `evict-scroll-test-${LEAF_1}`
+    const preEvictionPane = createPane(1)
+    preEvictionPane.terminal.buffer.active.baseY = 40
+    preEvictionPane.terminal.buffer.active.viewportY = 5
+    const preEvictionTracking = attachTerminalScrollIntentTracking(
+      preEvictionPane.terminal as never,
+      preEvictionPane.container,
+      scrollIntentKey
+    )
+    markTerminalPinnedViewport(preEvictionPane.terminal as never)
+    preEvictionTracking.dispose()
+
+    registerEvictedPane({
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'pty-main',
+      destroy: vi.fn(),
+      releaseForClaim: vi.fn()
+    })
+
+    // Remount into a FRESH xterm (empty buffer, viewportY/baseY 0) whose
+    // replay write grows the buffer and follows to the bottom, as xterm does.
+    const remountPane = createPane(1)
+    const remountBuffer = remountPane.terminal.buffer.active
+    // Model real xterm: write() queues and parses on a later macrotask (the
+    // WriteBuffer setTimeout path), so buffer state must NOT change until then.
+    // A synchronous mock hides the empty-buffer enforce bug this test pins.
+    remountPane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      setTimeout(() => {
+        if (data.includes('parked-history')) {
+          remountBuffer.baseY = 40
+          remountBuffer.viewportY = 40
+        }
+        callback?.()
+      }, 0)
+    }) as never
+    const remountTracking = attachTerminalScrollIntentTracking(
+      remountPane.terminal as never,
+      remountPane.container,
+      scrollIntentKey
+    )
+    const remountBinding = connectPanePty(
+      remountPane as never,
+      createManager(2) as never,
+      createDeps() as never
+    )
+    try {
+      await flushAsyncTicks(30)
+      expect(remountPane.terminal.write).toHaveBeenCalledWith(
+        'parked-history\r\n',
+        expect.any(Function)
+      )
+      // Yield real macrotasks so the deferred xterm-style parse callbacks run
+      // (flushAsyncTicks pumps microtasks only), then flush the enforce .then.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await flushAsyncTicks(10)
+      // The empty pre-replay buffer must not be captured as the scroll target:
+      // that pins the viewport to row 0 AND overwrites the durable intent to 0.
+      expect(remountPane.terminal.scrollToLine).not.toHaveBeenCalledWith(0)
+      expect(remountPane.terminal.scrollToLine).toHaveBeenCalledWith(5)
+      expect(remountBuffer.viewportY).toBe(5)
+    } finally {
+      remountTracking.dispose()
+      remountBinding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('restores a claimed eviction remount from the seq-aligned mirror, not the sequence-less daemon reattach snapshot (STA-1282)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest, registerEvictedPane } =
+      await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+
+    let currentPtyId: string | null = null
+    const transport = createMockTransport()
+    transport.getPtyId.mockImplementation(() => currentPtyId)
+    transport.connect.mockImplementation(async () => {
+      currentPtyId = 'pty-reattach'
+      // A daemon reattach snapshot is a bare string with no sequence — its tail
+      // overlaps the first live chunk and the renderer cannot trim it.
+      return { id: currentPtyId, isReattach: true, snapshot: 'daemon-snapshot-tail\r\n' }
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'mirror-history\r\n',
+      cols: 100,
+      rows: 30,
+      seq: 42
+    })
+
+    // A parked registry entry marks this remount as an eviction claim.
+    registerEvictedPane({
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'pty-reattach',
+      destroy: vi.fn(),
+      releaseForClaim: vi.fn()
+    })
+
+    const pane = createPane(1)
+    const binding = connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    try {
+      await flushAsyncTicks(30)
+      // The seq-aligned mirror restores this evicted pane...
+      expect(getMainBufferSnapshot).toHaveBeenCalled()
+      expect(pane.terminal.write).toHaveBeenCalledWith('mirror-history\r\n', expect.any(Function))
+      // ...and the sequence-less daemon reattach snapshot is never painted, so it
+      // cannot duplicate the boundary line when live output resumes.
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        'daemon-snapshot-tail\r\n',
+        expect.any(Function)
+      )
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
   it('binds a fresh spawn that resolves as a daemon reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     let currentPtyId: string | null = null
@@ -8092,6 +8309,481 @@ describe('connectPanePty', () => {
       expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[6n', expect.any(Function))
     } finally {
       binding.dispose()
+    }
+  })
+
+  it('charges the fail-open counter when a claimed eviction remount snapshot rejects through the real IPC shape (STA-1282 gate #5)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const {
+      __resetEvictedPaneRegistryForTest,
+      isEvictionSelfDisabled,
+      recordEvictionRemountReplayOutcome,
+      registerEvictedPane
+    } = await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    // Two prior structural failures pre-charged: the third must come from the
+    // real remount snapshot path (rejecting IPC) and trip the self-disable.
+    recordEvictionRemountReplayOutcome('error')
+    recordEvictionRemountReplayOutcome('error')
+    registerEvictedPane({
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'pty-id',
+      destroy: vi.fn(),
+      releaseForClaim: vi.fn()
+    })
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockRejectedValue(new Error('mirror boom'))
+
+    const isVisibleRef = { current: false }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({ isVisibleRef, startup: { command: 'codex' } }) as never
+    )
+    try {
+      await flushAsyncTicks(6)
+      capturedDataCallback.current?.('\x1b[6')
+      isVisibleRef.current = true
+      capturedDataCallback.current?.('n')
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalled()
+      expect(isEvictionSelfDisabled()).toBe(true)
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('does not charge the fail-open counter for a nil mirror on a claimed eviction remount (STA-1282 gate #5)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const {
+      __resetEvictedPaneRegistryForTest,
+      isEvictionSelfDisabled,
+      recordEvictionRemountReplayOutcome,
+      registerEvictedPane
+    } = await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    recordEvictionRemountReplayOutcome('error')
+    recordEvictionRemountReplayOutcome('error')
+    registerEvictedPane({
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'pty-id',
+      destroy: vi.fn(),
+      releaseForClaim: vi.fn()
+    })
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue(null)
+
+    const isVisibleRef = { current: false }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({ isVisibleRef, startup: { command: 'codex' } }) as never
+    )
+    try {
+      await flushAsyncTicks(6)
+      capturedDataCallback.current?.('\x1b[6')
+      isVisibleRef.current = true
+      capturedDataCallback.current?.('n')
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalled()
+      // A nil mirror is a successful blank+live remount, never a failure.
+      expect(isEvictionSelfDisabled()).toBe(false)
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('defers the parked claim until adoption: a dispose before attach leaves the entry reapable (STA-1282 gate #8)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest, isPaneParked, registerEvictedPane } =
+      await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const releaseForClaim = vi.fn()
+    registerEvictedPane({
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'pty-id',
+      destroy: vi.fn(),
+      releaseForClaim
+    })
+    const transport = createMockTransport('pty-id')
+    transportFactoryQueue.push(transport)
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    // Dispose before the deferred connect adopts the PTY (StrictMode / split-group
+    // remount race). Pre-fix the claim released the entry at bind, orphaning the
+    // still-live PTY; the claim must instead survive to be reaped on close.
+    binding.dispose()
+    expect(isPaneParked(paneKey)).toBe(true)
+    expect(releaseForClaim).not.toHaveBeenCalled()
+    __resetEvictedPaneRegistryForTest()
+  })
+
+  it('releases the parked claim once the fresh pane adopts the PTY (STA-1282 gate #8)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest, isPaneParked, registerEvictedPane } =
+      await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const releaseForClaim = vi.fn()
+    registerEvictedPane({
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'pty-id',
+      destroy: vi.fn(),
+      releaseForClaim
+    })
+    const transport = createMockTransport('pty-id')
+    transport.connect.mockImplementation(async () => 'pty-id')
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue(null)
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    try {
+      await flushAsyncTicks(20)
+      // Adoption ran: the parked entry is released so the stale feed cannot
+      // double-drive and a later re-park cannot destroy() the live PTY.
+      expect(releaseForClaim).toHaveBeenCalledTimes(1)
+      expect(isPaneParked(paneKey)).toBe(false)
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('parked exit observer clears tab ptyId + drops the entry when the PTY dies in the claim gap (STA-1282 gate #8)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest, isPaneParked } =
+      await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    // A park-capable transport captures the parked sinks the eviction installs.
+    const transport = createMockTransport('pty-id')
+    const parkedSinks: { current: { onPtyExit?: (ptyId: string) => void } | null } = {
+      current: null
+    }
+    const transportLifecycle = transport as unknown as {
+      park: (sinks: { onPtyExit?: (ptyId: string) => void }) => boolean
+      destroy: () => void
+    }
+    transportLifecycle.park = vi.fn((sinks) => {
+      parkedSinks.current = sinks
+      return true
+    })
+    transportLifecycle.destroy = vi.fn()
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1, leafId: LEAF_1 })
+    const deps = createDeps()
+    const binding = connectPanePty(createPane(1) as never, manager as never, deps as never)
+    try {
+      await flushAsyncTicks(20)
+      // Evict this pane: the parked transport's onPtyExit is now the ONLY observer
+      // of the live PTY while a fresh pane's remount claim is deferred to adoption.
+      binding.park()
+      expect(isPaneParked(paneKey)).toBe(true)
+      expect(parkedSinks.current?.onPtyExit).toBeTypeOf('function')
+
+      // The PTY dies during that gap: the parked observer must update store/tab
+      // state (clear the stale ptyId) and drop the registry entry so nothing
+      // remounts onto a dead PTY and no parked PTY is orphaned.
+      parkedSinks.current?.onPtyExit?.('pty-id')
+      expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-id')
+      expect(isPaneParked(paneKey)).toBe(false)
+      // Match the live exit path: a dead PTY has no running agent and no
+      // foreground identity — a respawn must not inherit a stale agent icon.
+      expect(mockStoreState.removeAgentStatus).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.clearPaneForegroundAgent).toHaveBeenCalledWith(paneKey)
+      // STA-1282: the parked exit must also mirror the live path's remaining store
+      // cleanup — consume the suppressed-exit flag (a hibernation kill suppresses
+      // the exit) and clear the stale runtime title + prompt cache timer, not just
+      // the ptyId/status. Otherwise these leak until the pane is remounted.
+      expect(deps.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-id')
+      expect(deps.clearRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1)
+      expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith(paneKey, null)
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('parked BEL still raises the tab/worktree unread marks (STA-1282)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest, isPaneParked } =
+      await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const transport = createMockTransport('pty-id')
+    const parkedSinks: { current: { onBell?: () => void } | null } = { current: null }
+    const transportLifecycle = transport as unknown as {
+      park: (sinks: { onBell?: () => void }) => boolean
+      destroy: () => void
+    }
+    transportLifecycle.park = vi.fn((sinks) => {
+      parkedSinks.current = sinks
+      return true
+    })
+    transportLifecycle.destroy = vi.fn()
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1, leafId: LEAF_1 })
+    const deps = createDeps()
+    const binding = connectPanePty(createPane(1) as never, manager as never, deps as never)
+    try {
+      await flushAsyncTicks(20)
+      binding.park()
+      expect(isPaneParked(paneKey)).toBe(true)
+      deps.markWorktreeUnread.mockClear()
+      deps.markTerminalTabUnread.mockClear()
+      // A hidden mounted pane's BEL raises these marks today; parking (which
+      // only puts the rendering away) must not swallow the attention signal.
+      expect(parkedSinks.current?.onBell).toBeTypeOf('function')
+      parkedSinks.current?.onBell?.()
+      expect(deps.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
+      expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('charges the fail-open counter when a claimed eviction remount reattach rejects (STA-1282 gate #5)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const {
+      __resetEvictedPaneRegistryForTest,
+      isEvictionSelfDisabled,
+      recordEvictionRemountReplayOutcome,
+      registerEvictedPane
+    } = await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    // Two prior structural failures pre-charged: the third must come from the
+    // claimed remount whose deferred reattach REJECTS (the .catch path), a sibling
+    // of the in-handler no-id/expired branches that already charge the counter.
+    recordEvictionRemountReplayOutcome('error')
+    recordEvictionRemountReplayOutcome('error')
+    registerEvictedPane({
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'restored-session',
+      destroy: vi.fn(),
+      releaseForClaim: vi.fn()
+    })
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      if (opts.sessionId) {
+        throw new Error('reattach boom')
+      }
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('fresh-pty')
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'restored-session' }
+    })
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    try {
+      await flushAsyncTicks(20)
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'restored-session' })
+      )
+      // Reverting the .catch charge leaves the counter at 2 → not self-disabled.
+      expect(isEvictionSelfDisabled()).toBe(true)
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('charges the fail-open counter when a claimed eviction remount SSH-deferred reattach rejects (STA-1282 gate #5)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const {
+      __resetEvictedPaneRegistryForTest,
+      isEvictionSelfDisabled,
+      recordEvictionRemountReplayOutcome,
+      registerEvictedPane
+    } = await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    // Two prior structural failures pre-charged: the third must come from the
+    // SSH-deferred reattach branch (waits for the connection, then reattaches),
+    // a sibling of the direct-deferred branch that also lost its charge before.
+    recordEvictionRemountReplayOutcome('error')
+    recordEvictionRemountReplayOutcome('error')
+    registerEvictedPane({
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getPtyId: () => 'leaf-session',
+      destroy: vi.fn(),
+      releaseForClaim: vi.fn()
+    })
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      if (opts.sessionId) {
+        throw new Error('ssh reattach boom')
+      }
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('fresh-ssh-pty')
+      return 'fresh-ssh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'tab-level-stale-session' }
+    } as StoreState
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'leaf-session' }
+    })
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    try {
+      await flushAsyncTicks(20)
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'leaf-session' })
+      )
+      // Reverting the SSH-deferred .catch charge leaves the counter at 2.
+      expect(isEvictionSelfDisabled()).toBe(true)
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('keeps the runtime pane title fresh while parked so the jump palette does not freeze (STA-1282)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest } = await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    const transport = createMockTransport('pty-id')
+    const parkedSinks: {
+      current: { onTitleChange?: (title: string, rawTitle: string) => void } | null
+    } = { current: null }
+    const transportLifecycle = transport as unknown as {
+      park: (sinks: { onTitleChange?: (title: string, rawTitle: string) => void }) => boolean
+      destroy: () => void
+    }
+    transportLifecycle.park = vi.fn((sinks) => {
+      parkedSinks.current = sinks
+      return true
+    })
+    transportLifecycle.destroy = vi.fn()
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1, leafId: LEAF_1 })
+    const deps = createDeps()
+    const binding = connectPanePty(createPane(1) as never, manager as never, deps as never)
+    try {
+      await flushAsyncTicks(20)
+      binding.park()
+      expect(parkedSinks.current?.onTitleChange).toBeTypeOf('function')
+      ;(deps.setRuntimePaneTitle as ReturnType<typeof vi.fn>).mockClear()
+      parkedSinks.current?.onTitleChange?.('shell-title', 'shell-title')
+      // Without this, the per-pane runtime title (jump palette / split spinner
+      // 'working' source) freezes at the pre-eviction title until remount.
+      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'shell-title')
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
+    }
+  })
+
+  it('normalizes the parked remote-runtime agent type instead of storing the raw payload (STA-1282)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { __resetEvictedPaneRegistryForTest } = await import('./evicted-pane-registry')
+    __resetEvictedPaneRegistryForTest()
+    enableActiveRuntimeEnvironment()
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const transport = createMockTransport('remote:web-env-1@@pty-parked-omp')
+    const parkedSinks: {
+      current: { onAgentStatus?: (payload: unknown) => void } | null
+    } = { current: null }
+    const transportLifecycle = transport as unknown as {
+      park: (sinks: { onAgentStatus?: (payload: unknown) => void }) => boolean
+      destroy: () => void
+    }
+    transportLifecycle.park = vi.fn((sinks) => {
+      parkedSinks.current = sinks
+      return true
+    })
+    transportLifecycle.destroy = vi.fn()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const manager = createManager(1, 1)
+    manager.getActivePane.mockReturnValue({ id: 1, leafId: LEAF_1 })
+    const deps = createDeps()
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    try {
+      // Establish the pane's authoritative agent as OMP by typing the command,
+      // exactly as the live-handler normalization tests do.
+      sendTerminalInputThroughPane(pane, 'omp\r')
+      await flushAsyncTicks()
+      binding.park()
+      expect(parkedSinks.current?.onAgentStatus).toBeTypeOf('function')
+      // A raw 'pi' status arriving while parked must be normalized to the owner
+      // agent (OMP), not stored verbatim — otherwise a parked remote pane mislabels
+      // its agent (#5270). Reverting the fix stores agentType 'pi'.
+      parkedSinks.current?.onAgentStatus?.({ state: 'done', prompt: '', agentType: 'pi' })
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+        state: 'done',
+        agentType: 'omp'
+      })
+    } finally {
+      binding.dispose()
+      __resetEvictedPaneRegistryForTest()
     }
   })
 

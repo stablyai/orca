@@ -5152,6 +5152,17 @@
             "defaultViewLabel": "默认原生聊天视图",
             "defaultViewTerminal": "终端聊天",
             "defaultViewNative": "原生聊天"
+          },
+          "terminalPaneEviction": {
+            "title": "Free memory from hidden terminals",
+            "description": "Unmounts terminal panes you have not looked at recently and restores them on demand, keeping heavy multi-agent workspaces fast.",
+            "copy": "Unmounts terminal panes you have not viewed recently so a busy multi-agent workspace stays fast. Their processes keep running and the pane restores from the live mirror when you open it again. Experimental while we tune restore fidelity for panes with a running agent.",
+            "toggleLabel": "Toggle free memory from hidden terminals",
+            "warmBudgetLabel": "Terminals kept ready",
+            "warmBudgetDescription": "How many recently-viewed hidden terminals stay mounted before older ones are unmounted.",
+            "afterMinutesLabel": "Unmount after",
+            "afterMinutesDescription": "A hidden terminal is unmounted once it has been out of view for this long.",
+            "afterMinutesSuffix": "minutes"
           }
         },
         "FloatingWorkspacePane": {
@@ -7304,6 +7315,10 @@
             "nativeChat": {
               "title": "原生聊天",
               "description": "预览 Claude 和 Codex 终端会话的桌面聊天界面。"
+            },
+            "terminalPaneEviction": {
+              "title": "Free memory from hidden terminals",
+              "description": "Unmounts terminal panes you have not looked at recently and restores them on demand, keeping heavy multi-agent workspaces fast. Their processes keep running."
             }
           }
         },

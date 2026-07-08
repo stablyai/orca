@@ -12,6 +12,7 @@ import {
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { isTerminalPaneEvictionEnabled } from '../../../shared/terminal-pane-eviction-settings'
 import { useAllWorktrees } from '../store/selectors'
 import { getConnectionId } from '../lib/connection-context'
 import { basename } from '../lib/path'
@@ -223,6 +224,8 @@ function Terminal(): React.JSX.Element | null {
   const renderedActiveWorktreeId = activeWorktreeId
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const terminalPaneMountByTabId = useAppStore((s) => s.terminalPaneMountByTabId)
+  const terminalPaneEvictionEnabled = useAppStore((s) => isTerminalPaneEvictionEnabled(s.settings))
   const activeTabId = useAppStore((s) => s.activeTabId)
   const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
   const createTab = useAppStore((s) => s.createTab)
@@ -773,15 +776,51 @@ function Terminal(): React.JSX.Element | null {
   // Without this gate, Phase 1 (hydrateWorkspaceSession) sets activeWorktreeId
   // with ptyId: null, and TerminalPane would call connectPanePty → pty:spawn,
   // creating a duplicate PTY for the same tab.
-  if (renderedActiveWorktreeId && workspaceSessionReady) {
-    mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)
-  }
   // Prune IDs of worktrees that no longer exist (deleted/removed)
   const allWorktreeIds = new Set(workspaceSurfaces.map((workspace) => workspace.id))
-  for (const id of mountedWorktreeIdsRef.current) {
-    if (!allWorktreeIds.has(id)) {
-      mountedWorktreeIdsRef.current.delete(id)
+  // STA-1282 worktree-dimension gate. Flag-OFF inertness: with eviction disabled
+  // (default) keep the pre-eviction MONOTONIC set — add the active worktree, prune
+  // only deleted ones — so switching away never unmounts a visited worktree's pane
+  // tree (byte-identical to today). With eviction ON the set is no longer
+  // monotonic: a worktree stays mounted only while it is active OR still has at
+  // least one policy-mounted (visible/warm/parked) terminal pane, so a fully
+  // aged-out worktree drops its whole pane tree (overlay layers included).
+  if (!terminalPaneEvictionEnabled) {
+    if (renderedActiveWorktreeId && workspaceSessionReady) {
+      mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)
     }
+    for (const id of mountedWorktreeIdsRef.current) {
+      if (!allWorktreeIds.has(id)) {
+        mountedWorktreeIdsRef.current.delete(id)
+      }
+    }
+  } else {
+    const nextMountedWorktreeIds = new Set<string>()
+    if (renderedActiveWorktreeId && workspaceSessionReady) {
+      nextMountedWorktreeIds.add(renderedActiveWorktreeId)
+    }
+    for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+      if (allWorktreeIds.has(worktreeId) && tabs.some((tab) => terminalPaneMountByTabId[tab.id])) {
+        nextMountedWorktreeIds.add(worktreeId)
+      }
+    }
+    // Preserve the background-measurement set so transient layout measurement
+    // still mounts its worktree.
+    for (const id of measurableBackgroundWorktreeIdsRef.current) {
+      if (allWorktreeIds.has(id)) {
+        nextMountedWorktreeIds.add(id)
+      }
+    }
+    // Why: an Activity-page terminal portal shows a pane whose worktree may be
+    // fully aged-out (no policy-mounted tab). Its worktree must stay mounted so
+    // the overlay layer exists to host the portal — otherwise a terminal the user
+    // is viewing on the Activity page would render nothing (Tier 0 violation).
+    for (const portal of activityTerminalPortals) {
+      if (allWorktreeIds.has(portal.worktreeId)) {
+        nextMountedWorktreeIds.add(portal.worktreeId)
+      }
+    }
+    mountedWorktreeIdsRef.current = nextMountedWorktreeIds
   }
   const anyMountedWorktreeHasLayout = computeAnyMountedWorktreeHasLayout(
     workspaceSurfaces.map((workspace) => workspace.id),

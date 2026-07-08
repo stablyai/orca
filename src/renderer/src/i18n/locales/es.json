@@ -5167,6 +5167,17 @@
             "defaultViewLabel": "Vista predeterminada de chat nativo",
             "defaultViewTerminal": "Chat en terminal",
             "defaultViewNative": "Chat nativo"
+          },
+          "terminalPaneEviction": {
+            "title": "Free memory from hidden terminals",
+            "description": "Unmounts terminal panes you have not looked at recently and restores them on demand, keeping heavy multi-agent workspaces fast.",
+            "copy": "Unmounts terminal panes you have not viewed recently so a busy multi-agent workspace stays fast. Their processes keep running and the pane restores from the live mirror when you open it again. Experimental while we tune restore fidelity for panes with a running agent.",
+            "toggleLabel": "Toggle free memory from hidden terminals",
+            "warmBudgetLabel": "Terminals kept ready",
+            "warmBudgetDescription": "How many recently-viewed hidden terminals stay mounted before older ones are unmounted.",
+            "afterMinutesLabel": "Unmount after",
+            "afterMinutesDescription": "A hidden terminal is unmounted once it has been out of view for this long.",
+            "afterMinutesSuffix": "minutes"
           }
         },
         "FloatingWorkspacePane": {
@@ -7319,6 +7330,10 @@
             "nativeChat": {
               "title": "Chat nativo",
               "description": "Previsualiza la vista de chat de escritorio para sesiones de terminal de Claude y Codex."
+            },
+            "terminalPaneEviction": {
+              "title": "Free memory from hidden terminals",
+              "description": "Unmounts terminal panes you have not looked at recently and restores them on demand, keeping heavy multi-agent workspaces fast. Their processes keep running."
             }
           }
         },

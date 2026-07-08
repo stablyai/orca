@@ -31,6 +31,11 @@ import {
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import {
+  TERMINAL_PANE_EVICTION_AFTER_MINUTES_DEFAULT,
+  TERMINAL_PANE_EVICTION_DEFAULT_ENABLED,
+  TERMINAL_PANE_EVICTION_WARM_BUDGET_DEFAULT
+} from './terminal-pane-eviction-settings'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -265,6 +270,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     claudeAgentTeamsMode: 'off',
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
+    experimentalTerminalPaneEviction: TERMINAL_PANE_EVICTION_DEFAULT_ENABLED,
+    terminalPaneEvictionWarmBudget: TERMINAL_PANE_EVICTION_WARM_BUDGET_DEFAULT,
+    terminalPaneEvictionAfterMinutes: TERMINAL_PANE_EVICTION_AFTER_MINUTES_DEFAULT,
     httpProxyUrl: '',
     httpProxyBypassRules: '',
     electronHttp1CompatibilityMode: false,

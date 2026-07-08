@@ -1,4 +1,4 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
@@ -12,6 +12,10 @@ import {
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
+import { TerminalPaneVisibilityReporter } from './terminal-pane-visibility-reporter'
+import { shouldMountTerminalPaneNow } from './pane-mount-policy'
+import { isTabParked } from './evicted-pane-registry'
+import { isTerminalPaneEvictionEnabled } from '../../../../shared/terminal-pane-eviction-settings'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -80,6 +84,11 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
+  // Visibility reporting is NOT done here: this slot is unmounted by the mount
+  // gate the instant a pane goes hidden-and-not-yet-warm, so its effect could
+  // never report the visible->hidden transition (an unmounting slot runs only
+  // its previous cleanup). The report is owned by TerminalPaneVisibilityReporter,
+  // which the parent renders for every tab regardless of the gate.
   const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
     null
   )
@@ -293,6 +302,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
       activeGroupId: state.activeGroupIdByWorktree[worktreeId]
     }))
   )
+  const mountByTabId = useAppStore((state) => state.terminalPaneMountByTabId)
+  const evictionEnabled = useAppStore((state) => isTerminalPaneEvictionEnabled(state.settings))
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
   const closeTab = useAppStore((state) => state.closeTab)
@@ -360,24 +371,52 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
           worktreeId,
           tabId: terminalTab.id
         })
+        // STA-1282 tab-dimension gate: a pane mounts iff it is visible now (incl.
+        // Activity portal) OR the eviction coordinator keeps it warm/exempt.
+        // Evicted (Tier 2) and never-visited hidden tabs render no TerminalPane —
+        // this is the mount-storm fix. Flag-OFF: mount every non-parked tab so
+        // behavior is byte-identical to the pre-eviction app (parked panes stay
+        // claimable-on-demand rather than force-remounting on a runtime flip-OFF).
+        const shouldMount = shouldMountTerminalPaneNow({
+          evictionEnabled,
+          isVisible,
+          hasActivityPortal: activityTerminalPortal !== null,
+          isWarm: mountByTabId[terminalTab.id] === true,
+          isParked: evictionEnabled ? false : isTabParked(terminalTab.id)
+        })
+        // The reporter is rendered for EVERY tab (even one the gate unmounts) so
+        // the visible->hidden transition is always reported; the gated slot below
+        // is what actually mounts the pane. Flag-OFF renders neither an extra
+        // reporter nor a changed tree — byte-identical to the pre-eviction app.
         return (
-          <TerminalOverlaySlot
-            key={terminalTab.id}
-            terminalTabId={terminalTab.id}
-            terminalGeneration={terminalTab.generation}
-            worktreeId={worktreeId}
-            worktreePath={worktreePath}
-            startupCwd={terminalTab.startupCwd}
-            groupId={assignment?.groupId}
-            isWorktreeActive={isWorktreeActive}
-            isVisible={isVisible}
-            isActive={isActive}
-            activityTerminalPortal={activityTerminalPortal}
-            onFocusOwningGroup={focusOwningGroup}
-            consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-            closeTab={closeTab}
-            leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
-          />
+          <Fragment key={terminalTab.id}>
+            {evictionEnabled ? (
+              <TerminalPaneVisibilityReporter
+                terminalTabId={terminalTab.id}
+                worktreeId={worktreeId}
+                effectiveVisible={isVisible || activityTerminalPortal !== null}
+                evictionEnabled={evictionEnabled}
+              />
+            ) : null}
+            {shouldMount ? (
+              <TerminalOverlaySlot
+                terminalTabId={terminalTab.id}
+                terminalGeneration={terminalTab.generation}
+                worktreeId={worktreeId}
+                worktreePath={worktreePath}
+                startupCwd={terminalTab.startupCwd}
+                groupId={assignment?.groupId}
+                isWorktreeActive={isWorktreeActive}
+                isVisible={isVisible}
+                isActive={isActive}
+                activityTerminalPortal={activityTerminalPortal}
+                onFocusOwningGroup={focusOwningGroup}
+                consumeSuppressedPtyExit={consumeSuppressedPtyExit}
+                closeTab={closeTab}
+                leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+              />
+            ) : null}
+          </Fragment>
         )
       })}
     </>

@@ -1,3 +1,9 @@
+// STA-1282 boundary note: this spec pins TIER 1 (hidden-warm) behavior — a
+// hidden pane that stays mounted keeps replaying live hidden output on its xterm.
+// Under terminal pane eviction the default 5-minute dwell means panes only reach
+// Tier 2 (evicted/unmounted) after minutes, so this seconds-timescale spec is
+// unchanged; the evict/restore path is covered by
+// terminal-hidden-pane-evict-restore.spec.ts.
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'

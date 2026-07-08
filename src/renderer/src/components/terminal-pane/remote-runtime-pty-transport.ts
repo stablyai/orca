@@ -89,13 +89,26 @@ export function createRemoteRuntimePtyTransport(
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
   const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}`
-  const outputProcessor = createPtyOutputProcessor({
+  // Why: STA-1282 — route side-effect callbacks through a mutable holder so
+  // park() can re-point the renderer-owned title/status feed (remote-runtime
+  // status is renderer-owned) and the exit observer without rebuilding the
+  // processor. Wrappers installed only where the opt was provided.
+  const sinks = {
     onTitleChange,
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,
     onAgentExited,
-    onAgentStatus
+    onAgentStatus,
+    onPtyExit
+  }
+  const outputProcessor = createPtyOutputProcessor({
+    onTitleChange: onTitleChange ? (title, raw) => sinks.onTitleChange?.(title, raw) : undefined,
+    onBell: onBell ? () => sinks.onBell?.() : undefined,
+    onAgentBecameIdle: onAgentBecameIdle ? (title) => sinks.onAgentBecameIdle?.(title) : undefined,
+    onAgentBecameWorking: onAgentBecameWorking ? () => sinks.onAgentBecameWorking?.() : undefined,
+    onAgentExited: onAgentExited ? () => sinks.onAgentExited?.() : undefined,
+    onAgentStatus: onAgentStatus ? (payload) => sinks.onAgentStatus?.(payload) : undefined
   })
 
   function findReadyHostSessionHandle(
@@ -355,7 +368,7 @@ export function createRemoteRuntimePtyTransport(
     remotePtyId = null
     closeMultiplexedStream()
     if (stalePtyId) {
-      onPtyExit?.(stalePtyId)
+      sinks.onPtyExit?.(stalePtyId)
     }
   }
 
@@ -424,7 +437,7 @@ export function createRemoteRuntimePtyTransport(
           storedCallbacks.onExit?.(0)
           storedCallbacks.onDisconnect?.()
           if (subscribedPtyId) {
-            onPtyExit?.(subscribedPtyId)
+            sinks.onPtyExit?.(subscribedPtyId)
           }
         },
         onError: (message) => {
@@ -595,7 +608,7 @@ export function createRemoteRuntimePtyTransport(
       remotePtyId = null
       storedCallbacks.onDisconnect?.()
       if (id) {
-        onPtyExit?.(id)
+        sinks.onPtyExit?.(id)
       }
     },
 
@@ -607,6 +620,25 @@ export function createRemoteRuntimePtyTransport(
       connected = false
       closeMultiplexedStream()
       storedCallbacks = {}
+    },
+
+    park(parkedSinks) {
+      // Why: STA-1282 provider-specific park. Unlike detach(), do NOT close the
+      // multiplexed stream — it is the channel both the renderer-owned
+      // title/status feed AND serializeBuffer() (host-side snapshot) ride on.
+      // Keep connected + handle intact so an evicted remote tab replays host
+      // scrollback/alt-screen on remount instead of coming back blank.
+      inputBatcher.flush()
+      inputBatcher.clear()
+      viewportBatcher.flush()
+      storedCallbacks = {}
+      sinks.onTitleChange = parkedSinks.onTitleChange
+      sinks.onBell = parkedSinks.onBell
+      sinks.onAgentBecameIdle = undefined
+      sinks.onAgentBecameWorking = undefined
+      sinks.onAgentExited = undefined
+      sinks.onAgentStatus = parkedSinks.onAgentStatus
+      sinks.onPtyExit = parkedSinks.onPtyExit
     },
 
     sendInput(data: string): boolean {

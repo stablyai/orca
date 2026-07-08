@@ -99,7 +99,25 @@ export type PtyTransport = {
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
   detach?: () => void
+  /** STA-1282: keep the PTY + its data/exit handlers alive while the pane's
+   *  xterm is torn down (Tier 1 -> Tier 2 eviction). Re-points title/status/exit
+   *  to a parked feed and stops writing to any xterm (no backlog — the main
+   *  mirror is the replay source). Distinct from detach() (which severs the feed)
+   *  and destroy() (which kills the PTY). */
+  park?: (sinks: ParkedPtySinks) => void
   destroy?: () => void | Promise<void>
+}
+
+/** Parked feed for an evicted pane: renderer-only title/status that has no
+ *  main->renderer push and would otherwise die with the xterm, plus the
+ *  re-pointed exit observer that clears store/registry state on a real exit. */
+export type ParkedPtySinks = {
+  onTitleChange?: (title: string, rawTitle: string) => void
+  /** BEL is the attention signal for TUIs without hook integration — a parked
+   *  pane must still raise the tab/worktree unread marks. */
+  onBell?: () => void
+  onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
+  onPtyExit?: (id: string) => void
 }
 
 export type IpcPtyTransportOptions = {

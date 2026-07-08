@@ -89,6 +89,7 @@ import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
+import { consumeTerminalPaneEviction } from './terminal-pane-eviction-coordinator'
 import type { PtyTransport } from './pty-transport'
 import {
   reconcileMissingSessions,
@@ -456,6 +457,46 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   return Boolean(
     args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
   )
+}
+
+export type PaneUnmountAction = 'park' | 'detach' | 'destroy'
+
+/**
+ * STA-1282 gate #1: three-way unmount selection at a today-binary seam.
+ * `shouldDetachPaneTransportOnUnmount` is keyed solely on tab existence; a
+ * tab-alive unmount is ambiguous (eviction vs. reparent/host-surface handoff).
+ * The discriminator is *eviction vs. everything-else-tab-alive*:
+ *   - policy-evicted, PTY alive          -> park (keep PTY + title/status feed)
+ *   - reparent / session-mirror handoff  -> detach (fresh pane re-registers now)
+ *   - tab/worktree gone, or no PTY yet    -> destroy
+ * A split-move reparent and a web/mobile host-surface handoff both keep the tab
+ * alive but are NOT evictions, so they take detach() (never park), which is what
+ * stops two transports from ever claiming one PTY.
+ */
+export function resolvePaneUnmountAction(args: {
+  isEviction: boolean
+  tabStillExists: boolean
+  tabId: string
+  ptyId: string | null
+  worktreeTabs: readonly TerminalTab[] | undefined
+}): PaneUnmountAction {
+  if (!args.ptyId) {
+    return 'destroy'
+  }
+  // Another live tab already owns this PTY (host-surface handoff / session
+  // mirror): detach, never park — parking would leave two transports on one PTY.
+  const sharedWithSibling = Boolean(
+    args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
+  )
+  if (sharedWithSibling) {
+    return 'detach'
+  }
+  if (!args.tabStillExists) {
+    return 'destroy'
+  }
+  // Tab alive, PTY exclusive to this tab: eviction parks (keep PTY + feed);
+  // reparent takes plain detach.
+  return args.isEviction ? 'park' : 'detach'
 }
 
 /**
@@ -1704,32 +1745,57 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       imeNativeTextForwarderDisposables.clear()
-      for (const transport of paneTransports.values()) {
-        const ptyId = transport.getPtyId()
-        if (
-          shouldDetachPaneTransportOnUnmount({
-            tabStillExists,
-            tabId,
-            ptyId,
-            worktreeTabs: currentWorktreeTabs
-          })
-        ) {
-          // Why: moving a terminal tab between groups currently rehomes the
-          // React subtree, which unmounts this TerminalPane even though the tab
-          // itself is still alive. Web session mirroring can also replace a
-          // temporary local tab with a host surface that owns the same PTY.
-          // Detaching preserves the running PTY so the remounted pane can
-          // reattach without restarting the user's shell.
-          // Transports that have not attached yet still have no PTY ID; those
-          // must be destroyed so any in-flight spawn resolves into a killed PTY
-          // instead of reviving a stale binding after unmount.
+      // STA-1282 three-way unmount selection at a today-binary seam. The React
+      // cleanup reads eviction *policy state* (consumed here so it fires once per
+      // unmount), not just tab existence:
+      //   - policy-evicted        -> park (keep PTY + title/status feed alive)
+      //   - reparent / host-surface handoff (tab alive, not eviction) -> detach
+      //   - tab/worktree gone     -> destroy
+      // consumeTerminalPaneEviction returns true only when the coordinator's
+      // idle teardown is what triggered this unmount, so a split-move reparent or
+      // a session-mirror handoff can never be misread as an eviction (gate #1).
+      const isEvictionUnmount = consumeTerminalPaneEviction(tabId)
+      for (const [paneId, transport] of paneTransports.entries()) {
+        const action = resolvePaneUnmountAction({
+          isEviction: isEvictionUnmount,
+          tabStillExists,
+          tabId,
+          ptyId: transport.getPtyId(),
+          worktreeTabs: currentWorktreeTabs
+        })
+        if (action === 'park') {
+          // park() keeps the PTY + title/status feed alive in the evicted
+          // registry and runs the pane's own DOM/xterm teardown; it returns
+          // false only when there is no live PTY to park (fall back to destroy).
+          const binding = panePtyBindings.get(paneId) as
+            | (IDisposable & { park?: () => boolean })
+            | undefined
+          const parked = binding?.park?.() ?? false
+          if (!parked) {
+            transport.destroy?.()
+            binding?.dispose()
+          }
+        } else if (action === 'detach') {
+          // Why: moving a terminal tab between groups rehomes the React subtree,
+          // unmounting this TerminalPane even though the tab is still alive. Web
+          // session mirroring can also replace a temporary local tab with a host
+          // surface that owns the same PTY. Detaching preserves the running PTY
+          // so the remounted pane reattaches without restarting the shell.
           transport.detach?.()
+          panePtyBindings.get(paneId)?.dispose()
         } else {
+          // Unbound/dead or tab gone: destroy so an in-flight spawn resolves into
+          // a killed PTY instead of reviving a stale binding after unmount.
           transport.destroy?.()
+          panePtyBindings.get(paneId)?.dispose()
         }
       }
-      for (const panePtyBinding of panePtyBindings.values()) {
-        panePtyBinding.dispose()
+      // Dispose any binding without a paired transport (defensive — they are
+      // created together, but never leave a binding undisposed).
+      for (const [paneId, panePtyBinding] of panePtyBindings.entries()) {
+        if (!paneTransports.has(paneId)) {
+          panePtyBinding.dispose()
+        }
       }
       panePtyBindings.clear()
       paneTransports.clear()

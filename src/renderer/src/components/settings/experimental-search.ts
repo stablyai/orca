@@ -3,6 +3,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
+import { getTerminalPaneEvictionExperimentalSearchEntry } from './terminal-pane-eviction-experimental-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 
@@ -184,6 +185,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
+    getTerminalPaneEvictionExperimentalSearchEntry(),
     getNewWorktreeCardStyleSearchEntry(),
     {
       title: translate(
@@ -265,6 +267,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.agentHibernation.title',
         'Agent sleep'
+      )
+    ),
+    terminalPaneEviction: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.terminalPaneEviction.title',
+        'Free memory from hidden terminals'
       )
     ),
     newWorktreeCardStyle: findEntry(

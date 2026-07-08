@@ -6,6 +6,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { PtyMainBufferSnapshotPayload } from '../shared/pty-main-buffer-snapshot'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
@@ -846,16 +847,8 @@ const api = {
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
-    ): Promise<{
-      data: string
-      cols: number
-      rows: number
-      cwd?: string | null
-      seq?: number
-      source?: 'headless' | 'renderer'
-      alternateScreen?: boolean
-      pendingEscapeTailAnsi?: string
-    } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
+    ): Promise<PtyMainBufferSnapshotPayload | null> =>
+      ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
       pendingPtyCount: number

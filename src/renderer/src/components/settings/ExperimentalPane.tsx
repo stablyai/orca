@@ -14,6 +14,7 @@ import {
   MIN_AGENT_HIBERNATION_IDLE_MS,
   getEffectiveAgentHibernationIdleMs
 } from '@/lib/agent-hibernation-planner'
+import { TerminalPaneEvictionExperimentalSetting } from './TerminalPaneEvictionExperimentalSetting'
 
 export { getExperimentalPaneSearchEntries }
 
@@ -276,6 +277,11 @@ export function ExperimentalPane({
           ) : null}
         </SearchableSetting>
       ) : null}
+
+      <TerminalPaneEvictionExperimentalSetting
+        settings={settings}
+        updateSettings={updateSettings}
+      />
 
       {showNewWorktreeCardStyle ? (
         <SearchableSetting

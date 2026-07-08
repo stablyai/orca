@@ -253,6 +253,39 @@ describe('terminal scroll intent', () => {
     remountedDisposable.dispose()
   })
 
+  it('enforcing against a transiently-empty remounted buffer neither scrolls nor clobbers the durable pin', () => {
+    vi.stubGlobal('Element', TestElement)
+    const firstTerminal = createTerminal({ viewportY: 76, baseY: 100 })
+    const firstHost = new TestElement() as unknown as HTMLElement
+    const firstDisposable = attachTerminalScrollIntentTracking(firstTerminal, firstHost, 'leaf-2')
+    markTerminalPinnedViewport(firstTerminal)
+
+    const remountedTerminal = createTerminal({ viewportY: 0, baseY: 0 })
+    const remountedHost = new TestElement() as unknown as HTMLElement
+    const remountedDisposable = attachTerminalScrollIntentTracking(
+      remountedTerminal,
+      remountedHost,
+      'leaf-2'
+    )
+
+    // Why: the reveal-path enforce runs BEFORE xterm has parsed the eviction
+    // remount replay, so the buffer is still empty. It must not scrollToLine(0)
+    // and must not overwrite the durable pinned intent with empty-buffer state.
+    enforceTerminalCurrentScrollIntent(remountedTerminal)
+    expect(remountedTerminal.scrollToLine).not.toHaveBeenCalled()
+    expect(remountedTerminal.scrollToBottom).not.toHaveBeenCalled()
+
+    // Once the replay is parsed (full-height buffer), the post-parse enforce
+    // restores the durable position.
+    remountedTerminal.buffer.active.baseY = 100
+    remountedTerminal.buffer.active.viewportY = 100
+    enforceTerminalCurrentScrollIntent(remountedTerminal)
+    expect(remountedTerminal.scrollToLine).toHaveBeenCalledWith(76)
+
+    firstDisposable.dispose()
+    remountedDisposable.dispose()
+  })
+
   it('tracks pointer-driven scrollbar scrolls without using output scroll as intent', () => {
     vi.stubGlobal('Element', TestElement)
     const terminal = createTerminal({ viewportY: 100, baseY: 100 })

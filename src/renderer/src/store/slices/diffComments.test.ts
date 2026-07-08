@@ -139,6 +139,7 @@ import { createRuntimeStatusSlice } from './runtime-status'
 import { createPullRequestGenerationSlice } from './pull-request-generation'
 import { createCommitMessageGenerationSlice } from './commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
+import { createTerminalPaneEvictionSlice } from './terminal-pane-eviction'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -175,7 +176,8 @@ function createTestStore() {
     ...createRuntimeStatusSlice(...a),
     ...createPullRequestGenerationSlice(...a),
     ...createCommitMessageGenerationSlice(...a),
-    ...createPinnedTabCloseConfirmSlice(...a)
+    ...createPinnedTabCloseConfirmSlice(...a),
+    ...createTerminalPaneEvictionSlice(...a)
   }))
 }
 

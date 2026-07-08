@@ -1512,6 +1512,28 @@ describe('OrcaRuntimeService', () => {
     expect(shown.ptyId).toBe('pty-1')
   })
 
+  it('stamps the main-buffer snapshot seq from the same counter as pty:data delivery (STA-1282 trim contract)', async () => {
+    const runtime = createRuntime()
+    const ptyId = 'pty-1'
+    // The renderer trims the reattach live-tail overlap by comparing the mirror
+    // snapshot seq against pty:data meta.seq. pty:data meta.seq is the cumulative
+    // byte count onPtyData returns (and stores in ptyOutputSequenceById); the
+    // mirror snapshot seq must share that exact domain or the trim would corrupt.
+    const firstChunk = 'seq-1\r\n'
+    const secondChunk = 'seq-2\r\nseq-3\r\n'
+    const seqAfterFirst = runtime.onPtyData(ptyId, firstChunk, 1)
+    const seqAfterSecond = runtime.onPtyData(ptyId, secondChunk, 2)
+    const cumulativeBytes = firstChunk.length + secondChunk.length
+
+    expect(seqAfterFirst).toBe(firstChunk.length)
+    expect(seqAfterSecond).toBe(cumulativeBytes)
+    expect(runtime.getPtyOutputSequence(ptyId)).toBe(cumulativeBytes)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer(ptyId)
+    expect(snapshot?.seq).toBe(cumulativeBytes)
+    expect(snapshot?.seq).toBe(runtime.getPtyOutputSequence(ptyId))
+  })
+
   it('surfaces stale terminal handles for stranded panes and recovers after same-pane wake', async () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-1'

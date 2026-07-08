@@ -8858,5 +8858,43 @@ describe('registerPtyHandlers', () => {
         source: 'headless'
       })
     })
+
+    // STA-1282 gate #5 (xterm-addon.boundary-containment): the eviction remount
+    // fail-open counter must tell a structural replay failure from a nil mirror.
+    // The old handler swallowed serialization errors to null, collapsing both
+    // cases; these pin the corrected contract through the real IPC handler shape.
+    it('rejects (does not swallow to null) when serialization throws, so a structural failure is distinguishable', async () => {
+      const runtime = {
+        setPtyController: vi.fn(),
+        serializeHiddenOutputRecoveryBuffer: vi.fn().mockRejectedValue(new Error('mirror boom'))
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      await expect(
+        handlers.get('pty:getMainBufferSnapshot')!(null, { id: 'pty-1' })
+      ).rejects.toThrow('mirror boom')
+    })
+
+    it('resolves null (nil mirror, not a failure) when there is no runtime', async () => {
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+
+      await expect(
+        handlers.get('pty:getMainBufferSnapshot')!(null, { id: 'pty-1' })
+      ).resolves.toBeNull()
+    })
+
+    it('resolves null without serializing for an empty/invalid id (nil mirror, not an error)', async () => {
+      const runtime = {
+        setPtyController: vi.fn(),
+        serializeHiddenOutputRecoveryBuffer: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      await expect(handlers.get('pty:getMainBufferSnapshot')!(null, { id: '' })).resolves.toBeNull()
+      expect(runtime.serializeHiddenOutputRecoveryBuffer).not.toHaveBeenCalled()
+    })
   })
 })

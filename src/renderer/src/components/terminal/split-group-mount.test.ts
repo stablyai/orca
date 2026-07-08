@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { getEffectiveLayoutForWorktree, anyMountedWorktreeHasLayout } from './split-group-mount'
 import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
 
+// STA-1282 boundary note: these assertions pin the mounted-worktree/layout
+// computation for worktrees that still have policy-mounted (Tier 0 visible or
+// Tier 1 warm) panes. Under terminal pane eviction the mounted-worktree set is
+// no longer monotonic — a fully aged-out (Tier 2) worktree drops from it — but
+// that transition is driven by the eviction coordinator, not by this layout
+// helper, so these cases are unchanged.
+
 function makeGroup(id: string, worktreeId: string): TabGroup {
   return { id, worktreeId, activeTabId: null, tabOrder: [] }
 }
