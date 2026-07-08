@@ -153,6 +153,10 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
   }
 
   const provider = normalizeProvider(input.provider) ?? baseRepo.provider ?? headRepo.provider
+  if (!provider) {
+    return null
+  }
+
   // Prefer the pushed branch name (pushTarget, else the tracking upstream on the
   // base remote) so the link matches what exists remotely, not the local name.
   const headBranch =
