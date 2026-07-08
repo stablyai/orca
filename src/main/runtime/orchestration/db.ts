@@ -465,6 +465,44 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
   }
 
+  deleteTask(id: string): TaskRow | undefined {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const task = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as
+        | TaskRow
+        | undefined
+      if (!task) {
+        this.db.exec('ROLLBACK')
+        return undefined
+      }
+      if (task.status === 'dispatched') {
+        throw new Error(`Task ${id} is dispatched; only inactive tasks can be deleted`)
+      }
+
+      const activeDispatch = this.db
+        .prepare(
+          "SELECT id FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched') LIMIT 1"
+        )
+        .get(id) as { id: string } | undefined
+      if (activeDispatch) {
+        throw new Error(
+          `Task ${id} has pending/dispatched dispatch contexts; only inactive tasks can be deleted`
+        )
+      }
+
+      this.db.prepare('DELETE FROM decision_gates WHERE task_id = ?').run(id)
+      this.db.prepare('DELETE FROM dispatch_contexts WHERE task_id = ?').run(id)
+      this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
+      this.db.exec('COMMIT')
+      return task
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK')
+      } catch {}
+      throw error
+    }
+  }
+
   listTasks(filter?: { status?: TaskStatus; ready?: boolean }): TaskRow[] {
     if (filter?.ready) {
       return this.db

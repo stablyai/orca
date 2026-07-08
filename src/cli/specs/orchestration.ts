@@ -88,6 +88,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: ['Valid --status values: pending, ready, dispatched, completed, failed, blocked.']
   },
   {
+    path: ['orchestration', 'task-delete'],
+    summary: 'Delete an orchestration task',
+    usage: 'orca orchestration task-delete --task <task_id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'task']
+  },
+  {
     path: ['orchestration', 'dispatch'],
     summary: 'Dispatch a task to a terminal',
     usage:

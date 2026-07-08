@@ -131,6 +131,10 @@ const TaskUpdateParams = z.object({
   result: OptionalString
 })
 
+const TaskDeleteParams = z.object({
+  task: requiredString('Missing --task')
+})
+
 const DispatchParams = z.object({
   task: requiredString('Missing --task'),
   // Why: --to is only required for real dispatches. When --dry-run is set the
@@ -418,6 +422,19 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const task = db.updateTaskStatus(params.id, params.status, params.result)
       if (!task) {
         throw new Error(`Task not found: ${params.id}`)
+      }
+      return { task }
+    }
+  }),
+
+  defineMethod({
+    name: 'orchestration.taskDelete',
+    params: TaskDeleteParams,
+    handler: (params, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const task = db.deleteTask(params.task)
+      if (!task) {
+        throw new Error(`Task not found: ${params.task}`)
       }
       return { task }
     }

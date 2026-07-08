@@ -527,6 +527,16 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (r) => `Updated ${r.task.id} -> ${r.task.status}`)
   },
 
+  'orchestration task-delete': async ({ flags, client, json }) => {
+    const result = await client.call<{ task: { id: string; status: string } }>(
+      'orchestration.taskDelete',
+      {
+        task: getRequiredStringFlag(flags, 'task')
+      }
+    )
+    printResult(result, json, (r) => `Deleted ${r.task.id} [${r.task.status}]`)
+  },
+
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const dryRun = flags.has('dry-run') ? true : undefined

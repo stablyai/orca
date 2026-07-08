@@ -267,6 +267,116 @@ describe('OrchestrationDb', () => {
       expect(d.listTasks()).toHaveLength(2)
     })
 
+    it('deleteTask returns undefined for missing task ids', () => {
+      const d = createDb()
+      expect(d.deleteTask('task_missing')).toBeUndefined()
+    })
+
+    it.each([
+      {
+        status: 'pending' as const,
+        prepare: () => undefined,
+        createTask: (d: OrchestrationDb) =>
+          d.createTask({ spec: 'pending task', deps: ['task_dependency'] })
+      },
+      {
+        status: 'ready' as const,
+        prepare: () => undefined,
+        createTask: (d: OrchestrationDb) => d.createTask({ spec: 'ready task' })
+      },
+      {
+        status: 'completed' as const,
+        prepare: (d: OrchestrationDb, taskId: string) => {
+          d.updateTaskStatus(taskId, 'completed')
+        },
+        createTask: (d: OrchestrationDb) => d.createTask({ spec: 'completed task' })
+      },
+      {
+        status: 'failed' as const,
+        prepare: (d: OrchestrationDb, taskId: string) => {
+          d.updateTaskStatus(taskId, 'failed')
+        },
+        createTask: (d: OrchestrationDb) => d.createTask({ spec: 'failed task' })
+      },
+      {
+        status: 'blocked' as const,
+        prepare: (d: OrchestrationDb, taskId: string) => {
+          d.createGate({ taskId, question: 'Block it?' })
+        },
+        createTask: (d: OrchestrationDb) => d.createTask({ spec: 'blocked task' })
+      }
+    ])(
+      'deleteTask deletes an eligible $status task and returns the pre-delete row',
+      ({ status, prepare, createTask }) => {
+        const d = createDb()
+        const task = createTask(d)
+        prepare(d, task.id)
+
+        const deleted = d.deleteTask(task.id)
+
+        expect(deleted?.id).toBe(task.id)
+        expect(deleted?.status).toBe(status)
+        expect(d.getTask(task.id)).toBeUndefined()
+        expect(d.listGates({ taskId: task.id })).toHaveLength(0)
+        expect(d.getDispatchContext(task.id)).toBeUndefined()
+      }
+    )
+
+    it('deleteTask rejects dispatched or pending/dispatched tasks', () => {
+      const d = createDb()
+      const dispatched = d.createTask({ spec: 'active task' })
+      const ctx = d.createDispatchContext(dispatched.id, 'term_worker')
+
+      expect(() => d.deleteTask(dispatched.id)).toThrow('dispatched')
+      expect(d.getTask(dispatched.id)?.status).toBe('dispatched')
+      expect(d.getDispatchContext(dispatched.id)?.id).toBe(ctx.id)
+
+      const pending = d.createTask({ spec: 'pending task' })
+      const sqlite = (d as unknown as { db: Database.Database }).db
+      sqlite
+        .prepare(
+          "INSERT INTO dispatch_contexts (id, task_id, assignee_handle, status, failure_count, dispatched_at) VALUES (?, ?, ?, 'pending', 0, NULL)"
+        )
+        .run('ctx_pending', pending.id, 'term_worker')
+
+      expect(() => d.deleteTask(pending.id)).toThrow('pending/dispatched')
+      expect(d.getTask(pending.id)?.status).toBe('ready')
+      expect(d.getDispatchContext(pending.id)?.status).toBe('pending')
+    })
+
+    it('deleteTask deletes only task-scoped rows and preserves adjacent task rows', () => {
+      const d = createDb()
+      const target = d.createTask({ spec: 'target' })
+      const targetCtx = d.createDispatchContext(target.id, 'term_target')
+
+      d.updateTaskStatus(target.id, 'completed')
+      d.createGate({ taskId: target.id, question: 'Proceed?' })
+
+      const adjacent = d.createTask({ spec: 'adjacent' })
+      const adjacentCtx = d.createDispatchContext(adjacent.id, 'term_adjacent')
+      const adjacentWithGate = d.createTask({ spec: 'adjacent gate' })
+      const adjacentGate = d.createGate({
+        taskId: adjacentWithGate.id,
+        question: 'Adjacent gate?'
+      })
+
+      const deleted = d.deleteTask(target.id)
+
+      expect(deleted?.id).toBe(target.id)
+      expect(deleted?.status).toBe('blocked')
+      expect(d.getTask(target.id)).toBeUndefined()
+      expect(d.getDispatchContext(target.id)).toBeUndefined()
+      expect(d.listGates({ taskId: target.id })).toHaveLength(0)
+      expect(targetCtx.id).toMatch(/^ctx_/)
+
+      expect(d.getTask(adjacent.id)?.status).toBe('dispatched')
+      expect(d.getDispatchContext(adjacent.id)?.id).toBe(adjacentCtx.id)
+      expect(d.getTask(adjacentWithGate.id)?.status).toBe('blocked')
+      expect(d.listGates({ taskId: adjacentWithGate.id }).map((gate) => gate.id)).toEqual([
+        adjacentGate.id
+      ])
+    })
+
     it('listTasksWithDispatch joins active dispatch metadata', () => {
       const d = createDb()
       const ready = d.createTask({ spec: 'ready task' })

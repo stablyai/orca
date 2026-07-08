@@ -84,6 +84,7 @@ Orchestration:
   orchestration task-create Create an orchestration task
   orchestration task-list   List orchestration tasks
   orchestration task-update Update a task status
+  orchestration task-delete Delete an orchestration task
   orchestration dispatch    Dispatch a task to a terminal
   orchestration dispatch-show Show dispatch context for a task
   orchestration run         Start the coordinator loop

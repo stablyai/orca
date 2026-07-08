@@ -56,7 +56,7 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(16)
+    expect(registry.size).toBe(17)
     expect(registry.has('orchestration.send')).toBe(true)
     expect(registry.has('orchestration.check')).toBe(true)
     expect(registry.has('orchestration.reply')).toBe(true)
@@ -64,6 +64,7 @@ describe('orchestration RPC methods', () => {
     expect(registry.has('orchestration.taskCreate')).toBe(true)
     expect(registry.has('orchestration.taskList')).toBe(true)
     expect(registry.has('orchestration.taskUpdate')).toBe(true)
+    expect(registry.has('orchestration.taskDelete')).toBe(true)
     expect(registry.has('orchestration.dispatch')).toBe(true)
     expect(registry.has('orchestration.dispatchShow')).toBe(true)
     expect(registry.has('orchestration.ask')).toBe(true)
@@ -1033,6 +1034,41 @@ describe('orchestration RPC methods', () => {
       await expect(
         call('orchestration.taskUpdate', { id: 'task_fake', status: 'completed' })
       ).rejects.toThrow('Task not found')
+    })
+  })
+
+  describe('orchestration.taskDelete', () => {
+    it('deletes a task and returns the pre-delete row', async () => {
+      setup()
+      const task = db.createTask({ spec: 'cleanup work' })
+
+      const result = (await call('orchestration.taskDelete', {
+        task: task.id
+      })) as { task: { id: string; status: string } }
+
+      expect(result.task.id).toBe(task.id)
+      expect(result.task.status).toBe('ready')
+      expect(db.getTask(task.id)).toBeUndefined()
+    })
+
+    it('throws on nonexistent task', async () => {
+      setup()
+      await expect(call('orchestration.taskDelete', { task: 'task_fake' })).rejects.toThrow(
+        'Task not found'
+      )
+    })
+
+    it('propagates dispatched task rejection', async () => {
+      setup()
+      const task = db.createTask({ spec: 'in-flight work' })
+      db.createDispatchContext(task.id, 'term_worker')
+
+      await expect(call('orchestration.taskDelete', { task: task.id })).rejects.toThrow(
+        'dispatched'
+      )
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContext(task.id)).toBeDefined()
     })
   })
 

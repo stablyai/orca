@@ -13,6 +13,7 @@ vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 
 function staleHandleError(): RuntimeClientError {
@@ -587,6 +588,41 @@ describe('orchestration task-create caller handle', () => {
       parent: undefined,
       callerTerminalHandle: 'term_live'
     })
+  })
+})
+
+describe('orchestration task-delete CLI handler', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    vi.mocked(printResult).mockReset()
+  })
+
+  const invoke = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration task-delete']({
+      flags,
+      client: { call: callMock },
+      json: true
+    } as never)
+
+  it('maps --task to orchestration.taskDelete and prints through printResult', async () => {
+    const response = {
+      id: 'req_task_delete',
+      ok: true,
+      result: {
+        task: { id: 'task_1', status: 'ready' }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    }
+    callMock.mockResolvedValueOnce(response)
+
+    await invoke(new Map([['task', 'task_1']]))
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.taskDelete', {
+      task: 'task_1'
+    })
+    expect(vi.mocked(printResult)).toHaveBeenCalledWith(response, true, expect.any(Function))
   })
 })
 

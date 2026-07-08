@@ -249,6 +249,18 @@ describe('orca root help', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('advertises orchestration task-delete in command help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['orchestration', 'task-delete', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('orca orchestration task-delete --task <task_id> [--json]')
+    expect(help).toContain('Delete an orchestration task')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('hides removed parent-workspace help and scopes create parent selectors', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     logSpy.mockClear()
@@ -3328,6 +3340,26 @@ describe('orca cli worktree awareness', () => {
       deps: undefined,
       parent: undefined,
       callerTerminalHandle: 'term_creator'
+    })
+  })
+
+  it('routes orchestration task-delete through the CLI', async () => {
+    callMock.mockResolvedValueOnce({
+      id: 'req_task_delete',
+      ok: true,
+      result: {
+        task: { id: 'task_1', status: 'ready' }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', 'task-delete', '--task', 'task_1', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.taskDelete', {
+      task: 'task_1'
     })
   })
 
