@@ -10,9 +10,11 @@ import type { AppState } from '@/store/types'
 import { useRuntimeFileListForWorktree, type RuntimeFileListState } from './quick-open-file-list'
 
 const listRuntimeFilesMock = vi.hoisted(() => vi.fn())
+const cancelRuntimeFileListMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/runtime-file-client', () => ({
-  listRuntimeFiles: listRuntimeFilesMock
+  listRuntimeFiles: listRuntimeFilesMock,
+  cancelRuntimeFileList: cancelRuntimeFileListMock
 }))
 
 const initialAppState = useAppStore.getInitialState()
@@ -104,6 +106,7 @@ async function renderProbe(args: {
 beforeEach(() => {
   useAppStore.setState(initialAppState, true)
   listRuntimeFilesMock.mockReset().mockResolvedValue(['packages/app/package.json'])
+  cancelRuntimeFileListMock.mockReset()
 })
 
 afterEach(async () => {
@@ -155,9 +158,37 @@ describe('useRuntimeFileListForWorktree', () => {
       }),
       {
         rootPath: '/srv/platform',
-        excludePaths: undefined
+        excludePaths: undefined,
+        requestToken: expect.any(String)
       }
     )
     expect(states.at(-1)?.files).toEqual(['packages/app/package.json'])
+  })
+
+  it('cancels the in-flight scan with the same request token on unmount (#7721)', async () => {
+    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
+
+    useAppStore.setState({
+      folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
+      projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
+      repos: [],
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+
+    const root = await renderProbe({
+      enabled: true,
+      onState: () => {},
+      worktreeId: workspaceKey
+    })
+    await waitForListRuntimeFilesCall()
+
+    const [listContext, listRequest] = listRuntimeFilesMock.mock.calls[0]
+    expect(cancelRuntimeFileListMock).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+
+    expect(cancelRuntimeFileListMock).toHaveBeenCalledWith(listContext, listRequest.requestToken)
   })
 })

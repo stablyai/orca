@@ -137,11 +137,33 @@ describe('ListFilesScanCoordinator', () => {
 
     first.abort()
     expect(scan.starts[0].aborted).toBe(false)
+    // The aborting requester observes its own cancellation immediately,
+    // while the shared scan keeps running for the sibling.
+    await expect(firstResult).rejects.toSatisfy(isFileListingCancellation)
 
     second.abort()
     expect(scan.starts[0].aborted).toBe(true)
-    await expect(firstResult).rejects.toSatisfy(isFileListingCancellation)
     await expect(secondResult).rejects.toSatisfy(isFileListingCancellation)
+  })
+
+  it('rejects an aborted coalesced requester while the sibling still resolves', async () => {
+    const coordinator = new ListFilesScanCoordinator()
+    const scan = controllableScan()
+    const first = new AbortController()
+
+    const firstResult = coordinator.run({
+      clientId: 1,
+      key: 'a',
+      signal: first.signal,
+      start: scan.start
+    })
+    const secondResult = coordinator.run({ clientId: 1, key: 'a', start: scan.start })
+
+    first.abort()
+    scan.finish(['kept.ts'])
+
+    await expect(firstResult).rejects.toSatisfy(isFileListingCancellation)
+    await expect(secondResult).resolves.toEqual(['kept.ts'])
   })
 
   it('rejects immediately when the requester is already cancelled', async () => {

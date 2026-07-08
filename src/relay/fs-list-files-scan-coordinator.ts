@@ -67,22 +67,38 @@ export class ListFilesScanCoordinator {
 
   private attach(entry: ScanEntry, signal?: AbortSignal): Promise<string[]> {
     entry.attachedCount++
-    if (signal) {
-      const onAbort = (): void => {
-        entry.attachedCount--
-        // Why: only stop the shared scan when nobody is left waiting on it —
-        // one requester cancelling must not break a coalesced sibling.
-        if (entry.attachedCount <= 0) {
-          entry.controller.abort(fileListingCancellationError(signal))
-        }
-      }
-      signal.addEventListener('abort', onAbort, { once: true })
-      entry.promise
-        .finally(() => signal.removeEventListener('abort', onAbort))
-        .catch(() => {
-          /* rejection is surfaced through the promise returned below */
-        })
+    if (!signal) {
+      return entry.promise
     }
-    return entry.promise
+    // Why: an aborting requester must see its own cancellation even though
+    // the shared scan keeps running (and may later resolve) for coalesced
+    // siblings — so each attachment gets its own promise.
+    return new Promise<string[]>((resolve, reject) => {
+      let settled = false
+      const settle = (complete: () => void): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        signal.removeEventListener('abort', onAbort)
+        complete()
+      }
+      const onAbort = (): void =>
+        settle(() => {
+          entry.attachedCount--
+          const cancellation = fileListingCancellationError(signal)
+          // Why: only stop the shared scan when nobody is left waiting on it —
+          // one requester cancelling must not break a coalesced sibling.
+          if (entry.attachedCount <= 0) {
+            entry.controller.abort(cancellation)
+          }
+          reject(cancellation)
+        })
+      signal.addEventListener('abort', onAbort, { once: true })
+      entry.promise.then(
+        (files) => settle(() => resolve(files)),
+        (error) => settle(() => reject(error))
+      )
+    })
   }
 }
