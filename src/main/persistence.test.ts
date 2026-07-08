@@ -3174,6 +3174,20 @@ describe('Store', () => {
     expect(repo.executionHostId).toBeUndefined()
   })
 
+  it('reassignSshTargetId persists a worktree-meta-only re-point (no matching repo)', async () => {
+    const store = await createStore()
+    // A meta on the old SSH host with no corresponding repo row — the re-point
+    // must still be saved, not left in memory only.
+    store.setWorktreeMeta('r1::/remote/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
+
+    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    expect(count).toBe(0) // no repo matched
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorktreeMeta('r1::/remote/wt')?.hostId).toBe('ssh:ssh-new')
+  })
+
   // ── 7. updateRepo ──────────────────────────────────────────────────
 
   it('updateRepo modifies the repo in place', async () => {

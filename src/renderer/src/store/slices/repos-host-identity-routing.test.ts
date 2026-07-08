@@ -271,7 +271,13 @@ describe('repo slice host identity routing', () => {
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
   })
 
-  it('removeProject with an explicit hostId targets that host, not the focused one', async () => {
+  it('removeProject with an explicit hostId routes to that host, not the focused one', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-explicit-host',
+      ok: true,
+      result: { status: 'removed' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
     const localWorktree = makeWorktree({ id: 'same-repo::/local/wt', repoId: 'same-repo' })
     const remoteWorktree = makeWorktree({
       id: 'same-repo::/remote/wt',
@@ -279,9 +285,9 @@ describe('repo slice host identity routing', () => {
       hostId: 'runtime:env-1'
     })
     const store = createTestStore()
-    // Focus is local (no active runtime env). Without an explicit hostId the old
-    // behavior would resolve to the local row; the SSH/host-removal flow passes
-    // the non-focused host so the correct row is removed.
+    // Focus is local (no active runtime env). Without deriving the target from the
+    // explicit hostId, this would route to the focused (local) host and delete the
+    // wrong row. It must target runtime:env-1 via that host's RPC.
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
       worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] }
@@ -289,12 +295,15 @@ describe('repo slice host identity routing', () => {
 
     await store.getState().removeProject('same-repo', { hostId: 'runtime:env-1' })
 
-    // Resolves to the explicitly-passed host, not the focused (local) one, and
-    // removes only that row host-scoped in main. The local row stays.
-    expect(reposRemoveForHost).toHaveBeenCalledWith({
-      repoId: 'same-repo',
-      hostId: 'runtime:env-1'
+    // Routes to the runtime host's repo.rm (not the local removeForHost/remove),
+    // and the local row is left intact.
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.rm',
+      params: { repo: 'same-repo' },
+      timeoutMs: 15_000
     })
+    expect(reposRemoveForHost).not.toHaveBeenCalled()
     expect(reposRemove).not.toHaveBeenCalled()
     expect(store.getState().repos).toEqual([localDuplicate])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])

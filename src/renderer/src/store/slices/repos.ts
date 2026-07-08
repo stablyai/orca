@@ -2574,7 +2574,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
         })
       }
-      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
+      // Why: derive the runtime target from the resolved owner host (which honors
+      // options.hostId), not settingsForRepoOwner — that re-resolves without the
+      // explicit host and can route repo.rm to the focused runtime, deleting the
+      // wrong remote row when duplicate repo ids exist across hosts.
+      const target = getProjectSetupRuntimeTarget(ownerHostId)
       // Why: the same repo id can exist on multiple hosts (local + an SSH target,
       // or a re-added SSH target). Main's repos:remove is repo-id-only and would
       // delete every host's row. Scope the local-side removal to the owning host

@@ -117,6 +117,52 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
     expect(fake.remaining()).toHaveLength(1) // tombstone preserved
   })
 
+  it('does NOT re-adopt a different account/port on the same host (implicit alias)', () => {
+    // Manual adds default configHost to host, so both carry configHost === host.
+    // That is NOT a real alias — matching on it alone would ignore port/username
+    // and reattach workspaces to the wrong SSH account on the same machine.
+    const fake = makeFakeStore([
+      tombstone({
+        configHost: 'dev.example.com',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'alice'
+      })
+    ])
+    const count = readoptOrphanedWorkspacesForTarget(
+      fake.store,
+      makeTarget({
+        configHost: 'dev.example.com',
+        host: 'dev.example.com',
+        port: 2222,
+        username: 'bob'
+      })
+    )
+    expect(count).toBe(0)
+    expect(fake.reassigned).toEqual([])
+  })
+
+  it('re-adopts the same account/host/port even with implicit configHost === host', () => {
+    const fake = makeFakeStore([
+      tombstone({
+        configHost: 'dev.example.com',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'alice'
+      })
+    ])
+    const count = readoptOrphanedWorkspacesForTarget(
+      fake.store,
+      makeTarget({
+        configHost: 'dev.example.com',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'alice'
+      })
+    )
+    expect(count).toBe(1)
+  })
+
   it('still re-adopts via tuple when the re-added target has no alias', () => {
     // Manual re-add (no configHost) of a host that was config-managed: fall back
     // to the tuple since one side lacks an alias to distinguish it.

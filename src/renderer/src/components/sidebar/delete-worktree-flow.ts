@@ -271,6 +271,11 @@ export function runWorktreeDelete(worktreeId: string): void {
         sshTargetLabels: state.sshTargetLabels
       })
   if (sshResolution.kind === 'ghost' || sshResolution.kind === 'disconnected') {
+    // Why no lineage-children warning here (unlike the normal path below):
+    // forget-local is metadata-only and per-worktree, so it can't fail on a
+    // still-registered child the way a remote git removal would. Any descendants
+    // live on the same ghost host and remain independently visible/forgettable —
+    // they are not orphaned unrecoverably.
     state.openModal('forget-ssh-workspace', {
       worktreeId,
       displayName: target.displayName,

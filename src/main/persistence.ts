@@ -6123,13 +6123,20 @@ export class Store {
       repoCount++
     }
     // Re-point worktree metas whose hostId pointed at the old SSH host.
+    let metaChanged = false
     for (const meta of Object.values(this.state.worktreeMeta)) {
       if (meta.hostId === oldHostId) {
         meta.hostId = newHostId
+        metaChanged = true
       }
     }
+    // Why: repo-row rewrites can affect host-setup compatibility, but meta-only
+    // rewrites cannot — keep that sync under the repo gate. Persist whenever
+    // either repos OR metas changed, so meta-only re-points aren't lost on quit.
     if (repoCount > 0) {
       this.syncProjectHostSetupCompatibilityState()
+    }
+    if (repoCount > 0 || metaChanged) {
       this.scheduleSave()
     }
     return repoCount

@@ -27,20 +27,29 @@ function tupleKey(fields: IdentityFields): string {
   return `${normalize(fields.host)}|${fields.port}|${normalize(fields.username)}`
 }
 
+// An alias only counts as a distinguishing identity when it differs from the
+// host. addTarget defaults configHost to host, so a manual add with no real
+// ssh-config alias has configHost === host — that's not an alias, it's just the
+// hostname, and matching on it alone would ignore port/username.
+function meaningfulAlias(fields: IdentityFields): string {
+  const alias = normalize(fields.configHost)
+  return alias && alias !== normalize(fields.host) ? alias : ''
+}
+
 function tombstoneMatches(tombstone: RemovedSshTargetTombstone, target: IdentityFields): boolean {
-  const targetAlias = normalize(target.configHost)
-  const tombstoneAlias = normalize(tombstone.configHost)
+  const targetAlias = meaningfulAlias(target)
+  const tombstoneAlias = meaningfulAlias(tombstone)
   // Primary: matching ssh-config alias. Stable across remove/re-import.
   if (targetAlias && tombstoneAlias) {
-    // Both carry an alias — the alias is the identity. Different aliases mean
-    // deliberately distinct targets (e.g. prod-deploy vs prod-admin on the same
-    // box with different identity files); do NOT fall through to the tuple, or a
-    // second alias for the same endpoint would steal the first's workspaces.
+    // Both carry a real alias — the alias is the identity. Different aliases
+    // mean deliberately distinct targets (e.g. prod-deploy vs prod-admin on the
+    // same box with different identity files); do NOT fall through to the tuple,
+    // or a second alias for the same endpoint would steal the first's workspaces.
     return targetAlias === tombstoneAlias
   }
-  // Fallback: identical host+user+port. Only when at least one side has no alias
-  // to distinguish it (manual re-adds, or config hosts imported without a
-  // distinct alias).
+  // Fallback: identical host+user+port. Used when either side has no real alias
+  // (manual adds default configHost to host), so a different account or port on
+  // the same host is correctly treated as a different target.
   return tupleKey(tombstone) === tupleKey(target)
 }
 

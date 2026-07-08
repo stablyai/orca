@@ -524,6 +524,56 @@ describe('SshConnectionStore', () => {
       expect(sshStore.lastReadoptedRepoCount).toBe(1)
     })
 
+    // Why: drive the real remove→re-add path so the tombstone carries the
+    // defaulted configHost (host) that buildRemovedSshTargetTombstone produces,
+    // rather than a hand-seeded tombstone without one.
+    it('re-adopts through an actual removeTarget then re-add of the same host', () => {
+      const added = sshStore.addTarget({
+        label: 'Dev',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'tim'
+      })
+      sshStore.removeTarget(added.id)
+      // The tombstone was built from the real target (configHost defaulted to host).
+      const tombstones = mockStore.getRemovedSshTargetTombstones()
+      expect(tombstones).toHaveLength(1)
+      expect(tombstones[0]).toMatchObject({ oldTargetId: added.id, configHost: 'dev.example.com' })
+
+      mockStore.reassignSshTargetId.mockClear()
+      const readded = sshStore.addTarget({
+        label: 'Dev',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'tim'
+      })
+
+      expect(mockStore.reassignSshTargetId).toHaveBeenCalledWith(added.id, readded.id)
+      expect(sshStore.lastReadoptedRepoCount).toBe(1)
+    })
+
+    // A different account on the SAME host must NOT re-adopt, even though both
+    // manual adds default configHost to the shared hostname.
+    it('does not re-adopt a different account on the same host', () => {
+      const alice = sshStore.addTarget({
+        label: 'alice',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'alice'
+      })
+      sshStore.removeTarget(alice.id)
+      mockStore.reassignSshTargetId.mockClear()
+
+      sshStore.addTarget({
+        label: 'bob',
+        host: 'dev.example.com',
+        port: 2222,
+        username: 'bob'
+      })
+
+      expect(mockStore.reassignSshTargetId).not.toHaveBeenCalled()
+    })
+
     it('does not re-adopt when the re-added host identity differs', () => {
       mockStore.addRemovedSshTargetTombstone({
         oldTargetId: 'ssh-old',

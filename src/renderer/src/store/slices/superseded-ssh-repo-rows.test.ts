@@ -31,7 +31,7 @@ describe('pruneSupersededSshRepoRows', () => {
     expect(result[0].connectionId).toBe('ssh-dead')
   })
 
-  it('keeps a dead-SSH row superseded only by a LOCAL sibling', () => {
+  it('drops a dead-SSH row superseded by a LOCAL sibling', () => {
     // A repo id on both local and a removed SSH host: the local row is the live
     // sibling, so the SSH ghost is a re-adoption/duplicate leftover → drop it.
     const repos = [repo({ id: 'shared' }), repo({ id: 'shared', connectionId: 'ssh-dead' })]

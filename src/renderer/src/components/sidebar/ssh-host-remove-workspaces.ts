@@ -1,4 +1,4 @@
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import type { SshHostRemoveResolution } from './ssh-host-remove-resolution'
 
@@ -53,6 +53,15 @@ export async function clearSshHostWorkspaces(
     try {
       await store.removeProject(repoId, { hostId })
     } catch {
+      failedIds.push(repoId)
+    }
+    // Why: removeProject swallows its own errors and returns void, so the
+    // try/catch above can't observe a failure. Verify the host's repo row is
+    // actually gone; if it lingers, the removal did not succeed.
+    const stillPresent = useAppStore
+      .getState()
+      .repos.some((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
+    if (stillPresent && !failedIds.includes(repoId)) {
       failedIds.push(repoId)
     }
   }
