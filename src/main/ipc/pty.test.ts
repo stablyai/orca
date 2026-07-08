@@ -261,6 +261,7 @@ describe('registerPtyHandlers', () => {
   const savedOrcaClaudeAgentStatusSettings = process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
   const savedProcessPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const savedDisableMacosLoginShell = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+  const savedOrcaUserDataPath = process.env.ORCA_USER_DATA_PATH
 
   beforeEach(() => {
     // Why: most PTY spawn tests assert POSIX shell behavior; Windows-specific
@@ -333,6 +334,10 @@ describe('registerPtyHandlers', () => {
       handlers.delete(channel)
     })
     getPathMock.mockReturnValue('/tmp/orca-user-data')
+    // Why: shell-ready wrapper roots resolve from ORCA_USER_DATA_PATH (main
+    // canonicalizes it to app.getPath('userData') at startup before any spawn);
+    // mirror that here so ZDOTDIR/wrapper assertions match the mocked userData.
+    process.env.ORCA_USER_DATA_PATH = '/tmp/orca-user-data'
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
     readFileSyncMock.mockReturnValue('')
@@ -386,6 +391,11 @@ describe('registerPtyHandlers', () => {
       process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = savedDisableMacosLoginShell
     } else {
       delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    }
+    if (savedOrcaUserDataPath !== undefined) {
+      process.env.ORCA_USER_DATA_PATH = savedOrcaUserDataPath
+    } else {
+      delete process.env.ORCA_USER_DATA_PATH
     }
     if (savedOpenCodeConfigDir !== undefined) {
       process.env.OPENCODE_CONFIG_DIR = savedOpenCodeConfigDir
