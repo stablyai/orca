@@ -117,19 +117,27 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     color: colors.textMuted
   },
   keyboardDismissKey: {
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.sm,
     marginVertical: spacing.xs,
     backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 0,
     borderRadius: radii.button,
-    minHeight: 28
+    minWidth: 36,
+    height: 28
+  },
+  keyboardDismissGlyph: {
+    alignItems: 'center',
+    height: 18,
+    justifyContent: 'flex-start',
+    position: 'relative',
+    width: 18
   },
   keyboardDismissChevron: {
-    marginTop: -3
+    bottom: -2,
+    position: 'absolute'
   },
   inputBar: {
     flexDirection: 'row',
