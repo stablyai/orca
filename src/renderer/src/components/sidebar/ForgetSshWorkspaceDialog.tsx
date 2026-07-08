@@ -36,7 +36,12 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
   const hostLabel = useAppStore((s) => {
     const resolution = isForgetModalData(s.modalData) ? s.modalData.resolution : null
     const targetId = resolution && resolution.kind !== 'not-ssh' ? resolution.targetId : undefined
-    return targetId ? (s.sshTargetLabels.get(targetId) ?? targetId) : ''
+    if (!targetId) {
+      return ''
+    }
+    // Prefer the live label, then the removed target's last known label (ghost
+    // host), then the raw id as a last resort.
+    return s.sshTargetLabels.get(targetId) ?? s.removedSshTargetLabels.get(targetId) ?? targetId
   })
   const [busy, setBusy] = useState<null | 'reconnect' | 'forget'>(null)
   const mountedRef = useMountedRef()

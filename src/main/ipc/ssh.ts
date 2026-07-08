@@ -51,6 +51,7 @@ let currentRuntime: OrcaRuntimeService | undefined
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
+  'ssh:listRemovedTargetLabels',
   'ssh:addTarget',
   'ssh:updateTarget',
   'ssh:removeTarget',
@@ -711,6 +712,10 @@ export function registerSshHandlers(
 
   ipcMain.handle('ssh:listTargets', () => {
     return sshStore!.listTargets()
+  })
+
+  ipcMain.handle('ssh:listRemovedTargetLabels', () => {
+    return sshStore!.listRemovedTargetLabels()
   })
 
   ipcMain.handle('ssh:addTarget', (_event, args: { target: Omit<SshTarget, 'id'> }) => {

@@ -2516,6 +2516,14 @@ export function useIpcEvents(): void {
       try {
         const targets = await window.api.ssh.listTargets()
         useAppStore.getState().setSshTargetsMetadata(targets)
+        // Why: ghost-host UI (removed target still referenced by a workspace)
+        // shows a friendly name from the removal tombstones instead of the raw id.
+        try {
+          const removedLabels = await window.api.ssh.listRemovedTargetLabels()
+          useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
+        } catch {
+          // Best-effort — a missing map just falls back to the raw target id.
+        }
         for (const target of targets) {
           const state = await window.api.ssh.getState({ targetId: target.id })
           if (state) {

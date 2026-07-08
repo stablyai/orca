@@ -21,6 +21,22 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
   const displayName = typeof modalData.displayName === 'string' ? modalData.displayName : ''
 
+  // Why: for an SSH project the files live on the remote host's disk, not the
+  // user's — "still on your disk" would be misleading. Name the host (using the
+  // removed-target label when it's a ghost) so the user knows where it remains
+  // and that re-adding that host recovers it.
+  const sshHostLabel = useAppStore((s) => {
+    const connectionId = s.repos.find((r) => r.id === repoId)?.connectionId?.trim()
+    if (!connectionId) {
+      return null
+    }
+    return (
+      s.sshTargetLabels.get(connectionId) ??
+      s.removedSshTargetLabels.get(connectionId) ??
+      connectionId
+    )
+  })
+
   const handleConfirm = useCallback(() => {
     if (repoId) {
       void removeProject(repoId)
@@ -50,10 +66,16 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
               'This only removes'
             )}{' '}
             <span className="break-all font-medium text-foreground">{displayName}</span>{' '}
-            {translate(
-              'auto.components.sidebar.RemoveFolderDialog.8c097ef04e',
-              'from Orca. It is still on your disk.'
-            )}
+            {sshHostLabel
+              ? translate(
+                  'auto.components.sidebar.RemoveFolderDialog.fromOrcaSsh',
+                  'from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it.',
+                  { value0: sshHostLabel }
+                )
+              : translate(
+                  'auto.components.sidebar.RemoveFolderDialog.8c097ef04e',
+                  'from Orca. It is still on your disk.'
+                )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

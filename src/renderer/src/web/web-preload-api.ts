@@ -2619,6 +2619,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
 function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
     listTargets: () => Promise.resolve([]),
+    listRemovedTargetLabels: () => Promise.resolve({}),
     addTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     updateTarget: () =>

@@ -2816,6 +2816,9 @@ export type PreloadApi = {
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>
+    // Removed-target id → last known label, for showing a friendly host name on
+    // workspaces still pinned to a target that no longer exists.
+    listRemovedTargetLabels: () => Promise<Record<string, string>>
     addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTarget>
     updateTarget: (args: {
       id: string

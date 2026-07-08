@@ -313,7 +313,11 @@ export default function TerminalPane({
   )
   const sshReconnectTargetLabel = useAppStore((store) =>
     sshReconnectTargetId
-      ? (store.sshTargetLabels.get(sshReconnectTargetId) ?? sshReconnectTargetId)
+      ? (store.sshTargetLabels.get(sshReconnectTargetId) ??
+        // Fall back to the removed target's last known label (ghost host) before
+        // the raw id, so a removed host shows its name instead of ssh-<ts>-<rand>.
+        store.removedSshTargetLabels.get(sshReconnectTargetId) ??
+        sshReconnectTargetId)
       : ''
   )
   // Why: the target was removed entirely (a ghost) when it's no longer a known

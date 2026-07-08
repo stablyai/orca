@@ -3837,6 +3837,9 @@ const api = {
   ssh: {
     listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
 
+    listRemovedTargetLabels: (): Promise<Record<string, string>> =>
+      ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
+
     addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTarget> =>
       ipcRenderer.invoke('ssh:addTarget', args),
 

@@ -14,6 +14,17 @@ export class SshConnectionStore {
     return this.store.getSshTargets().filter((target) => !isRuntimeOwnedSshTarget(target))
   }
 
+  /** Map of removed-target id → its last known label, from the re-adoption
+   *  tombstones. Lets the renderer show a friendly host name for a workspace
+   *  still pinned to a target that no longer exists. */
+  listRemovedTargetLabels(): Record<string, string> {
+    const labels: Record<string, string> = {}
+    for (const tombstone of this.store.getRemovedSshTargetTombstones()) {
+      labels[tombstone.oldTargetId] = tombstone.label
+    }
+    return labels
+  }
+
   getTarget(id: string): SshTarget | undefined {
     return this.store.getSshTarget(id)
   }
