@@ -2433,7 +2433,14 @@ function App(): React.JSX.Element {
                               {activeView === 'skills' ? <SkillsPage /> : null}
                               {activeView === 'tasks' ? <TaskPage /> : null}
                               {activeView === 'automations' ? <AutomationsPage /> : null}
-                              {activeView === 'activity' ? <ActivityPrototypePage /> : null}
+                              {/* Why: Agents View must not stack under Landing / worktree-creation
+                                  panels (CodeRabbit on #7838). Those surfaces own the same slot
+                                  when there is no active worktree or a pending creation. */}
+                              {activeView === 'activity' &&
+                              activeWorktreeId &&
+                              !creationLayoutActive ? (
+                                <ActivityPrototypePage />
+                              ) : null}
                               {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                               {activeView === 'mobile' ? <MobilePage /> : null}
                               {(activeView === 'terminal' || activeView === 'activity') &&
