@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import * as floatingMod from './floating-terminal'
 import {
   openHttpLink,
   registerHttpLinkStoreAccessor,
@@ -23,6 +24,7 @@ const storeState = {
     | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock,
+  activeView: undefined as string | undefined,
   repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
   projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
   worktreesByRepo: {} as Record<
@@ -38,6 +40,9 @@ const storeState = {
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
+  // Spy the request so we can assert activity links trigger open without
+  // testing App mount (per strategy for non-theater coverage of 7813 hop).
+  vi.spyOn(floatingMod, 'requestOpenFloatingTerminal')
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
     api: {
@@ -47,8 +52,9 @@ beforeEach(() => {
       localhostWorktreeLabels: {
         register: registerLocalhostLabelMock
       }
-    }
-  })
+    },
+    dispatchEvent: vi.fn()
+  } as unknown as Window & typeof globalThis)
 })
 
 afterEach(() => {
@@ -89,6 +95,59 @@ describe('openHttpLink', () => {
       { activate: true }
     )
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('routes links from Agents View (activity) using floating browser without setActiveWorktree', () => {
+    storeState.settings = { openLinksInApp: true }
+    storeState.activeView = 'activity'
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'https://example.com/',
+      { activate: true }
+    )
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(floatingMod.requestOpenFloatingTerminal).toHaveBeenCalled()
+  })
+
+  it('routes labeled localhost links from Agents View using floating', async () => {
+    storeState.settings = { openLinksInApp: true, localhostWorktreeLabelsEnabled: true }
+    storeState.activeView = 'activity'
+    storeState.repos = [{ id: 'repo-1', displayName: 'test' }]
+    storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', displayName: 'wt' }] }
+    storeState.workspacePortScan = {
+      result: {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:5180',
+            kind: 'workspace',
+            port: 5180,
+            protocol: 'http',
+            bindHost: '127.0.0.1',
+            connectHost: 'localhost',
+            owner: {
+              repoId: 'repo-1',
+              worktreeId: 'wt-1',
+              displayName: 'wt',
+              path: '/wt',
+              confidence: 'cwd'
+            } as WorkspacePort & { kind: 'workspace' }
+          }
+        ]
+      }
+    }
+    registerLocalhostLabelMock.mockResolvedValue({ url: 'http://labeled.orca.local' })
+
+    openHttpLink('http://localhost:5180/', { worktreeId: 'wt-1' })
+    await Promise.resolve()
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, 'http://labeled.orca.local', { activate: true })
+    expect(floatingMod.requestOpenFloatingTerminal).toHaveBeenCalled()
   })
 
   it('routes to the system browser when openLinksInApp is off', () => {

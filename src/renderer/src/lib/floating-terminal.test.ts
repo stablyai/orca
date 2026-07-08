@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   consumeFloatingTerminalOpenMaximizedIntent,
-  requestFloatingTerminalOpenMaximized
+  requestFloatingTerminalOpenMaximized,
+  shouldOpenFloatingTerminalOnRequest,
+  shouldForceCloseFloatingTerminal
 } from './floating-terminal'
 
 describe('floating terminal open-maximized intent', () => {
@@ -41,5 +43,29 @@ describe('floating terminal open-maximized intent', () => {
     vi.advanceTimersByTime(50)
 
     expect(consumeFloatingTerminalOpenMaximizedIntent()).toBe(true)
+  })
+})
+
+describe('floating terminal open/close policy for activity links (#7813)', () => {
+  // Table-driven: covers the case where floatingTerminalEnabled=false but a
+  // browser tab was created from Agents View terminal link (count>0) => must
+  // open and must not force-close.
+  const cases: {
+    enabled: boolean
+    count: number
+    open: boolean
+    forceClose: boolean
+    note: string
+  }[] = [
+    { enabled: true, count: 0, open: true, forceClose: false, note: 'normal enabled, no tabs' },
+    { enabled: true, count: 1, open: true, forceClose: false, note: 'enabled with tab' },
+    { enabled: false, count: 0, open: false, forceClose: true, note: 'disabled, no tabs => closed' },
+    { enabled: false, count: 1, open: true, forceClose: false, note: 'activity link case: disabled but count>0 => open for browser in Agents View' },
+    { enabled: false, count: 2, open: true, forceClose: false, note: 'multiple tabs while pref off' }
+  ]
+
+  it.each(cases)('shouldOpen($enabled, $count) => $open; shouldForceClose => $forceClose ($note)', ({ enabled, count, open, forceClose }) => {
+    expect(shouldOpenFloatingTerminalOnRequest({ enabled, visibleTabCount: count })).toBe(open)
+    expect(shouldForceCloseFloatingTerminal({ enabled, visibleTabCount: count })).toBe(forceClose)
   })
 })

@@ -1,4 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { requestOpenFloatingTerminal } from './floating-terminal'
 import {
   parseLoopbackUrlWithPort,
   type LocalhostWorktreeLabelRoute
@@ -20,6 +21,7 @@ type StoreAccessor = () => {
   > | null
   setActiveWorktree: (worktreeId: string) => void
   createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
+  activeView?: string
   repos?: LocalhostLinkRepo[]
   projects?: LocalhostLinkProject[]
   worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
@@ -70,18 +72,28 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     // history entry — the user isn't changing worktrees, they're opening a tab
     // in the one they're already in. activateAndRevealWorktree is reserved for
     // file-link jumps that genuinely switch worktrees.
-    if (worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+    const isActivity = state.activeView === 'activity'
+    if (!isActivity && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
       // Why: the floating workspace uses a synthetic worktree id. Promoting it
       // to the global activeWorktreeId deselects the real repo workspace.
       state.setActiveWorktree(worktreeId)
     }
     const localhostRoute = localhostLabelRouteForTerminalLink(url, state)
+    const targetWt = isActivity ? FLOATING_TERMINAL_WORKTREE_ID : worktreeId
     if (!localhostRoute) {
-      state.createBrowserTab(worktreeId, url, { activate: true })
+      state.createBrowserTab(targetWt, url, { activate: true })
+      if (isActivity) {
+        // Why: force the floating panel open so the browser is visible and
+        // activatable directly within the Agents View without leaving it.
+        requestOpenFloatingTerminal()
+      }
       return
     }
     void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-      state.createBrowserTab(worktreeId, labeledUrl, { activate: true })
+      state.createBrowserTab(targetWt, labeledUrl, { activate: true })
+      if (isActivity) {
+        requestOpenFloatingTerminal()
+      }
     })
     return
   }

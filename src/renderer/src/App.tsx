@@ -68,7 +68,10 @@ import { FloatingTerminalToggleButton } from './components/floating-terminal/Flo
 import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitcher'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
-  requestFloatingTerminalOpenMaximized
+  OPEN_FLOATING_TERMINAL_EVENT,
+  requestFloatingTerminalOpenMaximized,
+  shouldOpenFloatingTerminalOnRequest,
+  shouldForceCloseFloatingTerminal
 } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
@@ -529,11 +532,15 @@ function App(): React.JSX.Element {
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
   const terminalWorkbenchVisible =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+  // Why: main browser/terminal chrome is intentionally terminal-view only.
+  // For #7813, activity links use floating overlay (FLOATING_TERMINAL_WORKTREE_ID +
+  // requestOpen + policy) so browser is visible/usable while staying in 'activity'
+  // view. See openHttpLink and floating policy.
   // Why: a closed empty floating workspace is not startup-critical. Once it owns
   // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
   // retain their local state.
   const shouldMountFloatingTerminalPanel =
-    floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
+    (floatingTerminalEnabled || floatingVisibleTabCount > 0) && (floatingTerminalOpen || floatingVisibleTabCount > 0)
   // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -614,15 +621,36 @@ function App(): React.JSX.Element {
         setFloatingTerminalOpenWithFocus((open) => !open)
       }
     }
+    const openFloatingTerminal = (): void => {
+      // Why: read live from store inside handler (not closed-over values) so
+      // requestOpenFloatingTerminal() dispatched from activity links (after
+      // createBrowserTab bumps the count) always sees count>0 and sets open=true
+      // even if the pref is off. This makes the panel visible inside Agents View.
+      const live = useAppStore.getState()
+      const liveEnabled = live.settings?.floatingTerminalEnabled === true
+      const liveCount = selectFloatingVisibleTabCount(live)
+      if (shouldOpenFloatingTerminalOnRequest({ enabled: liveEnabled, visibleTabCount: liveCount })) {
+        setFloatingTerminalOpenWithFocus(true)
+      }
+    }
     window.addEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
-    return () => window.removeEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
-  }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
+    window.addEventListener(OPEN_FLOATING_TERMINAL_EVENT, openFloatingTerminal)
+    return () => {
+      window.removeEventListener(TOGGLE_FLOATING_TERMINAL_EVENT, toggleFloatingTerminal)
+      window.removeEventListener(OPEN_FLOATING_TERMINAL_EVENT, openFloatingTerminal)
+    }
+  }, [floatingTerminalEnabled, floatingVisibleTabCount, setFloatingTerminalOpenWithFocus])
 
   useEffect(() => {
-    if (!floatingTerminalEnabled) {
+    // Why: live read + policy so count>0 (activity browser tab) prevents force
+    // close even if !enabled. The request from routing will have set open.
+    const live = useAppStore.getState()
+    const liveEnabled = live.settings?.floatingTerminalEnabled === true
+    const liveCount = selectFloatingVisibleTabCount(live)
+    if (shouldForceCloseFloatingTerminal({ enabled: liveEnabled, visibleTabCount: liveCount })) {
       setFloatingTerminalOpenWithFocus(false)
     }
-  }, [floatingTerminalEnabled, setFloatingTerminalOpenWithFocus])
+  }, [floatingTerminalEnabled, floatingVisibleTabCount, setFloatingTerminalOpenWithFocus])
 
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -2408,7 +2436,7 @@ function App(): React.JSX.Element {
                               {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                               {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                               {activeView === 'mobile' ? <MobilePage /> : null}
-                              {activeView === 'terminal' &&
+                              {(activeView === 'terminal' || activeView === 'activity') &&
                               creationLayoutActive &&
                               activePendingCreationId ? (
                                 <WorktreeCreationPanel
@@ -2418,7 +2446,7 @@ function App(): React.JSX.Element {
                                   }
                                 />
                               ) : null}
-                              {activeView === 'terminal' &&
+                              {(activeView === 'terminal' || activeView === 'activity') &&
                               !activeWorktreeId &&
                               !creationLayoutActive ? (
                                 <Landing />

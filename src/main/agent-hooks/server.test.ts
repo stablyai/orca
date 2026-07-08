@@ -4959,13 +4959,14 @@ describe('Pi hook normalization', () => {
     expect(result?.payload.agentType).toBe('pi')
   })
 
-  it('session_shutdown maps to done', () => {
+  it('session_shutdown does not map to done (prevents mid-work disconnect for Pi, #7791)', () => {
     const result = _internals.normalizeHookPayload(
       'pi',
       buildBody({ hook_event_name: 'session_shutdown' }),
       'production'
     )
-    expect(result?.payload.state).toBe('done')
+    // session_shutdown no longer forces 'done' (only agent_end does); keeps status connected
+    expect(result).toBeNull()
   })
 
   it('done preserves the cached lastAssistantMessage from a prior message_end', () => {
