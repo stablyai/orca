@@ -1026,29 +1026,57 @@ export function registerFilesystemHandlers(
   )
 
   // ─── List all files (for quick-open) ─────────────────────
+  // Why #7721: keyed by renderer-generated token so a workspace switch can
+  // abort the previous workspace's full-tree scan (SSH relays otherwise stack
+  // scans that starve interactive fs.readDir/fs.stat past their 30s timeout).
+  const listFilesCancellations = new Map<string, AbortController>()
   ipcMain.handle(
     'fs:listFiles',
     async (
       _event,
-      args: { rootPath: string; connectionId?: string; excludePaths?: string[] }
-    ): Promise<string[]> => {
-      if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        // Why: when the SSH connection is not yet established (cold start) or
-        // temporarily disconnected, return [] so quick-open shows "No matching
-        // files" instead of an error banner. The file list will repopulate when
-        // the user re-opens quick-open after the connection is restored.
-        if (!provider) {
-          return []
-        }
-        // Why: forward excludePaths through to the remote provider.
-        // Dropping it here would silently double-scan nested linked worktrees
-        // over SSH and contribute to timeout-induced partial results.
-        return provider.listFiles(args.rootPath, { excludePaths: args.excludePaths })
+      args: {
+        rootPath: string
+        connectionId?: string
+        excludePaths?: string[]
+        requestToken?: string
       }
-      return listQuickOpenFiles(args.rootPath, store, args.excludePaths)
+    ): Promise<string[]> => {
+      const controller = args.requestToken ? new AbortController() : null
+      if (controller && args.requestToken) {
+        listFilesCancellations.set(args.requestToken, controller)
+      }
+      try {
+        if (args.connectionId) {
+          const provider = getSshFilesystemProvider(args.connectionId)
+          // Why: when the SSH connection is not yet established (cold start) or
+          // temporarily disconnected, return [] so quick-open shows "No matching
+          // files" instead of an error banner. The file list will repopulate when
+          // the user re-opens quick-open after the connection is restored.
+          if (!provider) {
+            return []
+          }
+          // Why: forward excludePaths through to the remote provider.
+          // Dropping it here would silently double-scan nested linked worktrees
+          // over SSH and contribute to timeout-induced partial results.
+          return await provider.listFiles(args.rootPath, {
+            excludePaths: args.excludePaths,
+            signal: controller?.signal
+          })
+        }
+        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths)
+      } finally {
+        if (args.requestToken) {
+          listFilesCancellations.delete(args.requestToken)
+        }
+      }
     }
   )
+
+  ipcMain.handle('fs:cancelListFiles', (_event, args: { requestToken: string }): void => {
+    // Why: best-effort — the entry is gone once the listing settles, and
+    // local scans are fast enough to simply let them finish.
+    listFilesCancellations.get(args.requestToken)?.abort()
+  })
 
   // ─── Git operations ─────────────────────────────────────
   ipcMain.handle(

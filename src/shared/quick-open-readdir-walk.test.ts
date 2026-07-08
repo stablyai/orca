@@ -24,6 +24,7 @@ import {
   listQuickOpenFilesWithReaddir,
   parseQuickOpenGitLsFilesEntry
 } from './quick-open-readdir-walk'
+import { isFileListingCancellation } from './file-listing-cancellation'
 
 const tempDirs: string[] = []
 const SHA1 = '0123456789abcdef0123456789abcdef01234567'
@@ -258,5 +259,36 @@ describe('quick-open readdir walk', () => {
         gitPaths: ['packages/app [one] space/']
       })
     ).resolves.toEqual(['packages/app [one] space/src/main.ts'])
+  })
+
+  it('stops the walk with a cancellation error when the signal aborts (#7721)', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'src/a.ts')
+    await writeRel(root, 'src/b.ts')
+
+    const controller = new AbortController()
+    controller.abort()
+
+    const rejection = listQuickOpenFilesWithReaddir(root, { signal: controller.signal })
+    await expect(rejection).rejects.toSatisfy(isFileListingCancellation)
+    // Cancellation must never be mistaken for a budget error, which callers
+    // translate into "install rg" guidance.
+    await rejection.catch((err) => expect(isQuickOpenReaddirBudgetError(err)).toBe(false))
+  })
+
+  it('stops nested-repo expansion when the signal aborts (#7721)', async () => {
+    const root = await makeTempRoot()
+    await writeRel(root, 'src/kept.ts')
+
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      expandQuickOpenGitFilesWithNestedRepos({
+        rootPath: root,
+        gitPaths: ['src/kept.ts'],
+        signal: controller.signal
+      })
+    ).rejects.toSatisfy(isFileListingCancellation)
   })
 })

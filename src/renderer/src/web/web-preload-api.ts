@@ -1509,6 +1509,10 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       )
       return result.files.map((entry) => entry.relativePath)
     },
+    cancelListFiles: async () => {
+      // Why: the paired-web path lists files over runtime RPC with its own
+      // request timeout; there is no host-side scan to abort from here.
+    },
     search: async (args) => {
       const file = await resolveRuntimeFilePath(args.rootPath)
       return callRuntimeResult<SearchResult>('files.search', {

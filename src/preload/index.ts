@@ -2648,7 +2648,10 @@ const api = {
       rootPath: string
       connectionId?: string
       excludePaths?: string[]
+      requestToken?: string
     }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
+    cancelListFiles: (args: { requestToken: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:cancelListFiles', args),
     search: (args: {
       query: string
       rootPath: string

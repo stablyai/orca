@@ -17,6 +17,11 @@ import {
 } from './fs-handler-utils'
 import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
+import { ListFilesScanCoordinator } from './fs-list-files-scan-coordinator'
+import {
+  isFileListingCancellation,
+  throwIfFileListingCancelled
+} from '../shared/file-listing-cancellation'
 import { isQuickOpenReaddirBudgetError } from '../shared/quick-open-readdir-walk'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
@@ -82,6 +87,7 @@ export class FsHandler {
   private dispatcher: RelayDispatcher
   private watches = new Map<string, WatchState>()
   private streamRegistry = new RelayStreamRegistry()
+  private listFilesScans = new ListFilesScanCoordinator()
 
   constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
     this.dispatcher = dispatcher
@@ -114,7 +120,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.copy', (p) => this.copy(p))
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
-    this.dispatcher.onRequest('fs.listFiles', (p) => this.listFiles(p))
+    this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
     this.dispatcher.onNotification('fs.unwatch', (p, context) => this.unwatch(p, context))
@@ -331,16 +337,33 @@ export class FsHandler {
     })
   }
 
-  private async listFiles(params: Record<string, unknown>): Promise<string[]> {
+  private listFiles(params: Record<string, unknown>, context?: RequestContext): Promise<string[]> {
     const rootPath = expandTilde(params.rootPath as string)
     // Why: the main-to-relay RPC adds excludePaths so nested linked worktrees
     // don't get double-scanned. The shared helper validates the shape and
     // normalizes into root-relative prefixes; malformed input yields [] so
     // the request still succeeds (older apps omit the field entirely).
     const excludePathPrefixes = buildExcludePathPrefixes(rootPath, params.excludePaths)
+    // Why #7721: full-tree scans are the relay's most expensive request; the
+    // coordinator caps them at one per client, coalescing duplicates and
+    // aborting a stale scan when the workspace changes or the host cancels.
+    return this.listFilesScans.run({
+      clientId: context?.clientId ?? 0,
+      key: JSON.stringify([rootPath, excludePathPrefixes]),
+      signal: context?.signal,
+      start: (signal) => this.runListFilesScan(rootPath, excludePathPrefixes, signal)
+    })
+  }
+
+  private async runListFilesScan(
+    rootPath: string,
+    excludePathPrefixes: string[],
+    signal: AbortSignal
+  ): Promise<string[]> {
     const rgAvailable = await checkRgAvailable()
+    throwIfFileListingCancelled(signal)
     if (rgAvailable) {
-      return listFilesWithRg(rootPath, excludePathPrefixes)
+      return listFilesWithRg(rootPath, excludePathPrefixes, { signal })
     }
     // Why: git ls-files only works inside git repos. Use rev-parse to detect
     // git ancestry — unlike checking for a local .git entry, this works from
@@ -361,7 +384,7 @@ export class FsHandler {
       // budget errors into install-rg guidance; genuine git failures keep
       // their own messages.
       try {
-        return await listFilesWithGit(rootPath, excludePathPrefixes)
+        return await listFilesWithGit(rootPath, excludePathPrefixes, { signal })
       } catch (err) {
         if (isQuickOpenReaddirBudgetError(err)) {
           throw new Error(await buildInstallRgMessage(err))
@@ -375,8 +398,13 @@ export class FsHandler {
     // problem, so translate the opaque cap error into actionable guidance
     // the user can act on directly from the error toast.
     try {
-      return await listFilesWithReaddir(rootPath, excludePathPrefixes)
+      return await listFilesWithReaddir(rootPath, excludePathPrefixes, { signal })
     } catch (err) {
+      // Why: a cancelled scan is not an rg-availability problem; wrapping it
+      // in install-rg guidance would surface bogus advice on the client.
+      if (isFileListingCancellation(err)) {
+        throw err
+      }
       throw new Error(await buildInstallRgMessage(err))
     }
   }

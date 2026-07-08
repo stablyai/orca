@@ -197,7 +197,10 @@ export type IFilesystemProvider = {
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>
-  listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]>
+  listFiles(
+    rootPath: string,
+    options?: { excludePaths?: string[]; signal?: AbortSignal }
+  ): Promise<string[]>
   scanWorkspaceSpace?(
     rootPath: string,
     options?: { signal?: AbortSignal }
