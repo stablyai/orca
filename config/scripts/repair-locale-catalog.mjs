@@ -3,6 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
+import { main as bootstrapZhTwCatalog } from './bootstrap-zh-tw-catalog.mjs'
 import { repairCacheMap, repairCatalog } from './locale-translation-policy.mjs'
 
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
@@ -13,6 +14,8 @@ const LOCALE_CACHE_FILES = {
   ja: '.ja-catalog-cache.json',
   es: '.es-catalog-cache.json'
 }
+
+const DEFAULT_LOCALES = ['ko', 'zh', 'zh-TW', 'ja', 'es']
 
 function parseLocaleArg(argv) {
   const localeFlagIndex = argv.indexOf('--locale')
@@ -37,6 +40,13 @@ async function saveCache(cachePath, cache) {
 }
 
 export async function repairLocale(root, locale) {
+  // Why: zh-TW has no MT cache — it is deterministically derived from the curated zh
+  // catalog, so repairing it means regenerating it after zh has been repaired.
+  if (locale === 'zh-TW') {
+    await bootstrapZhTwCatalog(root)
+    return { catalogRepairs: 0, cacheRepairs: 0 }
+  }
+
   const enPath = path.join(root, LOCALES_DIR, 'en.json')
   const localePath = path.join(root, LOCALES_DIR, `${locale}.json`)
   const cachePath = path.join(root, LOCALES_DIR, LOCALE_CACHE_FILES[locale])
@@ -57,8 +67,9 @@ export async function repairLocale(root, locale) {
 }
 
 export async function main(root = process.cwd(), locale = parseLocaleArg(process.argv)) {
-  const locales = locale ? [locale] : ['ko', 'zh', 'ja', 'es']
-  const unsupported = locales.filter((code) => !LOCALE_CACHE_FILES[code])
+  // Why: zh-TW is regenerated from zh.json, so DEFAULT_LOCALES repairs zh before zh-TW.
+  const locales = locale ? [locale] : DEFAULT_LOCALES
+  const unsupported = locales.filter((code) => code !== 'zh-TW' && !LOCALE_CACHE_FILES[code])
   if (unsupported.length > 0) {
     console.error(`Unsupported locale(s): ${unsupported.join(', ')}`)
     return 1

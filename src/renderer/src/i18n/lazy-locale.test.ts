@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
-  UI_LANGUAGE_SPANISH
+  UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_TRADITIONAL_CHINESE
 } from '../../../shared/ui-language'
 import { i18n, setRendererUiLanguage } from './i18n'
 
 // Why: the renderer now lazy-loads non-English catalogs through an i18next
-// backend instead of bundling all five into the startup chunk. This guards the
+// backend instead of bundling every catalog into the startup chunk. This guards the
 // invariant that switching language (I18nProvider effect / Settings) resolves
 // real translations once changeLanguage() settles — and that any direct
 // i18n.changeLanguage() call (used across the codebase and tests) transparently
@@ -32,6 +33,12 @@ describe('renderer i18n lazy locale loading', () => {
 
   it('lazy-loads a catalog through a direct changeLanguage call', async () => {
     await i18n.changeLanguage(UI_LANGUAGE_CHINESE)
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+  })
+
+  it('lazy-loads the Traditional Chinese catalog via setRendererUiLanguage', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_TRADITIONAL_CHINESE)
+    expect(i18n.language).toBe('zh-TW')
     expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
   })
 

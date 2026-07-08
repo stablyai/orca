@@ -266,6 +266,9 @@ importers:
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
+      opencc-js:
+        specifier: ^1.4.0
+        version: 1.4.0
       oxfmt:
         specifier: ^0.52.0
         version: 0.52.0
@@ -5327,6 +5330,9 @@ packages:
   open@11.0.0:
     resolution: {integrity: sha512-smsWv2LzFjP03xmvFoJ331ss6h+jixfA4UUV/Bsiyuu4YJPfN+FIQGOIiv4w9/+MoHkfkJ22UIaQWRVFRfH6Vw==}
     engines: {node: '>=20'}
+
+  opencc-js@1.4.0:
+    resolution: {integrity: sha512-SEb4huI5+lT4CFPA4sgs+NAOOgpcmdHZ+vYxhRLR1bQWIt6VRwpFPjWgTJAWAg1MviDcXTBe5zVoUOVxVxNK8w==}
 
   opentype.js@2.0.0:
     resolution: {integrity: sha512-kCyjv6xdDY1W/jLWZ/L3QhhTlKUqDZMQ5+Jdlw12b3dXkKNpYBqqlMMj0YDQPShWFTMwgZI1hG14kN3XUDSg/A==}
@@ -11803,6 +11809,8 @@ snapshots:
       is-inside-container: 1.0.0
       powershell-utils: 0.1.0
       wsl-utils: 0.3.1
+
+  opencc-js@1.4.0: {}
 
   opentype.js@2.0.0: {}
 

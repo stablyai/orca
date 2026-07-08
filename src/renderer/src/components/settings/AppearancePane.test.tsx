@@ -192,7 +192,7 @@ describe('AppearancePane', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
-  it('renders the language dropdown with system, english, chinese, korean, japanese, and spanish options', async () => {
+  it('renders the language dropdown with system, english, chinese (simplified and traditional), korean, japanese, and spanish options', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
@@ -207,12 +207,17 @@ describe('AppearancePane', () => {
     const chineseOption = container.querySelector<HTMLButtonElement>(
       '[data-slot="select-item"][data-value="zh"]'
     )
+    const traditionalChineseOption = container.querySelector<HTMLButtonElement>(
+      '[data-slot="select-item"][data-value="zh-TW"]'
+    )
 
     expect(languageTrigger).not.toBeNull()
     expect(chineseOption).not.toBeNull()
+    expect(traditionalChineseOption).not.toBeNull()
     expect(container.textContent).toContain('System')
     expect(container.textContent).toContain('English')
     expect(container.textContent).toContain('中文（简体）')
+    expect(container.textContent).toContain('中文（繁體）')
     expect(container.textContent).toContain('한국어')
     expect(container.textContent).toContain('日本語')
     expect(container.textContent).toContain('Español')

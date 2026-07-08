@@ -24,7 +24,8 @@ const LAZY_LOCALE_LOADERS: Record<
   es: () => import('../../renderer/src/i18n/locales/es.json'),
   ja: () => import('../../renderer/src/i18n/locales/ja.json'),
   ko: () => import('../../renderer/src/i18n/locales/ko.json'),
-  zh: () => import('../../renderer/src/i18n/locales/zh.json')
+  zh: () => import('../../renderer/src/i18n/locales/zh.json'),
+  'zh-TW': () => import('../../renderer/src/i18n/locales/zh-TW.json')
 }
 
 const lazyLocaleBackend: BackendModule = {
@@ -58,6 +59,9 @@ export async function ensureMainI18n(): Promise<I18nInstance> {
     await mainI18n.use(lazyLocaleBackend).init({
       fallbackLng: DEFAULT_UI_LOCALE,
       lng: DEFAULT_UI_LOCALE,
+      // Why: without currentOnly, zh-TW's resolve chain includes bare zh, which
+      // would lazily load the Simplified catalog alongside the Traditional one.
+      load: 'currentOnly',
       // Why: mark the default locale loaded with an empty resource bundle. Main
       // process English strings come from translateMain() fallbacks, and
       // partialBundledLanguages lets the backend supply non-English catalogs.

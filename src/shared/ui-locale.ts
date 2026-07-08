@@ -5,10 +5,11 @@ import {
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM,
+  UI_LANGUAGE_TRADITIONAL_CHINESE,
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'zh-TW', 'ko', 'ja', 'es'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -21,8 +22,16 @@ export function normalizeSupportedUiLocale(locale: string | undefined): Supporte
   const tag = normalizeLocaleTag(locale)
   const primary = tag.split('-')[0]
   if (primary === 'zh') {
-    if (tag.startsWith('zh-tw') || tag.startsWith('zh-hk') || tag.startsWith('zh-hant')) {
-      return DEFAULT_UI_LOCALE
+    // Traditional-script regions (Taiwan, Hong Kong, Macau) and explicit
+    // zh-Hant tags map to the Traditional Chinese catalog; everything else
+    // under zh uses Simplified.
+    if (
+      tag.startsWith('zh-tw') ||
+      tag.startsWith('zh-hk') ||
+      tag.startsWith('zh-mo') ||
+      tag.startsWith('zh-hant')
+    ) {
+      return 'zh-TW'
     }
     return 'zh'
   }
@@ -40,6 +49,9 @@ export function resolveUiLocale(
   }
   if (language === UI_LANGUAGE_CHINESE) {
     return 'zh'
+  }
+  if (language === UI_LANGUAGE_TRADITIONAL_CHINESE) {
+    return 'zh-TW'
   }
   if (language === UI_LANGUAGE_KOREAN) {
     return 'ko'
