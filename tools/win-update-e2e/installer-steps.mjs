@@ -97,6 +97,15 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
   // overwritten — to avoid reading the pre-update binary mid-copy.
   const targetVersion = getExeVersion(setupExe)
   const exePath = waitForInstalledExe(timeoutMs, installDir, targetVersion)
+  if (!exePath && locateInstalledExe(installDir)) {
+    // Version-gated wait failed but SOME exe exists — surface both versions so a
+    // comparison bug reads as itself, not as "installer produced nothing".
+    const found = locateInstalledExe(installDir)
+    throw new Error(
+      `Installed ${EXE_NAME} exists at ${found} but its version ` +
+        `(${getExeVersion(found)}) never matched the installer's (${targetVersion}) within ${timeoutMs}ms`
+    )
+  }
   if (!exePath) {
     const where = installDir ?? programsRoot()
     throw new Error(`Installed ${EXE_NAME} did not appear under ${where} within ${timeoutMs}ms`)
@@ -104,11 +113,27 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
   return { exePath, version: getExeVersion(exePath) }
 }
 
+// ProductVersion formats differ between the two artifacts: the NSIS setup exe
+// carries the full semver (e.g. "1.4.129-rc.1") while the installed app exe
+// carries a 4-part numeric version (e.g. "1.4.129.0"). Compare only the numeric
+// major.minor.patch prefix — strict string equality never matches across the
+// two formats and made every install wait time out (runs 28898246592 and
+// 28981670571). Prerelease-only differences within one X.Y.Z are invisible to
+// this check; the harness's real assertions (daemon pid, session survival) do
+// not rely on it.
+function normalizeExeVersion(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version ?? '')
+  return match ? `${match[1]}.${match[2]}.${match[3]}` : null
+}
+
 function waitForInstalledExe(timeoutMs, installDir = null, expectedVersion = null) {
   const deadline = Date.now() + timeoutMs
+  const expected = normalizeExeVersion(expectedVersion)
   while (Date.now() < deadline) {
     const exe = locateInstalledExe(installDir)
-    if (exe && (!expectedVersion || getExeVersion(exe) === expectedVersion)) {
+    // An unparseable version on either side skips the gate (presence-only wait)
+    // rather than spinning until timeout on a comparison that can never succeed.
+    if (exe && (!expected || normalizeExeVersion(getExeVersion(exe)) === expected)) {
       return exe
     }
     sleepSync(1000)
