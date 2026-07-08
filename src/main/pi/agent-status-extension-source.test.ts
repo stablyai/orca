@@ -198,9 +198,9 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(args).toEqual([
       '-sS',
       '--connect-timeout',
-      '0.5',
+      '3',
       '--max-time',
-      '1.5',
+      '10',
       '--noproxy',
       '127.0.0.1',
       '-o',
