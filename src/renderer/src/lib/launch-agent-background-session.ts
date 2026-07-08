@@ -1,5 +1,4 @@
 import { useAppStore } from '@/store'
-import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type {
   LaunchAgentBackgroundSessionArgs,
   LaunchAgentBackgroundSessionResult
@@ -15,7 +14,6 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -37,6 +35,8 @@ import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
+import { buildBackgroundAgentStartupPlan } from '@/lib/launch-agent-background-startup-plan'
+import { markBackgroundAgentWorkspaceTrusted } from '@/lib/launch-agent-background-trust'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -48,20 +48,22 @@ export async function launchAgentBackgroundSession(
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
-    try {
-      await window.api.agentTrust.markTrusted({
-        preset: preflight,
-        workspacePath: worktree.path
-      })
-    } catch {
-      // Best-effort: continue with launch. The user can still accept the trust menu.
-    }
-  }
+  const agentProfiles = store.settings?.agentProfiles ?? []
+  const variables = { repoPath: repo?.path, worktreePath: worktree.path }
+  await markBackgroundAgentWorkspaceTrusted({ agent, agentProfiles, workspacePath: worktree.path })
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const agentArgs = resolveTuiAgentLaunchArgs(
+    agent,
+    store.settings?.agentDefaultArgs,
+    agentProfiles,
+    variables
+  )
+  const agentEnv = resolveTuiAgentLaunchEnv(
+    agent,
+    store.settings?.agentDefaultEnv,
+    agentProfiles,
+    variables
+  )
   const launchPlatform = repo
     ? getAgentLaunchPlatformForRepo(
         repo,
@@ -71,36 +73,18 @@ export async function launchAgentBackgroundSession(
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
-  const trimmedPrompt = prompt?.trim() ?? ''
-  const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
-
-  let startupPlan: AgentStartupPlan | null = null
-  let pasteDraftAfterLaunch: string | null = null
-  if (hasPrompt && isFollowupPath) {
-    startupPlan = buildAgentStartupPlan({
+  const { startupPlan, pasteDraftAfterLaunch, trimmedPrompt, hasPrompt, isFollowupPath } =
+    buildBackgroundAgentStartupPlan({
       agent,
-      prompt: '',
+      prompt,
       cmdOverrides,
       agentArgs,
       agentEnv,
+      agentProfiles,
+      variables,
       platform: launchPlatform,
-      isRemote,
-      allowEmptyPromptLaunch: true
+      isRemote
     })
-    pasteDraftAfterLaunch = trimmedPrompt
-  } else {
-    startupPlan = buildAgentStartupPlan({
-      agent,
-      prompt: hasPrompt ? trimmedPrompt : '',
-      cmdOverrides,
-      agentArgs,
-      agentEnv,
-      platform: launchPlatform,
-      isRemote,
-      allowEmptyPromptLaunch: !hasPrompt
-    })
-  }
   if (!startupPlan) {
     return null
   }

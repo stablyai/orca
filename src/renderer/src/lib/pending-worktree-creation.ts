@@ -3,6 +3,7 @@ import type {
   GitPushTarget,
   SetupDecision,
   TuiAgent,
+  TuiAgentProfile,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
   WorktreeStartupLaunch
@@ -19,6 +20,19 @@ import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/tas
 export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
+
+export type WorktreeAgentStartupPlanTemplate = {
+  agent: TuiAgent
+  prompt: string
+  draftPrompt?: string | null
+  allowEmptyPromptLaunch?: boolean
+  cmdOverrides: Partial<Record<TuiAgent, string>>
+  agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+  agentProfiles: readonly TuiAgentProfile[]
+  platform: NodeJS.Platform
+  isRemote?: boolean
+}
 
 /**
  * Everything needed to run a worktree create in the background and reproduce it
@@ -86,6 +100,9 @@ export type WorktreeCreationRequest = {
   /** Renderer-side launch plan used to seed the first terminal when the backend
    *  did not already spawn it. Null for blank-shell creates. */
   startupPlan: AgentStartupPlan | null
+  /** Plain-data plan input for agent launches whose path variables must resolve
+   *  after the worktree path exists. */
+  startupPlanTemplate?: WorktreeAgentStartupPlanTemplate | null
   quickPrompt: string
   quickTelemetry: AgentStartedTelemetry | null
   /** When the composer stays open for sequential creates, completion must not

@@ -13,7 +13,10 @@ const { prepareEphemeralVmWorkspaceTargetMock } = vi.hoisted(() => ({
 type TestActiveView = 'terminal' | 'tasks'
 
 const store = {
-  settings: { activeRuntimeEnvironmentId: null as string | null },
+  settings: {
+    activeRuntimeEnvironmentId: null as string | null,
+    agentProfiles: []
+  },
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
   repos: [{ id: 'repo-runtime', connectionId: null }],
@@ -86,12 +89,13 @@ import {
   continueBackgroundWorktreeCreation,
   runBackgroundWorktreeCreation
 } from './worktree-creation-flow'
+import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 
 const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow.ts'), 'utf8')
 
 beforeEach(() => {
   vi.clearAllMocks()
-  store.settings.activeRuntimeEnvironmentId = null
+  store.settings = { activeRuntimeEnvironmentId: null, agentProfiles: [] }
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
   store.repos = []
@@ -194,6 +198,51 @@ describe('runBackgroundWorktreeCreation', () => {
         indeterminate: true,
         request: expect.not.objectContaining({
           worktreeCreateProgressMode: expect.any(String)
+        })
+      })
+    )
+  })
+
+  it('resolves startup profile path variables after the worktree is created', async () => {
+    store.repos = [{ id: 'repo-1', path: '/repo/main', connectionId: null }] as never
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/worktrees/feature' },
+      startupTerminal: { spawned: false }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValue({
+      primaryTabId: 'tab-1'
+    })
+
+    runBackgroundWorktreeCreation(
+      makeRequest({
+        agent: 'agent-profile:claude-work',
+        quickPrompt: 'fix it',
+        startupPlanTemplate: {
+          agent: 'agent-profile:claude-work',
+          prompt: 'fix it',
+          cmdOverrides: {},
+          agentDefaultArgs: {
+            'agent-profile:claude-work': '--plugin-dir {worktreePath}/plugins --repo {repoPath}'
+          },
+          agentProfiles: [
+            {
+              id: 'agent-profile:claude-work',
+              baseAgent: 'claude',
+              label: 'Claude Work'
+            }
+          ],
+          platform: 'linux'
+        }
+      })
+    )
+
+    await vi.waitFor(() => expect(ensureAgentStartupInTerminal).toHaveBeenCalled())
+
+    expect(ensureAgentStartupInTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          launchCommand:
+            "claude '--plugin-dir' '/worktrees/feature/plugins' '--repo' '/repo/main' 'fix it'"
         })
       })
     )
@@ -604,7 +653,7 @@ describe('worktree creation flow agent trust preflight', () => {
     expect(preflight).toContain('connectionId?: string | null')
     expect(preflight).toContain('...(connectionId ? { connectionId } : {})')
     expect(createFlow).toContain('repoConnectionId')
-    expect(createFlow).toContain('repo.id === worktree.repoId')
+    expect(createFlow).toContain('entry.id === worktree.repoId')
     expect(createFlow).toContain(
       'await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)'
     )

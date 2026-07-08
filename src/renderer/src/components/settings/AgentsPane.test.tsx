@@ -1,4 +1,5 @@
 import React from 'react'
+import { tmpdir } from 'node:os'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -349,7 +350,7 @@ describe('AgentsPane', () => {
 
   it('renders per-agent availability as labeled status choices without row explanation copy', () => {
     const markup = renderPane({
-      ...getDefaultSettings('/tmp'),
+      ...getDefaultSettings(tmpdir()),
       disabledTuiAgents: ['claude']
     })
 
@@ -361,6 +362,35 @@ describe('AgentsPane', () => {
     expect(markup).not.toContain('Hidden from launch and default choices.')
     expect(markup).not.toContain('aria-label="Enable Claude"')
     expect(markup).not.toContain('aria-label="Disable Claude"')
+  })
+
+  it('shows path variables in expanded agent launch settings', () => {
+    const markup = renderPane({
+      ...getDefaultSettings(tmpdir()),
+      agentDefaultArgs: { claude: '--plugin-dir {worktreePath}/plugins' }
+    })
+
+    expect(markup).toContain('value="--plugin-dir {worktreePath}/plugins"')
+    expect(markup).toContain('{repoPath}')
+    expect(markup).toContain('{worktreePath}')
+    expect(markup).toContain('Available in command, arguments, and environment values.')
+  })
+
+  it('keeps raw path variables in profile launch argument inputs', () => {
+    const markup = renderPane({
+      ...getDefaultSettings(tmpdir()),
+      agentProfiles: [
+        {
+          id: 'agent-profile:claude-work',
+          baseAgent: 'claude',
+          label: 'Claude Work',
+          defaultArgs: '--plugin-dir {worktreePath}/plugins'
+        }
+      ]
+    })
+
+    expect(markup).toContain('Claude Work')
+    expect(markup).toContain('value="--plugin-dir {worktreePath}/plugins"')
   })
 
   it('only toggles agent availability when the segmented value changes', () => {
@@ -473,7 +503,9 @@ describe('AgentsPane', () => {
     await flushPromiseQueue()
 
     expect(updateSettings).toHaveBeenCalledTimes(2)
-    expect(updates[1]).toMatchObject({ disabledTuiAgents: ['claude', 'codex'] })
+    expect(updates[1]).toMatchObject({
+      disabledTuiAgents: ['claude', 'codex']
+    })
 
     writes[1].resolve()
     await secondWrite

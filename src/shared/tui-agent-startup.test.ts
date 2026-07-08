@@ -224,6 +224,41 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
   })
 
+  it('launches profile ids with base agent behavior and profile variables', () => {
+    const profiles = [
+      {
+        id: 'agent-profile:claude-work' as const,
+        baseAgent: 'claude' as const,
+        label: 'Claude Work',
+        defaultArgs: '--plugin-dir {worktreePath}/plugins'
+      }
+    ]
+    const agent = profiles[0].id
+    const plan = buildAgentStartupPlan({
+      agent,
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs(agent, null, profiles, {
+        worktreePath: '/repo/worktree'
+      }),
+      agentProfiles: profiles,
+      variables: { worktreePath: '/repo/worktree' },
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent,
+      launchCommand: "claude '--plugin-dir' '/repo/worktree/plugins' 'fix it'",
+      expectedProcess: 'claude',
+      followupPrompt: null,
+      launchConfig: {
+        agentArgs: '--plugin-dir /repo/worktree/plugins',
+        agentCommand: "claude '--plugin-dir' '/repo/worktree/plugins'",
+        agentEnv: {}
+      }
+    })
+  })
+
   it('builds Windows resume plans that PowerShell can invoke', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
@@ -289,6 +324,19 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
   })
 
+  it('preserves Windows path separators in CLI arguments before quoting', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: '',
+      cmdOverrides: {},
+      agentArgs: '--plugin-dir C:\\Users\\me\\repo\\plugin',
+      platform: 'win32',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--plugin-dir' 'C:\\Users\\me\\repo\\plugin'")
+  })
+
   it('carries agent launch environment defaults into startup plans', () => {
     const plan = buildAgentStartupPlan({
       agent: 'goose',
@@ -319,7 +367,11 @@ describe('tui agent startup plans', () => {
       allowEmptyPromptLaunch: true
     })
 
-    expect(plan?.launchConfig).toEqual({ agentCommand: 'claude', agentArgs: '', agentEnv: {} })
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'claude',
+      agentArgs: '',
+      agentEnv: {}
+    })
   })
 
   it('does not append the unsupported OpenCode TUI skip-permissions arg', () => {
@@ -484,7 +536,10 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.env).toEqual({ ORCA_AGENT_MODE: 'managed', ORCA_PI_PREFILL: 'prefill text' })
+    expect(plan?.env).toEqual({
+      ORCA_AGENT_MODE: 'managed',
+      ORCA_PI_PREFILL: 'prefill text'
+    })
     expect(plan?.launchConfig).toEqual({
       agentCommand: 'pi',
       agentArgs: '',

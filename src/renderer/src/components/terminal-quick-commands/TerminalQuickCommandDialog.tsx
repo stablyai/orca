@@ -1,14 +1,14 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type {
   Repo,
   TerminalQuickCommand,
-  TerminalQuickCommandScope
+  TerminalQuickCommandScope,
+  TuiAgentProfile
 } from '../../../../shared/types'
 import {
   getTerminalQuickCommandAction,
   getTerminalQuickCommandScope,
-  isTerminalAgentQuickCommand,
-  supportsTerminalAgentQuickCommand
+  isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
@@ -19,7 +19,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalogWithProfiles } from '@/lib/agent-catalog'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { TuiAgent } from '../../../../shared/types'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
@@ -32,6 +32,11 @@ import {
   switchTerminalQuickCommandDialogAction
 } from './terminal-quick-command-dialog-draft'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import {
+  getTerminalQuickCommandAgentOptions,
+  isTerminalQuickCommandAgentOptionSupported
+} from './terminal-quick-command-agent-options'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
 
@@ -45,6 +50,7 @@ type TerminalQuickCommandDialogProps = {
 }
 
 const EMPTY_REPOS: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[] = []
+const EMPTY_AGENT_PROFILES: readonly TuiAgentProfile[] = []
 
 export function createTerminalQuickCommandDraft(
   scope: TerminalQuickCommandScope = { type: 'global' }
@@ -66,8 +72,23 @@ export function TerminalQuickCommandDialog({
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
+  const agentProfiles = settings?.agentProfiles ?? EMPTY_AGENT_PROFILES
+  const agentOptions = useMemo(
+    () => getTerminalQuickCommandAgentOptions(getAgentCatalogWithProfiles(agentProfiles)),
+    [agentProfiles]
+  )
+  const supportedAgentIds = useMemo(
+    () =>
+      new Set(
+        agentOptions
+          .filter((entry) => isTerminalQuickCommandAgentOptionSupported(entry))
+          .map((entry) => entry.id)
+      ),
+    [agentOptions]
+  )
   const fallbackAgent: TuiAgent =
-    getAgentCatalog().find((entry) => supportsTerminalAgentQuickCommand(entry.id))?.id ?? 'claude'
+    agentOptions.find((entry) => isTerminalQuickCommandAgentOptionSupported(entry))?.id ?? 'claude'
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
   const wasOpenRef = useRef(open)
   const syncedCommandRef = useRef(command)
@@ -100,7 +121,7 @@ export function TerminalQuickCommandDialog({
   }
 
   const selectedAgent =
-    isAgentAction && supportsTerminalAgentQuickCommand(draft.agent) ? draft.agent : fallbackAgent
+    isAgentAction && supportedAgentIds.has(draft.agent) ? draft.agent : fallbackAgent
 
   const setAction = (action: 'terminal-command' | 'agent-prompt'): void => {
     setDraft((current) => {
@@ -146,7 +167,7 @@ export function TerminalQuickCommandDialog({
     if (
       !next.label ||
       (isTerminalAgentQuickCommand(next)
-        ? !next.prompt.trim() || !supportsTerminalAgentQuickCommand(next.agent)
+        ? !next.prompt.trim() || !supportedAgentIds.has(next.agent)
         : !next.command.trim())
     ) {
       return
@@ -158,7 +179,7 @@ export function TerminalQuickCommandDialog({
   const canSave =
     draft.label.trim().length > 0 &&
     (isAgentAction
-      ? draft.prompt.trimEnd().length > 0 && supportsTerminalAgentQuickCommand(draft.agent)
+      ? draft.prompt.trimEnd().length > 0 && supportedAgentIds.has(draft.agent)
       : draft.command.trimEnd().length > 0)
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
@@ -213,6 +234,8 @@ export function TerminalQuickCommandDialog({
             draft={draft}
             isAgentAction={isAgentAction}
             selectedAgent={selectedAgent}
+            agentOptions={agentOptions}
+            agentProfiles={agentProfiles}
             draftMemoryRef={draftMemoryRef}
             setDraft={setDraft}
           />

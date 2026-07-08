@@ -1,32 +1,45 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QuickLaunchAgentMenuItems, shouldShowLaunchWatchdogTimeout } from './QuickLaunchButton'
+import {
+  buildQuickLaunchAgentMenuOptions,
+  QuickLaunchAgentMenuItems,
+  shouldShowLaunchWatchdogTimeout,
+} from './QuickLaunchButton'
 
-const { shortcutLabelMock, storeState, openSettingsPageMock, openSettingsTargetMock } = vi.hoisted(
-  () => ({
-    shortcutLabelMock: vi.fn<() => string | null>(),
-    storeState: {
-      settings: {
-        defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'gemini' | 'blank' | null,
-        disabledTuiAgents: [] as string[]
-      },
-      worktreesByRepo: {},
-      repos: [],
-      openSettingsPage: vi.fn(),
-      openSettingsTarget: vi.fn()
+const {
+  shortcutLabelMock,
+  storeState,
+  openSettingsPageMock,
+  openSettingsTargetMock,
+} = vi.hoisted(() => ({
+  shortcutLabelMock: vi.fn<() => string | null>(),
+  storeState: {
+    settings: {
+      defaultTuiAgent: 'codex' as
+        | 'claude'
+        | 'codex'
+        | 'gemini'
+        | 'blank'
+        | null,
+      disabledTuiAgents: [] as string[],
+      agentProfiles: [],
     },
-    openSettingsPageMock: vi.fn(),
-    openSettingsTargetMock: vi.fn()
-  })
-)
+    worktreesByRepo: {},
+    repos: [],
+    openSettingsPage: vi.fn(),
+    openSettingsTarget: vi.fn(),
+  },
+  openSettingsPageMock: vi.fn(),
+  openSettingsTargetMock: vi.fn(),
+}))
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
-  useDetectedAgents: () => ({ detectedIds: ['claude', 'codex', 'gemini'] })
+  useDetectedAgents: () => ({ detectedIds: ['claude', 'codex', 'gemini'] }),
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useOptionalShortcutLabel: shortcutLabelMock
+  useOptionalShortcutLabel: shortcutLabelMock,
 }))
 
 vi.mock('@/store', () => {
@@ -35,8 +48,8 @@ vi.mock('@/store', () => {
       return selector(storeState)
     },
     {
-      getState: () => storeState
-    }
+      getState: () => storeState,
+    },
   )
 
   return { useAppStore }
@@ -51,9 +64,28 @@ vi.mock('@/lib/agent-catalog', async () => {
     getAgentCatalog: () => [
       { id: 'claude', label: 'Claude' },
       { id: 'codex', label: 'Codex' },
-      { id: 'gemini', label: 'Gemini' }
+      { id: 'gemini', label: 'Gemini' },
     ],
-    AgentIcon: ({ agent }: { agent: string }) => ReactActual.createElement('span', null, agent)
+    getAgentCatalogWithProfiles: (
+      profiles: readonly {
+        id: string
+        baseAgent: string
+        label: string
+      }[] = [],
+    ) => [
+      { id: 'claude', label: 'Claude' },
+      ...profiles
+        .filter((profile) => profile.baseAgent === 'claude')
+        .map((profile) => ({
+          id: profile.id,
+          baseAgent: profile.baseAgent,
+          label: profile.label,
+        })),
+      { id: 'codex', label: 'Codex' },
+      { id: 'gemini', label: 'Gemini' },
+    ],
+    AgentIcon: ({ agent }: { agent: string }) =>
+      ReactActual.createElement('span', null, agent),
   }
 })
 
@@ -66,27 +98,35 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     DropdownMenuItem: ({ children, ...props }: { children: React.ReactNode }) =>
       ReactActual.createElement('div', props, children),
     DropdownMenuShortcut: ({ children }: { children: React.ReactNode }) =>
-      ReactActual.createElement('span', { 'data-dropdown-shortcut': 'true' }, children)
+      ReactActual.createElement(
+        'span',
+        { 'data-dropdown-shortcut': 'true' },
+        children,
+      ),
   }
 })
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
+  translate: (
+    _key: string,
+    fallback: string,
+    values?: Record<string, string>,
+  ) =>
     Object.entries(values ?? {}).reduce(
       (text, [key, value]) => text.replace(`{{${key}}}`, value),
-      fallback
-    )
+      fallback,
+    ),
 }))
 
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
-    message: vi.fn()
-  }
+    message: vi.fn(),
+  },
 }))
 
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: vi.fn()
+  launchAgentInNewTab: vi.fn(),
 }))
 
 function renderAgentMenuItems(): string {
@@ -94,8 +134,8 @@ function renderAgentMenuItems(): string {
     React.createElement(QuickLaunchAgentMenuItems, {
       worktreeId: 'worktree-1',
       groupId: 'group-1',
-      onFocusTerminal: vi.fn()
-    })
+      onFocusTerminal: vi.fn(),
+    }),
   )
 }
 
@@ -115,6 +155,7 @@ beforeEach(() => {
   openSettingsTargetMock.mockReset()
   storeState.settings.defaultTuiAgent = 'codex'
   storeState.settings.disabledTuiAgents = []
+  storeState.settings.agentProfiles = []
   storeState.worktreesByRepo = {}
   storeState.repos = []
   storeState.openSettingsPage = openSettingsPageMock
@@ -145,27 +186,92 @@ describe('QuickLaunchAgentMenuItems', () => {
     shortcutLabelMock.mockReturnValue('⌘⌥T')
 
     storeState.settings.defaultTuiAgent = null
-    expect(renderAgentMenuItems()).not.toContain('data-dropdown-shortcut="true"')
+    expect(renderAgentMenuItems()).not.toContain(
+      'data-dropdown-shortcut="true"',
+    )
 
     storeState.settings.defaultTuiAgent = 'blank'
-    expect(renderAgentMenuItems()).not.toContain('data-dropdown-shortcut="true"')
+    expect(renderAgentMenuItems()).not.toContain(
+      'data-dropdown-shortcut="true"',
+    )
   })
 })
+
+const claudeFooProfile = {
+  id: 'agent-profile:claude-foo',
+  baseAgent: 'claude',
+  label: 'Claude (foo)',
+  defaultArgs: '--foo',
+} as const
 
 describe('shouldShowLaunchWatchdogTimeout', () => {
   it('does not report slow agent readiness once a PTY exists', () => {
     expect(
       shouldShowLaunchWatchdogTimeout({
-        hasPty: true
-      })
+        hasPty: true,
+      }),
     ).toBe(false)
   })
 
   it('reports launches where no PTY appeared', () => {
     expect(
       shouldShowLaunchWatchdogTimeout({
-        hasPty: false
-      })
+        hasPty: false,
+      }),
     ).toBe(true)
+  })
+})
+
+describe('buildQuickLaunchAgentMenuOptions', () => {
+  it('shows detected agent profiles under their base agent', () => {
+    const options = buildQuickLaunchAgentMenuOptions(
+      null,
+      ['claude'],
+      [],
+      [claudeFooProfile],
+    )
+
+    expect(options.map((option) => option.agent)).toEqual([
+      'claude',
+      'agent-profile:claude-foo',
+    ])
+    expect(options.map((option) => option.label)).toEqual([
+      'Claude',
+      'Claude (foo)',
+    ])
+  })
+
+  it('can surface an enabled detected profile as the default', () => {
+    const options = buildQuickLaunchAgentMenuOptions(
+      'agent-profile:claude-foo',
+      ['claude'],
+      [],
+      [claudeFooProfile],
+    )
+
+    expect(options.map((option) => option.agent)).toEqual([
+      'agent-profile:claude-foo',
+      'claude',
+    ])
+  })
+
+  it('filters disabled profile and base agent ids', () => {
+    expect(
+      buildQuickLaunchAgentMenuOptions(
+        null,
+        ['claude'],
+        ['agent-profile:claude-foo'],
+        [claudeFooProfile],
+      ).map((option) => option.agent),
+    ).toEqual(['claude'])
+
+    expect(
+      buildQuickLaunchAgentMenuOptions(
+        null,
+        ['claude'],
+        ['claude'],
+        [claudeFooProfile],
+      ).map((option) => option.agent),
+    ).toEqual([])
   })
 })

@@ -1,5 +1,6 @@
 import type { TuiAgent } from '../../../shared/types'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
 import { useAppStore } from '@/store'
 import {
   inspectRuntimeTerminalProcess,
@@ -85,7 +86,9 @@ export async function pasteDraftWhenAgentReady(args: {
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
 
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+  const agentProfiles = useAppStore.getState().settings?.agentProfiles
+  const baseAgent = agent ? resolveTuiAgentBaseAgent(agent, agentProfiles) : null
+  const agentConfig = baseAgent ? TUI_AGENT_CONFIG[baseAgent] : null
 
   // Why: agents with a native draft prefill mechanism (flag or env var)
   // launch with the URL already in their input box. Pasting again would
@@ -112,7 +115,9 @@ export async function pasteDraftWhenAgentReady(args: {
     // launched agent owns the PTY, fall back to a best-effort paste instead of
     // silently dropping generated prompts.
     const fallbackReady = agentConfig
-      ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
+      ? await waitForAgentReady(tabId, agentConfig.expectedProcess, {
+          timeoutMs: 1000
+        })
       : { ready: false }
     if (!fallbackReady.ready) {
       onTimeout?.()
@@ -139,7 +144,9 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   onTimeout?: () => void
 }): Promise<boolean> {
   const { tabId, ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+  const agentProfiles = useAppStore.getState().settings?.agentProfiles
+  const baseAgent = agent ? resolveTuiAgentBaseAgent(agent, agentProfiles) : null
+  const agentConfig = baseAgent ? TUI_AGENT_CONFIG[baseAgent] : null
 
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
     return false
@@ -202,7 +209,11 @@ export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
 }): Promise<boolean> {
-  return await sendBracketedPasteToAgent({ ptyId: args.ptyId, content: args.content, submit: true })
+  return await sendBracketedPasteToAgent({
+    ptyId: args.ptyId,
+    content: args.content,
+    submit: true
+  })
 }
 
 async function sendBracketedPasteToAgent(args: {

@@ -203,6 +203,8 @@ export function useSourceControlAi({
           activeSourceControlLaunchPlatform,
           sourceRepoConnectionId: activeConnectionId ?? activeRepo?.connectionId ?? null,
           commitFailureRecoveryPrompt,
+          repoPath: activeRepo?.path ?? null,
+          worktreePath,
           promptOverride,
           getLaunchActionRecipe,
           getStoreState
@@ -215,13 +217,15 @@ export function useSourceControlAi({
       activeGroupId,
       activeConnectionId,
       activeRepo?.connectionId,
+      activeRepo?.path,
       activeWorktreeId,
       activeSourceControlLaunchPlatform,
       commitError,
       commitFailureRecoveryPrompt,
       getLaunchActionRecipe,
       getStoreState,
-      isLaunchingCommitFailureAgent
+      isLaunchingCommitFailureAgent,
+      worktreePath
     ]
   )
 

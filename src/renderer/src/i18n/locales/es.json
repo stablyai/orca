@@ -452,7 +452,12 @@
                 "46f1a2c9bd": "La entrada del comando está vacía.",
                 "8eb541cc83": "No se detectó el agente seleccionado en este host de espacio de trabajo.",
                 "b96e091fc9": "El agente seleccionado está deshabilitado en Ajustes.",
-                "a7ac8717c7": "Elige un agente antes de comenzar."
+                "a7ac8717c7": "Elige un agente antes de comenzar.",
+                "profile": {
+                  "resolution": {
+                    "failed": "Could not resolve the selected agent profile."
+                  }
+                }
               }
             }
           },
@@ -4762,6 +4767,12 @@
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
+          "variables": "Variables",
+          "worktreePathVariableHint": "Available in command, arguments, and environment values.",
+          "profileName": "Name",
+          "profileBadge": "Profile",
+          "duplicateProfile": "Duplicate agent",
+          "deleteProfile": "Delete profile",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."

@@ -9,6 +9,7 @@ import {
  *  is present, else the local agent env (null when that env can't be prepared). */
 export async function resolveGenerationTarget(
   worktreePath: string,
+  repoPath: string | null | undefined,
   agentId: string,
   provider: SshGitProvider | null,
   deps: { getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined }
@@ -17,6 +18,7 @@ export async function resolveGenerationTarget(
     return {
       kind: 'remote',
       cwd: worktreePath,
+      ...(repoPath ? { repoPath } : {}),
       execute: (plan, cwd, timeoutMs, operation) =>
         provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
       missingBinaryLocation: 'remote PATH'
@@ -26,5 +28,10 @@ export async function resolveGenerationTarget(
   if (!localEnv.ok) {
     return null
   }
-  return { kind: 'local', cwd: worktreePath, ...(localEnv.env ? { env: localEnv.env } : {}) }
+  return {
+    kind: 'local',
+    cwd: worktreePath,
+    ...(repoPath ? { repoPath } : {}),
+    ...(localEnv.env ? { env: localEnv.env } : {})
+  }
 }

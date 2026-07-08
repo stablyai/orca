@@ -19,6 +19,7 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../../shared/tui-agent-launch-defaults'
+import { normalizeTuiAgentProfiles } from '../../../../shared/tui-agent-profiles'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
@@ -126,6 +127,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       if ('agentDefaultEnv' in updates) {
         sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
         sanitizedUpdates.agentYoloDefaultsMigrated = true
+      }
+      if ('agentProfiles' in updates) {
+        sanitizedUpdates.agentProfiles = normalizeTuiAgentProfiles(updates.agentProfiles)
       }
       if ('uiLanguage' in updates) {
         sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)

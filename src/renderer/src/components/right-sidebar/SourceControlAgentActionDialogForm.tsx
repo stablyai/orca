@@ -23,11 +23,11 @@ import {
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
+import { sourceControlLaunchSaveTargetFromValue } from './source-control-agent-action-dialog-options'
 import { translate } from '@/i18n/i18n'
 
 export type SourceControlAgentActionDeliveryPlanState =
@@ -46,6 +46,8 @@ type SourceControlAgentActionDialogFormProps = {
   statusCopy: string | null
   agentArgs: string
   commandTemplate: string
+  repoPath: string | null
+  worktreePath: string | null
   savedCommandInputTemplate?: string | null
   saveLaunchRecipe: boolean
   saveTargetValue: string
@@ -67,19 +69,6 @@ type SourceControlAgentActionDialogFormProps = {
   onStart: () => void
 }
 
-function sourceControlLaunchSaveTargetFromValue(
-  value: string,
-  repo: Pick<Repo, 'id'> | null
-): SourceControlAiWriteTarget | null {
-  if (value === 'repo' && repo?.id) {
-    return { type: 'repo', repoId: repo.id }
-  }
-  if (value === 'global') {
-    return { type: 'global' }
-  }
-  return null
-}
-
 export function SourceControlAgentActionDialogForm({
   actionId,
   baseCommandInput,
@@ -91,6 +80,8 @@ export function SourceControlAgentActionDialogForm({
   statusCopy,
   agentArgs,
   commandTemplate,
+  repoPath,
+  worktreePath,
   savedCommandInputTemplate,
   saveLaunchRecipe,
   saveTargetValue,
@@ -254,7 +245,11 @@ export function SourceControlAgentActionDialogForm({
           />
           <SourceControlActionVariableChips
             actionId={actionId}
-            variablePreviews={{ basePrompt: baseCommandInput }}
+            variablePreviews={{
+              basePrompt: baseCommandInput,
+              ...(repoPath ? { repoPath } : {}),
+              ...(worktreePath ? { worktreePath } : {})
+            }}
             onInsert={(variable) => {
               const separator =
                 commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '

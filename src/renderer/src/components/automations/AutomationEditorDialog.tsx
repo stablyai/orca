@@ -1,7 +1,7 @@
 import React from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { getAgentCatalog } from '@/lib/agent-catalog'
-import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { getAgentCatalogWithProfiles, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
@@ -13,6 +13,7 @@ import type {
   Repo,
   SetupDecision,
   TuiAgent,
+  TuiAgentProfile,
   Worktree
 } from '../../../../shared/types'
 import {
@@ -27,6 +28,7 @@ import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
 import { translate } from '@/i18n/i18n'
 
+const EMPTY_AGENT_PROFILES: GlobalSettings['agentProfiles'] = []
 const PICKER_TRIGGER_CLASS =
   'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
 const MODE_TOGGLE_ITEM_CLASS =
@@ -53,6 +55,20 @@ export type AutomationDraft = {
 }
 
 export type AutomationCreateTarget = 'orca' | 'hermes'
+
+export function getVisibleAutomationAgents({
+  agentProfiles,
+  disabledTuiAgents,
+  selectedAgent
+}: {
+  agentProfiles: readonly TuiAgentProfile[] | null | undefined
+  disabledTuiAgents: GlobalSettings['disabledTuiAgents'] | undefined
+  selectedAgent: TuiAgent
+}): AgentCatalogEntry[] {
+  return getAgentCatalogWithProfiles(agentProfiles).filter(
+    (agent) => isTuiAgentEnabled(agent.id, disabledTuiAgents) || agent.id === selectedAgent
+  )
+}
 
 type AutomationEditorDialogProps = {
   open: boolean
@@ -107,17 +123,14 @@ export function AutomationEditorDialog({
   const isHermesTarget = createTarget === 'hermes'
   const isCreateMode = !isEditing && !isEditingExternal
   const isHermesCreate = isCreateMode && isHermesTarget
+  const agentProfiles = settings?.agentProfiles ?? EMPTY_AGENT_PROFILES
   const visibleAgents = React.useMemo(() => {
-    const enabledIds = new Set(
-      filterEnabledTuiAgents(
-        getAgentCatalog().map((agent) => agent.id),
-        settings?.disabledTuiAgents
-      )
-    )
-    return getAgentCatalog().filter(
-      (agent) => enabledIds.has(agent.id) || agent.id === draft.agentId
-    )
-  }, [draft.agentId, settings?.disabledTuiAgents])
+    return getVisibleAutomationAgents({
+      agentProfiles,
+      disabledTuiAgents: settings?.disabledTuiAgents,
+      selectedAgent: draft.agentId
+    })
+  }, [agentProfiles, draft.agentId, settings?.disabledTuiAgents])
   const scheduleField = (
     <Field
       label={translate('auto.components.automations.AutomationEditorDialog.c4b19094c2', 'Schedule')}

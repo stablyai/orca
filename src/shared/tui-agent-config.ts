@@ -1,4 +1,5 @@
-import type { TuiAgent } from './types'
+import { isTuiAgentProfileId } from './tui-agent-profile-id'
+import type { BuiltInTuiAgent, TuiAgent } from './types'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
@@ -57,7 +58,7 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
 }
 
-export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
+export const TUI_AGENT_CONFIG: Record<BuiltInTuiAgent, TuiAgentConfig> = {
   claude: {
     detectCmd: 'claude',
     launchCmd: 'claude',
@@ -348,8 +349,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   }
 }
 
-export function isTuiAgent(value: unknown): value is TuiAgent {
+export function isBuiltInTuiAgent(value: unknown): value is BuiltInTuiAgent {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
+}
+
+export function isTuiAgent(value: unknown): value is TuiAgent {
+  // Why: this guard validates ID shape only; profile existence is resolved
+  // later against the current `agentProfiles` set at launch/planning time.
+  return isBuiltInTuiAgent(value) || isTuiAgentProfileId(value)
 }
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {

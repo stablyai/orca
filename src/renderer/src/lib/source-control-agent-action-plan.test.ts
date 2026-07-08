@@ -12,7 +12,10 @@ describe('planSourceControlAgentActionLaunch', () => {
         disabledAgents: ['codex'],
         platform: 'darwin'
       })
-    ).toEqual({ ok: false, error: 'The selected agent is disabled in Settings.' })
+    ).toEqual({
+      ok: false,
+      error: 'The selected agent is disabled in Settings.'
+    })
   })
 
   it('rejects agents not detected on the current host', () => {
@@ -24,7 +27,10 @@ describe('planSourceControlAgentActionLaunch', () => {
         detectedAgents: ['codex'],
         platform: 'linux'
       })
-    ).toEqual({ ok: false, error: 'The selected agent was not detected on this workspace host.' })
+    ).toEqual({
+      ok: false,
+      error: 'The selected agent was not detected on this workspace host.'
+    })
   })
 
   it('mirrors submit-after-ready delivery without embedding the prompt in the command', () => {
@@ -82,5 +88,42 @@ describe('planSourceControlAgentActionLaunch', () => {
 
     expect(result.ok && result.delivery).toBe('draft-native')
     expect(result.ok && result.commandLabel).toContain('--prefill')
+  })
+
+  it('accepts profiles when their base agent is detected', () => {
+    const result = planSourceControlAgentActionLaunch({
+      agent: 'agent-profile:claude-foo',
+      commandInput: 'Fix checks',
+      promptDelivery: 'submit-after-ready',
+      detectedAgents: ['claude'],
+      agentProfiles: [
+        {
+          id: 'agent-profile:claude-foo',
+          baseAgent: 'claude',
+          label: 'Claude (foo)',
+          defaultArgs: '--foo'
+        }
+      ],
+      platform: 'darwin'
+    })
+
+    expect(result.ok && result.delivery).toBe('paste-submit')
+    expect(result.ok && result.commandLabel).toBe('claude')
+  })
+
+  it('returns a clear error when a profile id no longer resolves', () => {
+    expect(
+      planSourceControlAgentActionLaunch({
+        agent: 'agent-profile:deleted',
+        commandInput: 'Fix checks',
+        promptDelivery: 'submit-after-ready',
+        detectedAgents: ['agent-profile:deleted'],
+        agentProfiles: [],
+        platform: 'darwin'
+      })
+    ).toEqual({
+      ok: false,
+      error: 'Could not resolve the selected agent profile.'
+    })
   })
 })

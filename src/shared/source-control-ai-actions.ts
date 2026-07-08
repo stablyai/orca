@@ -72,22 +72,24 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<
 }
 
 export const SOURCE_CONTROL_ACTION_VARIABLES: Record<SourceControlActionId, string[]> = {
-  commitMessage: ['basePrompt', 'branch', 'stagedFiles', 'stagedPatch'],
+  commitMessage: ['basePrompt', 'branch', 'repoPath', 'stagedFiles', 'stagedPatch', 'worktreePath'],
   pullRequest: [
+    'baseBranch',
     'basePrompt',
     'branch',
-    'baseBranch',
-    'currentTitle',
-    'currentBody',
-    'commitSummary',
     'changedFiles',
-    'patch'
+    'commitSummary',
+    'currentBody',
+    'currentTitle',
+    'patch',
+    'repoPath',
+    'worktreePath'
   ],
-  branchName: ['basePrompt', 'firstPrompt', 'assistantMessage'],
-  fixCommitFailure: ['basePrompt'],
-  fixChecks: ['basePrompt'],
-  resolveConflicts: ['basePrompt'],
-  resolveComments: ['basePrompt']
+  branchName: ['assistantMessage', 'basePrompt', 'firstPrompt', 'repoPath', 'worktreePath'],
+  fixCommitFailure: ['basePrompt', 'repoPath', 'worktreePath'],
+  fixChecks: ['basePrompt', 'repoPath', 'worktreePath'],
+  resolveConflicts: ['basePrompt', 'repoPath', 'worktreePath'],
+  resolveComments: ['basePrompt', 'repoPath', 'worktreePath']
 }
 
 export type SourceControlActionVariableInfo = {
@@ -106,6 +108,14 @@ export const SOURCE_CONTROL_ACTION_VARIABLE_INFO: Record<string, SourceControlAc
     branch: {
       description: 'The current source-control branch name.',
       example: 'feature/source-control-ai-recipes'
+    },
+    repoPath: {
+      description: "The absolute path for the repository's primary checkout.",
+      example: '/Users/you/projects/orca'
+    },
+    worktreePath: {
+      description: 'The absolute path for the current worktree.',
+      example: '/Users/you/projects/orca/worktrees/feature'
     },
     stagedFiles: {
       description: 'A newline-separated list of staged files for commit-message generation.',

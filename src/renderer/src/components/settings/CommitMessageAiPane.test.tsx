@@ -15,6 +15,7 @@ import {
 } from './CommitMessageAiPane'
 import {
   getAgentCatalogForAction,
+  getSourceControlActionAgentWarningText,
   getSourceControlAgentArgsPlaceholder
 } from './source-control-action-recipe-options'
 import { getCommitMessageAiPaneSearchEntries } from './commit-message-ai-search'
@@ -164,6 +165,25 @@ describe('CommitMessageAiPane', () => {
     expect(getAgentCatalogForAction('fixChecks', null).map((agent) => agent.id)).toContain('aider')
   })
 
+  it('offers agent profiles for launch actions but not text-generation actions', () => {
+    const profiles = [
+      {
+        id: 'agent-profile:claude-foo',
+        baseAgent: 'claude',
+        label: 'Claude (foo)',
+        defaultArgs: '--foo',
+        defaultEnv: {}
+      }
+    ] as const
+
+    expect(
+      getAgentCatalogForAction('fixChecks', null, profiles).map((agent) => agent.id)
+    ).toContain('agent-profile:claude-foo')
+    expect(
+      getAgentCatalogForAction('commitMessage', null, profiles).map((agent) => agent.id)
+    ).not.toContain('agent-profile:claude-foo')
+  })
+
   it('explains which agents are supported for text-generation recipes', () => {
     const markup = renderPane(
       buildSettings({
@@ -219,6 +239,18 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Supported agents for this recipe:')
   })
 
+  it('uses profile labels in unsupported saved text-recipe warnings', () => {
+    expect(
+      getSourceControlActionAgentWarningText('commitMessage', 'agent-profile:aider-foo', [
+        {
+          id: 'agent-profile:aider-foo',
+          baseAgent: 'aider',
+          label: 'Aider (foo)'
+        }
+      ])
+    ).toContain('Aider (foo) cannot run this text-generation recipe.')
+  })
+
   it('keeps action agent selectors constrained for long labels', () => {
     const markup = renderPane(
       buildSettings({
@@ -248,7 +280,11 @@ describe('CommitMessageAiPane', () => {
           discoveredModelsByAgent: {},
           discoveredModelsByAgentByHost: {},
           selectedThinkingByModel: {},
-          instructionsByOperation: { commitMessage: '', pullRequest: '', branchName: '' },
+          instructionsByOperation: {
+            commitMessage: '',
+            pullRequest: '',
+            branchName: ''
+          },
           customAgentCommand: '',
           actions: {
             commitMessage: {
@@ -282,7 +318,11 @@ describe('CommitMessageAiPane', () => {
           discoveredModelsByAgent: {},
           discoveredModelsByAgentByHost: {},
           selectedThinkingByModel: {},
-          instructionsByOperation: { commitMessage: '', pullRequest: '', branchName: '' },
+          instructionsByOperation: {
+            commitMessage: '',
+            pullRequest: '',
+            branchName: ''
+          },
           customAgentCommand: 'my-commit-writer --prompt {prompt}',
           actions: {
             commitMessage: {
@@ -311,7 +351,11 @@ describe('CommitMessageAiPane', () => {
           discoveredModelsByAgent: {},
           discoveredModelsByAgentByHost: {},
           selectedThinkingByModel: {},
-          instructionsByOperation: { commitMessage: '', pullRequest: '', branchName: '' },
+          instructionsByOperation: {
+            commitMessage: '',
+            pullRequest: '',
+            branchName: ''
+          },
           customAgentCommand: '',
           actions: {
             fixChecks: {

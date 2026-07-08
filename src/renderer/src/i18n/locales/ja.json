@@ -452,7 +452,12 @@
                 "46f1a2c9bd": "コマンド入力が空です。",
                 "8eb541cc83": "選択した agent はこのワークスペース ホストで検出されませんでした。",
                 "b96e091fc9": "選択した agent は設定で無効になっています。",
-                "a7ac8717c7": "開始する前に agent を選択。"
+                "a7ac8717c7": "開始する前に agent を選択。",
+                "profile": {
+                  "resolution": {
+                    "failed": "Could not resolve the selected agent profile."
+                  }
+                }
               }
             }
           },
@@ -4747,6 +4752,12 @@
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手動",
           "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。",
+          "variables": "Variables",
+          "worktreePathVariableHint": "Available in command, arguments, and environment values.",
+          "profileName": "Name",
+          "profileBadge": "Profile",
+          "duplicateProfile": "Duplicate agent",
+          "deleteProfile": "Delete profile",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."

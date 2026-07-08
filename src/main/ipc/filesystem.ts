@@ -389,11 +389,13 @@ function getLocalAgentRuntimeTarget(
 function getLocalTextGenerationTarget(
   worktreePath: string,
   gitOptions: LocalProjectWorktreeGitOptions,
-  env?: NodeJS.ProcessEnv
+  env?: NodeJS.ProcessEnv,
+  repoPath?: string | null
 ): Extract<CommitMessageGenerationTarget, { kind: 'local' }> {
   return {
     kind: 'local',
     cwd: worktreePath,
+    ...(repoPath ? { repoPath } : {}),
     ...(gitOptions.wslDistro ? { wslDistro: gitOptions.wslDistro } : {}),
     ...(env ? { env } : {})
   }
@@ -1338,14 +1340,10 @@ export function registerFilesystemHandlers(
           ? { agentCmdOverrides: args.agentCmdOverrides }
           : {})
       }
+      const repo = await getRepoForSourceControlAi(store, args)
       const resolvedSettings = args.sourceControlAiResolvedParams
         ? { ok: true as const, params: args.sourceControlAiResolvedParams }
-        : resolveCommitMessageSettings(
-            requestSettings,
-            discoveryHostKey,
-            'commitMessage',
-            await getRepoForSourceControlAi(store, args)
-          )
+        : resolveCommitMessageSettings(requestSettings, discoveryHostKey, 'commitMessage', repo)
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -1373,6 +1371,7 @@ export function registerFilesystemHandlers(
         return generateCommitMessageFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
+          ...(repo?.path ? { repoPath: repo.path } : {}),
           execute: (plan, cwd, timeoutMs, operation) =>
             provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
           missingBinaryLocation: 'remote PATH'
@@ -1408,7 +1407,7 @@ export function registerFilesystemHandlers(
       return generateCommitMessageFromContext(
         context,
         resolvedSettings.params,
-        getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
+        getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env, repo?.path)
       )
     }
   )
@@ -1516,14 +1515,10 @@ export function registerFilesystemHandlers(
           ? { agentCmdOverrides: args.agentCmdOverrides }
           : {})
       }
+      const repo = await getRepoForSourceControlAi(store, args)
       const resolvedSettings = args.sourceControlAiResolvedParams
         ? { ok: true as const, params: args.sourceControlAiResolvedParams }
-        : resolveCommitMessageSettings(
-            requestSettings,
-            discoveryHostKey,
-            'pullRequest',
-            await getRepoForSourceControlAi(store, args)
-          )
+        : resolveCommitMessageSettings(requestSettings, discoveryHostKey, 'pullRequest', repo)
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -1566,6 +1561,7 @@ export function registerFilesystemHandlers(
         return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
+          ...(repo?.path ? { repoPath: repo.path } : {}),
           execute: (plan, cwd, timeoutMs, operation) =>
             provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
           missingBinaryLocation: 'remote PATH'
@@ -1617,7 +1613,7 @@ export function registerFilesystemHandlers(
       return generatePullRequestFieldsFromContext(
         context,
         resolvedSettings.params,
-        getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
+        getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env, repo?.path)
       )
     }
   )

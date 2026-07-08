@@ -8,12 +8,12 @@ import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
 } from '@/lib/source-control-launch-agent-selection'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import { buildCommitFailureAgentCommandInput } from './source-control-ai-prompts'
+import { isSourceControlAgentDetectedAndEnabled } from './source-control-agent-action-dialog-support'
 import { translate } from '@/i18n/i18n'
 
 type SourceControlAiLaunchStoreSnapshot = Pick<
@@ -27,6 +27,8 @@ export async function launchCommitFailureAgentWithDefault({
   activeSourceControlLaunchPlatform,
   sourceRepoConnectionId,
   commitFailureRecoveryPrompt,
+  repoPath,
+  worktreePath,
   promptOverride,
   getLaunchActionRecipe,
   getStoreState
@@ -36,6 +38,8 @@ export async function launchCommitFailureAgentWithDefault({
   activeSourceControlLaunchPlatform: NodeJS.Platform
   sourceRepoConnectionId?: string | null
   commitFailureRecoveryPrompt: string | null
+  repoPath?: string | null
+  worktreePath?: string | null
   promptOverride?: string
   getLaunchActionRecipe: (actionId: SourceControlLaunchActionId) => SourceControlActionRecipe
   getStoreState: () => SourceControlAiLaunchStoreSnapshot
@@ -75,7 +79,9 @@ export async function launchCommitFailureAgentWithDefault({
   const prompt = buildCommitFailureAgentCommandInput({
     promptOverride,
     commandInputTemplate: savedRecipe.commandInputTemplate,
-    basePrompt: commitFailureRecoveryPrompt
+    basePrompt: commitFailureRecoveryPrompt,
+    repoPath,
+    worktreePath
   })
   if (!prompt) {
     toast.error(
@@ -92,10 +98,15 @@ export async function launchCommitFailureAgentWithDefault({
       ? await store.ensureRemoteDetectedAgents(connectionId)
       : await store.ensureDetectedAgents()
   const savedAgent = readSourceControlLaunchRecipeAgentId(savedRecipe)
+  const agentProfiles = store.settings?.agentProfiles ?? []
   if (
     savedAgent &&
-    (!detectedAgents.includes(savedAgent) ||
-      !isTuiAgentEnabled(savedAgent, store.settings?.disabledTuiAgents))
+    !isSourceControlAgentDetectedAndEnabled(
+      savedAgent,
+      detectedAgents,
+      store.settings?.disabledTuiAgents,
+      agentProfiles
+    )
   ) {
     toast.error(
       translate(
@@ -109,7 +120,8 @@ export async function launchCommitFailureAgentWithDefault({
     savedAgent,
     defaultAgent: store.settings?.defaultTuiAgent,
     detectedAgents,
-    disabledAgents: store.settings?.disabledTuiAgents
+    disabledAgents: store.settings?.disabledTuiAgents,
+    profiles: agentProfiles
   })
   if (!agent) {
     toast.error(

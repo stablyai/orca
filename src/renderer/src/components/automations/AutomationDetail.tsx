@@ -3,7 +3,7 @@ import { Pencil, Pause, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
@@ -16,6 +16,7 @@ import {
 import type { AutomationTargetAvailability } from './automation-target-availability'
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
+import type { TuiAgentProfile } from '../../../../shared/types'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -24,6 +25,7 @@ type AutomationDetailProps = {
   workspaceName: string
   projectDefaultBaseRef: string | null
   hostLabelById?: ReadonlyMap<string, string>
+  agentProfiles: readonly TuiAgentProfile[]
   runNowAvailability: AutomationTargetAvailability | null
   now: number
   onRunNow: (automation: Automation) => void
@@ -101,6 +103,7 @@ export function AutomationDetail({
   workspaceName,
   projectDefaultBaseRef,
   hostLabelById,
+  agentProfiles,
   runNowAvailability,
   now,
   onRunNow,
@@ -125,8 +128,7 @@ export function AutomationDetail({
       : usageSummary.unavailableRuns > 0
         ? 'Unavailable'
         : 'No runs'
-  const agentLabel =
-    getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
+  const agentLabel = getAgentLabel(automation.agentId, agentProfiles)
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
@@ -273,7 +275,7 @@ export function AutomationDetail({
             {translate('auto.components.automations.AutomationDetail.2df8970cd5', 'Agent')}
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
-            <AgentIcon agent={automation.agentId} size={16} />
+            <AgentIcon agent={automation.agentId} profiles={agentProfiles} size={16} />
             <span className="truncate">{agentLabel}</span>
           </div>
         </div>

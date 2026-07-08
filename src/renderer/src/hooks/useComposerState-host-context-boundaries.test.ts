@@ -142,7 +142,7 @@ describe('useComposerState host-context boundaries', () => {
       'const selectedWorkspaceTarget'
     )
     expect(targetSection).toContain('folderTargetRuntimeEnvironmentId')
-    expect(targetSection).toContain("{ kind: 'runtime' as const")
+    expect(targetSection).toMatch(/kind:\s*'runtime' as const/)
     expect(targetSection).toContain('useFolderWorkspaceComposerPathStatus(')
     expect(targetSection).toContain('folderTargetRuntimeEnvironmentId')
     expect(targetSection).toContain('useDetectedAgents(folderTargetAgentDetectionTarget)')
@@ -406,8 +406,8 @@ describe('useComposerState host-context boundaries', () => {
       'const handleProjectChange = useCallback',
       'const handleSmartGitHubItemSelect'
     )
-    expect(handleProjectChange).toContain(
-      'handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })'
+    expect(handleProjectChange).toMatch(
+      /handleRepoChange\(nextRepoId,\s*\{\s*forceResetStartFrom: isProjectGroupTarget\s*\}\)/
     )
   })
 
@@ -621,8 +621,10 @@ describe('useComposerState host-context boundaries', () => {
       'const submitQuick = useCallback',
       'const createGateInput'
     )
-    expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
-    expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
+    expect(quickSubmit).toContain('promptLinkedWorkItem = agent === null ? null')
+    expect(quickSubmit).toContain('...(quickDraftPrompt ? { draftPrompt: quickDraftPrompt } : {})')
+    expect(quickSubmit).toContain('const backendStartup = undefined')
+    expect(quickSubmit).toContain('startupPlanTemplate,')
   })
 
   it('gates per-workspace environment recipe discovery behind the experimental setting', () => {

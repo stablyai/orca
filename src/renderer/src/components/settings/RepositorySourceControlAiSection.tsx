@@ -394,6 +394,7 @@ export function RepositorySourceControlAiSection({
         repoAi={repoAi}
         source={source}
         defaultTuiAgent={settings?.defaultTuiAgent}
+        agentProfiles={settings?.agentProfiles ?? []}
         isSaving={isSaving}
         actionDirtyById={actionDirtyById}
         onActionModeChange={updateActionMode}

@@ -452,7 +452,12 @@
                 "46f1a2c9bd": "提示词输入为空。",
                 "8eb541cc83": "此工作区主机上未检测到所选智能体。",
                 "b96e091fc9": "选定的智能体在“设置”中被禁用。",
-                "a7ac8717c7": "在开始之前选择一个智能体。"
+                "a7ac8717c7": "在开始之前选择一个智能体。",
+                "profile": {
+                  "resolution": {
+                    "failed": "Could not resolve the selected agent profile."
+                  }
+                }
               }
             }
           },
@@ -4747,6 +4752,12 @@
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "手动",
           "3f1bdf3cb4": "环境文本过长，无法安全解析。",
+          "variables": "Variables",
+          "worktreePathVariableHint": "Available in command, arguments, and environment values.",
+          "profileName": "Name",
+          "profileBadge": "Profile",
+          "duplicateProfile": "Duplicate agent",
+          "deleteProfile": "Delete profile",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."

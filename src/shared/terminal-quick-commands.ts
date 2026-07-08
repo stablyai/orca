@@ -1,4 +1,5 @@
-import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { isBuiltInTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { isTuiAgentProfileId } from './tui-agent-profile-id'
 import type {
   TerminalAgentQuickCommand,
   TerminalCommandQuickCommand,
@@ -34,7 +35,10 @@ function normalizeTerminalQuickCommandScope(input: unknown): TerminalQuickComman
   if (!repoId) {
     return { type: 'global' }
   }
-  return { type: 'repo', repoId: repoId.slice(0, MAX_QUICK_COMMAND_REPO_ID_LENGTH) }
+  return {
+    type: 'repo',
+    repoId: repoId.slice(0, MAX_QUICK_COMMAND_REPO_ID_LENGTH)
+  }
 }
 
 export function getTerminalQuickCommandScope(
@@ -66,7 +70,9 @@ export function isTerminalAgentQuickCommand(
 export function supportsTerminalAgentQuickCommand(
   agent: unknown
 ): agent is TerminalAgentQuickCommand['agent'] {
-  return isTuiAgent(agent) && TUI_AGENT_CONFIG[agent].promptInjectionMode !== 'stdin-after-start'
+  return (
+    isBuiltInTuiAgent(agent) && TUI_AGENT_CONFIG[agent].promptInjectionMode !== 'stdin-after-start'
+  )
 }
 
 export function getTerminalQuickCommandBody(command: TerminalQuickCommand): string {
@@ -104,7 +110,12 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
     if (!hasLabel && !hasCommand && !hasPrompt) {
       continue
     }
-    const agent = supportsTerminalAgentQuickCommand(record.agent) ? record.agent : null
+    // Why: keep profile IDs round-trippable in settings normalization; support
+    // checks for profile-backed options are evaluated later with profile context.
+    const agent =
+      supportsTerminalAgentQuickCommand(record.agent) || isTuiAgentProfileId(record.agent)
+        ? record.agent
+        : null
     if (action === 'agent-prompt' && agent === null) {
       continue
     }

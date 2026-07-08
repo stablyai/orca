@@ -1,6 +1,10 @@
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/types'
+import {
+  findTuiAgentProfile,
+  isTuiAgentProfileDetected
+} from '../../../../shared/tui-agent-profiles'
+import type { TuiAgent, TuiAgentProfile } from '../../../../shared/types'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
@@ -8,10 +12,15 @@ import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlA
 export function isSourceControlAgentDetectedAndEnabled(
   agent: TuiAgent | null,
   detectedAgents: TuiAgent[],
-  disabledAgents: TuiAgent[] | undefined
+  disabledAgents: TuiAgent[] | undefined,
+  profiles?: readonly TuiAgentProfile[] | null
 ): boolean {
+  const profile = agent ? findTuiAgentProfile(agent, profiles) : null
+  const detectedSet = new Set(detectedAgents)
   return Boolean(
-    agent && detectedAgents.includes(agent) && isTuiAgentEnabled(agent, disabledAgents)
+    agent &&
+    (profile ? isTuiAgentProfileDetected(profile, detectedSet) : detectedSet.has(agent)) &&
+    isTuiAgentEnabled(agent, disabledAgents)
   )
 }
 
@@ -80,6 +89,7 @@ export function buildSourceControlAgentStatusCopy(args: {
   connectionUnavailable: boolean
   hasEnabledAgents: boolean
   detecting: boolean
+  profiles?: readonly TuiAgentProfile[] | null
 }): string | null {
   const {
     selectedAgent,
@@ -89,7 +99,8 @@ export function buildSourceControlAgentStatusCopy(args: {
     detecting
   } = args
   if (selectedAgentUnavailable) {
-    return `${getAgentCatalog().find((entry) => entry.id === selectedAgent)?.label ?? selectedAgent} is not enabled or was not detected on this workspace host.`
+    const label = selectedAgent ? getAgentLabel(selectedAgent, args.profiles) : selectedAgent
+    return `${label} is not enabled or was not detected on this workspace host.`
   }
   if (connectionUnavailable) {
     return 'Unable to resolve the workspace connection.'

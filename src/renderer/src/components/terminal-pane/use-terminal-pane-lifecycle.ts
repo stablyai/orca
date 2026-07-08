@@ -881,11 +881,12 @@ export function useTerminalPaneLifecycle({
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
           const now = Date.now()
-          const pendingCandidateReleaseGuardActive = shouldApplyTerminalImePendingCandidateKeyRelease(
-            e,
-            pendingTerminalImeCandidateKeyReleases,
-            now
-          )
+          const pendingCandidateReleaseGuardActive =
+            shouldApplyTerminalImePendingCandidateKeyRelease(
+              e,
+              pendingTerminalImeCandidateKeyReleases,
+              now
+            )
           const imeKeyboardOptions = {
             compositionActive: imeCompositionTracker.isActive(),
             candidateKeyGuardActive:

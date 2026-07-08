@@ -57,6 +57,7 @@ import {
   type BuiltInWindowsTerminalShell,
   WINDOWS_GIT_BASH_SHELL
 } from '../../../../shared/windows-terminal-shell'
+import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -328,6 +329,7 @@ function TabBarInner({
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
+  const agentProfiles = useAppStore((s) => s.settings?.agentProfiles ?? [])
   const agentDetectionTargetKey = useAppStore((s): string | undefined => {
     const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
     const worktree = allWorktrees.find((w) => w.id === worktreeId)
@@ -353,10 +355,16 @@ function TabBarInner({
       return { kind: 'local' }
     }
     if (agentDetectionTargetKey.startsWith('ssh:')) {
-      return { kind: 'ssh', connectionId: agentDetectionTargetKey.slice('ssh:'.length) }
+      return {
+        kind: 'ssh',
+        connectionId: agentDetectionTargetKey.slice('ssh:'.length)
+      }
     }
     if (agentDetectionTargetKey.startsWith('runtime:')) {
-      return { kind: 'runtime', environmentId: agentDetectionTargetKey.slice('runtime:'.length) }
+      return {
+        kind: 'runtime',
+        environmentId: agentDetectionTargetKey.slice('runtime:'.length)
+      }
     }
     return { kind: 'local' }
   }, [agentDetectionTargetKey])
@@ -364,10 +372,15 @@ function TabBarInner({
   const agentLaunchOptions = useMemo(
     () =>
       buildTabAgentLaunchOptions(
-        orderTabLaunchAgents(defaultAgent, detectedIds ?? []),
-        agentCmdOverrides
+        orderTabLaunchAgents(
+          defaultAgent,
+          filterEnabledTuiAgents(detectedIds ?? [], settings?.disabledTuiAgents),
+          agentProfiles
+        ).filter((agent) => isTuiAgentEnabled(agent, settings?.disabledTuiAgents)),
+        agentCmdOverrides,
+        agentProfiles
       ),
-    [agentCmdOverrides, defaultAgent, detectedIds]
+    [agentCmdOverrides, agentProfiles, defaultAgent, detectedIds, settings?.disabledTuiAgents]
   )
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
@@ -567,7 +580,10 @@ function TabBarInner({
       defaultEntry,
       ...allShells.filter((shell) => shell.shell !== defaultEntry.shell)
     ]
-    return orderedShells.map((entry) => ({ label: entry.label, shell: entry.shell }))
+    return orderedShells.map((entry) => ({
+      label: entry.label,
+      shell: entry.shell
+    }))
   }, [
     defaultWindowsShell,
     onNewTerminalWithShell,
