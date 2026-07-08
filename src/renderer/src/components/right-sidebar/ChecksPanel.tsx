@@ -1649,7 +1649,9 @@ export default function ChecksPanel(): React.JSX.Element {
         const details = await fetchGitLabMRDetailsForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          settings,
+          // Why: route to the active worktree's runtime so the job list (and the
+          // trace fetch keyed off it) resolve against the same GitLab host.
+          settings: ownerSettings,
           iid: targetMRNumber
         })
         if (!isCurrentAsyncResult(requestKey)) {
@@ -1685,7 +1687,7 @@ export default function ChecksPanel(): React.JSX.Element {
       hostedReviewCacheKey,
       isCurrentAsyncResult,
       repo,
-      settings
+      ownerSettings
     ]
   )
 
@@ -1802,7 +1804,9 @@ export default function ChecksPanel(): React.JSX.Element {
         return loadGitLabCheckRunDetails({
           repoPath: repo.path,
           repoId: repo.id,
-          settings,
+          // Why: route to the active worktree's runtime, not the globally-active
+          // one, matching the other runtime-routed calls in this component.
+          settings: ownerSettings,
           check
         })
       }
@@ -1818,7 +1822,7 @@ export default function ChecksPanel(): React.JSX.Element {
         { repoId: repo.id }
       )
     },
-    [fetchPRCheckDetails, pr?.prRepo, repo, settings]
+    [fetchPRCheckDetails, ownerSettings, pr?.prRepo, repo]
   )
 
   useEffect(() => {
