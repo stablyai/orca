@@ -2598,6 +2598,8 @@ export default function ChecksPanel(): React.JSX.Element {
     [detectedAgentsForAI, resolveCommentsPreferredAgent, settings?.disabledTuiAgents]
   )
   const resolveCommentsReviewKeyRef = useRef<string | null>(null)
+  // Why: review switches reset the inline picker, while late agent detection
+  // should only fill a null choice so a per-PR pick is not overwritten.
   useEffect(() => {
     if (resolveCommentsReviewKeyRef.current === stateRequestKey) {
       return

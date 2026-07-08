@@ -207,6 +207,19 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onStart).not.toHaveBeenCalled()
     expect(container.textContent).toContain('Launch agent')
   })
+  it('pre-selects preferredAgentId over savedAgentId when the dialog opens', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['codex', 'claude'])
+    renderControlledDialog({
+      savedAgentId: 'codex',
+      preferredAgentId: 'claude',
+      disableSavedRecipeAutoStart: true
+    })
+    await vi.waitFor(() => expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1))
+    await flushEffects()
+    expect(container.querySelector('[data-agent-value]')?.getAttribute('data-agent-value')).toBe(
+      'claude'
+    )
+  })
 
   it('hides the dialog and auto-starts once when the saved repo launch recipe matches', async () => {
     resetStore(

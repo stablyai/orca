@@ -48,6 +48,9 @@ export function useSourceControlAgentActionDialogOpenSync({
       wasOpenRef.current = false
       return
     }
+    // Why: bump openCycle only on the rising edge of open so saved-receipt
+    // auto-start resets per dialog session; dependency churn while already
+    // open reuses the current cycle instead of silently re-arming a launch.
     const cycle = wasOpenRef.current ? openCycleRef.current : openCycleRef.current + 1
     if (!wasOpenRef.current) {
       openCycleRef.current = cycle
@@ -61,22 +64,31 @@ export function useSourceControlAgentActionDialogOpenSync({
     setSaveLaunchRecipe(true)
     setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
-    void refreshDetectedAgents().then((nextAgents) => {
-      if (stale || openCycleRef.current !== cycle) {
-        return
-      }
-      setSelectedAgent(
-        (current) =>
-          current ??
-          pickSourceControlLaunchAgent({
-            savedAgent: preferredAgentId ?? savedAgentId,
-            defaultAgent: settings?.defaultTuiAgent,
-            detectedAgents: nextAgents,
-            disabledAgents
-          })
-      )
-      setDetectedOpenCycle(cycle)
-    })
+    void refreshDetectedAgents()
+      .then((nextAgents) => {
+        if (stale || openCycleRef.current !== cycle) {
+          return
+        }
+        setSelectedAgent(
+          (current) =>
+            current ??
+            pickSourceControlLaunchAgent({
+              savedAgent: preferredAgentId ?? savedAgentId,
+              defaultAgent: settings?.defaultTuiAgent,
+              detectedAgents: nextAgents,
+              disabledAgents
+            })
+        )
+        setDetectedOpenCycle(cycle)
+      })
+      .catch(() => {
+        if (stale || openCycleRef.current !== cycle) {
+          return
+        }
+        // Why: still mark detection complete so the dialog can surface status
+        // copy instead of staying blocked behind a pending auto-start receipt.
+        setDetectedOpenCycle(cycle)
+      })
     return () => {
       stale = true
     }
