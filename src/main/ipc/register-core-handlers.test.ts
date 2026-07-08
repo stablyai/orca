@@ -407,7 +407,7 @@ describe('registerCoreHandlers', () => {
     registerEmulatorVideoStreamHandlersMock.mockReset()
   })
 
-  it('passes the store through to handler registrars that need it', () => {
+  it('passes the store through to handler registrars that need it', async () => {
     const store = { marker: 'store' }
     const runtime = { marker: 'runtime', getAgentBrowserBridge: () => null }
     const stats = { marker: 'stats' }
@@ -505,11 +505,15 @@ describe('registerCoreHandlers', () => {
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
     expect(registerSpeechHandlersMock).toHaveBeenCalledWith(store)
 
-    return expect(
-      aiVaultOptions.scanRuntimeAiVaultSessions('env-123', {
-        limit: 10,
-        scopePaths: ['/workspace']
-      })
+    await expect(
+      aiVaultOptions.scanRuntimeAiVaultSessions(
+        'env-123',
+        {
+          limit: 10,
+          scopePaths: ['/workspace']
+        },
+        { timeoutMs: 3000 }
+      )
     ).resolves.toEqual({
       sessions: [],
       issues: [
@@ -522,6 +526,18 @@ describe('registerCoreHandlers', () => {
       ],
       scannedAt: expect.any(String)
     })
+    expect(callRuntimeEnvironmentMock).toHaveBeenCalledWith(
+      '/test/user-data',
+      'env-123',
+      'aiVault.listSessions',
+      {
+        limit: 10,
+        force: undefined,
+        scopePaths: ['/workspace'],
+        executionHostId: 'runtime:env-123'
+      },
+      3000
+    )
   })
 
   it('only registers IPC handlers once but always updates web contents id', () => {

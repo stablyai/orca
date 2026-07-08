@@ -1,14 +1,19 @@
 import { z } from 'zod'
 import { scanAiVaultSessions } from '../../../ai-vault/session-scanner'
 import { defineMethod, type RpcMethod } from '../core'
-import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 
-const executionHostIdSchema = z
-  .string()
-  .transform((value) => normalizeExecutionHostId(value))
-  .refine((value): value is ExecutionHostId => value !== null, {
-    message: 'Invalid execution host id'
+const executionHostIdSchema = z.string().transform((value, ctx): `runtime:${string}` => {
+  const parsed = parseExecutionHostId(value)
+  if (parsed?.kind === 'runtime') {
+    return parsed.id
+  }
+  ctx.addIssue({
+    code: 'custom',
+    message: 'Invalid runtime execution host id'
   })
+  return z.NEVER
+})
 
 const listSessionsParamsSchema = z.object({
   limit: z.number().int().positive().optional(),

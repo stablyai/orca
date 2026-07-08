@@ -113,14 +113,62 @@ describe('listAiVaultSessions host routing', () => {
 
     const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
 
-    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith('remote-server', {
-      executionHostScope: 'runtime:remote-server'
-    })
+    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith(
+      'remote-server',
+      {
+        executionHostScope: 'runtime:remote-server'
+      },
+      expect.objectContaining({ timeoutMs: expect.any(Number) })
+    )
     expect(result.sessions.map((entry) => entry.executionHostId)).toEqual([
       'runtime:remote-server',
       'ssh:dev-box',
       'local'
     ])
+  })
+
+  it('keeps local and SSH results when runtime host discovery fails', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => {
+        throw new Error('runtime store is invalid')
+      },
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanRuntimeAiVaultSessions).not.toHaveBeenCalled()
+    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        agent: 'codex',
+        path: 'runtime environments',
+        message: 'runtime store is invalid'
+      })
+    ])
+  })
+
+  it('keeps direct runtime host scans on the normal runtime timeout', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => [],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    await _internals.listAiVaultSessions({
+      executionHostScope: 'runtime:remote-server',
+      force: true
+    })
+
+    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith(
+      'remote-server',
+      {
+        executionHostScope: 'runtime:remote-server',
+        force: true
+      },
+      {}
+    )
   })
 
   it('returns a scan issue for a disconnected SSH target', async () => {

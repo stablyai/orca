@@ -137,6 +137,9 @@
         "e3bcd082ac": "Orca에 연결",
         "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다."
+      },
       "web": {
         "preload": {
           "api": {
@@ -9642,7 +9645,7 @@
             "sessionsShownCompact": "{{value0}} 표시됨",
             "originalPaneUnavailable": "원래 창은 더 이상 사용할 수 없습니다.",
             "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse server history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요.",

@@ -137,6 +137,9 @@
         "e3bcd082ac": "连接到 Orca",
         "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。"
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "此执行主机不支持 Agent 会话历史记录。"
+      },
       "web": {
         "preload": {
           "api": {
@@ -9642,7 +9645,7 @@
             "sessionsShownCompact": "已显示 {{value0}} 个",
             "originalPaneUnavailable": "原始面板不再可用。",
             "worktreeUnavailable": "工作树不再可用。",
-            "runtimeBrowseLocalHistory": "远程运行时托管的工作区可以浏览本地历史。恢复操作在本地和 SSH 工作区中可用。",
+            "runtimeBrowseLocalHistory": "远程运行时托管的工作区可以浏览服务器历史。恢复操作在本地和 SSH 工作区中可用。",
             "runtimeWorkspacesUnsupported": "在远程运行时托管的工作区中无法从历史记录恢复会话。",
             "openSupportedWorkspace": "在恢复会话之前，请先打开一个本地或 SSH 工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",

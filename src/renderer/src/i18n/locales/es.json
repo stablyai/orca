@@ -137,6 +137,9 @@
         "e3bcd082ac": "Conectar con Orca",
         "mobileScopeRejected": "Este código QR solo da acceso limitado para móvil. Para usar la app web completa, abre el enlace para navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca → Nuevo enlace."
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "El historial de sesiones de Agents no está disponible para este host de ejecución."
+      },
       "web": {
         "preload": {
           "api": {
@@ -9642,7 +9645,7 @@
             "sessionsShownCompact": "{{value0}} mostradas",
             "originalPaneUnavailable": "El panel original ya no está disponible.",
             "worktreeUnavailable": "El worktree ya no está disponible.",
-            "runtimeBrowseLocalHistory": "Los workspaces alojados en runtime pueden explorar el historial local. Las acciones de reanudación están disponibles en workspaces locales y SSH.",
+            "runtimeBrowseLocalHistory": "Los workspaces alojados en runtime pueden explorar el historial del servidor. Las acciones de reanudación están disponibles en workspaces locales y SSH.",
             "runtimeWorkspacesUnsupported": "Reanudar desde el historial no está disponible en workspaces alojados en runtime.",
             "openSupportedWorkspace": "Abre un workspace local o SSH antes de reanudar una sesión.",
             "localSessionSshWorkspaceUnsupported": "El historial de esta sesión solo existe en este equipo. Para reanudarla, abre un workspace local. Los workspaces SSH no tienen acceso a ese historial.",

@@ -1,5 +1,4 @@
 import { app } from 'electron'
-import { z } from 'zod'
 import { registerAppHandlers } from './app'
 import { registerCliHandlers } from './cli'
 import { registerPreflightHandlers } from './preflight'
@@ -25,7 +24,6 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
@@ -72,51 +70,12 @@ import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import { listEnvironments } from '../../shared/runtime-environment-store'
-import { toRuntimeExecutionHostId } from '../../shared/execution-host'
-import { AI_VAULT_AGENTS, type AiVaultListArgs, type AiVaultListResult } from '../../shared/ai-vault-types'
+import {
+  getSavedRuntimeAiVaultHostInfos,
+  scanRuntimeAiVaultSessions
+} from '../ai-vault/runtime-session-scanner'
 
 let registered = false
-
-const aiVaultListResultSchema = z.object({
-  sessions: z.array(
-    z.object({
-      id: z.string(),
-      executionHostId: z.string(),
-      executionHostPlatform: z.string().nullable().optional(),
-      agent: z.enum(AI_VAULT_AGENTS),
-      sessionId: z.string(),
-      title: z.string(),
-      cwd: z.string().nullable(),
-      branch: z.string().nullable(),
-      model: z.string().nullable(),
-      filePath: z.string(),
-      codexHome: z.string().nullable(),
-      createdAt: z.string().nullable(),
-      updatedAt: z.string().nullable(),
-      modifiedAt: z.string(),
-      messageCount: z.number(),
-      totalTokens: z.number(),
-      previewMessages: z.array(
-        z.object({
-          role: z.enum(['user', 'assistant', 'system', 'tool', 'unknown']),
-          text: z.string(),
-          timestamp: z.string().nullable()
-        })
-      ),
-      resumeCommand: z.string()
-    })
-  ),
-  issues: z.array(
-    z.object({
-      executionHostId: z.string().optional(),
-      agent: z.enum(AI_VAULT_AGENTS),
-      path: z.string(),
-      message: z.string()
-    })
-  ),
-  scannedAt: z.string()
-})
 
 type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -219,66 +178,12 @@ export function registerCoreHandlers(
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     getActiveRuntimeAiVaultHostInfos: () =>
-      listEnvironments(app.getPath('userData')).map((environment) => ({
-        environmentId: environment.id,
-        executionHostId: toRuntimeExecutionHostId(environment.id)
-      })),
-    scanRuntimeAiVaultSessions: async (environmentId, args) =>
-      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args)
+      getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),
+    scanRuntimeAiVaultSessions: async (environmentId, args, options) =>
+      scanRuntimeAiVaultSessions(app.getPath('userData'), environmentId, args, options)
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
-}
-
-async function scanRuntimeAiVaultSessions(
-  userDataPath: string,
-  environmentId: string,
-  args: AiVaultListArgs
-): Promise<AiVaultListResult> {
-  const executionHostId = toRuntimeExecutionHostId(environmentId)
-  const response = await callRuntimeEnvironment(
-    userDataPath,
-    environmentId,
-    'aiVault.listSessions',
-    {
-      limit: args.limit,
-      force: args.force,
-      scopePaths: args.scopePaths,
-      executionHostId
-    }
-  )
-  if (response.ok === true) {
-    const parsed = aiVaultListResultSchema.safeParse(response.result)
-    if (parsed.success) {
-      return parsed.data
-    }
-    return {
-      sessions: [],
-      issues: [
-        {
-          executionHostId,
-          agent: 'codex',
-          path: environmentId,
-          message: `Invalid aiVault.listSessions response: ${
-            parsed.error.issues[0]?.message ?? 'unexpected result shape'
-          }`
-        }
-      ],
-      scannedAt: new Date().toISOString()
-    } satisfies AiVaultListResult
-  }
-  return {
-    sessions: [],
-    issues: [
-      {
-        executionHostId,
-        agent: 'codex',
-        path: environmentId,
-        message: response.error.message
-      }
-    ],
-    scannedAt: new Date().toISOString()
-  }
 }

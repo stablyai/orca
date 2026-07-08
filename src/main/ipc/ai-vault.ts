@@ -2,20 +2,15 @@ import { app, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { scanRemoteAiVaultSessions } from '../ai-vault/remote-session-scanner'
 import { scanAiVaultSessions } from '../ai-vault/session-scanner'
-import { sessionSortTime } from '../ai-vault/session-scanner-accumulator'
+import { aiVaultScanIssueResult, mergeAiVaultListResults } from '../ai-vault/session-list-results'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
-import type {
-  AiVaultListArgs,
-  AiVaultListResult,
-  AiVaultScanIssue
-} from '../../shared/ai-vault-types'
+import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostScope,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
-  type ExecutionHostId,
   type ExecutionHostScope
 } from '../../shared/execution-host'
 import {
@@ -25,14 +20,20 @@ import {
 import { getActiveSshAiVaultHostInfo, getActiveSshAiVaultHostInfos } from './ssh'
 
 const AI_VAULT_CACHE_TTL_MS = 15_000
+const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 
 type AiVaultHandlerOptions = {
   getAdditionalCodexHomePaths?: () => readonly string[]
   getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
   scanRuntimeAiVaultSessions?: (
     environmentId: string,
-    args: AiVaultListArgs
+    args: AiVaultListArgs,
+    options?: RuntimeAiVaultScanOptions
   ) => Promise<AiVaultListResult>
+}
+
+type RuntimeAiVaultScanOptions = {
+  timeoutMs?: number
 }
 
 type CachedAiVaultList = {
@@ -101,15 +102,20 @@ async function scanAiVaultSessionsByHostScope(
   }
 
   if (executionHostScope === 'all') {
+    const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
+    const runtimeResults = runtimeHosts.issue ? [runtimeHosts.issue] : []
     return mergeAiVaultListResults(
       await Promise.all([
         scanLocalAiVaultSessions(args),
         ...getActiveSshAiVaultHostInfos().map((hostInfo) =>
           scanSshAiVaultSessions(hostInfo.targetId, args)
         ),
-        ...getActiveRuntimeAiVaultHostInfos().map((hostInfo) =>
-          scanRuntimeAiVaultSessions(hostInfo, args)
-        )
+        ...runtimeHosts.hostInfos.map((hostInfo) =>
+          scanRuntimeAiVaultSessions(hostInfo, args, {
+            timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS
+          })
+        ),
+        ...runtimeResults
       ]),
       args?.limit
     )
@@ -129,7 +135,7 @@ async function scanAiVaultSessionsByHostScope(
     )
   }
 
-  return unavailableScanIssueResult({
+  return aiVaultScanIssueResult({
     executionHostId: executionHostScope,
     path: executionHostScope,
     message: 'Agent Session History is not available for this execution host.'
@@ -140,9 +146,26 @@ function getActiveRuntimeAiVaultHostInfos(): readonly RuntimeAiVaultHostInfo[] {
   return handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? []
 }
 
+function getActiveRuntimeAiVaultHostInfosResult(): {
+  hostInfos: readonly RuntimeAiVaultHostInfo[]
+  issue?: AiVaultListResult
+} {
+  try {
+    return { hostInfos: getActiveRuntimeAiVaultHostInfos() }
+  } catch (error) {
+    return {
+      hostInfos: [],
+      issue: runtimeHostDiscoveryIssueResult(
+        error instanceof Error ? error.message : 'Runtime hosts are unavailable.'
+      )
+    }
+  }
+}
+
 async function scanRuntimeAiVaultSessions(
   hostInfo: RuntimeAiVaultHostInfo,
-  args?: AiVaultListArgs
+  args?: AiVaultListArgs,
+  options: RuntimeAiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
   const scanner = handlerOptions.scanRuntimeAiVaultSessions
   if (!scanner) {
@@ -162,7 +185,7 @@ async function scanRuntimeAiVaultSessions(
     scanArgs.scopePaths = args.scopePaths
   }
   try {
-    return await scanner(hostInfo.environmentId, scanArgs)
+    return await scanner(hostInfo.environmentId, scanArgs, options)
   } catch (error) {
     return runtimeScanIssueResult(
       hostInfo,
@@ -175,30 +198,15 @@ function runtimeScanIssueResult(
   hostInfo: RuntimeAiVaultHostInfo,
   message: string
 ): AiVaultListResult {
-  return unavailableScanIssueResult({
+  return aiVaultScanIssueResult({
     executionHostId: hostInfo.executionHostId,
     path: hostInfo.environmentId,
     message
   })
 }
 
-function unavailableScanIssueResult(args: {
-  executionHostId: ExecutionHostId
-  path: string
-  message: string
-}): AiVaultListResult {
-  return {
-    sessions: [],
-    issues: [
-      {
-        executionHostId: args.executionHostId,
-        agent: 'codex',
-        path: args.path,
-        message: args.message
-      }
-    ],
-    scannedAt: new Date().toISOString()
-  }
+function runtimeHostDiscoveryIssueResult(message: string): AiVaultListResult {
+  return aiVaultScanIssueResult({ path: 'runtime environments', message })
 }
 
 async function scanLocalAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
@@ -243,40 +251,11 @@ function sshScanIssueResult(args: {
   targetId: string
   message: string
 }): AiVaultListResult {
-  return {
-    sessions: [],
-    issues: [
-      {
-        executionHostId: args.executionHostId,
-        agent: 'codex',
-        path: args.targetId,
-        message: args.message
-      }
-    ],
-    scannedAt: new Date().toISOString()
-  }
-}
-
-function mergeAiVaultListResults(
-  results: readonly AiVaultListResult[],
-  rawLimit: number | undefined
-): AiVaultListResult {
-  const limit = rawLimit && rawLimit > 0 ? Math.floor(rawLimit) : 1000
-  const byId = new Map<string, AiVaultListResult['sessions'][number]>()
-  const issues: AiVaultScanIssue[] = []
-  for (const result of results) {
-    for (const session of result.sessions) {
-      byId.set(session.id, session)
-    }
-    issues.push(...result.issues)
-  }
-  return {
-    sessions: [...byId.values()]
-      .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-      .slice(0, limit),
-    issues,
-    scannedAt: new Date().toISOString()
-  }
+  return aiVaultScanIssueResult({
+    executionHostId: args.executionHostId,
+    path: args.targetId,
+    message: args.message
+  })
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {

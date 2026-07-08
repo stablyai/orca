@@ -137,6 +137,9 @@
         "e3bcd082ac": "Connect to Orca",
         "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host."
+      },
       "web": {
         "preload": {
           "api": {
@@ -9642,7 +9645,7 @@
             "logPath": "Log path",
             "originalPaneUnavailable": "Original pane is no longer available.",
             "worktreeUnavailable": "Worktree is no longer available.",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse server history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
             "sessionHostMismatchUnsupported": "This session belongs to a different host. Open a workspace on the same host to resume it.",

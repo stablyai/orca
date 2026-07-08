@@ -10,6 +10,7 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
@@ -47,7 +48,13 @@ import {
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostScope,
+  normalizeExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import {
@@ -626,15 +633,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
     },
-    aiVault: {
-      listSessions: () =>
-        Promise.resolve({
-          sessions: [],
-          issues: [],
-          scannedAt: new Date().toISOString()
-        }),
-      onWindowFocused: () => () => {}
-    },
+    aiVault: createAiVaultApi(),
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
@@ -1113,6 +1112,48 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       const client = getClientForEnvironment(environment)
       return client.subscribe(method, params, callbacks, { timeoutMs })
     }
+  }
+}
+
+function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  return {
+    listSessions: (args?: AiVaultListArgs) => {
+      const environment = requireActiveEnvironment()
+      const executionHostId = toRuntimeExecutionHostId(environment.id)
+      const requestedScope = normalizeExecutionHostScope(
+        args?.executionHostScope ?? executionHostId
+      )
+      if (requestedScope !== 'all' && requestedScope !== executionHostId) {
+        return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
+      }
+      // Why: the browser client has no local filesystem; every history scan
+      // runs on the paired server and must be stamped as that runtime host.
+      return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
+        limit: args?.limit,
+        force: args?.force,
+        scopePaths: args?.scopePaths,
+        executionHostId
+      })
+    },
+    onWindowFocused: () => noopUnsubscribe
+  }
+}
+
+function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultListResult {
+  return {
+    sessions: [],
+    issues: [
+      {
+        executionHostId,
+        agent: 'codex',
+        path: executionHostId,
+        message: translate(
+          'auto.web.webPreloadApi.aiVaultUnavailableForHost',
+          'Agent Session History is not available for this execution host.'
+        )
+      }
+    ],
+    scannedAt: new Date().toISOString()
   }
 }
 

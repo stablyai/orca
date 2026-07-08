@@ -38,7 +38,7 @@ describe('aiVault.listSessions runtime RPC', () => {
     })
   })
 
-  it('rejects invalid execution host ids before dispatch', () => {
+  it('rejects non-runtime execution host ids before dispatch', () => {
     const method = AI_VAULT_METHODS.find((entry) => entry.name === 'aiVault.listSessions')
     expect(method).toBeDefined()
 
@@ -46,6 +46,16 @@ describe('aiVault.listSessions runtime RPC', () => {
       method!.params!.parse({
         executionHostId: 'not-a-runtime-host'
       })
-    ).toThrow('Invalid execution host id')
+    ).toThrow('Invalid runtime execution host id')
+    expect(() =>
+      method!.params!.parse({
+        executionHostId: 'local'
+      })
+    ).toThrow('Invalid runtime execution host id')
+    expect(() =>
+      method!.params!.parse({
+        executionHostId: 'ssh:dev-box'
+      })
+    ).toThrow('Invalid runtime execution host id')
   })
 })

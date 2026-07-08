@@ -137,6 +137,9 @@
         "e3bcd082ac": "Orca に接続",
         "mobileScopeRejected": "この QR コードは制限付き（モバイル）アクセスを許可します。完全な Web アプリを使うには、設定 → リモート Orca サーバー → この Orca サーバーを共有する → 新規リンク からブラウザー用アクセスリンクを開いてください。"
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "この実行ホストでは Agent セッション履歴を使用できません。"
+      },
       "web": {
         "preload": {
           "api": {
@@ -9642,7 +9645,7 @@
             "sessionsShownCompact": "{{value0}} 件表示",
             "originalPaneUnavailable": "元のペインは利用できなくなりました。",
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse server history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
