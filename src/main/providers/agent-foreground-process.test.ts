@@ -9,6 +9,7 @@ vi.mock('child_process', () => ({
 }))
 
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
+import { resetTmuxActivePaneCacheForTests } from '../../shared/tmux-active-pane'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
 import { resetWindowsProcessRowsSnapshotForTests } from './windows-foreground-process-rows'
 
@@ -74,6 +75,7 @@ describe('resolveAgentForegroundProcess', () => {
   beforeEach(() => {
     execFileMock.mockReset()
     resetProcessTableSnapshotForTests()
+    resetTmuxActivePaneCacheForTests()
     // Why: the Windows rows reader caches across calls (500ms TTL), so each
     // case's execFile mock must not be answered by the previous case's rows.
     resetWindowsProcessRowsSnapshotForTests()
@@ -104,6 +106,47 @@ describe('resolveAgentForegroundProcess', () => {
     mockPs(['101 100 S+   node /Users/dev/.nvm/versions/node/bin/codex'].join('\n'))
 
     await expect(resolveAgentForegroundProcess(100, 'node')).resolves.toBe('codex')
+  })
+
+  it('detects an agent hosted inside a user tmux via the client hop', async () => {
+    // Pane shell (100) -> tmux client (200). The real claude (401) lives under
+    // the reparented tmux server (300, ppid 1), unreachable from the shell.
+    execFileMock.mockImplementation((cmd: string, args: string[], _opts: unknown, cb: unknown) => {
+      const callback = cb as (err: unknown, r: { stdout: string; stderr: string }) => void
+      if (cmd === 'tmux') {
+        expect(args).toContain('list-clients')
+        callback(null, { stdout: '200 400\n', stderr: '' })
+        return
+      }
+      callback(null, {
+        stdout: [
+          '100 99  Ss   bash -i',
+          '200 100 S+   tmux attach -t work',
+          '300 1   Ss   tmux: server',
+          '400 300 Ss   bash',
+          '401 400 S+   claude'
+        ].join('\n'),
+        stderr: ''
+      })
+    })
+
+    await expect(resolveAgentForegroundProcess(100, 'tmux')).resolves.toBe('claude')
+  })
+
+  it('falls back when the tmux client has no resolvable active pane', async () => {
+    execFileMock.mockImplementation((cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+      const callback = cb as (err: unknown, r: { stdout: string; stderr: string }) => void
+      if (cmd === 'tmux') {
+        callback(null, { stdout: '999 400\n', stderr: '' }) // different client pid
+        return
+      }
+      callback(null, {
+        stdout: ['100 99  Ss   bash -i', '200 100 S+   tmux attach'].join('\n'),
+        stderr: ''
+      })
+    })
+
+    await expect(resolveAgentForegroundProcess(100, 'tmux')).resolves.toBe('tmux')
   })
 
   it('does not report Claude print-mode hook descendants as foreground agents', async () => {
