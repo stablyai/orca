@@ -2562,7 +2562,10 @@
             "connectFailed": "SSH 연결 실패",
             "title": "SSH 연결 필요",
             "connectingButton": "연결 중...",
-            "connectButton": "연결"
+            "connectButton": "연결",
+            "removedTitle": "SSH host removed",
+            "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
+            "removeWorkspaceButton": "Remove workspace"
           }
         }
       },
@@ -3684,7 +3687,8 @@
           "d36883e046": "취소",
           "8c097ef04e": "Orca에서. 아직 디스크에 있습니다.",
           "e62415c3d0": "다음 항목만 제거합니다",
-          "b79b39d865": "프로젝트 제거"
+          "b79b39d865": "프로젝트 제거",
+          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "활성 워크스페이스로 이동"
@@ -4400,7 +4404,16 @@
           "5e6f7a8b9c": "이 컴퓨터에서 저장된 SSH 호스트와 인증 정보를 제거합니다. 원격 파일은 삭제되지 않습니다.",
           "6f7a8b9c0d": "취소",
           "7a8b9c0d1e": "설정 열기",
-          "8b9c0d1e2f": "호스트 제거"
+          "8b9c0d1e2f": "호스트 제거",
+          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "oneWorkspace": "1 workspace",
+          "manyWorkspaces": "{{count}} workspaces",
+          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
+          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
+          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
+          "advanced": "Advanced",
+          "alsoDeleteRemoteHint": "Permanently deletes the remote Git worktrees and their branches. Cannot be undone.",
+          "alsoForgetLocalHint": "Clears them from Orca only. Remote files, worktrees, and branches are left untouched."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "호스트 이름 바꾸기",
@@ -4513,6 +4526,16 @@
           "importing": "가져오는 중...",
           "importSshConfig": "~/.ssh/config 가져오기",
           "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다."
+        },
+        "ForgetSshWorkspaceDialog": {
+          "reconnectFailed": "Reconnection failed",
+          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
+          "title": "Delete “{{name}}”?",
+          "disconnectedBody": "The SSH host for this workspace is not connected. Reconnect to delete it on the remote too, or remove it from Orca only.",
+          "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
+          "cancel": "Cancel",
+          "forget": "Remove from Orca",
+          "reconnectAndDelete": "Reconnect & Delete"
         }
       },
       "shared": {
