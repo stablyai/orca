@@ -20,6 +20,13 @@ function createMockMux(): MockMultiplexer {
   }
 }
 
+/** Identity env #7839 always injects for remote PTY parity with local. */
+const ORCA_TERMINAL_IDENTITY_ENV = {
+  TERM_PROGRAM: 'Orca',
+  COLORTERM: 'truecolor',
+  FORCE_HYPERLINK: '1'
+} as const
+
 describe('SshPtyProvider', () => {
   let mux: MockMultiplexer
   let provider: SshPtyProvider
@@ -44,7 +51,12 @@ describe('SshPtyProvider', () => {
         cols: 80,
         rows: 24,
         cwd: undefined,
-        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
+        env: expect.objectContaining({
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
+          TERM_PROGRAM: 'Orca',
+          COLORTERM: 'truecolor',
+          FORCE_HYPERLINK: '1'
+        })
       })
       expect(result).toEqual({ id: scopedPty1 })
     })
@@ -63,7 +75,13 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: '/home/user',
-        env: { FOO: 'bar', [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
+        env: expect.objectContaining({
+          FOO: 'bar',
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
+          TERM_PROGRAM: 'Orca',
+          COLORTERM: 'truecolor',
+          FORCE_HYPERLINK: '1'
+        })
       })
     })
 
@@ -81,7 +99,10 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        env: expect.objectContaining({
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
+          ...ORCA_TERMINAL_IDENTITY_ENV
+        }),
         paneKey: 'tab-a:leaf-a',
         tabId: 'tab-a'
       })
@@ -101,7 +122,10 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        env: expect.objectContaining({
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
+          ...ORCA_TERMINAL_IDENTITY_ENV
+        }),
         shellOverride: 'powershell.exe',
         terminalWindowsWslDistro: 'Ubuntu'
       })
@@ -120,7 +144,10 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set' }
+        env: expect.objectContaining({
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'already-set',
+          ...ORCA_TERMINAL_IDENTITY_ENV
+        })
       })
     })
 
@@ -138,8 +165,12 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: {}
+        env: expect.objectContaining({
+          ...ORCA_TERMINAL_IDENTITY_ENV
+        })
       })
+      const spawnCall = mux.request.mock.calls.find((call) => call[0] === 'pty.spawn')
+      expect(spawnCall?.[1]?.env).not.toHaveProperty(POWERLEVEL10K_WIZARD_DISABLE_ENV)
     })
 
     it('forwards provider command delivery to the relay', async () => {
@@ -157,7 +188,10 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        env: expect.objectContaining({
+          [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
+          ...ORCA_TERMINAL_IDENTITY_ENV
+        }),
         command: 'echo from-runtime',
         commandDelivery: 'provider',
         startupCommandDelivery: 'shell-ready'
@@ -183,15 +217,16 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: {
+        env: expect.objectContaining({
           PATH: '/home/user/.orca-relay/bin:/usr/bin',
           ORCA_TERMINAL_HANDLE: 'term_ssh',
           [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
           ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
           ORCA_RELAY_NODE_PATH: '/usr/bin/node',
-          ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
-        }
+          ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock',
+          ...ORCA_TERMINAL_IDENTITY_ENV
+        })
       })
     })
 
@@ -214,14 +249,15 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: {
+        env: expect.objectContaining({
           ORCA_TERMINAL_HANDLE: 'term_ssh',
           [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
           ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
           ORCA_RELAY_NODE_PATH: '/usr/bin/node',
-          ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
-        }
+          ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock',
+          ...ORCA_TERMINAL_IDENTITY_ENV
+        })
       })
     })
 
@@ -245,14 +281,15 @@ describe('SshPtyProvider', () => {
         cols: 120,
         rows: 40,
         cwd: undefined,
-        env: {
+        env: expect.objectContaining({
           Path: 'C:/Users/me/.orca-relay/bin;C:/Windows/System32;C:/Tools',
           [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
           ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin',
           ORCA_RELAY_DIR: 'C:/Users/me/.orca-remote/relay-v1',
           ORCA_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
-          ORCA_RELAY_SOCKET_PATH: '\\\\.\\pipe\\orca-relay-123'
-        }
+          ORCA_RELAY_SOCKET_PATH: '\\\\.\\pipe\\orca-relay-123',
+          ...ORCA_TERMINAL_IDENTITY_ENV
+        })
       })
     })
 

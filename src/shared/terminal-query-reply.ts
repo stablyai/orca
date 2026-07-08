@@ -41,6 +41,15 @@ const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u00
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
 const DCS_RESPONSE_RE = new RegExp('^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\$')
+// Why: Grok (and some ConPTY-style paths) can swallow the ESC/DCS introducer
+// of an XTVERSION reply and leave only the printable body. That body then
+// lands in the TUI as if the user typed it — e.g. `>|xterm.js(6.1.0-beta.287)`
+// as the Grok prompt on remote Mac (#7839). Match only the xterm.js identity
+// form so ordinary `>|` paste is never dropped.
+const ORPHANED_XTVERSION_BODY_RE = /^(?:P)?>\|xterm\.js\([^)\r\n]*\)$/
+// Same class as Windows ConPTY OSC color reply leaks (#6975): ESC swallowed,
+// printable OSC body remains (`]10;rgb:...` / `]11;rgb:...`).
+const ORPHANED_OSC_COLOR_BODY_RE = /^\](?:10|11);[^\r\n\u0007\u001b]{1,200}$/
 /* oxlint-enable no-control-regex */
 
 /**
@@ -66,4 +75,23 @@ export function isTerminalQueryReply(data: string): boolean {
     OSC_RESPONSE_RE.test(data) ||
     DCS_RESPONSE_RE.test(data)
   )
+}
+
+/**
+ * True when `data` is a **frameless** query-reply body that must be dropped
+ * rather than forwarded as PTY input. Used after ESC/control framing was lost
+ * (remote latency + cooked echo, ConPTY-style swallow, or TUI filter miss).
+ *
+ * Conservative: only exact full-chunk bodies for known reply shapes — never a
+ * prefix of user typing.
+ */
+export function isOrphanedTerminalQueryReplyBody(data: string): boolean {
+  if (data.length < 4 || data.length > 220) {
+    return false
+  }
+  // Full framed replies go through isTerminalQueryReply, not this drop path.
+  if (data[0] === ESC) {
+    return false
+  }
+  return ORPHANED_XTVERSION_BODY_RE.test(data) || ORPHANED_OSC_COLOR_BODY_RE.test(data)
 }

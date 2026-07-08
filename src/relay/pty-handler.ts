@@ -286,6 +286,20 @@ export class PtyHandler {
     ctx: { id: string; paneKey?: string; shell: string; command?: string }
   ): Record<string, string> {
     const baseEnv = { ...process.env, ...rendererEnv } as Record<string, string>
+    // Why: local + daemon PTY spawns always set Orca terminal identity so TUIs
+    // (Grok, Claude, Codex) feature-gate correctly. SSH/relay spawns previously
+    // inherited a bare remote env — Grok then falls back to XTVERSION probing
+    // and can paint `xterm.js(...)` into the prompt on slow remote paths (#7839).
+    // Match local-pty-provider / daemon pty-subprocess identity.
+    baseEnv.TERM = baseEnv.TERM || 'xterm-256color'
+    baseEnv.COLORTERM = 'truecolor'
+    baseEnv.TERM_PROGRAM = 'Orca'
+    baseEnv.TERM_PROGRAM_VERSION =
+      baseEnv.TERM_PROGRAM_VERSION ||
+      baseEnv.ORCA_APP_VERSION ||
+      process.env.ORCA_APP_VERSION ||
+      '0.0.0-dev'
+    baseEnv.FORCE_HYPERLINK = '1'
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {

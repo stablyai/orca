@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isTerminalQueryReply } from './terminal-query-reply'
+import { isOrphanedTerminalQueryReplyBody, isTerminalQueryReply } from './terminal-query-reply'
 
 describe('isTerminalQueryReply', () => {
   it('matches synthetic query replies that must be sent immediately', () => {
@@ -34,6 +34,8 @@ describe('isTerminalQueryReply', () => {
     expect(isTerminalQueryReply('\x1bP1$r0m\x1b\\')).toBe(true)
     expect(isTerminalQueryReply('\x1bP0$r\x1b\\')).toBe(true)
     expect(isTerminalQueryReply('\x1bP>|xterm.js(5.6.0)\x1b\\')).toBe(true)
+    // Current Orca bundle: @xterm/xterm@6.1.0-beta.287 (Grok remote prompt leak #7839).
+    expect(isTerminalQueryReply('\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\')).toBe(true)
   })
 
   it('documents the accepted modified-F3/CPR collision', () => {
@@ -77,5 +79,27 @@ describe('isTerminalQueryReply', () => {
     // Incomplete / non-terminated OSC and DCS must not match.
     expect(isTerminalQueryReply('\x1b]11;rgb:2828/2c2c/3434')).toBe(false)
     expect(isTerminalQueryReply('\x1bP1$r2 q')).toBe(false)
+  })
+})
+
+describe('isOrphanedTerminalQueryReplyBody (#7839)', () => {
+  it('drops ESC-stripped XTVERSION bodies that pollute Grok/agent prompts', () => {
+    expect(isOrphanedTerminalQueryReplyBody('>|xterm.js(6.1.0-beta.287)')).toBe(true)
+    expect(isOrphanedTerminalQueryReplyBody('P>|xterm.js(6.1.0-beta.287)')).toBe(true)
+    expect(isOrphanedTerminalQueryReplyBody('>|xterm.js(5.6.0)')).toBe(true)
+  })
+
+  it('drops ESC-stripped OSC color bodies', () => {
+    expect(isOrphanedTerminalQueryReplyBody(']11;rgb:2828/2c2c/3434')).toBe(true)
+    expect(isOrphanedTerminalQueryReplyBody(']10;rgb:c0c0/c0c0/c0c0')).toBe(true)
+  })
+
+  it('does not drop ordinary typing or framed replies', () => {
+    expect(isOrphanedTerminalQueryReplyBody('yes')).toBe(false)
+    expect(isOrphanedTerminalQueryReplyBody('>|not-xterm')).toBe(false)
+    expect(isOrphanedTerminalQueryReplyBody('>|xterm.js')).toBe(false) // incomplete
+    expect(isOrphanedTerminalQueryReplyBody('xterm.js(6.1.0-beta.287)')).toBe(false)
+    // Framed replies must go through isTerminalQueryReply + immediate send.
+    expect(isOrphanedTerminalQueryReplyBody('\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\')).toBe(false)
   })
 })

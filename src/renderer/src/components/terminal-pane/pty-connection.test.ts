@@ -5630,6 +5630,25 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('yes')
     expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A')
     expect(transport.sendInputImmediate).not.toHaveBeenCalled()
+
+    // Framed XTVERSION still takes the immediate path (#7839 / #7329).
+    // Mock sendInputImmediate delegates to sendInput, so only assert immediate.
+    transport.sendInputImmediate.mockClear()
+    const xtversionReply = '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'
+    sendTerminalInputThroughPane(pane, xtversionReply)
+    expect(transport.sendInputImmediate).toHaveBeenCalledWith(xtversionReply)
+
+    // ESC-stripped XTVERSION body must be dropped, not typed into Grok (#7839).
+    transport.sendInput.mockClear()
+    transport.sendInputImmediate.mockClear()
+    const orphanedXtversion = '>|xterm.js(6.1.0-beta.287)'
+    sendTerminalInputThroughPane(pane, orphanedXtversion)
+    expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(orphanedXtversion)
+    // sendInput is only reached for non-reply non-orphan input; body must not
+    // appear as a standalone typed chunk.
+    expect(
+      transport.sendInput.mock.calls.some((call) => call[0] === orphanedXtversion)
+    ).toBe(false)
   })
 
   it('writes the onReplayData pendingEscapeTailAnsi meta last, after the replayed bytes (#7329)', async () => {

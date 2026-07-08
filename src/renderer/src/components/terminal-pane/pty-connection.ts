@@ -12,7 +12,10 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
-import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
+import {
+  isOrphanedTerminalQueryReplyBody,
+  isTerminalQueryReply
+} from '../../../../shared/terminal-query-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
@@ -3000,6 +3003,13 @@ export function connectPanePty(
     // so a real keystroke never reaches this branch.
     if (isTerminalQueryReply(data)) {
       transport.sendInputImmediate(data)
+      return
+    }
+    // Why: #7839 — remote Grok (and similar) can surface ESC-stripped XTVERSION
+    // bodies (`>|xterm.js(...)`) as the prompt after a late/corrupt query reply.
+    // Drop frameless reply bodies instead of forwarding them as keystrokes.
+    if (isOrphanedTerminalQueryReplyBody(data)) {
+      clearPendingTerminalInputIntent()
       return
     }
     const intent = pendingTerminalInputIntent
