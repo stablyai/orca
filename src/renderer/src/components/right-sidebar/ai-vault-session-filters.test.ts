@@ -6,6 +6,7 @@ import {
   folderLabel,
   groupAiVaultSessions,
   isAiVaultSessionFilterQueryTooLarge,
+  isMainAgentSession,
   parseVaultQuery
 } from './ai-vault-session-filters'
 import {
@@ -56,7 +57,8 @@ describe('filterAiVaultSessions', () => {
         scope: 'workspace',
         sort: 'updated',
         activeWorktreePaths: ['/Users/ada/repo'],
-        hideEmptySessions: true
+        hideEmptySessions: true,
+        mainAgentOnly: false
       }).map((session) => session.id)
     ).toEqual(['claude:1'])
   })
@@ -85,7 +87,8 @@ describe('filterAiVaultSessions', () => {
           '/Users/ada/workspaces/orca/fix-agent-history',
           '/Users/ada/workspaces/orca/bream'
         ],
-        hideEmptySessions: true
+        hideEmptySessions: true,
+        mainAgentOnly: false
       }).map((session) => session.id)
     ).toEqual(['claude:old-path'])
   })
@@ -98,7 +101,8 @@ describe('filterAiVaultSessions', () => {
         scope: 'workspace',
         sort: 'updated',
         activeWorktreePaths: [],
-        hideEmptySessions: true
+        hideEmptySessions: true,
+        mainAgentOnly: false
       })
     ).toEqual([])
   })
@@ -119,7 +123,8 @@ describe('filterAiVaultSessions', () => {
         scope: 'all',
         sort: 'updated',
         activeWorktreePaths: [],
-        hideEmptySessions: true
+        hideEmptySessions: true,
+        mainAgentOnly: false
       }).map((session) => session.id)
     ).toEqual(['claude:1'])
 
@@ -129,7 +134,8 @@ describe('filterAiVaultSessions', () => {
       scope: 'all',
       sort: 'updated',
       activeWorktreePaths: [],
-      hideEmptySessions: false
+      hideEmptySessions: false,
+      mainAgentOnly: false
     }).map((session) => session.id)
 
     expect(new Set(shownWhenAllowed)).toEqual(new Set(['claude:1', 'claude:empty']))
@@ -156,7 +162,8 @@ describe('filterAiVaultSessions', () => {
           scope: 'all',
           sort: 'updated',
           activeWorktreePaths: [],
-          hideEmptySessions: true
+          hideEmptySessions: true,
+          mainAgentOnly: false
         }
       ).map((session) => session.id)
     ).toEqual(['claude:1'])
@@ -188,7 +195,8 @@ describe('filterAiVaultSessions', () => {
           scope: 'all',
           sort: 'updated',
           activeWorktreePaths: [],
-          hideEmptySessions: true
+          hideEmptySessions: true,
+          mainAgentOnly: false
         }
       )
     ).toEqual([])
@@ -209,7 +217,8 @@ describe('filterAiVaultSessions', () => {
           scope: 'workspace',
           sort: 'updated',
           activeWorktreePaths: ['c:\\users\\ada\\repo'],
-          hideEmptySessions: true
+          hideEmptySessions: true,
+          mainAgentOnly: false
         }
       )
     ).toHaveLength(1)
@@ -230,7 +239,8 @@ describe('filterAiVaultSessions', () => {
           scope: 'workspace',
           sort: 'updated',
           activeWorktreePaths: [String.raw`\\wsl.localhost\Ubuntu\home\ada\repo`],
-          hideEmptySessions: true
+          hideEmptySessions: true,
+          mainAgentOnly: false
         }
       )
     ).toHaveLength(1)
@@ -251,7 +261,8 @@ describe('filterAiVaultSessions', () => {
         scope: 'all',
         sort: 'updated',
         activeWorktreePaths: [],
-        hideEmptySessions: false
+        hideEmptySessions: false,
+        mainAgentOnly: false
       })
     ).toEqual([])
   })
@@ -273,7 +284,8 @@ describe('filterAiVaultSessions', () => {
         activeWorktreePaths: [],
         activeProjectKey: 'project:orca',
         sessionProjectById,
-        hideEmptySessions: true
+        hideEmptySessions: true,
+        mainAgentOnly: false
       }).map((session) => session.id)
     ).toEqual(['claude:project'])
   })
@@ -287,7 +299,8 @@ describe('filterAiVaultSessions', () => {
         sort: 'updated',
         activeWorktreePaths: [],
         activeProjectKey: null,
-        hideEmptySessions: true
+        hideEmptySessions: true,
+        mainAgentOnly: false
       })
     ).toEqual([])
   })
@@ -307,7 +320,8 @@ describe('filterAiVaultSessions', () => {
         activeWorktreePaths: [],
         sessionProjectById,
         projectLabelByKey,
-        hideEmptySessions: true
+        hideEmptySessions: true,
+        mainAgentOnly: false
       }).map((session) => session.id)
     ).toEqual(['claude:1'])
   })
@@ -656,5 +670,38 @@ describe('parseVaultQuery', () => {
 describe('folderLabel', () => {
   it('uses the last two path segments for compact labels', () => {
     expect(folderLabel('C:\\Users\\Ada\\repo\\app')).toBe('repo/app')
+  })
+})
+
+describe('main agent filter', () => {
+  it('treats sdk-spawned sessions as non-main and others as main', () => {
+    expect(isMainAgentSession({ ...baseSession, entrypoint: 'cli' })).toBe(true)
+    expect(isMainAgentSession({ ...baseSession, entrypoint: 'sdk-cli' })).toBe(false)
+    // No entrypoint (non-Claude agents, older transcripts) counts as main-agent.
+    expect(isMainAgentSession({ ...baseSession, entrypoint: null })).toBe(true)
+    expect(isMainAgentSession(baseSession)).toBe(true)
+  })
+
+  it('hides subagent/workflow sessions when mainAgentOnly is set', () => {
+    const sessions: AiVaultSession[] = [
+      { ...baseSession, id: 'main', entrypoint: 'cli' },
+      { ...baseSession, id: 'worker', sessionId: 'session-w', entrypoint: 'sdk-cli' }
+    ]
+    const filters = {
+      query: '',
+      agents: ['claude'] as const,
+      scope: 'all' as const,
+      sort: 'updated' as const,
+      activeWorktreePaths: [],
+      hideEmptySessions: false
+    }
+    expect(
+      filterAiVaultSessions(sessions, { ...filters, mainAgentOnly: true }).map((s) => s.id)
+    ).toEqual(['main'])
+    expect(
+      filterAiVaultSessions(sessions, { ...filters, mainAgentOnly: false })
+        .map((s) => s.id)
+        .sort()
+    ).toEqual(['main', 'worker'])
   })
 })

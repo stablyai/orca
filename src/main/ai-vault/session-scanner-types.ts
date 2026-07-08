@@ -100,6 +100,7 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  entrypoint: string | null
   latestTimestampMs: number
 }
 

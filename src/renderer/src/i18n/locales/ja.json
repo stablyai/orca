@@ -9683,7 +9683,8 @@
             "currentProjectLower": "現在のプロジェクト",
             "project": "プロジェクト",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
-            "host": "Host"
+            "host": "Host",
+            "mainAgentOnly": "メインエージェントのみ"
           },
           "AiVaultSessionDetails": {
             "updated": "更新日時",

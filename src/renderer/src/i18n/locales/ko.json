@@ -9683,7 +9683,8 @@
             "currentProjectLower": "현재 프로젝트",
             "project": "프로젝트",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
-            "host": "Host"
+            "host": "Host",
+            "mainAgentOnly": "메인 에이전트만"
           },
           "AiVaultSessionDetails": {
             "updated": "업데이트됨",

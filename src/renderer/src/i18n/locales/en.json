@@ -9683,7 +9683,8 @@
             "currentProjectLower": "current project",
             "project": "Project",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
-            "host": "Host"
+            "host": "Host",
+            "mainAgentOnly": "Main agent only"
           },
           "AiVaultSessionDetails": {
             "originalAsk": "Original ask",

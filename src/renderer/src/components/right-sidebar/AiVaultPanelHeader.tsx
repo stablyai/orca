@@ -25,6 +25,7 @@ type AiVaultPanelHeaderProps = {
   sort: AiVaultSort
   group: AiVaultGroup
   hideEmptySessions: boolean
+  mainAgentOnly: boolean
   adjustmentCount: number
   onQueryChange: (query: string) => void
   onScopeChange: (scope: AiVaultScope) => void
@@ -33,6 +34,7 @@ type AiVaultPanelHeaderProps = {
   onSortChange: (sort: AiVaultSort) => void
   onGroupChange: (group: AiVaultGroup) => void
   onHideEmptySessionsChange: (hideEmptySessions: boolean) => void
+  onMainAgentOnlyChange: (mainAgentOnly: boolean) => void
   onReset: () => void
   onRefresh: () => void
 }
@@ -52,6 +54,7 @@ export function AiVaultPanelHeader({
   sort,
   group,
   hideEmptySessions,
+  mainAgentOnly,
   adjustmentCount,
   onQueryChange,
   onScopeChange,
@@ -60,6 +63,7 @@ export function AiVaultPanelHeader({
   onSortChange,
   onGroupChange,
   onHideEmptySessionsChange,
+  onMainAgentOnlyChange,
   onReset,
   onRefresh
 }: AiVaultPanelHeaderProps): React.JSX.Element {
@@ -116,11 +120,13 @@ export function AiVaultPanelHeader({
             sort={sort}
             group={group}
             hideEmptySessions={hideEmptySessions}
+            mainAgentOnly={mainAgentOnly}
             adjustmentCount={adjustmentCount}
             onAgentEnabledChange={onAgentEnabledChange}
             onSortChange={onSortChange}
             onGroupChange={onGroupChange}
             onHideEmptySessionsChange={onHideEmptySessionsChange}
+            onMainAgentOnlyChange={onMainAgentOnlyChange}
             onReset={onReset}
           />
           <Button
