@@ -2591,8 +2591,7 @@
             "localWorkspacesOnly": "从历史恢复仅支持本地工作区。",
             "openLocalWorkspace": "恢复会话前请先打开一个本地工作区。",
             "sessionQueued": "会话已排队",
-            "runtimeWorkspacesUnsupported": "在远程运行时托管的工作区中无法从历史记录恢复会话。",
-            "openSupportedWorkspace": "在恢复会话之前，请先打开一个本地或 SSH 工作区。",
+            "openSupportedWorkspace": "在恢复会话之前，请先打开一个工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为将其拖放到本地工作区。",
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请将其拖放到同一主机上的工作区。"
           },
@@ -9645,9 +9644,7 @@
             "sessionsShownCompact": "已显示 {{value0}} 个",
             "originalPaneUnavailable": "原始面板不再可用。",
             "worktreeUnavailable": "工作树不再可用。",
-            "runtimeBrowseLocalHistory": "远程运行时托管的工作区可以浏览服务器历史。恢复操作在本地和 SSH 工作区中可用。",
-            "runtimeWorkspacesUnsupported": "在远程运行时托管的工作区中无法从历史记录恢复会话。",
-            "openSupportedWorkspace": "在恢复会话之前，请先打开一个本地或 SSH 工作区。",
+            "openSupportedWorkspace": "在恢复会话之前，请先打开一个工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。"
           },

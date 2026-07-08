@@ -194,10 +194,33 @@ describe('resolveAiVaultSessionResumeState', () => {
     })
   })
 
-  it('blocks runtime-owned targets even when they have no SSH connection', () => {
+  it('allows runtime-owned targets for matching runtime sessions', () => {
     expect(
       resolveAiVaultSessionResumeState({
         sessionFilePath: HOST_SESSION_FILE,
+        sessionExecutionHostId: 'runtime:env-1',
+        worktreeInfo: makeWorktreeInfo('active'),
+        activeWorktreeId: null,
+        worktrees: [makeWorktree()],
+        repos: [
+          makeRepo({
+            connectionId: null,
+            executionHostId: 'runtime:env-1'
+          })
+        ]
+      })
+    ).toEqual({
+      blocked: false,
+      worktreeId: 'repo-1::/repo/orca',
+      usesSessionWorktree: true
+    })
+  })
+
+  it('blocks runtime-owned targets for sessions from another host', () => {
+    expect(
+      resolveAiVaultSessionResumeState({
+        sessionFilePath: HOST_SESSION_FILE,
+        sessionExecutionHostId: 'local',
         worktreeInfo: makeWorktreeInfo('active'),
         activeWorktreeId: null,
         worktrees: [makeWorktree()],
@@ -215,19 +238,20 @@ describe('resolveAiVaultSessionResumeState', () => {
     })
   })
 
-  it('blocks runtime-stamped worktrees even when the repo owner is local', () => {
+  it('allows runtime-stamped worktrees even when the repo owner is local', () => {
     expect(
       resolveAiVaultSessionResumeState({
         sessionFilePath: HOST_SESSION_FILE,
+        sessionExecutionHostId: 'runtime:env-1',
         worktreeInfo: makeWorktreeInfo('active'),
         activeWorktreeId: null,
         worktrees: [makeWorktree({ hostId: 'runtime:env-1' })],
         repos: [makeRepo({ connectionId: null, executionHostId: 'local' })]
       })
     ).toEqual({
-      blocked: true,
-      worktreeId: null,
-      usesSessionWorktree: false
+      blocked: false,
+      worktreeId: 'repo-1::/repo/orca',
+      usesSessionWorktree: true
     })
   })
 
@@ -319,10 +343,11 @@ describe('resolveAiVaultSessionResumeState', () => {
     })
   })
 
-  it('blocks an active runtime folder workspace', () => {
+  it('allows an active runtime folder workspace for matching runtime sessions', () => {
     expect(
       resolveAiVaultSessionResumeState({
         sessionFilePath: HOST_SESSION_FILE,
+        sessionExecutionHostId: 'runtime:env-1',
         worktreeInfo: makeWorktreeInfo('archived'),
         activeWorktreeId: folderWorkspaceKey('folder-1'),
         worktrees: [],
@@ -330,8 +355,8 @@ describe('resolveAiVaultSessionResumeState', () => {
         targetState: makeFolderTargetState({ id: 'group-1', executionHostId: 'runtime:env-1' })
       })
     ).toEqual({
-      blocked: true,
-      worktreeId: null,
+      blocked: false,
+      worktreeId: folderWorkspaceKey('folder-1'),
       usesSessionWorktree: false
     })
   })
@@ -461,10 +486,11 @@ describe('resolveAiVaultSessionResumeActions', () => {
     })
   })
 
-  it('disables the active folder workspace action when it is runtime-owned', () => {
+  it('enables the active folder workspace action when it is a matching runtime host', () => {
     expect(
       resolveAiVaultSessionResumeActions({
         sessionFilePath: HOST_SESSION_FILE,
+        sessionExecutionHostId: 'runtime:env-1',
         worktreeInfo: makeWorktreeInfo('archived'),
         activeWorktreeId: folderWorkspaceKey('folder-1'),
         worktrees: [],
@@ -473,7 +499,7 @@ describe('resolveAiVaultSessionResumeActions', () => {
       })
     ).toEqual({
       worktree: { worktreeId: null, disabled: true },
-      newTab: { worktreeId: folderWorkspaceKey('folder-1'), disabled: true }
+      newTab: { worktreeId: folderWorkspaceKey('folder-1'), disabled: false }
     })
   })
 })
@@ -505,10 +531,25 @@ describe('resolveAiVaultSessionLaunchTarget', () => {
     })
   })
 
-  it('blocks direct resume into a runtime folder workspace', () => {
+  it('allows direct resume into a matching runtime folder workspace', () => {
     expect(
       resolveAiVaultSessionLaunchTarget({
         sessionFilePath: WSL_SESSION_FILE,
+        sessionExecutionHostId: 'runtime:env-1',
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        targetState: makeFolderTargetState({ id: 'group-1', executionHostId: 'runtime:env-1' })
+      })
+    ).toEqual({
+      status: 'ready',
+      worktreeId: folderWorkspaceKey('folder-1')
+    })
+  })
+
+  it('blocks direct resume into a mismatched runtime folder workspace', () => {
+    expect(
+      resolveAiVaultSessionLaunchTarget({
+        sessionFilePath: WSL_SESSION_FILE,
+        sessionExecutionHostId: 'runtime:env-2',
         activeWorktreeId: folderWorkspaceKey('folder-1'),
         targetState: makeFolderTargetState({ id: 'group-1', executionHostId: 'runtime:env-1' })
       })

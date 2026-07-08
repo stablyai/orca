@@ -28,7 +28,6 @@ import {
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
-import { getAiVaultResumeWorkspaceTargetStatus } from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_AGENTS,
   type AiVaultAgent,
@@ -77,12 +76,6 @@ export default function AiVaultPanel(): React.JSX.Element {
   const userChangedScopeRef = useRef(false)
   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
 
-  const isRuntimeWorktree = useMemo(
-    () =>
-      getAiVaultResumeWorkspaceTargetStatus(resumeTargetState, activeWorktreeId ?? null) ===
-      'runtime',
-    [activeWorktreeId, resumeTargetState]
-  )
   const runtimeHostOptions = useMemo(
     () => buildRuntimeAiVaultHostScopeOptions(runtimeEnvironments),
     [runtimeEnvironments]
@@ -344,15 +337,6 @@ export default function AiVaultPanel(): React.JSX.Element {
         onReset={resetViewOptions}
         onRefresh={() => void refresh({ force: true })}
       />
-
-      {isRuntimeWorktree ? (
-        <div className="border-b border-sidebar-border px-3 py-2 text-[11px] leading-4 text-muted-foreground">
-          {translate(
-            'auto.components.right.sidebar.AiVaultPanel.runtimeBrowseLocalHistory',
-            'Runtime-hosted workspaces can browse server history. Resume actions are available in local and SSH workspaces.'
-          )}
-        </div>
-      ) : null}
 
       {error ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">

@@ -2591,8 +2591,7 @@
             "localWorkspacesOnly": "履歴からの再開はローカルワークスペースでのみ利用できます。",
             "openLocalWorkspace": "セッションを再開する前にローカルワークスペースを開いてください。",
             "sessionQueued": "セッションをキューに追加しました",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースにドロップしてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。同じホスト上のワークスペースにドロップしてください。"
           },
@@ -9645,9 +9644,7 @@
             "sessionsShownCompact": "{{value0}} 件表示",
             "originalPaneUnavailable": "元のペインは利用できなくなりました。",
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse server history. Resume actions are available in local and SSH workspaces.",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。"
           },

@@ -2591,8 +2591,7 @@
             "localWorkspacesOnly": "기록에서 재개하기는 로컬 워크스페이스에서만 사용할 수 있습니다.",
             "openLocalWorkspace": "세션을 재개하기 전에 로컬 워크스페이스를 여세요.",
             "sessionQueued": "세션이 대기열에 추가됨",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스에 놓으세요.",
             "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 같은 호스트의 워크스페이스에 놓으세요."
           },
@@ -9645,9 +9644,7 @@
             "sessionsShownCompact": "{{value0}} 표시됨",
             "originalPaneUnavailable": "원래 창은 더 이상 사용할 수 없습니다.",
             "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse server history. Resume actions are available in local and SSH workspaces.",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요.",
             "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요."
           },

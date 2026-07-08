@@ -1,9 +1,18 @@
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TabSplitDirection } from '@/store/slices/tabs'
+
+export type LaunchAiVaultSessionInNewTabResult =
+  | { tabId: string; groupId?: string }
+  | { tabId: null; groupId?: string; runtimeLaunch: Promise<boolean> }
 
 export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
@@ -13,9 +22,33 @@ export function launchAiVaultSessionInNewTab(args: {
   launchConfig?: SleepingAgentLaunchConfig
   targetGroupId?: string
   splitDirection?: TabSplitDirection
-}): { tabId: string; groupId?: string } {
+}): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
   let targetGroupId = args.targetGroupId
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    const runtimeLaunch = createWebRuntimeSessionTerminal({
+      worktreeId: args.worktreeId,
+      environmentId: runtimeEnvironmentId,
+      ...(targetGroupId ? { targetGroupId } : {}),
+      command: args.command,
+      ...(args.env ? { env: args.env } : {}),
+      ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+      launchAgent: args.agent,
+      activate: true
+    }).then((created) => {
+      if (created) {
+        useAppStore.getState().setActiveTabType('terminal')
+      }
+      return created
+    })
+    return {
+      tabId: null,
+      ...(targetGroupId ? { groupId: targetGroupId } : {}),
+      runtimeLaunch
+    }
+  }
+
   if (args.splitDirection && targetGroupId) {
     targetGroupId =
       store.createEmptySplitGroup(args.worktreeId, targetGroupId, args.splitDirection) ??
