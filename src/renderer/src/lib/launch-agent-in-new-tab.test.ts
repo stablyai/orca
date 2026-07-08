@@ -681,6 +681,75 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
+  it('marks a cancelled submit-after-ready launch notified when the user closed the tab', async () => {
+    mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
+      onTimeout?.()
+      return Promise.resolve(false)
+    })
+    // User closed the tab before the agent became ready — it is gone from the list.
+    store.tabsByWorktree = { 'wt-1': [] }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'command-code',
+      worktreeId: 'wt-1',
+      prompt: 'large generated prompt',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: true
+    })
+    expect(mockToastMessage).not.toHaveBeenCalled()
+  })
+
+  it('marks a cancelled submit-after-ready launch notified when the user switched worktrees', async () => {
+    mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
+      onTimeout?.()
+      return Promise.resolve(false)
+    })
+    store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' } as never] }
+    store.activeWorktreeId = 'wt-2'
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'command-code',
+      worktreeId: 'wt-1',
+      prompt: 'large generated prompt',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: true
+    })
+    expect(mockToastMessage).not.toHaveBeenCalled()
+  })
+
+  it('leaves a genuine launch failure unnotified so the caller surfaces it', async () => {
+    mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
+      onTimeout?.()
+      return Promise.resolve(false)
+    })
+    // PTY never spawned: a real failure, not a user cancellation.
+    store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: null } as never] }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'command-code',
+      worktreeId: 'wt-1',
+      prompt: 'large generated prompt',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: false
+    })
+    expect(mockToastMessage).not.toHaveBeenCalled()
+  })
+
   it('queues per-launch CLI arguments without putting generated prompts in argv', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 

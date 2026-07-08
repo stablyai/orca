@@ -313,17 +313,17 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         const state = useAppStore.getState()
         const tabsForWorktree = state.tabsByWorktree[worktreeId] ?? []
         const currentTab = tabsForWorktree.find((t) => t.id === tab.id)
-        // Why: if the PTY never spawned, QuickLaunch's 5s watchdog already
-        // surfaced the launch failure. Don't double-toast for the same root
-        // cause. Looking up directly in `worktreeId` (not scanning every
-        // worktree) also preserves "still in this worktree" intent.
-        if (!currentTab) {
-          return // tab closed by user
+        if (currentTab?.ptyId === null) {
+          // Why: PTY never spawned — a genuine launch failure. Stay silent so
+          // the single notice comes from the caller (source-control dialog
+          // toast, or QuickLaunch's watchdog); leaving failureNotified false lets it fire.
+          return
         }
-        if (currentTab.ptyId === null) {
-          return // launch failed; QuickLaunch handled the user-facing toast
-        }
-        if (state.activeWorktreeId !== worktreeId) {
+        if (!currentTab || state.activeWorktreeId !== worktreeId) {
+          // Why: user-initiated cancellation (closed the tab or switched
+          // worktrees) — mark notified so the deferred source-control caller
+          // suppresses its generic "couldn't start" toast too, not just this nudge.
+          failureNotified = true
           return
         }
         toast.message(
