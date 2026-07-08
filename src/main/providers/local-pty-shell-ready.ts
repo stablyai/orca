@@ -13,7 +13,6 @@
 import { tmpdir } from 'node:os'
 import { basename, win32 as pathWin32 } from 'node:path'
 import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs'
-import { app } from 'electron'
 import type * as pty from 'node-pty'
 import {
   encodePowerShellCommand,
@@ -50,11 +49,11 @@ export type ShellReadySignal = {
 // ── Shell wrapper files ─────────────────────────────────────────────
 
 function getShellReadyWrapperRoot(): string {
-  // Why: this instance's userData must win over an inherited
-  // ORCA_USER_DATA_PATH (Orca launched from another Orca's terminal), so the
-  // wrapper writer root always matches the root buildPtyHostEnv hands to
-  // WSL children.
-  const userDataPath = app?.getPath?.('userData') ?? process.env.ORCA_USER_DATA_PATH ?? tmpdir()
+  // Why: bundled into daemon-entry.js (a plain-node fork with no electron
+  // require), so this must not import electron. Main canonicalizes
+  // ORCA_USER_DATA_PATH to its own userData at startup (configureOrcaUserDataPathEnv)
+  // and the daemon fork sets it explicitly, so the env value matches this root.
+  const userDataPath = process.env.ORCA_USER_DATA_PATH ?? tmpdir()
   return `${userDataPath}/shell-ready`
 }
 
