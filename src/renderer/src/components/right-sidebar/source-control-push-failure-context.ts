@@ -25,6 +25,10 @@ export function resolvePushFailureRawError(
     return null
   }
 
-  const raw = remoteActionError.rawError ?? remoteActionError.message
+  // Why: `message` is a user-facing summary; only raw git stderr is reliable for hook detection.
+  const raw = remoteActionError.rawError
+  if (!raw) {
+    return null
+  }
   return isPushHookFailure(raw) ? raw : null
 }

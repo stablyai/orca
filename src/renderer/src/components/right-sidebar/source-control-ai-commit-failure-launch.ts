@@ -40,7 +40,7 @@ export async function launchCommitFailureAgentWithDefault({
   getLaunchActionRecipe: (actionId: SourceControlLaunchActionId) => SourceControlActionRecipe
   getStoreState: () => SourceControlAiLaunchStoreSnapshot
 }): Promise<boolean> {
-  const connectionId = getConnectionId(activeWorktreeId) ?? sourceRepoConnectionId ?? null
+  const connectionId = getConnectionId(activeWorktreeId) ?? sourceRepoConnectionId
   if (connectionId === undefined) {
     toast.error(
       translate(

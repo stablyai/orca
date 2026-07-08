@@ -59,6 +59,7 @@ describe('launchCommitFailureAgentWithDefault', () => {
         activeWorktreeId: 'wt-1',
         activeGroupId: 'group-1',
         activeSourceControlLaunchPlatform: 'darwin',
+        sourceRepoConnectionId: null,
         commitFailureRecoveryPrompt: 'Fix this commit failure.',
         getLaunchActionRecipe: () => ({
           commandInputTemplate: '{basePrompt}',
@@ -78,5 +79,29 @@ describe('launchCommitFailureAgentWithDefault', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       'CLI arguments are invalid: Unclosed quote in command template.'
     )
+  })
+
+  it('rejects launches when the workspace connection cannot be resolved', async () => {
+    await expect(
+      launchCommitFailureAgentWithDefault({
+        activeWorktreeId: 'wt-1',
+        activeGroupId: 'group-1',
+        activeSourceControlLaunchPlatform: 'darwin',
+        commitFailureRecoveryPrompt: 'Fix this commit failure.',
+        getLaunchActionRecipe: () => ({
+          commandInputTemplate: '{basePrompt}',
+          agentArgs: ''
+        }),
+        getStoreState: () => ({
+          settings: { defaultTuiAgent: 'codex', disabledTuiAgents: [] } as never,
+          ensureDetectedAgents: mocks.ensureDetectedAgents,
+          ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents
+        })
+      })
+    ).resolves.toBe(false)
+
+    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith('Unable to resolve the workspace connection.')
   })
 })

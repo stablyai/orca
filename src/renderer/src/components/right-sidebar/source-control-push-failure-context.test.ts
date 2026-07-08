@@ -34,4 +34,13 @@ describe('resolvePushFailureRawError', () => {
       })
     ).toBeNull()
   })
+
+  it('returns null when only a formatted message is present', () => {
+    expect(
+      resolvePushFailureRawError({
+        kind: 'push',
+        message: 'Push blocked — lint failed during push.'
+      })
+    ).toBeNull()
+  })
 })
