@@ -50,7 +50,11 @@ export type ShellReadySignal = {
 // ── Shell wrapper files ─────────────────────────────────────────────
 
 function getShellReadyWrapperRoot(): string {
-  const userDataPath = process.env.ORCA_USER_DATA_PATH ?? app?.getPath?.('userData') ?? tmpdir()
+  // Why: this instance's userData must win over an inherited
+  // ORCA_USER_DATA_PATH (Orca launched from another Orca's terminal), so the
+  // wrapper writer root always matches the root buildPtyHostEnv hands to
+  // WSL children.
+  const userDataPath = app?.getPath?.('userData') ?? process.env.ORCA_USER_DATA_PATH ?? tmpdir()
   return `${userDataPath}/shell-ready`
 }
 

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -232,6 +232,15 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
     expect(existsSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'))).toBe(true)
     expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
+
+    // Why: the point of materializing wrappers for WSL is that a typed `omp`
+    // picks up Orca's status extension; pin that shim end to end.
+    const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
+    const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    for (const wrapperFile of [bashRcfile, zshLogin]) {
+      expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
+      expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
+    }
   })
 
   it('translates MSYS drive cwd to /mnt/<drive>/... for wsl.exe', () => {
