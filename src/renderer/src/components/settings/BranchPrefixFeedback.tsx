@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { getBranchPrefixIssue, normalizeBranchPrefix } from '../../../../shared/branch-prefix'
 import { translate } from '@/i18n/i18n'
 
@@ -6,7 +6,7 @@ type BranchPrefixFeedbackProps = {
   rawPrefix: string
 }
 
-export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): JSX.Element {
+export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): ReactNode {
   const issue = getBranchPrefixIssue(rawPrefix)
   const normalized = normalizeBranchPrefix(rawPrefix)
 
