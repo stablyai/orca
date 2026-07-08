@@ -4,7 +4,8 @@ import {
   buildAiVaultResumeCommand,
   type AiVaultAgent,
   type AiVaultSession,
-  type AiVaultSessionPreviewMessage
+  type AiVaultSessionPreviewMessage,
+  type AiVaultUserPrompt
 } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -20,6 +21,9 @@ import {
 } from './session-scanner-values'
 
 const SESSION_PREVIEW_MESSAGE_LIMIT = 5
+// Most-recent prompts retained per session; bounds the "My prompts" payload for
+// long conversations while covering all but the most extreme histories.
+const SESSION_USER_PROMPT_LIMIT = 200
 
 export function createAccumulator(args: {
   agent: AiVaultAgent
@@ -41,13 +45,20 @@ export function createAccumulator(args: {
     messageCount: 0,
     totalTokens: 0,
     previewMessages: [],
+    userPrompts: [],
     entrypoint: null,
     latestTimestampMs: 0
   }
 }
 
 export function cloneSessionAccumulator(accumulator: SessionAccumulator): SessionAccumulator {
-  return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
+  // Deep-copy every array consumeLine mutates so a resumed/failed parse can't
+  // corrupt the cached fold (see ResumableSessionParseState in the types file).
+  return {
+    ...accumulator,
+    previewMessages: [...accumulator.previewMessages],
+    userPrompts: [...accumulator.userPrompts]
+  }
 }
 
 // Resumable fold for parsers whose only parse state is the accumulator itself
@@ -111,6 +122,9 @@ export function finalizeSession(
     messageCount: accumulator.messageCount,
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
+    ...(accumulator.userPrompts.length > 0
+      ? { userPrompts: accumulator.userPrompts }
+      : {}),
     entrypoint: accumulator.entrypoint,
     resumeCommand: buildAiVaultResumeCommand({
       agent: accumulator.agent,
@@ -157,6 +171,13 @@ export function addPreviewMessage(
   })
   if (accumulator.previewMessages.length > SESSION_PREVIEW_MESSAGE_LIMIT) {
     accumulator.previewMessages.shift()
+  }
+}
+
+export function addUserPrompt(accumulator: SessionAccumulator, prompt: AiVaultUserPrompt): void {
+  accumulator.userPrompts.push(prompt)
+  if (accumulator.userPrompts.length > SESSION_USER_PROMPT_LIMIT) {
+    accumulator.userPrompts.shift()
   }
 }
 

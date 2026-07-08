@@ -9652,7 +9652,9 @@
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
             "sessionHostMismatchUnsupported": "This session belongs to a different host. Open a workspace on the same host to resume it.",
-            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
+            "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
+            "promptCount": "{{value0}} prompts",
+            "searchPrompts": "Search my prompts"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9684,7 +9686,10 @@
             "project": "Project",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
             "host": "Host",
-            "mainAgentOnly": "Main agent only"
+            "mainAgentOnly": "Main agent only",
+            "viewModeAriaLabel": "Session History view",
+            "sessionsView": "Sessions",
+            "promptsView": "My prompts"
           },
           "AiVaultSessionDetails": {
             "originalAsk": "Original ask",
@@ -9817,6 +9822,15 @@
             "archivedJumpUnavailable": "This session is in an archived worktree.",
             "noActiveWorktreeMatch": "No active worktree matches this session.",
             "noActiveWorktreeTarget": "No active worktree is available."
+          },
+          "AiVaultPromptTimeline": {
+            "loading": "Loading prompts…",
+            "noMatches": "No prompts match your search",
+            "empty": "No prompts to the main agent yet",
+            "resumeHint": "Resume this conversation",
+            "today": "Today",
+            "yesterday": "Yesterday",
+            "truncated": "Showing the {{value0}} most recent of {{value1}} prompts · narrow with search"
           }
         }
       },

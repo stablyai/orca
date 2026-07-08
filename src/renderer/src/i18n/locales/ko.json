@@ -9652,7 +9652,9 @@
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요.",
-            "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요."
+            "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요.",
+            "promptCount": "프롬프트 {{value0}}개",
+            "searchPrompts": "내 프롬프트 검색"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "세션 스캔 중",
@@ -9684,7 +9686,10 @@
             "project": "프로젝트",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
             "host": "Host",
-            "mainAgentOnly": "메인 에이전트만"
+            "mainAgentOnly": "메인 에이전트만",
+            "viewModeAriaLabel": "세션 기록 보기",
+            "sessionsView": "세션",
+            "promptsView": "내 프롬프트"
           },
           "AiVaultSessionDetails": {
             "updated": "업데이트됨",
@@ -9817,6 +9822,15 @@
             "archivedJumpUnavailable": "이 세션은 보관된 작업 트리에 있습니다.",
             "noActiveWorktreeMatch": "이 세션과 일치하는 활성 작업 트리가 없습니다.",
             "noActiveWorktreeTarget": "사용 가능한 활성 작업 트리가 없습니다."
+          },
+          "AiVaultPromptTimeline": {
+            "loading": "프롬프트 로드 중…",
+            "noMatches": "검색과 일치하는 프롬프트가 없습니다",
+            "empty": "아직 메인 에이전트에 보낸 프롬프트가 없습니다",
+            "resumeHint": "이 대화 재개",
+            "today": "오늘",
+            "yesterday": "어제",
+            "truncated": "{{value1}}개 중 최근 {{value0}}개 표시 중 · 검색으로 좁히기"
           }
         }
       },

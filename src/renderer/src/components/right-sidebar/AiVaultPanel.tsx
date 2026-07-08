@@ -21,10 +21,7 @@ import {
   normalizeAiVaultScopeForContext
 } from './ai-vault-scope-state'
 import { buildAiVaultProjectContext } from './ai-vault-session-projects'
-import {
-  resolveAiVaultSessionResumeActions,
-  resolveAiVaultSessionResumeState
-} from './ai-vault-session-resume'
+import { useAiVaultSessionResumeResolvers } from './ai-vault-session-resume-resolvers'
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
@@ -34,11 +31,13 @@ import {
   type AiVaultAgent,
   type AiVaultGroup,
   type AiVaultScope,
-  type AiVaultSession,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
+import { AiVaultPromptTimeline } from './AiVaultPromptTimeline'
+import type { AiVaultViewMode } from './ai-vault-prompt-timeline'
+import { useAiVaultPromptTimeline } from './ai-vault-prompt-timeline-state'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
 import { useAiVaultExecutionHostScope } from './ai-vault-host-scope'
@@ -68,6 +67,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const [group, setGroup] = useState<AiVaultGroup>('project')
   const [hideEmptySessions, setHideEmptySessions] = useState(true)
   const [mainAgentOnly, setMainAgentOnly] = useState(true)
+  const [viewMode, setViewMode] = useState<AiVaultViewMode>('sessions')
   const [agents, setAgents] = useState<AiVaultAgent[]>([...AI_VAULT_AGENTS])
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const userChangedScopeRef = useRef(false)
@@ -212,6 +212,23 @@ export default function AiVaultPanel(): React.JSX.Element {
     [filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
 
+  // The prompt timeline always shows main-agent conversations regardless of the
+  // sessions-view filters; search is applied per-prompt, not per-session.
+  const {
+    groups: promptTimelineGroups,
+    promptCount,
+    shownCount: promptShownCount
+  } = useAiVaultPromptTimeline({
+    enabled: viewMode === 'prompts',
+    sessions,
+    query,
+    scope,
+    activeWorktreePaths,
+    activeProjectKey,
+    sessionProjectById,
+    projectLabelByKey
+  })
+
   const copyText = useCallback(async (text: string, label: string): Promise<void> => {
     await window.api.ui.writeClipboardText(text)
     toast.success(
@@ -221,47 +238,15 @@ export default function AiVaultPanel(): React.JSX.Element {
     )
   }, [])
 
-  const getSessionResumeState = useCallback(
-    (session: AiVaultSession) =>
-      resolveAiVaultSessionResumeState({
-        sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
-        worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
-        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
-        worktrees: allWorktrees,
-        repos,
-        targetState: resumeTargetState
-      }),
-    [
-      activeWorktree?.id,
-      activeWorktreeId,
-      allWorktrees,
+  const { getSessionResumeState, getSessionResumeActions, resumePromptSession } =
+    useAiVaultSessionResumeResolvers({
+      sessionWorktreeById,
+      activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+      worktrees: allWorktrees,
       repos,
-      resumeTargetState,
-      sessionWorktreeById
-    ]
-  )
-
-  const getSessionResumeActions = useCallback(
-    (session: AiVaultSession) =>
-      resolveAiVaultSessionResumeActions({
-        sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
-        worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
-        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
-        worktrees: allWorktrees,
-        repos,
-        targetState: resumeTargetState
-      }),
-    [
-      activeWorktree?.id,
-      activeWorktreeId,
-      allWorktrees,
-      repos,
-      resumeTargetState,
-      sessionWorktreeById
-    ]
-  )
+      targetState: resumeTargetState,
+      onResume: handleResume
+    })
 
   const setAgentEnabled = useCallback((agent: AiVaultAgent, enabled: boolean) => {
     setAgents((current) => {
@@ -318,6 +303,9 @@ export default function AiVaultPanel(): React.JSX.Element {
         hideEmptySessions={hideEmptySessions}
         mainAgentOnly={mainAgentOnly}
         adjustmentCount={viewAdjustmentCount}
+        viewMode={viewMode}
+        promptCount={promptCount}
+        onViewModeChange={setViewMode}
         onQueryChange={setQuery}
         onScopeChange={handleScopeChange}
         onExecutionHostScopeChange={onExecutionHostScopeChange}
@@ -355,44 +343,56 @@ export default function AiVaultPanel(): React.JSX.Element {
         </div>
       ) : null}
 
-      <AiVaultSessionVirtualList
-        groups={groups}
-        collapsedGroups={collapsedGroups}
-        loading={loading}
-        sessionsCount={sessions.length}
-        filteredSessionsCount={filteredSessions.length}
-        error={error}
-        vaultScope={scope}
-        buildResumeStartup={buildResumeStartup}
-        getSessionResumeState={getSessionResumeState}
-        getSessionResumeActions={getSessionResumeActions}
-        getOriginalPaneTarget={getOriginalPaneTarget}
-        getWorktreeInfo={(session) => sessionWorktreeById.get(session.id) ?? null}
-        onToggleGroup={toggleGroup}
-        onJumpToOriginalPane={jumpToOriginalPane}
-        onJumpToWorktree={jumpToWorktree}
-        onResume={handleResume}
-        onCopyResume={(session, worktreeId) => void copyResumeCommand(session, worktreeId)}
-        onCopyId={(session) =>
-          void copyText(
-            session.sessionId,
-            translate('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
-          )
-        }
-        onCopyPath={(session) =>
-          void copyText(
-            session.filePath,
-            translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
-          )
-        }
-        onOpenLog={(session) => void window.api.shell.openFilePath(session.filePath)}
-        onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
-        onOpenCwd={(session) => {
-          if (session.cwd) {
-            void window.api.shell.openPath(session.cwd)
+      {viewMode === 'prompts' ? (
+        <AiVaultPromptTimeline
+          groups={promptTimelineGroups}
+          loading={loading}
+          hasQuery={query.trim().length > 0}
+          canResume={!isRuntimeWorktree}
+          totalCount={promptCount}
+          shownCount={promptShownCount}
+          onResumeSession={resumePromptSession}
+        />
+      ) : (
+        <AiVaultSessionVirtualList
+          groups={groups}
+          collapsedGroups={collapsedGroups}
+          loading={loading}
+          sessionsCount={sessions.length}
+          filteredSessionsCount={filteredSessions.length}
+          error={error}
+          vaultScope={scope}
+          buildResumeStartup={buildResumeStartup}
+          getSessionResumeState={getSessionResumeState}
+          getSessionResumeActions={getSessionResumeActions}
+          getOriginalPaneTarget={getOriginalPaneTarget}
+          getWorktreeInfo={(session) => sessionWorktreeById.get(session.id) ?? null}
+          onToggleGroup={toggleGroup}
+          onJumpToOriginalPane={jumpToOriginalPane}
+          onJumpToWorktree={jumpToWorktree}
+          onResume={handleResume}
+          onCopyResume={(session, worktreeId) => void copyResumeCommand(session, worktreeId)}
+          onCopyId={(session) =>
+            void copyText(
+              session.sessionId,
+              translate('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
+            )
           }
-        }}
-      />
+          onCopyPath={(session) =>
+            void copyText(
+              session.filePath,
+              translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
+            )
+          }
+          onOpenLog={(session) => void window.api.shell.openFilePath(session.filePath)}
+          onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
+          onOpenCwd={(session) => {
+            if (session.cwd) {
+              void window.api.shell.openPath(session.cwd)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

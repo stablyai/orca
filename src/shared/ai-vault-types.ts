@@ -54,6 +54,13 @@ export type AiVaultSessionPreviewMessage = {
   timestamp: string | null
 }
 
+// A prompt the user typed to the agent (see session-scanner-user-prompt.ts for
+// how genuine prompts are separated from tool results and injected messages).
+export type AiVaultUserPrompt = {
+  text: string
+  timestamp: string | null
+}
+
 export type AiVaultSession = {
   id: string
   executionHostId: ExecutionHostId
@@ -72,6 +79,10 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // The user's typed prompts to the main agent, oldest-first, for the AI Vault
+  // "My prompts" timeline. Present only for agents that record prompt origin
+  // (Claude today); omitted when none were captured.
+  userPrompts?: AiVaultUserPrompt[]
   // How the session is being driven (Claude Code's transcript `entrypoint`):
   // 'cli' for an interactive main-agent conversation, 'sdk'-prefixed for a
   // subagent/workflow the main agent spawned. Undefined for agents that don't

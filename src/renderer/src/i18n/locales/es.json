@@ -9652,7 +9652,9 @@
             "runtimeWorkspacesUnsupported": "Reanudar desde el historial no está disponible en workspaces alojados en runtime.",
             "openSupportedWorkspace": "Abre un workspace local o SSH antes de reanudar una sesión.",
             "localSessionSshWorkspaceUnsupported": "El historial de esta sesión solo existe en este equipo. Para reanudarla, abre un workspace local. Los workspaces SSH no tienen acceso a ese historial.",
-            "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Abre un espacio de trabajo en el mismo host para reanudarla."
+            "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Abre un espacio de trabajo en el mismo host para reanudarla.",
+            "promptCount": "{{value0}} prompts",
+            "searchPrompts": "Buscar en mis prompts"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Buscando sesiones",
@@ -9684,7 +9686,10 @@
             "project": "Proyecto",
             "hostScopeAriaLabel": "Host del historial de sesiones: {{value0}}",
             "host": "Host",
-            "mainAgentOnly": "Solo agente principal"
+            "mainAgentOnly": "Solo agente principal",
+            "viewModeAriaLabel": "Vista del historial de sesiones",
+            "sessionsView": "Sesiones",
+            "promptsView": "Mis prompts"
           },
           "AiVaultSessionDetails": {
             "updated": "Actualizado",
@@ -9817,6 +9822,15 @@
             "archivedJumpUnavailable": "Esta sesión está en un worktree archivado.",
             "noActiveWorktreeMatch": "Ningún worktree activo coincide con esta sesión.",
             "noActiveWorktreeTarget": "No hay ningún worktree activo disponible."
+          },
+          "AiVaultPromptTimeline": {
+            "loading": "Cargando prompts…",
+            "noMatches": "Ningún prompt coincide con tu búsqueda",
+            "empty": "Aún no hay prompts al agente principal",
+            "resumeHint": "Reanudar esta conversación",
+            "today": "Hoy",
+            "yesterday": "Ayer",
+            "truncated": "Mostrando los {{value0}} más recientes de {{value1}} prompts · afina con la búsqueda"
           }
         }
       },

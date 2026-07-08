@@ -8,7 +8,9 @@ import type {
   AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import type { AiVaultViewMode } from './ai-vault-prompt-timeline'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
+import { VaultViewModeToggle } from './AiVaultViewModeToggle'
 
 type AiVaultPanelHeaderProps = {
   query: string
@@ -27,6 +29,9 @@ type AiVaultPanelHeaderProps = {
   hideEmptySessions: boolean
   mainAgentOnly: boolean
   adjustmentCount: number
+  viewMode: AiVaultViewMode
+  promptCount: number
+  onViewModeChange: (mode: AiVaultViewMode) => void
   onQueryChange: (query: string) => void
   onScopeChange: (scope: AiVaultScope) => void
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
@@ -56,6 +61,9 @@ export function AiVaultPanelHeader({
   hideEmptySessions,
   mainAgentOnly,
   adjustmentCount,
+  viewMode,
+  promptCount,
+  onViewModeChange,
   onQueryChange,
   onScopeChange,
   onExecutionHostScopeChange,
@@ -84,7 +92,13 @@ export function AiVaultPanelHeader({
             </span>
           </div>
           <div className="truncate text-[11px] text-muted-foreground">
-            {hasScanResult ? (
+            {viewMode === 'prompts' ? (
+              translate(
+                'auto.components.right.sidebar.AiVaultPanel.promptCount',
+                '{{value0}} prompts',
+                { value0: promptCount }
+              )
+            ) : hasScanResult ? (
               <>
                 <span className="@max-[300px]/ai-vault:hidden">
                   {translate(
@@ -115,20 +129,22 @@ export function AiVaultPanelHeader({
             activeSshExecutionHostScope={activeSshExecutionHostScope}
             onExecutionHostScopeChange={onExecutionHostScopeChange}
           />
-          <VaultViewMenu
-            agents={agents}
-            sort={sort}
-            group={group}
-            hideEmptySessions={hideEmptySessions}
-            mainAgentOnly={mainAgentOnly}
-            adjustmentCount={adjustmentCount}
-            onAgentEnabledChange={onAgentEnabledChange}
-            onSortChange={onSortChange}
-            onGroupChange={onGroupChange}
-            onHideEmptySessionsChange={onHideEmptySessionsChange}
-            onMainAgentOnlyChange={onMainAgentOnlyChange}
-            onReset={onReset}
-          />
+          {viewMode === 'sessions' ? (
+            <VaultViewMenu
+              agents={agents}
+              sort={sort}
+              group={group}
+              hideEmptySessions={hideEmptySessions}
+              mainAgentOnly={mainAgentOnly}
+              adjustmentCount={adjustmentCount}
+              onAgentEnabledChange={onAgentEnabledChange}
+              onSortChange={onSortChange}
+              onGroupChange={onGroupChange}
+              onHideEmptySessionsChange={onHideEmptySessionsChange}
+              onMainAgentOnlyChange={onMainAgentOnlyChange}
+              onReset={onReset}
+            />
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -152,6 +168,10 @@ export function AiVaultPanelHeader({
       </div>
 
       <div className="mt-2">
+        <VaultViewModeToggle viewMode={viewMode} onViewModeChange={onViewModeChange} />
+      </div>
+
+      <div className="mt-2">
         <VaultScopeSwitch
           scope={scope}
           workspaceAvailable={Boolean(activeWorktreePath)}
@@ -165,10 +185,17 @@ export function AiVaultPanelHeader({
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={translate(
-            'auto.components.right.sidebar.AiVaultPanel.searchSessions',
-            'Search sessions'
-          )}
+          placeholder={
+            viewMode === 'prompts'
+              ? translate(
+                  'auto.components.right.sidebar.AiVaultPanel.searchPrompts',
+                  'Search my prompts'
+                )
+              : translate(
+                  'auto.components.right.sidebar.AiVaultPanel.searchSessions',
+                  'Search sessions'
+                )
+          }
           className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
           spellCheck={false}
         />

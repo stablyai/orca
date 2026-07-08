@@ -5,10 +5,8 @@ import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
-import {
-  parseClaudeSessionContent,
-  parseGeminiSessionContent
-} from './session-scanner-primary-parsers'
+import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
+import { parseGeminiSessionContent } from './session-scanner-gemini-parser'
 import {
   parseCopilotSessionContent,
   parseCursorSessionContent,

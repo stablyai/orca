@@ -9652,7 +9652,9 @@
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
             "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
-            "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。"
+            "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。",
+            "promptCount": "{{value0}} 件のプロンプト",
+            "searchPrompts": "自分のプロンプトを検索"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9684,7 +9686,10 @@
             "project": "プロジェクト",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
             "host": "Host",
-            "mainAgentOnly": "メインエージェントのみ"
+            "mainAgentOnly": "メインエージェントのみ",
+            "viewModeAriaLabel": "セッション履歴の表示",
+            "sessionsView": "セッション",
+            "promptsView": "自分のプロンプト"
           },
           "AiVaultSessionDetails": {
             "updated": "更新日時",
@@ -9817,6 +9822,15 @@
             "archivedJumpUnavailable": "このセッションはアーカイブされたワークツリーにあります。",
             "noActiveWorktreeMatch": "このセッションに一致するアクティブなワークツリーはありません。",
             "noActiveWorktreeTarget": "利用可能なアクティブなワークツリーはありません。"
+          },
+          "AiVaultPromptTimeline": {
+            "loading": "プロンプトを読み込み中…",
+            "noMatches": "検索に一致するプロンプトはありません",
+            "empty": "メインエージェントへのプロンプトはまだありません",
+            "resumeHint": "この会話を再開",
+            "today": "今日",
+            "yesterday": "昨日",
+            "truncated": "{{value1}} 件中、最新 {{value0}} 件を表示中 · 検索で絞り込み"
           }
         }
       },
