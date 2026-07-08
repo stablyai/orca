@@ -2,6 +2,7 @@ const { chmodSync, existsSync, readdirSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
+const { verifyPackagedDaemonEntryBoots } = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
@@ -130,6 +131,20 @@ module.exports = {
     }
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
+    // Why: boot the packaged daemon-entry under plain Node, but only for the
+    // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
+    // require()s the native (N-API) node-pty for the TARGET arch, which the host
+    // Node cannot load cross-arch. `Arch` enum: ia32=0, x64=1, armv7l=2,
+    // arm64=3, universal=4 (universal contains the host slice, so run it).
+    const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
+    const hostArchEnum = archEnumByNodeArch[process.arch]
+    if (context.arch === hostArchEnum || context.arch === 4) {
+      verifyPackagedDaemonEntryBoots(resourcesDir)
+    } else {
+      console.log(
+        `[verify-packaged-daemon-entry] skipped cross-arch slice (target ${context.arch}, host ${process.arch})`
+      )
+    }
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {

@@ -298,10 +298,13 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         // userData keeps process.cwd() valid after a repo/worktree is deleted.
         cwd: userDataPath,
         // Why: detached + unref lets the daemon outlive the Electron process.
-        // stdio 'ignore' prevents the child from holding the parent's stdout
-        // open, which would prevent Electron from exiting cleanly.
+        // stdout stays 'ignore' so the child never holds the parent's stdout
+        // open (which would block Electron exit); stderr is 'pipe' so a
+        // module-load crash during startup is captured instead of discarded
+        // (v1.4.129-rc.1 shipped a daemon that only logged "exited with code 1"
+        // because stderr was thrown away). The pipe is destroyed on readiness.
         detached: true,
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         // Why: run the relocated Orca.exe copy instead of the install-dir one.
         // It is byte-identical, so run-as-node behavior is unchanged; only the
         // image path moves out of the updater's kill zone.
@@ -319,6 +322,30 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
       }
     )
+
+    // Why: keep only the startup-window stderr tail so a crash cause is
+    // visible without unbounded memory if the daemon spews before dying.
+    const STARTUP_STDERR_MAX_BYTES = 8192
+    let startupStderr = ''
+    let collectingStderr = true
+    const onStartupStderr = (chunk: Buffer): void => {
+      if (!collectingStderr) {
+        return
+      }
+      startupStderr += chunk.toString('utf8')
+      if (startupStderr.length > STARTUP_STDERR_MAX_BYTES) {
+        startupStderr = startupStderr.slice(-STARTUP_STDERR_MAX_BYTES)
+      }
+    }
+    child.stderr?.on('data', onStartupStderr)
+    // Why: once the daemon is up (or has failed) the parent must not keep a
+    // live handle on the detached daemon's stderr — a piped stream would ref
+    // the parent event loop and prevent Electron from exiting cleanly.
+    const releaseStderr = (): void => {
+      collectingStderr = false
+      child.stderr?.off('data', onStartupStderr)
+      child.stderr?.destroy()
+    }
 
     // Wait for the daemon to signal readiness via IPC
     await new Promise<void>((resolve, reject) => {
@@ -338,6 +365,14 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         settled = true
         cleanupStartupListeners()
+        // Why: stderr was previously discarded, so a startup crash surfaced only
+        // as "exited with code 1". Attach the captured tail to the thrown error
+        // (which the fallback path reports) and log it so the real cause shows.
+        const stderrTail = startupStderr.trim()
+        if (stderrTail) {
+          console.warn(`[daemon] startup failed; captured stderr tail:\n${stderrTail}`)
+        }
+        releaseStderr()
         if (child.pid) {
           try {
             process.kill(child.pid, 'SIGTERM')
@@ -345,7 +380,9 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
             // Already dead
           }
         }
-        reject(error)
+        reject(
+          stderrTail ? new Error(`${error.message}\nDaemon stderr (tail):\n${stderrTail}`) : error
+        )
       }
       function onReadyMessage(msg: unknown): void {
         if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
@@ -372,8 +409,10 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               { mode: 0o600 }
             )
           }
-          // Why: disconnect IPC channel and unref so Electron can exit
-          // without waiting for the daemon. The daemon keeps running.
+          // Why: disconnect IPC channel, release the stderr pipe, and unref so
+          // Electron can exit without waiting for the daemon. The daemon keeps
+          // running detached.
+          releaseStderr()
           child.disconnect()
           child.unref()
           resolve()
