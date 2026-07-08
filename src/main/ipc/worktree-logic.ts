@@ -8,7 +8,11 @@ import { getWslHome, parseWslPath } from '../wsl'
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+export {
+  computeBranchName,
+  getConfiguredBranchPrefix,
+  computeValidatedBranchName
+} from './worktree-branch-name'
 export { mergeWorktree } from './worktree-metadata-merge'
 export { areWorktreePathsEqual } from './worktree-path-comparison'
 

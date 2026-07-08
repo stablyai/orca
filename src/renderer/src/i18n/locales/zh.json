@@ -5682,6 +5682,11 @@
           "273e7e81fe": "配置",
           "1f744a72f4": "配置"
         },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "前缀不能包含空格或 ~ ^ : ? * [ \\ 等特殊字符",
+          "64d70b156a": "分支将命名为 {{example}}",
+          "808f9a726e": "不会应用前缀"
+        },
         "GitPane": {
           "d2eede4c54": "将 Orca 署名添加到 commits、PR 和议题。",
           "e02ea23a32": "Orca 署名",

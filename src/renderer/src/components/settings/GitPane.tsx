@@ -6,6 +6,8 @@ import { Label } from '../ui/label'
 import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
+import { BranchPrefixFeedback } from './BranchPrefixFeedback'
+import { selectBranchPrefixInput } from '../../../../shared/branch-prefix'
 import { matchesSettingsSearch } from './settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
 import {
@@ -144,6 +146,9 @@ export function GitPane({
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
 
+  const isBranchPrefixInputMode = settings.branchPrefix !== 'none'
+  const branchPrefixInputValue = selectBranchPrefixInput(settings, displayedGitUsername) ?? ''
+
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
       title: translate('auto.components.settings.GitPane.330f584b50', 'Branch Prefix'),
@@ -195,13 +200,9 @@ export function GitPane({
             </button>
           ))}
         </div>
-        {(settings.branchPrefix === 'custom' || settings.branchPrefix === 'git-username') && (
+        {isBranchPrefixInputMode && (
           <Input
-            value={
-              settings.branchPrefix === 'git-username'
-                ? displayedGitUsername
-                : settings.branchPrefixCustom
-            }
+            value={branchPrefixInputValue}
             onChange={(e) => updateSettings({ branchPrefixCustom: e.target.value })}
             placeholder={
               settings.branchPrefix === 'git-username'
@@ -215,6 +216,7 @@ export function GitPane({
             readOnly={settings.branchPrefix === 'git-username'}
           />
         )}
+        {isBranchPrefixInputMode && <BranchPrefixFeedback rawPrefix={branchPrefixInputValue} />}
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {

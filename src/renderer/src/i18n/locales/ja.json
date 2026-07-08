@@ -5719,6 +5719,11 @@
         "YamlThemeImportButton": {
           "label": "YAML からインポート"
         },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "プレフィックスにスペースや ~ ^ : ? * [ \\ などの特殊文字は使用できません",
+          "64d70b156a": "ブランチ名は {{example}} になります",
+          "808f9a726e": "プレフィックスは適用されません"
+        },
         "GitPane": {
           "d2eede4c54": "Orca の帰属を commits、PR、Issue に追加します。",
           "e02ea23a32": "Orca の帰属",

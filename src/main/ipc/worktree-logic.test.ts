@@ -6,6 +6,7 @@ import {
   ensurePathWithinWorkspace,
   computeBranchName,
   getConfiguredBranchPrefix,
+  computeValidatedBranchName,
   computeWorktreePath,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
@@ -148,6 +149,18 @@ describe('computeBranchName', () => {
   it('returns bare name when branchPrefix is none', () => {
     expect(computeBranchName('feature', { branchPrefix: 'none' }, 'jdoe')).toBe('feature')
   })
+
+  it('does not double the slash when a custom prefix ends in one', () => {
+    expect(
+      computeBranchName('feature', { branchPrefix: 'custom', branchPrefixCustom: 'team/' }, null)
+    ).toBe('team/feature')
+  })
+
+  it('normalizes a trailing slash on a git username prefix', () => {
+    expect(computeBranchName('feature', { branchPrefix: 'git-username' }, 'jdoe/')).toBe(
+      'jdoe/feature'
+    )
+  })
 })
 
 describe('getConfiguredBranchPrefix', () => {
@@ -173,6 +186,40 @@ describe('getConfiguredBranchPrefix', () => {
 
   it('returns null when no prefix strategy applies', () => {
     expect(getConfiguredBranchPrefix({ branchPrefix: 'none' }, 'jdoe')).toBeNull()
+  })
+
+  it('normalizes a trailing slash out of the custom prefix', () => {
+    expect(
+      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: 'team/' }, null)
+    ).toBe('team')
+  })
+
+  it('returns null when the custom prefix normalizes away to empty', () => {
+    expect(
+      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: '/' }, null)
+    ).toBeNull()
+  })
+})
+
+describe('computeValidatedBranchName', () => {
+  it('returns the computed branch name when the prefix is valid', () => {
+    expect(
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team' },
+        null
+      )
+    ).toBe('team/feature')
+  })
+
+  it('throws when the configured prefix is invalid', () => {
+    expect(() =>
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team x' },
+        null
+      )
+    ).toThrow('contains characters git rejects')
   })
 })
 

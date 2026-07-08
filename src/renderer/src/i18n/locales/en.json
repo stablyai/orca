@@ -5757,6 +5757,11 @@
         "YamlThemeImportButton": {
           "label": "Import from YAML"
         },
+        "BranchPrefixFeedback": {
+          "6c40c0908f": "Prefix cannot contain spaces or special characters like ~ ^ : ? * [ \\",
+          "64d70b156a": "Branches will be named {{example}}",
+          "808f9a726e": "No prefix will be applied"
+        },
         "GitPane": {
           "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
           "e02ea23a32": "Orca Attribution",
