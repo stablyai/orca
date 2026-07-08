@@ -236,6 +236,86 @@ describe('hasAbsoluteCommandPath', () => {
 })
 
 describe('PreflightHandler', () => {
+  it('honors required commands when reporting detected agents', async () => {
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      const script = String(args[1])
+      if (script.includes("'orca'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/relay/path/orca\n' }
+      }
+      throw new Error('not found')
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    new PreflightHandler(dispatcher as never)
+
+    const handler = requestHandlers.get('preflight.detectAgents')
+    expect(handler).toBeDefined()
+    await expect(
+      handler!({
+        commands: [
+          { id: 'claude-agent-teams', cmd: 'orca', requiredCommands: ['claude'] },
+          { id: 'claude', cmd: 'claude' }
+        ]
+      })
+    ).resolves.toEqual({ agents: [] })
+  })
+
+  it('does not report platform-unsupported agents on native Windows SSH hosts', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      if (String(args[0]) === 'claude') {
+        return { stdout: 'C:\\Users\\test\\AppData\\Roaming\\npm\\claude.cmd\r\n' }
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: 'C:\\Program Files\\Orca\\orca.cmd\r\n' }
+      }
+      throw new Error('not found')
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    try {
+      new PreflightHandler(dispatcher as never)
+      const handler = requestHandlers.get('preflight.detectAgents')
+      expect(handler).toBeDefined()
+      await expect(
+        handler!({
+          commands: [
+            {
+              id: 'claude-agent-teams',
+              cmd: 'orca',
+              requiredCommands: ['claude'],
+              unsupportedRuntimes: ['win32']
+            },
+            { id: 'claude', cmd: 'claude' }
+          ]
+        })
+      ).resolves.toEqual({ agents: ['claude'] })
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('reports remote Windows shell capabilities through the SSH preflight path', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {

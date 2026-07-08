@@ -22,6 +22,15 @@ type RelayCommandLookupOptions = {
   accountLoginShell?: string | null
 }
 
+type AgentDetectionRuntime = NodeJS.Platform | 'wsl'
+
+type AgentDetectionCommand = {
+  id: string
+  cmd: string
+  requiredCommands?: readonly string[]
+  unsupportedRuntimes?: readonly AgentDetectionRuntime[]
+}
+
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
@@ -45,19 +54,42 @@ export class PreflightHandler {
   // on the relay side. This keeps the relay bundle minimal and makes the protocol
   // self-describing — the relay doesn't need to know the agent catalog.
   private async detectAgents(params: Record<string, unknown>): Promise<{ agents: string[] }> {
-    const commands = params.commands as { id: string; cmd: string }[]
+    const commands = params.commands as AgentDetectionCommand[]
     if (!Array.isArray(commands)) {
       return { agents: [] }
     }
+    const probeCommands = [
+      ...new Set(
+        commands
+          .filter((command) => !isDetectionUnsupportedInRuntime(command, process.platform))
+          .flatMap((command) => [command.cmd, ...(command.requiredCommands ?? [])])
+      )
+    ]
 
     const results = await Promise.all(
-      commands.map(async ({ id, cmd }) => ({
-        id,
+      probeCommands.map(async (cmd) => ({
+        cmd,
         installed: await this.isCommandOnPath(cmd)
       }))
     )
+    const foundCommands = new Set(
+      results.filter((result) => result.installed).map(({ cmd }) => cmd)
+    )
 
-    return { agents: [...new Set(results.filter((r) => r.installed).map((r) => r.id))] }
+    return {
+      agents: [
+        ...new Set(
+          commands
+            .filter(
+              (command) =>
+                !isDetectionUnsupportedInRuntime(command, process.platform) &&
+                foundCommands.has(command.cmd) &&
+                (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
+            )
+            .map(({ id }) => id)
+        )
+      ]
+    }
   }
 
   private async detectWindowsTerminalCapabilities(): Promise<{
@@ -89,6 +121,13 @@ export class PreflightHandler {
   private async isCommandOnPath(command: string): Promise<boolean> {
     return isCommandOnPathForRelay(command)
   }
+}
+
+function isDetectionUnsupportedInRuntime(
+  command: AgentDetectionCommand,
+  runtime: AgentDetectionRuntime
+): boolean {
+  return command.unsupportedRuntimes?.includes(runtime) === true
 }
 
 export function buildCommandLookupSpec(
