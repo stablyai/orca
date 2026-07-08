@@ -7282,7 +7282,11 @@ export class OrcaRuntimeService {
     this.freshSubscribeGuard.add(ptyId)
     try {
       const result = await this.enqueueLayout(ptyId, layoutTarget)
-      if (reclaimingHost) {
+      // Why: only drop the recorded host size once the reclaim resize actually
+      // landed. If it failed, the PTY is still at the remote-viewer width, so
+      // keep the target for the next reclaim (otherwise it resolves via the
+      // stale remote width and never restores true host geometry).
+      if (reclaimingHost && result.ok) {
         this.remoteDesktopHostReclaimTargets.delete(ptyId)
       }
       return result.ok
@@ -7321,6 +7325,38 @@ export class OrcaRuntimeService {
     viewers.delete(subscriptionKey)
     if (viewers.size === 0) {
       this.remoteDesktopViewers.delete(ptyId)
+    }
+    return this.applyRemoteDesktopLayout(ptyId)
+  }
+
+  // Why: the one-shot `terminal.updateViewport` RPC has no disconnect hook, so
+  // it must never *create* a width floor (that floor would leak — nothing
+  // releases it, pinning the host at a stale width after the viewer is gone).
+  // It only refreshes the floor(s) this client already owns via its stream
+  // subscription, keyed by clientId. Mirrors the mobile `updateMobileViewport`
+  // no-op-without-subscription invariant. Returns false when the client owns no
+  // floor (passive/stream-less viewer) — a stream-less viewer must not lock host
+  // resize.
+  refreshRemoteDesktopViewer(
+    ptyId: string,
+    clientId: string,
+    cols: number,
+    rows: number
+  ): Promise<boolean> {
+    const viewers = this.remoteDesktopViewers.get(ptyId)
+    if (!viewers) {
+      return Promise.resolve(false)
+    }
+    const viewport = clampTerminalViewport(cols, rows)
+    let changed = false
+    for (const [subscriptionKey, viewer] of viewers) {
+      if (viewer.clientId === clientId) {
+        viewers.set(subscriptionKey, { clientId, cols: viewport.cols, rows: viewport.rows })
+        changed = true
+      }
+    }
+    if (!changed) {
+      return Promise.resolve(false)
     }
     return this.applyRemoteDesktopLayout(ptyId)
   }

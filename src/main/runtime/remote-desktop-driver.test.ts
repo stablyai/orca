@@ -194,6 +194,74 @@ describe('remote desktop viewer width driver', () => {
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 120, rows: 40 })
   })
 
+  it('refresh never creates a floor (one-shot viewport cannot leak host suppression)', async () => {
+    const { runtime } = createRuntime()
+    // A one-shot terminal.updateViewport (refresh) from a viewer with no stream
+    // floor must NOT register one — that floor would leak (nothing releases a
+    // one-shot RPC's state), pinning the host at a stale width forever.
+    const created = await runtime.refreshRemoteDesktopViewer('pty-1', 'viewer-A', 90, 30)
+    expect(created).toBe(false)
+    expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+
+    // Once the client's STREAM registers the floor (and owns its cleanup), a
+    // refresh updates that same floor by clientId.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'stream:1', 'viewer-A', 100, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+    const refreshed = await runtime.refreshRemoteDesktopViewer('pty-1', 'viewer-A', 70, 25)
+    expect(refreshed).toBe(true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 70, rows: 25 })
+
+    // A refresh for a DIFFERENT client that owns no floor is a no-op.
+    const other = await runtime.refreshRemoteDesktopViewer('pty-1', 'viewer-Z', 60, 20)
+    expect(other).toBe(false)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 70, rows: 25 })
+
+    // The stream cleanup releases the sole floor — the refresh left no orphan,
+    // so the host reclaims (suppression drops).
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'stream:1')
+    expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
+  })
+
+  it('keeps the host reclaim target when the reclaim resize fails', async () => {
+    const { runtime } = createRuntime()
+    const ptySizes = new Map<string, { cols: number; rows: number }>([
+      ['pty-1', { cols: 150, rows: 40 }]
+    ])
+    let resizeSucceeds = true
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      resize: (ptyId, cols, rows) => {
+        if (!resizeSucceeds) {
+          return false
+        }
+        ptySizes.set(ptyId, { cols, rows })
+        return true
+      },
+      getSize: (ptyId) => ptySizes.get(ptyId) ?? null
+    })
+
+    // Host reports its own 120-wide geometry; a viewer drives the PTY to 80.
+    runtime.recordRemoteDesktopHostReclaimTarget('pty-1', 120, 40)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 40 })
+
+    // The last viewer leaves but the reclaim resize fails: the PTY is stuck at
+    // 80, so the recorded host target (120) MUST be retained for a later retry.
+    resizeSucceeds = false
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 40 })
+
+    // A retry once resize works restores the TRUE host width (120), not the
+    // stale viewer width (80) that a dropped target would have resolved to.
+    resizeSucceeds = true
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 40)
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-B')
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 120, rows: 40 })
+  })
+
   it('PTY exit clears the remote-desktop registry', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 40)

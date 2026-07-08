@@ -134,7 +134,7 @@ describe('terminal multiplex RPC', () => {
       )
       expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
         'pty-1',
-        'multiplex:5',
+        'multiplex:conn-1:5',
         'desktop-1',
         300,
         150
@@ -183,7 +183,7 @@ describe('terminal multiplex RPC', () => {
       await vi.waitFor(() =>
         expect(runtime.updateRemoteDesktopViewer).toHaveBeenLastCalledWith(
           'pty-1',
-          'multiplex:5',
+          'multiplex:conn-1:5',
           'desktop-1',
           100,
           30
@@ -241,6 +241,125 @@ describe('terminal multiplex RPC', () => {
       ).toBe('snapshot')
 
       runtime.cleanupSubscription('terminal-multiplex:conn-1')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('applies a viewer resize parked during a snapshot-request buffering window', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const handlers = new Map<
+        number,
+        (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+      >()
+      const cleanups = new Map<string, () => void>()
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi
+          .fn()
+          .mockResolvedValue({ data: 'snapshot', cols: 120, rows: 40 }),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+        getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true })
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.multiplex', {}),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-snap',
+          sendBinary: (bytes) => binaryFrames.push(bytes),
+          registerBinaryStreamHandler: (streamId, handler) => {
+            handlers.set(streamId, handler)
+            return () => handlers.delete(streamId)
+          }
+        }
+      )
+
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+      )
+      handlers.get(0)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Subscribe,
+            streamId: 0,
+            seq: 1,
+            payload: encodeTerminalStreamJson({
+              streamId: 9,
+              terminal: 'terminal-1',
+              client: { id: 'desktop-1', type: 'desktop' },
+              viewport: { cols: 300, rows: 150 }
+            })
+          })
+        )!
+      )
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      // Ignore the subscribe-time floor registration; assert only the drained one.
+      vi.mocked(runtime.updateRemoteDesktopViewer).mockClear()
+
+      // A snapshot request opens the buffering window synchronously (buffering
+      // is set before the first await inside the handler)...
+      handlers.get(9)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.SnapshotRequest,
+            streamId: 9,
+            seq: 2,
+            payload: encodeTerminalStreamJson({ requestId: 3, scrollbackRows: 1000 })
+          })
+        )!
+      )
+      // ...so a resize arriving now is PARKED, not applied inline.
+      handlers.get(9)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Resize,
+            streamId: 9,
+            seq: 3,
+            payload: encodeTerminalStreamJson({ cols: 88, rows: 33 })
+          })
+        )!
+      )
+      expect(runtime.updateRemoteDesktopViewer).not.toHaveBeenCalled()
+
+      // Once the snapshot completes and buffering clears, the parked resize is
+      // drained (previously it was silently dropped until the next resize).
+      await vi.waitFor(() =>
+        expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
+          'pty-1',
+          'multiplex:conn-snap:9',
+          'desktop-1',
+          88,
+          33
+        )
+      )
+
+      runtime.cleanupSubscription('terminal-multiplex:conn-snap')
       await dispatchPromise
     } finally {
       vi.useRealTimers()

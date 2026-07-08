@@ -377,6 +377,11 @@ export function createRemoteRuntimePtyTransport(
     }
     const subscribedHandle = handle
     const subscribedPtyId = remotePtyId
+    // Why: the viewport we hand the subscribe request. A resize landing during
+    // the round-trip falls back to the one-shot RPC, which is refresh-only (no
+    // leak) and no-ops before the stream floor exists — so replay the latest
+    // remembered viewport through the stream once it's current (below).
+    const subscribedViewport = desiredViewport
     const isCurrentSubscription = (): boolean =>
       isCurrentRemoteTerminal(subscribedHandle, subscribedPtyId)
     const nextStream = await getRemoteRuntimeTerminalMultiplexer(
@@ -384,7 +389,7 @@ export function createRemoteRuntimePtyTransport(
     ).subscribeTerminal({
       terminal: subscribedHandle,
       client: { id: clientId, type: 'desktop' },
-      viewport: desiredViewport ?? undefined,
+      viewport: subscribedViewport ?? undefined,
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
@@ -473,6 +478,17 @@ export function createRemoteRuntimePtyTransport(
     closeMultiplexedStream()
     multiplexedStream = nextStream
     multiplexedStreamHandle = subscribedHandle
+    // Why: a viewport change that landed during the subscribe round-trip took
+    // the now-no-op one-shot fallback, so the stream floor is still at the
+    // subscribe-time size. Replay the latest remembered viewport so the PTY
+    // tracks the current width instead of stalling until the next resize.
+    if (
+      desiredViewport &&
+      (desiredViewport.cols !== subscribedViewport?.cols ||
+        desiredViewport.rows !== subscribedViewport?.rows)
+    ) {
+      nextStream.resize(desiredViewport.cols, desiredViewport.rows)
+    }
   }
 
   return {

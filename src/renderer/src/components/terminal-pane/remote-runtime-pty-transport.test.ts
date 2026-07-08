@@ -1275,6 +1275,62 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
   })
 
+  it('replays a viewport that changed during the subscribe round-trip once the stream is current', async () => {
+    // Why: a resize landing while the subscribe is in flight takes the one-shot
+    // RPC fallback, which is refresh-only (no leak) and no-ops before the stream
+    // floor exists. The transport must replay the latest viewport over the
+    // now-current stream so the PTY does not stall at the subscribe-time width.
+    // Hold the multiplex "ready" to keep the round-trip open across the resize.
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    // Drain microtasks WITHOUT advancing timers, so the 33ms viewport batcher
+    // cannot fire — the replayed Resize frame must come from the round-trip
+    // flush alone (this test fails if that flush is removed).
+    const flushMicrotasks = async (): Promise<void> => {
+      for (let i = 0; i < 20; i += 1) {
+        await Promise.resolve()
+      }
+    }
+
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
+
+    // Resize while the stream is not yet current (subscribe still pending).
+    expect(transport.resize(132, 43)).toBe(true)
+
+    // Release readiness and drain the resolution chain by microtasks only.
+    emitMultiplexReady()
+    await flushMicrotasks()
+
+    // The Subscribe frame still carries the subscribe-time viewport...
+    expect(latestSubscribePayload().viewport).toEqual({ cols: 80, rows: 24 })
+    // ...and the newer viewport is replayed as a Resize frame over the stream,
+    // before the batcher's 33ms timer could have produced it.
+    const resizeFrame = latestFrameForOpcode(TerminalStreamOpcode.Resize)
+    expect(resizeFrame && decodeTerminalStreamJson(resizeFrame.payload)).toEqual({
+      cols: 132,
+      rows: 43
+    })
+
+    transport.destroy?.()
+  })
+
   it('coalesces rapid remote terminal input before sending it to the runtime', async () => {
     vi.useFakeTimers()
     try {
