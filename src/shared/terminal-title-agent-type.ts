@@ -31,6 +31,8 @@ export function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
+import { isGeminiTerminalTitle } from './gemini-terminal-title'
+
 export { isGeminiTerminalTitle } from './gemini-terminal-title'
 
 export function isPiTerminalTitle(title: string): boolean {
