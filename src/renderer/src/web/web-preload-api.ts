@@ -2139,6 +2139,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       ),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
+    // The browser clipboard exposes no OS file references, so a web paste can
+    // never carry copied-file paths.
+    readClipboardFilePaths: () => Promise.resolve([]),
     saveClipboardImageAsTempFile: async (args?: {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null

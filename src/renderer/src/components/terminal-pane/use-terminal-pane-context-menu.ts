@@ -12,6 +12,7 @@ import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-c
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { resolveTerminalPasteTargetShell } from './terminal-paste-target-shell'
 import {
   executeTerminalPastePlan,
   planTerminalPasteWithYield,
@@ -299,7 +300,9 @@ export function useTerminalPaneContextMenu({
     )
     const result = await pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
+      readClipboardFilePaths: () => window.api.ui.readClipboardFilePaths(),
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      targetShell: resolveTerminalPasteTargetShell({ worktreeId, fallbackCwd }),
       connectionId,
       runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,

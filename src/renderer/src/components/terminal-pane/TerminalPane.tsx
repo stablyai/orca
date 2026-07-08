@@ -158,6 +158,7 @@ import {
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
+import { resolveTerminalPasteTargetShell } from './terminal-paste-target-shell'
 import {
   isTerminalPanePasteFocusCurrent,
   isTerminalPanePasteTargetCurrent
@@ -2072,7 +2073,9 @@ export default function TerminalPane({
       const activeElementAtDispatch = document.activeElement
       void pasteTerminalClipboard({
         readClipboardText: window.api.ui.readClipboardText,
+        readClipboardFilePaths: () => window.api.ui.readClipboardFilePaths(),
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+        targetShell: resolveTerminalPasteTargetShell({ worktreeId, fallbackCwd: cwd }),
         connectionId,
         runtimeEnvironmentId,
         forceBracketedMultilineTextPaste,
@@ -2208,7 +2211,9 @@ export default function TerminalPane({
       )
       void pasteTerminalClipboard({
         readClipboardText: window.api.ui.readClipboardText,
+        readClipboardFilePaths: () => window.api.ui.readClipboardFilePaths(),
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+        targetShell: resolveTerminalPasteTargetShell({ worktreeId, fallbackCwd: cwd }),
         connectionId,
         runtimeEnvironmentId,
         forceBracketedMultilineTextPaste,
