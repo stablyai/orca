@@ -4,6 +4,7 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { installWindowLocalStorage } from '@/test/memory-storage'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -55,6 +56,7 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
+  installWindowLocalStorage()
   clearPRCommentsListSelection('review:42')
   container = document.createElement('div')
   document.body.appendChild(container)

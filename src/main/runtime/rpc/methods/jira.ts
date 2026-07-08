@@ -6,6 +6,7 @@ import {
   OptionalString,
   requiredString
 } from '../schemas'
+import { JiraConnectArgsSchema } from '../../../jira/jira-connect-args-schema'
 
 const VALID_FILTERS = ['assigned', 'reported', 'all', 'done'] as const
 
@@ -14,12 +15,6 @@ const SiteSelection = z
     siteId: OptionalString
   })
   .optional()
-
-const Connect = z.object({
-  siteUrl: requiredString('Site URL is required'),
-  email: requiredString('Email is required'),
-  apiToken: requiredString('API token is required')
-})
 
 const SelectSite = z.object({
   siteId: requiredString('Site ID is required')
@@ -56,13 +51,19 @@ const CreateIssue = z.object({
 const IssueUpdate = z.object({
   key: requiredString('Issue key is required'),
   siteId: OptionalString,
-  updates: z.object({
-    title: OptionalString,
-    labels: z.array(z.string()).optional(),
-    assigneeAccountId: z.union([z.string(), z.null()]).optional(),
-    priorityId: z.union([z.string(), z.null()]).optional(),
-    transitionId: OptionalString
-  })
+  updates: z
+    .object({
+      title: OptionalString,
+      labels: z.array(z.string()).optional(),
+      assigneeUserId: z.union([z.string(), z.null()]).optional(),
+      assigneeAccountId: z.union([z.string(), z.null()]).optional(),
+      priorityId: z.union([z.string(), z.null()]).optional(),
+      transitionId: OptionalString
+    })
+    .refine(
+      (updates) => updates.assigneeUserId === undefined || updates.assigneeAccountId === undefined,
+      'Use only one Jira assignee identifier field.'
+    )
 })
 
 const IssueComment = z.object({
@@ -91,13 +92,10 @@ const AssignableUsers = z.object({
 export const JIRA_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'jira.connect',
-    params: Connect,
-    handler: async (params, { runtime }) =>
-      runtime.jiraConnect({
-        siteUrl: params.siteUrl.trim(),
-        email: params.email.trim(),
-        apiToken: params.apiToken.trim()
-      })
+    params: JiraConnectArgsSchema,
+    handler: async (params, { runtime }) => {
+      return runtime.jiraConnect(params)
+    }
   }),
   defineMethod({
     name: 'jira.disconnect',

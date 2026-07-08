@@ -1,12 +1,20 @@
+export type JiraDeploymentType = 'cloud' | 'server'
+export type JiraAuthMode = 'basic' | 'bearer'
+
 export type JiraSite = {
   id: string
   siteUrl: string
   email: string
   displayName: string
   accountId: string
+  viewerUserId: string
+  deploymentType: JiraDeploymentType
+  authMode: JiraAuthMode
+  authUsername?: string
 }
 
 export type JiraViewer = {
+  userId: string
   accountId: string
   displayName: string
   email: string | null
@@ -61,6 +69,9 @@ export type JiraCreateField = {
 }
 
 export type JiraUser = {
+  // userId is deployment-specific; accountId remains as a deprecated
+  // Cloud-era alias for legacy renderer callers.
+  userId: string
   accountId: string
   displayName: string
   email?: string | null
@@ -117,18 +128,46 @@ export type JiraComment = {
 export type JiraIssueUpdate = {
   title?: string
   labels?: string[]
+  // assigneeUserId is the renderer-facing field; assigneeAccountId remains
+  // as a deprecated Cloud-era alias for existing callers.
+  assigneeUserId?: string | null
   assigneeAccountId?: string | null
   priorityId?: string | null
   transitionId?: string
 }
 
+export type JiraIssueUpdateStep = 'fields' | 'assignee' | 'transition'
+
 export type JiraIssueFilter = 'assigned' | 'reported' | 'all' | 'done'
 
-export type JiraConnectArgs = {
+export type JiraCloudConnectArgs = {
+  // Optional for legacy callers that predate Server/DC support; IPC/RPC/store
+  // boundaries normalize omitted deploymentType to Cloud.
+  deploymentType?: 'cloud'
   siteUrl: string
   email: string
   apiToken: string
 }
+
+export type JiraServerBasicConnectArgs = {
+  deploymentType: 'server'
+  authMode: 'basic'
+  siteUrl: string
+  username: string
+  passwordOrToken: string
+}
+
+export type JiraServerBearerConnectArgs = {
+  deploymentType: 'server'
+  authMode: 'bearer'
+  siteUrl: string
+  bearerToken: string
+}
+
+export type JiraConnectArgs =
+  | JiraCloudConnectArgs
+  | JiraServerBasicConnectArgs
+  | JiraServerBearerConnectArgs
 
 export type JiraCreateIssueArgs = {
   siteId?: string
@@ -143,4 +182,11 @@ export type JiraCreateIssueResult =
   | { ok: true; id: string; key: string; url: string }
   | { ok: false; error: string }
 
-export type JiraMutationResult = { ok: true } | { ok: false; error: string }
+export type JiraMutationResult =
+  | { ok: true; applied?: JiraIssueUpdateStep[] }
+  | {
+      ok: false
+      error: string
+      applied?: JiraIssueUpdateStep[]
+      failedStep?: JiraIssueUpdateStep
+    }

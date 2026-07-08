@@ -263,6 +263,13 @@ export default function JiraIssueWorkspace({
         }
         const result = await jiraUpdateIssue(providerSettings, displayed.key, updates, siteId)
         if (!result.ok) {
+          // Why: a later Jira update step can fail after earlier steps landed,
+          // so refetch instead of showing a stale local rollback.
+          if (result.applied?.length) {
+            await refreshIssue()
+            toast.error(result.error)
+            return
+          }
           throw new Error(result.error)
         }
         await refreshIssue()
@@ -339,7 +346,7 @@ export default function JiraIssueWorkspace({
         id: result.id || createBrowserUuid(),
         body: bodyState.body,
         createdAt: new Date().toISOString(),
-        user: { accountId: 'local', displayName: 'You' }
+        user: { userId: 'local', accountId: 'local', displayName: 'You' }
       }
       optimisticCommentsRef.current.push(comment)
       setComments((prev) => [...prev, comment])
@@ -566,7 +573,7 @@ export default function JiraIssueWorkspace({
                     onClick={() =>
                       void mutateIssue(
                         'assignee',
-                        { assigneeAccountId: null },
+                        { assigneeUserId: null },
                         { assignee: undefined }
                       )
                     }
@@ -576,12 +583,12 @@ export default function JiraIssueWorkspace({
                   </button>
                   {users.map((user) => (
                     <button
-                      key={user.accountId}
+                      key={user.userId}
                       type="button"
                       onClick={() =>
                         void mutateIssue(
                           'assignee',
-                          { assigneeAccountId: user.accountId },
+                          { assigneeUserId: user.userId },
                           { assignee: user }
                         )
                       }

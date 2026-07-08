@@ -1,6 +1,7 @@
 import type {
   GlobalSettings,
   JiraComment,
+  JiraConnectArgs,
   JiraConnectionStatus,
   JiraCreateField,
   JiraCreateIssueArgs,
@@ -56,7 +57,7 @@ export async function jiraStatus(settings: RuntimeJiraSettings): Promise<JiraCon
 
 export async function jiraConnect(
   settings: RuntimeJiraSettings,
-  args: { siteUrl: string; email: string; apiToken: string }
+  args: JiraConnectArgs
 ): Promise<JiraConnectResult> {
   const target = getJiraRuntimeTarget(settings)
   return target.kind === 'environment'

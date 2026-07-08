@@ -88,11 +88,13 @@ import type {
   ListWorkItemsResult,
   IssueInfo,
   JiraComment,
+  JiraConnectArgs,
   JiraConnectionStatus,
   JiraCreateField,
   JiraCreateIssueArgs,
   JiraIssue,
   JiraIssueFilter,
+  JiraMutationResult,
   JiraIssueType,
   JiraIssueUpdate,
   JiraPriority,
@@ -1801,11 +1803,9 @@ export type PreloadApi = {
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
   }
   jira: {
-    connect: (args: {
-      siteUrl: string
-      email: string
-      apiToken: string
-    }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
+    connect: (
+      args: JiraConnectArgs
+    ) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
     disconnect: (args?: { siteId?: string }) => Promise<void>
     selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>
     status: () => Promise<JiraConnectionStatus>
@@ -1830,7 +1830,7 @@ export type PreloadApi = {
       key: string
       updates: JiraIssueUpdate
       siteId?: string
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    }) => Promise<JiraMutationResult>
     addIssueComment: (args: {
       key: string
       body: string

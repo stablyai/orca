@@ -31,6 +31,9 @@ import type {
   GitForkSyncResult,
   GitUpstreamStatus,
   GhosttyImportPreview,
+  JiraConnectArgs,
+  JiraMutationResult,
+  JiraViewer,
   ListWorkItemsResult,
   LinearProjectDetail,
   MemorySnapshot,
@@ -1552,11 +1555,9 @@ const api = {
   },
 
   jira: {
-    connect: (args: {
-      siteUrl: string
-      email: string
-      apiToken: string
-    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+    connect: (
+      args: JiraConnectArgs
+    ): Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }> =>
       ipcRenderer.invoke('jira:connect', args),
 
     disconnect: (args?: { siteId?: string }): Promise<void> =>
@@ -1569,7 +1570,7 @@ const api = {
 
     testConnection: (args?: {
       siteId?: string
-    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+    }): Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }> =>
       ipcRenderer.invoke('jira:testConnection', args),
 
     searchIssues: (args: { jql: string; limit?: number; siteId?: string }): Promise<unknown[]> =>
@@ -1599,8 +1600,7 @@ const api = {
       key: string
       updates: unknown
       siteId?: string
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('jira:updateIssue', args),
+    }): Promise<JiraMutationResult> => ipcRenderer.invoke('jira:updateIssue', args),
 
     addIssueComment: (args: {
       key: string

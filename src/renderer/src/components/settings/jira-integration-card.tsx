@@ -38,8 +38,14 @@ export function JiraIntegrationCard(): React.JSX.Element {
   const siteCount = sites.length || (connected ? 1 : 0)
   const accountScope = getProviderAccountScope(settings)
   const credentialCopy = hasRemoteProviderRuntime(settings)
-    ? 'Connect a Jira Cloud site with your Atlassian email and an API token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.'
-    : 'Connect a Jira Cloud site with your Atlassian email and an API token. Credentials are stored locally and encrypted when local runtime storage supports it.'
+    ? translate(
+        'auto.components.settings.task.tracker.integration.cards.0532cb79e5',
+        'Connect a Jira Cloud or Server/Data Center site. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.'
+      )
+    : translate(
+        'auto.components.settings.task.tracker.integration.cards.bb4969ab86',
+        'Connect a Jira Cloud or Server/Data Center site. Credentials are stored locally and encrypted when local runtime storage supports it.'
+      )
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
   const accountScopeRowClass = useIntegrationSubordinateRowClass('text-xs')
 
@@ -85,8 +91,8 @@ export function JiraIntegrationCard(): React.JSX.Element {
                 'Checking Jira access before showing setup actions.'
               )
             : translate(
-                'auto.components.settings.task.tracker.integration.cards.7ca5ffffdb',
-                'Browse, create, and start work from Jira Cloud issues.'
+                'auto.components.settings.task.tracker.integration.cards.1f53303b5e',
+                'Browse, create, and start work from Jira issues.'
               )
       }
       checking={checking}
@@ -126,6 +132,8 @@ export function JiraIntegrationCard(): React.JSX.Element {
             {sites.map((site) => {
               const testResult = testResultBySite[site.id]
               const testing = testingSiteId === site.id
+              const identityLabel =
+                site.deploymentType === 'server' ? site.authUsername || site.email : site.email
               return (
                 <div key={site.id} className={subordinateRowClass}>
                   <div className="min-w-0 flex-1">
@@ -134,7 +142,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
                       {site.siteUrl}
-                      {site.email ? ` · ${site.email}` : ''}
+                      {identityLabel ? ` · ${identityLabel}` : ''}
                     </p>
                   </div>
                   {testResult?.state === 'ok' ? (
@@ -189,8 +197,8 @@ export function JiraIntegrationCard(): React.JSX.Element {
             })}
             <p className="text-[11px] text-muted-foreground/70">
               {translate(
-                'auto.components.settings.task.tracker.integration.cards.8c20e76308',
-                'Each connected Jira site has one token stored by the active runtime.'
+                'auto.components.settings.task.tracker.integration.cards.cf506ae83c',
+                'Each connected Jira site has one credential stored by the active runtime.'
               )}
             </p>
           </div>
