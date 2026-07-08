@@ -5,6 +5,7 @@ boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { join, delimiter } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { statSync } from 'node:fs'
 import {
   type BrowserWindow,
   type IpcMainEvent,
@@ -82,7 +83,11 @@ import {
   parsePaneKey
 } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
-import { resolveTerminalStartupCwdForWorkspace } from '../../shared/terminal-startup-cwd'
+import {
+  resolveTerminalStartupCwdForWorkspace,
+  type TerminalStartupCwdMissingDirFallback
+} from '../../shared/terminal-startup-cwd'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
@@ -2043,14 +2048,30 @@ export function registerPtyHandlers(
 
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
-    cwd: string | undefined
+    cwd: string | undefined,
+    missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ): string | undefined =>
     resolveTerminalStartupCwdForWorkspace({
       workspaceId: worktreeId,
       requestedCwd: cwd,
+      missingDirFallback,
       resolveFolderWorkspacePath: (folderWorkspaceId) =>
         store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
     })
+
+  const localStartupCwdDirectoryExists = (path: string): boolean => {
+    // Why: Win32 statSync on \\wsl.localhost 9P shares can falsely report
+    // ENOENT for directories that exist on the Linux side; never fall back on
+    // that signal — the provider's WSL-aware validation decides instead.
+    if (isWslUncPath(path)) {
+      return true
+    }
+    try {
+      return statSync(path).isDirectory()
+    } catch {
+      return false
+    }
+  }
 
   // Why: the runtime controller must route through getProviderForPty() so that
   // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
@@ -2642,6 +2663,10 @@ export function registerPtyHandlers(
         cols: number
         rows: number
         cwd?: string
+        // Why: fresh local renderer spawns opt into recovering a saved cwd
+        // whose directory was deleted (#7239); reattach/remote callers must
+        // keep exact cwd semantics, so the flag alone is not sufficient.
+        cwdFallback?: 'worktree'
         env?: Record<string, string>
         envToDelete?: string[]
         command?: string
@@ -2685,7 +2710,26 @@ export function registerPtyHandlers(
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
-      const cwd = resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
+      // Why: honor the fallback only for fresh local spawns even if a caller
+      // sends the flag — reattach must keep the session's exact cwd and
+      // remote/SSH paths cannot probe the local filesystem meaningfully.
+      const allowMissingCwdFallback =
+        !args.connectionId && !args.sessionId && args.cwdFallback === 'worktree'
+      let didFallbackToWorkspaceRootCwd = false
+      const cwd = resolvePtySpawnStartupCwd(
+        args.worktreeId,
+        args.cwd,
+        allowMissingCwdFallback
+          ? {
+              directoryExists: localStartupCwdDirectoryExists,
+              onFallbackToWorkspaceRoot: () => {
+                didFallbackToWorkspaceRootCwd = true
+              }
+            }
+          : undefined
+      )
+      const startupCwdFallback =
+        didFallbackToWorkspaceRootCwd && cwd ? ({ kind: 'worktree', cwd } as const) : undefined
       spawnTiming.mark('preflight')
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
@@ -3347,7 +3391,10 @@ export function registerPtyHandlers(
           ...result,
           ...(!result.isReattach && effectiveLaunchConfig
             ? { launchConfig: effectiveLaunchConfig }
-            : {})
+            : {}),
+          // Why: a daemon-retry race can surface isReattach even for a minted
+          // session id, and a reattach must never claim its cwd was remapped.
+          ...(startupCwdFallback && !result.isReattach ? { startupCwdFallback } : {})
         }
         return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, response)
       } catch (err) {

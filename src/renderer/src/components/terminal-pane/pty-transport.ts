@@ -451,6 +451,7 @@ export function createPtyOutputProcessor({
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
     cwd,
+    cwdFallback,
     env,
     command,
     launchConfig,
@@ -618,10 +619,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
 
       try {
+        // Why: missing-cwd recovery is only valid for fresh local spawns —
+        // reattach must keep the session's exact cwd and SSH-tagged transports
+        // resolve cwd on the remote host.
+        const shouldSendLocalCwdFallback =
+          cwdFallback === 'worktree' && !connectionId && !options.sessionId
         const result = await window.api.pty.spawn({
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
           cwd,
+          ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
           env: options.env ?? env,
           command: options.command ?? command,
           ...((options.launchConfig ?? launchConfig)
@@ -687,10 +694,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi
           } satisfies PtyConnectResult
         }
-        if (spawnResult.launchConfig) {
+        if (spawnResult.launchConfig || spawnResult.startupCwdFallback) {
           return {
             id: spawnResult.id,
-            launchConfig: spawnResult.launchConfig
+            ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
+            ...(spawnResult.startupCwdFallback
+              ? { startupCwdFallback: spawnResult.startupCwdFallback }
+              : {})
           } satisfies PtyConnectResult
         }
         return spawnResult.id

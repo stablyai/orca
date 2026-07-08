@@ -190,6 +190,10 @@ const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
+// Why: the notice deliberately omits the rejected path — saved cwds can
+// contain private repo/user names; the terminal itself shows where it opened.
+export const STARTUP_CWD_FALLBACK_NOTICE =
+  '\r\n[Orca opened this terminal at the workspace root because its saved start folder no longer exists.]\r\n'
 const STARTUP_DRAFT_PASTE_TIMEOUT_MS = 8000
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
@@ -2748,6 +2752,10 @@ export function connectPanePty(
     : undefined
   const transportOptions = {
     cwd: deps.cwd,
+    // Why: only fresh local IPC spawns may recover from a saved startup cwd
+    // whose directory was deleted (#7239); remote-runtime and SSH spawns
+    // resolve cwd on another host and must keep exact cwd semantics.
+    ...(runtimeEnvironmentId === null && !connectionId ? { cwdFallback: 'worktree' as const } : {}),
     env: paneEnv,
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
     startupCommandDelivery: shouldDeliverStartupViaTerminalPaste
@@ -3780,6 +3788,15 @@ export function connectPanePty(
             })
           }
           if (resolvedPtyId) {
+            if (
+              spawnedPtyId &&
+              typeof spawnedPtyId === 'object' &&
+              spawnedPtyId.startupCwdFallback?.kind === 'worktree'
+            ) {
+              writeTerminalOutput(pane.terminal, STARTUP_CWD_FALLBACK_NOTICE, {
+                foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+              })
+            }
             if (coldRestoreOverride?.hasSleepingRecord) {
               showSessionRestoredBanner()
             }
