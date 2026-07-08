@@ -3522,14 +3522,18 @@ export function registerPtyHandlers(
     if (runtime?.isResizeSuppressed()) {
       return
     }
-    // Why: presence-lock defense-in-depth. While mobile is driving,
-    // desktop-side resizes (auto-fit on window resize, split drag) must
-    // not reach the PTY. The renderer guard checks the driver state too,
-    // but this is the load-bearing layer because the renderer mirror lags
-    // by one IPC hop. Note: BOTH guards apply — isResizeSuppressed handles
-    // the safeFit cascade after take-back; this driver check handles the
-    // ongoing locked state. See docs/mobile-presence-lock.md.
-    if (runtime?.getDriver(args.id).kind === 'mobile') {
+    // Why: presence-lock defense-in-depth. While a phone OR a remote desktop
+    // viewer drives the PTY width, the host's own desktop-side resizes
+    // (auto-fit on window resize, split drag, tab reveal, "+"-new-tab
+    // re-render) must not reach the PTY — otherwise they overwrite the remote
+    // viewer's grid and its alt-screen TUI garbles ("porridge"). The renderer
+    // guard checks the driver state too, but this is the load-bearing layer
+    // because the renderer mirror lags by one IPC hop. Note: BOTH guards apply
+    // — isResizeSuppressed handles the safeFit cascade after take-back; this
+    // driver check handles the ongoing locked state. See
+    // docs/mobile-presence-lock.md.
+    if (runtime?.isPtyResizeDrivenRemotely(args.id)) {
+      runtime.recordRemoteDesktopHostReclaimTarget(args.id, args.cols, args.rows)
       return
     }
     const provider = tryGetProviderForPty(args.id)
