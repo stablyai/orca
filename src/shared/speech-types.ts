@@ -1,5 +1,5 @@
-export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper' | 'openai'
-export type SpeechModelProvider = 'local' | 'openai'
+export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper' | 'openai' | 'sarvam'
+export type SpeechModelProvider = 'local' | 'openai' | 'sarvam'
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
 
@@ -64,4 +64,5 @@ export type VoiceSettings = {
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
+  sarvamApiKeyConfigured: boolean
 }

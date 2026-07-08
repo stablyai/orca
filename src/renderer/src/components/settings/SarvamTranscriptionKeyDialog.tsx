@@ -1,7 +1,7 @@
 import { CloudApiKeyDialog } from './CloudApiKeyDialog'
 import { translate } from '@/i18n/i18n'
 
-type OpenAiTranscriptionKeyDialogProps = {
+type SarvamTranscriptionKeyDialogProps = {
   open: boolean
   configured: boolean
   apiKeyDraft: string
@@ -12,7 +12,7 @@ type OpenAiTranscriptionKeyDialogProps = {
   onClear: () => void
 }
 
-export function OpenAiTranscriptionKeyDialog({
+export function SarvamTranscriptionKeyDialog({
   open,
   configured,
   apiKeyDraft,
@@ -21,7 +21,7 @@ export function OpenAiTranscriptionKeyDialog({
   onApiKeyDraftChange,
   onSave,
   onClear
-}: OpenAiTranscriptionKeyDialogProps): React.JSX.Element {
+}: SarvamTranscriptionKeyDialogProps): React.JSX.Element {
   return (
     <CloudApiKeyDialog
       open={open}
@@ -32,37 +32,40 @@ export function OpenAiTranscriptionKeyDialog({
       onApiKeyDraftChange={onApiKeyDraftChange}
       onSave={onSave}
       onClear={onClear}
-      inputId="openai-speech-api-key"
+      inputId="sarvam-speech-api-key"
       title={translate(
-        'auto.components.settings.OpenAiTranscriptionKeyDialog.439e91879e',
-        'OpenAI Transcription'
+        'auto.components.settings.SarvamTranscriptionKeyDialog.title',
+        'Sarvam Transcription'
       )}
       description={translate(
-        'auto.components.settings.OpenAiTranscriptionKeyDialog.07ed3e512e',
-        'Audio is sent to OpenAI only when an OpenAI speech model is selected.'
+        'auto.components.settings.SarvamTranscriptionKeyDialog.description',
+        'Audio streams to Sarvam only when a Sarvam speech model is selected. Supports 23 Indian languages and English with auto-detect.'
       )}
       apiKeyLabel={translate(
-        'auto.components.settings.OpenAiTranscriptionKeyDialog.16015322f9',
+        'auto.components.settings.SarvamTranscriptionKeyDialog.apiKey',
         'API Key'
       )}
       placeholder={
         configured
           ? translate(
-              'auto.components.settings.OpenAiTranscriptionKeyDialog.2f797018f0',
+              'auto.components.settings.SarvamTranscriptionKeyDialog.placeholderConfigured',
               'API key configured'
             )
-          : translate('auto.components.settings.OpenAiTranscriptionKeyDialog.c3380e4ca5', 'sk-...')
+          : translate(
+              'auto.components.settings.SarvamTranscriptionKeyDialog.placeholder',
+              'Sarvam API subscription key'
+            )
       }
       storageNote={translate(
-        'auto.components.settings.OpenAiTranscriptionKeyDialog.d246b2bdb3',
+        'auto.components.settings.SarvamTranscriptionKeyDialog.storage',
         'Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.'
       )}
       clearLabel={translate(
-        'auto.components.settings.OpenAiTranscriptionKeyDialog.07b26f2742',
+        'auto.components.settings.SarvamTranscriptionKeyDialog.clear',
         'Clear Key'
       )}
       saveLabel={translate(
-        'auto.components.settings.OpenAiTranscriptionKeyDialog.fa83512e48',
+        'auto.components.settings.SarvamTranscriptionKeyDialog.save',
         'Save Key'
       )}
     />

@@ -11,8 +11,14 @@ import type {
   SpeechModelState,
   SpeechModelStatus
 } from '../../shared/speech-types'
-import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
+import {
+  SPEECH_MODEL_CATALOG,
+  getCatalogModel,
+  isCloudSpeechModel,
+  isLocalSpeechModel
+} from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import { hasSarvamSpeechApiKey } from './sarvam-api-key-store'
 import { resolveTarExecutable } from './tar-executable'
 import {
   getSpeechModelCacheDirCandidates,
@@ -106,10 +112,19 @@ export class ModelManager {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
+    if (isCloudSpeechModel(manifest)) {
+      // Why: cloud models have nothing to download; readiness is purely whether
+      // the matching provider's API key is configured. Match providers explicitly
+      // so an unknown provider isn't reported ready off the wrong (OpenAI) key.
+      let keyConfigured = false
+      if (manifest.provider === 'sarvam') {
+        keyConfigured = hasSarvamSpeechApiKey()
+      } else if (manifest.provider === 'openai') {
+        keyConfigured = hasOpenAiSpeechApiKey()
+      }
       return {
         id: modelId,
-        status: hasOpenAiSpeechApiKey() ? 'ready' : 'not-downloaded'
+        status: keyConfigured ? 'ready' : 'not-downloaded'
       }
     }
 

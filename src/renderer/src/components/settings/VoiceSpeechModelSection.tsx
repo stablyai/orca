@@ -18,7 +18,7 @@ type VoiceSpeechModelSectionProps = {
   catalog: SpeechModelManifest[]
   modelStates: SpeechModelState[]
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
-  onOpenOpenAiDialog: (modelId: string) => void
+  onOpenCloudKeyDialog: (manifest: SpeechModelManifest) => void
   onRefreshModelStates: () => void
 }
 
@@ -27,7 +27,7 @@ export function VoiceSpeechModelSection({
   catalog,
   modelStates,
   onUpdateVoiceSettings,
-  onOpenOpenAiDialog,
+  onOpenCloudKeyDialog,
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
   const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<Set<string>>(() => new Set())
@@ -74,7 +74,7 @@ export function VoiceSpeechModelSection({
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
-            const isCloud = manifest.provider === 'openai'
+            const isCloud = manifest.provider !== 'local'
             const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
@@ -86,7 +86,7 @@ export function VoiceSpeechModelSection({
                   if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
-                    onOpenOpenAiDialog(manifest.id)
+                    onOpenCloudKeyDialog(manifest)
                   } else if (!isDownloading) {
                     void window.api.speech
                       .downloadModel(manifest.id)

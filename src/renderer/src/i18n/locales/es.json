@@ -6728,7 +6728,11 @@
           "f9a9cf6928": "Se requiere permiso del micrófono antes de habilitar el dictado de voz.",
           "1eac933202": "Se abrió Privacidad y seguridad de macOS. Vuelve a habilitar el dictado después de otorgar acceso.",
           "cd9fe37556": "Permiso de micrófono concedido",
-          "6fa734ed95": "Eliminar {{value0}}"
+          "6fa734ed95": "Eliminar {{value0}}",
+          "sarvamKeySaved": "Sarvam API key saved",
+          "sarvamKeySaveFailed": "Failed to save Sarvam API key",
+          "sarvamKeyCleared": "Sarvam API key cleared",
+          "sarvamKeyClearFailed": "Failed to clear Sarvam API key"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -8339,7 +8343,9 @@
               "20574cbc72": "Habilitar dictado de voz",
               "322d457a0d": "transcripción",
               "dcc7846641": "Configure la clave API de OpenAI utilizada para los modelos de voz a texto en la nube.",
-              "ebfd0b32e5": "Transcripción OpenAI"
+              "ebfd0b32e5": "Transcripción OpenAI",
+              "sarvamTitle": "Sarvam Transcription",
+              "sarvamDescription": "Configure the Sarvam API key used for cloud speech-to-text models."
             }
           }
         },
@@ -8770,6 +8776,25 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "Muestra controles de configuración y destinos de ejecución de espacios de trabajo para entornos bajo demanda del repositorio.",
           "toggleLabel": "Activar o desactivar entornos por espacio de trabajo"
+        },
+        "SarvamTranscriptionKeyDialog": {
+          "title": "Sarvam Transcription",
+          "description": "Audio streams to Sarvam only when a Sarvam speech model is selected. Supports 23 Indian languages and English with auto-detect.",
+          "apiKey": "API Key",
+          "placeholderConfigured": "API key configured",
+          "placeholder": "Sarvam API subscription key",
+          "storage": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
+          "clear": "Clear Key",
+          "save": "Save Key"
+        },
+        "SarvamTranscriptionSettingsRow": {
+          "title": "Sarvam Transcription",
+          "connected": "Connected",
+          "configured": "API key configured for cloud speech-to-text models.",
+          "prompt": "Add a Sarvam API key before selecting cloud speech-to-text models.",
+          "replace": "Replace key",
+          "disconnect": "Disconnect Sarvam API key",
+          "add": "Add API key"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",

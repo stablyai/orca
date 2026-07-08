@@ -79,17 +79,29 @@ const {
 
     constructor(
       readonly modelId: string,
-      readonly readApiKey: () => string
+      readonly readApiKey: () => string,
+      readonly sink: (event: { type: string; text?: string; error?: string }) => void
     ) {
       HoistedMockOpenAiTranscriptionSession.instances.push(this)
     }
+
+    async start(): Promise<void> {}
 
     feedAudio(samples: Float32Array, sampleRate: number): void {
       this.feedCalls.push({ samples, sampleRate })
     }
 
-    finish(): Promise<string> {
-      return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
+    async stop(): Promise<void> {
+      // Why: the cloud session now emits its own final through the sink; the key
+      // is read here (not at construction) so the "read only when finishing" test
+      // still holds. Mirror production: no audio fed => no final, no key read.
+      if (this.feedCalls.length === 0) {
+        return
+      }
+      const text = `${this.modelId}:${this.readApiKey()}`
+      if (text) {
+        this.sink({ type: 'final', text })
+      }
     }
   }
 
@@ -140,7 +152,8 @@ vi.mock('./model-catalog', () => ({
           streaming: true,
           sampleRate: 16000,
           files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
-        }
+        },
+  isCloudSpeechModel: (manifest: { provider: string }) => manifest.provider !== 'local'
 }))
 
 vi.mock('./openai-api-key-store', () => ({

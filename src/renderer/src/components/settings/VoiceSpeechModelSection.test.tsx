@@ -71,11 +71,23 @@ const secondLocalModel: SpeechModelManifest = {
   label: 'Second Local Model'
 }
 
+const sarvamModel: SpeechModelManifest = {
+  id: 'sarvam-saaras-v3',
+  label: 'Sarvam Cloud Model',
+  description: 'Cloud transcription',
+  provider: 'sarvam',
+  language: 'multilingual',
+  type: 'sarvam',
+  streaming: true,
+  sampleRate: 16000
+}
+
 function renderSection(args: {
   deleteModel: (modelId: string) => Promise<void>
   catalog?: SpeechModelManifest[]
   modelStates?: SpeechModelState[]
   refreshModelStates?: () => void
+  onOpenCloudKeyDialog?: (manifest: SpeechModelManifest) => void
 }): { container: HTMLDivElement; root: Root } {
   Object.assign(window, {
     api: {
@@ -99,13 +111,19 @@ function renderSection(args: {
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={vi.fn()}
-        onOpenOpenAiDialog={vi.fn()}
+        onOpenCloudKeyDialog={args.onOpenCloudKeyDialog ?? vi.fn()}
         onRefreshModelStates={args.refreshModelStates ?? vi.fn()}
       />
     )
   })
 
   return { container, root }
+}
+
+function findOptionByLabel(container: HTMLElement, label: string): HTMLElement | undefined {
+  return Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).find((option) =>
+    option.textContent?.includes(label)
+  )
 }
 
 describe('VoiceSpeechModelSection', () => {
@@ -196,6 +214,29 @@ describe('VoiceSpeechModelSection', () => {
     })
 
     expect(refreshModelStates).toHaveBeenCalledTimes(2)
+    root.unmount()
+  })
+
+  it('opens the cloud key dialog when selecting a not-ready cloud model', async () => {
+    const onOpenCloudKeyDialog = vi.fn()
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      onOpenCloudKeyDialog,
+      catalog: [localModel, sarvamModel],
+      modelStates: [
+        { id: localModel.id, status: 'ready' },
+        { id: sarvamModel.id, status: 'not-downloaded' }
+      ]
+    })
+    const sarvamOption = findOptionByLabel(container, sarvamModel.label)
+
+    expect(sarvamOption).not.toBeUndefined()
+    await act(async () => {
+      sarvamOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onOpenCloudKeyDialog).toHaveBeenCalledWith(sarvamModel)
+    expect(window.api.speech.downloadModel).not.toHaveBeenCalled()
     root.unmount()
   })
 

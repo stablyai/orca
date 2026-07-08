@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionRequestResult } from '../../../../shared/developer-permissions-types'
 import type { GlobalSettings } from '../../../../shared/types'
+import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { handleVoiceDictationToggle, VoicePane } from './VoicePane'
 
@@ -26,6 +27,22 @@ vi.mock('sonner', () => ({
     success: vi.fn()
   }
 }))
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
+    values ? fallback.replace('{{value0}}', values.value0) : fallback
+}))
+
+const sarvamModel: SpeechModelManifest = {
+  id: 'sarvam-saaras-v3',
+  label: 'Sarvam Cloud Model',
+  description: 'Cloud transcription',
+  provider: 'sarvam',
+  language: 'multilingual',
+  type: 'sarvam',
+  streaming: true,
+  sampleRate: 16000
+}
 
 const deniedMicrophoneResult: DeveloperPermissionRequestResult = {
   id: 'microphone',
@@ -55,6 +72,9 @@ function installWindowApi(
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
         clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
+        getSarvamApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        saveSarvamApiKey: vi.fn(async () => ({ configured: true })),
+        clearSarvamApiKey: vi.fn(async () => ({ configured: false })),
         onDownloadProgress: vi.fn(() => () => {}),
         downloadModel: vi.fn()
       }
@@ -224,5 +244,155 @@ describe('VoicePane dictation switch', () => {
     root.unmount()
 
     expect(recordFeatureInteraction).not.toHaveBeenCalled()
+  })
+})
+
+function installSarvamWindowApi(configured: boolean): void {
+  Object.assign(window, {
+    api: {
+      developerPermissions: { request: vi.fn() },
+      speech: {
+        getCatalog: vi.fn(async () => [sarvamModel]),
+        getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
+        clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
+        getSarvamApiKeyStatus: vi.fn(async () => ({ configured })),
+        saveSarvamApiKey: vi.fn(async () => ({ configured: true })),
+        clearSarvamApiKey: vi.fn(async () => ({ configured: false })),
+        onDownloadProgress: vi.fn(() => () => {}),
+        downloadModel: vi.fn()
+      }
+    }
+  })
+}
+
+async function renderSarvamPane(args: {
+  sarvamConfigured: boolean
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+}): Promise<{ root: Root; refreshModelStates: ReturnType<typeof vi.fn> }> {
+  const refreshModelStates = vi.fn()
+  useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      modelStates: [],
+      refreshModelStates,
+      markFeatureTipsSeen: vi.fn(),
+      recordFeatureInteraction: vi.fn()
+    })
+  )
+  useShortcutLabelMock.mockReturnValue('Ctrl+Shift+Y')
+  installSarvamWindowApi(args.sarvamConfigured)
+
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  const settings = {
+    voice: {
+      ...getDefaultVoiceSettings(),
+      enabled: true,
+      sttModel: sarvamModel.id,
+      sarvamApiKeyConfigured: args.sarvamConfigured
+    }
+  } as GlobalSettings
+  await act(async () => {
+    root.render(<VoicePane settings={settings} updateSettings={args.updateSettings} />)
+  })
+  // Flush the async getCatalog / key-status effects so the Sarvam row renders.
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+
+  return { root, refreshModelStates }
+}
+
+function findBodyButton(predicate: (button: HTMLButtonElement) => boolean): HTMLButtonElement {
+  const button = Array.from(document.body.querySelectorAll('button')).find(predicate)
+  if (!button) {
+    throw new Error('Button not found')
+  }
+  return button
+}
+
+describe('VoicePane Sarvam key flow', () => {
+  beforeEach(() => {
+    useAppStoreMock.mockReset()
+    useShortcutLabelMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.body.innerHTML = ''
+  })
+
+  it('saves a Sarvam key from the dialog and selects the pending model', async () => {
+    const updateSettings = vi.fn()
+    const { root, refreshModelStates } = await renderSarvamPane({
+      sarvamConfigured: false,
+      updateSettings
+    })
+
+    const addButton = findBodyButton((b) => b.textContent?.includes('Add API key') ?? false)
+    await act(async () => {
+      addButton.click()
+      await Promise.resolve()
+    })
+
+    const input = document.body.querySelector<HTMLInputElement>('#sarvam-speech-api-key')
+    expect(input).not.toBeNull()
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value'
+    )!.set!
+    await act(async () => {
+      valueSetter.call(input, 'sarvam-secret')
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    const saveButton = findBodyButton((b) => b.textContent?.includes('Save Key') ?? false)
+    await act(async () => {
+      saveButton.click()
+      await Promise.resolve()
+    })
+
+    expect(window.api.speech.saveSarvamApiKey).toHaveBeenCalledWith('sarvam-secret')
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        voice: expect.objectContaining({
+          sarvamApiKeyConfigured: true,
+          sttModel: sarvamModel.id
+        })
+      })
+    )
+    expect(refreshModelStates).toHaveBeenCalled()
+    root.unmount()
+  })
+
+  it('clears the Sarvam key and deselects the active Sarvam model', async () => {
+    const updateSettings = vi.fn()
+    const { root, refreshModelStates } = await renderSarvamPane({
+      sarvamConfigured: true,
+      updateSettings
+    })
+
+    const disconnectButton = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Disconnect Sarvam API key"]'
+    )
+    expect(disconnectButton).not.toBeNull()
+    await act(async () => {
+      disconnectButton!.click()
+      await Promise.resolve()
+    })
+
+    expect(window.api.speech.clearSarvamApiKey).toHaveBeenCalled()
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        voice: expect.objectContaining({
+          sarvamApiKeyConfigured: false,
+          sttModel: ''
+        })
+      })
+    )
+    expect(refreshModelStates).toHaveBeenCalled()
+    root.unmount()
   })
 })

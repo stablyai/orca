@@ -1,4 +1,6 @@
 import { resampleToRate } from './stt-audio-resample'
+import { combineChunks, encodePcm16Wav } from './pcm-wav-encoder'
+import type { SttEventSink } from './stt-service'
 
 export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-4o-mini-transcribe': 'gpt-4o-mini-transcribe',
@@ -29,44 +31,6 @@ export function sanitizeOpenAiTranscriptionErrorMessage(message: string): string
   return sanitized || 'OpenAI transcription request failed'
 }
 
-function encodePcm16Wav(samples: Float32Array, sampleRate: number): Buffer {
-  const dataBytes = samples.length * 2
-  const buffer = Buffer.alloc(44 + dataBytes)
-
-  buffer.write('RIFF', 0)
-  buffer.writeUInt32LE(36 + dataBytes, 4)
-  buffer.write('WAVE', 8)
-  buffer.write('fmt ', 12)
-  buffer.writeUInt32LE(16, 16)
-  buffer.writeUInt16LE(1, 20)
-  buffer.writeUInt16LE(1, 22)
-  buffer.writeUInt32LE(sampleRate, 24)
-  buffer.writeUInt32LE(sampleRate * 2, 28)
-  buffer.writeUInt16LE(2, 32)
-  buffer.writeUInt16LE(16, 34)
-  buffer.write('data', 36)
-  buffer.writeUInt32LE(dataBytes, 40)
-
-  for (let i = 0; i < samples.length; i += 1) {
-    const clamped = Math.max(-1, Math.min(1, samples[i]))
-    const value = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff
-    buffer.writeInt16LE(Math.round(value), 44 + i * 2)
-  }
-
-  return buffer
-}
-
-function combineChunks(chunks: Float32Array[]): Float32Array {
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const combined = new Float32Array(totalLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    combined.set(chunk, offset)
-    offset += chunk.length
-  }
-  return combined
-}
-
 function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): string {
   if (typeof data.text === 'string') {
     return data.text.trim()
@@ -77,14 +41,23 @@ function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): st
   throw new Error('OpenAI transcription response did not include text')
 }
 
+// Buffers dictation audio and uploads it once on stop(). Conforms to
+// CloudTranscriptionSession (structural): start() is a no-op because there is
+// no connection to open, and stop() performs the single request and emits the
+// resulting transcript as one `final` event through the sink.
 export class OpenAiTranscriptionSession {
   private chunks: Float32Array[] = []
   private audioSeconds = 0
 
   constructor(
     private readonly modelId: string,
-    private readonly readApiKey: () => string
+    private readonly readApiKey: () => string,
+    private readonly sink: SttEventSink
   ) {}
+
+  async start(): Promise<void> {
+    // No connection to establish; the buffered upload happens on stop().
+  }
 
   feedAudio(samples: Float32Array, sampleRate: number): void {
     const normalized = resampleToRate(samples, sampleRate, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
@@ -95,7 +68,21 @@ export class OpenAiTranscriptionSession {
     this.chunks.push(new Float32Array(normalized))
   }
 
-  async finish(): Promise<string> {
+  async stop(): Promise<void> {
+    try {
+      const text = await this.transcribe()
+      if (text) {
+        this.sink({ type: 'final', text })
+      }
+    } catch (error) {
+      this.sink({
+        type: 'error',
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  private async transcribe(): Promise<string> {
     if (this.chunks.length === 0) {
       return ''
     }
