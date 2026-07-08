@@ -1,4 +1,5 @@
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { AgentType, ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
@@ -17,6 +18,18 @@ export type AgentAttentionDispatchMeta = {
   agentStatus: AgentCompletionStatusSnapshot
 }
 
+export type AgentCompletionStatusRepairSignal =
+  | {
+      source: 'title'
+      title: string
+      agentType?: AgentType
+    }
+  | {
+      source: 'process-exit'
+      title: string
+      agent: RecognizedAgentProcess
+    }
+
 export type AgentCompletionCoordinatorOptions = {
   paneKey: string
   getPtyId: () => string | null
@@ -30,6 +43,9 @@ export type AgentCompletionCoordinatorOptions = {
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
   shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
+  onCompletionStatusRepair?: (
+    signal: AgentCompletionStatusRepairSignal
+  ) => AgentCompletionStatusSnapshot | null | undefined
 }
 
 export type AgentCompletionCoordinator = {
