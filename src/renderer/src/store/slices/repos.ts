@@ -1040,8 +1040,12 @@ async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]
   }
 }
 
-function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoId: string) {
-  const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
+function settingsForRepoOwner(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  repoId: string,
+  hostId?: ExecutionHostId
+) {
+  const repo = findRepoForHost(state.repos, repoId, { settings: state.settings, hostId })
   if (!repo) {
     return state.settings
   }
@@ -2574,11 +2578,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
         })
       }
-      // Why: derive the runtime target from the resolved owner host (which honors
-      // options.hostId), not settingsForRepoOwner — that re-resolves without the
-      // explicit host and can route repo.rm to the focused runtime, deleting the
-      // wrong remote row when duplicate repo ids exist across hosts.
-      const target = getProjectSetupRuntimeTarget(ownerHostId)
+      // Why: derive the runtime target from the owner's own settings, passing the
+      // explicit options.hostId so a duplicate repo id across hosts resolves to the
+      // intended row. settingsForRepoOwner clears the focused runtime for SSH/local
+      // owners (routing local) and pins runtime owners to their environment, so an
+      // SSH host removal never routes repo.rm to the focused runtime.
+      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
       // Why: the same repo id can exist on multiple hosts (local + an SSH target,
       // or a re-added SSH target). Main's repos:remove is repo-id-only and would
       // delete every host's row. Scope the local-side removal to the owning host

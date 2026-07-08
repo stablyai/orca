@@ -309,6 +309,42 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
+  it('removeProject of an SSH host row routes local even when a runtime is focused', async () => {
+    // Regression: removing an SSH host's repo (explicit ssh hostId) must NOT route
+    // repo.rm to the focused runtime env. settingsForRepoOwner clears the focused
+    // runtime for SSH owners, so removal stays on the host-scoped local path.
+    const sshDuplicate: Repo = {
+      id: 'same-repo',
+      path: '/home/orca/project',
+      displayName: 'SSH',
+      badgeColor: '#222',
+      addedAt: 3,
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1'
+    }
+    const sshWorktree = makeWorktree({
+      id: 'same-repo::/home/orca/wt',
+      repoId: 'same-repo',
+      hostId: 'ssh:ssh-1'
+    })
+    const store = createTestStore()
+    // A runtime env is focused, but the row being removed is SSH-owned.
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [localDuplicate, sshDuplicate],
+      worktreesByRepo: { 'same-repo': [sshWorktree] }
+    })
+
+    await store.getState().removeProject('same-repo', { hostId: 'ssh:ssh-1' })
+
+    // Host-scoped local removal (id also exists on local), never the runtime RPC.
+    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'ssh:ssh-1' })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'repo.rm' })
+    )
+    expect(store.getState().repos).toEqual([localDuplicate])
+  })
+
   it('removes a runtime duplicate without purging legacy local worktrees', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-duplicate-remove',
