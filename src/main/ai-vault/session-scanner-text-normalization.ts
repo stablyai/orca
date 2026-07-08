@@ -1,5 +1,8 @@
 const SESSION_TITLE_TEXT_LIMIT = 96
 const SESSION_PREVIEW_TEXT_LIMIT = 220
+// Prompt History keeps far more than the 220-char preview so a copied prompt is
+// usable, but still bounds a single record.
+const USER_PROMPT_TEXT_LIMIT = 4000
 const ELLIPSIS = '...'
 const HIDDEN_BLOCK_CLOSE_SCAN_LIMIT = 256 * 1024
 const HIDDEN_BLOCK_OPEN_TAG_SCAN_LIMIT = 512
@@ -40,6 +43,16 @@ export function extractPreviewContentText(value: unknown): string | null {
 
 export function normalizePreviewText(value: string): string | null {
   return finalizeNormalizedText(normalizeStringText(value, SESSION_PREVIEW_TEXT_LIMIT))
+}
+
+// Full-fidelity user-prompt text for Prompt History (message content form).
+export function extractUserPromptText(value: unknown): string | null {
+  return normalizeContentText(value, USER_PROMPT_TEXT_LIMIT)
+}
+
+// Full-fidelity user-prompt text for Prompt History (already-extracted string).
+export function normalizeUserPromptText(value: string): string | null {
+  return finalizeNormalizedText(normalizeStringText(value, USER_PROMPT_TEXT_LIMIT))
 }
 
 function normalizeContentText(value: unknown, limit: number): string | null {

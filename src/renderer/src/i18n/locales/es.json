@@ -9465,7 +9465,8 @@
             "fc3095d2ed": "explorador",
             "aiVaultSessionHistory": "Agentes",
             "folderWorkspaces": "Worktrees adjuntos",
-            "parentPrChecks": "Checks de PR"
+            "parentPrChecks": "Checks de PR",
+            "promptHistory": "Historial de prompts"
           },
           "right": {
             "panel": {
@@ -9816,6 +9817,17 @@
             "archivedJumpUnavailable": "Esta sesión está en un worktree archivado.",
             "noActiveWorktreeMatch": "Ningún worktree activo coincide con esta sesión.",
             "noActiveWorktreeTarget": "No hay ningún worktree activo disponible."
+          },
+          "PromptHistoryPanel": {
+            "copied": "Prompt copiado",
+            "searchPlaceholder": "Buscar prompts…",
+            "scopeWorkspace": "Este espacio",
+            "scopeAll": "Todos",
+            "refresh": "Actualizar",
+            "empty": "Aún no hay prompts para este ámbito.",
+            "copy": "Copiar prompt",
+            "copyFailed": "No se pudo copiar el prompt",
+            "loading": "Cargando…"
           }
         }
       },

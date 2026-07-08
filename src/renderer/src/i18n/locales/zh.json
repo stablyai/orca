@@ -9465,7 +9465,8 @@
             "fc3095d2ed": "资源管理器",
             "aiVaultSessionHistory": "智能体",
             "folderWorkspaces": "已附加的工作树",
-            "parentPrChecks": "PR 检查"
+            "parentPrChecks": "PR 检查",
+            "promptHistory": "提示历史"
           },
           "right": {
             "panel": {
@@ -9816,6 +9817,17 @@
             "archivedJumpUnavailable": "此会话位于已归档的工作树中。",
             "noActiveWorktreeMatch": "没有与此会话匹配的活动工作树。",
             "noActiveWorktreeTarget": "没有可用的活动工作树。"
+          },
+          "PromptHistoryPanel": {
+            "copied": "已复制提示",
+            "searchPlaceholder": "搜索提示…",
+            "scopeWorkspace": "此工作区",
+            "scopeAll": "全部",
+            "refresh": "刷新",
+            "empty": "此范围内暂无提示。",
+            "copy": "复制提示",
+            "copyFailed": "无法复制提示",
+            "loading": "加载中…"
           }
         }
       },

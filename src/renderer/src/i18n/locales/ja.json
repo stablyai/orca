@@ -9465,7 +9465,8 @@
             "fc3095d2ed": "エクスプローラ",
             "aiVaultSessionHistory": "エージェント",
             "folderWorkspaces": "添付ワークツリー",
-            "parentPrChecks": "PR チェック"
+            "parentPrChecks": "PR チェック",
+            "promptHistory": "プロンプト履歴"
           },
           "right": {
             "panel": {
@@ -9816,6 +9817,17 @@
             "archivedJumpUnavailable": "このセッションはアーカイブされたワークツリーにあります。",
             "noActiveWorktreeMatch": "このセッションに一致するアクティブなワークツリーはありません。",
             "noActiveWorktreeTarget": "利用可能なアクティブなワークツリーはありません。"
+          },
+          "PromptHistoryPanel": {
+            "copied": "プロンプトをコピーしました",
+            "searchPlaceholder": "プロンプトを検索…",
+            "scopeWorkspace": "このワークスペース",
+            "scopeAll": "すべて",
+            "refresh": "更新",
+            "empty": "この範囲のプロンプトはまだありません。",
+            "copy": "プロンプトをコピー",
+            "copyFailed": "プロンプトをコピーできませんでした",
+            "loading": "読み込み中…"
           }
         }
       },

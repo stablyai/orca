@@ -235,7 +235,10 @@ function getFolderGroupKey(pathValue: string | null): string {
   return pathValue ? normalizeRuntimePathSeparators(pathValue).toLowerCase() : 'unknown'
 }
 
-function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
+export function isAiVaultSessionInWorkspacePath(
+  workspacePath: string,
+  sessionCwd: string
+): boolean {
   if (isPathInsideOrEqual(workspacePath, sessionCwd)) {
     return true
   }

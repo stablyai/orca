@@ -11,6 +11,7 @@ import type {
 import {
   accumulatorFoldResumeState,
   addPreviewContent,
+  cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
@@ -60,10 +61,10 @@ export function cloneClaudeSessionParseState(
   state: ClaudeSessionParseState
 ): ClaudeSessionParseState {
   return {
-    accumulator: {
-      ...state.accumulator,
-      previewMessages: [...state.accumulator.previewMessages]
-    },
+    // Use the shared clone so every accumulator array (previewMessages AND
+    // userPrompts) is deep-copied; a partial/failed resume must not mutate the
+    // cached state's arrays.
+    accumulator: cloneSessionAccumulator(state.accumulator),
     metaTitle: state.metaTitle,
     generatedTitle: state.generatedTitle,
     firstUserTitle: state.firstUserTitle
@@ -105,7 +106,11 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   if (record.type === 'user') {
     accumulator.messageCount++
     const title = extractMessageText(record.message)
-    addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp)
+    // Meta records are injected context (e.g. the local-command caveat), not the
+    // user's typed prompt, so keep them out of Prompt History.
+    addPreviewContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
+      excludeFromPromptHistory: record.isMeta === true
+    })
     if (title) {
       // Meta prompts (injected context) only seed the last-resort title.
       if (record.isMeta === true) {

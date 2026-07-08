@@ -9,6 +9,13 @@ describe('normalizeRightSidebarRoute', () => {
     })
   })
 
+  it('preserves the Prompt History route', () => {
+    expect(normalizeRightSidebarRoute('prompts')).toEqual({
+      rightSidebarTab: 'prompts',
+      rightSidebarExplorerView: 'files'
+    })
+  })
+
   it('still normalizes invalid tabs to Explorer files', () => {
     expect(normalizeRightSidebarRoute('missing')).toEqual({
       rightSidebarTab: 'explorer',

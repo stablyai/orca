@@ -3163,6 +3163,7 @@ export type RightSidebarTab =
   | 'explorer'
   | 'search'
   | 'vault'
+  | 'prompts'
   | 'workspaces'
   | 'pr-checks'
   | 'source-control'

@@ -805,6 +805,7 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     tab === 'explorer' ||
     tab === 'search' ||
     tab === 'vault' ||
+    tab === 'prompts' ||
     tab === 'workspaces' ||
     tab === 'source-control' ||
     tab === 'checks' ||

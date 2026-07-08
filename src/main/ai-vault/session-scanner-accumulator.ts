@@ -15,11 +15,16 @@ import type {
 import {
   extractPreviewContentText,
   extractString,
+  extractUserPromptText,
   normalizePreviewText,
+  normalizeUserPromptText,
   timestampMs
 } from './session-scanner-values'
 
 const SESSION_PREVIEW_MESSAGE_LIMIT = 5
+// Per-session cap on retained user prompts (Prompt History). Bounds payload/memory
+// while keeping far more than the 5-message rolling preview.
+const USER_PROMPT_HISTORY_LIMIT = 25
 
 export function createAccumulator(args: {
   agent: AiVaultAgent
@@ -41,12 +46,18 @@ export function createAccumulator(args: {
     messageCount: 0,
     totalTokens: 0,
     previewMessages: [],
+    userPrompts: [],
     latestTimestampMs: 0
   }
 }
 
 export function cloneSessionAccumulator(accumulator: SessionAccumulator): SessionAccumulator {
-  return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
+  return {
+    ...accumulator,
+    previewMessages: [...accumulator.previewMessages],
+    // Deep-copy so the resumable parse cache can't corrupt a handed-out snapshot.
+    userPrompts: [...accumulator.userPrompts]
+  }
 }
 
 // Resumable fold for parsers whose only parse state is the accumulator itself
@@ -110,6 +121,7 @@ export function finalizeSession(
     messageCount: accumulator.messageCount,
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
+    userPrompts: accumulator.userPrompts,
     resumeCommand: buildAiVaultResumeCommand({
       agent: accumulator.agent,
       sessionId,
@@ -142,32 +154,72 @@ export function addPreviewMessage(
     role: AiVaultSessionPreviewMessage['role']
     text: string | null
     timestamp?: unknown
+    // Full-fidelity user-prompt text for Prompt History; falls back to `text`.
+    fullPromptText?: string | null
+    // True when a role:'user' record is not a typed prompt (tool result, or
+    // injected/meta context) and must be kept out of Prompt History.
+    excludeFromPromptHistory?: boolean
   }
 ): void {
-  const text = normalizePreviewText(args.text ?? '')
-  if (!text) {
-    return
+  const timestamp = timestampIso(args.timestamp)
+  const previewText = normalizePreviewText(args.text ?? '')
+  if (previewText) {
+    accumulator.previewMessages.push({ role: args.role, text: previewText, timestamp })
+    if (accumulator.previewMessages.length > SESSION_PREVIEW_MESSAGE_LIMIT) {
+      accumulator.previewMessages.shift()
+    }
   }
-  accumulator.previewMessages.push({
-    role: args.role,
-    text,
-    timestamp: timestampIso(args.timestamp)
-  })
-  if (accumulator.previewMessages.length > SESSION_PREVIEW_MESSAGE_LIMIT) {
-    accumulator.previewMessages.shift()
+  // Retain the full run of genuine user prompts (excluding tool results and the
+  // preview's 220-char truncation) so Prompt History can copy them back verbatim.
+  if (args.role === 'user' && !args.excludeFromPromptHistory) {
+    const promptText = normalizeUserPromptText(args.fullPromptText ?? args.text ?? '')
+    if (promptText) {
+      accumulator.userPrompts.push({ text: promptText, timestamp })
+      if (accumulator.userPrompts.length > USER_PROMPT_HISTORY_LIMIT) {
+        accumulator.userPrompts.shift()
+      }
+    }
   }
+}
+
+// Claude and similar agents store tool results as role:'user' records.
+function isToolResultBlock(block: unknown): boolean {
+  return (
+    block != null &&
+    typeof block === 'object' &&
+    (block as { type?: unknown }).type === 'tool_result'
+  )
+}
+
+// A user turn that is nothing but tool results (no typed text) is not a prompt.
+function isToolResultContent(content: unknown): boolean {
+  return Array.isArray(content) && content.length > 0 && content.every(isToolResultBlock)
+}
+
+// Drop tool_result blocks so a mixed turn (tool output + typed text) contributes
+// only the user's text to Prompt History, never the tool output.
+function stripToolResultBlocks(content: unknown): unknown {
+  return Array.isArray(content) ? content.filter((block) => !isToolResultBlock(block)) : content
 }
 
 export function addPreviewContent(
   accumulator: SessionAccumulator,
   role: AiVaultSessionPreviewMessage['role'],
   content: unknown,
-  timestamp?: unknown
+  timestamp?: unknown,
+  options?: { excludeFromPromptHistory?: boolean }
 ): void {
+  const excludeFromPromptHistory =
+    options?.excludeFromPromptHistory === true || (role === 'user' && isToolResultContent(content))
   addPreviewMessage(accumulator, {
     role,
     text: extractPreviewContentText(content),
-    timestamp
+    timestamp,
+    fullPromptText:
+      role === 'user' && !excludeFromPromptHistory
+        ? extractUserPromptText(stripToolResultBlocks(content))
+        : undefined,
+    excludeFromPromptHistory
   })
 }
 

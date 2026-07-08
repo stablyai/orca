@@ -2,7 +2,8 @@ import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
   AiVaultScanIssue,
   AiVaultSession,
-  AiVaultSessionPreviewMessage
+  AiVaultSessionPreviewMessage,
+  AiVaultUserPrompt
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 
@@ -100,6 +101,7 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  userPrompts: AiVaultUserPrompt[]
   latestTimestampMs: number
 }
 

@@ -57,8 +57,10 @@ export {
   extractContentText,
   extractMessageText,
   extractPreviewContentText,
+  extractUserPromptText,
   normalizePreviewText,
-  normalizeTitleText
+  normalizeTitleText,
+  normalizeUserPromptText
 } from './session-scanner-text-normalization'
 
 export function extractGitBranch(value: unknown): string | null {

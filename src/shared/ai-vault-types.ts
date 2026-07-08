@@ -54,6 +54,14 @@ export type AiVaultSessionPreviewMessage = {
   timestamp: string | null
 }
 
+// A single user-authored prompt extracted from a session transcript. Powers the
+// Prompt History panel; kept separate from the 5-message rolling preview so it
+// can retain the full run of prompts without changing the preview behavior.
+export type AiVaultUserPrompt = {
+  text: string
+  timestamp: string | null
+}
+
 export type AiVaultSession = {
   id: string
   executionHostId: ExecutionHostId
@@ -72,6 +80,9 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // The user's prompts in this session (oldest→newest, capped). Optional so
+  // session builders that don't extract them (e.g. remote/SSH scans) can omit it.
+  userPrompts?: AiVaultUserPrompt[]
   resumeCommand: string
 }
 
