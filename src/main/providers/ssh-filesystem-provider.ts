@@ -251,7 +251,9 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request(
       'fs.workspaceSpaceScan',
       { rootPath },
-      { signal: options?.signal, timeoutMs: WORKSPACE_SPACE_SCAN_TIMEOUT_MS }
+      // Why: accurate remote du scans can legitimately outlive the default
+      // request deadline; explicit cancellation still sends rpc.cancel.
+      { signal: options?.signal, timeoutMs: null }
     )) as WorkspaceSpaceDirectoryScanResult
   }
 
