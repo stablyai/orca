@@ -65,6 +65,7 @@ import {
   isPiCompatibleAgentType,
   type PiAgentKind
 } from '../../shared/pi-agent-kind'
+import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
@@ -1005,6 +1006,10 @@ export type BuildPtyHostEnvOptions = {
   /** Distro for WSL spawns (null = Windows default distro); drives the WSL hook relay + endpoint repoint. Only read when isWsl. */
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
+  /** Per-user disabled agents from Settings > Agents. Used to avoid installing
+   *  managed Pi/OMP extensions (writing orca-*.ts files into ~/.pi or ~/.omp)
+   *  for agents the user has explicitly disabled. */
+  disabledTuiAgents?: readonly unknown[] | null
   networkProxySettings?: NetworkProxySettings
   /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
   deferGitConfigGuardToDaemon?: boolean
@@ -1617,7 +1622,9 @@ export function buildPtyHostEnv(
     // (#10196). Only create default homes on an explicit Pi/OMP launch;
     // otherwise install only into an existing agent dir (or userData for OMP
     // status so a typed `omp` still gets the shell wrapper extension).
-    if (piAgentKind === 'pi') {
+    // Why: only install Orca-managed extensions for agents enabled in Settings >
+    // Agents so disabled agents do not get orca-*.ts pollution (#7814).
+    if (piAgentKind === 'pi' && isTuiAgentEnabled('pi', opts.disabledTuiAgents)) {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
         materializeDefaultHome: explicitPiAgentKind === 'pi'
       })
@@ -1625,7 +1632,7 @@ export function buildPtyHostEnv(
       exposePiManagedExtensionEnv(baseEnv, 'pi', piEnv)
     }
 
-    if (shouldPrepareOmpShadow) {
+    if (shouldPrepareOmpShadow && isTuiAgentEnabled('omp', opts.disabledTuiAgents)) {
       const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp', {
         materializeDefaultHome: explicitPiAgentKind === 'omp'
       })
@@ -2253,6 +2260,7 @@ export function registerPtyHandlers(
           isWsl: ctx?.isWsl,
           wslDistro: ctx?.wslDistro ?? null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+          disabledTuiAgents: getSettings?.()?.disabledTuiAgents,
           networkProxySettings: getSettings?.()
         })
         // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
@@ -4417,6 +4425,7 @@ export function registerPtyHandlers(
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
           wslDistro: codexSelectionTarget.runtime === 'wsl' ? expectedWslDistro : null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+          disabledTuiAgents: getSettings?.()?.disabledTuiAgents,
           networkProxySettings: getSettings?.(),
           deferGitConfigGuardToDaemon: provider.supportsGitCredentialGuardHost?.(sessionId) === true
         })
@@ -5804,6 +5813,7 @@ export function registerPtyHandlers(
               isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
               wslDistro: codexSelectionTarget.runtime === 'wsl' ? expectedWslDistro : null,
               agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+              disabledTuiAgents: getSettings?.()?.disabledTuiAgents,
               networkProxySettings: getSettings?.(),
               deferGitConfigGuardToDaemon:
                 provider.supportsGitCredentialGuardHost?.(effectiveSessionId) === true
