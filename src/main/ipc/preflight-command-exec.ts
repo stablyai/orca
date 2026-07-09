@@ -1,12 +1,14 @@
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import { buildLocalPreflightEnv } from './preflight-local-env'
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 
 const execFileAsync = promisify(execFile)
 export const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
+const WSL_COMMAND_PATH_SENTINEL = '__ORCA_PREFLIGHT_COMMAND_PATH__'
 
 export type PreflightCommandResult = { stdout: string; stderr: string }
 
@@ -81,26 +83,31 @@ export async function isCommandOnPath(
   const finder = process.platform === 'win32' ? 'where' : 'which'
   try {
     const { stdout } = wslTarget
-      ? // Why: match WSL agent discovery (#7816) — bash type -P, zsh type -p,
-        // then command -v so shell aliases do not mask PATH executables.
+      ? // Why: preflight must validate the executable on PATH, not a shell alias or function.
         await execCommandInWsl(
           wslTarget,
           [
-            `resolved=$(type -P ${shellQuote(command)} 2>/dev/null)`,
-            `[ -n "$resolved" ] || resolved=$(type -p ${shellQuote(command)} 2>/dev/null)`,
-            `[ -n "$resolved" ] || resolved=$(command -v ${shellQuote(command)} 2>/dev/null)`,
+            buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
             'if [ -n "$resolved" ]; then',
-            'printf \'%s\\n\' "$resolved"',
+            `printf '${WSL_COMMAND_PATH_SENTINEL}%s\\n' "$resolved"`,
             'fi'
           ].join('\n')
         )
       : await execLocalPreflightCommand(finder, [command])
-    // Why: WSL returns POSIX paths; path.isAbsolute on win32 rejects /usr/bin/...
-    const isAbsolute = wslTarget ? path.posix.isAbsolute.bind(path.posix) : path.isAbsolute
+    if (wslTarget) {
+      // Why: WSL startup chatter can contain unrelated absolute paths.
+      return stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith(WSL_COMMAND_PATH_SENTINEL))
+        .map((line) => line.slice(WSL_COMMAND_PATH_SENTINEL.length))
+        .some((line) => path.posix.isAbsolute(line))
+    }
+
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .some((line) => isAbsolute(line))
+      .some((line) => path.isAbsolute(line))
   } catch {
     return false
   }

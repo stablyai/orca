@@ -7,6 +7,7 @@ import { buildRelayCommandEnv } from './relay-command-env'
 import { isPwshAvailable } from '../main/pwsh'
 import { isWslAvailable, listWslDistros } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
+import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
 const execFileAsync = promisify(execFile)
 
@@ -219,16 +220,9 @@ function buildPosixCommandLookupSpec(command: string, shell: string): CommandLoo
 }
 
 function buildShCommandLookupScript(command: string): string {
-  const quotedCommand = shellQuote(command)
-  // Why: interactive login shells load aliases (e.g. LeanCTX wraps agent CLIs).
-  // `command -v` then prints alias text, which fails absolute-path detection.
-  // Bash needs `type -P` past aliases; zsh uses lowercase `type -p`; dash/sh
-  // support neither, so fall back to `command -v`. Non-empty checks between
-  // steps avoid bash `type -p` empty success short-circuiting the chain.
+  // Why: login shells may define aliases or functions that mask the PATH executable.
   return [
-    `resolved=$(type -P ${quotedCommand} 2>/dev/null)`,
-    `[ -n "$resolved" ] || resolved=$(type -p ${quotedCommand} 2>/dev/null)`,
-    `[ -n "$resolved" ] || resolved=$(command -v ${quotedCommand} 2>/dev/null)`,
+    buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
     'if [ -n "$resolved" ]; then',
     `printf '${AGENT_PATH_PREFIX}%s\\n' "$resolved"`,
     'fi'

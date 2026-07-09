@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import path from 'node:path'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import {
   buildWslLoginShellCommand,
   escapeWslShCommandForWindows
@@ -24,23 +25,14 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
-  // Why: join with newlines, not spaces. zsh treats `fi done` as a parse error
-  // (it needs a separator before `done`); the login shell may be zsh, so a
-  // space-joined script silently fails for every agent. Newlines are valid
-  // statement separators in every POSIX shell and zsh.
-  //
-  // Why: interactive login shells load aliases (e.g. LeanCTX wraps claude/codex).
-  // `command -v` then prints alias text, which fails our absolute-path check and
-  // hides installed agents (#7816). Bash needs `type -P` to force a PATH lookup
-  // past aliases/functions; zsh's equivalent is lowercase `type -p` (uppercase
-  // -P is not valid there). Dash/sh support neither, so fall back to `command -v`.
-  // Why non-empty checks between steps: bash `type -p` can exit 0 with empty
-  // stdout for alias-only names; a bare `||` chain would then skip `command -v`.
+  const lookupScript = buildPosixCommandPathLookupScript({
+    kind: 'shell-variable',
+    name: 'cmd'
+  })
+  // Newlines keep the loop valid in zsh and every POSIX shell used here.
   const script = [
     `for cmd in ${commandList}; do`,
-    'resolved=$(type -P "$cmd" 2>/dev/null)',
-    '[ -n "$resolved" ] || resolved=$(type -p "$cmd" 2>/dev/null)',
-    '[ -n "$resolved" ] || resolved=$(command -v "$cmd" 2>/dev/null)',
+    lookupScript,
     'if [ -n "$resolved" ]; then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',

@@ -16,6 +16,8 @@ vi.mock('child_process', () => {
 })
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { escapeWslShCommandForWindows } from '../../shared/wsl-login-shell-command'
 
 function lastShCommandPayload(): string {
   const call = execFileAsyncMock.mock.calls.at(-1)
@@ -47,23 +49,18 @@ describe('detectWslCommandsOnPath', () => {
     expect(payload).toContain('fi\ndone')
   })
 
-  it('prefers type -P/-p over command -v so shell aliases do not mask PATH binaries', async () => {
+  it('uses the shared alias- and function-neutral PATH lookup', async () => {
     execFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
     await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     const payload = lastShCommandPayload()
-    // Why: LeanCTX and similar tools alias claude/codex; command -v alone
-    // returns alias text and fails absolute-path detection (#7816).
-    // bash: type -P; zsh: type -p; dash/sh: command -v.
-    // Non-empty checks between steps avoid empty-success short-circuit.
-    // `$` is escaped for Windows argv preprocessing before the WSL shell runs.
-    expect(payload).toContain('resolved=\\$(type -P "\\$cmd" 2>/dev/null)')
-    expect(payload).toContain('[ -n "\\$resolved" ] || resolved=\\$(type -p "\\$cmd" 2>/dev/null)')
-    expect(payload).toContain(
-      '[ -n "\\$resolved" ] || resolved=\\$(command -v "\\$cmd" 2>/dev/null)'
-    )
-    expect(payload).toContain('if [ -n "\\$resolved" ]; then')
+    const lookupScript = buildPosixCommandPathLookupScript({
+      kind: 'shell-variable',
+      name: 'cmd'
+    })
+    expect(payload).toContain(escapeWslShCommandForWindows(lookupScript))
+    expect(payload).not.toContain('type -P')
   })
 
   it('parses detected commands from prefixed stdout', async () => {
@@ -82,18 +79,6 @@ describe('detectWslCommandsOnPath', () => {
   it('ignores commands whose resolved path is not absolute', async () => {
     execFileAsyncMock.mockResolvedValue({
       stdout: '__ORCA_AGENT_PATH__claude\tclaude\n',
-      stderr: ''
-    })
-
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
-
-    expect(found).toEqual(new Set())
-  })
-
-  it('ignores alias-style resolution output that is not an absolute path', async () => {
-    execFileAsyncMock.mockResolvedValue({
-      stdout:
-        '__ORCA_AGENT_PATH__claude\talias claude=\'LEAN_CTX_AGENT=1 BASH_ENV="$HOME/.bashenv" claude\'\n',
       stderr: ''
     })
 
