@@ -7091,7 +7091,8 @@
             },
             "leftSidebarAppearance": {
               "title": "左サイドバーの外観",
-              "description": "左サイドバーを terminal に合わせるか、既定のままにするか、色合いを加えます。"
+              "description": "左サイドバーを terminal に合わせるか、既定のままにするか、色合いを加えます。",
+              "chrome": "chrome"
             },
             "workspaceCardLayout": {
               "title": "ワークスペースカードのレイアウト",

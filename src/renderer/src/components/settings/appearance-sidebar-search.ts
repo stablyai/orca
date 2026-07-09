@@ -7,11 +7,11 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
       'auto.components.settings.appearance.search.leftSidebarAppearance.title',
-      'Left Sidebar Appearance'
+      'Workspace Appearance'
     ),
     description: translate(
       'auto.components.settings.appearance.search.leftSidebarAppearance.description',
-      'Make the left sidebar match your terminal, stay default, or use a tint.'
+      'Match the terminal palette across workspace chrome, use app defaults, or tint the sidebar.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
@@ -26,6 +26,10 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.leftSidebarAppearance.background',
         'background'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.chrome',
+        'chrome'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.leftSidebarAppearance.tint',

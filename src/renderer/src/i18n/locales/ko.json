@@ -7054,7 +7054,8 @@
             },
             "leftSidebarAppearance": {
               "title": "왼쪽 사이드바 모양",
-              "description": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다."
+              "description": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
+              "chrome": "chrome"
             },
             "9a115966d3": "닫을 때 트레이로 최소화",
             "4d5b9427b5": "활성화하면 창을 닫아도 Orca가 종료되지 않고 시스템 트레이에서 계속 실행됩니다.",

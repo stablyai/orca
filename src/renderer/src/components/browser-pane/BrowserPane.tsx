@@ -4638,11 +4638,12 @@ function BrowserPagePane({
       return
     }
     // Why: Electron webviews render in their own compositor layer, so a React
-    // overlay can sit "under" a failed guest and still look like a black page.
-    // Fully removing the guest from layout is more reliable than visibility
-    // toggles here; some Electron builds keep painting a hidden guest layer.
-    webview.style.display = showFailureOverlay ? 'none' : 'flex'
-  }, [showFailureOverlay])
+    // overlay can sit "under" a failed or blank guest and still show the
+    // guest document's default white background. Fully removing the guest from
+    // layout is more reliable than visibility toggles here; some Electron
+    // builds keep painting a hidden guest layer.
+    webview.style.display = showFailureOverlay || isBlankTab ? 'none' : 'flex'
+  }, [isBlankTab, showFailureOverlay])
 
   const handleInternalFileDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
@@ -5505,7 +5506,7 @@ function BrowserPagePane({
                 </div>
               ) : null}
               {isBlankTab ? (
-                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background px-6">
                   <div className="flex flex-col items-center px-8 py-8 text-center opacity-70">
                     <div className="mb-4 rounded-full border border-border/70 bg-muted/30 p-3">
                       <Globe className="size-5 text-muted-foreground" />

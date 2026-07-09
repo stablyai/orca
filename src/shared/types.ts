@@ -2488,8 +2488,13 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
-  /** Controls the left sidebar surface without changing terminal brightness. */
+  /** Controls workspace chrome appearance without changing terminal brightness. In
+   *  match-terminal mode, the workspace shell derives surfaces from the active terminal palette;
+   *  other modes keep app defaults or only tint the sidebar. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
+  /** One-shot migration guard for promoting the terminal-matched sidebar default.
+   *  Once set, future explicit Default/Tinted choices survive reloads. */
+  leftSidebarAppearanceDefaultedToMatchTerminal?: boolean
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
   uiLanguage: UiLanguage
