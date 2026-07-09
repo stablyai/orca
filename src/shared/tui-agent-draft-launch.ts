@@ -110,7 +110,7 @@ export function buildAgentDraftLaunchPlan(args: {
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }
   }
-  if (!plan || !inlineCommandFitsPlatform(plan.launchCommand, plan.env, platform)) {
+  if (!plan || !inlineCommandFitsPlatform(plan.launchCommand, plan.env, platform, shell)) {
     return null
   }
   return plan

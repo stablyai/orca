@@ -156,6 +156,7 @@ describe('buildWslCodexSessionBridgeShellCommand', () => {
     expect(shellCommand).toContain(`-name '*.jsonl'`)
     expect(shellCommand).toContain(`-name '*.jsonl.zst'`)
     expect(shellCommand).toContain('cp -p --')
+    expect(shellCommand).toContain('.orca-session-copies')
     expect(shellCommand).not.toContain('.sqlite')
   })
 

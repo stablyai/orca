@@ -109,6 +109,16 @@ export function buildWslCodexSessionBridgeShellCommand(
     '    linked_files=$((linked_files + 1))',
     '  elif cp -p -- "$source_file" "$target_file"; then',
     '    linked_files=$((linked_files + 1))',
+    // Why: hardlinks share an inode so usage de-dupes automatically; cp creates
+    // a second file the scanner would count twice unless we leave the same
+    // .orca-session-copies marker the Windows bridge writes after copyFileSync.
+    '    marker_file="$managed_sessions_root/../.orca-session-copies/${relative_path}.json"',
+    '    mkdir -p -- "$(dirname -- "$marker_file")" 2>/dev/null || true',
+    '    source_size=$(stat -c %s -- "$source_file" 2>/dev/null || printf 0)',
+    '    target_size=$(stat -c %s -- "$target_file" 2>/dev/null || printf 0)',
+    '    source_mtime_ms=$(($(stat -c %Y -- "$source_file" 2>/dev/null || printf 0) * 1000))',
+    '    target_mtime_ms=$(($(stat -c %Y -- "$target_file" 2>/dev/null || printf 0) * 1000))',
+    `    printf '{"sourcePath":"%s","sourceSize":%s,"sourceMtimeMs":%s,"targetSize":%s,"targetMtimeMs":%s}\\n' "$source_file" "$source_size" "$source_mtime_ms" "$target_size" "$target_mtime_ms" >"$marker_file" 2>/dev/null || true`,
     '  fi',
     `done < <(find "$source_sessions_root" -type f \\( -name '*.jsonl' -o -name '*.jsonl.zst' \\) -print0 2>/dev/null)`,
     `printf '{"scannedFiles":%s,"linkedFiles":%s}\\n' "$scanned_files" "$linked_files"`

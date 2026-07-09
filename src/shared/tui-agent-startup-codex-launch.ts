@@ -6,6 +6,9 @@ import {
 // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
 // generated prompts/drafts should use the existing post-ready paste fallback.
 export const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
+// Why: cmd.exe CreateProcess command-line max is 8191 chars; leave headroom for
+// the shell wrapper when terminalWindowsShell resolves to cmd.
+export const WIN32_CMD_INLINE_DRAFT_LIMIT_CHARS = 7_500
 
 export function normalizeStartupImagePaths(
   imagePaths: readonly string[] | null | undefined
@@ -42,7 +45,8 @@ export function appendCodexImageArgs(
 export function inlineCommandFitsPlatform(
   launchCommand: string,
   env: Record<string, string> | undefined,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  shell?: AgentStartupShell
 ): boolean {
   if (platform !== 'win32') {
     return true
@@ -51,5 +55,7 @@ export function inlineCommandFitsPlatform(
     (total, [key, value]) => total + key.length + value.length,
     0
   )
-  return launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
+  const limit =
+    shell === 'cmd' ? WIN32_CMD_INLINE_DRAFT_LIMIT_CHARS : WIN32_INLINE_DRAFT_LIMIT_CHARS
+  return launchCommand.length + envChars <= limit
 }

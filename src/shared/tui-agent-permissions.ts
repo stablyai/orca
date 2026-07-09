@@ -69,6 +69,11 @@ function argsContainYoloFlag(args: string, yoloArgs: string): boolean {
   }
   const tokens = args.split(/\s+/).filter(Boolean)
   const yoloTokens = yoloArgs.split(/\s+/).filter(Boolean)
+  // Why: whitespace-only yoloArgs is truthy but yields zero tokens; [].every
+  // is vacuously true and would mark any non-empty args as YOLO.
+  if (yoloTokens.length === 0) {
+    return false
+  }
   if (yoloTokens.length === 1) {
     return tokens.includes(yoloTokens[0]!)
   }

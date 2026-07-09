@@ -138,7 +138,7 @@ export function buildAgentStartupPlan(args: {
     // Why: Windows argv/env budgets reject oversized CreateProcess command lines.
     // Fall back to empty launch + post-ready paste-submit (followup) so the
     // prompt still lands without truncating argv.
-    if (!inlineCommandFitsPlatform(inlineLaunchCommand, env, platform)) {
+    if (!inlineCommandFitsPlatform(inlineLaunchCommand, env, platform, shell)) {
       return {
         agent,
         launchCommand: launchBaseCommand,
