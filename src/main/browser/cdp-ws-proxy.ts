@@ -269,7 +269,8 @@ export class CdpWsProxy {
       this.sendResult(clientId, {}, client)
       return
     }
-    if (msg.method === 'Target.attachToTarget') {
+    // Why: attachToBrowserTarget is blocked by the page debugger, so satisfy it in the proxy.
+    if (msg.method === 'Target.attachToTarget' || msg.method === 'Target.attachToBrowserTarget') {
       this.clientSessionId = 'orca-proxy-session'
       this.sendResult(clientId, { sessionId: this.clientSessionId }, client)
       return

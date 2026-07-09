@@ -89,6 +89,82 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
+  it('handles Target.attachToBrowserTarget locally and keeps session-scoped commands on the proxy path', async () => {
+    const client = await connect(endpoint)
+
+    const attachResponse = await sendAndReceive(client, {
+      id: 31,
+      method: 'Target.attachToBrowserTarget',
+      params: {}
+    })
+
+    expect(attachResponse).toEqual({
+      id: 31,
+      result: { sessionId: 'orca-proxy-session' }
+    })
+    expect(getSendCommandMethods(mock)).not.toContain('Target.attachToBrowserTarget')
+
+    const sessionResponse = await sendAndReceive(client, {
+      id: 32,
+      method: 'Runtime.evaluate',
+      params: { expression: 'document.title' },
+      sessionId: 'orca-proxy-session'
+    })
+
+    expect(sessionResponse).toEqual({ id: 32, result: {} })
+    expect(getSendCommandCalls(mock)).toContainEqual([
+      'Runtime.evaluate',
+      { expression: 'document.title' }
+    ])
+    client.close()
+  })
+
+  it('preserves Target.attachToTarget and clears the synthetic session on Target.detachFromTarget', async () => {
+    const client = await connect(endpoint)
+
+    const attachResponse = await sendAndReceive(client, {
+      id: 33,
+      method: 'Target.attachToTarget',
+      params: { targetId: 'orca-proxy-target', flatten: true }
+    })
+
+    expect(attachResponse).toEqual({
+      id: 33,
+      result: { sessionId: 'orca-proxy-session' }
+    })
+
+    const detachResponse = await sendAndReceive(client, {
+      id: 34,
+      method: 'Target.detachFromTarget',
+      params: { sessionId: 'orca-proxy-session' }
+    })
+
+    expect(detachResponse).toEqual({ id: 34, result: {} })
+
+    const rootEventPromise = new Promise<Record<string, unknown>>((resolve) => {
+      client.once('message', (data) => resolve(JSON.parse(data.toString())))
+    })
+    mock.emit('message', {}, 'Runtime.executionContextCreated', { context: { id: 1 } })
+
+    const rootEvent = await rootEventPromise
+    expect(rootEvent).toEqual({
+      method: 'Runtime.executionContextCreated',
+      params: { context: { id: 1 } }
+    })
+
+    const reattachResponse = await sendAndReceive(client, {
+      id: 35,
+      method: 'Target.attachToTarget',
+      params: { targetId: 'orca-proxy-target', flatten: true }
+    })
+
+    expect(reattachResponse).toEqual({
+      id: 35,
+      result: { sessionId: 'orca-proxy-session' }
+    })
+    client.close()
+  })
+
   it('returns an error instead of crashing when a command arrives after tab destruction', async () => {
     const client = await connect(endpoint)
     mock.destroy()
