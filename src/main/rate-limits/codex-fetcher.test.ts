@@ -31,7 +31,11 @@ vi.mock('./codex-auth-presence', () => ({
   codexAuthExists: vi.fn(() => true)
 }))
 
-import { fetchCodexRateLimits } from './codex-fetcher'
+import {
+  buildCodexRateLimitResetCreditsUrl,
+  fetchCodexRateLimits,
+  normalizeCodexBackendBaseUrl
+} from './codex-fetcher'
 import { codexAuthExists } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
 
@@ -71,6 +75,21 @@ function makePtyTerm() {
     emitExit: () => exitHandler?.()
   }
 }
+
+describe('normalizeCodexBackendBaseUrl', () => {
+  it('defaults to ChatGPT backend-api and normalizes bare chatgpt hosts', () => {
+    expect(normalizeCodexBackendBaseUrl(null)).toBe('https://chatgpt.com/backend-api')
+    expect(normalizeCodexBackendBaseUrl('https://chatgpt.com/')).toBe(
+      'https://chatgpt.com/backend-api'
+    )
+    expect(normalizeCodexBackendBaseUrl('https://api.example.com/v1/')).toBe(
+      'https://api.example.com/v1'
+    )
+    expect(buildCodexRateLimitResetCreditsUrl('https://api.example.com')).toBe(
+      'https://api.example.com/api/codex/rate-limit-reset-credits'
+    )
+  })
+})
 
 describe('fetchCodexRateLimits', () => {
   beforeEach(() => {
@@ -350,17 +369,91 @@ describe('fetchCodexRateLimits', () => {
     expect(result.weekly?.windowMinutes).toBe(10080)
   })
 
+  it('surfaces additional rateLimitsByLimitId buckets alongside preferred session/weekly', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: {
+                  rateLimits: {
+                    limitId: 'codex',
+                    primary: { usedPercent: 10, windowDurationMins: 299 },
+                    secondary: { usedPercent: 20, windowDurationMins: 10079 }
+                  },
+                  rateLimitsByLimitId: {
+                    codex: {
+                      limitId: 'codex',
+                      limitName: 'Codex',
+                      primary: { usedPercent: 10 },
+                      secondary: { usedPercent: 20 }
+                    },
+                    codex_other: {
+                      limitId: 'codex_other',
+                      limitName: 'Codex other',
+                      primary: { usedPercent: 40 },
+                      secondary: { usedPercent: 55 }
+                    }
+                  }
+                }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await resultPromise
+
+    expect(result).toMatchObject({
+      provider: 'codex',
+      session: { usedPercent: 10, windowMinutes: 300 },
+      weekly: { usedPercent: 20, windowMinutes: 10080 },
+      status: 'ok'
+    })
+    expect(result.buckets).toEqual([
+      expect.objectContaining({ name: 'Codex', usedPercent: 10, windowMinutes: 300 }),
+      expect.objectContaining({ name: 'Codex other', usedPercent: 40, windowMinutes: 300 }),
+      expect.objectContaining({
+        name: 'Codex other weekly',
+        usedPercent: 55,
+        windowMinutes: 10080
+      })
+    ])
+  })
+
   it('fills reset-credit count from the backend when the installed app-server omits it', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
-    readFileMock.mockResolvedValue(
-      JSON.stringify({
+    readFileMock.mockImplementation(async (path: string) => {
+      if (String(path).endsWith('config.toml')) {
+        return 'model = "gpt-5"\n'
+      }
+      return JSON.stringify({
         tokens: {
           access_token: 'access-token',
           account_id: 'account-id'
         }
       })
-    )
+    })
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -455,6 +548,126 @@ describe('fetchCodexRateLimits', () => {
           originator: 'Codex Desktop'
         })
       })
+    )
+  })
+
+  it('uses chatgpt_base_url from config for reset-credit backend requests', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    readFileMock.mockImplementation(async (path: string) => {
+      if (String(path).endsWith('config.toml')) {
+        return 'chatgpt_base_url = "https://chatgpt.com"\n'
+      }
+      return JSON.stringify({
+        tokens: {
+          access_token: 'access-token',
+          account_id: 'account-id'
+        }
+      })
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ available_count: 1 })
+    } as Response)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: {
+                  rateLimits: { primary: { usedPercent: 3 } }
+                }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits({
+      codexHomePath: '/managed/codex-home',
+      allowPtyFallback: false
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    await resultPromise
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
+      expect.anything()
+    )
+  })
+
+  it('uses Codex API path style when chatgpt_base_url is a non-ChatGPT backend', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    readFileMock.mockImplementation(async (path: string) => {
+      if (String(path).endsWith('config.toml')) {
+        return 'chatgpt_base_url = "https://api.example.com/v1"\n'
+      }
+      return JSON.stringify({
+        tokens: {
+          access_token: 'access-token',
+          account_id: 'account-id'
+        }
+      })
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ available_count: 1 })
+    } as Response)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: {
+                  rateLimits: { primary: { usedPercent: 3 } }
+                }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits({
+      codexHomePath: '/managed/codex-home',
+      allowPtyFallback: false
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    await resultPromise
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.example.com/v1/api/codex/rate-limit-reset-credits',
+      expect.anything()
     )
   })
 

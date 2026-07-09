@@ -4,7 +4,11 @@ import type { DraftPasteReadySignal } from './tui-agent-config'
 // actually mounted/focused. These markers let the scanner detect the real
 // "input is ready" moment per agent instead of guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
-const CODEX_COMPOSER_PROMPT = '›'
+// Why: bare `›` alone is too weak — Codex can emit it during hooks-review /
+// onboarding frames before the real idle composer is focused. Require the
+// idle placeholder text chat_composer.rs paints with the prompt glyph.
+const CODEX_COMPOSER_GLYPH = '›'
+const CODEX_COMPOSER_PLACEHOLDER = 'Ask Codex'
 // Why: opencode emits the DECTCEM show-cursor only once the composer row is
 // mounted and the text cursor is placed in it — a "composer ready" signal,
 // analogous to Codex's prompt glyph. It fires ~2s after bracketed paste is
@@ -28,8 +32,9 @@ export type DraftPasteReadyScanResult = {
  * and return types differ.
  *
  * Per agent signal:
- *   - `codex-composer-prompt`: ready when the `›` glyph renders after DECSET
- *     2004; never arms the quiet window (`armQuietTimer` stays false).
+ *   - `codex-composer-prompt`: ready when both the `›` glyph and the idle
+ *     "Ask Codex" placeholder render after DECSET 2004; never arms the quiet
+ *     window (`armQuietTimer` stays false).
  *   - `render-cursor-after-bracketed-paste`: ready when DECTCEM show-cursor
  *     (`\x1b[?25h`) renders after DECSET 2004. Like Codex it does NOT arm the
  *     quiet window: opencode stays silent for ~1.5-2s between enabling
@@ -49,13 +54,23 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
   let recent = ''
   let postHandshakeRecent = ''
   let saw2004 = false
+  let sawCodexGlyph = false
+  let sawCodexPlaceholder = false
 
-  const signalMarker =
-    readySignal === 'codex-composer-prompt'
-      ? CODEX_COMPOSER_PROMPT
-      : readySignal === 'render-cursor-after-bracketed-paste'
-        ? DECTCEM_SHOW_CURSOR
-        : null
+  const usesCursorMarker = readySignal === 'render-cursor-after-bracketed-paste'
+  const usesCodexComposer = readySignal === 'codex-composer-prompt'
+  const usesMarker = usesCursorMarker || usesCodexComposer
+
+  const codexComposerReady = (): boolean => sawCodexGlyph && sawCodexPlaceholder
+
+  const observeCodexMarkers = (chunk: string): void => {
+    if (!sawCodexGlyph && chunk.includes(CODEX_COMPOSER_GLYPH)) {
+      sawCodexGlyph = true
+    }
+    if (!sawCodexPlaceholder && chunk.includes(CODEX_COMPOSER_PLACEHOLDER)) {
+      sawCodexPlaceholder = true
+    }
+  }
 
   return {
     observe(data: string): DraftPasteReadyScanResult {
@@ -68,27 +83,40 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
         }
         saw2004 = true
         const postHandshakeChunk = combined.slice(markerIndex + DECSET_BRACKETED_PASTE.length)
-        if (signalMarker !== null && postHandshakeChunk.includes(signalMarker)) {
+        if (usesCodexComposer) {
+          observeCodexMarkers(postHandshakeChunk)
+          if (codexComposerReady()) {
+            return { ready: true, armQuietTimer: false }
+          }
+        } else if (usesCursorMarker && postHandshakeChunk.includes(DECTCEM_SHOW_CURSOR)) {
           return { ready: true, armQuietTimer: false }
         }
         postHandshakeRecent = postHandshakeChunk.slice(-512)
       } else {
-        if (
-          signalMarker !== null &&
-          (data.includes(signalMarker) || (postHandshakeRecent + data).includes(signalMarker))
+        if (usesCodexComposer) {
+          observeCodexMarkers(data)
+          observeCodexMarkers(postHandshakeRecent + data)
+          if (codexComposerReady()) {
+            return { ready: true, armQuietTimer: false }
+          }
+        } else if (
+          usesCursorMarker &&
+          (data.includes(DECTCEM_SHOW_CURSOR) ||
+            (postHandshakeRecent + data).includes(DECTCEM_SHOW_CURSOR))
         ) {
           return { ready: true, armQuietTimer: false }
         }
         postHandshakeRecent = (postHandshakeRecent + data).slice(-512)
       }
-      // Why: marker-based signals (Codex glyph, opencode show-cursor) must NOT
-      // arm the quiet window. opencode goes silent for ~1.5-2s between enabling
-      // bracketed paste and mounting its composer, so a quiet window would fire
-      // during that gap — before the composer exists — and pre-empt the marker.
-      // These signals wait for their marker, bounded only by the caller's hard
-      // timeout (and the caller's best-effort process-ownership paste after it).
-      // Only the default signal, which has no marker, uses the quiet window.
-      return { ready: false, armQuietTimer: signalMarker === null && saw2004 }
+      // Why: marker-based signals (Codex glyph+placeholder, opencode show-cursor)
+      // must NOT arm the quiet window. opencode goes silent for ~1.5-2s between
+      // enabling bracketed paste and mounting its composer, so a quiet window
+      // would fire during that gap — before the composer exists — and pre-empt
+      // the marker. These signals wait for their marker, bounded only by the
+      // caller's hard timeout (and the caller's best-effort process-ownership
+      // paste after it). Only the default signal, which has no marker, uses the
+      // quiet window.
+      return { ready: false, armQuietTimer: !usesMarker && saw2004 }
     }
   }
 }

@@ -52,6 +52,36 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('matches cold-compressed Codex .jsonl.zst rollouts by session id', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-codex-zst-')
+    const codexSessionsDir = join(root, 'codex-sessions')
+    const dayDir = join(codexSessionsDir, '2026', '06', '04')
+    await mkdir(dayDir, { recursive: true })
+    const target = join(dayDir, 'rollout-2026-06-04T10-00-00-zst-session.jsonl.zst')
+    await writeFile(target, 'zstd')
+
+    const resolved = await resolveSessionFilePath('codex', 'zst-session', {
+      codexSessionsDirs: [codexSessionsDir]
+    })
+    expect(resolved).toBe(target)
+  })
+
+  it('prefers plain .jsonl over sibling .jsonl.zst for the same session', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-codex-prefer-plain-')
+    const codexSessionsDir = join(root, 'codex-sessions')
+    const dayDir = join(codexSessionsDir, '2026', '06', '04')
+    await mkdir(dayDir, { recursive: true })
+    const plain = join(dayDir, 'rollout-2026-06-04T10-00-00-dual-session.jsonl')
+    const compressed = join(dayDir, 'rollout-2026-06-04T10-00-00-dual-session.jsonl.zst')
+    await writeFile(plain, '{}\n')
+    await writeFile(compressed, 'zstd')
+
+    const resolved = await resolveSessionFilePath('codex', 'dual-session', {
+      codexSessionsDirs: [codexSessionsDir]
+    })
+    expect(resolved).toBe(plain)
+  })
+
   it('resolves a rollout from the orca-managed Codex home (ORCA_USER_DATA_PATH)', async () => {
     // Orca launches Codex with its own managed CODEX_HOME, so rollout files land
     // under <userData>/codex-runtime-home/home/sessions, NOT ~/.codex/sessions.

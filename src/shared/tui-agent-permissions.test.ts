@@ -76,6 +76,26 @@ describe('tui agent permissions', () => {
     ).toBe('mixed')
   })
 
+  it('treats Codex YOLO bypass plus extra flags as yolo', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'codex',
+        agentArgs: `${YOLO_TUI_AGENT_ARGS.codex} --profile work`,
+        agentEnv: {}
+      })
+    ).toBe('yolo')
+  })
+
+  it('does not treat a partial YOLO flag substring as yolo', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'codex',
+        agentArgs: '--dangerously-bypass-approvals-and-sandbox-extra',
+        agentEnv: {}
+      })
+    ).toBe('mixed')
+  })
+
   it('resolves env-driven yolo launches', () => {
     expect(
       resolveTuiAgentPermissionMode({

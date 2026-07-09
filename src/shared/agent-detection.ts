@@ -26,8 +26,10 @@ export {
 } from './terminal-title-agent-type'
 export type { AgentStatus } from './terminal-title-status'
 export {
+  CODEX_NATIVE_ACTION_REQUIRED_TITLE_RE,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
+  isCodexNativeActionRequiredTitle,
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE
 } from './terminal-title-status'

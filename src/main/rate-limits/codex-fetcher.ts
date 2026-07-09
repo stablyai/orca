@@ -81,6 +81,8 @@ type RpcRateLimitsResult = {
 // The actual response shape is `{ rateLimits: { primary, secondary, ... } }`.
 type RpcRateLimitsResponse = {
   rateLimits?: RpcRateLimitsResult
+  // Why: multi-meter plans return several snapshots keyed by limit_id.
+  rateLimitsByLimitId?: Record<string, RpcRateLimitSnapshot | undefined> | null
   rateLimitResetCredits?: {
     availableCount?: number
     totalEarnedCount?: number
@@ -376,7 +378,8 @@ async function fetchBackendRateLimitResetCredits(
   }
   // Why: published Codex 0.140 can read windows through app-server but strips
   // reset-credit metadata that the backend already returns.
-  const response = await fetch('https://chatgpt.com/backend-api/wham/rate-limit-reset-credits', {
+  const baseUrl = await resolveCodexBackendBaseUrl(options?.codexHomePath)
+  const response = await fetch(buildCodexRateLimitResetCreditsUrl(baseUrl), {
     ...auth,
     signal
   })
@@ -435,18 +438,16 @@ export async function consumeCodexRateLimitResetCredit(options: {
   if (!auth) {
     throw new Error('Codex not signed in')
   }
-  const response = await fetch(
-    'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume',
-    {
-      method: 'POST',
-      headers: {
-        ...auth.headers,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ redeem_request_id: options.idempotencyKey }),
-      signal
-    }
-  )
+  const baseUrl = await resolveCodexBackendBaseUrl(options.codexHomePath)
+  const response = await fetch(buildCodexRateLimitResetCreditsConsumeUrl(baseUrl), {
+    method: 'POST',
+    headers: {
+      ...auth.headers,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ redeem_request_id: options.idempotencyKey }),
+    signal
+  })
   if (!response.ok) {
     throw new Error(`Codex reset failed: HTTP ${response.status}`)
   }
@@ -490,6 +491,141 @@ function mapRpcWindow(
     resetDescription
   }
 }
+
+function parseTopLevelTomlStringKey(config: string, key: string): string | null {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const keyPattern = new RegExp(
+    `^[ \\t]*${escapedKey}[ \\t]*=[ \\t]*(?:"([^"]*)"|'([^']*)')`
+  )
+  for (const line of config.split('\n')) {
+    if (/^[ \t]*\[/.test(line)) {
+      break
+    }
+    const match = keyPattern.exec(line)
+    if (match) {
+      return match[1] ?? match[2] ?? null
+    }
+  }
+  return null
+}
+
+// Why: Codex backend-client normalizes ChatGPT hostnames onto /backend-api so
+// WHAM paths resolve; custom bases use the /api/codex path style instead.
+export function normalizeCodexBackendBaseUrl(raw: string | null | undefined): string {
+  let base = (raw?.trim() || DEFAULT_CHATGPT_BACKEND_BASE_URL).replace(/\/+$/, '')
+  if (
+    (base.startsWith('https://chatgpt.com') || base.startsWith('https://chat.openai.com')) &&
+    !base.includes('/backend-api')
+  ) {
+    base = `${base}/backend-api`
+  }
+  return base
+}
+
+function isChatGptApiBaseUrl(baseUrl: string): boolean {
+  return baseUrl.includes('/backend-api')
+}
+
+export function buildCodexRateLimitResetCreditsUrl(baseUrl: string): string {
+  const normalized = normalizeCodexBackendBaseUrl(baseUrl)
+  return isChatGptApiBaseUrl(normalized)
+    ? `${normalized}/wham/rate-limit-reset-credits`
+    : `${normalized}/api/codex/rate-limit-reset-credits`
+}
+
+export function buildCodexRateLimitResetCreditsConsumeUrl(baseUrl: string): string {
+  return `${buildCodexRateLimitResetCreditsUrl(baseUrl)}/consume`
+}
+
+async function readCodexChatGptBaseUrl(codexHomePath?: string | null): Promise<string | null> {
+  try {
+    const config = await readFile(join(getCodexHomePath(codexHomePath), 'config.toml'), 'utf8')
+    return parseTopLevelTomlStringKey(config, 'chatgpt_base_url')
+  } catch {
+    return null
+  }
+}
+
+async function resolveCodexBackendBaseUrl(codexHomePath?: string | null): Promise<string> {
+  const fromConfig = await readCodexChatGptBaseUrl(codexHomePath)
+  return normalizeCodexBackendBaseUrl(fromConfig)
+}
+
+function preferredRpcRateLimitSnapshot(
+  wrapper: RpcRateLimitsResponse | undefined
+): { id: string | null; snapshot: RpcRateLimitSnapshot | undefined } {
+  const byId = wrapper?.rateLimitsByLimitId
+  if (byId) {
+    if (byId.codex) {
+      return { id: 'codex', snapshot: byId.codex }
+    }
+    for (const [id, snapshot] of Object.entries(byId)) {
+      if (snapshot) {
+        return { id, snapshot }
+      }
+    }
+  }
+  return { id: null, snapshot: wrapper?.rateLimits }
+}
+
+function limitSnapshotDisplayName(id: string, snapshot: RpcRateLimitSnapshot): string {
+  const named = snapshot.limitName?.trim() || snapshot.limitId?.trim() || id
+  return named === 'codex' ? 'Session' : named
+}
+
+// Why: multi-meter plans expose additional limit_ids beyond the primary codex
+// snapshot. Surface them as named buckets while keeping session/weekly for the
+// preferred (usually "codex") pair used by compact status-bar UI.
+function mapRpcRateLimitsPayload(wrapper: RpcRateLimitsResponse | undefined): {
+  session: RateLimitWindow | null
+  weekly: RateLimitWindow | null
+  buckets?: RateLimitBucket[]
+} {
+  const preferred = preferredRpcRateLimitSnapshot(wrapper)
+  const session = mapRpcWindow(preferred.snapshot?.primary, 300)
+  const weekly = mapRpcWindow(preferred.snapshot?.secondary, 10080)
+  const byId = wrapper?.rateLimitsByLimitId
+  if (!byId) {
+    return { session, weekly }
+  }
+
+  const entries = Object.entries(byId).filter(
+    (entry): entry is [string, RpcRateLimitSnapshot] => entry[1] != null
+  )
+  const preferredId = preferred.id ?? 'codex'
+  const hasAdditional = entries.some(([id]) => id !== preferredId)
+  if (!hasAdditional) {
+    return { session, weekly }
+  }
+
+  const buckets: RateLimitBucket[] = []
+  for (const [id, snapshot] of entries) {
+    const name = limitSnapshotDisplayName(id, snapshot)
+    const primary = mapRpcWindow(snapshot.primary, 300)
+    if (primary) {
+      buckets.push({ name, ...primary })
+    }
+    if (id === preferredId) {
+      // Preferred secondary is already exposed as weekly.
+      continue
+    }
+    const secondary = mapRpcWindow(snapshot.secondary, 10080)
+    if (secondary) {
+      buckets.push({ name: `${name} weekly`, ...secondary })
+    }
+  }
+
+  return {
+    session,
+    weekly,
+    ...(buckets.length > 0 ? { buckets } : {})
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RPC fetch — spawn `codex -s read-only -a untrusted app-server`
+// ---------------------------------------------------------------------------
+
 
 function mapBackendUsageWindow(
   raw: BackendRateLimitWindow | null | undefined,
@@ -723,9 +859,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             }
 
             const wrapper = msg.result as RpcRateLimitsResponse | undefined
-            const result = wrapper?.rateLimits
-            const session = mapRpcWindow(result?.primary, 300)
-            const weekly = mapRpcWindow(result?.secondary, 10080)
+            const { session, weekly, buckets } = mapRpcRateLimitsPayload(wrapper)
             const rateLimitResetCredits = mapRpcRateLimitResetCredits(
               wrapper?.rateLimitResetCredits
             )
@@ -735,6 +869,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
                 provider: 'codex',
                 session,
                 weekly,
+                ...(buckets ? { buckets } : {}),
                 ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
                 updatedAt: Date.now(),
                 error: null,

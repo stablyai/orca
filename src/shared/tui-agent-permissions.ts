@@ -54,11 +54,39 @@ function sameEnv(
   return leftEntries.every(([name, value]) => right?.[name] === value)
 }
 
+/**
+ * Why: launch configs often append profile/model flags alongside YOLO bypass.
+ * Exact string equality would misclassify those as `mixed` and re-enable
+ * permission noise. Treat the bypass flag as yolo when present as a whole
+ * argv token (or the full args string when the YOLO constant is multi-token).
+ */
+function argsContainYoloFlag(args: string, yoloArgs: string): boolean {
+  if (!yoloArgs) {
+    return false
+  }
+  if (args === yoloArgs) {
+    return true
+  }
+  const tokens = args.split(/\s+/).filter(Boolean)
+  const yoloTokens = yoloArgs.split(/\s+/).filter(Boolean)
+  if (yoloTokens.length === 1) {
+    return tokens.includes(yoloTokens[0]!)
+  }
+  // Multi-token YOLO constants (e.g. `--auto-approve true`) must appear as a
+  // contiguous token sequence so partial flag matches stay non-yolo.
+  for (let i = 0; i <= tokens.length - yoloTokens.length; i++) {
+    if (yoloTokens.every((token, offset) => tokens[i + offset] === token)) {
+      return true
+    }
+  }
+  return false
+}
+
 function resolveAgentPermissionMode(args: string, yoloArgs: string): AgentPermissionMode {
   if (!args) {
     return 'manual'
   }
-  return args === yoloArgs ? 'yolo' : 'mixed'
+  return argsContainYoloFlag(args, yoloArgs) ? 'yolo' : 'mixed'
 }
 
 function resolveAgentEnvPermissionMode(

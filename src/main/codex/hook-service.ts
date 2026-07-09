@@ -61,15 +61,18 @@ import {
 
 // Why: PreToolUse/PostToolUse give the dashboard a live readout of the
 // in-flight tool (name + input preview) between UserPromptSubmit and Stop.
-// PermissionRequest is the human-input boundary: the managed script exits
-// without a decision so Codex still shows its normal approval UI, while Orca
-// can flip the pane to the red waiting state.
+// SubagentStart/SubagentStop keep the parent turn visible while a subagent
+// runs — SubagentStop must not look like root Stop. PermissionRequest is the
+// human-input boundary: the managed script exits without a decision so Codex
+// still shows its normal approval UI, while Orca can flip the pane to waiting.
 const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'SubagentStart',
+  'SubagentStop',
   'Stop'
 ] as const
 
@@ -95,6 +98,8 @@ const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> 
   PreToolUse: CODEX_HOOK_EVENT_LABEL.PreToolUse!,
   PermissionRequest: CODEX_HOOK_EVENT_LABEL.PermissionRequest!,
   PostToolUse: CODEX_HOOK_EVENT_LABEL.PostToolUse!,
+  SubagentStart: CODEX_HOOK_EVENT_LABEL.SubagentStart!,
+  SubagentStop: CODEX_HOOK_EVENT_LABEL.SubagentStop!,
   Stop: CODEX_HOOK_EVENT_LABEL.Stop!
 }
 
@@ -1240,11 +1245,14 @@ export class CodexHookService {
         const definition: HookDefinition = {
           hooks: [buildManagedCommandHook(command)]
         }
-        nextHooks[eventName] = [...cleaned, definition]
+        // Why: prepend managed hooks (groupIndex 0) so a slow user PostToolUse/
+        // Stop hook cannot leave the sidebar sticky while Codex is still running
+        // other handlers — same ordering as local install().
+        nextHooks[eventName] = [definition, ...cleaned]
         trustEntries.push({
           sourcePath: remoteConfigPath,
           eventLabel: CODEX_EVENT_LABEL[eventName],
-          groupIndex: cleaned.length,
+          groupIndex: 0,
           handlerIndex: 0,
           command,
           timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS

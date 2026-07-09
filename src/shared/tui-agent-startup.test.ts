@@ -61,6 +61,41 @@ describe('tui agent startup plans', () => {
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 
+  it('wires repeatable Codex -i image args before the positional PROMPT', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'describe these',
+      cmdOverrides: {},
+      platform: 'linux',
+      imagePaths: ['/tmp/a.png', '/tmp/b with spaces.png', '/tmp/a.png', '  ']
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "codex -i '/tmp/a.png' -i '/tmp/b with spaces.png' 'describe these'"
+    )
+    expect(plan?.startupCommandDelivery).toBe('shell-ready')
+    expect(plan?.followupPrompt).toBeNull()
+  })
+
+  it('falls back to empty Codex launch + followup paste-submit when win32 argv is oversized', () => {
+    const hugePrompt = 'x'.repeat(25_000)
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: hugePrompt,
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan).toEqual({
+      agent: 'codex',
+      launchCommand: 'codex',
+      expectedProcess: 'codex',
+      followupPrompt: hugePrompt,
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+    })
+    expect(plan?.startupCommandDelivery).toBeUndefined()
+  })
+
   it('keeps plain empty Codex startup on the fast delivery path', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

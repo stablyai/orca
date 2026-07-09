@@ -10,6 +10,7 @@ import {
   beginAgentStartupDeliveryAttempt,
   getAgentStartupTabPtyId,
   queuePendingAgentStartupDelivery,
+  releaseAgentStartupDeliveryAttempt,
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
 import type { FolderWorkspaceLinkedTask, OrcaHooks, TaskViewPresetId } from '../../../shared/types'
@@ -287,7 +288,13 @@ export async function ensureAgentStartupInTerminal(args: {
   }
 
   if (beginAgentStartupDeliveryAttempt({ worktreeId, tabId, launchToken })) {
-    await deliverAgentStartupToTerminal(tabId, ptyId, startup)
+    const delivered = await deliverAgentStartupToTerminal(tabId, ptyId, startup)
+    if (!delivered) {
+      // Why: Codex readiness can fire too early (hooks-review/onboarding) and
+      // drop the paste. Release the consume guard so a later mount/retry can
+      // re-attempt instead of treating a failed paste as final delivery.
+      releaseAgentStartupDeliveryAttempt({ worktreeId, tabId, launchToken })
+    }
   }
 }
 
@@ -295,35 +302,39 @@ async function deliverAgentStartupToTerminal(
   tabId: string,
   ptyId: string,
   startup: AgentStartupPlan
-): Promise<void> {
+): Promise<boolean> {
   const draftPrompt = startup.draftPrompt ?? null
   const runtimeSettings = getSettingsForAgentTabRuntimeOwner(tabId)
+  let delivered = true
   // Why: followupPrompt is the legacy path for stdin-after-start agents
   // (aider, goose, etc.) that need their initial prompt typed into the live
   // session and submitted. Wait until the agent owns the PTY before writing.
   if (startup.followupPrompt) {
-    await sendFollowupPromptWhenAgentReady({
-      ptyId,
-      expectedProcess: startup.expectedProcess,
-      prompt: startup.followupPrompt,
-      settings: runtimeSettings
-    })
+    delivered =
+      (await sendFollowupPromptWhenAgentReady({
+        ptyId,
+        expectedProcess: startup.expectedProcess,
+        prompt: startup.followupPrompt,
+        settings: runtimeSettings
+      })) && delivered
   }
 
   // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
   // agent's input buffer (no per-char echo, no auto-submit). Shared with the
   // launch-work-item-direct flow so both behave identically.
   if (draftPrompt) {
-    await pasteDraftToAgentPtyWhenReady({
-      tabId,
-      ptyId,
-      content: draftPrompt,
-      agent: startup.agent,
-      // Why: startup.draftPrompt is only attached after native draft launch
-      // planning is unavailable, so this paste is the first delivery attempt.
-      forcePaste: true
-    })
+    delivered =
+      (await pasteDraftToAgentPtyWhenReady({
+        tabId,
+        ptyId,
+        content: draftPrompt,
+        agent: startup.agent,
+        // Why: startup.draftPrompt is only attached after native draft launch
+        // planning is unavailable, so this paste is the first delivery attempt.
+        forcePaste: true
+      })) && delivered
   }
+  return delivered
 }
 
 function ensureStartupLaunchToken(startup: AgentStartupPlan): string {

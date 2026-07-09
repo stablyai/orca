@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { normalizeDeprecatedCodexHookFeatureFlag } from './codex-config-hooks-feature-normalize'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { syncSystemProfileV2ConfigOverlaysIntoManagedHome } from './codex-profile-v2-config-overlay-mirror'
 import {
   promoteCodexRuntimeSettingsToSystem,
   snapshotCodexRuntimeSettingsBaseline,
@@ -15,6 +17,13 @@ import {
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
+
+// Why: multi-account vault assumes auth.json; keyring/auto stores credentials
+// outside managed homes and breaks account switching / presence detection.
+const CLI_AUTH_CREDENTIALS_STORE_FILE_LINE = 'cli_auth_credentials_store = "file"'
+const CLI_AUTH_CREDENTIALS_STORE_KEY_RE = /^[ \t]*cli_auth_credentials_store[ \t]*=/
+const CLI_AUTH_CREDENTIALS_STORE_FILE_RE =
+  /^[ \t]*cli_auth_credentials_store[ \t]*=[ \t]*(?:"file"|'file')[ \t\r]*(?:#.*)?$/
 
 export function syncSystemConfigIntoManagedCodexHome(
   homes: CodexSettingsPromotionHomes = {
@@ -49,6 +58,9 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe({
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
   const systemConfigExists = existsSync(systemConfigPath)
   const runtimeConfigExists = existsSync(runtimeConfigPath)
+  // Why: profile-v2 overlays (`*.config.toml`) are sibling files Codex loads by
+  // name; link them even when config.toml is missing so --profile-v2 still works.
+  syncSystemProfileV2ConfigOverlaysIntoManagedHome()
   if (!systemConfigExists && !runtimeConfigExists) {
     return
   }
@@ -65,7 +77,9 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe({
 
   const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
   const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
-  const mergedConfig = mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig)
+  const mergedConfig = forceFileAuthCredentialsStore(
+    mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig)
+  )
   if (mergedConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, mergedConfig)
   }
@@ -90,73 +104,47 @@ export function prepareSystemConfigForFreshRuntimeMirror(
   config: string,
   systemConfigDir: string
 ): string {
-  return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
+  return forceFileAuthCredentialsStore(
+    stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
+  )
 }
 
-function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
-  if (!config.includes('codex_hooks')) {
-    return config
-  }
-
+// Why: Orca multi-account vaults read/write CODEX_HOME/auth.json; force file
+// store so mirrored keyring/auto mode cannot hide credentials from the vault.
+export function forceFileAuthCredentialsStore(config: string): string {
   const lines = config.split('\n')
-  const featureSections: { start: number; end: number }[] = []
-  let featureStart: number | null = null
+  let scanState = createTomlLineScanState()
+  let existingKeyIndex: number | null = null
 
-  for (let index = 0; index <= lines.length; index += 1) {
-    const line = lines[index]
-    // Why: CRLF configs keep a trailing \r after the split, so header anchors
-    // must tolerate it or Windows-shaped configs skip normalization entirely.
-    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?\r?$/.test(line)
-    if (!isHeader) {
-      continue
-    }
-
-    if (featureStart !== null) {
-      featureSections.push({ start: featureStart, end: index })
-      featureStart = null
-    }
-    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?\r?$/.test(line)) {
-      featureStart = index
-    }
-  }
-
-  for (const section of featureSections.toReversed()) {
-    normalizeFeatureSectionLines(lines, section.start + 1, section.end)
-  }
-  return lines.join('\n')
-}
-
-function normalizeFeatureSectionLines(lines: string[], start: number, end: number): void {
-  const deprecatedIndexes: number[] = []
-  let hasHooksKey = false
-  for (let index = start; index < end; index += 1) {
+  for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? ''
-    if (/^[ \t]*hooks[ \t]*=/.test(line)) {
-      hasHooksKey = true
+    if (isTomlStructuralLine(scanState)) {
+      if (getTomlTableHeader(line)) {
+        break
+      }
+      if (CLI_AUTH_CREDENTIALS_STORE_KEY_RE.test(line)) {
+        existingKeyIndex = index
+        break
+      }
     }
-    if (/^[ \t]*codex_hooks[ \t]*=/.test(line)) {
-      deprecatedIndexes.push(index)
-    }
-  }
-  if (deprecatedIndexes.length === 0) {
-    return
+    scanState = updateTomlLineScanState(scanState, line)
   }
 
-  if (!hasHooksKey) {
-    const firstDeprecatedIndex = deprecatedIndexes.shift()
-    if (firstDeprecatedIndex !== undefined) {
-      // Why: Codex 0.133 warns on the old key. Mirror into Orca's runtime
-      // config using the new key without rewriting the user's real config.
-      lines[firstDeprecatedIndex] = lines[firstDeprecatedIndex]!.replace(
-        /^([ \t]*)codex_hooks([ \t]*=)/,
-        '$1hooks$2'
-      )
+  if (existingKeyIndex !== null) {
+    const existingLine = lines[existingKeyIndex] ?? ''
+    if (CLI_AUTH_CREDENTIALS_STORE_FILE_RE.test(existingLine)) {
+      return config
     }
+    const indent = /^[ \t]*/.exec(existingLine)?.[0] ?? ''
+    const lineEnding = existingLine.endsWith('\r') ? '\r' : ''
+    lines[existingKeyIndex] = `${indent}${CLI_AUTH_CREDENTIALS_STORE_FILE_LINE}${lineEnding}`
+    return lines.join('\n')
   }
 
-  for (const index of deprecatedIndexes.toReversed()) {
-    lines.splice(index, 1)
+  if (config.length === 0) {
+    return `${CLI_AUTH_CREDENTIALS_STORE_FILE_LINE}\n`
   }
+  return `${CLI_AUTH_CREDENTIALS_STORE_FILE_LINE}\n${config}`
 }
 
 function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: string): string {

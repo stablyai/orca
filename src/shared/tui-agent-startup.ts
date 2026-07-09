@@ -6,18 +6,23 @@ import {
   type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import {
-  clearEnvCommand,
-  commandSeparator,
   planAgentCliArgsSuffix,
   quoteStartupArg,
   resolveStartupShell,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
+import {
+  appendCodexImageArgs,
+  inlineCommandFitsPlatform,
+  normalizeStartupImagePaths
+} from './tui-agent-startup-codex-launch'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { TuiAgent } from './types'
-
-const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
+import {
+  buildAgentDraftLaunchPlan,
+  type AgentDraftLaunchPlan
+} from './tui-agent-draft-launch'
 
 export type AgentStartupPlan = {
   agent: TuiAgent
@@ -80,6 +85,11 @@ export function buildAgentStartupPlan(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must be skipped for remote launches. */
   isRemote?: boolean
+  /**
+   * Optional image paths for agents that accept launch-time image flags.
+   * Today only Codex wires these as repeatable `-i PATH` args.
+   */
+  imagePaths?: readonly string[] | null
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -96,10 +106,16 @@ export function buildAgentStartupPlan(args: {
   if (!baseCommand.ok) {
     return null
   }
+  const codexImagePaths = agent === 'codex' ? normalizeStartupImagePaths(args.imagePaths) : []
+  const launchBaseCommand =
+    agent === 'codex'
+      ? appendCodexImageArgs(baseCommand.command, codexImagePaths, shell)
+      : baseCommand.command
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
     agentCommand: baseCommand.command
   })
+  const env = args.agentEnv ? { ...args.agentEnv } : undefined
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -107,68 +123,82 @@ export function buildAgentStartupPlan(args: {
     }
     return {
       agent,
-      launchCommand: baseCommand.command,
+      launchCommand: launchBaseCommand,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(env ? { env } : {})
     }
   }
 
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
+    const inlineLaunchCommand = `${launchBaseCommand} ${quotedPrompt}`
+    // Why: Windows argv/env budgets reject oversized CreateProcess command lines.
+    // Fall back to empty launch + post-ready paste-submit (followup) so the
+    // prompt still lands without truncating argv.
+    if (!inlineCommandFitsPlatform(inlineLaunchCommand, env, platform)) {
+      return {
+        agent,
+        launchCommand: launchBaseCommand,
+        expectedProcess: config.expectedProcess,
+        followupPrompt: trimmedPrompt,
+        launchConfig,
+        ...(env ? { env } : {})
+      }
+    }
     return {
       agent,
-      launchCommand: `${baseCommand.command} ${quotedPrompt}`,
+      launchCommand: inlineLaunchCommand,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(env ? { env } : {})
     }
   }
 
   if (config.promptInjectionMode === 'flag-prompt') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
+      launchCommand: `${launchBaseCommand} --prompt ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(env ? { env } : {})
     }
   }
 
   if (config.promptInjectionMode === 'flag-prompt-interactive') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
+      launchCommand: `${launchBaseCommand} --prompt-interactive ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(env ? { env } : {})
     }
   }
 
   if (config.promptInjectionMode === 'flag-interactive') {
     return {
       agent,
-      launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
+      launchCommand: `${launchBaseCommand} -i ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      ...(env ? { env } : {})
     }
   }
 
   return {
     agent,
-    launchCommand: baseCommand.command,
+    launchCommand: launchBaseCommand,
     expectedProcess: config.expectedProcess,
     followupPrompt: trimmedPrompt,
     launchConfig,
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    ...(env ? { env } : {})
   }
 }
 
@@ -223,91 +253,8 @@ export function buildAgentResumeStartupPlan(args: {
   }
 }
 
-export type AgentDraftLaunchPlan = {
-  agent: TuiAgent
-  launchCommand: string
-  expectedProcess: string
-  launchConfig: SleepingAgentLaunchConfig
-  env?: Record<string, string>
-  startupCommandDelivery?: StartupCommandDelivery
-}
-
-function inlineDraftPlanFitsPlatform(
-  plan: AgentDraftLaunchPlan,
-  platform: NodeJS.Platform
-): boolean {
-  if (platform !== 'win32') {
-    return true
-  }
-  const envChars = Object.entries(plan.env ?? {}).reduce(
-    (total, [key, value]) => total + key.length + value.length,
-    0
-  )
-  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
-  // generated drafts should use the existing post-ready paste fallback.
-  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
-}
-
-export function buildAgentDraftLaunchPlan(args: {
-  agent: TuiAgent
-  draft: string
-  cmdOverrides: Partial<Record<TuiAgent, string>>
-  platform: NodeJS.Platform
-  shell?: AgentStartupShell
-  agentArgs?: string | null
-  agentEnv?: Record<string, string> | null
-  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
-  isRemote?: boolean
-}): AgentDraftLaunchPlan | null {
-  const { agent, draft, cmdOverrides, platform } = args
-  const shell = resolveStartupShell(platform, args.shell)
-  const config = TUI_AGENT_CONFIG[agent]
-  const trimmed = draft.trim()
-  if (!trimmed) {
-    return null
-  }
-  const baseCommand = resolveBaseCommand({
-    agent,
-    cmdOverrides,
-    platform,
-    shell,
-    agentArgs: args.agentArgs,
-    isRemote: args.isRemote
-  })
-  if (!baseCommand.ok) {
-    return null
-  }
-  const launchConfig = buildSleepingAgentLaunchConfig({
-    ...args,
-    agentCommand: baseCommand.command
-  })
-  let plan: AgentDraftLaunchPlan | null = null
-  if (config.draftPromptFlag) {
-    const quoted = quoteStartupArg(trimmed, shell)
-    plan = {
-      agent,
-      launchCommand: `${baseCommand.command} ${config.draftPromptFlag} ${quoted}`,
-      expectedProcess: config.expectedProcess,
-      launchConfig,
-      // Why: native draft flags carry user text on argv and must survive rc-file startup.
-      ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
-  } else if (config.draftPromptEnvVar) {
-    const clearVar = clearEnvCommand(config.draftPromptEnvVar, shell)
-    plan = {
-      agent,
-      launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
-      expectedProcess: config.expectedProcess,
-      launchConfig,
-      env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
-    }
-  }
-  if (!plan || !inlineDraftPlanFitsPlatform(plan, platform)) {
-    return null
-  }
-  return plan
-}
+export type { AgentDraftLaunchPlan }
+export { buildAgentDraftLaunchPlan }
 
 export { isShellProcess }
 export {

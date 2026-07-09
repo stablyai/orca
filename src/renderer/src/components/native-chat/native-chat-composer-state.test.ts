@@ -3,6 +3,7 @@ import {
   applyMentionSuggestion,
   applySkillSuggestion,
   applySlashSuggestion,
+  dedupeSkillSuggestionsByName,
   deriveComposerAutocomplete,
   EMPTY_HISTORY,
   filterSkillSuggestions,
@@ -144,6 +145,47 @@ describe('filterSkillSuggestions', () => {
     ])
     expect(filterSkillSuggestions(skills, 'h')).toEqual([])
   })
+
+  it('dedupes same-name skills preferring repo over home for PTY $name insert', () => {
+    const skills = [
+      skill({
+        id: 'home-review',
+        name: 'review',
+        sourceKind: 'home',
+        skillFilePath: '/Users/test/.agents/skills/review/SKILL.md'
+      }),
+      skill({
+        id: 'repo-review',
+        name: 'review',
+        sourceKind: 'repo',
+        skillFilePath: '/repo/.agents/skills/review/SKILL.md'
+      })
+    ]
+    const filtered = filterSkillSuggestions(skills, 'rev')
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0]?.skillFilePath).toBe('/repo/.agents/skills/review/SKILL.md')
+  })
+})
+
+describe('dedupeSkillSuggestionsByName', () => {
+  it('keeps the higher-priority source when names collide', () => {
+    const result = dedupeSkillSuggestionsByName([
+      skill({
+        id: 'plugin',
+        name: 'demo',
+        sourceKind: 'plugin',
+        skillFilePath: '/plugin/demo/SKILL.md'
+      }),
+      skill({
+        id: 'home',
+        name: 'demo',
+        sourceKind: 'home',
+        skillFilePath: '/home/demo/SKILL.md'
+      })
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0]?.sourceKind).toBe('home')
+  })
 })
 
 describe('history recall', () => {
@@ -209,5 +251,16 @@ describe('apply suggestions', () => {
     const result = applySkillSuggestion('use $typ now', 8, 'typescript')
     expect(result.draft).toBe('use $typescript  now')
     expect(result.caret).toBe('use $typescript '.length)
+  })
+
+  it('applySkillSuggestion keeps $name text and threads skillFilePath for later use', () => {
+    const result = applySkillSuggestion(
+      'use $typ',
+      8,
+      'typescript',
+      '/repo/.agents/skills/typescript/SKILL.md'
+    )
+    expect(result.draft).toBe('use $typescript ')
+    expect(result.skillFilePath).toBe('/repo/.agents/skills/typescript/SKILL.md')
   })
 })

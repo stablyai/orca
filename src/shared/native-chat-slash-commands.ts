@@ -30,12 +30,21 @@ const CLAUDE_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'help', description: 'Show available commands' }
 ]
 
+// Why: order mirrors Codex SlashCommand enum presentation order (do not
+// alpha-sort). Keep in sync with codex-rs/tui/src/slash_command.rs.
 const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'model', description: 'Choose the model and reasoning effort' },
   { name: 'ide', description: 'Include IDE context' },
   { name: 'permissions', description: 'Choose what Codex is allowed to do' },
   { name: 'keymap', description: 'Remap TUI shortcuts' },
   { name: 'vim', description: 'Toggle Vim mode' },
+  { name: 'setup-default-sandbox', description: 'Set up elevated agent sandbox' },
+  // Why: Windows-only in Codex is_visible; always listed so non-Windows users
+  // can still discover/type it (TUI rejects when unsupported).
+  {
+    name: 'sandbox-add-read-dir',
+    description: 'Let sandbox read a directory (Windows; /sandbox-add-read-dir <path>)'
+  },
   { name: 'experimental', description: 'Toggle experimental features' },
   { name: 'approve', description: 'Approve one auto-review retry' },
   { name: 'memories', description: 'Configure memory use' },
@@ -56,23 +65,29 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'goal', description: 'Set or view the goal' },
   { name: 'agent', description: 'Switch the active agent thread' },
   { name: 'side', description: 'Start a side conversation' },
+  { name: 'btw', description: 'Start a side conversation (alias of /side)' },
   { name: 'copy', description: 'Copy the last response as markdown' },
   { name: 'raw', description: 'Toggle raw scrollback mode' },
   { name: 'diff', description: 'Show the working diff' },
   { name: 'mention', description: 'Mention a file' },
   { name: 'status', description: 'Show session configuration and usage' },
   { name: 'usage', description: 'View account usage' },
+  { name: 'debug-config', description: 'Show config layers and requirement sources' },
   { name: 'title', description: 'Configure the terminal title' },
   { name: 'statusline', description: 'Configure the status line' },
   { name: 'theme', description: 'Choose a syntax highlighting theme' },
   { name: 'pets', description: 'Choose or hide the terminal pet' },
+  { name: 'pet', description: 'Alias for /pets' },
   { name: 'mcp', description: 'List configured MCP tools' },
+  { name: 'apps', description: 'Manage apps' },
   { name: 'plugins', description: 'Browse plugins' },
   { name: 'logout', description: 'Log out of Codex' },
+  { name: 'quit', description: 'Exit Codex' },
   { name: 'exit', description: 'Exit Codex' },
   { name: 'feedback', description: 'Send logs to maintainers' },
   { name: 'ps', description: 'List background terminals' },
   { name: 'stop', description: 'Stop all background terminals' },
+  { name: 'clean', description: 'Alias for /stop' },
   { name: 'clear', description: 'Clear the terminal and start a new chat' },
   { name: 'personality', description: 'Choose a communication style' },
   { name: 'subagents', description: 'Switch the active agent thread' }

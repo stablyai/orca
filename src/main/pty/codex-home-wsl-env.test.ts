@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from './codex-home-wsl-env'
+import {
+  getHostCodexHomeStrippedForWslMessage,
+  isHostCodexHomeForWsl,
+  isWslCodexHomeForHost,
+  shouldStripHostCodexHomeForWslShell
+} from './codex-home-wsl-env'
 
 describe('isHostCodexHomeForWsl', () => {
   it('matches Windows paths that WSL Codex cannot use as CODEX_HOME', () => {
@@ -19,5 +24,16 @@ describe('isHostCodexHomeForWsl', () => {
     expect(isWslCodexHomeForHost('/home/jin/.local/share/orca/codex-accounts/a/home')).toBe(true)
     expect(isWslCodexHomeForHost('C:\\Users\\jin\\.codex')).toBe(false)
     expect(isWslCodexHomeForHost(undefined)).toBe(false)
+  })
+
+  it('documents strip behavior when host CODEX_HOME reaches a WSL shell', () => {
+    // Why: host-managed account selection must not leak into WSL; callers strip
+    // CODEX_HOME so the distro uses Linux ~/.codex or a WSL-managed account.
+    expect(shouldStripHostCodexHomeForWslShell('C:\\Users\\jin\\.orca\\codex-accounts\\a\\home')).toBe(
+      true
+    )
+    expect(shouldStripHostCodexHomeForWslShell('/home/jin/.codex')).toBe(false)
+    expect(getHostCodexHomeStrippedForWslMessage()).toMatch(/WSL terminals use the distro Codex home/)
+    expect(getHostCodexHomeStrippedForWslMessage()).toMatch(/not the host Windows CODEX_HOME/)
   })
 })

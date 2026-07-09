@@ -1,7 +1,11 @@
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import {
+  CODEX_SESSION_ROLLOUT_EXTENSIONS,
+  isCodexSessionRolloutPath,
+  uniqueCodexSessionsDirs
+} from './session-scanner-codex-paths'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
 import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-sources'
@@ -115,7 +119,16 @@ function codexDiscoveries(
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
   return rootDirs.map((rootDir) =>
-    discoverFiles({ rootDir, limit, agent: 'codex', issues, extensions: ['.jsonl'] })
+    discoverFiles({
+      rootDir,
+      limit,
+      agent: 'codex',
+      issues,
+      // Why: Codex cold-compresses rollouts to sibling `*.jsonl.zst`; walk must
+      // accept both so vault history is not empty for archived threads.
+      extensions: [...CODEX_SESSION_ROLLOUT_EXTENSIONS],
+      filePredicate: isCodexSessionRolloutPath
+    })
   )
 }
 

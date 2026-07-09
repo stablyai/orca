@@ -57,9 +57,9 @@ export type TuiAgentConfig = {
   preflightTrust?: 'cursor' | 'copilot' | 'codex'
   /** Why: most TUIs need both bracketed-paste enablement and a quiet render
    * window before pasted bytes reliably land in the composer. Codex can use
-   * a stronger signal from its own renderer: chat_composer.rs writes the
-   * `›` prompt only when the composer row exists, so Orca can paste as soon
-   * as that prompt appears after bracketed paste is enabled. */
+   * a stronger multi-signal gate from its own renderer: after bracketed paste
+   * is enabled, wait for both the `›` glyph and the idle "Ask Codex"
+   * placeholder (bare `›` alone can fire during hooks-review/onboarding). */
   draftPasteReadySignal?: DraftPasteReadySignal
 }
 

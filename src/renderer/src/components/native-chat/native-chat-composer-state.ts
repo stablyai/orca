@@ -69,22 +69,53 @@ export function deriveComposerAutocomplete(
   return { mode: 'none' }
 }
 
+// Why: PTY insert is `$name` only (no structured Skill path yet). Prefer
+// repo-scoped skills when the same name appears from multiple roots so the
+// text fallback is less ambiguous. Source priority mirrors Codex discovery
+// (repo before home/plugin/bundled). App-server Skill{name,path} is deferred.
+const SKILL_SOURCE_KIND_PRIORITY: Record<DiscoveredSkill['sourceKind'], number> = {
+  repo: 0,
+  home: 1,
+  plugin: 2,
+  bundled: 3
+}
+
+function skillSuggestionPriority(skill: DiscoveredSkill): number {
+  return SKILL_SOURCE_KIND_PRIORITY[skill.sourceKind] ?? 99
+}
+
+/** Dedupe same-name installed skills, keeping the highest-priority source. */
+export function dedupeSkillSuggestionsByName(
+  skills: readonly DiscoveredSkill[]
+): DiscoveredSkill[] {
+  const byName = new Map<string, DiscoveredSkill>()
+  for (const skill of skills) {
+    const key = skill.name.toLowerCase()
+    const existing = byName.get(key)
+    if (!existing || skillSuggestionPriority(skill) < skillSuggestionPriority(existing)) {
+      byName.set(key, skill)
+    }
+  }
+  return Array.from(byName.values())
+}
+
 export function filterSkillSuggestions(
   skills: readonly DiscoveredSkill[],
   query: string
 ): DiscoveredSkill[] {
   const normalized = query.toLowerCase()
   const installed = skills.filter((skill) => skill.installed)
-  if (normalized === '') {
-    return installed.slice(0, 12)
-  }
-  return installed
-    .filter((skill) => {
-      const name = skill.name.toLowerCase()
-      const dirName = skill.directoryPath.split(/[\\/]/).findLast(Boolean)?.toLowerCase()
-      return name.startsWith(normalized) || dirName?.startsWith(normalized)
-    })
-    .slice(0, 12)
+  const matched =
+    normalized === ''
+      ? installed
+      : installed.filter((skill) => {
+          const name = skill.name.toLowerCase()
+          const dirName = skill.directoryPath.split(/[\\/]/).findLast(Boolean)?.toLowerCase()
+          return name.startsWith(normalized) || dirName?.startsWith(normalized)
+        })
+  // Why: keep skillFilePath on the retained row for future app-server structured
+  // insert; PTY mode still inserts `$name` via applySkillSuggestion.
+  return dedupeSkillSuggestionsByName(matched).slice(0, 12)
 }
 
 export type HistoryState = {
@@ -169,19 +200,31 @@ export function applyMentionSuggestion(
   return { draft: nextBefore + after, caret: nextBefore.length }
 }
 
+/**
+ * Insert `$name` for PTY/TUI text fallback.
+ * Why: structured Skill { name, path } needs app-server turns; until then keep
+ * the text form. Optional skillFilePath is threaded through so callers can
+ * retain path metadata without changing the inserted draft.
+ */
 export function applySkillSuggestion(
   draft: string,
   caret: number,
-  skillName: string
-): { draft: string; caret: number } {
+  skillName: string,
+  skillFilePath?: string | null
+): { draft: string; caret: number; skillFilePath?: string } {
   const before = draft.slice(0, caret)
   const after = draft.slice(caret)
   const match = before.match(/(^|\s)\$(\S*)$/)
   if (!match) {
-    return { draft, caret }
+    return skillFilePath ? { draft, caret, skillFilePath } : { draft, caret }
   }
   const tokenStart = before.length - match[2].length - 1 // -1 for the '$'
+  // Why: PTY mode only accepts text `$name`; path is retained for future
+  // app-server structured Skill insert, not embedded in the draft.
   const insertion = `$${skillName} `
   const nextBefore = before.slice(0, tokenStart) + insertion
+  if (skillFilePath) {
+    return { draft: nextBefore + after, caret: nextBefore.length, skillFilePath }
+  }
   return { draft: nextBefore + after, caret: nextBefore.length }
 }

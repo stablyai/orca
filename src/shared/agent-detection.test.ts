@@ -65,6 +65,22 @@ describe('OSC title extraction', () => {
   })
 })
 
+describe('Codex native Action Required titles', () => {
+  it.each([
+    ['[ ! ] Action Required | my-project', 'permission'],
+    ['[ . ] Action Required | my-project', 'permission'],
+    ['[!] Action Required', 'permission'],
+    ['⠋ my-project', 'working']
+  ] as const)('classifies %s as %s without a codex token', (title, expectedStatus) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it('does not treat bare Action Required prose as permission', () => {
+    expect(detectAgentStatusFromTitle('Action Required | project')).toBeNull()
+    expect(detectAgentStatusFromTitle('please take action required now')).toBeNull()
+  })
+})
+
 describe('MiMo title detection', () => {
   it.each([
     ['MiMo Code', 'idle'],

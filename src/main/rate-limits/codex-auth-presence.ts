@@ -41,9 +41,10 @@ function getAuthPresenceProbe(authPath: string): SharedAuthFilesystemOperation<b
 // Why: the background quota poller spawns the real `codex` binary to read rate
 // limits. For users who installed Codex but never signed in, that spawn can
 // only fail — and worse, surfaces as an unexpected Codex process starting in
-// the background. A signed-in Codex always writes an auth.json under its
-// CODEX_HOME, so gating the fetch on that file keeps the poller silent until
-// the user actually uses Codex.
+// the background. A signed-in Codex with file-backed credentials writes
+// auth.json under CODEX_HOME (Orca forces cli_auth_credentials_store=file on
+// managed/runtime homes), so gating the fetch on that file keeps the poller
+// silent until the user actually uses Codex.
 export async function codexAuthExists(
   codexHomePath?: string | null,
   options: CodexAuthPresenceOptions = {}

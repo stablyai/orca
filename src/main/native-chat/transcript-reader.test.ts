@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readNativeChatTranscript } from './transcript-reader'
 
@@ -105,6 +106,147 @@ describe('readNativeChatTranscript (claude)', () => {
 })
 
 describe('readNativeChatTranscript (codex)', () => {
+  it('maps Paginated item_completed TurnItems into chat messages', async () => {
+    const filePath = await writeFixture('orca-native-chat-codex-paginated-', [
+      {
+        type: 'session_meta',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        payload: { id: 'codex-paginated', cwd: '/repo', history_mode: 'paginated' }
+      },
+      {
+        type: 'event_msg',
+        timestamp: '2026-06-01T10:00:01.000Z',
+        payload: {
+          type: 'item_completed',
+          thread_id: 'codex-paginated',
+          turn_id: 'turn-1',
+          completed_at_ms: 1,
+          item: {
+            type: 'user_message',
+            id: 'user-1',
+            content: [{ type: 'text', text: 'Paginated hello' }]
+          }
+        }
+      },
+      {
+        type: 'event_msg',
+        timestamp: '2026-06-01T10:00:02.000Z',
+        payload: {
+          type: 'item_completed',
+          thread_id: 'codex-paginated',
+          turn_id: 'turn-1',
+          completed_at_ms: 2,
+          item: {
+            type: 'reasoning',
+            id: 'reason-1',
+            summary_text: ['Thinking about the answer']
+          }
+        }
+      },
+      {
+        type: 'event_msg',
+        timestamp: '2026-06-01T10:00:03.000Z',
+        payload: {
+          type: 'item_completed',
+          thread_id: 'codex-paginated',
+          turn_id: 'turn-1',
+          completed_at_ms: 3,
+          item: {
+            type: 'command_execution',
+            id: 'cmd-1',
+            command: ['bash', '-lc', 'ls'],
+            cwd: '/repo',
+            status: 'completed',
+            exit_code: 0
+          }
+        }
+      },
+      {
+        type: 'event_msg',
+        timestamp: '2026-06-01T10:00:04.000Z',
+        payload: {
+          type: 'item_completed',
+          thread_id: 'codex-paginated',
+          turn_id: 'turn-1',
+          completed_at_ms: 4,
+          item: {
+            type: 'agent_message',
+            id: 'agent-1',
+            content: [{ type: 'text', text: 'Done.' }]
+          }
+        }
+      }
+    ])
+
+    const result = await readNativeChatTranscript('codex', 'codex-paginated', { filePath })
+    if (!('messages' in result)) {
+      throw new Error('expected messages')
+    }
+
+    expect(result.messages.map((message) => message.role)).toEqual([
+      'user',
+      'reasoning',
+      'assistant',
+      'assistant'
+    ])
+    expect(result.messages[0]?.blocks[0]).toEqual({ type: 'text', text: 'Paginated hello' })
+    expect(result.messages[1]?.blocks[0]).toEqual({
+      type: 'text',
+      text: 'Thinking about the answer'
+    })
+    expect(result.messages[2]?.blocks[0]).toEqual({
+      type: 'tool-call',
+      name: 'command_execution',
+      input: {
+        command: ['bash', '-lc', 'ls'],
+        cwd: '/repo',
+        status: 'completed',
+        exit_code: 0
+      }
+    })
+    expect(result.messages[3]?.blocks[0]).toEqual({ type: 'text', text: 'Done.' })
+  })
+
+  it('reads cold-compressed .jsonl.zst codex transcripts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-codex-zst-'))
+    tempRoots.push(root)
+    const filePath = join(root, 'rollout-session.jsonl.zst')
+    const plain = jsonLines([
+      {
+        type: 'event_msg',
+        timestamp: '2026-06-01T10:00:01.000Z',
+        payload: {
+          type: 'item_completed',
+          item: {
+            type: 'user_message',
+            id: 'u1',
+            content: [{ type: 'text', text: 'From zst' }]
+          }
+        }
+      },
+      {
+        type: 'event_msg',
+        timestamp: '2026-06-01T10:00:02.000Z',
+        payload: {
+          type: 'item_completed',
+          item: {
+            type: 'agent_message',
+            id: 'a1',
+            content: [{ type: 'text', text: 'Compressed reply' }]
+          }
+        }
+      }
+    ])
+    await writeFile(filePath, zstdCompressSync(Buffer.from(plain, 'utf-8')))
+
+    const result = await readNativeChatTranscript('codex', 'session', { filePath })
+    if (!('messages' in result)) {
+      throw new Error('expected messages')
+    }
+    expect(result.messages.map((message) => message.role)).toEqual(['user', 'assistant'])
+    expect(result.messages[0]?.blocks[0]).toEqual({ type: 'text', text: 'From zst' })
+  })
+
   it('maps tool calls and results to tool-call/tool-result blocks', async () => {
     const filePath = await writeFixture('orca-native-chat-codex-', [
       {

@@ -16,7 +16,7 @@ type PendingAgentStartupDelivery = {
   tabId: string
   launchToken: string
   startup: AgentStartupPlan
-  deliver: (tabId: string, ptyId: string, startup: AgentStartupPlan) => Promise<void>
+  deliver: (tabId: string, ptyId: string, startup: AgentStartupPlan) => Promise<boolean | void>
 }
 
 const pendingAgentStartupDeliveries = new Map<string, PendingAgentStartupDelivery>()
@@ -172,11 +172,20 @@ function flushPendingAgentStartupDeliveries(): void {
     }
     // Why: once the launch-bound PTY exists, the bounded readiness/paste path
     // owns success or failure. Consume before awaiting so store churn cannot
-    // duplicate a linked-work-item draft.
+    // duplicate a linked-work-item draft; release on failed paste so Codex
+    // (and other cautious agents) can retry when readiness was premature.
     if (beginAgentStartupDeliveryAttempt(delivery)) {
-      void delivery.deliver(tabId, ptyId, delivery.startup).catch((error) => {
-        console.warn('Queued agent startup delivery failed', error)
-      })
+      void delivery
+        .deliver(tabId, ptyId, delivery.startup)
+        .then((delivered) => {
+          if (delivered === false) {
+            releaseAgentStartupDeliveryAttempt(delivery)
+          }
+        })
+        .catch((error) => {
+          releaseAgentStartupDeliveryAttempt(delivery)
+          console.warn('Queued agent startup delivery failed', error)
+        })
     }
   }
   stopPendingAgentStartupSubscriptionIfIdle()

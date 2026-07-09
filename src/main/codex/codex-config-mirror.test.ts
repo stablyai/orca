@@ -24,6 +24,7 @@ vi.mock('node:os', async () => {
 })
 
 import {
+  forceFileAuthCredentialsStore,
   prepareSystemConfigForFreshRuntimeMirror,
   resolveCodexConfigMirrorSourceDirectory,
   syncSystemConfigIntoManagedCodexHome
@@ -92,9 +93,45 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('cli_auth_credentials_store = "file"')
     expect(runtimeConfig).toContain('model = "system-model"')
     expect(runtimeConfig).toContain('[projects."/repo"]')
     expect(runtimeConfig).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+  })
+
+  it('forces file auth credentials store even when system config prefers keyring', () => {
+    writeFileSync(
+      getSystemConfigPath(),
+      ['model = "system-model"', 'cli_auth_credentials_store = "keyring"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('cli_auth_credentials_store = "file"')
+    expect(runtimeConfig).not.toContain('cli_auth_credentials_store = "keyring"')
+    expect(runtimeConfig).toContain('model = "system-model"')
+    expect(readFileSync(getSystemConfigPath(), 'utf-8')).toContain(
+      'cli_auth_credentials_store = "keyring"'
+    )
+  })
+
+  it('rewrites an existing runtime keyring store setting on merge', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ['model = "runtime-model"', 'cli_auth_credentials_store = "auto"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(getSystemConfigPath(), 'model = "system-model"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('cli_auth_credentials_store = "file"')
+    expect(runtimeConfig).not.toContain('cli_auth_credentials_store = "auto"')
+    expect(runtimeConfig).toContain('model = "system-model"')
   })
 
   it('normalizes deprecated codex_hooks feature flag only in runtime config', () => {
@@ -171,12 +208,18 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     writeFileSync(
       getSystemConfigPath(),
       [
+        'js_repl_node_path = "bin/node"',
+        '',
         '[profiles.fast]',
         'model_catalog_json = "catalogs/fast.json"',
+        'js_repl_node_path = "bin/profile-node"',
         '',
         '[debug.config_lockfile]',
         'load_path = "locks/config.lock.toml"',
         'export_dir = "locks"',
+        '',
+        '[otel.exporter.tls]',
+        'ca-certificate = "certs/ca.pem"',
         ''
       ].join('\n'),
       'utf-8'
@@ -186,12 +229,33 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
     expect(runtimeConfig).toContain(
+      `js_repl_node_path = '${join(getSystemCodexHomePath(), 'bin', 'node')}'`
+    )
+    expect(runtimeConfig).toContain(
       `model_catalog_json = '${join(getSystemCodexHomePath(), 'catalogs', 'fast.json')}'`
+    )
+    expect(runtimeConfig).toContain(
+      `js_repl_node_path = '${join(getSystemCodexHomePath(), 'bin', 'profile-node')}'`
     )
     expect(runtimeConfig).toContain(
       `load_path = '${join(getSystemCodexHomePath(), 'locks', 'config.lock.toml')}'`
     )
     expect(runtimeConfig).toContain(`export_dir = '${join(getSystemCodexHomePath(), 'locks')}'`)
+    expect(runtimeConfig).toContain(
+      `ca-certificate = '${join(getSystemCodexHomePath(), 'certs', 'ca.pem')}'`
+    )
+  })
+
+  it('links free-standing profile-v2 *.config.toml overlays into the runtime home', () => {
+    writeFileSync(getSystemConfigPath(), 'model = "system-model"\n', 'utf-8')
+    const systemOverlayPath = join(getSystemCodexHomePath(), 'work.config.toml')
+    writeFileSync(systemOverlayPath, 'model = "work-profile"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeOverlayPath = join(userDataDir, 'codex-runtime-home', 'home', 'work.config.toml')
+    expect(existsSync(runtimeOverlayPath)).toBe(true)
+    expect(readFileSync(runtimeOverlayPath, 'utf-8')).toBe('model = "work-profile"\n')
   })
 
   it('does not treat lines inside multiline arrays as headers or path keys', () => {
@@ -437,10 +501,46 @@ describe('prepareSystemConfigForFreshRuntimeMirror', () => {
 
     // Why: WSL configs are consumed inside the distro, so rewrites must use
     // posix join semantics regardless of the host platform.
+    expect(prepared).toContain('cli_auth_credentials_store = "file"')
     expect(prepared).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
     expect(prepared).toContain('hooks = true')
     expect(prepared).not.toContain('codex_hooks')
     expect(prepared).toContain('[projects."/home/alice/repo"]')
     expect(prepared).not.toContain('[hooks.state."system-hooks:stop:0:0"]')
+  })
+})
+
+describe('forceFileAuthCredentialsStore', () => {
+  it('inserts the file store setting when missing', () => {
+    expect(forceFileAuthCredentialsStore('model = "gpt"\n')).toBe(
+      'cli_auth_credentials_store = "file"\nmodel = "gpt"\n'
+    )
+  })
+
+  it('overrides keyring and auto modes in the root table only', () => {
+    const input = [
+      'cli_auth_credentials_store = "keyring"',
+      'model = "gpt"',
+      '',
+      '[features]',
+      'hooks = true',
+      ''
+    ].join('\n')
+
+    expect(forceFileAuthCredentialsStore(input)).toBe(
+      [
+        'cli_auth_credentials_store = "file"',
+        'model = "gpt"',
+        '',
+        '[features]',
+        'hooks = true',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('is idempotent when the file store is already set', () => {
+    const input = 'cli_auth_credentials_store = "file"\nmodel = "gpt"\n'
+    expect(forceFileAuthCredentialsStore(input)).toBe(input)
   })
 })

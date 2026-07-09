@@ -84,6 +84,21 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Claude Code - action required')).toBe('permission')
   })
 
+  // Why: default Codex OSC titles omit the app name. Permission frames use a
+  // fixed `[ ! ] Action Required` / `[ . ] Action Required` prefix that must
+  // classify as permission without a "codex" token (process ownership supplies
+  // identity). Braille working frames still work via the spinner path.
+  it('detects Codex native Action Required titles without a codex token', () => {
+    expect(detectAgentStatusFromTitle('[ ! ] Action Required | my-project')).toBe('permission')
+    expect(detectAgentStatusFromTitle('[ . ] Action Required | my-project')).toBe('permission')
+    expect(detectAgentStatusFromTitle('[!] Action Required | project')).toBe('permission')
+    expect(detectAgentStatusFromTitle('Action Required | project')).toBeNull()
+  })
+
+  it('still classifies Codex braille working titles without a codex token', () => {
+    expect(detectAgentStatusFromTitle('⠋ my-project')).toBe('working')
+  })
+
   it('detects "permission" keyword with agent name', () => {
     expect(detectAgentStatusFromTitle('codex - permission needed')).toBe('permission')
   })

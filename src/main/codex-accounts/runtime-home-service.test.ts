@@ -1320,7 +1320,7 @@ describe('CodexRuntimeHomeService', () => {
     service.prepareForCodexLaunch()
 
     expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
-      'model = "second"\n'
+      'cli_auth_credentials_store = "file"\nmodel = "second"\n'
     )
   })
 
@@ -1615,6 +1615,7 @@ describe('CodexRuntimeHomeService', () => {
       )
       const runtimeConfigPath = join(wslRuntimeHomePath, 'config.toml')
       const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
+      expect(runtimeConfig).toContain('cli_auth_credentials_store = "file"')
       expect(runtimeConfig).toContain(
         `model_instructions_file = '${join(systemCodexHomePath, 'instructions.md')}'`
       )
@@ -1638,18 +1639,22 @@ describe('CodexRuntimeHomeService', () => {
 
     // Why: real UNC sources cannot back live fs operations in tests, so pin
     // the UNC -> Linux-side anchor translation on the extracted seed function.
-    expect(
-      prepareWslRuntimeSeedConfig(
-        'model_instructions_file = "instructions.md"\n',
-        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
-      )
-    ).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
-    expect(
-      prepareWslRuntimeSeedConfig(
-        'model_instructions_file = "instructions.md"\n',
-        '\\\\wsl$\\Ubuntu\\home\\alice\\.codex'
-      )
-    ).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
+    const seededLocalhost = prepareWslRuntimeSeedConfig(
+      'model_instructions_file = "instructions.md"\n',
+      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+    )
+    expect(seededLocalhost).toContain('cli_auth_credentials_store = "file"')
+    expect(seededLocalhost).toContain(
+      "model_instructions_file = '/home/alice/.codex/instructions.md'"
+    )
+    const seededWslDollar = prepareWslRuntimeSeedConfig(
+      'model_instructions_file = "instructions.md"\n',
+      '\\\\wsl$\\Ubuntu\\home\\alice\\.codex'
+    )
+    expect(seededWslDollar).toContain('cli_auth_credentials_store = "file"')
+    expect(seededWslDollar).toContain(
+      "model_instructions_file = '/home/alice/.codex/instructions.md'"
+    )
   })
 
   it('switches WSL accounts by rewriting one stable WSL runtime home', async () => {

@@ -15,6 +15,31 @@ describe('getAgentSlashCommands', () => {
     expect(names).toContain('diff')
   })
 
+  it('includes recently added Codex TUI commands and aliases', () => {
+    const names = getAgentSlashCommands('codex').map((c) => c.name)
+    for (const expected of [
+      'setup-default-sandbox',
+      'sandbox-add-read-dir',
+      'btw',
+      'debug-config',
+      'apps',
+      'quit',
+      'pet',
+      'clean'
+    ]) {
+      expect(names).toContain(expected)
+    }
+  })
+
+  it('keeps Codex slash order roughly aligned with TUI presentation order', () => {
+    const names = getAgentSlashCommands('codex').map((c) => c.name)
+    expect(names.indexOf('vim')).toBeLessThan(names.indexOf('setup-default-sandbox'))
+    expect(names.indexOf('side')).toBeLessThan(names.indexOf('btw'))
+    expect(names.indexOf('usage')).toBeLessThan(names.indexOf('debug-config'))
+    expect(names.indexOf('mcp')).toBeLessThan(names.indexOf('apps'))
+    expect(names.indexOf('quit')).toBeLessThan(names.indexOf('exit'))
+  })
+
   it('returns Claude commands for claude (no Codex-only /model)', () => {
     const names = getAgentSlashCommands('claude').map((c) => c.name)
     expect(names).toContain('clear')

@@ -294,6 +294,209 @@ describe('shared agent-hook-listener', () => {
     )
   })
 
+  it('does not treat Codex SessionStart as working', () => {
+    const started = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', source: 'startup' }
+      },
+      'production'
+    )
+    // Why: SessionStart fires when the TUI opens/resumes while still idle.
+    expect(started).toBeNull()
+  })
+
+  it('keeps Codex SubagentStart/SubagentStop as working and only root Stop as done', () => {
+    normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'review this PR' }
+      },
+      'production'
+    )
+    const subStart = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SubagentStart',
+          agent_id: 'agent-1',
+          agent_type: 'explorer'
+        }
+      },
+      'production'
+    )
+    const subStop = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SubagentStop',
+          agent_id: 'agent-1',
+          agent_type: 'explorer',
+          last_assistant_message: 'Found 3 call sites'
+        }
+      },
+      'production'
+    )
+    const stop = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'Stop',
+          last_assistant_message: 'PR review complete'
+        }
+      },
+      'production'
+    )
+
+    expect(subStart?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'codex',
+      toolName: 'explorer',
+      prompt: 'review this PR'
+    })
+    expect(subStart?.toolAgentId).toBe('agent-1')
+    expect(subStart?.toolAgentType).toBe('explorer')
+    expect(subStop?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'codex',
+      lastAssistantMessage: 'Found 3 call sites',
+      prompt: 'review this PR'
+    })
+    expect(stop?.payload).toMatchObject({
+      state: 'done',
+      agentType: 'codex',
+      lastAssistantMessage: 'PR review complete'
+    })
+  })
+
+  it('promotes Codex PostToolUse tool_response into lastAssistantMessage', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'ls' },
+          tool_response: 'README.md\nsrc\n'
+        }
+      },
+      'production'
+    )
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      toolName: 'Bash',
+      toolInput: 'ls',
+      // Why: agent status normalizer trims trailing whitespace while keeping
+      // interior newlines for multi-line tool output.
+      lastAssistantMessage: 'README.md\nsrc'
+    })
+  })
+
+  it('previews Codex apply_patch command and spawn_agent prompt tool inputs', () => {
+    const patch = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'apply_patch',
+          tool_input: { command: '*** Begin Patch\n*** Update File: a.ts\n*** End Patch' }
+        }
+      },
+      'production'
+    )
+    const spawn = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'spawn_agent',
+          tool_input: { agent_type: 'explorer', prompt: 'find auth handlers' }
+        }
+      },
+      'production'
+    )
+    expect(patch?.payload.toolInput).toContain('Begin Patch')
+    expect(spawn?.payload.toolInput).toBe('find auth handlers')
+  })
+
+  it('clears sticky Codex working when a tool event carries an interrupt marker', () => {
+    normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'run tests' }
+      },
+      'production'
+    )
+    const interrupted = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'npm test' },
+          is_interrupt: true
+        }
+      },
+      'production'
+    )
+    expect(interrupted?.payload).toMatchObject({
+      state: 'done',
+      agentType: 'codex',
+      interrupted: true,
+      prompt: 'run tests'
+    })
+  })
+
+  it('marks Codex Stop with is_interrupt as interrupted done', () => {
+    normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'say hi' }
+      },
+      'production'
+    )
+    const stop = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'Stop',
+          is_interrupt: true,
+          last_assistant_message: 'partial'
+        }
+      },
+      'production'
+    )
+    expect(stop?.payload).toMatchObject({
+      state: 'done',
+      interrupted: true,
+      lastAssistantMessage: 'partial'
+    })
+  })
+
   it('clears interactivePrompt on the next tool event after AskUserQuestion', () => {
     normalizeHookPayload(
       state,

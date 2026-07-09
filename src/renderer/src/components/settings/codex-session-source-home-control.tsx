@@ -125,7 +125,7 @@ export function AgentSessionSourceHomeInput({
           <TooltipContent side="top" sideOffset={6} className="max-w-xs">
             {translate(
               'auto.components.settings.AgentsPane.codexSessionSourceTooltip',
-              'Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.'
+              'Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex. On Windows, host and WSL Codex homes are separate — WSL terminals use the distro ~/.codex (or a WSL-managed account), not the host CODEX_HOME.'
             )}
           </TooltipContent>
         </Tooltip>

@@ -17,6 +17,7 @@ import { sendAgentDraftPasteContent } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import { AGENT_PROMPT_SUBMIT_DELAY_MS } from '../../../shared/agent-prompt-injection'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -32,7 +33,10 @@ export {
 // line-edit shortcuts. Callers choose whether to append Enter after the paste.
 export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
 export { BRACKETED_PASTE_END }
-export const POST_PASTE_SUBMIT_DELAY_MS = 50
+// Why: Codex/Claude need a render turn after bracketed-paste end before Enter
+// is accepted as submit (not paste content). Keep the draft-submit path aligned
+// with the shared agent-prompt-injection gap (≥500ms).
+export const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_SUBMIT_DELAY_MS
 
 export function sanitizeBracketedPasteContent(content: string): string {
   return sanitizeTerminalPasteText(content)

@@ -4503,7 +4503,9 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     expect(capturedDataCallback.current).not.toBeNull()
 
-    capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
+    capturedDataCallback.current?.(
+      '\x1b[?2004h\x1b[2K\x1b[1m›\x1b[0m Ask Codex to do anything'
+    )
     await flushAsyncTicks()
 
     expect(window.api.pty.writeAccepted).toHaveBeenCalledWith(
@@ -4669,7 +4671,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('waits for shell-ready for SSH Codex native prefill commands without an explicit hint', async () => {
+  it('waits for shell-ready for SSH Codex positional PROMPT when plan opts in', async () => {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
@@ -4704,7 +4706,10 @@ describe('connectPanePty', () => {
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps({
-        startup: { command: "codex --prefill 'linked issue context'" }
+        startup: {
+          command: "codex 'linked issue context'",
+          startupCommandDelivery: 'shell-ready'
+        }
       })
 
       connectPanePty(pane as never, manager as never, deps as never)
@@ -4719,7 +4724,7 @@ describe('connectPanePty', () => {
         fn()
       }
 
-      expect(transport.sendInput).toHaveBeenCalledWith("codex --prefill 'linked issue context'\r")
+      expect(transport.sendInput).toHaveBeenCalledWith("codex 'linked issue context'\r")
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
@@ -4763,8 +4768,9 @@ describe('connectPanePty', () => {
       const deps = createDeps({
         startup: {
           command: wrapperCommand,
+          startupCommandDelivery: 'shell-ready',
           env: {
-            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --prefill 'linked issue context'"
+            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex 'linked issue context'"
           }
         }
       })

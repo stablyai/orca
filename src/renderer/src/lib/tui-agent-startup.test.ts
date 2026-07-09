@@ -233,6 +233,43 @@ describe('buildAgentStartupPlan', () => {
     ).toBeNull()
   })
 
+  it('launches Codex with shell-ready positional PROMPT (no mythical --prefill)', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'codex',
+        prompt: 'Fix the bug',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'codex',
+      launchCommand: "codex 'Fix the bug'",
+      expectedProcess: 'codex',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('codex'),
+      startupCommandDelivery: 'shell-ready'
+    })
+  })
+
+  it('appends Codex -i image paths when provided', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'codex',
+        prompt: 'look at this',
+        cmdOverrides: {},
+        platform: 'darwin',
+        imagePaths: ['/tmp/shot.png']
+      })
+    ).toEqual({
+      agent: 'codex',
+      launchCommand: "codex -i '/tmp/shot.png' 'look at this'",
+      expectedProcess: 'codex',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('codex'),
+      startupCommandDelivery: 'shell-ready'
+    })
+  })
+
   it('uses -i flag for copilot to start an interactive session with initial prompt', () => {
     expect(
       buildAgentStartupPlan({

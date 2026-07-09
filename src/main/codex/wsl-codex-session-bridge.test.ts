@@ -65,11 +65,13 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
     expect(shellCommand).toContain(
       "managed_sessions_root='/home/alice/.local/share/orca/codex-runtime-home/home/sessions'"
     )
-    expect(shellCommand).toContain(`find "\\$source_sessions_root" -type f -name '*.jsonl' -print0`)
+    expect(shellCommand).toContain(
+      `find "\\$source_sessions_root" -type f \\( -name '*.jsonl' -o -name '*.jsonl.zst' \\) -print0`
+    )
     expect(shellCommand).toContain('ln -- "\\$source_file" "\\$target_file"')
+    expect(shellCommand).toContain('cp -p -- "\\$source_file" "\\$target_file"')
     expect(shellCommand).toContain('if [ -e "\\$target_file" ] || [ -L "\\$target_file" ]; then')
     expect(shellCommand).not.toContain('ln -s')
-    expect(shellCommand).not.toContain('cp ')
     expect(shellCommand).not.toContain('sqlite')
   })
 
@@ -152,6 +154,8 @@ describe('buildWslCodexSessionBridgeShellCommand', () => {
       `source_sessions_root='/home/alice/.codex/sessions with '\\''quote'\\'''`
     )
     expect(shellCommand).toContain(`-name '*.jsonl'`)
+    expect(shellCommand).toContain(`-name '*.jsonl.zst'`)
+    expect(shellCommand).toContain('cp -p --')
     expect(shellCommand).not.toContain('.sqlite')
   })
 

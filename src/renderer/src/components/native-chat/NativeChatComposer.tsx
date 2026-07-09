@@ -432,7 +432,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
           textareaRef.current?.focus()
         }}
         onChooseSkill={(skill) => {
-          const result = applySkillSuggestion(draft, caret, skill.name)
+          // Why: PTY insert remains `$name`; skillFilePath is retained on the
+          // result for future app-server Skill { name, path } turns.
+          const result = applySkillSuggestion(draft, caret, skill.name, skill.skillFilePath)
           setDraft(result.draft)
           setCaret(result.caret)
           setActiveSuggestion(0)

@@ -260,7 +260,9 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     ).toBe(false)
   })
 
-  it('falls back to symlinks when hardlinks are unavailable', () => {
+  it('falls back to copy-sync when hardlinks are unavailable', () => {
+    // Why: Codex resume ignores symlinks; cross-volume hardlink failure must
+    // produce a regular-file copy, not a symlink.
     fsMockState.failLink = true
     const systemSessionPath = join(
       getSystemCodexHomePath(),
@@ -268,7 +270,7 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
       '2026',
       '05',
       '26',
-      'rollout-symlink-fallback.jsonl'
+      'rollout-copy-fallback.jsonl'
     )
     mkdirSync(dirname(systemSessionPath), { recursive: true })
     writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
@@ -281,12 +283,23 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
       '2026',
       '05',
       '26',
-      'rollout-symlink-fallback.jsonl'
+      'rollout-copy-fallback.jsonl'
     )
-    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(true)
-    expect(normalizeLinkTarget(readlinkSync(runtimeSessionPath))).toBe(
-      normalizeLinkTarget(systemSessionPath)
-    )
+    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"system"}\n')
+    expect(lstatSync(runtimeSessionPath).ino).not.toBe(lstatSync(systemSessionPath).ino)
+    expect(
+      existsSync(
+        join(
+          getRuntimeCodexHomePath(),
+          '.orca-session-copies',
+          '2026',
+          '05',
+          '26',
+          'rollout-copy-fallback.jsonl.json'
+        )
+      )
+    ).toBe(true)
   })
 
   it('does not overwrite runtime-owned session files', () => {
@@ -322,27 +335,30 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     expectResourceLinked(runtimeSessionPath, systemSessionPath)
   })
 
-  it('does not create independent session copies when file links are unavailable', () => {
-    fsMockState.failLink = true
-    fsMockState.failSymlink = true
+  it('bridges cold-compressed .jsonl.zst session files', () => {
     const systemSessionPath = join(
       getSystemCodexHomePath(),
       'sessions',
       '2026',
       '05',
       '26',
-      'rollout-unlinked.jsonl'
+      'rollout-cold.jsonl.zst'
     )
     mkdirSync(dirname(systemSessionPath), { recursive: true })
-    writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
+    writeFileSync(systemSessionPath, 'fake-zstd-bytes', 'utf-8')
 
     syncSystemCodexSessionsIntoManagedHome()
 
-    expect(
-      existsSync(
-        join(getRuntimeCodexHomePath(), 'sessions', '2026', '05', '26', 'rollout-unlinked.jsonl')
-      )
-    ).toBe(false)
+    const runtimeSessionPath = join(
+      getRuntimeCodexHomePath(),
+      'sessions',
+      '2026',
+      '05',
+      '26',
+      'rollout-cold.jsonl.zst'
+    )
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('fake-zstd-bytes')
+    expectResourceLinked(runtimeSessionPath, systemSessionPath)
   })
 
   it('replaces unchanged legacy copied sessions with links', () => {
@@ -361,7 +377,7 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     expectResourceLinked(runtimeSessionPath, systemSessionPath)
   })
 
-  it('preserves unchanged legacy copied sessions when relinking fails', () => {
+  it('preserves unchanged legacy copied sessions when hardlink migration fails', () => {
     const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-unlinked.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
@@ -371,7 +387,6 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     writeFileSync(runtimeSessionPath, '{"id":"legacy"}\n', 'utf-8')
     writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
     fsMockState.failLink = true
-    fsMockState.failSymlink = true
 
     syncSystemCodexSessionsIntoManagedHome()
 

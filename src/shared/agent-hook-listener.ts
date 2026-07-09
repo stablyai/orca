@@ -472,7 +472,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   Execute: ['command'],
   MultiEdit: ['file_path', 'filePath', 'path'],
   NotebookEdit: ['file_path', 'filePath', 'path'],
-  Bash: ['command'],
+  Bash: ['command', 'cmd'],
   Glob: ['pattern'],
   Grep: ['pattern'],
   WebFetch: ['url'],
@@ -493,7 +493,11 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   shell_command: ['cmd', 'command'],
   run_terminal_cmd: ['command'],
   execute_code: ['code', 'command', 'cmd'],
-  apply_patch: ['path', 'file_path'],
+  // Why: Codex apply_patch sends the patch body in `command` (same field as
+  // Bash); path/file_path cover alternate file-edit shapes.
+  apply_patch: ['command', 'path', 'file_path'],
+  // Why: Codex spawn_agent previews the subagent task/type in the status row.
+  spawn_agent: ['prompt', 'agent_type', 'description', 'name'],
   view_image: ['path', 'file_path'],
   AskUser: ['question', 'prompt', 'message'],
   ask_user: ['question', 'prompt', 'message'],
@@ -1268,7 +1272,7 @@ function extractCodexToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
-    return toolUpdate(
+    const update = toolUpdate(
       {
         toolName,
         toolInput,
@@ -1276,8 +1280,22 @@ function extractCodexToolFields(
       },
       { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
     )
+    if (eventName === 'PostToolUse') {
+      // Why: mirror Claude — Codex PostToolUse carries tool_response text that
+      // is the best live assistant preview until Stop's last_assistant_message.
+      const responseText = extractToolResponseText(hookPayload.tool_response)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
   }
-  if (eventName === 'Stop') {
+  if (eventName === 'SubagentStart') {
+    // Why: annotate the status row with the subagent type when the payload has it.
+    const agentType = readString(hookPayload, 'agent_type')
+    return agentType ? toolUpdate({ toolName: agentType }) : {}
+  }
+  if (eventName === 'SubagentStop' || eventName === 'Stop') {
     const message = readString(hookPayload, 'last_assistant_message')
     if (message) {
       return { lastAssistantMessage: message }
@@ -2026,7 +2044,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'kimi':
       return eventName === 'UserPromptSubmit'
     case 'codex':
-      return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
+      // Why: SessionStart only resets idle session caches (see normalizeCodexEvent);
+      // UserPromptSubmit is the real new-turn boundary.
+      return eventName === 'UserPromptSubmit'
     case 'gemini':
       return eventName === 'BeforeAgent'
     case 'antigravity':
@@ -2635,6 +2655,27 @@ function hasExplicitPromptForSource(
   return eventName === 'agent.start' && promptText.length > 0
 }
 
+function codexPayloadIndicatesTurnEnded(hookPayload: Record<string, unknown>): boolean {
+  // Why: Codex has no StopFailure. Only clear sticky working on explicit
+  // interrupt/abort markers (not bare tool errors — those are mid-turn).
+  // Pane process death still clears via agent-hooks clearPaneState on PTY exit.
+  if (hookPayload['is_interrupt'] === true || hookPayload['interrupted'] === true) {
+    return true
+  }
+  const stopReason = readFirstString(hookPayload, ['stop_reason', 'stopReason'])
+  if (!stopReason) {
+    return false
+  }
+  const lower = stopReason.toLowerCase()
+  return (
+    lower.includes('interrupt') ||
+    lower.includes('abort') ||
+    lower.includes('cancel') ||
+    lower === 'error' ||
+    lower.includes('failed')
+  )
+}
+
 function normalizeCodexEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -2642,17 +2683,41 @@ function normalizeCodexEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  const stateName =
-    eventName === 'SessionStart' ||
+  if (eventName === 'SessionStart') {
+    // Why: Codex emits SessionStart on TUI open/resume/clear while still idle.
+    // Mapping it to working flashed "Codex - Running" before any user prompt.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  // Why: SubagentStop is not root Stop — the parent turn continues after the
+  // child finishes. Only root Stop (or an explicit interrupt/error marker)
+  // ends the visible working state.
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
     eventName === 'UserPromptSubmit' ||
     eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'PermissionRequest'
-        ? 'waiting'
-        : eventName === 'Stop'
-          ? 'done'
-          : null
+    eventName === 'PostToolUse' ||
+    eventName === 'SubagentStart' ||
+    eventName === 'SubagentStop'
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'PermissionRequest') {
+    stateName = 'waiting'
+  } else if (eventName === 'Stop') {
+    stateName = 'done'
+  }
+
+  // Why: without StopFailure, recover sticky working when an already-received
+  // Codex event carries terminal error/interrupt fields (e.g. aborted tool turn).
+  if (
+    stateName === 'working' &&
+    eventName !== 'UserPromptSubmit' &&
+    eventName !== 'SubagentStart' &&
+    codexPayloadIndicatesTurnEnded(hookPayload)
+  ) {
+    stateName = 'done'
+  }
 
   if (!stateName) {
     return null
@@ -2665,6 +2730,14 @@ function normalizeCodexEvent(
     { resetOnNewTurn: isNewTurnEvent('codex', eventName) }
   )
 
+  const interrupted =
+    eventName === 'Stop' &&
+    (hookPayload['is_interrupt'] === true || hookPayload['interrupted'] === true)
+      ? true
+      : stateName === 'done' && codexPayloadIndicatesTurnEnded(hookPayload)
+        ? true
+        : undefined
+
   return parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
@@ -2675,7 +2748,8 @@ function normalizeCodexEvent(
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
+      lastAssistantMessage: snapshot.lastAssistantMessage,
+      interrupted
     })
   )
 }

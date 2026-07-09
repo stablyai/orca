@@ -124,6 +124,8 @@ function localManagedCodexEvents(): string[] {
     'PreToolUse',
     'SessionStart',
     'Stop',
+    'SubagentStart',
+    'SubagentStop',
     'UserPromptSubmit'
   ]
 }
@@ -156,6 +158,118 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain('model = "gpt-5.2-codex"')
     expect(trustConfig).toContain('approval_policy = "on-request"')
     expect(trustConfig).toContain(':permission_request:0:0')
+    expect(trustConfig).toContain(':subagent_start:0:0')
+    expect(trustConfig).toContain(':subagent_stop:0:0')
+    expect(
+      isCodexManagedCommand(hooksConfig.hooks.SubagentStart?.[0]?.hooks?.[0]?.command)
+    ).toBe(true)
+    expect(
+      isCodexManagedCommand(hooksConfig.hooks.SubagentStop?.[0]?.hooks?.[0]?.command)
+    ).toBe(true)
+  })
+
+  it('prepends managed remote hooks ahead of existing user hooks (groupIndex 0)', async () => {
+    // Why: remote install used to append managed hooks, leaving slow user hooks
+    // at groupIndex 0 and delaying status updates relative to local install.
+    const files = new Map<string, string>([
+      [
+        '/home/dev/.codex/hooks.json',
+        `${JSON.stringify({
+          hooks: {
+            Stop: [
+              {
+                hooks: [{ type: 'command', command: 'echo user-stop-hook' }]
+              }
+            ]
+          }
+        })}\n`
+      ]
+    ])
+    const modes = new Map<string, number>()
+    const dirs = new Set<string>(['/'])
+    const noEntry = (path: string): { code: number; message: string } => ({
+      code: 2,
+      message: `ENOENT ${path}`
+    })
+    const sftp = {
+      readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
+        const value = files.get(path)
+        if (value === undefined) {
+          cb(noEntry(path))
+          return
+        }
+        cb(null, value)
+      },
+      writeFile: (
+        path: string,
+        content: string,
+        options: string | { mode?: number },
+        cb: (err: unknown) => void
+      ): void => {
+        files.set(path, content)
+        if (typeof options !== 'string' && options.mode !== undefined) {
+          modes.set(path, options.mode)
+        }
+        cb(null)
+      },
+      rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
+        const value = files.get(src)
+        if (value === undefined) {
+          cb(noEntry(src))
+          return
+        }
+        files.set(dst, value)
+        files.delete(src)
+        const mode = modes.get(src)
+        if (mode !== undefined) {
+          modes.set(dst, mode)
+          modes.delete(src)
+        }
+        cb(null)
+      },
+      unlink: (path: string, cb: (err: unknown) => void): void => {
+        files.delete(path)
+        modes.delete(path)
+        cb(null)
+      },
+      chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
+        modes.set(path, mode)
+        cb(null)
+      },
+      stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
+        if (!files.has(path)) {
+          cb(noEntry(path))
+          return
+        }
+        cb(null, { mode: modes.get(path) ?? 0o100644 })
+      },
+      readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
+        if (dirs.has(path)) {
+          cb(null, [])
+          return
+        }
+        cb(noEntry(path))
+      },
+      mkdir: (path: string, cb: (err: unknown) => void): void => {
+        dirs.add(path)
+        cb(null)
+      }
+    }
+
+    const status = await new CodexHookService().installRemote(sftp as never, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    const hooks = JSON.parse(files.get('/home/dev/.codex/hooks.json')!) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain('codex-hook.sh')
+    expect(hooks.hooks.Stop?.[1]?.hooks?.[0]?.command).toBe('echo user-stop-hook')
+    expect(hooks.hooks.SubagentStart?.[0]?.hooks?.[0]?.command).toContain('codex-hook.sh')
+    expect(hooks.hooks.SubagentStop?.[0]?.hooks?.[0]?.command).toContain('codex-hook.sh')
+    const toml = files.get('/home/dev/.codex/config.toml') ?? ''
+    expect(toml).toContain(':stop:0:0')
+    expect(toml).toContain(':subagent_start:0:0')
+    expect(toml).toContain(':subagent_stop:0:0')
   })
 
   it('drops plugin manager metadata from runtime hooks.json during install', () => {

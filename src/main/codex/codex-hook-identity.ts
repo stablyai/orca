@@ -11,6 +11,8 @@ export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   PreToolUse: 'pre_tool_use',
   PermissionRequest: 'permission_request',
   PostToolUse: 'post_tool_use',
+  SubagentStart: 'subagent_start',
+  SubagentStop: 'subagent_stop',
   Stop: 'stop',
   PreCompact: 'pre_compact',
   PostCompact: 'post_compact'
@@ -22,6 +24,8 @@ export const CODEX_EVENT_NAME_BY_LABEL: Record<CodexEventLabel, string> = {
   pre_tool_use: 'PreToolUse',
   permission_request: 'PermissionRequest',
   post_tool_use: 'PostToolUse',
+  subagent_start: 'SubagentStart',
+  subagent_stop: 'SubagentStop',
   stop: 'Stop',
   pre_compact: 'PreCompact',
   post_compact: 'PostCompact'

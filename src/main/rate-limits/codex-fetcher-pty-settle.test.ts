@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
@@ -33,7 +33,16 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    // Why: after PTY success the fetcher may probe real WHAM reset-credits via
+    // global fetch; isolate that under fake timers so local auth.json cannot
+    // hang the suite.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     resolveCodexCommandMock.mockReturnValue('codex')
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('coalesces the PTY fallback status settle timer while output keeps streaming', async () => {

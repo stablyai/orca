@@ -14,6 +14,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { codexTurnItem } from './transcript-codex-turn-items'
 
 export function decodeClaudeTranscriptLine(
   line: string,
@@ -144,6 +145,15 @@ function codexEventMessage(
     return text
       ? { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
       : null
+  }
+  // Why: Paginated history_mode writes TurnItems under item_completed instead of
+  // legacy user_message/agent_message event_msg records.
+  if (payload.type === 'item_completed') {
+    const item = asRecord(payload.item)
+    if (!item) {
+      return null
+    }
+    return codexTurnItem(item, extractString(item.id) ?? id, timestamp)
   }
   return null
 }

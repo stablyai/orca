@@ -135,6 +135,18 @@ export function createAgentStatusTracker(
 // stomp the synthesized state back to idle.
 const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 
+// Why: default Codex OSC titles omit the app name (activity + project only).
+// Permission frames use a fixed bracket prefix, e.g.
+// `[ ! ] Action Required | project` (and the blink variant `[ . ]`).
+// Match this Codex-native form without requiring a "codex" token so
+// title-only status paths (and process-owned codex sessions) still map to
+// waiting/permission. See TERMINAL_TITLE_ACTION_REQUIRED_PREFIX in Codex TUI.
+export const CODEX_NATIVE_ACTION_REQUIRED_TITLE_RE = /\[\s*[!.]\s*\]\s*Action Required/i
+
+export function isCodexNativeActionRequiredTitle(title: string): boolean {
+  return CODEX_NATIVE_ACTION_REQUIRED_TITLE_RE.test(title)
+}
+
 export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (!title) {
     return null
@@ -148,6 +160,12 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   // or a tighter match worth classifying.
   if (title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER) {
     return null
+  }
+
+  // Why: Codex default permission titles have no agent-name token; classify
+  // the fixed Action Required prefix before agent-name-gated branches below.
+  if (isCodexNativeActionRequiredTitle(title)) {
+    return 'permission'
   }
 
   // Gemini CLI symbols are the most specific and should take precedence.

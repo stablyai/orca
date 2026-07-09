@@ -1,13 +1,12 @@
 import {
+  copyFileSync,
   existsSync,
   linkSync,
   lstatSync,
   mkdirSync,
-  readFileSync,
   readlinkSync,
   renameSync,
-  rmSync,
-  symlinkSync
+  rmSync
 } from 'node:fs'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
@@ -16,16 +15,14 @@ import {
   listCodexSessionJsonlFilesIncrementally
 } from './codex-session-file-listing'
 import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
+import {
+  clearLegacyCopiedSessionMarker,
+  fileStatsMatchMarker,
+  readLegacyCopiedSessionMarker,
+  writeLegacyCopiedSessionMarker
+} from './codex-session-copy-markers'
 
 export type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
-
-type LegacyCopiedSessionMarker = {
-  sourcePath: string
-  sourceSize: number
-  sourceMtimeMs: number
-  targetSize: number
-  targetMtimeMs: number
-}
 
 export type LegacyCopiedCodexSessionBridgeScanPreference = {
   sourcePath: string
@@ -147,36 +144,20 @@ function bridgeSystemCodexSessionFile(
 }
 
 /**
- * Links a source session file and clears any stale copied-session marker.
+ * Links a source session file (hardlink preferred) or copy-syncs across volumes.
  */
 function linkSystemCodexSessionFile(
   sourcePath: string,
   targetPath: string,
   relativePath: string
 ): boolean {
-  const linked = tryLinkSystemCodexSessionFile(sourcePath, targetPath)
-  if (linked) {
-    clearLegacyCopiedSessionMarker(relativePath)
-  }
-  return linked
-}
-
-/**
- * Attempts to link a session file with hardlink first and symlink fallback.
- */
-function tryLinkSystemCodexSessionFile(sourcePath: string, targetPath: string): boolean {
   if (tryHardlinkSystemCodexSessionFile(sourcePath, targetPath)) {
+    clearLegacyCopiedSessionMarker(relativePath)
     return true
   }
-  try {
-    // Why fallback: hardlinks keep sessions visible to Codex resume, but can
-    // fail across volumes. A symlink is still better than a diverging copy.
-    symlinkSync(sourcePath, targetPath, process.platform === 'win32' ? 'file' : undefined)
-    return true
-  } catch (error) {
-    console.warn('[codex-session-bridge] Failed to link system Codex session:', sourcePath, error)
-  }
-  return false
+  // Why: Codex resume ignores symlinks; cross-volume hardlink failure must
+  // copy so the managed home still has a resume-visible regular file.
+  return tryCopySystemCodexSessionFile(sourcePath, targetPath, relativePath)
 }
 
 /**
@@ -194,8 +175,27 @@ function tryHardlinkSystemCodexSessionFile(sourcePath: string, targetPath: strin
 }
 
 /**
- * Replaces an older symlink bridge with a hardlink when the target still points
- * at the expected source session.
+ * Copies a session file and records a marker so later scans can keep the copy
+ * coherent until a hardlink migration succeeds.
+ */
+function tryCopySystemCodexSessionFile(
+  sourcePath: string,
+  targetPath: string,
+  relativePath: string
+): boolean {
+  try {
+    copyFileSync(sourcePath, targetPath)
+    writeLegacyCopiedSessionMarker(relativePath, sourcePath, targetPath)
+    return true
+  } catch (error) {
+    console.warn('[codex-session-bridge] Failed to copy system Codex session:', sourcePath, error)
+    return false
+  }
+}
+
+/**
+ * Replaces an older symlink bridge with a hardlink (or copy) so Codex resume
+ * can see a regular file. Codex FS scans ignore symlinks.
  */
 function replaceSymlinkSessionBridgeWithHardlink(
   sourcePath: string,
@@ -217,13 +217,20 @@ function replaceSymlinkSessionBridgeWithHardlink(
     }
 
     replacementPath = `${targetPath}.orca-link-${process.pid}-${Date.now()}`
-    if (!tryHardlinkSystemCodexSessionFile(sourcePath, replacementPath)) {
-      return false
+    if (tryHardlinkSystemCodexSessionFile(sourcePath, replacementPath)) {
+      rmSync(targetPath, { force: true })
+      renameSync(replacementPath, targetPath)
+      clearLegacyCopiedSessionMarker(relativePath)
+      return true
     }
-    rmSync(targetPath, { force: true })
-    renameSync(replacementPath, targetPath)
-    clearLegacyCopiedSessionMarker(relativePath)
-    return true
+    if (tryCopySystemCodexSessionFile(sourcePath, replacementPath, relativePath)) {
+      rmSync(targetPath, { force: true })
+      renameSync(replacementPath, targetPath)
+      // Marker was written against the temp path; rewrite for the final target.
+      writeLegacyCopiedSessionMarker(relativePath, sourcePath, targetPath)
+      return true
+    }
+    return false
   } catch (error) {
     console.warn(
       '[codex-session-bridge] Failed to replace symlinked Codex session bridge:',
@@ -238,8 +245,8 @@ function replaceSymlinkSessionBridgeWithHardlink(
 }
 
 /**
- * Migrates a legacy copied bridge to a linked bridge when the copied file still
- * matches its marker.
+ * Migrates a legacy copied bridge to a hardlink when the copied file still
+ * matches its marker. Leaves the copy in place when hardlink is unavailable.
  */
 function migrateLegacyCopiedSessionBridge(
   sourcePath: string,
@@ -261,7 +268,7 @@ function migrateLegacyCopiedSessionBridge(
       return
     }
     replacementPath = `${targetPath}.orca-link-${process.pid}-${Date.now()}`
-    if (!tryLinkSystemCodexSessionFile(sourcePath, replacementPath)) {
+    if (!tryHardlinkSystemCodexSessionFile(sourcePath, replacementPath)) {
       return
     }
     rmSync(targetPath, { force: true })
@@ -283,7 +290,7 @@ function migrateLegacyCopiedSessionBridge(
  * Resolves how scanners should treat a legacy copied session bridge.
  *
  * The result keeps resume scans coherent until the copied bridge is migrated to
- * a hardlink or symlink.
+ * a hardlink.
  */
 export function getLegacyCopiedCodexSessionBridgeScanPreference(
   sessionFilePath: string
@@ -319,58 +326,4 @@ export function getLegacyCopiedCodexSessionBridgeScanPreference(
     preferManagedCopy: !targetMatchesMarker || sourceMatchesMarker,
     sourceSkipBytes: !targetMatchesMarker && !sourceMatchesMarker ? marker.sourceSize : null
   }
-}
-
-/**
- * Returns the marker path for a legacy copied session bridge.
- */
-function getLegacySessionCopyMarkerPath(relativePath: string): string {
-  return join(getOrcaManagedCodexHomePath(), '.orca-session-copies', `${relativePath}.json`)
-}
-
-/**
- * Reads and validates the marker for a legacy copied session bridge.
- */
-function readLegacyCopiedSessionMarker(relativePath: string): LegacyCopiedSessionMarker | null {
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(getLegacySessionCopyMarkerPath(relativePath), 'utf-8')
-    )
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return null
-    }
-    const marker = parsed as Record<string, unknown>
-    if (
-      typeof marker.sourcePath !== 'string' ||
-      typeof marker.sourceSize !== 'number' ||
-      typeof marker.sourceMtimeMs !== 'number' ||
-      typeof marker.targetSize !== 'number' ||
-      typeof marker.targetMtimeMs !== 'number'
-    ) {
-      return null
-    }
-    return marker as LegacyCopiedSessionMarker
-  } catch {
-    return null
-  }
-}
-
-/**
- * Checks whether source or target file stats still match a legacy bridge marker.
- */
-function fileStatsMatchMarker(
-  stat: { size: number; mtimeMs: number },
-  marker: LegacyCopiedSessionMarker,
-  kind: 'source' | 'target'
-): boolean {
-  const expectedSize = kind === 'source' ? marker.sourceSize : marker.targetSize
-  const expectedMtimeMs = kind === 'source' ? marker.sourceMtimeMs : marker.targetMtimeMs
-  return stat.size === expectedSize && stat.mtimeMs === expectedMtimeMs
-}
-
-/**
- * Removes the marker after a copied session bridge has been migrated or retired.
- */
-function clearLegacyCopiedSessionMarker(relativePath: string): void {
-  rmSync(getLegacySessionCopyMarkerPath(relativePath), { force: true })
 }

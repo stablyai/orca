@@ -96,7 +96,7 @@ describe('pasteDraftWhenAgentReady', () => {
     vi.useRealTimers()
   })
 
-  it('pastes into Codex as soon as its composer prompt renders after bracketed paste is enabled', async () => {
+  it('pastes into Codex only after glyph and idle placeholder render after bracketed paste', async () => {
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -112,6 +112,11 @@ describe('pasteDraftWhenAgentReady', () => {
     await flushMicrotasks()
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
+    // Why: bare `›` after 2004 (hooks-review/onboarding) must not unlock paste.
+    testState.ptyObserver?.('›')
+    await flushMicrotasks()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+
     testState.ptyObserver?.(CODEX_COMPOSER_PROMPT_RENDER)
 
     await expect(promise).resolves.toBe(true)
@@ -123,7 +128,7 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('detects the Codex composer prompt inside a large first render chunk', async () => {
+  it('detects the Codex idle composer prompt inside a large first render chunk', async () => {
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -351,7 +356,7 @@ describe('pasteDraftWhenAgentReady', () => {
       'pty-1',
       PASTED_ISSUE_URL
     )
-    await vi.advanceTimersByTimeAsync(49)
+    await vi.advanceTimersByTimeAsync(499)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
     await expect(promise).resolves.toBe(true)
@@ -532,7 +537,7 @@ describe('pasteDraftWhenAgentReady', () => {
     )
 
     await flushMicrotasks()
-    await vi.advanceTimersByTimeAsync(49)
+    await vi.advanceTimersByTimeAsync(499)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
 
@@ -558,7 +563,7 @@ describe('pasteDraftWhenAgentReady', () => {
     })
 
     await flushMicrotasks()
-    await vi.advanceTimersByTimeAsync(50)
+    await vi.advanceTimersByTimeAsync(500)
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
@@ -599,7 +604,7 @@ describe('pasteDraftWhenAgentReady', () => {
       expect((call[2] as string).length).toBeLessThanOrEqual(AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES)
     }
 
-    await vi.advanceTimersByTimeAsync(50)
+    await vi.advanceTimersByTimeAsync(500)
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith({}, 'pty-1', '\r')
