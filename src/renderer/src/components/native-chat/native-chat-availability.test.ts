@@ -55,14 +55,14 @@ describe('canToggleNativeChat', () => {
     ).toBe(true)
   })
 
-  it('rejects an unsupported launch agent (Grok)', () => {
+  it('accepts a Grok launch agent once native chat can parse its transcript', () => {
     expect(
       canToggleNativeChat({
         experimentalNativeChatEnabled: true,
         contentType: 'terminal',
         launchAgent: 'grok'
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('rejects an unsupported agent detected live (Gemini)', () => {
@@ -76,7 +76,7 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
-  it('rejects an unsupported agent resolved from the title', () => {
+  it('accepts Grok when resolved from the title', () => {
     expect(
       canToggleNativeChat({
         experimentalNativeChatEnabled: true,
@@ -84,7 +84,7 @@ describe('canToggleNativeChat', () => {
         launchAgent: null,
         resolvedAgent: 'grok'
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('rejects a stale supported title when live detection found an unsupported agent', () => {
@@ -115,7 +115,7 @@ describe('canToggleNativeChat', () => {
       canToggleNativeChat({
         experimentalNativeChatEnabled: true,
         contentType: 'terminal',
-        launchAgent: 'grok',
+        launchAgent: 'gemini',
         resolvedAgent: 'claude'
       })
     ).toBe(false)

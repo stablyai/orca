@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, extname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
@@ -28,12 +28,20 @@ function codexSessionsDirs(): string[] {
   return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
 }
 
+function grokSessionsDir(): string {
+  return process.env.GROK_HOME?.trim()
+    ? join(process.env.GROK_HOME.trim(), 'sessions')
+    : join(homedir(), '.grok', 'sessions')
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
   /** Override the Codex sessions roots, searched in order (tests / isolated
    *  scans). Defaults to the orca-managed home then CODEX_HOME/~/.codex. */
   codexSessionsDirs?: string[]
+  /** Override the Grok sessions root (`~/.grok/sessions`). */
+  grokSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -76,6 +84,9 @@ export async function resolveSessionFilePath(
   if (agent === 'codex') {
     return resolveCodexSessionFile(trimmedId, options.codexSessionsDirs ?? codexSessionsDirs())
   }
+  if (agent === 'grok') {
+    return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir())
+  }
   return null
 }
 
@@ -114,4 +125,23 @@ async function resolveCodexSessionFile(
     }
   }
   return null
+}
+
+async function resolveGrokSessionFile(
+  sessionId: string,
+  sessionsDir: string
+): Promise<string | null> {
+  // Why: Grok nests chat_history.jsonl under encodeURIComponent(cwd)/sessionId/
+  // (same layout agent-hook-listener getGrokChatHistoryPath uses). Walk the
+  // sessions tree for that exact leaf name under a directory named sessionId.
+  if (!existsSync(sessionsDir)) {
+    return null
+  }
+  const targetName = 'chat_history.jsonl'
+  const files = await walkSessionFiles(sessionsDir, 'grok', [], {
+    extensions: new Set(['.jsonl']),
+    filePredicate: (path) =>
+      basename(path) === targetName && basename(dirname(path)) === sessionId
+  })
+  return files[0] ?? null
 }

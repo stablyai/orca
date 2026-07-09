@@ -38,6 +38,18 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('resolves Grok chat_history.jsonl under encodeURIComponent(cwd)/sessionId', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-')
+    const grokSessionsDir = join(root, 'grok-sessions')
+    const sessionDir = join(grokSessionsDir, encodeURIComponent('/tmp/work'), 'sess-grok-1')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'chat_history.jsonl')
+    await writeFile(target, '{"type":"user","content":"hi"}\n')
+
+    const resolved = await resolveSessionFilePath('grok', 'sess-grok-1', { grokSessionsDir })
+    expect(resolved).toBe(target)
+  })
+
   it('matches Codex rollout files by session id suffix', async () => {
     const root = await makeRoot('orca-native-chat-resolve-codex-')
     const codexSessionsDir = join(root, 'codex-sessions')

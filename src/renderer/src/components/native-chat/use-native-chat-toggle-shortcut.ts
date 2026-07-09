@@ -61,7 +61,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         (candidate) => candidate.id === tab.entityId
       )
       // Carry the agent identity (not just "an agent exists") so the chord stays
-      // inert on unsupported agents like Grok, matching the menu/header gate.
+      // inert on unsupported agents (e.g. Gemini), matching the menu/header gate.
       // Pane keys are `${entityId}:${leafId}` — the backing terminal tab id, not
       // the unified tab id.
       const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]

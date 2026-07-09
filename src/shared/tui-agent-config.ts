@@ -345,7 +345,11 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'grok',
     launchCmd: 'grok',
     expectedProcess: 'grok',
-    promptInjectionMode: 'stdin-after-start'
+    // Why: Grok CLI accepts an initial prompt as a positional argv
+    // (`grok "fix the bug"`). Prefer argv over stdin-after-start so multi-line
+    // / special-character prompts are not typed as raw PTY keystrokes, and so
+    // clipboard-derived launch text is not mangled by line-edit shortcuts.
+    promptInjectionMode: 'argv'
   },
   devin: {
     detectCmd: 'devin',

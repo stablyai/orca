@@ -13,7 +13,11 @@ import { open, stat } from 'node:fs/promises'
 import type { Readable } from 'node:stream'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'
+import {
+  decodeClaudeTranscriptLine,
+  decodeCodexTranscriptLine,
+  decodeGrokTranscriptLine
+} from './transcript-line-decoders'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
@@ -56,6 +60,9 @@ function lineDecoderForAgent(
   }
   if (agent === 'codex') {
     return decodeCodexTranscriptLine
+  }
+  if (agent === 'grok') {
+    return decodeGrokTranscriptLine
   }
   return null
 }

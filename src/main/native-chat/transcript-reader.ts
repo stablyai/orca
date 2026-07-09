@@ -3,7 +3,11 @@ import { createInterface } from 'node:readline'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'
+import {
+  decodeClaudeTranscriptLine,
+  decodeCodexTranscriptLine,
+  decodeGrokTranscriptLine
+} from './transcript-line-decoders'
 
 export type ReadTranscriptResult = { messages: NativeChatMessage[] } | { error: string }
 
@@ -35,6 +39,9 @@ export async function readNativeChatTranscript(
     }
     if (agent === 'codex') {
       return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+    }
+    if (agent === 'grok') {
+      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
     }
     return { error: `Unsupported agent for native chat transcript: ${agent}` }
   } catch (err) {
