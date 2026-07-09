@@ -31,6 +31,38 @@
   overflow-y: scroll;
 }
 
+.xterm .xterm-viewport {
+  --xterm-scrollbar-thumb: rgba(121, 121, 121, 0.4);
+  --xterm-scrollbar-thumb-hover: rgba(121, 121, 121, 0.7);
+
+  /* Why: when macOS shows non-overlay scrollbars, Blink otherwise paints the
+     reserved terminal gutter with a light native track in dark terminal themes. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--xterm-scrollbar-thumb) transparent;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 14px;
+  background: transparent;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--xterm-scrollbar-thumb);
+  border: 3px solid transparent;
+  border-radius: 7px;
+  background-clip: padding-box;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--xterm-scrollbar-thumb-hover);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
 /* xterm.css hard-codes the viewport background to #000 (for opaque macOS
    scrollbars). On light-themed terminals at fractional-pixel positions (e.g.
    the install terminals inside centered setup modals), that black layer
