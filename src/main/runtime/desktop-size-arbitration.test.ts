@@ -254,4 +254,41 @@ describe('desktop size arbitration (multi-client)', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
     expect(runtime.getTerminalFitOverride('pty-1')?.mode).toBe('mobile-fit')
   })
+
+  it('remote owner disconnect restores host size and clears the hold overlay', async () => {
+    const { runtime, ptySizes, fitOverrideEvents } = createRuntime()
+    runtime.onExternalPtyResize('pty-1', 150, 40)
+    await runtime.updateDesktopViewport(
+      'pty-1',
+      { cols: 100, rows: 30 },
+      { clientId: 'desktop:b', intent: 'control' }
+    )
+    expect(runtime.getDesktopSizeOwner('pty-1')?.clientId).toBe('desktop:b')
+    fitOverrideEvents.length = 0
+
+    runtime.onClientDisconnected('desktop:b')
+
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(runtime.getDesktopSizeOwner('pty-1')?.clientId).toBe(LOCAL_DESKTOP_CLIENT_ID)
+    expect(fitOverrideEvents.at(-1)?.mode).toBe('desktop-fit')
+    expect(runtime.getFitHoldForViewer('pty-1', LOCAL_DESKTOP_CLIENT_ID).mode).toBe('desktop-fit')
+  })
+
+  it('observe under phone-fit does not poison host restore baseline', async () => {
+    const { runtime, ptySizes } = createRuntime()
+    runtime.onExternalPtyResize('pty-1', 150, 40)
+    expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+    // Remote subscribe observe while phone holds — must not rewrite baseline.
+    await runtime.updateDesktopViewport(
+      'pty-1',
+      { cols: 80, rows: 24 },
+      { clientId: 'desktop:b', intent: 'observe' }
+    )
+    expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+  })
 })
