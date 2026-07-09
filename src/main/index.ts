@@ -110,7 +110,7 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
-import { createSystemTray, destroySystemTray } from './tray/system-tray'
+import { createSystemTray, destroySystemTray, setTrayAttention } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
 import { CodexAccountService } from './codex-accounts/service'
@@ -1002,6 +1002,10 @@ function openMainWindow(): BrowserWindow {
   // macOS dock re-activation recreates the BrowserWindow.
   window.on('show', notifyMainWindowBecameVisible)
   window.on('restore', notifyMainWindowBecameVisible)
+  // Why: showing/restoring the window means the user is back, so clear the
+  // tray attention dot set while it was minimized/hidden (see notifications.ts).
+  window.on('show', () => setTrayAttention(false))
+  window.on('restore', () => setTrayAttention(false))
   agentHookServer.setListener(
     ({
       paneKey,

@@ -70,6 +70,14 @@ vi.mock('electron', () => ({
   }
 }))
 
+// Why: notifications.ts pulls in the tray module (for the minimized attention
+// dot), which transitively loads app-icon/electron-toolkit; stub it so this
+// suite stays focused on notification dispatch and avoids that import chain.
+const setTrayAttentionMock = vi.hoisted(() => vi.fn())
+vi.mock('../tray/system-tray', () => ({
+  setTrayAttention: setTrayAttentionMock
+}))
+
 import {
   registerNotificationHandlers,
   triggerStartupNotificationRegistration
@@ -101,6 +109,7 @@ describe('registerNotificationHandlers', () => {
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
     shellOpenExternalMock.mockClear()
+    setTrayAttentionMock.mockClear()
   })
 
   afterEach(() => {
@@ -285,6 +294,65 @@ describe('registerNotificationHandlers', () => {
       reason: 'suppressed-focus'
     })
     expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  describe('minimized tray attention dot', () => {
+    function registerEnabledNotifications(): void {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+    }
+
+    it('lights the tray dot for an agent completion while the window is hidden', () => {
+      getAllWindowsMock.mockReturnValue([
+        { isDestroyed: () => false, isVisible: () => false, isMinimized: () => false } as never
+      ])
+      registerEnabledNotifications()
+
+      getDispatchHandler()({}, { source: 'agent-task-complete' })
+
+      expect(setTrayAttentionMock).toHaveBeenCalledWith(true)
+    })
+
+    it('lights the tray dot for a terminal bell while the window is minimized', () => {
+      getAllWindowsMock.mockReturnValue([
+        { isDestroyed: () => false, isVisible: () => true, isMinimized: () => true } as never
+      ])
+      registerEnabledNotifications()
+
+      getDispatchHandler()({}, { source: 'terminal-bell' })
+
+      expect(setTrayAttentionMock).toHaveBeenCalledWith(true)
+    })
+
+    it('does not light the tray dot while the window is visible', () => {
+      getAllWindowsMock.mockReturnValue([
+        { isDestroyed: () => false, isVisible: () => true, isMinimized: () => false } as never
+      ])
+      registerEnabledNotifications()
+
+      getDispatchHandler()({}, { source: 'agent-task-complete' })
+
+      expect(setTrayAttentionMock).not.toHaveBeenCalled()
+    })
+
+    it('does not light the tray dot for non-bell/completion sources', () => {
+      getAllWindowsMock.mockReturnValue([
+        { isDestroyed: () => false, isVisible: () => false, isMinimized: () => false } as never
+      ])
+      registerEnabledNotifications()
+
+      getDispatchHandler()({}, { source: 'test' })
+
+      expect(setTrayAttentionMock).not.toHaveBeenCalled()
+    })
   })
 
   it('delivers a notification when the event is allowed', () => {

@@ -24,6 +24,8 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from './notification-options'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { setTrayAttention } from '../tray/system-tray'
+import { isMainWindowVisible } from '../window/main-window-visibility'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
@@ -255,6 +257,22 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       _event,
       args: NotificationDispatchRequest
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
+      // Why: a terminal bell or agent completion that arrives while the window
+      // is minimized/hidden lights the tray attention dot — a passive cue that
+      // clears on window show/restore (see index.ts). Placed before the
+      // focus-suppression, cooldown, and enabled gates below so those do not
+      // hold back the dot. It rides the notification dispatch, so it follows the
+      // renderer's per-source decision to notify: bells always reach here, while
+      // an agent completion is suppressed upstream when its notification is
+      // disabled. Tray exists only on Windows, so setTrayAttention no-ops
+      // elsewhere.
+      if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
+        const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
+        if (!isMainWindowVisible(activeWindow)) {
+          setTrayAttention(true)
+        }
+      }
+
       const settings = store.getSettings().notifications
       if (!settings.enabled) {
         return { delivered: false, reason: 'disabled' }

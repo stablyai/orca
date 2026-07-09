@@ -10429,6 +10429,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Mostrar espacio de trabajo flotante",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "Minimizar el espacio de trabajo flotante",
             "bfe7809a70": "{{value0}} espacio de trabajo flotante ({{value1}})"
           },

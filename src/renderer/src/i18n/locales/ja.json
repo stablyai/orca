@@ -10429,6 +10429,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "フローティングワークスペースを表示",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "フローティングワークスペースを最小限に抑える",
             "bfe7809a70": "{{value0}} フローティング ワークスペース ({{value1}})"
           },

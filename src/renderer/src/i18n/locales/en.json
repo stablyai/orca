@@ -10429,6 +10429,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Show floating workspace",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "Minimize floating workspace",
             "bfe7809a70": "{{value0}} floating workspace ({{value1}})"
           },

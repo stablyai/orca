@@ -10429,6 +10429,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "显示浮动工作区",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "最小化浮动工作区",
             "bfe7809a70": "{{value0}} 浮动工作区 ({{value1}})"
           },

@@ -10429,6 +10429,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "플로팅 워크스페이스 표시",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "플로팅 워크스페이스 최소화",
             "bfe7809a70": "{{value0}} 플로팅 워크스페이스({{value1}})"
           },
