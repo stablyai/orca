@@ -536,14 +536,23 @@ describe('fetchCodexRateLimits', () => {
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
       expect(spawnFile).toBe('wsl.exe')
-      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'bash', '-ic'])
-      const bashCommand = spawnArgs.at(-1) as string
-      expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
-      expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
-      expect(bashCommand).toContain(
-        "export CODEX_HOME='/home/alice/.local/share/orca/account/home'"
+      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
+      const shellCommand = spawnArgs.at(-1) as string
+      expect(shellCommand).toContain('_orca_wsl_shell=\\$(getent passwd')
+      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain(
+        'exec 3<&0\nexec 4>&1\nexec </dev/null\nexec >/dev/null\n_orca_wsl_shell='
       )
-      expect(bashCommand).toContain("exec codex '-s' 'read-only' '-a' 'untrusted' 'app-server'")
+      expect(shellCommand).toContain('mkdir -p "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('cd "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain(
+        "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
+      )
+      expect(shellCommand).toContain(
+        "exec codex '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''untrusted'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
+      )
+      expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
+      expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           cwd: expect.stringContaining('rate-limit-pty-cwd'),
@@ -645,13 +654,20 @@ describe('fetchCodexRateLimits', () => {
 
       const [spawnFile, spawnArgs, spawnOptions] = ptySpawnMock.mock.calls[0]
       expect(spawnFile).toBe('wsl.exe')
-      const bashCommand = spawnArgs.at(-1) as string
-      expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
-      expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
-      expect(bashCommand).toContain(
-        "export CODEX_HOME='/home/alice/.local/share/orca/account/home'"
+      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
+      const shellCommand = spawnArgs.at(-1) as string
+      expect(shellCommand).toContain('_orca_wsl_shell=\\$(getent passwd')
+      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).not.toContain('exec 3<&0')
+      expect(shellCommand).not.toContain('exec </dev/null')
+      expect(shellCommand).not.toContain('exec >/dev/null')
+      expect(shellCommand).not.toContain('<&3 >&4 3<&- 4>&-')
+      expect(shellCommand).toContain('mkdir -p "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('cd "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain(
+        "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
       )
-      expect(bashCommand).toContain('exec codex ')
+      expect(shellCommand).toContain('exec codex ')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           cwd: expect.stringContaining('rate-limit-pty-cwd'),
