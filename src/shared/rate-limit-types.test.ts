@@ -13,6 +13,7 @@ describe('RateLimitState', () => {
       gemini: null,
       opencodeGo: null,
       kimi: null,
+      grok: null,
       minimax: null,
       minimaxCookieConfigured: false,
       claudeTarget: { runtime: 'host', wslDistro: null },

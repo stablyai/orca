@@ -21,6 +21,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    grok: null,
     minimax: null,
     minimaxCookieConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },

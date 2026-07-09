@@ -9,6 +9,7 @@ import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchGrokRateLimits } from './grok-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
@@ -24,6 +25,10 @@ vi.mock('./codex-fetcher', () => ({
 
 vi.mock('./gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
+}))
+
+vi.mock('./grok-fetcher', () => ({
+  fetchGrokRateLimits: vi.fn()
 }))
 
 vi.mock('./opencode-go-usage-fetcher', () => ({
@@ -52,19 +57,31 @@ function deferred<T>(): Deferred<T> {
 }
 
 function okProvider(
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'minimax',
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'grok' | 'minimax',
   usedPercent: number,
-  updatedAt = Date.now()
+  updatedAt = Date.now(),
+  window: 'session' | 'weekly' = 'session'
 ): ProviderRateLimits {
   return {
     provider,
-    session: {
-      usedPercent,
-      windowMinutes: 300,
-      resetsAt: null,
-      resetDescription: null
-    },
-    weekly: null,
+    session:
+      window === 'session'
+        ? {
+            usedPercent,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          }
+        : null,
+    weekly:
+      window === 'weekly'
+        ? {
+            usedPercent,
+            windowMinutes: 10080,
+            resetsAt: null,
+            resetDescription: null
+          }
+        : null,
     updatedAt,
     error: null,
     status: 'ok'
@@ -72,7 +89,7 @@ function okProvider(
 }
 
 function errorProvider(
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'minimax',
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi' | 'grok' | 'minimax',
   message: string
 ): ProviderRateLimits {
   return {
@@ -125,6 +142,7 @@ describe('RateLimitService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
+    vi.mocked(fetchGrokRateLimits).mockResolvedValue(okProvider('grok', 0, Date.now()))
     vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
     vi.mocked(fetchMiniMaxRateLimits).mockResolvedValue(okProvider('minimax', 0, Date.now()))
     vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
@@ -154,6 +172,21 @@ describe('RateLimitService', () => {
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+  })
+
+  it('includes Grok usage in full refresh state', async () => {
+    const service = new RateLimitService()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 11))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 22))
+    vi.mocked(fetchGrokRateLimits).mockResolvedValueOnce(
+      okProvider('grok', 33, Date.now(), 'weekly')
+    )
+
+    await service.refresh()
+
+    expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().grok?.provider).toBe('grok')
+    expect(service.getState().grok?.weekly?.usedPercent).toBe(33)
   })
 
   it('removes all window listeners when replacing the attached window', () => {
