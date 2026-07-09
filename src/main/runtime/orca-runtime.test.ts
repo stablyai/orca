@@ -2579,11 +2579,50 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('selector_not_found')
   })
 
+  it('guides bare repo-id worktree selectors to the full id shape', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree(`id:${TEST_REPO_ID}`)).rejects.toThrow(
+      'worktree_id_requires_full_path: Worktree id selectors must use the full <repo-id>::<path> value.'
+    )
+  })
+
+  it('still resolves the full worktree id selector', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
+      id: TEST_WORKTREE_ID
+    })
+  })
+
   it('still throws selector_not_found for an unknown id selector', async () => {
     const runtime = new OrcaRuntimeService(store)
 
     await expect(runtime.showManagedWorktree('id:does-not-exist')).rejects.toThrow(
       'selector_not_found'
+    )
+  })
+
+  it('still throws selector_not_found for unknown bare ids', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree('id:not-a-repo')).rejects.toThrow(
+      'selector_not_found'
+    )
+  })
+
+  it('does not treat partial repo ids as full worktree ids', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree('id:repo')).rejects.toThrow('selector_not_found')
+  })
+
+  it('preserves full-id guidance for explicit parent-worktree lineage selectors', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
+
+    await expect(resolveLineage({ parentWorktree: `id:${TEST_REPO_ID}` })).rejects.toThrow(
+      'worktree_id_requires_full_path: Worktree id selectors must use the full <repo-id>::<path> value.'
     )
   })
 

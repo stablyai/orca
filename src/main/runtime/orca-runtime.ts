@@ -179,6 +179,7 @@ import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  WORKTREE_ID_SEPARATOR,
   splitWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../shared/worktree-id'
@@ -2012,6 +2013,16 @@ class RuntimeLineageError extends Error {
     super(message)
     this.code = code
     this.data = data
+  }
+}
+
+class WorktreeIdRequiresFullPathError extends Error {
+  readonly code = 'worktree_id_requires_full_path'
+
+  constructor() {
+    super(
+      'worktree_id_requires_full_path: Worktree id selectors must use the full <repo-id>::<path> value. Use the id from `orca worktree list --json`, or target by path:<path>, branch:<branch>, or issue:<number>.'
+    )
   }
 }
 
@@ -19084,6 +19095,11 @@ export class OrcaRuntimeService {
             : null
         if (fallback !== null) {
           candidates = [fallback]
+        } else if (
+          !worktreeId.includes(WORKTREE_ID_SEPARATOR) &&
+          worktrees.some((worktree) => worktree.id.startsWith(`${worktreeId}${WORKTREE_ID_SEPARATOR}`))
+        ) {
+          throw new WorktreeIdRequiresFullPathError()
         }
       }
     } else if (selector.startsWith('path:')) {
@@ -19200,6 +19216,15 @@ export class OrcaRuntimeService {
   private async resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput
   ): Promise<WorktreeLineageResolution> {
+    const parentSelectorNextSteps = [
+      'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
+      'Retry with --no-parent to create without lineage.'
+    ]
+    const parentSelectorNotFoundMessage = (err: unknown): string =>
+      err instanceof WorktreeIdRequiresFullPathError
+        ? err.message
+        : 'Parent selector was not found.'
+
     if (!input) {
       return { kind: 'none', warnings: [] }
     }
@@ -19229,15 +19254,12 @@ export class OrcaRuntimeService {
           origin: 'cli',
           capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
         }
-      } catch {
+      } catch (err) {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_NOT_FOUND',
-          'Parent selector was not found.',
+          parentSelectorNotFoundMessage(err),
           {
-            nextSteps: [
-              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
-              'Retry with --no-parent to create without lineage.'
-            ]
+            nextSteps: parentSelectorNextSteps
           }
         )
       }
@@ -19257,15 +19279,12 @@ export class OrcaRuntimeService {
           origin: 'cli',
           capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
         }
-      } catch {
+      } catch (err) {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_NOT_FOUND',
-          'Parent selector was not found.',
+          parentSelectorNotFoundMessage(err),
           {
-            nextSteps: [
-              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
-              'Retry with --no-parent to create without lineage.'
-            ]
+            nextSteps: parentSelectorNextSteps
           }
         )
       }
