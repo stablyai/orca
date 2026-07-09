@@ -46,6 +46,7 @@ function createOpenInApplication(): OpenInApplication {
   }
 }
 
+/** Builds the stored application row for a catalog preset, keyed by the preset id. */
 export function createPresetOpenInApplication(preset: OpenInAppPreset): OpenInApplication {
   return {
     id: preset.id,
@@ -72,6 +73,7 @@ function resolveOpenInApplicationsDraftState(
     : createOpenInApplicationsDraftState(openInApplications)
 }
 
+/** Drafts persist only once every row has both a label and a command. */
 export function shouldCommitOpenInApplicationsDraft(applications: OpenInApplication[]): boolean {
   return applications.every((application) => {
     return application.label.trim() !== '' && application.command.trim() !== ''
@@ -236,6 +238,10 @@ function OpenInMenuRow({
   )
 }
 
+/**
+ * Settings row for managing the workspace "Open in" apps: add presets
+ * (JetBrains suite grouped in a submenu) or custom label/command pairs.
+ */
 export function OpenInMenuSetting({
   applications,
   updateSettings
@@ -293,6 +299,7 @@ export function OpenInMenuSetting({
   const standalonePresets = presets.filter((preset) => preset.group === undefined)
   const jetbrainsPresets = presets.filter((preset) => preset.group === 'jetbrains')
 
+  /** Dropdown entry for one preset; shared by the top-level list and the JetBrains submenu. */
   const renderPresetItem = (preset: OpenInAppPreset): React.JSX.Element => {
     const isAdded = isOpenInAppPresetAdded(draft, preset)
     return (
