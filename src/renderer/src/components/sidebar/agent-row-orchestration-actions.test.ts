@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   askAgent,
   dispatchTaskToAgent,
+  findActiveDispatchForWorker,
+  formatCoordinatorWaitHint,
   getActiveTerminalPaneKey,
   listCoordinatorCandidates,
   resolveCoordinatorPaneKey,
@@ -151,6 +153,9 @@ describe('dispatchTaskToAgent', () => {
           const paneKey = String(request.params?.paneKey ?? '')
           return resolvePaneResponse(paneKey.startsWith('tab-coord') ? 'term_coord' : 'term_worker')
         }
+        if (request.method === 'orchestration.taskList') {
+          return ok({ tasks: [], count: 0 })
+        }
         if (request.method === 'orchestration.taskCreate') {
           return ok({ task: { id: 'task_1', status: 'ready' } })
         }
@@ -193,6 +198,43 @@ describe('dispatchTaskToAgent', () => {
     })
   })
 
+  it('rejects when the worker already has an active dispatch', async () => {
+    const callRuntime = vi.fn(
+      async (request: { method: string; params?: Record<string, unknown> }) => {
+        if (request.method === 'terminal.resolvePane') {
+          const paneKey = String(request.params?.paneKey ?? '')
+          return resolvePaneResponse(paneKey.startsWith('tab-coord') ? 'term_coord' : 'term_worker')
+        }
+        if (request.method === 'orchestration.taskList') {
+          return ok({
+            tasks: [
+              {
+                id: 'task_busy',
+                status: 'dispatched',
+                assignee_handle: 'term_worker',
+                dispatch_id: 'ctx_busy'
+              }
+            ],
+            count: 1
+          })
+        }
+        throw new Error(`unexpected ${request.method}`)
+      }
+    )
+
+    await expect(
+      dispatchTaskToAgent({
+        workerPaneKey: WORKER_PANE,
+        coordinatorPaneKey: COORD_PANE,
+        spec: 'another job',
+        callRuntime
+      })
+    ).rejects.toThrow(/already has an active dispatch/)
+    expect(callRuntime).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'orchestration.taskCreate' })
+    )
+  })
+
   it('rejects when coordinator and worker are the same pane', async () => {
     const callRuntime = vi.fn()
     await expect(
@@ -204,6 +246,48 @@ describe('dispatchTaskToAgent', () => {
       })
     ).rejects.toThrow(/same terminal/)
     expect(callRuntime).not.toHaveBeenCalled()
+  })
+})
+
+describe('findActiveDispatchForWorker / wait hint', () => {
+  it('returns the active dispatch for the worker handle', async () => {
+    const callRuntime = vi.fn(
+      async (request: { method: string; params?: Record<string, unknown> }) => {
+        if (request.method === 'terminal.resolvePane') {
+          return resolvePaneResponse('term_worker')
+        }
+        if (request.method === 'orchestration.taskList') {
+          return ok({
+            tasks: [
+              {
+                id: 'task_9',
+                status: 'dispatched',
+                assignee_handle: 'term_worker',
+                dispatch_id: 'ctx_9'
+              }
+            ],
+            count: 1
+          })
+        }
+        throw new Error(`unexpected ${request.method}`)
+      }
+    )
+
+    await expect(
+      findActiveDispatchForWorker({
+        workerPaneKey: WORKER_PANE,
+        callRuntime
+      })
+    ).resolves.toEqual({
+      workerHandle: 'term_worker',
+      taskId: 'task_9',
+      dispatchId: 'ctx_9'
+    })
+  })
+
+  it('returns the coordinator wait hint used after dispatch', () => {
+    expect(formatCoordinatorWaitHint()).toContain('orchestration check --wait')
+    expect(formatCoordinatorWaitHint()).toContain('worker_done,escalation,decision_gate')
   })
 })
 

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Copy, MessagesSquare, Send, Workflow } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -15,7 +15,10 @@ import {
   buildWorktreeGroupAddress,
   resolveTerminalHandleForPaneKey
 } from '@/components/dashboard/agent-row-orchestration-clipboard'
-import type { OrchestrationActionKind } from './agent-row-orchestration-actions'
+import {
+  findActiveDispatchForWorker,
+  type OrchestrationActionKind
+} from './agent-row-orchestration-actions'
 
 /** Marker so the worktree context menu can offer agent orchestration actions. */
 export const AGENT_ROW_ORCHESTRATION_ATTR = 'data-agent-row-orchestration'
@@ -91,6 +94,42 @@ type Props = {
 export function WorktreeAgentOrchestrationMenuSection({ target, onRequestAction }: Props) {
   const worktreeAddress = target.worktreeId ? buildWorktreeGroupAddress(target.worktreeId) : null
   const coordinator = target.coordinatorHandle
+  // Why: skill/runtime allow only one active dispatch per assignee — disable
+  // Dispatch in the menu so users do not hit a late RPC error.
+  const [workerBusy, setWorkerBusy] = useState(false)
+  const [workerBusyLabel, setWorkerBusyLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setWorkerBusy(false)
+    setWorkerBusyLabel(null)
+    void findActiveDispatchForWorker({
+      workerPaneKey: target.paneKey,
+      callRuntime: window.api.runtime.call as (request: {
+        method: string
+        params?: Record<string, unknown>
+      }) => ReturnType<typeof window.api.runtime.call>
+    })
+      .then((active) => {
+        if (cancelled || !active) {
+          return
+        }
+        setWorkerBusy(true)
+        setWorkerBusyLabel(
+          translate(
+            'auto.components.dashboard.AgentRowContextMenu.dispatch.busy',
+            'Already has active dispatch {{dispatchId}} (task {{taskId}})',
+            { dispatchId: active.dispatchId, taskId: active.taskId }
+          )
+        )
+      })
+      .catch(() => {
+        // Best-effort: leave Dispatch enabled; submit path re-checks.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [target.paneKey])
 
   const copyText = useCallback(async (text: string, successLabel: string) => {
     try {
@@ -136,7 +175,12 @@ export function WorktreeAgentOrchestrationMenuSection({ target, onRequestAction 
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="min-w-56">
           <DropdownMenuItem
+            disabled={workerBusy}
+            title={workerBusyLabel ?? undefined}
             onSelect={() => {
+              if (workerBusy) {
+                return
+              }
               onRequestAction('dispatch')
             }}
           >

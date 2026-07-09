@@ -17,11 +17,14 @@ import { isOrchestrationSetupEnabled } from '@/lib/orchestration-setup-state'
 import {
   askAgent,
   dispatchTaskToAgent,
+  findActiveDispatchForWorker,
+  formatCoordinatorWaitHint,
   listCoordinatorCandidates,
   resolveCoordinatorPaneKey,
   sendMessageToAgent,
   type OrchestrationActionKind
 } from './agent-row-orchestration-actions'
+import { dialogCopy } from './agent-row-orchestration-action-copy'
 import { AgentRowOrchestrationCoordinatorPicker } from './agent-row-orchestration-coordinator-picker'
 import type { AgentRowOrchestrationTarget } from './worktree-agent-orchestration-menu'
 
@@ -35,86 +38,6 @@ type Props = {
   onOpenChange: (open: boolean) => void
 }
 
-function dialogCopy(kind: OrchestrationActionKind): {
-  title: string
-  description: string
-  primaryLabel: string
-  primaryFieldLabel: string
-  primaryPlaceholder: string
-} {
-  switch (kind) {
-    case 'dispatch':
-      return {
-        title: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.title',
-          'Dispatch to this agent'
-        ),
-        description: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.description',
-          'This agent is the worker. Choose which terminal is the coordinator (who owns the task and receives worker_done).'
-        ),
-        primaryLabel: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.submit',
-          'Dispatch'
-        ),
-        primaryFieldLabel: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.spec',
-          'Task spec'
-        ),
-        primaryPlaceholder: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.placeholder',
-          'e.g. Fix the login button CSS and add a regression test'
-        )
-      }
-    case 'send':
-      return {
-        title: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.send.title',
-          'Send message to this agent'
-        ),
-        description: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.send.description',
-          'Sends a status message to this agent. Choose which terminal is --from (usually your coordinator).'
-        ),
-        primaryLabel: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.send.submit',
-          'Send'
-        ),
-        primaryFieldLabel: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.send.subject',
-          'Subject'
-        ),
-        primaryPlaceholder: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.send.placeholder',
-          'e.g. Please review auth changes'
-        )
-      }
-    case 'ask':
-      return {
-        title: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.title',
-          'Ask this agent'
-        ),
-        description: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.description',
-          'Asks this agent and waits up to 2 minutes for a reply. Choose which terminal is the coordinator (--from).'
-        ),
-        primaryLabel: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.submit',
-          'Ask'
-        ),
-        primaryFieldLabel: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.question',
-          'Question'
-        ),
-        primaryPlaceholder: translate(
-          'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.placeholder',
-          'e.g. Which hashing algorithm should we use?'
-        )
-      }
-  }
-}
-
 export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props) {
   const open = state != null
   const kind = state?.kind ?? 'dispatch'
@@ -125,6 +48,7 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
   const [inject, setInject] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [coordinatorPaneKey, setCoordinatorPaneKey] = useState<string>('')
+  const [workerBusyMessage, setWorkerBusyMessage] = useState<string | null>(null)
 
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
@@ -159,18 +83,50 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
   ])
 
   useEffect(() => {
-    if (open && target) {
-      setPrimary('')
-      setBody('')
-      setInject(true)
-      setSubmitting(false)
-      const preferred =
-        resolveCoordinatorPaneKey({
-          workerPaneKey: target.paneKey,
-          workerWorktreeId: target.worktreeId,
-          state: useAppStore.getState()
-        }) ?? ''
-      setCoordinatorPaneKey(preferred)
+    if (!open || !target) {
+      return
+    }
+    setPrimary('')
+    setBody('')
+    setInject(true)
+    setSubmitting(false)
+    setWorkerBusyMessage(null)
+    const preferred =
+      resolveCoordinatorPaneKey({
+        workerPaneKey: target.paneKey,
+        workerWorktreeId: target.worktreeId,
+        state: useAppStore.getState()
+      }) ?? ''
+    setCoordinatorPaneKey(preferred)
+
+    if (kind !== 'dispatch') {
+      return
+    }
+    let cancelled = false
+    void findActiveDispatchForWorker({
+      workerPaneKey: target.paneKey,
+      callRuntime: window.api.runtime.call as (request: {
+        method: string
+        params?: Record<string, unknown>
+      }) => ReturnType<typeof window.api.runtime.call>
+    })
+      .then((active) => {
+        if (cancelled || !active) {
+          return
+        }
+        setWorkerBusyMessage(
+          translate(
+            'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.busy',
+            'This agent already has an active dispatch ({{dispatchId}} / task {{taskId}}). Wait for worker_done before dispatching again.',
+            { dispatchId: active.dispatchId, taskId: active.taskId }
+          )
+        )
+      })
+      .catch(() => {
+        // Best-effort probe; submit re-checks.
+      })
+    return () => {
+      cancelled = true
     }
   }, [open, kind, target?.paneKey, target?.worktreeId, target])
 
@@ -194,6 +150,10 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
           'Select a coordinator terminal (must be different from this agent)'
         )
       )
+      return
+    }
+    if (kind === 'dispatch' && workerBusyMessage) {
+      toast.error(workerBusyMessage)
       return
     }
     setSubmitting(true)
@@ -222,7 +182,11 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
               handle: result.workerHandle,
               injected: result.injected ? ' (injected)' : ''
             }
-          )
+          ),
+          {
+            description: formatCoordinatorWaitHint(),
+            duration: 12_000
+          }
         )
       } else if (kind === 'send') {
         const result = await sendMessageToAgent({
@@ -280,10 +244,15 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {workerBusyMessage ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {workerBusyMessage}
+            </p>
+          ) : null}
           <AgentRowOrchestrationCoordinatorPicker
             options={coordinatorOptions}
             value={coordinatorPaneKey}
-            disabled={submitting}
+            disabled={submitting || Boolean(workerBusyMessage)}
             onChange={setCoordinatorPaneKey}
           />
           <div className="space-y-2">
@@ -360,7 +329,12 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
             onClick={() => {
               void submit()
             }}
-            disabled={submitting || primary.trim().length === 0 || coordinatorPaneKey.length === 0}
+            disabled={
+              submitting ||
+              primary.trim().length === 0 ||
+              coordinatorPaneKey.length === 0 ||
+              Boolean(workerBusyMessage)
+            }
           >
             {submitting
               ? translate(

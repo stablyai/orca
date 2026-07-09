@@ -45,6 +45,58 @@ function readAskAnswer(result: unknown): { answer: string | null; timedOut: bool
   return { answer, timedOut }
 }
 
+export type ActiveWorkerDispatch = {
+  workerHandle: string
+  taskId: string
+  dispatchId: string
+}
+
+// Why: the DB rejects a second active dispatch on the same assignee. Probe
+// taskList so the menu can disable Dispatch before the RPC fails.
+export async function findActiveDispatchForWorker(args: {
+  workerPaneKey: string
+  callRuntime: CallRuntime
+}): Promise<ActiveWorkerDispatch | null> {
+  const workerHandle = await resolveTerminalHandleForPaneKey({
+    paneKey: args.workerPaneKey,
+    callRuntime: args.callRuntime
+  })
+  const listResult = assertOk(
+    await args.callRuntime({
+      method: 'orchestration.taskList',
+      params: { status: 'dispatched' }
+    })
+  )
+  if (!isRecord(listResult) || !Array.isArray(listResult.tasks)) {
+    return null
+  }
+  for (const row of listResult.tasks) {
+    if (!isRecord(row)) {
+      continue
+    }
+    if (
+      row.assignee_handle === workerHandle &&
+      typeof row.id === 'string' &&
+      typeof row.dispatch_id === 'string' &&
+      row.dispatch_id.length > 0
+    ) {
+      return {
+        workerHandle,
+        taskId: row.id,
+        dispatchId: row.dispatch_id
+      }
+    }
+  }
+  return null
+}
+
+export function formatCoordinatorWaitHint(): string {
+  return (
+    'On the coordinator terminal, run:\n' +
+    'orca orchestration check --wait --types worker_done,escalation,decision_gate --timeout-ms 900000 --json'
+  )
+}
+
 export async function resolveCoordinatorAndWorkerHandles(args: {
   workerPaneKey: string
   coordinatorPaneKey: string | null
@@ -101,6 +153,16 @@ export async function dispatchTaskToAgent(args: {
     coordinatorPaneKey: args.coordinatorPaneKey,
     callRuntime: args.callRuntime
   })
+
+  const active = await findActiveDispatchForWorker({
+    workerPaneKey: args.workerPaneKey,
+    callRuntime: args.callRuntime
+  })
+  if (active) {
+    throw new Error(
+      `This agent already has an active dispatch (${active.dispatchId} for task ${active.taskId}). Wait for worker_done or fail the task before dispatching again.`
+    )
+  }
 
   const createResult = assertOk(
     await args.callRuntime({
