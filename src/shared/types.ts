@@ -3187,6 +3187,7 @@ export type RightSidebarTab =
   | 'source-control'
   | 'checks'
   | 'ports'
+  | 'wiki'
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 
@@ -3563,6 +3564,15 @@ export type MarkdownDocument = {
   basename: string
   name: string
 }
+
+export type WikiReadResult =
+  | { hasWiki: false }
+  | {
+      hasWiki: true
+      rootRelativePath: string
+      note: { relativePath: string; content: string } | null
+    }
+export type WikiGenerateResult = { ok: true } | { ok: false; error: string }
 
 // ─── Filesystem watcher ─────────────────────────────────────
 export type FsChangeEvent = {

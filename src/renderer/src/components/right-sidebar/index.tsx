@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow } from 'lucide-react'
+import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow, BookText } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { useRepoById } from '@/store/selectors'
@@ -129,6 +129,14 @@ function RightSidebarInner(): React.JSX.Element {
         title: translate('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
         shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
         gitOnly: true
+      },
+      {
+        // Why: a .wiki/ folder is not git-specific — show Wiki for folder projects too
+        // (the panel reads the worktree path, which folder repos provide).
+        id: 'wiki',
+        icon: BookText,
+        title: translate('auto.components.right.sidebar.index.375ca239c1', 'Wiki'),
+        shortcut: ''
       },
       {
         id: 'ports',

@@ -3,7 +3,7 @@
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
 import { existsSync, statSync } from 'node:fs'
-import { isAbsolute, join } from 'node:path'
+import { basename, isAbsolute, join } from 'node:path'
 import os from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -25,6 +25,10 @@ import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemo
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
+import type { WikiHandlerDeps } from './ipc/wiki'
+import { WikiGenerationService } from './wiki/wiki-generation-service'
+import { spawnWikiAgent } from './wiki/wiki-generation-process'
+import { TUI_AGENT_CONFIG, getTuiAgentLaunchCommand } from '../shared/tui-agent-config'
 import { initObservability, shutdownObservability } from './observability'
 import { startSpan } from './observability/tracer'
 import { registerMobileHandlers } from './ipc/mobile'
@@ -136,7 +140,7 @@ import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
-import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import {
@@ -930,6 +934,49 @@ function openMainWindow(): BrowserWindow {
   }
   window.webContents.on('did-finish-load', onFirstWindowLoad)
 
+  const wikiGenerationService = new WikiGenerationService({
+    resolveBinary: (agent) => {
+      const overrides = store!.getSettings().agentCmdOverrides
+      return (
+        overrides?.[agent] ||
+        getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], process.platform, { isRemote: false })
+      )
+    },
+    emitChanged: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('wiki:generationChanged', payload)
+      }
+    },
+    spawnAgent: spawnWikiAgent,
+    now: () => Date.now()
+  })
+
+  const wikiDeps: WikiHandlerDeps = {
+    getWorktree: (worktreeId) => {
+      // Why: worktree ids are `${repoId}::${path}` (see shared/worktree-id.ts),
+      // so the path resolves synchronously without a runtime git rescan.
+      const parsed = splitWorktreeIdForFilesystem(worktreeId)
+      if (!parsed) {
+        return null
+      }
+      const repo = store!.getRepo(parsed.repoId)
+      if (!repo) {
+        return null
+      }
+      return {
+        path: parsed.worktreePath,
+        repoName: repo.displayName || basename(repo.path),
+        connectionId: repo.connectionId ?? undefined
+      }
+    },
+    getSettings: () => store!.getSettings(),
+    generation: {
+      start: (input) => wikiGenerationService.start(input),
+      getStatus: (worktreeId) => wikiGenerationService.getStatus(worktreeId),
+      cancel: (worktreeId) => wikiGenerationService.cancel(worktreeId)
+    }
+  }
+
   registerCoreHandlers(
     store,
     runtime,
@@ -956,7 +1003,8 @@ function openMainWindow(): BrowserWindow {
         isQuitting = true
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
       }
-    }
+    },
+    wikiDeps
   )
   automations.setWebContents(window.webContents)
   automations.start()

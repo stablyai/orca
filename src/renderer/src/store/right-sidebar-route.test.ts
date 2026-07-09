@@ -16,3 +16,12 @@ describe('normalizeRightSidebarRoute', () => {
     })
   })
 })
+
+describe('normalizeRightSidebarRoute wiki', () => {
+  it('keeps the wiki tab instead of falling back to explorer', () => {
+    expect(normalizeRightSidebarRoute('wiki', 'files')).toEqual({
+      rightSidebarTab: 'wiki',
+      rightSidebarExplorerView: 'files'
+    })
+  })
+})

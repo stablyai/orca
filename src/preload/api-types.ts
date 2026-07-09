@@ -203,7 +203,9 @@ import type {
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
   WorkspaceSessionPatch,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  WikiGenerateResult,
+  WikiReadResult
 } from '../shared/types'
 
 type GitLabRepoSelectorArgs = {
@@ -875,6 +877,28 @@ export type AppApi = {
   pickFloatingWorkspaceDirectory: () => Promise<string | null>
 }
 
+export type WikiGenerationStatus = { running: boolean; output: string; error?: string }
+
+export type WikiGenerationChangedPayload = WikiGenerationStatus & {
+  worktreeId: string
+  done?: boolean
+}
+
+export type WikiApi = {
+  read: (args: {
+    worktreeId: string
+    target?: string
+    fromRelativePath?: string
+  }) => Promise<WikiReadResult>
+  generate: (args: {
+    worktreeId: string
+    addClaudeMdInstruction?: boolean
+  }) => Promise<WikiGenerateResult>
+  generationStatus: (args: { worktreeId: string }) => Promise<WikiGenerationStatus | null>
+  cancelGeneration: (args: { worktreeId: string }) => Promise<{ ok: boolean }>
+  onGenerationChanged: (callback: (payload: WikiGenerationChangedPayload) => void) => () => void
+}
+
 export type PreloadApi = {
   app: AppApi
   orcaProfiles: {
@@ -911,6 +935,7 @@ export type PreloadApi = {
       args: OrcaProfileOrgMemberRemoveArgs
     ) => Promise<OrcaProfileOrgMemberMutationResult>
   }
+  wiki: WikiApi
   platform: {
     get: () => {
       platform: NodeJS.Platform
