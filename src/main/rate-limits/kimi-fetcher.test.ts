@@ -1,9 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
-const fsState = vi.hoisted<{ credentials: string | null; readError: Error | null }>(() => ({
+const fsState = vi.hoisted<{
+  credentials: string | null
+  readError: Error | null
+  writes: Map<string, string>
+  writeOptions: Map<string, unknown>
+  renames: { from: string; to: string }[]
+}>(() => ({
   credentials: null,
-  readError: null
+  readError: null,
+  writes: new Map(),
+  writeOptions: new Map(),
+  renames: []
 }))
 
 vi.mock('electron', () => ({
@@ -21,8 +30,18 @@ vi.mock('node:fs', () => ({
     }
     return fsState.credentials
   },
-  writeFileSync: () => {},
-  renameSync: () => {}
+  writeFileSync: (path: string, value: string, options?: unknown) => {
+    fsState.writes.set(path, value)
+    fsState.writeOptions.set(path, options)
+  },
+  renameSync: (from: string, to: string) => {
+    fsState.renames.push({ from, to })
+    const value = fsState.writes.get(from)
+    if (value !== undefined) {
+      fsState.credentials = value
+      fsState.writes.delete(from)
+    }
+  }
 }))
 
 vi.mock('node:os', () => ({ homedir: () => '/home/test' }))
@@ -60,6 +79,9 @@ describe('fetchKimiRateLimits', () => {
     netFetchMock.mockReset()
     fsState.credentials = null
     fsState.readError = null
+    fsState.writes.clear()
+    fsState.writeOptions.clear()
+    fsState.renames = []
   })
 
   afterEach(() => {
@@ -133,8 +155,78 @@ describe('fetchKimiRateLimits', () => {
     expect(result.weekly).toBeNull()
   })
 
-  it('does NOT refresh or call the API when the token is expired (read-only)', async () => {
-    // expires_at in the past → token stale; fetcher must not hit the network.
+  it('refreshes an expired access token before fetching usage', async () => {
+    fsState.credentials = JSON.stringify({
+      access_token: 'tok-old',
+      refresh_token: 'refresh-old',
+      expires_at: 1,
+      token_type: 'Bearer',
+      scope: 'kimi-code'
+    })
+    netFetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          access_token: 'tok-new',
+          refresh_token: 'refresh-new',
+          expires_in: 900,
+          token_type: 'Bearer',
+          scope: 'kimi-code'
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
+
+    const result = await fetchKimiRateLimits()
+
+    expect(result.status).toBe('ok')
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    const [refreshUrl, refreshInit] = netFetchMock.mock.calls[0]
+    expect(refreshUrl).toBe('https://auth.kimi.com/api/oauth/token')
+    const refreshBody = new URLSearchParams(refreshInit.body as string)
+    expect(refreshBody.get('client_id')).toBe('17e5f671-d194-4dfb-9706-5516cb48c098')
+    expect(refreshBody.get('grant_type')).toBe('refresh_token')
+    expect(refreshBody.get('refresh_token')).toBe('refresh-old')
+    const [, usageInit] = netFetchMock.mock.calls[1]
+    expect((usageInit.headers as Record<string, string>).Authorization).toBe('Bearer tok-new')
+    expect(fsState.renames).toHaveLength(1)
+    const [{ from: tmpPath }] = fsState.renames
+    expect(fsState.writeOptions.get(tmpPath)).toEqual({ encoding: 'utf-8', mode: 0o600 })
+    expect(JSON.parse(fsState.credentials ?? '{}')).toMatchObject({
+      access_token: 'tok-new',
+      refresh_token: 'refresh-new',
+      expires_in: 900,
+      token_type: 'Bearer',
+      scope: 'kimi-code'
+    })
+    expect(JSON.parse(fsState.credentials ?? '{}').expires_at).toBeGreaterThan(1)
+  })
+
+  it('uses credentials refreshed by the Kimi CLI when its refresh wins the race', async () => {
+    fsState.credentials = JSON.stringify({
+      access_token: 'tok-old',
+      refresh_token: 'refresh-old',
+      expires_at: 1
+    })
+    netFetchMock
+      .mockImplementationOnce(async () => {
+        fsState.credentials = JSON.stringify({
+          access_token: 'tok-cli',
+          refresh_token: 'refresh-cli',
+          expires_at: 99_999_999_999
+        })
+        return jsonResponse({ error: 'invalid_grant' }, 400)
+      })
+      .mockResolvedValueOnce(jsonResponse(USAGE_RESPONSE))
+
+    const result = await fetchKimiRateLimits()
+
+    expect(result.status).toBe('ok')
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    const [, usageInit] = netFetchMock.mock.calls[1]
+    expect((usageInit.headers as Record<string, string>).Authorization).toBe('Bearer tok-cli')
+    expect(fsState.renames).toHaveLength(0)
+  })
+
+  it('does NOT refresh or call the API when the expired token has no refresh token', async () => {
     fsState.credentials = JSON.stringify({ access_token: 'tok-old', expires_at: 1 })
 
     const result = await fetchKimiRateLimits()
