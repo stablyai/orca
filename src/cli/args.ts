@@ -44,6 +44,7 @@ export const BOOLEAN_FLAGS = new Set([
   'recipe-json',
   'relations',
   'reinstall',
+  'reopen',
   'restore-window',
   'return-preamble',
   'run-hooks',
@@ -141,7 +142,8 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'emulator',
       'note',
       'diagnostics',
-      'linear'
+      'linear',
+      'todo'
     ].includes(commandPath[0])
   ) {
     return false
@@ -182,6 +184,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'environment',
         'diagnostics',
         'linear',
+        'todo',
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||

@@ -9540,7 +9540,8 @@
             "fc3095d2ed": "エクスプローラ",
             "aiVaultSessionHistory": "エージェント",
             "folderWorkspaces": "添付ワークツリー",
-            "parentPrChecks": "PR チェック"
+            "parentPrChecks": "PR チェック",
+            "todosTab": "Todos"
           },
           "right": {
             "panel": {
@@ -9925,6 +9926,20 @@
             "archivedJumpUnavailable": "このセッションはアーカイブされたワークツリーにあります。",
             "noActiveWorktreeMatch": "このセッションに一致するアクティブなワークツリーはありません。",
             "noActiveWorktreeTarget": "利用可能なアクティブなワークツリーはありません。"
+          },
+          "TodosPanel": {
+            "worktreeSection": "This worktree",
+            "worktreeEmpty": "No todos for this worktree yet.",
+            "addPlaceholder": "Add a todo…",
+            "noWorktree": "Open a worktree to track todos.",
+            "projectSection": "Project",
+            "projectEmpty": "No project todos yet."
+          },
+          "todos": {
+            "TodoRow": {
+              "toggle": "Toggle todo",
+              "delete": "Delete todo"
+            }
           }
         }
       },

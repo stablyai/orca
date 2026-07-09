@@ -22,6 +22,8 @@ export {
   formatListWindows
 } from './computer-format'
 export type { ComputerActionFollowUpTarget } from './computer-format'
+export { formatTodoDelete, formatTodoList, formatTodoMutation } from './todo-format'
+export type { TodoDeleteResult, TodoListResult, TodoMutationResult } from './todo-format'
 export {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,

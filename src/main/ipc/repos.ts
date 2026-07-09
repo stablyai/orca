@@ -1969,6 +1969,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'importedExternalWorktreePaths'
             | 'projectGroupId'
             | 'projectGroupOrder'
+            | 'todos'
           >
         > & {
           sourceControlAi?: Repo['sourceControlAi'] | null

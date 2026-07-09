@@ -5,6 +5,7 @@ import { AUTOMATION_HANDLERS } from './handlers/automations'
 import { PROJECT_HANDLERS } from './handlers/project'
 import { REPO_HANDLERS } from './handlers/repo'
 import { WORKTREE_HANDLERS } from './handlers/worktree'
+import { TODO_HANDLERS } from './handlers/todo'
 import { FILE_HANDLERS } from './handlers/file'
 import { TERMINAL_HANDLERS } from './handlers/terminal'
 import { BROWSER_NAV_HANDLERS } from './handlers/browser-nav'
@@ -42,6 +43,7 @@ function buildHandlers(): Map<string, CommandHandler> {
     PROJECT_HANDLERS,
     REPO_HANDLERS,
     WORKTREE_HANDLERS,
+    TODO_HANDLERS,
     FILE_HANDLERS,
     TERMINAL_HANDLERS,
     BROWSER_NAV_HANDLERS,

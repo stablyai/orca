@@ -9540,7 +9540,8 @@
             "fc3095d2ed": "탐색기",
             "aiVaultSessionHistory": "에이전트",
             "folderWorkspaces": "연결된 워크트리",
-            "parentPrChecks": "PR 검사"
+            "parentPrChecks": "PR 검사",
+            "todosTab": "Todos"
           },
           "right": {
             "panel": {
@@ -9925,6 +9926,20 @@
             "archivedJumpUnavailable": "이 세션은 보관된 작업 트리에 있습니다.",
             "noActiveWorktreeMatch": "이 세션과 일치하는 활성 작업 트리가 없습니다.",
             "noActiveWorktreeTarget": "사용 가능한 활성 작업 트리가 없습니다."
+          },
+          "TodosPanel": {
+            "worktreeSection": "This worktree",
+            "worktreeEmpty": "No todos for this worktree yet.",
+            "addPlaceholder": "Add a todo…",
+            "noWorktree": "Open a worktree to track todos.",
+            "projectSection": "Project",
+            "projectEmpty": "No project todos yet."
+          },
+          "todos": {
+            "TodoRow": {
+              "toggle": "Toggle todo",
+              "delete": "Delete todo"
+            }
           }
         }
       },
