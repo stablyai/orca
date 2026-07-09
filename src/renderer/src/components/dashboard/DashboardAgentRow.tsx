@@ -11,6 +11,7 @@ import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { agentRowOrchestrationDataProps } from '@/components/sidebar/worktree-agent-orchestration-menu'
 
 // Why: the dashboard tracks its own rollup states (incl. 'idle'); narrow to the
 // shared dot states for rendering, falling back to 'idle' for any unknown
@@ -269,6 +270,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       )}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
+      // Why: WorktreeContextMenu reads these attrs to surface Orchestration
+      // actions for the right-clicked agent without a nested context menu.
+      {...agentRowOrchestrationDataProps({
+        paneKey: agent.paneKey,
+        worktreeId: agent.entry.worktreeId ?? agent.tab.worktreeId,
+        coordinatorHandle: agent.entry.orchestration?.coordinatorHandle
+      })}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}

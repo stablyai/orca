@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { copyTerminalHandleForPane } from './terminal-handle-copy'
+import { copyTerminalHandleForPane, copyTerminalHandleForPaneKey } from './terminal-handle-copy'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const PANE_KEY = `tab-1:${LEAF_ID}`
 
 describe('copyTerminalHandleForPane', () => {
   it('copies the runtime terminal handle for a pane key', async () => {
@@ -31,7 +32,7 @@ describe('copyTerminalHandleForPane', () => {
 
     expect(callRuntime).toHaveBeenCalledWith({
       method: 'terminal.resolvePane',
-      params: { paneKey: `tab-1:${LEAF_ID}` }
+      params: { paneKey: PANE_KEY }
     })
     expect(writeClipboardText).toHaveBeenCalledWith('term_worker')
   })
@@ -56,6 +57,55 @@ describe('copyTerminalHandleForPane', () => {
       })
     ).rejects.toThrow('terminal not found')
 
+    expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+})
+
+describe('copyTerminalHandleForPaneKey', () => {
+  it('parses paneKey and copies the resolved terminal handle', async () => {
+    const callRuntime = vi.fn().mockResolvedValue({
+      id: 'req-1',
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'term_sidebar_agent',
+          tabId: 'tab-1',
+          leafId: LEAF_ID,
+          ptyId: 'pty-1'
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      copyTerminalHandleForPaneKey({
+        paneKey: PANE_KEY,
+        callRuntime,
+        writeClipboardText
+      })
+    ).resolves.toBe('term_sidebar_agent')
+
+    expect(callRuntime).toHaveBeenCalledWith({
+      method: 'terminal.resolvePane',
+      params: { paneKey: PANE_KEY }
+    })
+    expect(writeClipboardText).toHaveBeenCalledWith('term_sidebar_agent')
+  })
+
+  it('rejects invalid pane keys without calling the runtime', async () => {
+    const callRuntime = vi.fn()
+    const writeClipboardText = vi.fn()
+
+    await expect(
+      copyTerminalHandleForPaneKey({
+        paneKey: 'tab-1:not-a-uuid',
+        callRuntime,
+        writeClipboardText
+      })
+    ).rejects.toThrow('Terminal ID unavailable')
+
+    expect(callRuntime).not.toHaveBeenCalled()
     expect(writeClipboardText).not.toHaveBeenCalled()
   })
 })

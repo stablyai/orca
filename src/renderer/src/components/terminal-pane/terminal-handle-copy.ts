@@ -1,13 +1,21 @@
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+
+type CallRuntime = (request: {
+  method: 'terminal.resolvePane'
+  params: { paneKey: string }
+}) => Promise<RuntimeRpcResponse<unknown>>
 
 type CopyTerminalHandleDeps = {
   tabId: string
   leafId: string
-  callRuntime: (request: {
-    method: 'terminal.resolvePane'
-    params: { paneKey: string }
-  }) => Promise<RuntimeRpcResponse<unknown>>
+  callRuntime: CallRuntime
+  writeClipboardText: (text: string) => Promise<void>
+}
+
+type CopyTerminalHandleForPaneKeyDeps = {
+  paneKey: string
+  callRuntime: CallRuntime
   writeClipboardText: (text: string) => Promise<void>
 }
 
@@ -18,9 +26,27 @@ export async function copyTerminalHandleForPane({
   writeClipboardText
 }: CopyTerminalHandleDeps): Promise<string> {
   const paneKey = makePaneKey(tabId, leafId)
+  return copyTerminalHandleForPaneKey({
+    paneKey,
+    callRuntime,
+    writeClipboardText
+  })
+}
+
+// Why: sidebar agent rows only know paneKey; resolve the durable tab/leaf pair
+// so orchestration/CLI handles can be copied without opening the terminal pane.
+export async function copyTerminalHandleForPaneKey({
+  paneKey,
+  callRuntime,
+  writeClipboardText
+}: CopyTerminalHandleForPaneKeyDeps): Promise<string> {
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed) {
+    throw new Error('Terminal ID unavailable')
+  }
   const response = await callRuntime({
     method: 'terminal.resolvePane',
-    params: { paneKey }
+    params: { paneKey: makePaneKey(parsed.tabId, parsed.leafId) }
   })
   if (!response.ok) {
     throw new Error(response.error.message)

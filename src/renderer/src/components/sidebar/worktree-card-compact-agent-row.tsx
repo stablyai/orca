@@ -9,6 +9,7 @@ import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
+import { agentRowOrchestrationDataProps } from './worktree-agent-orchestration-menu'
 
 function formatShortTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -252,6 +253,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       onDragStart={(e) => e.stopPropagation()}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
+      // Why: WorktreeContextMenu reads these attrs to surface Orchestration
+      // actions for the right-clicked agent without a nested context menu.
+      {...agentRowOrchestrationDataProps({
+        paneKey: agent.paneKey,
+        worktreeId: agent.entry.worktreeId ?? agent.tab.worktreeId,
+        coordinatorHandle: agent.entry.orchestration?.coordinatorHandle
+      })}
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}

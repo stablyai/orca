@@ -1,0 +1,234 @@
+import React, { useCallback } from 'react'
+import { Copy, MessagesSquare, Workflow } from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger
+} from '@/components/ui/dropdown-menu'
+import { translate } from '@/i18n/i18n'
+import {
+  buildOrchestrationAskCommand,
+  buildOrchestrationSendCommand,
+  buildWorktreeGroupAddress,
+  resolveTerminalHandleForPaneKey
+} from '@/components/dashboard/agent-row-orchestration-clipboard'
+
+/** Marker so the worktree context menu can offer agent orchestration actions. */
+export const AGENT_ROW_ORCHESTRATION_ATTR = 'data-agent-row-orchestration'
+
+export type AgentRowOrchestrationTarget = {
+  paneKey: string
+  worktreeId: string | null
+  coordinatorHandle: string | null
+}
+
+function orchestrationTargetFromElement(row: Element): AgentRowOrchestrationTarget | null {
+  const paneKey = row.getAttribute('data-pane-key')?.trim()
+  if (!paneKey) {
+    return null
+  }
+  const worktreeId = row.getAttribute('data-worktree-id')?.trim() || null
+  const coordinatorHandle = row.getAttribute('data-coordinator-handle')?.trim() || null
+  return { paneKey, worktreeId, coordinatorHandle }
+}
+
+export function readAgentRowOrchestrationTarget(
+  target: EventTarget | null,
+  event?: Event | null
+): AgentRowOrchestrationTarget | null {
+  // Why: React synthetic events and text-node targets can miss closest(); walk
+  // the composed path first so agent-row right-clicks always resolve.
+  if (event && typeof event.composedPath === 'function') {
+    for (const node of event.composedPath()) {
+      if (node instanceof Element && node.hasAttribute(AGENT_ROW_ORCHESTRATION_ATTR)) {
+        return orchestrationTargetFromElement(node)
+      }
+    }
+  }
+  const element = target as {
+    closest?: (selector: string) => Element | null
+    parentElement?: { closest?: (selector: string) => Element | null }
+  } | null
+  const row =
+    element?.closest?.(`[${AGENT_ROW_ORCHESTRATION_ATTR}]`) ??
+    element?.parentElement?.closest?.(`[${AGENT_ROW_ORCHESTRATION_ATTR}]`)
+  if (!row) {
+    return null
+  }
+  return orchestrationTargetFromElement(row)
+}
+
+export function agentRowOrchestrationDataProps(target: {
+  paneKey: string
+  worktreeId?: string | null
+  coordinatorHandle?: string | null
+}): Record<string, string> {
+  const props: Record<string, string> = {
+    [AGENT_ROW_ORCHESTRATION_ATTR]: '',
+    'data-pane-key': target.paneKey
+  }
+  if (target.worktreeId) {
+    props['data-worktree-id'] = target.worktreeId
+  }
+  if (target.coordinatorHandle) {
+    props['data-coordinator-handle'] = target.coordinatorHandle
+  }
+  return props
+}
+
+type Props = {
+  target: AgentRowOrchestrationTarget
+}
+
+// Why: live on the worktree context menu (not a nested Radix ContextMenu) so
+// right-click on an agent row cannot be swallowed by WorktreeContextMenu's
+// capture handler — the same menu users already open on the card.
+export function WorktreeAgentOrchestrationMenuSection({ target }: Props) {
+  const worktreeAddress = target.worktreeId ? buildWorktreeGroupAddress(target.worktreeId) : null
+  const coordinator = target.coordinatorHandle
+
+  const copyText = useCallback(async (text: string, successLabel: string) => {
+    try {
+      await window.api.ui.writeClipboardText(text)
+      toast.success(successLabel)
+    } catch {
+      toast.error(
+        translate('auto.components.dashboard.AgentRowContextMenu.copy.failed', 'Unable to copy')
+      )
+    }
+  }, [])
+
+  const copyResolvedHandle = useCallback(
+    async (build: (handle: string) => string, successLabel: string) => {
+      try {
+        const handle = await resolveTerminalHandleForPaneKey({
+          paneKey: target.paneKey,
+          callRuntime: window.api.runtime.call
+        })
+        await window.api.ui.writeClipboardText(build(handle))
+        toast.success(successLabel)
+      } catch {
+        toast.error(
+          translate(
+            'auto.components.terminal.pane.use.terminal.pane.context.menu.terminal.id.copy.failed',
+            'Unable to copy terminal ID'
+          )
+        )
+      }
+    },
+    [target.paneKey]
+  )
+
+  return (
+    <>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <Workflow className="size-3.5" />
+          {translate(
+            'auto.components.dashboard.AgentRowContextMenu.orchestration',
+            'Orchestration'
+          )}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="min-w-56">
+          <DropdownMenuItem
+            onSelect={() => {
+              void copyResolvedHandle(
+                (handle) => handle,
+                translate(
+                  'auto.components.terminal.pane.use.terminal.pane.context.menu.terminal.id.copied',
+                  'Terminal ID copied'
+                )
+              )
+            }}
+          >
+            <Copy className="size-3.5" />
+            {translate(
+              'auto.components.terminal.pane.TerminalContextMenu.copyTerminalId',
+              'Copy Terminal ID'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              void copyResolvedHandle(
+                buildOrchestrationSendCommand,
+                translate(
+                  'auto.components.dashboard.AgentRowContextMenu.send.command.copied',
+                  'Send command copied'
+                )
+              )
+            }}
+          >
+            <MessagesSquare className="size-3.5" />
+            {translate(
+              'auto.components.dashboard.AgentRowContextMenu.copySendCommand',
+              'Copy send command'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              void copyResolvedHandle(
+                buildOrchestrationAskCommand,
+                translate(
+                  'auto.components.dashboard.AgentRowContextMenu.ask.command.copied',
+                  'Ask command copied'
+                )
+              )
+            }}
+          >
+            <MessagesSquare className="size-3.5" />
+            {translate(
+              'auto.components.dashboard.AgentRowContextMenu.copyAskCommand',
+              'Copy ask command'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!worktreeAddress}
+            onSelect={() => {
+              if (!worktreeAddress) {
+                return
+              }
+              void copyText(
+                worktreeAddress,
+                translate(
+                  'auto.components.dashboard.AgentRowContextMenu.worktree.address.copied',
+                  'Worktree address copied'
+                )
+              )
+            }}
+          >
+            <Copy className="size-3.5" />
+            {translate(
+              'auto.components.dashboard.AgentRowContextMenu.copyWorktreeAddress',
+              'Copy worktree address'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!coordinator}
+            onSelect={() => {
+              if (!coordinator) {
+                return
+              }
+              void copyText(
+                coordinator,
+                translate(
+                  'auto.components.dashboard.AgentRowContextMenu.coordinator.handle.copied',
+                  'Coordinator handle copied'
+                )
+              )
+            }}
+          >
+            <Copy className="size-3.5" />
+            {translate(
+              'auto.components.dashboard.AgentRowContextMenu.copyCoordinatorHandle',
+              'Copy coordinator handle'
+            )}
+          </DropdownMenuItem>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSeparator />
+    </>
+  )
+}
