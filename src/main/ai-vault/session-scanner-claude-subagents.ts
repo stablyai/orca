@@ -14,7 +14,6 @@ import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcript
 import {
   asRecord,
   errorMessage,
-  extractMessageText,
   extractString,
   normalizeTitleText,
   parseJsonObject
@@ -203,11 +202,16 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
         continue
       }
       if (hasNotification) {
-        const text = extractString(record.content) ?? extractMessageText(record.message) ?? ''
-        const taskId = TASK_ID_PATTERN.exec(text)?.[1]?.trim()
-        const status = TASK_STATUS_PATTERN.exec(text)?.[1]
-        if (taskId && status) {
-          statuses.set(taskId, status)
+        const text = taskNotificationText(record)
+        // Only records whose text IS the notification set a status; a user
+        // prompt that merely quotes one (which the raw-line prefilter also
+        // matches) must not overwrite a real terminal status.
+        if (text.startsWith(TASK_NOTIFICATION_MARKER)) {
+          const taskId = TASK_ID_PATTERN.exec(text)?.[1]?.trim()
+          const status = TASK_STATUS_PATTERN.exec(text)?.[1]
+          if (taskId && status) {
+            statuses.set(taskId, status)
+          }
         }
         continue
       }
@@ -222,6 +226,34 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
     // A missing/unreadable parent transcript degrades to recency-only status.
   }
   return statuses
+}
+
+// The <status> marker follows <tool-use-id>/<output-file> lines in real
+// notifications, so it sits well past the 96-char title cap — the notification
+// text must be read untruncated (unlike titles/previews). Both delivery shapes
+// appear: queue-operation records carry it as top-level `content`; user-message
+// records under `message.content` (a string, or text content blocks).
+function taskNotificationText(record: Record<string, unknown>): string {
+  const direct = extractString(record.content)
+  if (direct) {
+    return direct
+  }
+  const content = asRecord(record.message)?.content
+  if (typeof content === 'string') {
+    return content.trim()
+  }
+  if (Array.isArray(content)) {
+    return content.map(taskNotificationBlockText).filter(Boolean).join(' ').trim()
+  }
+  return ''
+}
+
+function taskNotificationBlockText(block: unknown): string {
+  if (typeof block === 'string') {
+    return block
+  }
+  const record = asRecord(block)
+  return extractString(record?.text) ?? extractString(record?.content) ?? ''
 }
 
 // Claude writes an `agent-<id>.meta.json` sidecar carrying the Task tool's
