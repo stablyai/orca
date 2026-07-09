@@ -26,7 +26,6 @@ import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
-import { startSpan } from './observability/tracer'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
 import { classifyError } from './telemetry/classify-error'
@@ -165,22 +164,16 @@ import {
 } from './crash-reporting/crash-breadcrumb-store'
 import { CrashReportStore } from './crash-reporting/crash-report-store'
 import {
-  shouldRecordProcessGoneCrash,
   shouldRecoverRendererAfterProcessGone,
   type ExpectedTeardownScope
 } from './crash-reporting/process-gone-classification'
-import {
-  buildProcessGoneCrashDetails,
-  buildSuppressedProcessGoneBreadcrumbData
-} from './crash-reporting/process-gone-diagnostics'
-import { getProcessGoneDedupeKey, processGoneDedupe } from './crash-reporting/process-gone-dedupe'
+import { recordProcessGoneCrash } from './crash-reporting/process-gone-crash'
 import {
   advanceSyntheticTitleSpinnerEntries,
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
 import { shouldCopySyntheticTitleFrameToPtyData } from './synthetic-title-frame-routing'
-import { isCrashReportReason } from '../shared/crash-reporting'
 import {
   getSyntheticAgentTitleProfile,
   shouldDriveSyntheticAgentTitleFromHook,
@@ -821,8 +814,10 @@ function openMainWindow(): BrowserWindow {
       isQuitting = false
       clearExpectedRendererReload()
     },
+    // Why: classification stays in the recorder so suppressed reportable exits
+    // can leave a durable diagnostic instead of disappearing at the window boundary.
     onRendererProcessGone: (details, webContentsId) => {
-      recordProcessGoneCrash(
+      recordProcessGoneCrashFromMain(
         'renderer',
         'renderer',
         details.reason,
@@ -833,14 +828,6 @@ function openMainWindow(): BrowserWindow {
         webContentsId
       )
     },
-    shouldRecordRendererCrash: (details, webContentsId) =>
-      shouldRecordProcessGoneCrash({
-        source: 'renderer',
-        processType: 'renderer',
-        reason: details.reason,
-        exitCode: details.exitCode ?? null,
-        expectedTeardown: getExpectedTeardownScope(webContentsId)
-      }),
     shouldRecoverRenderer: (details, webContentsId) =>
       shouldRecoverRendererAfterProcessGone({
         reason: details.reason,
@@ -1221,7 +1208,7 @@ function handleGpuChildCrash(reason: string, exitCode: number | null): void {
   app.exit(0)
 }
 
-function recordProcessGoneCrash(
+function recordProcessGoneCrashFromMain(
   source: 'renderer' | 'child',
   processType: string,
   reason: string,
@@ -1229,75 +1216,12 @@ function recordProcessGoneCrash(
   details: Record<string, unknown>,
   webContentsId?: number
 ): void {
-  if (!crashReports || !isCrashReportReason(reason)) {
-    return
-  }
-  if (
-    !shouldRecordProcessGoneCrash({
-      source,
-      processType,
-      serviceName: typeof details.serviceName === 'string' ? details.serviceName : undefined,
-      reason,
-      exitCode,
-      expectedTeardown: getExpectedTeardownScope(webContentsId)
-    })
-  ) {
-    recordCrashBreadcrumb(
-      'process_gone_suppressed',
-      buildSuppressedProcessGoneBreadcrumbData({
-        source,
-        processType,
-        reason,
-        exitCode,
-        details
-      })
-    )
-    return
-  }
-  const key = getProcessGoneDedupeKey(source, processType, reason, exitCode)
-  if (!processGoneDedupe.shouldRecord(key)) {
-    return
-  }
-  const crashDetails = buildProcessGoneCrashDetails(details)
-  const span = startSpan('electron.process_gone', {
-    attributes: {
-      'crash.source': source,
-      'crash.process_type': processType,
-      'crash.reason': reason,
-      ...(exitCode !== null ? { 'crash.exit_code': exitCode } : {}),
-      'app.version': app.getVersion(),
-      platform: process.platform,
-      osRelease: os.release(),
-      arch: process.arch,
-      electronVersion: process.versions.electron,
-      chromeVersion: process.versions.chrome,
-      details: crashDetails,
-      breadcrumbs: getCrashBreadcrumbSnapshot()
-    }
+  recordProcessGoneCrash(source, processType, reason, exitCode, details, {
+    crashReports,
+    expectedTeardown: getExpectedTeardownScope(webContentsId),
+    getCrashBreadcrumbSnapshot,
+    recordCrashBreadcrumb
   })
-  // Why: renderer/child crashes belong in the local trace lane so the
-  // diagnostic bundle has the same process-gone signal as the startup prompt.
-  span.fail(`${source} process gone: ${processType} ${reason} (${exitCode ?? 'unknown'})`)
-  void crashReports
-    .record({
-      source,
-      processType,
-      reason,
-      exitCode,
-      appVersion: app.getVersion(),
-      platform: process.platform,
-      osRelease: os.release(),
-      arch: process.arch,
-      electronVersion: process.versions.electron,
-      chromeVersion: process.versions.chrome,
-      details: crashDetails,
-      // Why: breadcrumbs stay memory-only during normal operation. Persist a
-      // snapshot only after Electron reports a crash-like process exit.
-      breadcrumbs: getCrashBreadcrumbSnapshot()
-    })
-    .catch((error) => {
-      console.error('[crash-reporting] Failed to persist crash report:', error)
-    })
 }
 
 function shutdownWatchersOnce(): Promise<void> {
@@ -1977,11 +1901,17 @@ app.whenReady().then(async () => {
   }
 
   app.on('child-process-gone', (_event, details) => {
-    recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
-      name: details.name,
-      serviceName: details.serviceName,
-      type: details.type
-    })
+    recordProcessGoneCrashFromMain(
+      'child',
+      details.type,
+      details.reason,
+      details.exitCode ?? null,
+      {
+        name: details.name,
+        serviceName: details.serviceName,
+        type: details.type
+      }
+    )
     if (
       isGpuFallbackCrashCandidate({
         platform: process.platform,

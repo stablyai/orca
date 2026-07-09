@@ -1,6 +1,8 @@
 import { app } from 'electron'
+import { startSpan } from '../observability/tracer'
 import {
   sanitizeCrashReportDetails,
+  sanitizeCrashReportString,
   type CrashReportBreadcrumbData,
   type CrashReportDetailValue
 } from '../../shared/crash-reporting'
@@ -106,6 +108,77 @@ function getProcessGoneMetricDetails(): CrashReportDetails {
   } catch (error) {
     const errorName = error instanceof Error ? error.name : typeof error
     return { processMetricsError: errorName }
+  }
+}
+
+export type ProcessGoneNoCaptureDiagnosticName =
+  | 'process_gone_suppressed'
+  | 'process_gone_store_unavailable'
+  | 'process_gone_persist_failed'
+
+type ProcessGoneNoCaptureDiagnosticInput = {
+  source: 'renderer' | 'child'
+  processType: string
+  reason: string
+  exitCode: number | null
+  details: Record<string, unknown>
+  error?: unknown
+}
+
+function buildProcessGoneNoCaptureErrorDetails(error: unknown): CrashReportBreadcrumbData {
+  if (error === undefined || error === null) {
+    return {}
+  }
+  const errorName = error instanceof Error ? error.name : typeof error
+  const errorMessage = error instanceof Error ? error.message : String(error)
+  return {
+    'error.name': sanitizeCrashReportString(errorName),
+    'error.message': sanitizeCrashReportString(errorMessage)
+  }
+}
+
+export function buildProcessGoneNoCaptureDiagnosticAttributes({
+  source,
+  processType,
+  reason,
+  exitCode,
+  details,
+  error
+}: ProcessGoneNoCaptureDiagnosticInput): CrashReportBreadcrumbData {
+  const breadcrumbData = buildSuppressedProcessGoneBreadcrumbData({
+    source,
+    processType,
+    reason,
+    exitCode,
+    details
+  })
+  const identity = sanitizeCrashReportDetails({
+    source,
+    processType,
+    reason,
+    ...(exitCode !== null ? { exitCode } : {}),
+    ...(breadcrumbData.name ? { name: breadcrumbData.name } : {}),
+    ...(breadcrumbData.serviceName ? { serviceName: breadcrumbData.serviceName } : {}),
+    ...(breadcrumbData.type ? { type: breadcrumbData.type } : {})
+  })
+  return {
+    kind: 'crash-no-capture',
+    ...identity,
+    ...buildProcessGoneNoCaptureErrorDetails(error)
+  }
+}
+
+export function recordProcessGoneNoCaptureDiagnostic(
+  name: ProcessGoneNoCaptureDiagnosticName,
+  input: ProcessGoneNoCaptureDiagnosticInput
+): void {
+  try {
+    const span = startSpan(name, {
+      attributes: buildProcessGoneNoCaptureDiagnosticAttributes(input)
+    })
+    span.end()
+  } catch (error) {
+    console.warn('[crash-reporting] Failed to record no-capture crash diagnostic:', error)
   }
 }
 

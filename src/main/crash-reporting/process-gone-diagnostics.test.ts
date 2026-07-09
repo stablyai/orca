@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildProcessGoneCrashDetails,
+  buildProcessGoneNoCaptureDiagnosticAttributes,
   buildSuppressedProcessGoneBreadcrumbData,
-  collectProcessGoneMetricDetails
+  collectProcessGoneMetricDetails,
+  recordProcessGoneNoCaptureDiagnostic
 } from './process-gone-diagnostics'
 
 type MetricFixture = {
@@ -11,8 +13,9 @@ type MetricFixture = {
   memory: { workingSetSize: number }
 }
 
-const { appMetricsMock } = vi.hoisted(() => ({
-  appMetricsMock: vi.fn<() => MetricFixture[]>(() => [])
+const { appMetricsMock, startSpanMock } = vi.hoisted(() => ({
+  appMetricsMock: vi.fn<() => MetricFixture[]>(() => []),
+  startSpanMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -20,6 +23,16 @@ vi.mock('electron', () => ({
     getAppMetrics: appMetricsMock
   }
 }))
+
+vi.mock('../observability/tracer', () => ({
+  startSpan: startSpanMock
+}))
+
+afterEach(() => {
+  appMetricsMock.mockClear()
+  startSpanMock.mockReset()
+  vi.restoreAllMocks()
+})
 
 describe('process gone diagnostics', () => {
   it('summarizes Electron process memory by crash-report-friendly buckets', () => {
@@ -85,5 +98,169 @@ describe('process gone diagnostics', () => {
       name: 'Network Service',
       serviceName: 'network.mojom.NetworkService'
     })
+  })
+
+  it('records durable suppressed-process diagnostics with sanitized identity fields', () => {
+    const end = vi.fn()
+    startSpanMock.mockReturnValue({ end })
+
+    const attributes = buildProcessGoneNoCaptureDiagnosticAttributes({
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'killed',
+      exitCode: 0,
+      details: {
+        name: 'C:\\Users\\alice\\Renderer',
+        serviceName: 'renderer.service token=abc123',
+        type: 'tab',
+        nested: { ignored: true }
+      }
+    })
+
+    expect(attributes).toEqual({
+      kind: 'crash-no-capture',
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'killed',
+      exitCode: 0,
+      name: '[redacted-path]',
+      serviceName: 'renderer.service token=[redacted]',
+      type: 'tab'
+    })
+
+    recordProcessGoneNoCaptureDiagnostic('process_gone_suppressed', {
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'killed',
+      exitCode: 0,
+      details: {
+        name: 'C:\\Users\\alice\\Renderer',
+        serviceName: 'renderer.service token=abc123',
+        type: 'tab'
+      }
+    })
+
+    expect(startSpanMock).toHaveBeenCalledWith('process_gone_suppressed', {
+      attributes
+    })
+    expect(end).toHaveBeenCalledTimes(1)
+  })
+
+  it('records a store-unavailable no-capture span with process-gone identity fields', () => {
+    const end = vi.fn()
+    startSpanMock.mockReturnValue({ end })
+
+    recordProcessGoneNoCaptureDiagnostic('process_gone_store_unavailable', {
+      source: 'child',
+      processType: 'renderer',
+      reason: 'crashed',
+      exitCode: null,
+      details: {
+        name: 'Renderer',
+        serviceName: 'renderer.service'
+      }
+    })
+
+    expect(startSpanMock).toHaveBeenCalledWith('process_gone_store_unavailable', {
+      attributes: {
+        kind: 'crash-no-capture',
+        source: 'child',
+        processType: 'renderer',
+        reason: 'crashed',
+        name: 'Renderer',
+        serviceName: 'renderer.service'
+      }
+    })
+    expect(end).toHaveBeenCalledTimes(1)
+  })
+
+  it('sanitizes persist-failed error payloads before recording the span', () => {
+    const end = vi.fn()
+    startSpanMock.mockReturnValue({ end })
+
+    const attributes = buildProcessGoneNoCaptureDiagnosticAttributes({
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'crashed',
+      exitCode: 5,
+      details: {
+        name: 'Renderer',
+        serviceName: 'renderer.service'
+      },
+      error: new Error(
+        'failed at C:\\Users\\alice\\workspace with token=abc123 and sk-12345678901234567890'
+      )
+    })
+
+    expect(attributes).toMatchObject({
+      kind: 'crash-no-capture',
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'crashed',
+      exitCode: 5,
+      name: 'Renderer',
+      serviceName: 'renderer.service',
+      'error.name': 'Error'
+    })
+    expect(attributes['error.message']).toContain('[redacted-path]')
+    expect(attributes['error.message']).toContain('token=[redacted]')
+    expect(attributes['error.message']).toContain('[redacted-secret]')
+
+    recordProcessGoneNoCaptureDiagnostic('process_gone_persist_failed', {
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'crashed',
+      exitCode: 5,
+      details: {
+        name: 'Renderer',
+        serviceName: 'renderer.service'
+      },
+      error: new Error(
+        'failed at C:\\Users\\alice\\workspace with token=abc123 and sk-12345678901234567890'
+      )
+    })
+
+    expect(startSpanMock).toHaveBeenCalledWith('process_gone_persist_failed', {
+      attributes
+    })
+    expect(end).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves falsey persistence rejection details', () => {
+    expect(
+      buildProcessGoneNoCaptureDiagnosticAttributes({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'crashed',
+        exitCode: 5,
+        details: {},
+        error: 0
+      })
+    ).toMatchObject({
+      'error.name': 'number',
+      'error.message': '0'
+    })
+  })
+
+  it('swallows tracer failures when recording no-capture diagnostics', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    startSpanMock.mockImplementation(() => {
+      throw new Error('boom')
+    })
+
+    expect(() =>
+      recordProcessGoneNoCaptureDiagnostic('process_gone_store_unavailable', {
+        source: 'child',
+        processType: 'renderer',
+        reason: 'crashed',
+        exitCode: null,
+        details: {}
+      })
+    ).not.toThrow()
+
+    expect(warn).toHaveBeenCalledWith(
+      '[crash-reporting] Failed to record no-capture crash diagnostic:',
+      expect.any(Error)
+    )
   })
 })
