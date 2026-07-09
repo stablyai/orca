@@ -95,7 +95,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.providerFor(id).shutdown(id, opts)
-    if (!opts.keepHistory) {
+    // Why: graceful shutdown is followed by a forced escalation when the PTY
+    // ignores the signal; dropping ownership here would route that escalation
+    // to the fallback provider instead of the daemon/local provider that owns it.
+    if (opts.immediate === true && !opts.keepHistory) {
       this.sessionProviders.delete(id)
     }
   }

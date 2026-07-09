@@ -31,6 +31,22 @@ vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
 }))
 
+const {
+  requestWindowsProcessTreeExitMock,
+  forceKillWindowsProcessTreeMock,
+  waitForWindowsProcessTreeForceKillMock
+} = vi.hoisted(() => ({
+  requestWindowsProcessTreeExitMock: vi.fn(),
+  forceKillWindowsProcessTreeMock: vi.fn(),
+  waitForWindowsProcessTreeForceKillMock: vi.fn()
+}))
+
+vi.mock('../main/pty/windows-process-tree-kill', () => ({
+  requestWindowsProcessTreeExit: requestWindowsProcessTreeExitMock,
+  forceKillWindowsProcessTree: forceKillWindowsProcessTreeMock,
+  waitForWindowsProcessTreeForceKill: waitForWindowsProcessTreeForceKillMock
+}))
+
 import { PtyHandler, attachIdentityMismatches } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
@@ -100,6 +116,10 @@ describe('PtyHandler', () => {
     mockPtyInstance.resize.mockReset()
     mockPtyInstance.kill.mockReset()
     mockPtyInstance.clear.mockReset()
+    requestWindowsProcessTreeExitMock.mockReset()
+    forceKillWindowsProcessTreeMock.mockReset()
+    waitForWindowsProcessTreeForceKillMock.mockReset()
+    waitForWindowsProcessTreeForceKillMock.mockResolvedValue(undefined)
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -1513,6 +1533,112 @@ describe('PtyHandler', () => {
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-shutdown:0' }])
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('immediate Windows shutdown does not double-notify if onExit wins the taskkill wait', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    let releaseForceKill = (): void => {
+      throw new Error('force kill waiter was not installed')
+    }
+    waitForWindowsProcessTreeForceKillMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseForceKill = resolve
+        })
+    )
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      pid: 1234,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    const exits: { id: string; paneKey?: string }[] = []
+    handler.setExitListener((evt) => exits.push(evt))
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: { ORCA_PANE_KEY: 'tab-shutdown:0' }
+      })
+      const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      await Promise.resolve()
+      expect(waitForWindowsProcessTreeForceKillMock).toHaveBeenCalledWith(1234)
+
+      onExitCb!({ exitCode: 0 })
+      releaseForceKill()
+      await shutdown
+
+      expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-shutdown:0' }])
+      expect(
+        dispatcher._notifications.filter((notification) => notification.method === 'pty.exit')
+      ).toEqual([{ method: 'pty.exit', params: { id: 'pty-1', code: 0 } }])
+      expect(handler.activePtyCount).toBe(0)
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('Windows graceful fallback does not synthesize exit after natural exit wins taskkill', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    let releaseForceKill = (): void => {
+      throw new Error('force kill waiter was not installed')
+    }
+    waitForWindowsProcessTreeForceKillMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseForceKill = resolve
+        })
+    )
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      pid: 1234,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    const exits: { id: string; paneKey?: string }[] = []
+    handler.setExitListener((evt) => exits.push(evt))
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: { ORCA_PANE_KEY: 'tab-fallback:0' }
+      })
+      await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+      vi.advanceTimersByTime(5000)
+      await Promise.resolve()
+      expect(waitForWindowsProcessTreeForceKillMock).toHaveBeenCalledWith(1234)
+
+      onExitCb!({ exitCode: 0 })
+      releaseForceKill()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-fallback:0' }])
+      expect(
+        dispatcher._notifications.filter((notification) => notification.method === 'pty.exit')
+      ).toEqual([{ method: 'pty.exit', params: { id: 'pty-1', code: 0 } }])
+      expect(handler.activePtyCount).toBe(0)
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 
   it('dispose kills all PTYs with SIGKILL and invokes exit listeners', async () => {

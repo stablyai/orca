@@ -54,6 +54,7 @@ import {
   recentTerminalOutputIncludesPath,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
+import { WORKTREE_PTY_SHUTDOWN_CONCURRENCY } from './worktree-pty-shutdown-concurrency'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import {
@@ -2214,9 +2215,20 @@ describe('OrcaRuntimeService', () => {
       }
     }
     let deletedWorktreeId = ''
+    // Why: worktree teardown drains via shutdownPtyWithDrain, which subscribes
+    // onExit and waits for the exit event; emit it so the sweep stays fast.
+    const providerExitListeners = new Set<(payload: { id: string; code: number }) => void>()
     const localProvider = {
       listProcesses: vi.fn(async () => [{ id: `${deletedWorktreeId}@@pty-1` }]),
-      shutdown: vi.fn(async () => undefined)
+      shutdown: vi.fn(async (id: string) => {
+        for (const listener of providerExitListeners) {
+          listener({ id, code: 0 })
+        }
+      }),
+      onExit: vi.fn((cb: (payload: { id: string; code: number }) => void) => {
+        providerExitListeners.add(cb)
+        return () => providerExitListeners.delete(cb)
+      })
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getLocalProvider: () => localProvider as never
@@ -2279,7 +2291,7 @@ describe('OrcaRuntimeService', () => {
     deletedWorktreeId = result.worktree.id
     await expect(runtime.removeManagedWorktree(`id:${result.worktree.id}`)).resolves.toEqual({})
     expect(localProvider.shutdown).toHaveBeenCalledWith(`${result.worktree.id}@@pty-1`, {
-      immediate: true
+      immediate: false
     })
     expect(metaById[result.worktree.id]).toBeUndefined()
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(result.worktree.id)
@@ -20181,6 +20193,56 @@ describe('OrcaRuntimeService', () => {
 
     await expect(stopPromise).rejects.toThrow('runtime_unavailable')
     expect(killed).toBe(false)
+  })
+
+  it('stops renderer-known worktree PTYs with bounded concurrency', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyIds = Array.from(
+      { length: WORKTREE_PTY_SHUTDOWN_CONCURRENCY + 3 },
+      (_, index) => `pty-${index}`
+    )
+    let active = 0
+    let maxActive = 0
+    const kill = vi.fn(() => false)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      stopAndWait: async (ptyId) => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await new Promise((resolve) => setTimeout(resolve, 2))
+        runtime.onPtyExit(ptyId, -1)
+        active -= 1
+        return true
+      },
+      getForegroundProcess: async () => null
+    })
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: ptyIds.map((ptyId, index) => ({
+        tabId: 'tab-1',
+        worktreeId: 'repo-1::/tmp/worktree-a',
+        leafId: `pane:${index + 1}`,
+        paneRuntimeId: index + 1,
+        ptyId
+      }))
+    })
+
+    await expect(runtime.stopTerminalsForWorktree('id:repo-1::/tmp/worktree-a')).resolves.toEqual({
+      stopped: ptyIds.length
+    })
+    expect(kill).not.toHaveBeenCalled()
+    expect(maxActive).toBe(WORKTREE_PTY_SHUTDOWN_CONCURRENCY)
   })
 
   it('stops exactly the expected live PTYs for a worktree', async () => {

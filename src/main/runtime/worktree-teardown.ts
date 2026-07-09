@@ -1,6 +1,8 @@
 import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
+import { shutdownPtyWithDrain } from '../providers/pty-shutdown-drain'
+import { runWorktreePtyShutdownsWithBoundedConcurrency } from './worktree-pty-shutdown-concurrency'
 
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
@@ -51,15 +53,18 @@ export async function killAllProcessesForWorktree(
     result.runtimeStopped = r.stopped
   }
 
+  const stoppedProviderPtys = new Set<string>()
   result.providerStopped = await sweepProviderByPrefix(
     worktreeId,
     deps.localProvider,
-    deps.onPtyStopped
+    deps.onPtyStopped,
+    stoppedProviderPtys
   )
   result.registryStopped = await sweepRegistryForWorktree(
     worktreeId,
     deps.localProvider,
-    deps.onPtyStopped
+    deps.onPtyStopped,
+    stoppedProviderPtys
   )
 
   return result
@@ -68,44 +73,60 @@ export async function killAllProcessesForWorktree(
 async function sweepProviderByPrefix(
   worktreeId: string,
   provider: IPtyProvider,
-  onPtyStopped?: (ptyId: string) => void
+  onPtyStopped: ((ptyId: string) => void) | undefined,
+  stoppedProviderPtys: Set<string>
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
   const sessions = await provider.listProcesses().catch(() => [])
-  let killed = 0
-  for (const s of sessions) {
-    if (!s.id.startsWith(prefix)) {
-      continue
-    }
-    try {
-      await provider.shutdown(s.id, { immediate: true })
-      clearStoppedPtyState(s.id, onPtyStopped)
-      killed += 1
-    } catch {
-      // Already dead, or the backend dropped the session — treat as success.
-      killed += 1
+  const ids = [...new Set(sessions.filter((s) => s.id.startsWith(prefix)).map((s) => s.id))]
+  const results = await runWorktreePtyShutdownsWithBoundedConcurrency(ids, (id) =>
+    stopPtyForWorktree(provider, id, onPtyStopped, true)
+  )
+  for (const [index, result] of results.entries()) {
+    if (result.cleared) {
+      stoppedProviderPtys.add(ids[index])
     }
   }
-  return killed
+  return results.filter((result) => result.counted).length
 }
 
 async function sweepRegistryForWorktree(
   worktreeId: string,
   localProvider: IPtyProvider,
-  onPtyStopped?: (ptyId: string) => void
+  onPtyStopped: ((ptyId: string) => void) | undefined,
+  stoppedProviderPtys: Set<string>
 ): Promise<number> {
-  const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
-  let killed = 0
-  for (const entry of entries) {
-    try {
-      await localProvider.shutdown(entry.ptyId, { immediate: true })
-      clearStoppedPtyState(entry.ptyId, onPtyStopped)
-      killed += 1
-    } catch {
-      /* ignore — best-effort */
-    }
+  const ids = [
+    ...new Set(
+      listRegisteredPtys()
+        .filter((r) => r.worktreeId === worktreeId && !stoppedProviderPtys.has(r.ptyId))
+        .map((r) => r.ptyId)
+    )
+  ]
+  const results = await runWorktreePtyShutdownsWithBoundedConcurrency(ids, (id) =>
+    stopPtyForWorktree(localProvider, id, onPtyStopped, false)
+  )
+  return results.filter((result) => result.counted).length
+}
+
+async function stopPtyForWorktree(
+  provider: IPtyProvider,
+  ptyId: string,
+  onPtyStopped: ((ptyId: string) => void) | undefined,
+  countErrorsAsStopped: boolean
+): Promise<{ counted: boolean; cleared: boolean }> {
+  try {
+    // Why: drain-then-force keeps this bounded and reaps the PTY before
+    // git-level worktree removal deletes files it may hold open (best-effort
+    // on Windows — the taskkill wait resolves on a bounded timeout).
+    await shutdownPtyWithDrain(provider, ptyId, {})
+    clearStoppedPtyState(ptyId, onPtyStopped)
+    return { counted: true, cleared: true }
+  } catch {
+    // Provider-list entries can disappear between list and kill; preserve the
+    // old best-effort count while registry cleanup stays stricter.
+    return { counted: countErrorsAsStopped, cleared: false }
   }
-  return killed
 }
 
 function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {

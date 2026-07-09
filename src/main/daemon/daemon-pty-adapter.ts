@@ -87,6 +87,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private activeSessionIds = new Set<string>()
   private dirtySessionVersions = new Map<string, number>()
+  // Why: keepHistory graceful shutdowns must leave meta.endedAt null, but only
+  // after the real exit event has delivered any final daemon-side output.
+  private keepHistoryShutdownsPendingExit = new Set<string>()
+  // Why: handleExitEvent awaits disk writes; a wake respawn of the same
+  // sessionId can land inside that window. The epoch (globally monotonic per
+  // spawn) lets the resumed handler detect the newer generation and leave its
+  // writer/tracking alone instead of tearing down the live woken session.
+  private spawnEpochCounter = 0
+  private sessionSpawnEpochs = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
   // log belong to the pre-crash session. Incremental appends would land on
   // that stale log (and be rejected by its sequence check on restore), so the
@@ -242,6 +251,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
     this.activeSessionIds.add(sessionId)
+    this.spawnEpochCounter += 1
+    this.sessionSpawnEpochs.set(sessionId, this.spawnEpochCounter)
+    // Why: a leaked pending-exit flag (kill RPC raced an already-dead session)
+    // must not make this new generation's eventual real exit skip closeSession
+    // — that would leave endedAt null and trigger a bogus cold restore later.
+    this.keepHistoryShutdownsPendingExit.delete(sessionId)
 
     // Cold restore: daemon created a new session but disk history shows
     // an unclean shutdown → return saved scrollback so the renderer can
@@ -356,18 +371,28 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (opts.keepHistory) {
       await this.checkpointSessions([id], { final: true, teardown: true })
     }
-    await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
-    this.activeSessionIds.delete(id)
-    this.dirtySessionVersions.delete(id)
-    this.coldRestoreCache.delete(id)
-    // Why: the !keepHistory close path doesn't take a final checkpoint, so a
-    // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
-    // (Under keepHistory the final checkpoint above already cleared the flag, so
-    // this is a harmless no-op there — kept unconditional to cover both paths.)
-    this.sessionsNeedingFullCheckpoint.delete(id)
-    this.lastFullCheckpointAt.delete(id)
-    this.stopCheckpointTimerIfIdle()
-    this.initialCwds.delete(id)
+    const preserveHistoryOnExit = opts.keepHistory === true && opts.immediate !== true
+    if (preserveHistoryOnExit) {
+      this.keepHistoryShutdownsPendingExit.add(id)
+    }
+    try {
+      await this.client.request('kill', {
+        sessionId: id,
+        immediate: opts.immediate ?? false,
+        ...(preserveHistoryOnExit && this.protocolVersion >= 19 ? { collectFinalOutput: true } : {})
+      })
+    } catch (err) {
+      if (preserveHistoryOnExit && !isSessionNotFoundError(err)) {
+        this.keepHistoryShutdownsPendingExit.delete(id)
+      }
+      throw err
+    }
+
+    if (preserveHistoryOnExit) {
+      return
+    }
+
+    this.clearSessionTracking(id)
     // Why: history removal is for the "user explicitly closed this terminal"
     // path. Sleep also calls shutdown but expects scrollback to survive — wake
     // re-spawns and the cold-restore reader needs the dir intact. Caller
@@ -376,6 +401,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       void this.historyManager
         .removeSession(id)
         .catch((err) => console.warn('[history] removeSession failed:', id, err))
+    } else if (this.historyManager) {
+      this.historyManager.detachSessionWriter(id)
     }
 
     // Why: tombstone rejects reattach against a session the user explicitly
@@ -629,6 +656,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
+    this.keepHistoryShutdownsPendingExit.clear()
+    this.sessionSpawnEpochs.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -665,6 +694,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
+    this.keepHistoryShutdownsPendingExit.clear()
+    this.sessionSpawnEpochs.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -688,6 +719,22 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (this.dirtySessionVersions.size === 0) {
       this.stopCheckpointTimer()
     }
+  }
+
+  private clearSessionTracking(sessionId: string): void {
+    this.activeSessionIds.delete(sessionId)
+    this.dirtySessionVersions.delete(sessionId)
+    this.coldRestoreCache.delete(sessionId)
+    // Why: exited/closed sessions can never be checkpointed again; keep the
+    // pending full-checkpoint and cooldown sets bounded across reused ids.
+    this.sessionsNeedingFullCheckpoint.delete(sessionId)
+    this.lastFullCheckpointAt.delete(sessionId)
+    this.keepHistoryShutdownsPendingExit.delete(sessionId)
+    // Why: the counter is globally monotonic, so deleting here keeps the map
+    // bounded without letting a reused id collide with a stale epoch.
+    this.sessionSpawnEpochs.delete(sessionId)
+    this.stopCheckpointTimerIfIdle()
+    this.initialCwds.delete(sessionId)
   }
 
   private scheduleCheckpointTimer(): void {
@@ -1013,29 +1060,52 @@ export class DaemonPtyAdapter implements IPtyProvider {
           listener({ id: event.sessionId, data: event.payload.data })
         }
       } else if (event.event === 'exit') {
-        this.activeSessionIds.delete(event.sessionId)
-        this.dirtySessionVersions.delete(event.sessionId)
-        this.coldRestoreCache.delete(event.sessionId)
-        // Why: an exited session can never be checkpointed again, so its pending
-        // full-checkpoint flag is dead state. Without this, a cold-restored
-        // session that exits before its first checkpoint leaks a permanent entry.
-        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
-        // Why: a reused sessionId (renderer respawns a persisted ptyId) must
-        // not inherit the dead session's snapshot cooldown.
-        this.lastFullCheckpointAt.delete(event.sessionId)
-        this.stopCheckpointTimerIfIdle()
-        if (this.historyManager) {
-          void this.historyManager
-            .closeSession(event.sessionId, event.payload.code)
-            .catch((err) => console.warn('[history] closeSession failed:', event.sessionId, err))
-        }
-        this.initialCwds.delete(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.exitListeners]) {
-          listener({ id: event.sessionId, code: event.payload.code })
-        }
+        void this.handleExitEvent(event)
       }
     })
+  }
+
+  private async handleExitEvent(event: Extract<DaemonEvent, { event: 'exit' }>): Promise<void> {
+    const preserveHistory = this.keepHistoryShutdownsPendingExit.has(event.sessionId)
+    const epochAtExit = this.sessionSpawnEpochs.get(event.sessionId) ?? 0
+    if (preserveHistory && this.historyManager) {
+      try {
+        await this.persistFinalExitHistory(event.sessionId, event.payload.finalOutput)
+      } catch (err) {
+        console.warn('[history] final exit checkpoint failed:', event.sessionId, err)
+      } finally {
+        // Why: only detach if no newer spawn re-registered this id's writer
+        // while the persist awaited — detaching the woken generation's writer
+        // would silently stop its persistence.
+        if ((this.sessionSpawnEpochs.get(event.sessionId) ?? 0) === epochAtExit) {
+          this.historyManager.detachSessionWriter(event.sessionId)
+        }
+      }
+    } else if (this.historyManager) {
+      void this.historyManager
+        .closeSession(event.sessionId, event.payload.code)
+        .catch((err) => console.warn('[history] closeSession failed:', event.sessionId, err))
+    }
+    if ((this.sessionSpawnEpochs.get(event.sessionId) ?? 0) === epochAtExit) {
+      this.clearSessionTracking(event.sessionId)
+    }
+    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+    for (const listener of [...this.exitListeners]) {
+      listener({ id: event.sessionId, code: event.payload.code })
+    }
+  }
+
+  private async persistFinalExitHistory(
+    sessionId: string,
+    finalOutput: TakePendingOutputResult | undefined
+  ): Promise<void> {
+    if (!this.historyManager || !finalOutput?.snapshot) {
+      return
+    }
+    await this.historyManager.checkpoint(sessionId, finalOutput.snapshot)
+    if (finalOutput.records.length > 0) {
+      await this.historyManager.appendIncrements(sessionId, finalOutput.seq, finalOutput.records)
+    }
   }
 }
 
@@ -1055,4 +1125,8 @@ function isDaemonGoneError(err: unknown): boolean {
   }
   const msg = err.message
   return msg === 'Connection lost' || msg === 'Not connected'
+}
+
+function isSessionNotFoundError(err: unknown): boolean {
+  return err instanceof Error && /Session not found/i.test(err.message)
 }

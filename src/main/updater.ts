@@ -567,7 +567,9 @@ async function performQuitAndInstall(): Promise<void> {
   quittingForUpdate = true
 
   await runBeforeUpdateQuitCleanup()
-  killAllPty()
+  // Why: bounded drain (graceful signal → force-kill) so agent CLIs flush
+  // their transcripts before ShipIt replaces the app bundle.
+  await killAllPty()
 
   for (const win of BrowserWindow.getAllWindows()) {
     win.removeAllListeners('close')

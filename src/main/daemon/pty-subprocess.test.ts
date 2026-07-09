@@ -59,6 +59,23 @@ vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
 }))
 
+// Why: never spawn a real `taskkill` from tests — on a Windows runner that
+// would signal an arbitrary live pid.
+const {
+  requestWindowsProcessTreeExitMock,
+  forceKillWindowsProcessTreeMock,
+  waitForWindowsProcessTreeForceKillMock
+} = vi.hoisted(() => ({
+  requestWindowsProcessTreeExitMock: vi.fn(),
+  forceKillWindowsProcessTreeMock: vi.fn(),
+  waitForWindowsProcessTreeForceKillMock: vi.fn()
+}))
+vi.mock('../pty/windows-process-tree-kill', () => ({
+  requestWindowsProcessTreeExit: requestWindowsProcessTreeExitMock,
+  forceKillWindowsProcessTree: forceKillWindowsProcessTreeMock,
+  waitForWindowsProcessTreeForceKill: waitForWindowsProcessTreeForceKillMock
+}))
+
 import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
 
 const ORCA_SHELL_WRAPPER_ENV = [
@@ -106,6 +123,10 @@ describe('createPtySubprocess', () => {
   beforeEach(() => {
     spawnMock.mockReset()
     isPwshAvailableMock.mockReset()
+    requestWindowsProcessTreeExitMock.mockReset()
+    forceKillWindowsProcessTreeMock.mockReset()
+    waitForWindowsProcessTreeForceKillMock.mockReset()
+    waitForWindowsProcessTreeForceKillMock.mockResolvedValue(undefined)
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
@@ -2353,8 +2374,31 @@ describe('createPtySubprocess', () => {
       }
     })
 
-    it('dispose() on Windows skips destroy after node-pty kill()', () => {
-      const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
+    it('kill() on Windows requests a graceful tree exit and leaves destroy() live', () => {
+      const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
+        destroy: ReturnType<typeof vi.fn>
+      }
+      proc.destroy = vi.fn()
+      spawnMock.mockReturnValue(proc)
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+        handle.kill()
+        // Why: the graceful path must NOT tear the ConPTY down — that would
+        // collapse the drain window agent CLIs need to flush transcripts.
+        expect(requestWindowsProcessTreeExitMock).toHaveBeenCalledWith(123456)
+        expect(proc.kill).not.toHaveBeenCalled()
+        handle.dispose()
+        // dispose() still releases the ConPTY via destroy() (which is kill()).
+        expect(proc.destroy).toHaveBeenCalledOnce()
+      } finally {
+        restorePlatform(origPlatform)
+      }
+    })
+
+    it('dispose() on Windows skips destroy after forceKill kills the tree', () => {
+      const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
       proc.destroy = vi.fn(() => proc.kill())
@@ -2363,8 +2407,9 @@ describe('createPtySubprocess', () => {
       Object.defineProperty(process, 'platform', { value: 'win32' })
       try {
         const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-        handle.kill()
+        handle.forceKill()
         handle.dispose()
+        expect(forceKillWindowsProcessTreeMock).toHaveBeenCalledWith(123456)
         expect(proc.kill).toHaveBeenCalledOnce()
         expect(proc.destroy).not.toHaveBeenCalled()
       } finally {
@@ -2372,26 +2417,37 @@ describe('createPtySubprocess', () => {
       }
     })
 
-    it('dispose() on Windows skips destroy after forceKill falls back to node-pty kill()', () => {
-      const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
-        destroy: ReturnType<typeof vi.fn>
-      }
-      proc.destroy = vi.fn(() => proc.kill())
+    it('forceKillAndWait() on Windows waits for taskkill before closing ConPTY', async () => {
+      const proc = mockPtyProcess(123456)
       spawnMock.mockReturnValue(proc)
-      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-        throw new Error('already gone')
-      })
+      let releaseForceKill = (): void => {
+        throw new Error('force kill waiter was not installed')
+      }
+      waitForWindowsProcessTreeForceKillMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseForceKill = resolve
+          })
+      )
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
       try {
         const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-        handle.forceKill()
-        handle.dispose()
-        expect(killSpy).toHaveBeenCalledWith(123456, 'SIGKILL')
+        let settled = false
+        const forceKill = handle.forceKillAndWait?.().then(() => {
+          settled = true
+        })
+        await Promise.resolve()
+
+        expect(waitForWindowsProcessTreeForceKillMock).toHaveBeenCalledWith(123456)
+        expect(proc.kill).not.toHaveBeenCalled()
+        expect(settled).toBe(false)
+
+        releaseForceKill()
+        await forceKill
         expect(proc.kill).toHaveBeenCalledOnce()
-        expect(proc.destroy).not.toHaveBeenCalled()
+        expect(settled).toBe(true)
       } finally {
-        killSpy.mockRestore()
         restorePlatform(origPlatform)
       }
     })

@@ -48,6 +48,9 @@ export type SubprocessHandle = {
   clear?(): void
   kill(): void
   forceKill(): void
+  /** Same force-kill signal as forceKill(), but resolves after platform-specific
+   *  tree-kill work that callers need before deleting worktree files. */
+  forceKillAndWait?(): Promise<void>
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number) => void): void
@@ -77,7 +80,7 @@ export type SessionOptions = {
 type AttachedClient = {
   token: symbol
   onData: (data: string) => void
-  onExit: (code: number) => void
+  onExit: (code: number, finalOutput?: TakePendingOutputResult) => void
 }
 
 export class Session {
@@ -101,6 +104,7 @@ export class Session {
   private pendingOutputBytes = 0
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
+  private captureFinalOutput = false
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -203,6 +207,18 @@ export class Session {
     }, KILL_TIMEOUT_MS)
   }
 
+  requestFinalOutputOnExit(): void {
+    this.captureFinalOutput = true
+  }
+
+  hasPendingOutputForCheckpoint(): boolean {
+    return (
+      this.pendingOutputOverflowed ||
+      this.pendingOutputRecords.length > 0 ||
+      this.shellReadyScanState !== null
+    )
+  }
+
   signal(sig: string): void {
     if (this._state === 'exited') {
       return
@@ -210,7 +226,10 @@ export class Session {
     this.subprocess.signal(sig)
   }
 
-  attachClient(client: { onData: (data: string) => void; onExit: (code: number) => void }): symbol {
+  attachClient(client: {
+    onData: (data: string) => void
+    onExit: (code: number, finalOutput?: TakePendingOutputResult) => void
+  }): symbol {
     const token = Symbol('attach')
     this.attachedClients.push({ token, ...client })
     return token
@@ -404,6 +423,23 @@ export class Session {
     this.emulator.dispose()
   }
 
+  async forceKillAndDisposeSubprocessAndWait(): Promise<void> {
+    try {
+      if (this.subprocess.forceKillAndWait) {
+        await this.subprocess.forceKillAndWait()
+      } else {
+        this.subprocess.forceKill()
+      }
+    } catch {
+      /* swallow — child may already be gone */
+    }
+    this._exitCode = -1
+    this._isTerminating = false
+    this.#teardownSubprocess()
+    this._state = 'exited'
+    this.emulator.dispose()
+  }
+
   /** Private: shared teardown helper called by dispose(), forceDispose(), and
    *  forceKillAndDisposeSubprocess(). Flips `_disposed`, clears pending timers,
    *  and forwards to subprocess.dispose() exactly once. Does NOT set `_state` —
@@ -497,7 +533,10 @@ export class Session {
 
     this._exitCode = code
     this._state = 'exited'
-    this.releaseHeldShellReadyBytes()
+    const finalOutput = this.takeFinalOutputIfRequested()
+    if (!finalOutput) {
+      this.releaseHeldShellReadyBytes()
+    }
 
     if (this.killTimer) {
       clearTimeout(this.killTimer)
@@ -523,7 +562,11 @@ export class Session {
     }
 
     for (const client of this.attachedClients) {
-      client.onExit(code)
+      if (finalOutput) {
+        client.onExit(code, finalOutput)
+      } else {
+        client.onExit(code)
+      }
     }
 
     // Why: hand off to the owner's reaper so the emulator is disposed and the
@@ -543,6 +586,14 @@ export class Session {
     // state changes discard it.
     this.emitSubprocessOutput(heldBytes)
     return heldBytes
+  }
+
+  private takeFinalOutputIfRequested(): TakePendingOutputResult | null {
+    if (!this.captureFinalOutput) {
+      return null
+    }
+    this.captureFinalOutput = false
+    return this.takePendingOutput(true, { teardownSnapshot: true })
   }
 
   private transitionToReady(postMarkerBytesObserved = false): void {
@@ -592,6 +643,7 @@ export class Session {
     } catch {
       /* already dead */
     }
+    const finalOutput = this.takeFinalOutputIfRequested()
     this._exitCode = -1
     this._isTerminating = false
 
@@ -605,7 +657,11 @@ export class Session {
     this.emulator.dispose()
 
     for (const client of clients) {
-      client.onExit(-1)
+      if (finalOutput) {
+        client.onExit(-1, finalOutput)
+      } else {
+        client.onExit(-1)
+      }
     }
 
     // Why: reap from the host map on the kill-timeout path too (emulator already

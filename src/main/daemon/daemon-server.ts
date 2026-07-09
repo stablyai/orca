@@ -21,6 +21,11 @@ import {
   type DaemonRequest
 } from './types'
 
+/** Bounded graceful-exit window for live sessions on daemon shutdown, so
+ *  agent CLIs can flush transcripts before dispose() force-kills leftovers.
+ *  Kept short: daemon restart / app quit wait on this. */
+const SHUTDOWN_SESSION_DRAIN_MS = 2_000
+
 export type DaemonServerOptions = {
   socketPath: string
   tokenPath: string
@@ -97,7 +102,8 @@ export class DaemonServer {
   }
 
   async shutdown(): Promise<void> {
-    this.host.dispose()
+    await this.host.drainLiveSessions(SHUTDOWN_SESSION_DRAIN_MS)
+    await this.host.disposeAndWaitForForceKill({ checkpointDirtyOnly: true })
     this.streamDataBatcher.clear()
 
     for (const [, client] of this.clients) {
@@ -305,7 +311,7 @@ export class DaemonServer {
                 flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS
               })
             },
-            onExit: (code) => {
+            onExit: (code, finalOutput) => {
               // Why: exit tears down renderer handlers; flush final output first
               // so the last few milliseconds of PTY data are not stranded.
               this.log.log('session-exited', { sessionId: p.sessionId, code })
@@ -317,7 +323,7 @@ export class DaemonServer {
                     type: 'event',
                     event: 'exit',
                     sessionId: p.sessionId,
-                    payload: { code }
+                    payload: { code, ...(finalOutput ? { finalOutput } : {}) }
                   })
                 )
               }
@@ -369,7 +375,14 @@ export class DaemonServer {
           sessionId: request.payload.sessionId,
           immediate: request.payload.immediate === true
         })
-        this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
+        if (request.payload.immediate === true) {
+          await this.host.killAndWait(request.payload.sessionId, { immediate: true })
+        } else {
+          this.host.kill(request.payload.sessionId, {
+            immediate: request.payload.immediate,
+            collectFinalOutput: request.payload.collectFinalOutput === true
+          })
+        }
         return {}
 
       case 'signal':
@@ -428,7 +441,10 @@ export class DaemonServer {
           killSessions: request.payload.killSessions === true
         })
         if (request.payload.killSessions) {
-          this.host.dispose()
+          // Why: drain before dispose so agent CLIs flush transcripts; the
+          // client's shutdown RPC timeout (30s) comfortably covers the window.
+          await this.host.drainLiveSessions(SHUTDOWN_SESSION_DRAIN_MS)
+          await this.host.disposeAndWaitForForceKill({ checkpointDirtyOnly: true })
         }
         process.nextTick(() => this.shutdown())
         return {}

@@ -312,6 +312,112 @@ describe('TerminalHost', () => {
     })
   })
 
+  describe('drainLiveSessions', () => {
+    it('gracefully kills live sessions and resolves once they exit', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      // The mock subprocess exits ~5ms after kill(), well inside the window.
+      await host.drainLiveSessions(1_000)
+
+      expect(lastSubprocess.kill).toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+      expect(host.listSessions()).toEqual([])
+    })
+
+    it('does not fan exit events to attached clients during the drain', async () => {
+      const onExit = vi.fn()
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit }
+      })
+
+      await host.drainLiveSessions(1_000)
+
+      // Why: daemon shutdown must stay silent toward connected apps — an exit
+      // event here would write endedAt app-side and break cold restore after
+      // a daemon restart or external termination.
+      expect(onExit).not.toHaveBeenCalled()
+      expect(host.listSessions()).toEqual([])
+    })
+
+    it('returns after the bounded window when a session ignores the signal', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      // Session ignores the graceful signal: never fires onExit.
+      ;(lastSubprocess.kill as ReturnType<typeof vi.fn>).mockImplementation(() => {})
+
+      const start = Date.now()
+      await host.drainLiveSessions(120)
+      expect(Date.now() - start).toBeLessThan(2_000)
+
+      // dispose() (the caller's next step) force-kills the leftover.
+      host.dispose()
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    })
+
+    it('does not checkpoint quiet stubborn sessions twice before force dispose', async () => {
+      host.dispose()
+      const onFinalCheckpoint = vi.fn()
+      host = new TerminalHost({
+        spawnSubprocess: spawnFn as MockSpawnFn,
+        onFinalCheckpoint
+      })
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      lastSubprocess._onDataCb?.('before drain\r\n')
+      ;(lastSubprocess.kill as ReturnType<typeof vi.fn>).mockImplementation(() => {})
+
+      await host.drainLiveSessions(10)
+      await host.disposeAndWaitForForceKill({ checkpointDirtyOnly: true })
+
+      expect(onFinalCheckpoint).toHaveBeenCalledTimes(1)
+    })
+
+    it('checkpoints stubborn sessions again when they emit output during drain', async () => {
+      host.dispose()
+      const onFinalCheckpoint = vi.fn()
+      host = new TerminalHost({
+        spawnSubprocess: spawnFn as MockSpawnFn,
+        onFinalCheckpoint
+      })
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      lastSubprocess._onDataCb?.('before drain\r\n')
+      ;(lastSubprocess.kill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        lastSubprocess._onDataCb?.('tail during drain\r\n')
+      })
+
+      await host.drainLiveSessions(10)
+      await host.disposeAndWaitForForceKill({ checkpointDirtyOnly: true })
+
+      expect(onFinalCheckpoint).toHaveBeenCalledTimes(2)
+      expect(onFinalCheckpoint).toHaveBeenLastCalledWith(
+        'session-1',
+        expect.objectContaining({ snapshotAnsi: expect.stringContaining('tail during drain') }),
+        []
+      )
+    })
+  })
+
   describe('signal', () => {
     it('sends signal without entering kill state', async () => {
       await host.createOrAttach({

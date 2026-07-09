@@ -2224,9 +2224,10 @@ app.on('will-quit', (e) => {
   destroySystemTray()
   // Why: stats.flush() must run before killAllPty() so it can read the
   // live agent state and emit synthetic agent_stop events for agents that
-  // are still running. killAllPty() does not call runtime.onPtyExit(),
-  // so without this ordering, running agents would produce orphaned
-  // agent_start events with no matching stops.
+  // are still running. killAllPty()'s graceful drain can fire
+  // runtime.onPtyExit() for PTYs that exit inside the window, but stubborn
+  // ones are force-killed without it — so flush-first stays the only
+  // ordering that guarantees no orphaned agent_start events.
   starNag?.stop()
   automations?.stop()
   setUnreadDockBadgeCount(0)
@@ -2240,7 +2241,9 @@ app.on('will-quit', (e) => {
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   serveSimStateWatcher.stop()
-  killAllPty()
+  // Why: killAllPty drains agent CLIs (graceful signal → bounded force-kill)
+  // so buffered transcripts flush; awaited below alongside the daemon flush.
+  const ptyDrainOnQuit = killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   store?.flush()
 
@@ -2290,7 +2293,13 @@ app.on('will-quit', (e) => {
     // Why: normal quits preserve the detached daemon for warm reattach, but a
     // dev parent dying means the temp/dev profile has no owner left to reattach.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown, emulatorShutdown])
+    Promise.allSettled([
+      daemonTeardown,
+      rpcStopAndClear,
+      watcherShutdown,
+      emulatorShutdown,
+      ptyDrainOnQuit
+    ])
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
       .catch(() => {

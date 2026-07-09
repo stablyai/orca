@@ -24,12 +24,12 @@ describe('createDaemonFileLog', () => {
   it('appends NDJSON lines with src/ts/pid/event and terse details', () => {
     const filePath = join(dir, 'daemon.log')
     const log = createDaemonFileLog(filePath)
-    log.log('startup', { protocolVersion: 18 })
+    log.log('startup', { protocolVersion: 19 })
     log.log('session-created', { sessionId: 'abc', pid: 42 })
 
     const lines = readLines(filePath)
     expect(lines).toHaveLength(2)
-    expect(lines[0]).toMatchObject({ src: 'daemon', event: 'startup', protocolVersion: 18 })
+    expect(lines[0]).toMatchObject({ src: 'daemon', event: 'startup', protocolVersion: 19 })
     expect(typeof lines[0].ts).toBe('string')
     expect(lines[0].pid).toBe(process.pid)
     expect(lines[1]).toMatchObject({ event: 'session-created', sessionId: 'abc', pid: 42 })
