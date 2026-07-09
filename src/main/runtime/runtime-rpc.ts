@@ -736,6 +736,12 @@ export class OrcaRuntimeRpcServer {
                   const device = this.deviceRegistry?.validateToken(ch.deviceToken)
                   if (device) {
                     this.deviceRegistry?.updateLastSeen(device.deviceId)
+                    // Why: phone reports marketing model on auth (e.g.
+                    // "iPhone 15 Pro Max") so Settings stops showing the
+                    // QR-time placeholder "Mobile <date>".
+                    if (ch.reportedDeviceName) {
+                      this.deviceRegistry?.updateName(device.deviceId, ch.reportedDeviceName)
+                    }
                   }
                 }
               },

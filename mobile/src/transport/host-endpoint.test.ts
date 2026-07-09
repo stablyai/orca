@@ -1,0 +1,103 @@
+import { describe, expect, it } from 'vitest'
+import { displayHostEndpoint, endpointPort, normalizeHostEndpoint } from './host-endpoint'
+
+describe('displayHostEndpoint', () => {
+  it('shows host:port for websocket URLs', () => {
+    expect(displayHostEndpoint('ws://192.168.1.10:6768')).toBe('192.168.1.10:6768')
+    // Why: URL omits default scheme ports (443 for wss); use a non-default port.
+    expect(displayHostEndpoint('wss://desk.example:8443')).toBe('desk.example:8443')
+  })
+
+  it('returns the raw string when not a URL', () => {
+    expect(displayHostEndpoint('not-a-url')).toBe('not-a-url')
+  })
+})
+
+describe('endpointPort', () => {
+  it('reads the port when present', () => {
+    expect(endpointPort('ws://192.168.1.10:6768')).toBe('6768')
+  })
+
+  it('returns undefined when the port is omitted', () => {
+    expect(endpointPort('ws://192.168.1.10')).toBeUndefined()
+  })
+})
+
+describe('normalizeHostEndpoint', () => {
+  it('accepts a full ws URL', () => {
+    expect(normalizeHostEndpoint('ws://100.64.0.5:6768')).toEqual({
+      ok: true,
+      endpoint: 'ws://100.64.0.5:6768'
+    })
+  })
+
+  it('accepts wss and preserves scheme', () => {
+    expect(normalizeHostEndpoint('wss://desk.example:8443')).toEqual({
+      ok: true,
+      endpoint: 'wss://desk.example:8443'
+    })
+  })
+
+  it('accepts bare host:port', () => {
+    expect(normalizeHostEndpoint('192.168.1.10:6768')).toEqual({
+      ok: true,
+      endpoint: 'ws://192.168.1.10:6768'
+    })
+  })
+
+  it('defaults missing port to 6768', () => {
+    expect(normalizeHostEndpoint('192.168.1.10')).toEqual({
+      ok: true,
+      endpoint: 'ws://192.168.1.10:6768'
+    })
+  })
+
+  it('uses fallbackPort when the user omits the port', () => {
+    expect(normalizeHostEndpoint('mac-mini.local', { fallbackPort: '7777' })).toEqual({
+      ok: true,
+      endpoint: 'ws://mac-mini.local:7777'
+    })
+  })
+
+  it('fills missing port on scheme URLs from fallbackPort', () => {
+    expect(normalizeHostEndpoint('ws://192.168.1.10', { fallbackPort: '9000' })).toEqual({
+      ok: true,
+      endpoint: 'ws://192.168.1.10:9000'
+    })
+  })
+
+  it('trims whitespace', () => {
+    expect(normalizeHostEndpoint('  10.0.0.2:6768  ')).toEqual({
+      ok: true,
+      endpoint: 'ws://10.0.0.2:6768'
+    })
+  })
+
+  it('rejects empty input', () => {
+    expect(normalizeHostEndpoint('   ')).toEqual({
+      ok: false,
+      error: 'Enter a host address.'
+    })
+  })
+
+  it('rejects non-websocket schemes', () => {
+    expect(normalizeHostEndpoint('http://192.168.1.10:6768')).toEqual({
+      ok: false,
+      error: 'Use ws:// or wss:// (or host:port).'
+    })
+  })
+
+  it('rejects invalid ports', () => {
+    expect(normalizeHostEndpoint('192.168.1.10:99999')).toEqual({
+      ok: false,
+      error: 'Port must be 1–65535.'
+    })
+  })
+
+  it('accepts bracketed IPv6 with port', () => {
+    expect(normalizeHostEndpoint('[fd7a:115c:a1e0::1]:6768')).toEqual({
+      ok: true,
+      endpoint: 'ws://[fd7a:115c:a1e0::1]:6768'
+    })
+  })
+})

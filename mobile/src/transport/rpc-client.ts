@@ -29,6 +29,7 @@ import {
 import { describeSocketEvent } from './socket-event-debug'
 import { isRpcResponse } from './rpc-response-shape'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { resolveMobileDeviceDisplayName } from './device-identity'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -446,7 +447,14 @@ export function connect(
           const msg = JSON.parse(raw)
           if (msg.type === 'e2ee_ready') {
             emitLog('success', 'Received e2ee_ready', 'Sending device token')
-            sendEncrypted({ type: 'e2ee_auth', deviceToken })
+            // Why: report the marketing model (e.g. "iPhone 15 Pro Max") so the
+            // desktop Paired Devices list can replace the QR-time placeholder
+            // name "Mobile <date>". Optional on the wire for older desktops.
+            sendEncrypted({
+              type: 'e2ee_auth',
+              deviceToken,
+              deviceName: resolveMobileDeviceDisplayName()
+            })
             return
           }
         } catch {

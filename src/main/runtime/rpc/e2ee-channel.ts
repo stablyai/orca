@@ -18,6 +18,24 @@ type E2EEHello = {
 type E2EEAuth = {
   type: 'e2ee_auth'
   deviceToken: string
+  // Why: optional so older mobile builds keep working. When present, the
+  // desktop renames the paired-device entry from "Mobile <date>" to a model
+  // string like "iPhone 15 Pro Max".
+  deviceName?: string
+}
+
+const MAX_REPORTED_DEVICE_NAME_LENGTH = 64
+
+export function sanitizeReportedDeviceName(raw: unknown): string | null {
+  if (typeof raw !== 'string') {
+    return null
+  }
+  const cleaned = raw
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_REPORTED_DEVICE_NAME_LENGTH)
+  return cleaned.length > 0 ? cleaned : null
 }
 
 export type E2EEChannelOptions = {
@@ -50,6 +68,7 @@ export class E2EEChannel {
   private binaryMessageHandler: ((plaintext: Uint8Array<ArrayBufferLike>) => void) | null = null
 
   deviceToken: string | null = null
+  reportedDeviceName: string | null = null
 
   constructor(ws: WebSocket, options: E2EEChannelOptions) {
     this.ws = ws
@@ -204,6 +223,7 @@ export class E2EEChannel {
     }
 
     this.deviceToken = auth.deviceToken
+    this.reportedDeviceName = sanitizeReportedDeviceName(auth.deviceName)
     this.state = 'ready'
 
     if (this.handshakeTimer) {
