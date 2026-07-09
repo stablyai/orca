@@ -25,11 +25,17 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
  * way dev (`orca-dev` userData) and packaged (`orca` userData) runs lock in
  * separate namespaces instead of serialising against each other.
  */
-export function acquireSingleInstanceLock(app: App, onSecondInstance: () => void): boolean {
+export function acquireSingleInstanceLock(
+  app: App,
+  onSecondInstance: (argv: string[]) => void
+): boolean {
   if (!app.requestSingleInstanceLock()) {
     return false
   }
-  app.on('second-instance', onSecondInstance)
+  // Why: forward the second launch's argv so Windows/Linux protocol activations
+  // (`orca://…` arrives as an argv entry, not an event) can be routed by the
+  // handler. macOS delivers the same intent via `open-url` instead.
+  app.on('second-instance', (_event, argv) => onSecondInstance(argv))
   return true
 }
 
