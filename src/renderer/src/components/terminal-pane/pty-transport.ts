@@ -502,16 +502,41 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   })
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
 
+  // Why: pane->tab detach / split-group moves rehome the React subtree, so a
+  // NEW TerminalPane can attach to the same ptyId before the OLD instance's
+  // detach() runs. Track the handlers THIS instance registered so unregister
+  // paths only delete map entries they still own — an unconditional delete
+  // destroys the live handler and the pane freezes (data diverts into the
+  // pre-handler buffer forever).
+  const ownedDataAndReplayHandlers = new Map<
+    string,
+    { data: (data: string, meta?: PtyDataMeta) => void; replay: (data: string) => void }
+  >()
+  const ownedExitHandlers = new Map<string, (code: number) => void>()
+
   function unregisterPtyHandlers(id: string): void {
-    ptyDataHandlers.delete(id)
-    ptyReplayHandlers.delete(id)
-    ptyExitHandlers.delete(id)
-    ptyTeardownHandlers.delete(id)
+    unregisterPtyDataAndStatusHandlers(id)
+    const ownedExit = ownedExitHandlers.get(id)
+    if (ownedExit && ptyExitHandlers.get(id) === ownedExit) {
+      ptyExitHandlers.delete(id)
+    }
+    ownedExitHandlers.delete(id)
+    if (ptyTeardownHandlers.get(id) === clearAccumulatedState) {
+      ptyTeardownHandlers.delete(id)
+    }
   }
 
   function unregisterPtyDataAndStatusHandlers(id: string): void {
-    ptyDataHandlers.delete(id)
-    ptyReplayHandlers.delete(id)
+    const owned = ownedDataAndReplayHandlers.get(id)
+    if (owned) {
+      if (ptyDataHandlers.get(id) === owned.data) {
+        ptyDataHandlers.delete(id)
+      }
+      if (ptyReplayHandlers.get(id) === owned.replay) {
+        ptyReplayHandlers.delete(id)
+      }
+    }
+    ownedDataAndReplayHandlers.delete(id)
   }
 
   // Why: shared by connect() and attach() to avoid duplicating title/bell/exit
@@ -520,7 +545,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     // Why: relay pty.attach sends replay data via a dedicated pty:replay IPC
     // channel. Route it through onReplayData so the renderer engages the
     // replay guard and xterm auto-replies do not leak into the shell.
-    ptyReplayHandlers.set(id, (data) => {
+    const replayHandler = (data: string): void => {
       if (ptyId !== id) {
         return
       }
@@ -529,7 +554,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       } else {
         storedCallbacks.onData?.(data)
       }
-    })
+    }
+    ptyReplayHandlers.set(id, replayHandler)
     const dataHandler = (data: string, meta?: PtyDataMeta): void => {
       if (ptyId !== id) {
         return
@@ -544,6 +570,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       )
     }
     ptyDataHandlers.set(id, dataHandler)
+    ownedDataAndReplayHandlers.set(id, { data: dataHandler, replay: replayHandler })
     drainPreHandlerPtyData(id, dataHandler)
   }
 
@@ -599,6 +626,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       onPtyExit?.(id)
     }
     ptyExitHandlers.set(id, exitHandler)
+    ownedExitHandlers.set(id, exitHandler)
     // Why: shutdownWorktreeTerminals bypasses the transport layer — it
     // kills PTYs directly via IPC without calling disconnect()/destroy().
     // This teardown callback lets unregisterPtyDataHandlers cancel
