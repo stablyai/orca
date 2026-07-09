@@ -1218,13 +1218,15 @@ describe('createUISlice hydratePersistedUI', () => {
       'resource-usage',
       'ports',
       'kimi',
-      'minimax'
+      'minimax',
+      'antigravity'
     ])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi', 'minimax'],
+      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi', 'minimax', 'antigravity'],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
-      _minimaxStatusBarDefaultAdded: true
+      _minimaxStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true
     })
   })
 
@@ -1238,7 +1240,8 @@ describe('createUISlice hydratePersistedUI', () => {
         statusBarItems: ['claude', 'resource-usage'],
         _portsStatusBarDefaultAdded: true,
         _kimiStatusBarDefaultAdded: true,
-        _minimaxStatusBarDefaultAdded: true
+        _minimaxStatusBarDefaultAdded: true,
+        _antigravityStatusBarDefaultAdded: true
       })
     )
 

@@ -7,6 +7,10 @@ vi.mock('@/i18n/i18n', () => ({
 import { getProviderDisplayName } from './usage-error-copy'
 
 describe('getProviderDisplayName', () => {
+  it('returns the Antigravity brand name', () => {
+    expect(getProviderDisplayName('antigravity')).toBe('Antigravity')
+  })
+
   it('returns the MiniMax brand name', () => {
     expect(getProviderDisplayName('minimax')).toBe('MiniMax')
   })

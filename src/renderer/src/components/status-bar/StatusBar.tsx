@@ -1689,9 +1689,11 @@ export function ProviderDetailsMenu({
                       ? 'O'
                       : provider.provider === 'kimi'
                         ? 'K'
-                        : provider.provider === 'minimax'
-                          ? 'M'
-                          : 'X'}
+                        : provider.provider === 'antigravity'
+                          ? 'A'
+                          : provider.provider === 'minimax'
+                            ? 'M'
+                            : 'X'}
               </span>
             </span>
           ) : (
@@ -1833,20 +1835,31 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, minimax } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax } = rateLimits
 
   // Why: a provider earns a bar from either a usable live snapshot or durable
   // setup in Settings. The durable path keeps account switchers visible while
   // usage snapshots hydrate, fail, or temporarily report unavailable.
   // Detection-gating (see status-bar-agent-gating) additionally hides per-CLI
   // bars when the agent isn't installed on PATH.
-  // Why: thread the cookie durability flag from RateLimitState so the
-  // MiniMax bar stays visible after a reload and between snapshot refreshes.
-  const usageSettings = { ...settings, minimaxCookieConfigured: rateLimits.minimaxCookieConfigured }
+  // Why: Antigravity usage has no separate persisted credential. A checked
+  // status item plus detected CLI is the durable signal that the user wants
+  // its usage slot visible while the first snapshot is still pending.
+  const antigravityUsageConfigured =
+    statusBarItems.includes('antigravity') &&
+    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+  // Why: thread non-GlobalSettings durability flags from renderer/main state so
+  // bars stay visible after a reload and between snapshot refreshes.
+  const usageSettings = {
+    ...settings,
+    antigravityUsageConfigured,
+    minimaxCookieConfigured: rateLimits.minimaxCookieConfigured
+  }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
   const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
+  const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const showClaude =
     visibleClaude !== null &&
@@ -1864,6 +1877,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
+  const showAntigravity =
+    visibleAntigravity !== null &&
+    statusBarItems.includes('antigravity') &&
+    isStatusBarItemAvailable('antigravity', detectedAgentIds)
   // Why: MiniMax is a cookie-auth provider, not a CLI on PATH, so detection-gating
   // doesn't apply (same rationale as OpenCode Go below).
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
@@ -1882,6 +1899,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showGemini ||
     showOpencodeGo ||
     showKimi ||
+    showAntigravity ||
     showMiniMax ||
     showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
@@ -1889,7 +1907,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // included because managed accounts are durable even when live usage
   // snapshots are still hydrating or unavailable after an update.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, minimax },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax },
     usageSettings
   )
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
@@ -1901,6 +1919,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
+    antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching'
 
   const compact = containerWidth < 900
@@ -1951,6 +1970,17 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.d2375976eb',
                   'Open Gemini usage details'
+                )}
+              />
+            )}
+            {showAntigravity && (
+              <ProviderDetailsMenu
+                provider={visibleAntigravity}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.antigravityUsageDetails',
+                  'Open Antigravity usage details'
                 )}
               />
             )}
@@ -2093,6 +2123,21 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             >
               <GeminiIcon size={14} />
               {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
+            </DropdownMenuCheckboxItem>
+          )}
+          {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('antigravity')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('antigravity')
+              }}
+            >
+              <AgentIcon agent="antigravity" size={14} />
+              {translate(
+                'auto.components.status.bar.StatusBar.antigravityUsage',
+                'Antigravity Usage'
+              )}
             </DropdownMenuCheckboxItem>
           )}
           <DropdownMenuCheckboxItem

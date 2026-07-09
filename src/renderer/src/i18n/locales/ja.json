@@ -28,7 +28,8 @@
         "minimaxToggleDescription": "アクティブなワークスペースの MiniMax サブスクリプション使用状況を表示します。",
         "sshToggleDescription": "設定済み SSH ホストとリモート Orca ホストがある場合に表示します。",
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。これをクリックすると、CPU、メモリ、セッション、デーモン コントロール、およびワークスペース ディスク スキャンが行われます。",
-        "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。"
+        "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
+        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace."
       }
     }
   },
@@ -2946,7 +2947,9 @@
             "f077f586db": "今後表示しない",
             "c0e972d726": "キャンセル",
             "06741a2f3d": "MiniMax の使用量詳細を開く",
-            "3bbf140864": "MiniMax 使用量"
+            "3bbf140864": "MiniMax 使用量",
+            "antigravityUsageDetails": "Open Antigravity usage details",
+            "antigravityUsage": "Antigravity Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -7078,7 +7081,9 @@
               "detailed": "詳細"
             },
             "9a115966d3": "閉じるときにトレイへ最小化",
-            "4d5b9427b5": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。"
+            "4d5b9427b5": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。",
+            "antigravityUsageTitle": "Antigravity Usage",
+            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar."
           }
         },
         "auto": {

@@ -77,6 +77,7 @@ type InternalRateLimitState = {
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
 }
 
@@ -110,6 +111,7 @@ export class RateLimitService {
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    antigravity: null,
     minimax: null
   }
   private pollInterval: number = DEFAULT_POLL_MS
