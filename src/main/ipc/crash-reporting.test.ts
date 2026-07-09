@@ -249,6 +249,94 @@ describe('registerCrashReportingHandlers', () => {
     expect(markSent).toHaveBeenCalledWith(pending.id)
   })
 
+  it('retries an uncaptured crash report without logs after the bundled submit fails', async () => {
+    submitFeedbackMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 413,
+        error: 'status 413'
+      })
+      .mockResolvedValueOnce({ ok: true })
+    registerCrashReportingHandlers({
+      getById: vi.fn(async () => null),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => []),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const result = await handlers.get('crashReports:submit')?.(null, {
+      notes: 'manual report',
+      submitAnonymously: true,
+      githubLogin: null,
+      githubEmail: null
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      report: null,
+      diagnosticBundle: {
+        status: 'not_uploaded',
+        reason: 'diagnostic log attachment submit failed; logs were not uploaded',
+        bundleSubmissionId: 'bundleabcdefghijklmnop',
+        bytes: 25,
+        spanCount: 1
+      }
+    })
+    expect(submitFeedbackMock).toHaveBeenCalledTimes(2)
+    expect(submitFeedbackMock.mock.calls[0]?.[0]).toHaveProperty('diagnosticBundle')
+    expect(submitFeedbackMock.mock.calls[1]?.[0]).not.toHaveProperty('diagnosticBundle')
+    expect(
+      String((submitFeedbackMock.mock.calls[1]?.[0] as Record<string, unknown>)?.feedback)
+    ).toContain('diagnostic log attachment submit failed; logs were not uploaded')
+  })
+
+  it('retries a pending crash report without logs after the bundled submit fails and marks it sent', async () => {
+    const pending = report('pending', 'crash-retry')
+    const sent = report('sent', pending.id)
+    const markSent = vi.fn(async () => sent)
+    submitFeedbackMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 413,
+        error: 'status 413'
+      })
+      .mockResolvedValueOnce({ ok: true })
+    registerCrashReportingHandlers({
+      getById: vi.fn(async () => pending),
+      dismiss: vi.fn(),
+      markSent,
+      markDismissedSent: vi.fn(),
+      listRecent: vi.fn(async () => [pending]),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const result = await handlers.get('crashReports:submit')?.(null, {
+      reportId: pending.id,
+      submitAnonymously: true,
+      githubLogin: null,
+      githubEmail: null
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      report: sent,
+      diagnosticBundle: {
+        status: 'not_uploaded',
+        reason: 'diagnostic log attachment submit failed; logs were not uploaded',
+        bundleSubmissionId: 'bundleabcdefghijklmnop',
+        bytes: 25,
+        spanCount: 1
+      }
+    })
+    expect(submitFeedbackMock).toHaveBeenCalledTimes(2)
+    expect(submitFeedbackMock.mock.calls[1]?.[0]).not.toHaveProperty('diagnosticBundle')
+    expect(markSent).toHaveBeenCalledWith(pending.id)
+  })
+
   it('submits an uncaptured Help menu crash report with an attached diagnostic bundle', async () => {
     const pending = report('pending', 'crash-late-pending')
     const markSent = vi.fn()
@@ -374,12 +462,14 @@ describe('registerCrashReportingHandlers', () => {
         reason: 'diagnostic log upload skipped by user'
       }
     })
+    expect(submitFeedbackMock).toHaveBeenCalledTimes(1)
     expect(collectDiagnosticBundleMock).not.toHaveBeenCalled()
     expect(submitFeedbackMock).toHaveBeenCalledWith(
       expect.objectContaining({
         feedback: expect.stringContaining('diagnostic log upload skipped by user')
       })
     )
+    expect(submitFeedbackMock.mock.calls[0]?.[0]).not.toHaveProperty('diagnosticBundle')
   })
 
   it('still submits an uncaptured crash report when the diagnostic bundle cannot be collected', async () => {
@@ -411,9 +501,11 @@ describe('registerCrashReportingHandlers', () => {
         reason: 'collect failed'
       }
     })
+    expect(submitFeedbackMock).toHaveBeenCalledTimes(1)
     expect(submitFeedbackMock).toHaveBeenCalledWith(
       expect.objectContaining({ feedback: expect.stringContaining('Status: not uploaded') })
     )
+    expect(submitFeedbackMock.mock.calls[0]?.[0]).not.toHaveProperty('diagnosticBundle')
   })
 
   it('submits a dismissed startup prompt through feedback and marks it sent', async () => {
@@ -487,14 +579,20 @@ describe('registerCrashReportingHandlers', () => {
     expect(submitFeedbackMock).not.toHaveBeenCalled()
   })
 
-  it('keeps a pending report available if feedback submission fails', async () => {
+  it('keeps a pending report available when the bundled submit and retry both fail', async () => {
     const pending = report('pending', 'crash-failed')
     const markSent = vi.fn()
-    submitFeedbackMock.mockResolvedValue({
-      ok: false,
-      status: 500,
-      error: 'status 500'
-    })
+    submitFeedbackMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        error: 'status 500'
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: null,
+        error: 'request aborted'
+      })
     registerCrashReportingHandlers({
       getById: vi.fn(async () => pending),
       dismiss: vi.fn(),
@@ -515,19 +613,20 @@ describe('registerCrashReportingHandlers', () => {
     expect(result).toEqual({
       ok: false,
       status: 500,
-      error: 'status 500',
+      error:
+        'Failed to send crash report. First attempt: status 500. Retry without diagnostic logs: timed out.',
+      diagnosticBundle: {
+        status: 'not_uploaded',
+        reason: 'diagnostic log attachment submit failed; logs were not uploaded',
+        bundleSubmissionId: 'bundleabcdefghijklmnop',
+        bytes: 25,
+        spanCount: 1
+      },
       report: pending
     })
-    expect(submitFeedbackMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        diagnosticBundle: {
-          bundleSubmissionId: 'bundleabcdefghijklmnop',
-          content: diagnosticBundle().payload,
-          bytes: 25,
-          spanCount: 1
-        }
-      })
-    )
+    expect(submitFeedbackMock).toHaveBeenCalledTimes(2)
+    expect(submitFeedbackMock.mock.calls[0]?.[0]).toHaveProperty('diagnosticBundle')
+    expect(submitFeedbackMock.mock.calls[1]?.[0]).not.toHaveProperty('diagnosticBundle')
     expect(markSent).not.toHaveBeenCalled()
   })
 

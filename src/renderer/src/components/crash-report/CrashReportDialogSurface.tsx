@@ -18,6 +18,7 @@ import {
   isReactErrorBoundaryReport,
   type CrashReportRecord
 } from '../../../../shared/crash-reporting'
+import type { CrashReportDiagnosticBundle } from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -56,6 +57,70 @@ function getNotesPlaceholder(report: CrashReportRecord | null): string {
   return report && isReactErrorBoundaryReport(report)
     ? 'Optional: what were you doing before this UI error?'
     : 'Optional: what were you doing before Orca closed?'
+}
+
+type CrashReportSubmitFailureDetails = {
+  status: number | null
+  error: string
+  diagnosticBundle?: CrashReportDiagnosticBundle
+}
+
+function summarizeCrashReportSubmitFailure(details: CrashReportSubmitFailureDetails): string {
+  if (details.status !== null) {
+    return translate(
+      'auto.components.crash.report.CrashReportDialog.5ac5842b4e',
+      'Status {{value0}}.',
+      { value0: details.status }
+    )
+  }
+  const error = details.error.toLowerCase()
+  if (error.includes('timeout') || error.includes('timed out') || error.includes('aborted')) {
+    return translate('auto.components.crash.report.CrashReportDialog.58e3b2cf1d', 'Timed out.')
+  }
+  return translate('auto.components.crash.report.CrashReportDialog.cae57fc7d8', 'Network error.')
+}
+
+export function formatCrashReportSubmitFailureToastMessage(
+  details: CrashReportSubmitFailureDetails
+): string {
+  // Why: raw submit errors can include local paths or tokens.
+  const parts = [
+    translate(
+      'auto.components.crash.report.CrashReportDialog.56a3dfa283',
+      'Failed to send crash report.'
+    ),
+    summarizeCrashReportSubmitFailure(details)
+  ]
+  if (
+    details.diagnosticBundle?.status === 'not_uploaded' &&
+    details.diagnosticBundle.reason.includes('attachment submit failed')
+  ) {
+    parts.push(
+      translate(
+        'auto.components.crash.report.CrashReportDialog.54eb269759',
+        'Diagnostic logs were not uploaded because the attachment submit failed.'
+      )
+    )
+  }
+  return parts.join(' ')
+}
+
+export function formatCrashReportSubmitSuccessToastMessage(
+  diagnosticBundle?: CrashReportDiagnosticBundle
+): string {
+  if (
+    diagnosticBundle?.status === 'not_uploaded' &&
+    diagnosticBundle.reason.includes('attachment submit failed')
+  ) {
+    return translate(
+      'auto.components.crash.report.CrashReportDialog.a74856425d',
+      'Crash report sent without diagnostic logs.'
+    )
+  }
+  return translate(
+    'auto.components.crash.report.CrashReportDialog.8e24fe4f75',
+    'Crash report sent.'
+  )
 }
 
 type CrashReportDialogSurfaceProps = {
@@ -173,12 +238,7 @@ export function CrashReportDialogSurface({
             )
           )
         } else {
-          toast.error(
-            translate(
-              'auto.components.crash.report.CrashReportDialog.56a3dfa283',
-              'Failed to send crash report.'
-            )
-          )
+          toast.error(formatCrashReportSubmitFailureToastMessage(result))
         }
         console.error('Failed to submit crash report:', result.error)
         return
@@ -188,16 +248,14 @@ export function CrashReportDialogSurface({
       }
       onReportChange(result.report)
       setNotes('')
-      toast.success(
-        translate('auto.components.crash.report.CrashReportDialog.8e24fe4f75', 'Crash report sent.')
-      )
+      toast.success(formatCrashReportSubmitSuccessToastMessage(result.diagnosticBundle))
       onOpenChange(false)
     } catch (error) {
       toast.error(
-        translate(
-          'auto.components.crash.report.CrashReportDialog.56a3dfa283',
-          'Failed to send crash report.'
-        )
+        formatCrashReportSubmitFailureToastMessage({
+          status: null,
+          error: error instanceof Error ? error.message : String(error)
+        })
       )
       console.error('Failed to submit crash report:', error)
     } finally {

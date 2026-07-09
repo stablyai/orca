@@ -57,6 +57,26 @@ type CrashDiagnosticBundleAttachment = {
   readonly feedbackDiagnosticBundle?: FeedbackDiagnosticBundleAttachment
 }
 
+type CrashReportSubmissionContext = {
+  readonly diagnosticUpload: CrashDiagnosticBundleAttachment
+  readonly buildFeedbackText: (diagnosticBundle: CrashReportDiagnosticBundle | undefined) => string
+  readonly submitAnonymously?: boolean
+  readonly githubLogin: string | null
+  readonly githubEmail: string | null
+}
+
+type CrashReportSubmissionAttemptResult =
+  | {
+      readonly ok: true
+      readonly diagnosticBundle: CrashReportDiagnosticBundle
+    }
+  | {
+      readonly ok: false
+      readonly status: number | null
+      readonly error: string
+      readonly diagnosticBundle: CrashReportDiagnosticBundle
+    }
+
 function stringField(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') {
     return undefined
@@ -334,6 +354,97 @@ function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
   }
 }
 
+function buildCrashReportRetryDiagnosticBundle(
+  diagnosticUpload: CrashDiagnosticBundleAttachment
+): CrashReportDiagnosticBundle {
+  if (!diagnosticUpload.feedbackDiagnosticBundle) {
+    return diagnosticUpload.diagnosticBundle
+  }
+  return {
+    status: 'not_uploaded',
+    reason: 'diagnostic log attachment submit failed; logs were not uploaded',
+    bundleSubmissionId: diagnosticUpload.feedbackDiagnosticBundle.bundleSubmissionId,
+    bytes: diagnosticUpload.feedbackDiagnosticBundle.bytes,
+    spanCount: diagnosticUpload.feedbackDiagnosticBundle.spanCount
+  }
+}
+
+function summarizeFeedbackFailure(result: { status: number | null; error: string }): string {
+  if (result.status !== null) {
+    return `status ${result.status}`
+  }
+  const error = result.error.toLowerCase()
+  if (error.includes('timeout') || error.includes('timed out') || error.includes('aborted')) {
+    return 'timed out'
+  }
+  if (
+    error.includes('network') ||
+    error.includes('fetch failed') ||
+    error.includes('failed to fetch')
+  ) {
+    return 'network error'
+  }
+  return 'network error'
+}
+
+function formatCombinedCrashSubmitFailure(
+  firstResult: { status: number | null; error: string },
+  retryResult: { status: number | null; error: string }
+): string {
+  const combined = `Failed to send crash report. First attempt: ${summarizeFeedbackFailure(
+    firstResult
+  )}. Retry without diagnostic logs: ${summarizeFeedbackFailure(retryResult)}.`
+  return combined.length > 420 ? `${combined.slice(0, 417)}...` : combined
+}
+
+async function submitCrashReportWithDiagnosticFallback(
+  context: CrashReportSubmissionContext
+): Promise<CrashReportSubmissionAttemptResult> {
+  const firstFeedbackResult = await submitFeedback({
+    feedback: context.buildFeedbackText(context.diagnosticUpload.diagnosticBundle),
+    submissionType: 'crash',
+    submitAnonymously: context.submitAnonymously,
+    githubLogin: context.githubLogin,
+    githubEmail: context.githubEmail,
+    ...(context.diagnosticUpload.feedbackDiagnosticBundle
+      ? { diagnosticBundle: context.diagnosticUpload.feedbackDiagnosticBundle }
+      : {})
+  })
+  if (firstFeedbackResult.ok || !context.diagnosticUpload.feedbackDiagnosticBundle) {
+    return firstFeedbackResult.ok
+      ? {
+          ok: true,
+          diagnosticBundle: context.diagnosticUpload.diagnosticBundle
+        }
+      : {
+          ...firstFeedbackResult,
+          diagnosticBundle: context.diagnosticUpload.diagnosticBundle
+        }
+  }
+
+  const retryDiagnosticBundle = buildCrashReportRetryDiagnosticBundle(context.diagnosticUpload)
+  // Why: dropping the attachment preserves the crash report when bundle submission fails.
+  const retryResult = await submitFeedback({
+    feedback: context.buildFeedbackText(retryDiagnosticBundle),
+    submissionType: 'crash',
+    submitAnonymously: context.submitAnonymously,
+    githubLogin: context.githubLogin,
+    githubEmail: context.githubEmail
+  })
+  if (retryResult.ok) {
+    return {
+      ok: true,
+      diagnosticBundle: retryDiagnosticBundle
+    }
+  }
+  return {
+    ok: false,
+    status: firstFeedbackResult.status ?? retryResult.status,
+    error: formatCombinedCrashSubmitFailure(firstFeedbackResult, retryResult),
+    diagnosticBundle: retryDiagnosticBundle
+  }
+}
+
 function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachment {
   const status = getDiagnosticsStatus()
   if (!status.bundleEnabled) {
@@ -452,19 +563,16 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
           args.includeDiagnosticLogs === false
             ? skippedCrashDiagnosticBundle()
             : collectCrashDiagnosticBundleAttachment()
-        const diagnosticBundle = diagnosticUpload.diagnosticBundle
-        const result = await submitFeedback({
-          feedback: buildUncapturedCrashReportText(args.notes, diagnosticBundle),
-          submissionType: 'crash',
+        const result = await submitCrashReportWithDiagnosticFallback({
+          diagnosticUpload,
+          buildFeedbackText: (diagnosticBundle) =>
+            buildUncapturedCrashReportText(args.notes, diagnosticBundle),
           submitAnonymously: args.submitAnonymously,
           githubLogin: args.githubLogin,
-          githubEmail: args.githubEmail,
-          ...(diagnosticUpload.feedbackDiagnosticBundle
-            ? { diagnosticBundle: diagnosticUpload.feedbackDiagnosticBundle }
-            : {})
+          githubEmail: args.githubEmail
         })
         return result.ok
-          ? { ok: true, report: null, diagnosticBundle }
+          ? { ok: true, report: null, diagnosticBundle: result.diagnosticBundle }
           : {
               ...result,
               report: null
@@ -495,16 +603,13 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
           args.includeDiagnosticLogs === false
             ? skippedCrashDiagnosticBundle()
             : collectCrashDiagnosticBundleAttachment()
-        const diagnosticBundle = diagnosticUpload.diagnosticBundle
-        const result = await submitFeedback({
-          feedback: formatCrashReportText(report, args.notes, diagnosticBundle),
-          submissionType: 'crash',
+        const result = await submitCrashReportWithDiagnosticFallback({
+          diagnosticUpload,
+          buildFeedbackText: (diagnosticBundle) =>
+            formatCrashReportText(report, args.notes, diagnosticBundle),
           submitAnonymously: args.submitAnonymously,
           githubLogin: args.githubLogin,
-          githubEmail: args.githubEmail,
-          ...(diagnosticUpload.feedbackDiagnosticBundle
-            ? { diagnosticBundle: diagnosticUpload.feedbackDiagnosticBundle }
-            : {})
+          githubEmail: args.githubEmail
         })
         if (!result.ok) {
           return {
@@ -518,21 +623,37 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
             // Why: startup prompts are dismissed before the user can send from
             // the still-open dialog, so successful uploads must update storage.
             const sent = await store.markDismissedSent(report.id)
-            return { ok: true, report: sent ?? { ...report, status: 'sent' }, diagnosticBundle }
+            return {
+              ok: true,
+              report: sent ?? { ...report, status: 'sent' },
+              diagnosticBundle: result.diagnosticBundle
+            }
           } catch (error) {
             console.error('[crash-reporting] Failed to mark dismissed crash report sent:', error)
-            return { ok: true, report: { ...report, status: 'sent' }, diagnosticBundle }
+            return {
+              ok: true,
+              report: { ...report, status: 'sent' },
+              diagnosticBundle: result.diagnosticBundle
+            }
           }
         }
         try {
           const sent = await store.markSent(report.id)
-          return { ok: true, report: sent ?? { ...report, status: 'sent' }, diagnosticBundle }
+          return {
+            ok: true,
+            report: sent ?? { ...report, status: 'sent' },
+            diagnosticBundle: result.diagnosticBundle
+          }
         } catch (error) {
           // Why: the upstream submission already succeeded. A local persistence
           // failure must not present as upload failure or invite duplicate sends
           // during this app session.
           console.error('[crash-reporting] Failed to mark crash report sent:', error)
-          return { ok: true, report: { ...report, status: 'sent' }, diagnosticBundle }
+          return {
+            ok: true,
+            report: { ...report, status: 'sent' },
+            diagnosticBundle: result.diagnosticBundle
+          }
         }
       } finally {
         inFlightSubmissions.delete(report.id)
