@@ -2893,6 +2893,15 @@ export default function SessionScreen() {
     ]
   )
 
+  // Why: a fresh notification tap can change `?pane=` while this screen stays
+  // mounted (Expo reuses the route component). Clear the one-shot guard and the
+  // cached handle so the focus effect below re-resolves and re-focuses the new
+  // pane instead of short-circuiting on the previous tap's applied state.
+  useEffect(() => {
+    routePaneFocusAppliedRef.current = false
+    routePaneResolvedHandleRef.current = null
+  }, [routePaneKey])
+
   // Why: focus the pane named by a notification tap (`?pane=`). Resolve the
   // stable pane key to a live terminal handle once, then hand off to switchTab
   // when its session tab has loaded. Failure is a no-op — the worktree-level
