@@ -128,6 +128,43 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.terminal.search.7d924d870d', 'graphics'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.1abcf4d7de', 'linux')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.minimumContrastRatio.title',
+      'Minimum Contrast Ratio'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.minimumContrastRatio.description',
+      'Raises low-contrast ANSI text toward the background until this ratio is met. Set to 1 to use theme colors as-is.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrastRatio.contrast',
+        'contrast'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrastRatio.color',
+        'color'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrastRatio.ansi',
+        'ansi'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrastRatio.ratio',
+        'minimum contrast'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrastRatio.colors',
+        'colors'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.minimumContrastRatio.xterm',
+        'xterm'
+      )
+    ]
   }
 ])
 

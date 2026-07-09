@@ -11,8 +11,10 @@ import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-join
 import {
   buildDefaultTerminalOptions,
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
+  DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO,
   DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
   normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalMinimumContrastRatio,
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from './pane-terminal-options'
@@ -113,7 +115,22 @@ describe('buildDefaultTerminalOptions', () => {
   })
 
   it('enables xterm contrast correction for low-contrast CLI colors', () => {
-    expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
+    expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(
+      DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO
+    )
+  })
+
+  it('normalizes terminal minimum contrast ratio to the xterm 1–21 range', () => {
+    expect(normalizeTerminalMinimumContrastRatio(undefined)).toBe(
+      DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO
+    )
+    expect(normalizeTerminalMinimumContrastRatio(1)).toBe(1)
+    expect(normalizeTerminalMinimumContrastRatio(0)).toBe(1)
+    expect(normalizeTerminalMinimumContrastRatio(21)).toBe(21)
+    expect(normalizeTerminalMinimumContrastRatio(30)).toBe(21)
+    expect(normalizeTerminalMinimumContrastRatio(Number.NaN)).toBe(
+      DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO
+    )
   })
 
   it('only uses inactive outline for block cursors', () => {

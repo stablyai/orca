@@ -220,6 +220,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
+    // Why: match xterm default used in pane-terminal-options; users can lower
+    // to 1 when theme colors should render without contrast boosting (#7934).
+    terminalMinimumContrastRatio: 4.5,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
     terminalTuiScrollSensitivity: 1,

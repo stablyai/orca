@@ -5,6 +5,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalFontFamily: 'Font Family',
   terminalFontWeight: 'Font Weight',
   terminalLineHeight: 'Line Height',
+  terminalMinimumContrastRatio: 'Minimum Contrast Ratio',
   terminalScrollSensitivity: 'Normal Scroll Speed',
   terminalFastScrollSensitivity: 'Fast Scroll Speed',
   terminalTuiScrollSensitivity: 'TUI Scroll Speed',

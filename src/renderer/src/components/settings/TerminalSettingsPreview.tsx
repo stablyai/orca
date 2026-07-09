@@ -4,7 +4,10 @@ import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
+import {
+  buildDefaultTerminalOptions,
+  normalizeTerminalMinimumContrastRatio
+} from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/components/terminal-pane/layout-serialization'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
@@ -165,6 +168,9 @@ export function TerminalSettingsPreview({
       fontWeight: weights.fontWeight,
       fontWeightBold: weights.fontWeightBold,
       lineHeight: terminalLineHeight,
+      minimumContrastRatio: normalizeTerminalMinimumContrastRatio(
+        settings.terminalMinimumContrastRatio
+      ),
       theme: composedTheme ?? undefined,
       allowTransparency:
         settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1,
@@ -211,6 +217,9 @@ export function TerminalSettingsPreview({
     terminal.options.fontWeight = weights.fontWeight
     terminal.options.fontWeightBold = weights.fontWeightBold
     terminal.options.lineHeight = terminalLineHeight
+    terminal.options.minimumContrastRatio = normalizeTerminalMinimumContrastRatio(
+      settings.terminalMinimumContrastRatio
+    )
     terminal.options.cursorStyle = settings.terminalCursorStyle
     // Why: see constructor — mirror so the unfocused cursor reflects the
     // user's chosen shape (xterm defaults inactive to 'outline').
@@ -221,6 +230,7 @@ export function TerminalSettingsPreview({
     effectiveFontFamily,
     settings.terminalFontWeight,
     terminalLineHeight,
+    settings.terminalMinimumContrastRatio,
     settings.terminalCursorStyle,
     settings.terminalCursorBlink
   ])

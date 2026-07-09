@@ -65,6 +65,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
     terminalLineHeight: 1,
+    terminalMinimumContrastRatio: 4.5,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
     terminalTuiScrollSensitivity: 1,

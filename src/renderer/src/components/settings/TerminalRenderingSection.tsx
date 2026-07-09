@@ -1,11 +1,19 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import {
+  DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO,
+  TERMINAL_MINIMUM_CONTRAST_RATIO_MAX,
+  TERMINAL_MINIMUM_CONTRAST_RATIO_MIN,
+  normalizeTerminalMinimumContrastRatio
+} from '@/lib/pane-manager/pane-terminal-options'
+import {
+  NumberField,
   SettingsRow,
   SettingsSegmentedControl,
   SettingsSubsectionHeader
 } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { translate } from '@/i18n/i18n'
+import { getTerminalRenderingSearchEntries } from './terminal-typography-search'
 
 type TerminalRenderingSectionProps = {
   settings: GlobalSettings
@@ -16,6 +24,10 @@ export function TerminalRenderingSection({
   settings,
   updateSettings
 }: TerminalRenderingSectionProps): React.JSX.Element {
+  const searchEntries = getTerminalRenderingSearchEntries()
+  // Why index 1: catalog order is GPU Acceleration, then Minimum Contrast Ratio.
+  const contrastEntry = searchEntries[1]
+
   return (
     <section key="rendering" className="space-y-3">
       <SettingsSubsectionHeader
@@ -88,6 +100,53 @@ export function TerminalRenderingSection({
                   }
                 ]}
               />
+            }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalPane.minimumContrastRatio.title',
+            'Minimum Contrast Ratio'
+          )}
+          description={
+            contrastEntry?.description ??
+            translate(
+              'auto.components.settings.TerminalPane.minimumContrastRatio.description',
+              'Raises low-contrast ANSI text toward the background until this ratio is met. Set to 1 to use theme colors as-is.'
+            )
+          }
+          keywords={
+            contrastEntry?.keywords ?? [
+              'terminal',
+              'contrast',
+              'color',
+              'ansi',
+              'minimum contrast',
+              'colors',
+              'xterm'
+            ]
+          }
+        >
+          <NumberField
+            label={translate(
+              'auto.components.settings.TerminalPane.minimumContrastRatio.title',
+              'Minimum Contrast Ratio'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalPane.minimumContrastRatio.helper',
+              '1 leaves colors unchanged; 4.5 is the accessibility default.'
+            )}
+            value={normalizeTerminalMinimumContrastRatio(settings.terminalMinimumContrastRatio)}
+            defaultValue={DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO}
+            min={TERMINAL_MINIMUM_CONTRAST_RATIO_MIN}
+            max={TERMINAL_MINIMUM_CONTRAST_RATIO_MAX}
+            step={0.5}
+            suffix="1-21"
+            onChange={(value) =>
+              updateSettings({
+                terminalMinimumContrastRatio: normalizeTerminalMinimumContrastRatio(value)
+              })
             }
           />
         </SearchableSetting>

@@ -6,6 +6,12 @@ type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveS
 
 export const DEFAULT_TERMINAL_SCROLL_SENSITIVITY = 1.15
 export const DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY = 5
+// Why: xterm accepts 1–21; 1 means no correction, 4.5 keeps low-contrast ANSI
+// body text readable on light themes (default). Users can lower it when themes
+// already choose colors carefully (#7934).
+export const DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO = 4.5
+export const TERMINAL_MINIMUM_CONTRAST_RATIO_MIN = 1
+export const TERMINAL_MINIMUM_CONTRAST_RATIO_MAX = 21
 
 export function normalizeTerminalScrollSensitivity(value: number | undefined): number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -17,6 +23,16 @@ export function normalizeTerminalFastScrollSensitivity(value: number | undefined
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(20, Math.max(1, value))
     : DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
+}
+
+export function normalizeTerminalMinimumContrastRatio(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO
+  }
+  return Math.min(
+    TERMINAL_MINIMUM_CONTRAST_RATIO_MAX,
+    Math.max(TERMINAL_MINIMUM_CONTRAST_RATIO_MIN, value)
+  )
 }
 
 export function resolveTerminalCursorInactiveStyle(
@@ -49,7 +65,8 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     allowTransparency: false,
     // Why: agent CLIs sometimes render body text with ANSI white/bright-white
     // on light themes; xterm can keep those cells readable across renderers.
-    minimumContrastRatio: 4.5,
+    // Overridable via settings.terminalMinimumContrastRatio (#7934).
+    minimumContrastRatio: DEFAULT_TERMINAL_MINIMUM_CONTRAST_RATIO,
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
