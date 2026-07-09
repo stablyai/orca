@@ -1837,7 +1837,7 @@ export async function stageFile(
   clearGitReadInvalidationState()
   try {
     await gitExecFileAsync(
-      ['add', '--', literalPathspec(filePath)],
+      ['add', '--', literalPathspec(filePath, options)],
       gitOptionsForWorktree(worktreePath, options)
     )
   } finally {
@@ -1855,7 +1855,7 @@ export async function unstageFile(
 ): Promise<void> {
   clearGitReadInvalidationState()
   try {
-    await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath)], {
+    await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath, options)], {
       ...gitOptionsForWorktree(worktreePath, options)
     })
   } finally {
@@ -1961,9 +1961,12 @@ export async function discardChanges(
 
     let tracked = false
     try {
-      await gitExecFileAsync(['ls-files', '--error-unmatch', '--', literalPathspec(filePath)], {
-        ...gitOptionsForWorktree(worktreePath, options)
-      })
+      await gitExecFileAsync(
+        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, options)],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
       tracked = true
     } catch {
       // File is not tracked by git
@@ -1971,7 +1974,7 @@ export async function discardChanges(
 
     if (tracked) {
       await gitExecFileAsync(
-        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath)],
+        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath, options)],
         {
           ...gitOptionsForWorktree(worktreePath, options)
         }
@@ -1991,9 +1994,11 @@ function normalizeGitPathForCompare(filePath: string): string {
   return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
-function literalPathspec(filePath: string): string {
-  // Why: source-control selections are concrete paths, not user-authored Git globs.
-  return `:(literal)${filePath}`
+function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
+  // Why: Windows validation produces backslashes, but Git running inside WSL
+  // needs POSIX paths. Host paths stay untouched so POSIX filenames remain literal.
+  const runtimePath = options.wslDistro ? filePath.replace(/\\/g, '/') : filePath
+  return `:(literal)${runtimePath}`
 }
 
 function isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
@@ -2013,7 +2018,7 @@ async function listTrackedPathSpecs(
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     const { stdout } = await gitExecFileAsync(
-      ['ls-files', '-z', '--', ...chunk.map(literalPathspec)],
+      ['ls-files', '-z', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
       {
         ...gitOptionsForWorktree(worktreePath, options)
       }
@@ -2038,9 +2043,12 @@ async function cleanUntrackedPaths(
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     if (chunk.length > 0) {
       // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
-      await gitExecFileAsync(['clean', '-ffdx', '--', ...chunk.map(literalPathspec)], {
-        ...gitOptionsForWorktree(worktreePath, options)
-      })
+      await gitExecFileAsync(
+        ['clean', '-ffdx', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
     }
   }
 }
@@ -2082,7 +2090,13 @@ export async function bulkDiscardChanges(
         for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
           const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
           await gitExecFileAsync(
-            ['restore', '--worktree', '--source=HEAD', '--', ...chunk.map(literalPathspec)],
+            [
+              'restore',
+              '--worktree',
+              '--source=HEAD',
+              '--',
+              ...chunk.map((filePath) => literalPathspec(filePath, options))
+            ],
             {
               ...gitOptionsForWorktree(worktreePath, options)
             }
@@ -2125,7 +2139,7 @@ export async function bulkStageFiles(
     for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
       await gitExecFileAsync(
-        ['add', '--', ...chunk.map(literalPathspec)],
+        ['add', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
         gitOptionsForWorktree(worktreePath, options)
       )
     }
@@ -2149,9 +2163,17 @@ export async function bulkUnstageFiles(
   try {
     for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-      await gitExecFileAsync(['restore', '--staged', '--', ...chunk.map(literalPathspec)], {
-        ...gitOptionsForWorktree(worktreePath, options)
-      })
+      await gitExecFileAsync(
+        [
+          'restore',
+          '--staged',
+          '--',
+          ...chunk.map((filePath) => literalPathspec(filePath, options))
+        ],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
     }
   } finally {
     clearGitReadInvalidationState()
