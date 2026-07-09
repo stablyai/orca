@@ -352,6 +352,26 @@ describe('ghExecFileAsync WSL fallback', () => {
     )
   })
 
+  it('does not wake default WSL for glab auth probes when host glab is missing', async () => {
+    // Why: #7536 — diagnoseAuth / getGlabKnownHosts run `glab auth status`
+    // without a repo cwd. WSL fallback would start Ubuntu for GitHub-only users.
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock.mockImplementation((_binary, _args, _options, callback) => {
+      callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+    })
+
+    await expect(glabExecFileAsync(['auth', 'status'])).rejects.toMatchObject({ code: 'ENOENT' })
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'glab',
+      ['auth', 'status'],
+      expect.anything(),
+      expect.any(Function)
+    )
+    expect(execFileMock.mock.calls.some(([binary]) => binary === 'wsl.exe')).toBe(false)
+  })
+
   it('still retries idempotent glab transient failures', async () => {
     execFileMock
       .mockImplementationOnce((_binary, _args, _options, callback) => {

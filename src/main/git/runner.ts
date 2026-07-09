@@ -149,6 +149,11 @@ function resolveDefaultWslCli(command: 'gh' | 'glab', args: string[]): ResolvedC
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 
+/** `glab auth …` probes — never wake the default WSL distro for these. */
+function isGlabAuthProbeArgs(args: readonly string[]): boolean {
+  return args[0] === 'auth'
+}
+
 function isHostCommandMissing(err: unknown, command: 'gh' | 'glab'): boolean {
   if (!err || typeof err !== 'object') {
     return false
@@ -1544,11 +1549,17 @@ export async function glabExecFileAsync(
         resolved.wsl === null &&
         !options.cwd &&
         !options.wslDistro &&
-        isHostCommandMissing(err, 'glab')
+        isHostCommandMissing(err, 'glab') &&
+        // Why: #7536 — `glab auth status` runs on startup / known-host probes.
+        // Falling back to the default WSL distro wakes Ubuntu for GitHub-only
+        // Windows users who never use GitLab. Auth is host-config scoped; if
+        // glab only exists inside a WSL project, callers pass wslDistro/cwd.
+        !isGlabAuthProbeArgs(args)
       ) {
         const wslResolved = resolveDefaultWslCli('glab', args)
         if (wslResolved) {
-          // Why: mirror gh's WSL-only fallback for global GitLab project/auth calls.
+          // Why: mirror gh's WSL-only fallback for global GitLab API calls
+          // (not auth probes — see isGlabAuthProbeArgs).
           resolved = wslResolved
           attemptedDefaultWslFallback = true
           attempt = -1
