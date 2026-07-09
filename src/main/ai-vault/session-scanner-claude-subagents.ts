@@ -201,19 +201,20 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
       if (!record) {
         continue
       }
+      // Only records whose text IS the notification set a status; a user prompt
+      // (or a sync-Task toolUseResult report) that merely quotes one also trips
+      // the raw-line prefilter, so it must not consume the record — fall through
+      // to the toolUseResult branch below rather than dropping a real status.
       if (hasNotification) {
         const text = taskNotificationText(record)
-        // Only records whose text IS the notification set a status; a user
-        // prompt that merely quotes one (which the raw-line prefilter also
-        // matches) must not overwrite a real terminal status.
         if (text.startsWith(TASK_NOTIFICATION_MARKER)) {
           const taskId = TASK_ID_PATTERN.exec(text)?.[1]?.trim()
           const status = TASK_STATUS_PATTERN.exec(text)?.[1]
           if (taskId && status) {
             statuses.set(taskId, status)
           }
+          continue
         }
-        continue
       }
       const result = asRecord(record.toolUseResult)
       const agentId = extractString(result?.agentId)

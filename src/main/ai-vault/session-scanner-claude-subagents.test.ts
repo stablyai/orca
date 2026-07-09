@@ -305,6 +305,49 @@ describe('listClaudeSubagentSessions', () => {
     expect(result.sessions.map((session) => session.subagent?.status)).toEqual(['completed'])
   })
 
+  it('reads a sync-Task toolUseResult status even when its report quotes a notification', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-turmarker-'))
+    tempRoots.push(root)
+    const parentFilePath = join(root, 'project', 'parent-session.jsonl')
+    const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
+
+    await writeJsonlFile(parentFilePath, [
+      {
+        // A sync-Task completion: the terminal status lives in toolUseResult,
+        // but the subagent's own report text quotes <task-notification>, so the
+        // raw-line prefilter must not misroute it into the notification branch.
+        type: 'user',
+        sessionId: 'parent-session',
+        timestamp: '2026-07-05T10:03:00.000Z',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu_report',
+              content: 'The subagent explained how <task-notification> records work.'
+            }
+          ]
+        },
+        toolUseResult: { status: 'completed', agentId: 'reporter', agentType: 'Explore' }
+      }
+    ])
+    // Stale, so a dropped status would fall back to null, not 'completed'.
+    const staleTime = new Date(Date.now() - 60 * 60_000)
+    await writeSubagentTranscript({
+      subagentsDir,
+      agentId: 'reporter',
+      taskPrompt: 'Task for reporter',
+      timestamp: '2026-07-05T10:00:10.000Z'
+    })
+    await utimes(join(subagentsDir, 'agent-reporter.jsonl'), staleTime, staleTime)
+
+    const result = await listClaudeSubagentSessions({ parentFilePath, platform: 'darwin' })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions.map((session) => session.subagent?.status)).toEqual(['completed'])
+  })
+
   it('links to the parent derived from its file path even when the transcript has no sessionId', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-parent-'))
     tempRoots.push(root)
