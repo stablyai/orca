@@ -492,11 +492,19 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
   run_terminal_cmd: ['command'],
+  // Why: Grok maps Bash/Edit/Write to snake_case first-party tool names
+  // (run_terminal_command, search_replace, …). Without these keys the status
+  // row shows a blank toolInput for the bulk of Grok tool turns.
+  run_terminal_command: ['command'],
+  search_replace: ['file_path', 'path', 'filePath'],
+  write_to_file: ['TargetFile', 'path', 'file_path'],
   execute_code: ['code', 'command', 'cmd'],
   apply_patch: ['path', 'file_path'],
   view_image: ['path', 'file_path'],
   AskUser: ['question', 'prompt', 'message'],
   ask_user: ['question', 'prompt', 'message'],
+  AskUserQuestion: ['questions', 'question', 'prompt', 'message'],
+  ask_user_question: ['questions', 'question', 'prompt', 'message'],
   bash: ['command'],
   powershell: ['command'],
   create: ['path', 'file_path'],
@@ -517,7 +525,6 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   skill_manage: ['action', 'name', 'file_path'],
   delegate_task: ['task', 'prompt', 'description'],
   view_file: ['AbsolutePath', 'path', 'file_path'],
-  write_to_file: ['TargetFile', 'path', 'file_path'],
   replace_file_content: ['TargetFile', 'path', 'file_path'],
   multi_replace_file_content: ['TargetFile', 'path', 'file_path'],
   list_dir: ['DirectoryPath', 'path'],
@@ -528,7 +535,9 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   manage_task: ['TaskId', 'Action'],
   schedule: ['Prompt', 'DurationSeconds', 'CronExpression'],
   ask_question: ['question', 'questions'],
-  ask_permission: ['Action', 'Target', 'Reason']
+  ask_permission: ['Action', 'Target', 'Reason'],
+  spawn_subagent: ['prompt', 'description', 'subagent_type'],
+  open_page: ['url']
 }
 
 const FALLBACK_TOOL_INPUT_KEYS = [
@@ -1849,13 +1858,19 @@ function extractGrokToolFields(
       readString(hookPayload, 'toolName') ??
       readString(hookPayload, 'tool_name') ??
       readString(hookPayload, 'name')
+    const rawInput =
+      hookPayload.toolInput ??
+      hookPayload.tool_input ??
+      hookPayload.input ??
+      hookPayload.arguments
     const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.toolInput) ??
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.input) ??
-      deriveToolInputPreview(toolName, hookPayload.arguments)
+      deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
+    // Why: Grok's ask_user_question is auto-allowed and arrives as PreToolUse
+    // (not PermissionRequest). Capture the full question payload so the live
+    // card path can render options instead of only a waiting Notification.
+    const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
     const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
+      { toolName, toolInput, interactivePrompt },
       {
         hasToolInputField: hasAnyOwnField(hookPayload, [
           'toolInput',
@@ -1879,7 +1894,7 @@ function extractGrokToolFields(
     }
     return update
   }
-  if (isGrokEvent(eventName, 'stop', 'session_end')) {
+  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
     const direct =
       readString(hookPayload, 'lastAssistantMessage') ??
       readString(hookPayload, 'last_assistant_message')
@@ -3026,18 +3041,25 @@ function normalizeGrokEvent(
   const notificationMessage = readString(hookPayload, 'message')
   const notificationType = getGrokNotificationType(hookPayload)
   const notificationLevel = readString(hookPayload, 'level')
+  const preToolName =
+    readString(hookPayload, 'toolName') ??
+    readString(hookPayload, 'tool_name') ??
+    readString(hookPayload, 'name')
+  // Why: Grok's ask_user_question is auto-allowed, so it emits PreToolUse while
+  // blocked on a human answer (same shape as Kimi). Map that to waiting so the
+  // sidebar attention state matches Claude PermissionRequest UX.
+  const isUserInputPreTool =
+    isGrokEvent(eventName, 'pre_tool_use') && isAskUserQuestionTool(preToolName)
+
   let stateName: 'working' | 'waiting' | 'done' | null = null
   if (
-    isGrokEvent(
-      eventName,
-      'user_prompt_submit',
-      'pre_tool_use',
-      'post_tool_use',
-      'post_tool_use_failure'
-    )
+    isGrokEvent(eventName, 'user_prompt_submit', 'post_tool_use', 'post_tool_use_failure') ||
+    (isGrokEvent(eventName, 'pre_tool_use') && !isUserInputPreTool)
   ) {
     stateName = 'working'
-  } else if (isGrokEvent(eventName, 'stop', 'session_end')) {
+  } else if (isUserInputPreTool) {
+    stateName = 'waiting'
+  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
     stateName = 'done'
   } else if (
     isGrokEvent(eventName, 'notification') &&

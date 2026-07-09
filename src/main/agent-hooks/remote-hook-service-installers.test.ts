@@ -411,6 +411,7 @@ describe('remote hook service installers', () => {
       'SessionStart',
       'UserPromptSubmit',
       'Stop',
+      'StopFailure',
       'SessionEnd',
       'PreToolUse',
       'PostToolUse',
@@ -422,7 +423,10 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
       expect(command).toMatch(/^if \[ -x /)
     }
-    expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+    // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
+    expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
+    expect(grokConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
+    expect(grokConfig.hooks.StopFailure?.[0]?.matcher).toBeUndefined()
 
     const devinConfig = JSON.parse(devin.fs.files.get('/home/dev/.config/devin/config.json')!) as {
       permissions: { mode: string }

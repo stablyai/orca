@@ -1463,6 +1463,119 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('previews Grok-native tool names (run_terminal_command / search_replace)', () => {
+    const shell = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          tool_name: 'run_terminal_command',
+          tool_input: { command: 'git status' }
+        }
+      },
+      'production'
+    )
+    const edit = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          toolName: 'search_replace',
+          toolInput: { path: 'src/app.ts', old_string: 'a', new_string: 'b' }
+        }
+      },
+      'production'
+    )
+    expect(shell?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'run_terminal_command',
+      toolInput: 'git status'
+    })
+    expect(edit?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'search_replace',
+      toolInput: 'src/app.ts'
+    })
+  })
+
+  it('maps Grok ask_user_question PreToolUse to waiting with interactivePrompt', () => {
+    const questions = [
+      {
+        question: 'Ship to which region?',
+        options: [{ label: 'us-east', description: 'US East' }]
+      }
+    ]
+    const waiting = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          tool_name: 'ask_user_question',
+          tool_input: { questions }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PostToolUse',
+          tool_name: 'ask_user_question',
+          tool_response: { selected: ['us-east'] }
+        }
+      },
+      'production'
+    )
+    expect(waiting?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'waiting',
+      toolName: 'ask_user_question'
+    })
+    expect(waiting?.payload.interactivePrompt).toContain('Ship to which region?')
+    expect(answered?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'ask_user_question'
+    })
+  })
+
+  it('maps Grok StopFailure to done', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'UserPromptSubmit', prompt: 'do work' }
+      },
+      'production'
+    )
+    const done = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'StopFailure', error: 'api timeout' }
+      },
+      'production'
+    )
+    expect(done?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'done',
+      prompt: 'do work'
+    })
+  })
+
   it('strips Grok internal user_query wrapper before caching the prompt', () => {
     const prompt = normalizeHookPayload(
       state,

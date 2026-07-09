@@ -21,25 +21,39 @@ import {
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
 
+// Why: Grok's tool-event matcher is a real regex (see Grok hooks docs). Bare
+// `*` is not a valid "match all" pattern and can fail to load/match, so tool
+// lifecycle hooks never fire. `.*` matches every tool name (same as Command
+// Code's managed hooks).
+const GROK_TOOL_EVENT_MATCHER = '.*'
+
 const GROK_EVENTS = [
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: Grok can end a turn on API error without a normal Stop; without this
+  // the sidebar can stick on working (same rationale as Claude StopFailure).
+  { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
   {
     eventName: 'PreToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+    definition: { matcher: GROK_TOOL_EVENT_MATCHER, hooks: [{ type: 'command', command: '' }] }
   },
   {
     eventName: 'PostToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+    definition: { matcher: GROK_TOOL_EVENT_MATCHER, hooks: [{ type: 'command', command: '' }] }
   },
   {
     eventName: 'PostToolUseFailure',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+    definition: { matcher: GROK_TOOL_EVENT_MATCHER, hooks: [{ type: 'command', command: '' }] }
   },
   { eventName: 'Notification', definition: { hooks: [{ type: 'command', command: '' }] } }
 ] as const
+
+/** Test seam: the matcher string written for Pre/Post tool lifecycle hooks. */
+export function getGrokToolEventMatcherForTests(): string {
+  return GROK_TOOL_EVENT_MATCHER
+}
 
 function getConfigPath(): string {
   // Why: Grok loads trusted global hook files from ~/.grok/hooks/*.json. Keep
