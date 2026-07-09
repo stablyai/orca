@@ -51,7 +51,10 @@ vi.mock('node:os', async () => {
   }
 })
 
-import { syncSystemCodexResourcesIntoManagedHome } from './codex-home-paths'
+import {
+  syncCodexGlobalInstructionsIntoManagedHome,
+  syncSystemCodexResourcesIntoManagedHome
+} from './codex-home-paths'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -228,5 +231,62 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
 
     expect(lstatSync(runtimeHooksPath).isSymbolicLink()).toBe(true)
     expectSymbolicLinkTargetIfLinked(runtimeHooksPath, systemHooksPath)
+  })
+
+  it('mirrors the global AGENTS.md into the managed runtime home so user instructions survive', () => {
+    const systemAgentsPath = join(getSystemCodexHomePath(), 'AGENTS.md')
+    const runtimeAgentsPath = join(getRuntimeCodexHomePath(), 'AGENTS.md')
+    writeFileSync(systemAgentsPath, '# Global instructions\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# Global instructions\n')
+    expectSymbolicLinkTargetIfLinked(runtimeAgentsPath, systemAgentsPath)
+  })
+
+  it('mirrors only global instructions when explicit Codex homes are provided', () => {
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    mkdirSync(join(systemHomePath, 'skills'), { recursive: true })
+    writeFileSync(join(systemHomePath, 'skills', 'system.md'), 'skill\n')
+    writeFileSync(join(systemHomePath, 'AGENTS.md'), '# WSL instructions\n')
+
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+    const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+    expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# WSL instructions\n')
+    expectSymbolicLinkTargetIfLinked(runtimeAgentsPath, join(systemHomePath, 'AGENTS.md'))
+    expect(existsSync(join(managedHomePath, 'skills'))).toBe(false)
+  })
+
+  it('refreshes and removes owned global-instruction copies when file symlinks fail', () => {
+    fsMockState.failSymlink = true
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    const systemAgentsPath = join(systemHomePath, 'AGENTS.md')
+    const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+    writeFileSync(systemAgentsPath, 'first\n')
+
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+    writeFileSync(systemAgentsPath, 'second\n')
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+    expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
+    expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('second\n')
+    rmSync(systemAgentsPath)
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+    expect(existsSync(runtimeAgentsPath)).toBe(false)
+  })
+
+  it('preserves runtime-owned global instructions in an explicit managed home', () => {
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    mkdirSync(managedHomePath, { recursive: true })
+    writeFileSync(join(systemHomePath, 'AGENTS.md'), 'system\n')
+    writeFileSync(join(managedHomePath, 'AGENTS.md'), 'runtime\n')
+
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+    expect(readFileSync(join(managedHomePath, 'AGENTS.md'), 'utf-8')).toBe('runtime\n')
   })
 })

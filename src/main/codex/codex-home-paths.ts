@@ -14,6 +14,8 @@ import {
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
+const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
+
 const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'skills',
   'hooks',
@@ -21,7 +23,8 @@ const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'plugin-state',
   'profile-v2',
   'themes',
-  'prompts'
+  'prompts',
+  CODEX_GLOBAL_INSTRUCTIONS_ENTRY
 ] as const
 
 export function getSystemCodexHomePath(): string {
@@ -55,6 +58,17 @@ export function syncSystemCodexResourcesIntoManagedHome(): void {
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, managedHomePath, entryName)
   }
+}
+
+export function syncCodexGlobalInstructionsIntoManagedHome({
+  systemHomePath,
+  managedHomePath
+}: {
+  systemHomePath: string
+  managedHomePath: string
+}): void {
+  mkdirSync(managedHomePath, { recursive: true })
+  linkSystemCodexResource(systemHomePath, managedHomePath, CODEX_GLOBAL_INSTRUCTIONS_ENTRY)
 }
 
 function linkSystemCodexResource(
