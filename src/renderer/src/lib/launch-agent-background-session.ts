@@ -71,13 +71,21 @@ export async function launchAgentBackgroundSession(
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
-  const trimmedPrompt = prompt?.trim() ?? ''
+  const sshConnectionId = repo?.connectionId ?? null
+  // Route by the worktree's owner host, not the focused runtime.
+  const runtimeTarget = getActiveRuntimeTarget(
+    getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+  )
+  const rawPrompt = prompt ?? ''
+  const trimmedPrompt = rawPrompt.trim()
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  const shouldPastePromptAfterLaunch = hasPrompt
 
   let startupPlan: AgentStartupPlan | null = null
   let pasteDraftAfterLaunch: string | null = null
-  if (hasPrompt && isFollowupPath) {
+  if (shouldPastePromptAfterLaunch) {
+    // Why: automation prompts can be large and include shell metacharacters. Start
+    // the hosted TUI cleanly, then submit through its input path instead of argv.
     startupPlan = buildAgentStartupPlan({
       agent,
       prompt: '',
@@ -88,7 +96,7 @@ export async function launchAgentBackgroundSession(
       isRemote,
       allowEmptyPromptLaunch: true
     })
-    pasteDraftAfterLaunch = trimmedPrompt
+    pasteDraftAfterLaunch = rawPrompt
   } else {
     startupPlan = buildAgentStartupPlan({
       agent,
@@ -105,61 +113,41 @@ export async function launchAgentBackgroundSession(
     return null
   }
 
-  // Why: automation runs should start without revealing the workspace.
-  // Spawn the PTY immediately, then attach an inactive tab to the live session.
-  // Background-mount the hidden worktree first so its off-screen terminal surface
-  // gets a measurable layout box and the eager PTY buffer flushes on the first
-  // mount — mirroring the renderer-backed Codex startup path in useIpcEvents.
-  window.dispatchEvent(
-    new CustomEvent(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, {
-      detail: { worktreeId }
-    })
-  )
-  const tab = store.createTab(worktreeId, undefined, undefined, {
-    activate: false,
-    recordInteraction: false
-  })
-  if (title) {
-    store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
-  }
   // Why: agent hook callbacks are keyed by pane, and background automation
-  // tabs never mount a TerminalPane to inject this env for us. createBrowserUuid
-  // (not crypto.randomUUID) because the latter is undefined in non-secure
-  // browser contexts — the LAN web client served over plain HTTP.
+  // tabs never mount a TerminalPane to inject this env for us. The tab id is
+  // preallocated so the commandful PTY can start before React can mount a pane.
+  // createBrowserUuid (not crypto.randomUUID) because the latter is undefined
+  // in non-secure browser contexts — the LAN web client served over plain HTTP.
+  const tabId = createBrowserUuid()
   const leafId = createBrowserUuid()
-  const paneKey = makePaneKey(tab.id, leafId)
+  const paneKey = makePaneKey(tabId, leafId)
   const launchToken = createBrowserUuid()
   store.registerAgentLaunchConfig(paneKey, startupPlan.launchConfig, {
     agentType: agent,
     launchToken,
-    tabId: tab.id,
+    tabId,
     leafId
   })
-  // Why: `title` labels the tab/worktree entry. Pane titles render as an
-  // in-terminal title row, so background sessions must not persist it there.
-  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
   const paneEnv = {
     ...startupPlan.env,
     ORCA_PANE_KEY: paneKey,
-    ORCA_TAB_ID: tab.id,
+    ORCA_TAB_ID: tabId,
     ORCA_WORKTREE_ID: worktreeId,
     ORCA_AGENT_LAUNCH_TOKEN: launchToken
   }
-  const sshConnectionId = repo?.connectionId ?? null
   const sshStartupDelivery = createSshBackgroundStartupDelivery({
     command: sshConnectionId ? startupPlan.launchCommand : null,
     waitForShellReady:
       Boolean(sshConnectionId) &&
-      shouldUseShellReadyStartupDelivery({
+      (shouldUseShellReadyStartupDelivery({
         command: startupPlan.launchCommand,
         startupCommandDelivery: startupPlan.startupCommandDelivery
-      }),
+      }) ||
+        // Why: prompts are now pasted after launch, but SSH still needs the
+        // bare startup command submitted only after the remote shell is writable.
+        shouldPastePromptAfterLaunch),
     write: (ptyId, data) => window.api.pty.write(ptyId, data)
   })
-  // Route by the worktree's owner host, not the focused runtime.
-  const runtimeTarget = getActiveRuntimeTarget(
-    getSettingsForWorktreeRuntimeOwner(store, worktreeId)
-  )
   let ptyId = ''
   try {
     if (runtimeTarget.kind === 'environment') {
@@ -179,7 +167,7 @@ export async function launchAgentBackgroundSession(
             : {}),
           env: paneEnv,
           title,
-          tabId: tab.id,
+          tabId,
           leafId,
           // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
           presentation: 'background'
@@ -202,7 +190,7 @@ export async function launchAgentBackgroundSession(
         launchAgent: agent,
         connectionId: sshConnectionId,
         worktreeId,
-        tabId: tab.id,
+        tabId,
         leafId,
         telemetry: {
           agent_kind: tuiAgentToAgentKind(agent),
@@ -215,18 +203,37 @@ export async function launchAgentBackgroundSession(
         store.registerAgentLaunchConfig(paneKey, result.launchConfig, {
           agentType: agent,
           launchToken,
-          tabId: tab.id,
+          tabId,
           leafId
         })
       }
     }
   } catch (error) {
-    store.closeTab(tab.id, { recordInteraction: false })
+    store.clearAgentLaunchConfig(paneKey)
     throw error
   }
-  store.updateTabPtyId(tab.id, ptyId)
+  // Why: only publish a mountable hidden tab after the command-bearing PTY
+  // exists. Otherwise opening the workspace during launch can mount the pane
+  // first and race a plain shell against the agent command.
+  // Dispatch just before publication so the first hidden mount is measurable
+  // for xterm's eager-buffer flush without exposing a pre-command tab.
+  window.dispatchEvent(
+    new CustomEvent(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, {
+      detail: { worktreeId }
+    })
+  )
+  const tab = store.createTab(worktreeId, undefined, undefined, {
+    id: tabId,
+    initialPtyId: ptyId,
+    activate: false,
+    recordInteraction: false,
+    launchAgent: agent
+  })
+  if (title) {
+    store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
+  }
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
-  if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
+  if (agent === 'command-code' && hasPrompt) {
     // Why: Command Code does not expose a prompt-start hook; seed working for
     // hidden prompt launches so sidebar/activity surfaces do not stay idle.
     store.setAgentStatus(
@@ -304,6 +311,7 @@ export async function launchAgentBackgroundSession(
       content: pasteDraftAfterLaunch,
       agent,
       submit: true,
+      forcePaste: true,
       onTimeout: () => showAutomationPromptNotSentToast(agent)
     })
   }
