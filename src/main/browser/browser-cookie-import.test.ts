@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({
+const { appGetPathMock, sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({
+  appGetPathMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
+  app: { getPath: appGetPathMock },
   BrowserWindow: { fromWebContents: vi.fn() },
   dialog: { showOpenDialog: dialogShowOpenDialogMock },
   session: { fromPartition: sessionFromPartitionMock }
@@ -20,7 +22,8 @@ import {
   type ChromiumCookieColumnInfo,
   type DetectedBrowser
 } from './browser-cookie-import'
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { writeFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -324,6 +327,115 @@ describe('importCookiesFromBrowser Safari', () => {
 
     expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
     expect(cookiesSetMock).not.toHaveBeenCalled()
+  })
+})
+
+function createChromiumCookieDb(dbPath: string, rows: { name: string; value: string }[]): void {
+  mkdirSync(join(dbPath, '..'), { recursive: true })
+  const db = new DatabaseSync(dbPath)
+  db.exec(`
+    CREATE TABLE cookies (
+      creation_utc INTEGER NOT NULL,
+      host_key TEXT NOT NULL,
+      top_frame_site_key TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      value TEXT NOT NULL,
+      encrypted_value BLOB NOT NULL DEFAULT X'',
+      path TEXT NOT NULL,
+      expires_utc INTEGER NOT NULL,
+      is_secure INTEGER NOT NULL,
+      is_httponly INTEGER NOT NULL,
+      samesite INTEGER NOT NULL,
+      source_scheme INTEGER NOT NULL DEFAULT 0,
+      source_port INTEGER NOT NULL DEFAULT -1,
+      last_update_utc INTEGER NOT NULL DEFAULT 0,
+      has_cross_site_ancestor INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(host_key, top_frame_site_key, name, path, source_scheme, source_port)
+    )
+  `)
+  const insert = db.prepare(`
+    INSERT INTO cookies (
+      creation_utc,
+      host_key,
+      top_frame_site_key,
+      name,
+      value,
+      encrypted_value,
+      path,
+      expires_utc,
+      is_secure,
+      is_httponly,
+      samesite,
+      source_scheme,
+      source_port,
+      last_update_utc,
+      has_cross_site_ancestor
+    ) VALUES (?, ?, '', ?, ?, X'', '/', 0, 0, 0, 0, 0, -1, ?, 0)
+  `)
+  rows.forEach((row, index) => {
+    insert.run(133_000_000_000_000 + index, '.example.com', row.name, row.value, 0)
+  })
+  db.close()
+}
+
+describe('importCookiesFromBrowser Chromium', () => {
+  let tmpDir: string
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
+  let cookiesFlushStoreMock: ReturnType<typeof vi.fn>
+  let clearStorageDataMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'orca-chromium-cookie-test-'))
+    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
+    cookiesFlushStoreMock = vi.fn().mockResolvedValue(undefined)
+    clearStorageDataMock = vi.fn().mockResolvedValue(undefined)
+    appGetPathMock.mockReset()
+    appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
+    sessionFromPartitionMock.mockReset()
+    sessionFromPartitionMock.mockReturnValue({
+      cookies: {
+        set: cookiesSetMock,
+        remove: cookiesRemoveMock,
+        flushStore: cookiesFlushStoreMock
+      },
+      clearStorageData: clearStorageDataMock
+    })
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('imports from a live Chromium source DB into a Network/Cookies target profile', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieDb(sourceCookiesPath, [{ name: 'sid', value: 'source-value' }])
+    createChromiumCookieDb(targetCookiesPath, [{ name: 'old', value: 'target-value' }])
+
+    const browser: DetectedBrowser = {
+      family: 'chrome',
+      label: 'Google Chrome',
+      cookiesPath: sourceCookiesPath,
+      keychainService: 'Chrome Safe Storage',
+      keychainAccount: 'Chrome',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default'
+    }
+
+    const result = await importCookiesFromBrowser(browser, 'persist:test')
+
+    expect(result.ok).toBe(true)
+    expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain: '.example.com',
+        name: 'sid',
+        value: 'source-value'
+      })
+    )
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
+    expect(clearStorageDataMock).toHaveBeenCalledWith({ storages: ['cookies'] })
   })
 })
 
