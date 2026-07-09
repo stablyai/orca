@@ -2,7 +2,7 @@
    path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
@@ -39,6 +39,23 @@ type WatchState = {
   unwatchFn: (() => void) | null
   setupPromise: Promise<void> | null
   clients: Map<number, () => boolean>
+}
+
+// Why: a recursive watch rooted at the account home (or a filesystem root)
+// makes @parcel/watcher brute-force crawl the entire tree — container storage,
+// ML model dirs, package caches: millions of entries. That pins a libuv worker
+// and gigabytes of RSS for an hour+ and starves every other fs request on the
+// relay, freezing ALL workspaces that share the connection. Refuse those roots;
+// callers already tolerate a missing watcher (same as the no-parcel path) and
+// simply run without fs.changed events.
+function isBroadWatchRoot(rootPath: string): boolean {
+  const norm = rootPath.replace(/\/+$/, '')
+  const home = homedir().replace(/\/+$/, '')
+  if (norm === '' || norm === '/' || norm === home) {
+    return true
+  }
+  // An ancestor of home (e.g. /home) is at least as broad as home itself.
+  return home.startsWith(`${norm}/`)
 }
 
 async function isDirectoryEntry(
@@ -388,6 +405,14 @@ export class FsHandler {
 
   private async watch(params: Record<string, unknown>, context?: RequestContext) {
     const rootPath = expandTilde(params.rootPath as string)
+
+    if (isBroadWatchRoot(rootPath)) {
+      // Why: log loudly — a broad-root watch request is a client-side bug worth
+      // tracing (which surface asked to watch the whole home directory?).
+      console.log(`[relay] watch REFUSED (broad root): ${rootPath}`)
+      return
+    }
+    console.log(`[relay] watch start: ${rootPath}`)
 
     this.releaseStaleWatches()
 
