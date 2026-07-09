@@ -1154,7 +1154,7 @@ export class RateLimitService {
       fetchGeminiRateLimits(geminiCliOAuthEnabled),
       fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
       fetchKimiRateLimits(),
-      fetchGrokRateLimits({ grokHomePath }),
+      fetchGrokRateLimits({ grokHomePath, signal }),
       miniMaxConfigResult.error
         ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
         : fetchMiniMaxRateLimits({

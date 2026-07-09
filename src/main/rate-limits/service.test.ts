@@ -211,8 +211,20 @@ describe('RateLimitService', () => {
     await firstRefresh
     await switchRefresh
 
-    expect(fetchGrokRateLimits).toHaveBeenNthCalledWith(1, { grokHomePath: '/managed/grok-one' })
-    expect(fetchGrokRateLimits).toHaveBeenNthCalledWith(2, { grokHomePath: '/managed/grok-two' })
+    expect(fetchGrokRateLimits).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        grokHomePath: '/managed/grok-one',
+        signal: expect.any(AbortSignal)
+      })
+    )
+    expect(fetchGrokRateLimits).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        grokHomePath: '/managed/grok-two',
+        signal: expect.any(AbortSignal)
+      })
+    )
     expect(service.getState().grok?.weekly?.usedPercent).toBe(77)
   })
 

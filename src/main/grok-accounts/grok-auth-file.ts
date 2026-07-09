@@ -9,10 +9,17 @@ type GrokAuthRecord = {
 }
 
 export function readGrokAuthIdentity(managedHomePath: string): string | null {
-  const parsed = JSON.parse(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')) as Record<
-    string,
-    unknown
-  >
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')) as Record<
+      string,
+      unknown
+    >
+  } catch {
+    // Why: missing/malformed auth.json should return null so callers can show
+    // a friendly message instead of raw ENOENT/JSON parse errors.
+    return null
+  }
   for (const value of Object.values(parsed)) {
     const record = asAuthRecord(value)
     if (record?.key && typeof record.key === 'string') {

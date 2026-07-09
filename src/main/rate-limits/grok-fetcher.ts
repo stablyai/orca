@@ -45,6 +45,7 @@ type GrokBillingFetchResult = {
 
 export type FetchGrokRateLimitsOptions = {
   grokHomePath?: string | null
+  signal?: AbortSignal
 }
 
 function makeResult(
@@ -201,7 +202,10 @@ export function mapGrokBillingPayload(
   }
 }
 
-async function fetchGrokBilling(token: string): Promise<GrokBillingFetchResult> {
+async function fetchGrokBilling(
+  token: string,
+  signal?: AbortSignal
+): Promise<GrokBillingFetchResult> {
   const baseUrl = (process.env.GROK_CLI_CHAT_PROXY_BASE_URL ?? DEFAULT_GROK_BASE_URL).replace(
     /\/$/,
     ''
@@ -210,10 +214,15 @@ async function fetchGrokBilling(token: string): Promise<GrokBillingFetchResult> 
     Authorization: `Bearer ${token}`,
     Accept: 'application/json'
   }
+  // Why: honor caller cancel (RateLimitService abort) while keeping the request
+  // timeout, matching Claude/Codex fetchers.
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
+    : AbortSignal.timeout(API_TIMEOUT_MS)
   try {
     const response = await net.fetch(`${baseUrl}/billing?format=credits`, {
       headers,
-      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      signal: requestSignal
     })
     if (response.status === 401 || response.status === 403) {
       return {
@@ -251,20 +260,32 @@ async function fetchGrokBilling(token: string): Promise<GrokBillingFetchResult> 
 async function refreshGrokAuthAndFetchBilling(
   options: FetchGrokRateLimitsOptions = {}
 ): Promise<ProviderRateLimits> {
-  const authResult = await authenticateWithGrokCli({ grokHomePath: options.grokHomePath })
+  if (options.signal?.aborted) {
+    return makeResult('error', 'Grok usage fetch aborted.', 'network')
+  }
+  const authResult = await authenticateWithGrokCli({
+    grokHomePath: options.grokHomePath,
+    signal: options.signal
+  })
   if (authResult.status !== 'ok') {
     return makeResult(authResult.status, authResult.error, authResult.failureKind)
+  }
+  if (options.signal?.aborted) {
+    return makeResult('error', 'Grok usage fetch aborted.', 'network')
   }
   const tokenResult = readGrokAccessToken(options)
   if (tokenResult.status !== 'ok') {
     return makeResult('error', tokenResult.error, 'missing-credentials')
   }
-  return (await fetchGrokBilling(tokenResult.token)).rateLimits
+  return (await fetchGrokBilling(tokenResult.token, options.signal)).rateLimits
 }
 
 export async function fetchGrokRateLimits(
   options: FetchGrokRateLimitsOptions = {}
 ): Promise<ProviderRateLimits> {
+  if (options.signal?.aborted) {
+    return makeResult('error', 'Grok usage fetch aborted.', 'network')
+  }
   const tokenResult = readGrokAccessToken(options)
   if (tokenResult.status !== 'ok') {
     return makeResult(
@@ -274,7 +295,7 @@ export async function fetchGrokRateLimits(
     )
   }
   if (!tokenResult.expired) {
-    const billingResult = await fetchGrokBilling(tokenResult.token)
+    const billingResult = await fetchGrokBilling(tokenResult.token, options.signal)
     if (!billingResult.unauthorized) {
       return billingResult.rateLimits
     }

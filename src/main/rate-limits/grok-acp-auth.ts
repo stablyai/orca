@@ -17,6 +17,7 @@ type JsonRpcResponse = {
 
 type GrokCliAuthOptions = {
   grokHomePath?: string | null
+  signal?: AbortSignal
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -58,7 +59,13 @@ export async function authenticateWithGrokCli(
 ): Promise<GrokCliAuthResult> {
   // Why: `grok agent stdio` is the documented structured integration path.
   // Calling `authenticate` lets the CLI own OAuth refresh and auth precedence.
+  if (options.signal?.aborted) {
+    return failed('Grok authentication aborted.', 'network')
+  }
   await hydrateGrokCliPath()
+  if (options.signal?.aborted) {
+    return failed('Grok authentication aborted.', 'network')
+  }
   return await new Promise<GrokCliAuthResult>((resolve) => {
     const child = options.grokHomePath
       ? spawn('grok', ['--no-auto-update', 'agent', 'stdio'], {
@@ -96,10 +103,15 @@ export async function authenticateWithGrokCli(
         clearTimeout(killTimer)
         killTimer = null
       }
+      options.signal?.removeEventListener('abort', onAbort)
       child.stdout.off('data', onStdoutData)
       child.stdin.off('error', onStdinError)
       child.off('error', onChildError)
       child.off('close', onClose)
+    }
+
+    const onAbort = (): void => {
+      finish(failed('Grok authentication aborted.', 'network'))
     }
 
     const terminateChild = (): void => {
@@ -165,6 +177,14 @@ export async function authenticateWithGrokCli(
     }, ACP_TIMEOUT_MS)
     if (typeof timer.unref === 'function') {
       timer.unref()
+    }
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        finish(failed('Grok authentication aborted.', 'network'))
+        return
+      }
+      options.signal.addEventListener('abort', onAbort, { once: true })
     }
 
     const onChildError = (error: Error): void => {
