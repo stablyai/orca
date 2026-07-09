@@ -43,6 +43,8 @@ export type GitHubWorkItemBackgroundStoreSnapshot = {
           | 'agentCmdOverrides'
           | 'agentDefaultArgs'
           | 'agentDefaultEnv'
+          | 'grokManagedAccounts'
+          | 'activeGrokManagedAccountId'
         >
       >
     | null
@@ -191,7 +193,12 @@ export function buildGitHubWorkItemStartupPlan(args: {
         draft: draftPrompt,
         cmdOverrides: store.settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv),
+        agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv, {
+          settings: store.settings,
+          isRemote,
+          launchPlatform: platform,
+          hostPlatform: CLIENT_PLATFORM
+        }),
         platform,
         isRemote
       })
@@ -213,7 +220,12 @@ export function buildGitHubWorkItemStartupPlan(args: {
         prompt: quickPrompt,
         cmdOverrides: store.settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv),
+        agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv, {
+          settings: store.settings,
+          isRemote,
+          launchPlatform: platform,
+          hostPlatform: CLIENT_PLATFORM
+        }),
         platform,
         isRemote,
         allowEmptyPromptLaunch: true

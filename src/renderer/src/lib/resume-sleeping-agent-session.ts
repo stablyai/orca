@@ -39,6 +39,10 @@ function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
   return CLIENT_PLATFORM
 }
 
+function isRemoteResumeLaunch(worktreeId: string): boolean {
+  return getResumeLaunchPlatform(worktreeId) !== CLIENT_PLATFORM
+}
+
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
   const state = useAppStore.getState()
   const termIds = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
@@ -60,6 +64,7 @@ function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
 function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
+  const resumeLaunchPlatform = getResumeLaunchPlatform(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -71,9 +76,14 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
+        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv, {
+            settings: state.settings,
+            isRemote: isRemoteResumeLaunch(record.worktreeId),
+            launchPlatform: resumeLaunchPlatform,
+            hostPlatform: CLIENT_PLATFORM
+          }),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    platform: getResumeLaunchPlatform(record.worktreeId)
+    platform: resumeLaunchPlatform
   })
   if (!startupPlan) {
     toast.error(

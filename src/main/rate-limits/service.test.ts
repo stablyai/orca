@@ -189,6 +189,33 @@ describe('RateLimitService', () => {
     expect(service.getState().grok?.weekly?.usedPercent).toBe(33)
   })
 
+  it('does not apply stale Grok usage from the previous managed account after a switch', async () => {
+    const service = new RateLimitService()
+    const firstGrok = deferred<ProviderRateLimits>()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 11))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 22))
+    vi.mocked(fetchGrokRateLimits)
+      .mockImplementationOnce(() => firstGrok.promise)
+      .mockResolvedValueOnce(okProvider('grok', 77, Date.now(), 'weekly'))
+
+    let grokHomePath: string | null = '/managed/grok-one'
+    service.setGrokHomePathResolver(() => grokHomePath)
+    const firstRefresh = service.refresh()
+    await Promise.resolve()
+
+    grokHomePath = '/managed/grok-two'
+    const switchRefresh = service.refreshGrokForAccountChange()
+    await Promise.resolve()
+    firstGrok.resolve(okProvider('grok', 12, Date.now(), 'weekly'))
+
+    await firstRefresh
+    await switchRefresh
+
+    expect(fetchGrokRateLimits).toHaveBeenNthCalledWith(1, { grokHomePath: '/managed/grok-one' })
+    expect(fetchGrokRateLimits).toHaveBeenNthCalledWith(2, { grokHomePath: '/managed/grok-two' })
+    expect(service.getState().grok?.weekly?.usedPercent).toBe(77)
+  })
+
   it('removes all window listeners when replacing the attached window', () => {
     const service = new RateLimitService()
     const firstWindow = new FakeRateLimitWindow()

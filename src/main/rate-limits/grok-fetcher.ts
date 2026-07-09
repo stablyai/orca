@@ -43,6 +43,10 @@ type GrokBillingFetchResult = {
   unauthorized: boolean
 }
 
+export type FetchGrokRateLimitsOptions = {
+  grokHomePath?: string | null
+}
+
 function makeResult(
   status: ProviderRateLimits['status'],
   error: string | null,
@@ -59,12 +63,12 @@ function makeResult(
   }
 }
 
-function getGrokHome(): string {
-  return process.env.GROK_HOME?.trim() || join(homedir(), '.grok')
+function getGrokHome(options: FetchGrokRateLimitsOptions = {}): string {
+  return options.grokHomePath?.trim() || process.env.GROK_HOME?.trim() || join(homedir(), '.grok')
 }
 
-function getAuthPath(): string {
-  return join(getGrokHome(), 'auth.json')
+function getAuthPath(options: FetchGrokRateLimitsOptions = {}): string {
+  return join(getGrokHome(options), 'auth.json')
 }
 
 function asNumber(value: unknown): number | null {
@@ -106,8 +110,8 @@ function isExpiredToken(record: GrokAuthRecord): boolean {
   return expiresAt !== null && expiresAt - Date.now() <= TOKEN_EXPIRY_SKEW_MS
 }
 
-function readGrokAccessToken(): GrokAccessTokenResult {
-  const authPath = getAuthPath()
+function readGrokAccessToken(options: FetchGrokRateLimitsOptions = {}): GrokAccessTokenResult {
+  const authPath = getAuthPath(options)
   if (!existsSync(authPath)) {
     return { status: 'missing', error: 'Not signed in to Grok. Run `grok login`.' }
   }
@@ -244,20 +248,24 @@ async function fetchGrokBilling(token: string): Promise<GrokBillingFetchResult> 
   }
 }
 
-async function refreshGrokAuthAndFetchBilling(): Promise<ProviderRateLimits> {
-  const authResult = await authenticateWithGrokCli()
+async function refreshGrokAuthAndFetchBilling(
+  options: FetchGrokRateLimitsOptions = {}
+): Promise<ProviderRateLimits> {
+  const authResult = await authenticateWithGrokCli({ grokHomePath: options.grokHomePath })
   if (authResult.status !== 'ok') {
     return makeResult(authResult.status, authResult.error, authResult.failureKind)
   }
-  const tokenResult = readGrokAccessToken()
+  const tokenResult = readGrokAccessToken(options)
   if (tokenResult.status !== 'ok') {
     return makeResult('error', tokenResult.error, 'missing-credentials')
   }
   return (await fetchGrokBilling(tokenResult.token)).rateLimits
 }
 
-export async function fetchGrokRateLimits(): Promise<ProviderRateLimits> {
-  const tokenResult = readGrokAccessToken()
+export async function fetchGrokRateLimits(
+  options: FetchGrokRateLimitsOptions = {}
+): Promise<ProviderRateLimits> {
+  const tokenResult = readGrokAccessToken(options)
   if (tokenResult.status !== 'ok') {
     return makeResult(
       tokenResult.status === 'missing' ? 'unavailable' : 'error',
@@ -271,5 +279,5 @@ export async function fetchGrokRateLimits(): Promise<ProviderRateLimits> {
       return billingResult.rateLimits
     }
   }
-  return refreshGrokAuthAndFetchBilling()
+  return refreshGrokAuthAndFetchBilling(options)
 }

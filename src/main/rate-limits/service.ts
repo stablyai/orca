@@ -37,6 +37,7 @@ export type InactiveCodexAccountInfo = {
 }
 
 type CodexHomePathResolver = (target?: CodexAccountSelectionTarget) => string | null
+type GrokHomePathResolver = () => string | null
 type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -129,11 +130,13 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private grokFetchGeneration = 0
   private opencodeFetchGeneration = 0
   private minimaxFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
+  private grokHomePathResolver: GrokHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
     wslDistro: null
@@ -170,6 +173,10 @@ export class RateLimitService {
 
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
     this.codexHomePathResolver = resolver
+  }
+
+  setGrokHomePathResolver(resolver: GrokHomePathResolver): void {
+    this.grokHomePathResolver = resolver
   }
 
   setCodexFetchTarget(target?: CodexAccountSelectionTarget): void {
@@ -405,6 +412,18 @@ export class RateLimitService {
       claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
     })
     await this.fetchClaudeOnly({ force: true })
+    return this.getState()
+  }
+
+  async refreshGrokForAccountChange(): Promise<RateLimitState> {
+    this.grokFetchGeneration += 1
+    // Why: Grok account switching swaps GROK_HOME. Clear the old account's
+    // usage immediately so it cannot be displayed under the new account label.
+    this.updateState({
+      ...this.state,
+      grok: this.withFetchingStatus(null, 'grok')
+    })
+    await this.fetchAll({ force: true })
     return this.getState()
   }
 
@@ -1058,6 +1077,9 @@ export class RateLimitService {
     const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
+    const grokHomePath = this.grokHomePathResolver?.() ?? null
+    const grokProvenance = grokHomePath ?? 'system'
+    const grokGeneration = this.grokFetchGeneration
     const previousState = this.state
     const openCodeGoConfig = this.openCodeGoConfigResolver?.()
     const cookie = openCodeGoConfig?.sessionCookie ?? ''
@@ -1132,7 +1154,7 @@ export class RateLimitService {
       fetchGeminiRateLimits(geminiCliOAuthEnabled),
       fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
       fetchKimiRateLimits(),
-      fetchGrokRateLimits(),
+      fetchGrokRateLimits({ grokHomePath }),
       miniMaxConfigResult.error
         ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
         : fetchMiniMaxRateLimits({
@@ -1241,12 +1263,14 @@ export class RateLimitService {
           } satisfies ProviderRateLimits)
 
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+    const latestGrokHomePath = this.grokHomePathResolver?.() ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
+    const latestGrokProvenance = latestGrokHomePath ?? 'system'
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
     const shouldApplyClaude =
@@ -1255,6 +1279,8 @@ export class RateLimitService {
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyGrok =
+      grokGeneration === this.grokFetchGeneration && grokProvenance === latestGrokProvenance
 
     // Why: account switches can race in-flight Codex fetches. Only apply a
     // Codex result if both the selected-account provenance and the request
@@ -1275,7 +1301,7 @@ export class RateLimitService {
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      grok: this.applyStalePolicy(grok, previousState.grok),
+      grok: shouldApplyGrok ? this.applyStalePolicy(grok, previousState.grok) : this.state.grok,
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax

@@ -15,6 +15,10 @@ type JsonRpcResponse = {
   error?: { message?: unknown; code?: unknown }
 }
 
+type GrokCliAuthOptions = {
+  grokHomePath?: string | null
+}
+
 function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
 }
@@ -49,14 +53,24 @@ async function hydrateGrokCliPath(): Promise<void> {
   }
 }
 
-export async function authenticateWithGrokCli(): Promise<GrokCliAuthResult> {
+export async function authenticateWithGrokCli(
+  options: GrokCliAuthOptions = {}
+): Promise<GrokCliAuthResult> {
   // Why: `grok agent stdio` is the documented structured integration path.
   // Calling `authenticate` lets the CLI own OAuth refresh and auth precedence.
   await hydrateGrokCliPath()
   return await new Promise<GrokCliAuthResult>((resolve) => {
-    const child = spawn('grok', ['--no-auto-update', 'agent', 'stdio'], {
-      stdio: ['pipe', 'pipe', 'ignore']
-    })
+    const child = options.grokHomePath
+      ? spawn('grok', ['--no-auto-update', 'agent', 'stdio'], {
+          stdio: ['pipe', 'pipe', 'ignore'],
+          env: {
+            ...process.env,
+            GROK_HOME: options.grokHomePath
+          }
+        })
+      : spawn('grok', ['--no-auto-update', 'agent', 'stdio'], {
+          stdio: ['pipe', 'pipe', 'ignore']
+        })
     let settled = false
     let nextId = 1
     let stdoutBuffer = ''

@@ -114,6 +114,7 @@ import { createSystemTray, destroySystemTray } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
 import { CodexAccountService } from './codex-accounts/service'
+import { GrokAccountService } from './grok-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import {
   normalizeCodexRuntimeSelection,
@@ -201,6 +202,7 @@ let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let openCodeUsage: OpenCodeUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
+let grokAccounts: GrokAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let claudeAccounts: ClaudeAccountService | null = null
 let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
@@ -766,6 +768,9 @@ function openMainWindow(): BrowserWindow {
   if (!codexAccounts) {
     throw new Error('Codex account service must be initialized before opening the main window')
   }
+  if (!grokAccounts) {
+    throw new Error('Grok account service must be initialized before opening the main window')
+  }
   if (!codexRuntimeHome) {
     throw new Error('Codex runtime home service must be initialized before opening the main window')
   }
@@ -924,6 +929,7 @@ function openMainWindow(): BrowserWindow {
     codexUsage,
     openCodeUsage,
     codexAccounts,
+    grokAccounts,
     claudeAccounts,
     rateLimits,
     rendererWebContentsId,
@@ -938,6 +944,7 @@ function openMainWindow(): BrowserWindow {
     {
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
+      getAdditionalAiVaultGrokHomePaths: () => grokAccounts?.getManagedHomePaths() ?? [],
       onBeforeRelaunch: async () => {
         isQuitting = true
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
@@ -954,6 +961,7 @@ function openMainWindow(): BrowserWindow {
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
       awaitLocalPtyStartup: () => localPtyStartupReady,
+      getSelectedGrokHomePath: () => grokAccounts?.getActiveManagedHomePath() ?? null,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
           markExpectedRendererReload(webContentsId)
@@ -1710,11 +1718,13 @@ app.whenReady().then(async () => {
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
+  grokAccounts = new GrokAccountService(store, rateLimits)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver((target) =>
     codexRuntimeHome!.prepareForRateLimitFetch(target)
   )
+  rateLimits.setGrokHomePathResolver(() => grokAccounts!.getActiveManagedHomePath())
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   rateLimits.setClaudeAuthPreparationResolver((target) =>
@@ -2077,7 +2087,8 @@ app.whenReady().then(async () => {
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
       (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
-      store
+      store,
+      () => grokAccounts?.getActiveManagedHomePath() ?? null
     )
     // Why: headless servers have no renderer to mount <webview> browser panes.
     // Back them with main-process offscreen WebContents instead, so this host can

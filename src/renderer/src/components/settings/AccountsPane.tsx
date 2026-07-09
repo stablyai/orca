@@ -42,6 +42,7 @@ import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
+  getAccountsGrokSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
@@ -62,6 +63,7 @@ import {
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { GrokAccountsSection } from './GrokAccountsSection'
 
 export { getAccountsPaneSearchEntries }
 
@@ -1292,6 +1294,9 @@ export function AccountsPane({
           </div>
         </SearchableSetting>
       </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
+      <GrokAccountsSection key="grok-accounts" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries()) ? (
       <section key="gemini" id="accounts-gemini" className="space-y-4 scroll-mt-6">

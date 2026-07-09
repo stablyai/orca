@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
 const spawnMock = vi.hoisted(() => vi.fn())
-const fsState = vi.hoisted<{ authJson: string | null }>(() => ({ authJson: null }))
+const fsState = vi.hoisted<{
+  authJson: string | null
+  lastExistsPath: string | null
+  lastReadPath: string | null
+}>(() => ({
+  authJson: null,
+  lastExistsPath: null,
+  lastReadPath: null
+}))
 const grokVersionMock = vi.hoisted(() => vi.fn(() => 'grok 0.2.91 (abc) [stable]\n'))
 const hydrateShellPathMock = vi.hoisted(() => vi.fn())
 const mergePathSegmentsMock = vi.hoisted(() => vi.fn())
@@ -18,8 +26,12 @@ vi.mock('node:child_process', () => ({
 }))
 
 vi.mock('node:fs', () => ({
-  existsSync: () => fsState.authJson !== null,
-  readFileSync: () => {
+  existsSync: (path: string) => {
+    fsState.lastExistsPath = path
+    return fsState.authJson !== null
+  },
+  readFileSync: (path: string) => {
+    fsState.lastReadPath = path
     if (fsState.authJson === null) {
       throw new Error('ENOENT')
     }
@@ -187,6 +199,8 @@ describe('fetchGrokRateLimits', () => {
     vi.clearAllMocks()
     vi.unstubAllEnvs()
     fsState.authJson = authJson('tok-before-auth')
+    fsState.lastExistsPath = null
+    fsState.lastReadPath = null
     fakeProcess = new FakeGrokProcess()
     spawnMock.mockReturnValue(fakeProcess)
     netFetchMock.mockResolvedValue(jsonResponse(BILLING_RESPONSE))
@@ -284,6 +298,22 @@ describe('fetchGrokRateLimits', () => {
       'https://proxy.example.test/v1/billing?format=credits',
       expect.anything()
     )
+    expect(fsState.lastReadPath).toBe('/custom/grok-home/auth.json')
+  })
+
+  it('uses a managed Grok home for credential reads and ACP refresh', async () => {
+    fsState.authJson = expiredAuthJson('tok-expired')
+
+    await fetchGrokRateLimits({ grokHomePath: '/managed/grok-home' })
+
+    expect(fsState.lastExistsPath).toBe('/managed/grok-home/auth.json')
+    expect(fsState.lastReadPath).toBe('/managed/grok-home/auth.json')
+    expect(spawnMock).toHaveBeenCalledWith('grok', ['--no-auto-update', 'agent', 'stdio'], {
+      stdio: ['pipe', 'pipe', 'ignore'],
+      env: expect.objectContaining({
+        GROK_HOME: '/managed/grok-home'
+      })
+    })
   })
 
   it('returns unavailable without spawning when Grok is not signed in', async () => {

@@ -6867,7 +6867,9 @@
             "b84a5b0c8a": "プロバイダー アカウントをこのデバイスまたは WSL で検査および追加するかどうかを選択します。",
             "d09fb5ca92": "アカウントの場所",
             "733f9e2a93": "MiniMax 使用量",
-            "f8374c3151": "ローカルのレート制限取得用に platform.minimax.io のセッション Cookie を貼り付けます。"
+            "f8374c3151": "ローカルのレート制限取得用に platform.minimax.io のセッション Cookie を貼り付けます。",
+            "913f2f40f9": "Grok Accounts",
+            "4f0a71c893": "Optional account switching for Grok using isolated GROK_HOME directories."
           }
         },
         "advanced": {
@@ -8811,6 +8813,28 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "GrokAccountsSection": {
+          "09c0c774f6": "Could not load Grok accounts.",
+          "0edb3b4c8d": "Grok account updated.",
+          "a617606f43": "{{value0}} -> {{value1}}. Restart live Grok terminals before continuing old sessions.",
+          "53eab14cd4": "Grok account update failed.",
+          "f8d3c1d153": "Remove Grok Account?",
+          "a2d157c8b5": "Orca will delete the managed Grok home for this saved account. If it is currently active, Orca falls back to the system default Grok login.",
+          "dbb9626ed1": "Cancel",
+          "c2d2751587": "Remove Account",
+          "0baad2d5d2": "Grok",
+          "9434c099b4": "Optional. Add Grok accounts only if you want Orca-launched Grok terminals and usage reads to switch between isolated CLI homes.",
+          "603bfb6f0c": "Grok Accounts",
+          "caa4e95f6d": "Managed Grok accounts use isolated GROK_HOME directories.",
+          "94d351af4a": "Accounts",
+          "6f598b68c3": "New accounts are added on this device.",
+          "b0e948a4f9": "Add Account",
+          "f2a265f8c7": "System default",
+          "e74831fb6b": "Active",
+          "afd4795eef": "Use your current system Grok login.",
+          "264b67cb71": "No managed Grok accounts. Orca will use the system default Grok login until you add one here.",
+          "8a0f870153": "Re-authenticate"
         }
       },
       "right": {
