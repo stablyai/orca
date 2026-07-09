@@ -196,6 +196,12 @@ describe('dispatchTaskToAgent', () => {
         inject: true
       }
     })
+    // Why: busy probe reuses the already-resolved worker handle — only one
+    // resolvePane per pane (coord + worker), not a third for the taskList check.
+    const resolvePaneCalls = callRuntime.mock.calls.filter(
+      ([request]) => request.method === 'terminal.resolvePane'
+    )
+    expect(resolvePaneCalls).toHaveLength(2)
   })
 
   it('rejects when the worker already has an active dispatch', async () => {

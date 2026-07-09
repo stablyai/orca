@@ -61,6 +61,18 @@ export async function findActiveDispatchForWorker(args: {
     paneKey: args.workerPaneKey,
     callRuntime: args.callRuntime
   })
+  return findActiveDispatchForWorkerHandle({
+    workerHandle,
+    callRuntime: args.callRuntime
+  })
+}
+
+// Why: dispatch already resolved the worker handle; reuse it instead of a second
+// terminal.resolvePane round-trip when probing taskList.
+async function findActiveDispatchForWorkerHandle(args: {
+  workerHandle: string
+  callRuntime: CallRuntime
+}): Promise<ActiveWorkerDispatch | null> {
   const listResult = assertOk(
     await args.callRuntime({
       method: 'orchestration.taskList',
@@ -75,13 +87,13 @@ export async function findActiveDispatchForWorker(args: {
       continue
     }
     if (
-      row.assignee_handle === workerHandle &&
+      row.assignee_handle === args.workerHandle &&
       typeof row.id === 'string' &&
       typeof row.dispatch_id === 'string' &&
       row.dispatch_id.length > 0
     ) {
       return {
-        workerHandle,
+        workerHandle: args.workerHandle,
         taskId: row.id,
         dispatchId: row.dispatch_id
       }
@@ -154,8 +166,8 @@ export async function dispatchTaskToAgent(args: {
     callRuntime: args.callRuntime
   })
 
-  const active = await findActiveDispatchForWorker({
-    workerPaneKey: args.workerPaneKey,
+  const active = await findActiveDispatchForWorkerHandle({
+    workerHandle,
     callRuntime: args.callRuntime
   })
   if (active) {
