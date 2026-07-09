@@ -55,6 +55,13 @@ export type CodexTrustEntry = {
   matcher?: string
   /** Optional statusMessage field. */
   statusMessage?: string
+  /** Verbatim hash to write instead of computing one. Used when carrying a
+   *  Codex-written approval across files, so trust survives even if Codex's
+   *  hash algorithm drifts from computeTrustedHash. Never fed into hashing. */
+  trustedHash?: string
+  /** Explicit enabled state to write. When absent, a pre-existing
+   *  `enabled = false` on the target block is preserved. */
+  enabled?: boolean
 }
 
 export type CodexHookTrustState = {
@@ -308,7 +315,8 @@ export function upsertHookTrustEntriesInContent(
     updated = upsertTrustBlocks(
       updated,
       getTrustKeyWriteVariants(computeTrustKey(entry)),
-      computeTrustedHash(entry)
+      entry.trustedHash ?? computeTrustedHash(entry),
+      entry.enabled
     )
   }
   return updated
@@ -420,7 +428,12 @@ export function escapeTomlString(value: string): string {
     .replaceAll('\t', '\\t')
 }
 
-function upsertTrustBlocks(content: string, keys: readonly string[], hash: string): string {
+function upsertTrustBlocks(
+  content: string,
+  keys: readonly string[],
+  hash: string,
+  explicitEnabled?: boolean
+): string {
   const ranges = keys
     .flatMap((key) => findTrustBlockRanges(content, key))
     .filter(
@@ -431,7 +444,7 @@ function upsertTrustBlocks(content: string, keys: readonly string[], hash: strin
     )
     .sort((a, b) => a.start - b.start)
   if (ranges.length === 0) {
-    const block = buildTrustBlocks(keys, hash, true)
+    const block = buildTrustBlocks(keys, hash, explicitEnabled ?? true)
     if (content.length === 0) {
       return `${block}\n`
     }
@@ -446,13 +459,17 @@ function upsertTrustBlocks(content: string, keys: readonly string[], hash: strin
   // silently re-enabled by the next auto-install on app start.
   // If duplicate blocks already exist, treat any disabled copy as authoritative
   // while collapsing the malformed TOML back to one table.
-  const enabled = !ranges.some((range) => {
-    const existingBlock = content.slice(range.headerLineEnd, range.end)
-    const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(
-      existingBlock
-    )
-    return enabledMatch?.[1] === 'false'
-  })
+  // An explicit enabled state (write-back promotion of an in-Orca /hooks
+  // toggle) overrides that preservation: it IS the user's latest decision.
+  const enabled =
+    explicitEnabled ??
+    !ranges.some((range) => {
+      const existingBlock = content.slice(range.headerLineEnd, range.end)
+      const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(
+        existingBlock
+      )
+      return enabledMatch?.[1] === 'false'
+    })
   const block = buildTrustBlocks(keys, hash, enabled)
   let cursor = 0
   let deduped = ''
