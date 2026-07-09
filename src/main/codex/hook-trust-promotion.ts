@@ -134,6 +134,16 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
   if (!existsSync(runtimeTomlPath)) {
     return
   }
+  // Why: without a snapshot of what Orca last wrote (first launch after
+  // upgrading to a build with promotion, or a corrupted snapshot), a mirrored
+  // copy of since-revoked system trust is indistinguishable from a genuine
+  // in-Orca approval. Promoting would resurrect trust the user revoked in
+  // ~/.codex, so skip this launch — install() writes the first snapshot and
+  // promotion starts on the next one.
+  const provenance = readHookTrustProvenance(runtimeHomePath)
+  if (!provenance) {
+    return
+  }
   const runtimeTrust = readHookTrustEntries(runtimeTomlPath)
   if (runtimeTrust.size === 0) {
     return
@@ -146,7 +156,6 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
   if (!runtimeConfig?.hooks || !systemConfig?.hooks) {
     return
   }
-  const provenance = readHookTrustProvenance(runtimeHomePath)
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
 
   const promotions: CodexTrustEntry[] = []
@@ -158,7 +167,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
     if (!parsed || getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
       continue
     }
-    const previous = provenance?.get(normalizeHookTrustKeyForLookup(key))
+    const previous = provenance.get(normalizeHookTrustKeyForLookup(key))
     if (
       previous &&
       previous.trustedHash === state.trustedHash &&
