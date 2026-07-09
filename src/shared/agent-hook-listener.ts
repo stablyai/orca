@@ -2162,13 +2162,21 @@ function normalizeClaudeEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  // Why: Claude's AskUserQuestion tool is auto-allowed, so it emits PreToolUse
+  // (not PermissionRequest) while blocked on a human answer — Claude posts a
+  // Notification instead of PermissionRequest, and Orca does not register the
+  // Notification hook. Treat that PreToolUse as waiting so the sidebar shows the
+  // amber attention state instead of a working spinner that decays to grey while
+  // the question sits unanswered. Mirrors normalizeKimiEvent's handling.
+  const isAskUserQuestion =
+    eventName === 'PreToolUse' && isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
   const stateName =
     eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure'
+    eventName === 'PostToolUseFailure' ||
+    (eventName === 'PreToolUse' && !isAskUserQuestion)
       ? 'working'
-      : eventName === 'PermissionRequest'
+      : eventName === 'PermissionRequest' || isAskUserQuestion
         ? 'waiting'
         : eventName === 'Stop' || eventName === 'StopFailure'
           ? 'done'

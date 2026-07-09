@@ -90,6 +90,9 @@ export function sendSharedControlCleanupRequest(args: {
 export function replaySharedControlSubscriptions(args: {
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
   send: (subscription: SharedControlLogicalSubscription<unknown>) => void
+  // Why: true only for a reconnect of a previously-ready connection; first
+  // connects deliver their initial snapshot through the normal gated path.
+  tagReplayedResponses?: boolean
 }): void {
   for (const subscription of args.subscriptions.values()) {
     if (subscription.closeAfterReady) {
@@ -97,6 +100,9 @@ export function replaySharedControlSubscriptions(args: {
     }
     subscription.sent = false
     subscription.remoteSubscriptionId = null
+    if (args.tagReplayedResponses) {
+      subscription.pendingReplayTag = true
+    }
     args.send(subscription)
   }
 }

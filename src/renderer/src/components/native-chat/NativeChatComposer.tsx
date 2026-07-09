@@ -41,6 +41,7 @@ import {
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
+import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
 import { dispatchDictationControl } from '../dictation/dictation-control-events'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 
@@ -167,7 +168,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       setCaret(el.selectionStart ?? el.value.length)
     }, [])
 
-    const { imageAttachments, attachLocalPaths, clearImageAttachments, removeImageAttachment } =
+    const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
       useNativeChatComposerAttachments({
         attachmentScopeKey: targetPtyId ?? terminalTabId,
         caret,
@@ -213,11 +214,19 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       return true
     }, [])
 
+    const { attachExternalPaths, resolveAttachmentOwner } = useNativeChatExternalAttachments({
+      terminalTabId,
+      disabled,
+      attachResolvedPaths,
+      setNotice
+    })
+
     const { handlePaste, pasteFromClipboard } = useNativeChatComposerPaste({
       agent,
       disabled,
       caret,
-      attachLocalPaths,
+      resolveAttachmentOwner,
+      attachResolvedPaths,
       insertTypedText,
       setCaret,
       setNotice
@@ -234,9 +243,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         if (payload.target !== NATIVE_FILE_DROP_TARGET.composer) {
           return
         }
-        attachLocalPaths(payload.paths)
+        attachExternalPaths(payload.paths)
       })
-    }, [attachLocalPaths])
+    }, [attachExternalPaths])
 
     const pickAttachment = useCallback(() => {
       void (async () => {
@@ -244,9 +253,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         if (!filePath) {
           return
         }
-        attachLocalPaths([filePath])
+        attachExternalPaths([filePath])
       })()
-    }, [attachLocalPaths])
+    }, [attachExternalPaths])
 
     const focusForDictation = useCallback(() => {
       textareaRef.current?.focus()

@@ -13,6 +13,7 @@ import {
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
+import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
 
 const TEST_PROJECT_PATH = path.join('tmp', 'project')
 
@@ -406,6 +407,83 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
+  it('detects a half-open socket via client liveness, reconnects, and tags the replayed response', async () => {
+    // Why: the server keeps the TCP connection open but stops answering —
+    // no close frame, no pongs (autoPong disabled), no responses. This is the
+    // half-open devtunnel scenario from #7718: edge-triggered reconnect never
+    // fires, so client liveness must terminate the socket itself.
+    const server = await createServer({ disableAutoPong: true })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      liveness: { pingIntervalMs: 50, livenessTimeoutMs: 200 }
+    })
+    const onResponse = vi.fn()
+    const onClose = vi.fn()
+
+    await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
+      onResponse,
+      onError: vi.fn(),
+      onClose
+    })
+    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+    expect(isRuntimeSubscriptionReplayResponse(onResponse.mock.calls[0]?.[0])).toBe(false)
+
+    // Liveness terminates the silent socket and the reconnect path replays
+    // the subscription on a fresh connection.
+    await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThanOrEqual(2), {
+      timeout: 5000
+    })
+    await vi.waitFor(
+      () =>
+        expect(
+          server.requests.filter((request) => request.method === 'runtime.clientEvents.subscribe')
+            .length
+        ).toBeGreaterThanOrEqual(2),
+      { timeout: 5000 }
+    )
+    // The first response after the reconnect replay carries the replay tag so
+    // snapshot freshness gates can accept the re-emitted snapshot.
+    await vi.waitFor(
+      () =>
+        expect(
+          onResponse.mock.calls.some(([response]) => isRuntimeSubscriptionReplayResponse(response))
+        ).toBe(true),
+      { timeout: 5000 }
+    )
+    expect(onClose).not.toHaveBeenCalled()
+
+    connection.close()
+  })
+
+  it('tears down the socket when a request times out and reconnects active subscriptions', async () => {
+    const server = await createServer({ silentMethods: ['worktree.hang'] })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const onResponse = vi.fn()
+    const onClose = vi.fn()
+
+    await connection.subscribe('runtime.clientEvents.subscribe', null, 1000, {
+      onResponse,
+      onError: vi.fn(),
+      onClose
+    })
+    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+
+    // Why: mirrors RemoteRuntimeRequestConnection — a request the server never
+    // answered marks the socket as suspect and must not leave it 'ready'.
+    await expect(connection.request('worktree.hang', undefined, 50)).rejects.toThrow('Timed out')
+
+    await vi.waitFor(() => expect(server.connectionCount()).toBe(2), { timeout: 5000 })
+    await vi.waitFor(
+      () =>
+        expect(
+          server.requests.filter((request) => request.method === 'runtime.clientEvents.subscribe')
+        ).toHaveLength(2),
+      { timeout: 5000 }
+    )
+    expect(onClose).not.toHaveBeenCalled()
+
+    connection.close()
+  })
+
   it('rejects pending requests and records close diagnostics when the socket closes', async () => {
     const server = await createServer({ closeBeforeResponse: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
@@ -434,6 +512,10 @@ async function createServer(
     closeAfterFirstStreamingResponse?: boolean
     closeBeforeResponse?: boolean
     suppressReadyFrame?: boolean
+    // Why: half-open simulation — the socket stays open but never answers
+    // protocol pings, like a wedged tunnel that swallows frames silently.
+    disableAutoPong?: boolean
+    silentMethods?: string[]
   } = {}
 ): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
@@ -441,7 +523,7 @@ async function createServer(
   const delayedResponses: (() => void)[] = []
   let connectionCount = 0
   let closedAfterFirstStreamingResponse = false
-  const wss = new WebSocketServer({ port: 0 })
+  const wss = new WebSocketServer({ port: 0, autoPong: options.disableAutoPong !== true })
   servers.push(wss)
 
   wss.on('connection', (ws) => {
@@ -531,10 +613,14 @@ function handleRequest(
     sendUnknownResponseBeforeResponse?: boolean
     closeAfterStreamingResponse?: () => boolean
     closeBeforeResponse?: boolean
+    silentMethods?: string[]
   },
   delayedResponses: (() => void)[]
 ): void {
   requests.push(request)
+  if (options.silentMethods?.includes(request.method)) {
+    return
+  }
   if (options.closeBeforeResponse) {
     ws.close(4001, 'test close')
     return

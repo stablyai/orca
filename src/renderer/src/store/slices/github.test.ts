@@ -2619,12 +2619,74 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(store.getState().prCache[`repo-1::${branch}`]?.data).toEqual(cachedPR)
   })
 
-  it('preserves visible cached PR data when a fallback refresh misses', async () => {
+  it.each(['open', 'draft'] as const)(
+    'clears visible cached %s PR data when a fallback refresh misses',
+    async (state) => {
+      const store = createTestStore()
+      const repoPath = '/repo'
+      const repoId = 'repo-1'
+      const branch = 'feature/fallback-miss'
+      const cachedPR = makePR({ number: 12, state, title: 'Visible cached PR' })
+      const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
+      store.setState({
+        repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+        prCache: {
+          [`${repoId}::${branch}`]: {
+            data: cachedPR,
+            fetchedAt: 1
+          }
+        },
+        hostedReviewCache: {
+          [hostedReviewCacheKey]: {
+            data: {
+              provider: 'github',
+              number: 12,
+              title: 'Visible cached PR',
+              state,
+              url: 'https://github.com/acme/orca/pull/12',
+              status: 'pending',
+              updatedAt: '2026-03-28T00:00:00Z',
+              mergeable: 'UNKNOWN'
+            },
+            fetchedAt: 1,
+            linkedReviewHintKey: 'github:12'
+          }
+        }
+      } as unknown as Partial<AppState>)
+      mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+      await expect(
+        store.getState().fetchPRForBranch(repoPath, branch, {
+          force: true,
+          repoId,
+          fallbackPRNumber: 12
+        })
+      ).resolves.toBeNull()
+      expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
+        data: null,
+        fetchedAt: 2
+      })
+      expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+        data: null,
+        fetchedAt: 2,
+        linkedReviewHintKey: 'github:12'
+      })
+    }
+  )
+
+  it('writes a merged fallback result over an open cached PR', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-1'
-    const branch = 'feature/fallback-miss'
-    const cachedPR = makePR({ number: 12, title: 'Visible cached PR' })
+    const branch = 'feature/fallback-found-merged'
+    const cachedPR = makePR({ number: 12, title: 'Visible open PR', state: 'open' })
+    const mergedPR = makePR({
+      number: 12,
+      title: 'Merged PR',
+      state: 'merged',
+      headSha: 'head-oid'
+    })
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
     store.setState({
@@ -2640,7 +2702,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
           data: {
             provider: 'github',
             number: 12,
-            title: 'Visible cached PR',
+            title: 'Visible open PR',
             state: 'open',
             url: 'https://github.com/acme/orca/pull/12',
             status: 'pending',
@@ -2652,7 +2714,11 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         }
       }
     } as unknown as Partial<AppState>)
-    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: mergedPR,
+      fetchedAt: 2
+    })
 
     await expect(
       store.getState().fetchPRForBranch(repoPath, branch, {
@@ -2660,14 +2726,14 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         repoId,
         fallbackPRNumber: 12
       })
-    ).resolves.toEqual(cachedPR)
+    ).resolves.toEqual(mergedPR)
     expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
-      data: cachedPR,
-      fetchedAt: 1
+      data: mergedPR,
+      fetchedAt: 2
     })
     expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
-      data: expect.objectContaining({ provider: 'github', number: 12 }),
-      fetchedAt: 1,
+      data: expect.objectContaining({ provider: 'github', number: 12, state: 'merged' }),
+      fetchedAt: 2,
       linkedReviewHintKey: 'github:12'
     })
   })
@@ -3191,54 +3257,57 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(worktrees.find((worktree) => worktree.id === 'wt-b')?.linkedPR).toBe(12)
   })
 
-  it('preserves visible cached PR data when a fallback refresh event misses', () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-1'
-    const branch = 'feature/event-fallback-miss'
-    const cacheKey = `${repoId}::${branch}`
-    const cachedPR = makePR({ number: 12, title: 'Visible event PR' })
-    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+  it.each(['open', 'draft'] as const)(
+    'clears visible cached %s PR data when a fallback refresh event misses',
+    (state) => {
+      const store = createTestStore()
+      const repoPath = '/repo'
+      const repoId = 'repo-1'
+      const branch = 'feature/event-fallback-miss'
+      const cacheKey = `${repoId}::${branch}`
+      const cachedPR = makePR({ number: 12, state, title: 'Visible event PR' })
+      const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
-    store.setState({
-      prCache: {
-        [cacheKey]: {
-          data: cachedPR,
-          fetchedAt: 1
+      store.setState({
+        prCache: {
+          [cacheKey]: {
+            data: cachedPR,
+            fetchedAt: 1
+          }
+        },
+        hostedReviewCache: {
+          [hostedReviewCacheKey]: {
+            data: {
+              provider: 'github',
+              number: 12,
+              title: 'Visible event PR',
+              state,
+              url: 'https://github.com/acme/orca/pull/12',
+              status: 'pending',
+              updatedAt: '2026-03-28T00:00:00Z',
+              mergeable: 'UNKNOWN'
+            },
+            fetchedAt: 1,
+            linkedReviewHintKey: 'github:12'
+          }
         }
-      },
-      hostedReviewCache: {
-        [hostedReviewCacheKey]: {
-          data: {
-            provider: 'github',
-            number: 12,
-            title: 'Visible event PR',
-            state: 'open',
-            url: 'https://github.com/acme/orca/pull/12',
-            status: 'pending',
-            updatedAt: '2026-03-28T00:00:00Z',
-            mergeable: 'UNKNOWN'
-          },
-          fetchedAt: 1,
-          linkedReviewHintKey: 'github:12'
-        }
-      }
-    } as unknown as Partial<AppState>)
+      } as unknown as Partial<AppState>)
 
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 1,
-      aliases: [{ cacheKey, repoId, repoPath, branch, fallbackPRNumber: 12 }],
-      reason: 'visible',
-      outcome: { kind: 'no-pr', fetchedAt: 2 }
-    })
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: 1,
+        aliases: [{ cacheKey, repoId, repoPath, branch, fallbackPRNumber: 12 }],
+        reason: 'visible',
+        outcome: { kind: 'no-pr', fetchedAt: 2 }
+      })
 
-    expect(store.getState().prCache[cacheKey]).toEqual({ data: cachedPR, fetchedAt: 1 })
-    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toMatchObject({
-      data: expect.objectContaining({ provider: 'github', number: 12 }),
-      fetchedAt: 1,
-      linkedReviewHintKey: 'github:12'
-    })
-  })
+      expect(store.getState().prCache[cacheKey]).toEqual({ data: null, fetchedAt: 2 })
+      expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
+        data: null,
+        fetchedAt: 2,
+        linkedReviewHintKey: 'github:12'
+      })
+    }
+  )
 
   it('preserves cached merged PR data when a no-PR refresh event matches the worktree head', () => {
     vi.useFakeTimers()

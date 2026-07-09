@@ -10,6 +10,7 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
@@ -34,6 +35,7 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
+import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
@@ -44,10 +46,20 @@ import {
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
 } from '../../../shared/constants'
+import {
+  createDefaultLocalOrcaProfile,
+  DEFAULT_LOCAL_ORCA_PROFILE_ID
+} from '../../../shared/orca-profiles'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostScope,
+  normalizeExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import {
@@ -447,6 +459,15 @@ export function installWebPreloadApi(): void {
 }
 
 function createWebPreloadApi(): Partial<PreloadApi> {
+  const webOrcaProfileAuthStatus = () =>
+    Promise.resolve({
+      activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+      configured: false,
+      state: 'unconfigured' as const,
+      persistence: 'none' as const,
+      setupMessage: 'Orca Cloud sign-in is not available in the browser fallback.'
+    })
+
   return {
     app: {
       getIdentity: () =>
@@ -492,6 +513,58 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         osRelease: '',
         displayServer: null
       })
+    },
+    orcaProfiles: {
+      list: () =>
+        Promise.resolve({
+          activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+          profiles: [createDefaultLocalOrcaProfile(0)],
+          multiProfileUi: false
+        }),
+      authStatus: webOrcaProfileAuthStatus,
+      createLocal: () =>
+        Promise.resolve({
+          activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+          profiles: [createDefaultLocalOrcaProfile(0)],
+          profile: createDefaultLocalOrcaProfile(0)
+        }),
+      createCloudLinked: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      switchProfile: () => Promise.resolve({ status: 'already-active' }),
+      transferProject: (args) =>
+        Promise.resolve({
+          status: 'duplicate-target',
+          sourceProfileId: args.sourceProfileId,
+          targetProfileId: args.targetProfileId,
+          sourceRepoId: args.repoId,
+          duplicateRepoId: args.repoId
+        }),
+      findProjectProfiles: async () => ({ projects: [] }),
+      connectCurrent: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      refreshAuth: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      signOutCurrent: async () => ({
+        status: 'signed-out',
+        auth: await webOrcaProfileAuthStatus(),
+        activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+        profiles: [createDefaultLocalOrcaProfile(0)]
+      }),
+      selectOrg: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      orgMembersList: async () => ({ status: 'unconfigured' }),
+      orgMemberInvite: async () => ({ status: 'unconfigured' }),
+      orgInviteRevoke: async () => ({ status: 'unconfigured' }),
+      orgMemberChangeRole: async () => ({ status: 'unconfigured' }),
+      orgMemberRemove: async () => ({ status: 'unconfigured' })
     },
     e2e: {
       getConfig: () => createE2EConfig({})
@@ -626,16 +699,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
     },
-    aiVault: {
-      listSessions: () =>
-        Promise.resolve({
-          sessions: [],
-          issues: [],
-          scannedAt: new Date().toISOString()
-        }),
-      listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
-      onWindowFocused: () => () => {}
-    },
+    aiVault: createAiVaultApi(),
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
@@ -1117,6 +1181,52 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
   }
 }
 
+function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  return {
+    listSessions: (args?: AiVaultListArgs) => {
+      const environment = requireActiveEnvironment()
+      const executionHostId = toRuntimeExecutionHostId(environment.id)
+      const requestedScope = normalizeExecutionHostScope(
+        args?.executionHostScope ?? executionHostId
+      )
+      if (requestedScope !== 'all' && requestedScope !== executionHostId) {
+        return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
+      }
+      // Why: the browser client has no local filesystem; every history scan
+      // runs on the paired server and must be stamped as that runtime host.
+      return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
+        limit: args?.limit,
+        force: args?.force,
+        scopePaths: args?.scopePaths,
+        executionHostId
+      })
+    },
+    // Why: the runtime RPC surface only exposes aiVault.listSessions; subagent
+    // transcript listing has no server-side method yet, so the browser client
+    // reports an empty (not erroring) result.
+    listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
+    onWindowFocused: () => noopUnsubscribe
+  }
+}
+
+function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultListResult {
+  return {
+    sessions: [],
+    issues: [
+      {
+        executionHostId,
+        agent: 'codex',
+        path: executionHostId,
+        message: translate(
+          'auto.web.webPreloadApi.aiVaultUnavailableForHost',
+          'Agent Session History is not available for this execution host.'
+        )
+      }
+    ],
+    scannedAt: new Date().toISOString()
+  }
+}
+
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
     list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
@@ -1467,6 +1577,10 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         }
       )
       return result.files.map((entry) => entry.relativePath)
+    },
+    cancelListFiles: async () => {
+      // Why: the paired-web path lists files over runtime RPC with its own
+      // request timeout; there is no host-side scan to abort from here.
     },
     search: async (args) => {
       const file = await resolveRuntimeFilePath(args.rootPath)
@@ -2457,8 +2571,7 @@ function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notification
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
-    requestPermission: () =>
-      Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
+    probeDelivery: () => Promise.resolve({ state: 'unsupported' as const, authoritative: false }),
     playSound: () => Promise.resolve({ played: false, reason: 'missing-path' })
   }
 }
@@ -2619,19 +2732,51 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
 
 function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
-    listTargets: () => Promise.resolve([]),
-    listRemovedTargetLabels: () => Promise.resolve({}),
+    // Why: SSH connections are owned by the paired host. Read/connect route to
+    // its runtime RPC so remote worktrees can show real connection state and
+    // reconnect (STA-1468); target management stays desktop-only.
+    listTargets: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return []
+      }
+      const { targets } = await callRuntimeResult<{ targets: SshTarget[] }>('ssh.listTargets')
+      return targets
+    },
+    listRemovedTargetLabels: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return {}
+      }
+      const { labels } = await callRuntimeResult<{ labels: Record<string, string> }>(
+        'ssh.listRemovedTargetLabels'
+      )
+      return labels
+    },
     addTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     updateTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
     importConfig: () => Promise.resolve([]),
-    connect: () => Promise.resolve(null),
+    connect: async (args) => {
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.connect',
+        { targetId: args.targetId }
+      )
+      return state
+    },
     disconnect: () => Promise.resolve(),
     terminateSessions: () => Promise.resolve(),
     resetRelay: () => Promise.resolve(),
-    getState: () => Promise.resolve(null),
+    getState: async (args) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return null
+      }
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.getState',
+        { targetId: args.targetId }
+      )
+      return state
+    },
     needsPassphrasePrompt: () => Promise.resolve(false),
     testConnection: () =>
       Promise.resolve({

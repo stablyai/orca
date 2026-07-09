@@ -1,15 +1,12 @@
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
-import { SUBAGENT_DIR_NAME } from './session-scanner-claude-subagents'
 import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
-import {
-  parseClaudeSessionContent,
-  parseGeminiSessionContent
-} from './session-scanner-primary-parsers'
+import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
+import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import {
   parseCopilotSessionContent,
   parseCursorSessionContent,
@@ -37,17 +34,21 @@ export function remoteSessionSources(
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
-    jsonlSource(
-      'claude',
-      remoteHome,
-      hostPlatform,
-      ['.claude', 'projects'],
-      parseClaudeSessionContent,
-      // Why: Task subagent transcripts under `<session>/subagents/` would list
-      // as phantom top-level sessions carrying the parent's sessionId. The
-      // local scanner prunes them at discovery; mirror that exclusion here.
-      (path) => !remotePathSegments(path).includes(SUBAGENT_DIR_NAME)
-    ),
+    {
+      ...jsonlSource(
+        'claude',
+        remoteHome,
+        hostPlatform,
+        ['.claude', 'projects'],
+        parseClaudeSessionContent
+      ),
+      // The remote host owns the transcript disk, so the local readdir in the
+      // Claude parser is skipped; the walked listing supplies the sibling
+      // subagent counts instead. Partitioning also prunes the subagent
+      // transcripts themselves, which would otherwise list as phantom
+      // top-level sessions carrying the parent's sessionId.
+      collectSubagentSiblingCounts: true
+    },
     source(
       'gemini',
       remoteHome,

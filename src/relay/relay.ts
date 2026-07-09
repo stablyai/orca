@@ -59,6 +59,7 @@ import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugi
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
+import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 
@@ -358,13 +359,13 @@ async function main(): Promise<void> {
   // would risk silent data corruption or zombie PTYs. We log for diagnostics
   // and then exit so the client can detect the disconnect and reconnect cleanly.
   process.on('uncaughtException', (err) => {
-    process.stderr.write(`[relay] Uncaught exception: ${err.message}\n${err.stack}\n`)
+    relayLogLine(`[relay] Uncaught exception: ${err.message}\n${err.stack}`)
     cleanupOwnedSocket()
     process.exit(1)
   })
 
   process.on('unhandledRejection', (reason) => {
-    process.stderr.write(`[relay] Unhandled rejection: ${reason}\n`)
+    relayLogLine(`[relay] Unhandled rejection: ${reason}`)
   })
 
   // Why: stdoutAlive tracks whether process.stdout is still writable.
@@ -529,8 +530,8 @@ async function main(): Promise<void> {
   try {
     await hookServer.start({ publishEndpoint: false })
   } catch (err) {
-    process.stderr.write(
-      `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
+    relayLogLine(
+      `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}`
     )
   }
 
@@ -688,7 +689,7 @@ async function main(): Promise<void> {
 
   function cancelGrace(reason: string): void {
     if (ptyHandler.graceTimerActive) {
-      process.stderr.write(`[relay] Grace canceled: ${reason}\n`)
+      relayLogLine(`[relay] Grace canceled: ${reason}`)
     }
     graceDeadlineAt = null
     graceReason = null
@@ -704,8 +705,8 @@ async function main(): Promise<void> {
 
     hasAcceptedSocketClient = true
     acceptedSocketConnections++
-    process.stderr.write(
-      `[relay] Socket client accepted (clients=${socketClients.size + 1}, accepted=${acceptedSocketConnections})\n`
+    relayLogLine(
+      `[relay] Socket client accepted (clients=${socketClients.size + 1}, accepted=${acceptedSocketConnections})`
     )
     cancelGrace('socket client accepted')
 
@@ -779,7 +780,7 @@ async function main(): Promise<void> {
         if (clientId !== undefined) {
           dispatcher.detachClient(clientId)
         }
-        process.stderr.write(`[relay] Socket client closed (clients=${socketClients.size})\n`)
+        relayLogLine(`[relay] Socket client closed (clients=${socketClients.size})`)
         if (!stdoutAlive && socketClients.size === 0) {
           startGrace('socket client closed')
         }
@@ -821,9 +822,9 @@ async function main(): Promise<void> {
         ownsSocketPath = true
         ownedSocketIdentity = readSocketIdentity(sockPath)
         server.on('error', (err) => {
-          process.stderr.write(`[relay] Socket server error: ${err.message}\n`)
+          relayLogLine(`[relay] Socket server error: ${err.message}`)
         })
-        process.stderr.write(`[relay] Socket server listening: ${sockPath}\n`)
+        relayLogLine(`[relay] Socket server listening: ${sockPath}`)
         resolve()
       }
 
@@ -831,11 +832,11 @@ async function main(): Promise<void> {
         removeStartupListeners()
         restoreUmask()
         if (err.code === 'EADDRINUSE') {
-          process.stderr.write(
-            `[relay] Socket path already in use: ${sockPath}; another relay is likely active. Use --connect instead of starting a new daemon.\n`
+          relayLogLine(
+            `[relay] Socket path already in use: ${sockPath}; another relay is likely active. Use --connect instead of starting a new daemon.`
           )
         } else {
-          process.stderr.write(`[relay] Socket server error before listen: ${err.message}\n`)
+          relayLogLine(`[relay] Socket server error before listen: ${err.message}`)
         }
         reject(err)
       }
@@ -903,9 +904,7 @@ async function main(): Promise<void> {
               failInitial(err)
               return
             }
-            process.stderr.write(
-              `[relay] Removed stale socket at ${sockPath} and retrying listen\n`
-            )
+            relayLogLine(`[relay] Removed stale socket at ${sockPath} and retrying listen`)
             removeStartupListeners()
             listenForStartupError(failInitial)
           })
@@ -958,11 +957,11 @@ async function main(): Promise<void> {
       : graceTimeMs
     graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
     graceReason = reason
-    process.stderr.write(
-      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, startupEmptyDetached=${startupEmptyDetached}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}\n`
+    relayLogLine(
+      `[relay] Grace started (${reason}): timeoutMs=${timeoutMs}, startupEmptyDetached=${startupEmptyDetached}, ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}`
     )
     ptyHandler.startGraceTimer(() => {
-      process.stderr.write(`[relay] Grace expired (${reason}); shutting down\n`)
+      relayLogLine(`[relay] Grace expired (${reason}); shutting down`)
       shutdown()
     }, timeoutMs)
   }
@@ -1006,8 +1005,8 @@ async function main(): Promise<void> {
   }
 
   function shutdown(): void {
-    process.stderr.write(
-      `[relay] Shutdown: ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}, ownsSocket=${ownsSocketPath}\n`
+    relayLogLine(
+      `[relay] Shutdown: ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}, ownsSocket=${ownsSocketPath}`
     )
     graceDeadlineAt = null
     graceReason = null
@@ -1034,10 +1033,10 @@ async function main(): Promise<void> {
   // window — a reconnecting client can then bridge to the live relay via
   // --connect and reattach to the still-running PTY sessions.
   process.on('SIGHUP', () => {
-    process.stderr.write('[relay] Received SIGHUP (SSH session dropped), ignoring\n')
+    relayLogLine('[relay] Received SIGHUP (SSH session dropped), ignoring')
   })
   process.on('exit', (code) => {
-    process.stderr.write(`[relay] Process exiting with code ${code}\n`)
+    relayLogLine(`[relay] Process exiting with code ${code}`)
   })
 
   // Signal readiness to the client — the client watches for this exact
@@ -1059,8 +1058,8 @@ function cleanupSocket(sockPath: string): void {
 }
 
 void main().catch((err) => {
-  process.stderr.write(
-    `[relay] Fatal startup error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`
+  relayLogLine(
+    `[relay] Fatal startup error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`
   )
   process.exit(1)
 })

@@ -24,6 +24,11 @@ import {
 // unaffected; the class lives in a ws-free module so type-only consumers
 // (and mobile's typecheck) don't compile this file's Node-only deps.
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import {
+  startRemoteRuntimeSocketLiveness,
+  type RemoteRuntimeSocketLivenessMonitor,
+  type RemoteRuntimeSocketLivenessOptions
+} from './remote-runtime-socket-liveness'
 
 export { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
@@ -354,7 +359,8 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  callbacks: RemoteRuntimeSubscriptionCallbacks<TResult>
+  callbacks: RemoteRuntimeSubscriptionCallbacks<TResult>,
+  livenessOptions?: RemoteRuntimeSocketLivenessOptions
 ): Promise<RemoteRuntimeSubscription> {
   return await new Promise((resolve, reject) => {
     const requestId = randomUUID()
@@ -364,8 +370,11 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     let state: HandshakeState = 'awaiting_ready'
     let settled = false
     let ws: WebSocket | null = null
+    let liveness: RemoteRuntimeSocketLivenessMonitor | null = null
 
     const cleanupSocketListeners = (): WebSocket | null => {
+      liveness?.stop()
+      liveness = null
       const socket = ws
       if (!socket) {
         return null
@@ -374,6 +383,8 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       socket.off('error', onError)
       socket.off('close', onClose)
       socket.off('message', onMessage)
+      socket.off('pong', onLivenessSignal)
+      socket.off('ping', onLivenessSignal)
       ws = null
       // Why: startup failures detach Orca callbacks before closing the ws,
       // but ws can still emit a late transport error while close is in flight.
@@ -485,6 +496,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     }
 
     function onMessage(data: WebSocket.RawData, isBinary: boolean): void {
+      liveness?.noteActivity()
       if (isBinary) {
         handleBinaryFrame(new Uint8Array(data as Buffer))
         return
@@ -515,10 +527,46 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       handleRpcFrame(plaintext)
     }
 
+    function onLivenessSignal(): void {
+      liveness?.noteActivity()
+    }
+
     ws.once('open', onOpen)
     ws.once('error', onError)
     ws.on('close', onClose)
     ws.on('message', onMessage)
+    ws.on('pong', onLivenessSignal)
+    ws.on('ping', onLivenessSignal)
+
+    // Why: dedicated stream sockets (terminal.multiplex, browser.screencast)
+    // ride the same tunnels as shared control; a half-open drop must surface
+    // as a close so the renderer's onTransportClose resubscribe path runs
+    // instead of freezing the stream forever (#7718/#7489).
+    const monitoredWs = ws
+    liveness = startRemoteRuntimeSocketLiveness({
+      ping: () => {
+        if (monitoredWs.readyState === WebSocket.OPEN) {
+          monitoredWs.ping()
+        }
+      },
+      onDead: () => {
+        // Why: fail() first so listeners detach before terminate's close event;
+        // otherwise the close handler would emit a second onClose to callers.
+        fail(
+          new RemoteRuntimeClientError(
+            'remote_runtime_unavailable',
+            'Remote Orca runtime stopped responding; the stream connection was reset.'
+          )
+        )
+        try {
+          // Why: close() on a half-open socket can hang for the OS TCP timeout.
+          monitoredWs.terminate()
+        } catch {
+          // Best-effort terminate; the subscription is already settled.
+        }
+      },
+      options: livenessOptions
+    })
 
     function handleReadyFrame(frame: string): void {
       let ready: unknown

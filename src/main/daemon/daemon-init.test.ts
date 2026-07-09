@@ -1365,6 +1365,123 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(child.unref).not.toHaveBeenCalled()
   })
 
+  it('captures daemon startup stderr into the failure error', async () => {
+    const mod = await importFresh()
+    checkDaemonHealthMock.mockResolvedValue('unreachable')
+    await mod.initDaemonPtyProvider()
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+      message: [],
+      error: [],
+      exit: []
+    }
+    const stderrDataCbs: ((chunk: Buffer) => void)[] = []
+    const stderrDestroy = vi.fn()
+    const stderr = {
+      on(event: string, cb: (chunk: Buffer) => void) {
+        if (event === 'data') {
+          stderrDataCbs.push(cb)
+        }
+        return this
+      },
+      off(event: string, cb: (chunk: Buffer) => void) {
+        if (event === 'data') {
+          const idx = stderrDataCbs.indexOf(cb)
+          if (idx !== -1) {
+            stderrDataCbs.splice(idx, 1)
+          }
+        }
+        return this
+      },
+      destroy: stderrDestroy
+    }
+    const child = {
+      pid: 4321,
+      stderr,
+      on(event: string, cb: (arg?: unknown) => void) {
+        handlers[event]?.push(cb)
+        if (event === 'exit') {
+          // Why: deliver the stderr tail before the exit so the failure path
+          // sees the captured crash reason, mirroring a module-load crash.
+          queueMicrotask(() => {
+            for (const dataCb of stderrDataCbs.slice()) {
+              dataCb(Buffer.from("Error: Cannot find module 'electron'\n"))
+            }
+            cb(1)
+          })
+        }
+        return this
+      },
+      off: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return child
+      }),
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }
+    forkMock.mockReturnValueOnce(child)
+
+    const error = await launcher('/fake/socket', '/fake/token').catch((err: Error) => err)
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toMatch(/Cannot find module 'electron'/)
+    expect((error as Error).message).toMatch(/Daemon stderr \(tail\)/)
+    // Why: the piped stderr must be released so the detached daemon does not
+    // keep the parent event loop alive after the failure.
+    expect(stderrDestroy).toHaveBeenCalled()
+  })
+
+  it('destroys the daemon stderr pipe once the daemon signals ready', async () => {
+    const mod = await importFresh()
+    checkDaemonHealthMock.mockResolvedValue('unreachable')
+    await mod.initDaemonPtyProvider()
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+      message: [],
+      error: [],
+      exit: []
+    }
+    const stderrOff = vi.fn()
+    const stderrDestroy = vi.fn()
+    const stderr = {
+      on() {
+        return this
+      },
+      off: stderrOff,
+      destroy: stderrDestroy
+    }
+    const child = {
+      pid: 12345,
+      stderr,
+      on(event: string, cb: (arg?: unknown) => void) {
+        handlers[event]?.push(cb)
+        if (event === 'message') {
+          queueMicrotask(() => cb({ type: 'ready' }))
+        }
+        return this
+      },
+      off: vi.fn(() => child),
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }
+    forkMock.mockReturnValueOnce(child)
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(stderrOff).toHaveBeenCalledWith('data', expect.any(Function))
+    expect(stderrDestroy).toHaveBeenCalledOnce()
+    expect(child.disconnect).toHaveBeenCalledOnce()
+    expect(child.unref).toHaveBeenCalledOnce()
+  })
+
   it('preserves a health-check-failing daemon when it owns live sessions', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()

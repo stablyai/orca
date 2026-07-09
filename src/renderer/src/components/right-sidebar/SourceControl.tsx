@@ -11,9 +11,7 @@ import {
   Loader2,
   RefreshCw,
   Settings2,
-  Sparkle,
   Sparkles,
-  SlidersHorizontal,
   Square,
   Undo2,
   Check,
@@ -32,7 +30,10 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { resolveRemoteOperationErrorMessage } from '@/lib/source-control-remote-error'
+import {
+  isSyncPushStageError,
+  resolveRemoteOperationErrorMessage
+} from '@/lib/source-control-remote-error'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
@@ -131,7 +132,6 @@ import { toast } from 'sonner'
 import { SourceControlEntryContextMenu } from './source-control-entry-context-menu'
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -219,12 +219,6 @@ import {
   loadSessionCommitDrafts,
   saveSessionCommitDrafts
 } from '@/lib/source-control-commit-draft-session'
-import {
-  getCommitFailureDialogWorktreeKey,
-  shouldShowCommitFailureDialog,
-  syncCommitFailureDialogState,
-  type CommitFailureDialogState
-} from './commit-failure-dialog-state'
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
 import {
   isSourceControlSplitOpenModifier,
@@ -303,11 +297,25 @@ import {
   type PullRequestGenerationContext,
   type PullRequestGenerationFields
 } from '@/store/slices/pull-request-generation'
+import {
+  captureSourceControlRecoveryEntrySnapshot,
+  type SourceControlActionError,
+  type SourceControlRecoveryStatusEntry
+} from './source-control-action-error'
+import {
+  deriveSourceControlPushRecovery,
+  getSourceControlRecoveryFailureKindLabel,
+  type SourceControlPushRecovery
+} from './source-control-push-recovery'
+import { SourceControlRecoveryNotice } from './source-control-recovery-notice'
 
 export {
   appendCommitFailureCustomInstruction,
+  appendPushFailureCustomInstruction,
   buildCommitFailureAgentCommandInput,
   buildFixCommitFailurePrompt,
+  buildFixPushFailurePrompt,
+  buildPushFailureAgentCommandInput,
   buildResolveConflictsPrompt,
   buildResolvePullRequestConflictsPrompt
 } from './source-control-ai-prompts'
@@ -317,11 +325,6 @@ export {
 } from './source-control-text-generation-defaults'
 
 type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
-type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
-export type SourceControlActionError = {
-  kind: RemoteOpKind | AbortActionErrorKind
-  message: string
-}
 type SourceControlOperationTarget = RuntimeGitContext & {
   worktreeId: string
   pushTarget?: GitPushTarget
@@ -725,6 +728,7 @@ function resolveRemoteActionError(kind: RemoteOpKind, error: unknown): string {
     isPush: kind === 'push',
     isForcePush: kind === 'force_push',
     isSync: kind === 'sync',
+    isSyncPushStage: kind === 'sync' && isSyncPushStageError(error),
     isFetch: kind === 'fetch',
     isFastForward: kind === 'fast_forward',
     isRebase: kind === 'rebase'
@@ -1034,6 +1038,7 @@ function SourceControlInner(): React.JSX.Element {
   const [remoteActionErrors, setRemoteActionErrors] = useState<
     Record<string, SourceControlActionError | null>
   >({})
+  const remoteActionErrorSequenceByWorktreeRef = useRef<Record<string, number>>({})
   const previousConflictOperationsRef = useRef<Record<string, GitConflictOperation>>({})
   // Why: keep commit-in-flight state per-worktree. A single boolean would be
   // cleared when the user switched worktrees, letting them double-click Commit
@@ -1134,6 +1139,9 @@ function SourceControlInner(): React.JSX.Element {
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
   const remoteActionError = remoteActionErrors[activeWorktreeId ?? ''] ?? null
+  const activeRemoteActionSequence = activeWorktreeId
+    ? (remoteActionErrorSequenceByWorktreeRef.current[activeWorktreeId] ?? null)
+    : null
   const [gitHistoryByWorktree, setGitHistoryByWorktree] = useState<
     Record<string, GitHistoryPanelState>
   >({})
@@ -1887,6 +1895,15 @@ function SourceControlInner(): React.JSX.Element {
       })),
     [unresolvedConflicts]
   )
+  const pushRecovery = useMemo(
+    () =>
+      deriveSourceControlPushRecovery({
+        actionError: remoteActionError,
+        currentBranchName: branchName || null,
+        currentSequence: activeRemoteActionSequence
+      }),
+    [activeRemoteActionSequence, branchName, remoteActionError]
+  )
   const {
     sourceControlAiDiscoveryHostKey,
     sourceControlAiActionsVisible,
@@ -1901,12 +1918,14 @@ function SourceControlInner(): React.JSX.Element {
     openCommitGenerationDialog,
     openPullRequestGenerationDialog,
     isLaunchingCommitFailureAgent,
+    isLaunchingPushFailureAgent,
     resolveConflictsPrompt,
     commitFailureRecoveryPrompt,
     getLaunchActionRecipe,
     saveLaunchActionDefault,
     handleResolveConflictsWithAI,
     handleFixCommitFailureWithAI,
+    handleFixPushFailureWithAI,
     handleSaveCommitMessageGenerationDefaults,
     handleSavePullRequestGenerationDefaults,
     openSourceControlAiSettings
@@ -1923,6 +1942,7 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath,
     commitMessage,
     commitError,
+    pushRecoveryPrompt: pushRecovery?.prompt ?? null,
     updateSettings,
     updateRepo,
     openSettingsTarget,
@@ -1976,6 +1996,11 @@ function SourceControlInner(): React.JSX.Element {
     for (const key of Object.keys(commitInFlightRef.current)) {
       if (!worktreeMap.has(key)) {
         delete commitInFlightRef.current[key]
+      }
+    }
+    for (const key of Object.keys(remoteActionErrorSequenceByWorktreeRef.current)) {
+      if (!worktreeMap.has(key)) {
+        delete remoteActionErrorSequenceByWorktreeRef.current[key]
       }
     }
     for (const key of Object.keys(generateInFlightRef.current)) {
@@ -2429,7 +2454,6 @@ function SourceControlInner(): React.JSX.Element {
         | 'rebase',
       options?: {
         target?: SourceControlOperationTarget
-        remoteStatus?: GitUpstreamStatus
         baseRef?: string | null
       }
     ): Promise<boolean> => {
@@ -2447,6 +2471,19 @@ function SourceControlInner(): React.JSX.Element {
       if (!target) {
         return false
       }
+      const sequence = (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] ?? 0) + 1
+      remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] = sequence
+      const targetIsActiveWorktree = target.worktreeId === activeWorktreeId
+      const recoveryEntrySnapshot = captureSourceControlRecoveryEntrySnapshot(
+        targetIsActiveWorktree
+          ? ([
+              ...grouped.staged,
+              ...grouped.unstaged,
+              ...grouped.untracked
+            ] satisfies SourceControlRecoveryStatusEntry[])
+          : []
+      )
+      const failureBranchName = targetIsActiveWorktree ? branchName || null : null
       setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
       try {
         if (kind === 'publish') {
@@ -2461,18 +2498,17 @@ function SourceControlInner(): React.JSX.Element {
           return true
         }
         if (kind === 'push') {
-          const forceWithLease = shouldForcePushWithLeaseForUpstream(
-            options?.remoteStatus ?? remoteStatus
-          )
+          // Why: kind 'push' must stay a regular push. Force-with-lease is only
+          // for kind 'force_push' (and callers that choose it). Auto-upgrading
+          // here made the always-enabled dropdown Push row silently force-push
+          // while its tooltip claimed a normal push might merely fail.
           await pushBranch(
             target.worktreeId,
             target.worktreePath,
             false,
             target.connectionId,
             target.pushTarget,
-            forceWithLease
-              ? { forceWithLease: true, runtimeTargetSettings: target.settings }
-              : { runtimeTargetSettings: target.settings }
+            { runtimeTargetSettings: target.settings }
           )
           return true
         }
@@ -2545,18 +2581,30 @@ function SourceControlInner(): React.JSX.Element {
             runtimeTargetSettings: target.settings
           }
         )
-        setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+        if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] === sequence) {
+          setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+        }
         return true
       } catch (error) {
         // Why: remote action failures are surfaced by editor-slice actions to keep
         // one consistent toast path and avoid duplicate notifications in the UI.
         // Keep the latest failure inline too: dropdown-only actions like Fetch can
         // otherwise look like nothing happened once the menu closes.
+        if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
+          return false
+        }
         setRemoteActionErrors((prev) => ({
           ...prev,
           [target.worktreeId]: {
             kind,
-            message: resolveRemoteActionError(kind, error)
+            message: resolveRemoteActionError(kind, error),
+            rawError: error instanceof Error ? error.message : String(error),
+            syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
+            branchName: failureBranchName,
+            worktreePath: target.worktreePath,
+            entriesSnapshot: recoveryEntrySnapshot.entries,
+            entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
+            sequence
           }
         }))
         return false
@@ -2574,14 +2622,17 @@ function SourceControlInner(): React.JSX.Element {
       activeRepoSettings,
       activeWorktree?.pushTarget,
       activeWorktreeId,
+      branchName,
       fetchBranch,
       fastForwardBranch,
       effectiveBaseRef,
+      grouped.staged,
+      grouped.unstaged,
+      grouped.untracked,
       pullBranch,
       pushBranch,
       rebaseFromBase,
       refreshActiveGitStatusAfterMutation,
-      remoteStatus,
       syncBranch,
       worktreePath
     ]
@@ -2639,7 +2690,11 @@ function SourceControlInner(): React.JSX.Element {
         )
         setRemoteActionErrors((prev) => ({
           ...prev,
-          [activeWorktreeId]: { kind: isRebase ? 'abort_rebase' : 'abort_merge', message }
+          [activeWorktreeId]: {
+            kind: isRebase ? 'abort_rebase' : 'abort_merge',
+            message,
+            rawError: message
+          }
         }))
       } finally {
         setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
@@ -2695,9 +2750,20 @@ function SourceControlInner(): React.JSX.Element {
       if (!ok) {
         return
       }
+      // Why: "Commit & Force Push" still invokes remoteKind 'push' from the
+      // dropdown kind map. Route to force_push when the upstream shape requires
+      // lease force so compound commit does not silently fall back to a regular
+      // push after we stopped auto-upgrading kind 'push'.
+      if (
+        remoteKind === 'push' &&
+        shouldForcePushWithLeaseForUpstream(remoteStatusForActions ?? remoteStatus)
+      ) {
+        await runRemoteAction('force_push')
+        return
+      }
       await runRemoteAction(remoteKind)
     },
-    [handleCommit, runRemoteAction]
+    [handleCommit, remoteStatus, remoteStatusForActions, runRemoteAction]
   )
 
   const handlePullRequestCreated = useCallback(
@@ -3951,7 +4017,6 @@ function SourceControlInner(): React.JSX.Element {
       })
       const remoteOk = await runRemoteAction(remoteStep, {
         target: operationTarget,
-        remoteStatus: latestUpstreamStatus,
         baseRef: token.baseRef
       })
       if (abortIfStale()) {
@@ -4642,8 +4707,17 @@ function SourceControlInner(): React.JSX.Element {
       case 'stage':
         void handleStageAllPrimary()
         return
-      case 'commit':
       case 'push':
+        // Why: primary labels "Force Push" while keeping kind 'push'. Invoke the
+        // explicit force path when lease force is required so regular push stays
+        // non-force for the dropdown.
+        handleActionInvoke(
+          shouldForcePushWithLeaseForUpstream(remoteStatusForActions ?? remoteStatus)
+            ? 'force_push'
+            : 'push'
+        )
+        return
+      case 'commit':
       case 'pull':
       case 'sync':
       case 'publish':
@@ -4653,7 +4727,14 @@ function SourceControlInner(): React.JSX.Element {
       case 'create_pr_intent':
         void runCreatePrIntent()
     }
-  }, [handleActionInvoke, handleStageAllPrimary, primaryAction.kind, runCreatePrIntent])
+  }, [
+    handleActionInvoke,
+    handleStageAllPrimary,
+    primaryAction.kind,
+    remoteStatus,
+    remoteStatusForActions,
+    runCreatePrIntent
+  ])
 
   const handleCreatePrHeaderClick = useCallback((): void => {
     if (!createPrHeaderAction || createPrHeaderAction.disabled) {
@@ -5772,10 +5853,12 @@ function SourceControlInner(): React.JSX.Element {
                 commitMessage={commitMessage}
                 commitError={commitError}
                 commitFailureRecoveryPrompt={commitFailureRecoveryPrompt}
-                remoteActionError={remoteActionError?.message ?? null}
+                pushRecovery={pushRecovery}
+                remoteActionError={pushRecovery ? null : (remoteActionError?.message ?? null)}
                 createPrIntentNotice={createPrIntentNotice}
                 isCommitting={isCommitting}
                 isFixingCommitFailureWithAI={isLaunchingCommitFailureAgent}
+                isFixingPushFailureWithAI={isLaunchingPushFailureAgent}
                 isCreatingPr={isCreatingPr || isCreatePrIntentInFlight}
                 isCreatePrIntentInFlight={isCreatePrIntentInFlight}
                 groupId={activeGroupId ?? activeWorktreeId}
@@ -5793,6 +5876,7 @@ function SourceControlInner(): React.JSX.Element {
                 primaryAction={primaryAction}
                 dropdownItems={dropdownItems}
                 fixCommitFailureRecipe={getLaunchActionRecipe('fixCommitFailure')}
+                fixPushFailureRecipe={getLaunchActionRecipe('fixPushFailure')}
                 onCommitMessageChange={(value) => {
                   if (!activeWorktreeId) {
                     return
@@ -5806,6 +5890,7 @@ function SourceControlInner(): React.JSX.Element {
                 onSaveLaunchActionDefault={saveLaunchActionDefault}
                 onOpenSourceControlAiSettings={openSourceControlAiSettings}
                 onFixCommitFailureWithAI={handleFixCommitFailureWithAI}
+                onFixPushFailureWithAI={handleFixPushFailureWithAI}
                 onPrimaryAction={handlePrimaryClick}
                 onDropdownAction={handleActionInvoke}
               />
@@ -6365,173 +6450,6 @@ function SourceControlInner(): React.JSX.Element {
 const SourceControl = React.memo(SourceControlInner)
 export default SourceControl
 
-type CommitFailureFixSplitButtonProps = {
-  label: string
-  worktreeId: string | null
-  groupId: string | null
-  connectionId?: string | null
-  repoId?: string | null
-  launchPlatform?: NodeJS.Platform
-  prompt: string | null
-  isLaunching: boolean
-  variant: React.ComponentProps<typeof Button>['variant']
-  size: React.ComponentProps<typeof Button>['size']
-  iconClassName: string
-  primaryClassName?: string
-  chevronClassName?: string
-  savedAgentId?: TuiAgent | null
-  savedCommandInputTemplate?: string | null
-  savedAgentArgs?: string | null
-  onSaveAgentDefault?: (
-    target: SourceControlAiWriteTarget,
-    actionId: SourceControlLaunchActionId,
-    recipe: SourceControlActionRecipe
-  ) => void | Promise<void>
-  onOpenSettings?: () => void
-  onFixWithDefaultAgent: (promptOverride?: string) => Promise<boolean> | boolean
-  onPromptDelivered: () => void
-}
-
-function CommitFailureFixSplitButton({
-  label,
-  worktreeId,
-  groupId,
-  connectionId,
-  repoId,
-  launchPlatform,
-  prompt,
-  isLaunching,
-  variant,
-  size,
-  iconClassName,
-  primaryClassName,
-  chevronClassName,
-  savedAgentId,
-  savedCommandInputTemplate,
-  savedAgentArgs,
-  onSaveAgentDefault,
-  onOpenSettings,
-  onFixWithDefaultAgent,
-  onPromptDelivered
-}: CommitFailureFixSplitButtonProps): React.JSX.Element {
-  const [composerOpen, setComposerOpen] = useState(false)
-  const canLaunch = Boolean(worktreeId && groupId && prompt)
-  const dividerClass = variant === 'default' ? 'border-primary-foreground/20' : 'border-border'
-
-  return (
-    <>
-      <DropdownMenu>
-        <div className="flex shrink-0 items-stretch">
-          <Button
-            type="button"
-            variant={variant}
-            size={size}
-            className={cn('rounded-r-none', primaryClassName)}
-            disabled={isLaunching || !canLaunch}
-            onClick={() => void onFixWithDefaultAgent()}
-            title={translate(
-              'auto.components.right.sidebar.SourceControl.4b37ae99b0',
-              'Start the default AI agent to fix this commit failure'
-            )}
-            aria-label={translate(
-              'auto.components.right.sidebar.SourceControl.30b8d4f181',
-              'Fix commit failure with AI'
-            )}
-          >
-            {isLaunching ? (
-              <RefreshCw className={cn(iconClassName, 'animate-spin')} />
-            ) : (
-              <Sparkle className={iconClassName} />
-            )}
-            {label}
-          </Button>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant={variant}
-              size={size}
-              className={cn('rounded-l-none border-l', dividerClass, chevronClassName)}
-              disabled={isLaunching || !canLaunch}
-              title={translate(
-                'auto.components.right.sidebar.SourceControl.dd43c47089',
-                'Choose an agent for this commit failure'
-              )}
-              aria-label={translate(
-                'auto.components.right.sidebar.SourceControl.ec7bfced55',
-                'Choose agent to fix commit failure'
-              )}
-            >
-              <ChevronDown className={iconClassName} />
-            </Button>
-          </DropdownMenuTrigger>
-        </div>
-        <DropdownMenuContent align="end" className="min-w-[210px] p-1">
-          {worktreeId && groupId && prompt ? (
-            <DropdownMenuItem
-              onSelect={() => setComposerOpen(true)}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <SlidersHorizontal className="size-4 text-muted-foreground" />
-              {translate(
-                'auto.components.right.sidebar.SourceControl.f0a2dc9e46',
-                'Customize launch...'
-              )}
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem disabled>
-              {translate(
-                'auto.components.right.sidebar.SourceControl.9e5ccd00aa',
-                'Commit failure context unavailable'
-              )}
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {worktreeId && groupId && prompt ? (
-        <SourceControlAgentActionDialog
-          open={composerOpen}
-          onOpenChange={setComposerOpen}
-          actionId="fixCommitFailure"
-          title={translate(
-            'auto.components.right.sidebar.SourceControl.054ead86b1',
-            'Fix Commit Failure With AI'
-          )}
-          description={translate(
-            'auto.components.right.sidebar.SourceControl.15b7f210d7',
-            'Choose the agent and edit the full command input before launch.'
-          )}
-          baseCommandInput={prompt}
-          worktreeId={worktreeId}
-          groupId={groupId}
-          connectionId={connectionId}
-          repoId={repoId}
-          promptDelivery="submit-after-ready"
-          launchPlatform={launchPlatform}
-          launchSource="source_control_recovery"
-          savedAgentId={savedAgentId}
-          savedCommandInputTemplate={savedCommandInputTemplate}
-          savedAgentArgs={savedAgentArgs}
-          onSaveAgentDefault={onSaveAgentDefault}
-          onOpenSettings={onOpenSettings}
-          onLaunched={onPromptDelivered}
-        />
-      ) : null}
-    </>
-  )
-}
-
-function getCommitFailureKindLabel(summary: string): string | null {
-  if (/\blint\b/i.test(summary)) {
-    return 'Lint'
-  }
-
-  if (/\bhook\b|\bpre-commit\b/i.test(summary)) {
-    return 'Hook'
-  }
-
-  return null
-}
-
 type CommitAreaProps = {
   worktreeId: string | null
   groupId: string | null
@@ -6541,10 +6459,12 @@ type CommitAreaProps = {
   commitMessage: string
   commitError: string | null
   commitFailureRecoveryPrompt: string | null
+  pushRecovery: SourceControlPushRecovery | null
   remoteActionError: string | null
   createPrIntentNotice?: CreatePrIntentNotice | null
   isCommitting: boolean
   isFixingCommitFailureWithAI: boolean
+  isFixingPushFailureWithAI: boolean
   isCreatingPr?: boolean
   isCreatePrIntentInFlight?: boolean
   showComposer?: boolean
@@ -6561,6 +6481,7 @@ type CommitAreaProps = {
   primaryAction: PrimaryAction
   dropdownItems: DropdownEntry[]
   fixCommitFailureRecipe?: SourceControlActionRecipe
+  fixPushFailureRecipe?: SourceControlActionRecipe
   onCommitMessageChange: (message: string) => void
   onGenerate: () => void
   onCancelGenerate: () => void
@@ -6571,6 +6492,7 @@ type CommitAreaProps = {
   ) => void | Promise<void>
   onOpenSourceControlAiSettings?: () => void
   onFixCommitFailureWithAI: (promptOverride?: string) => Promise<boolean> | boolean
+  onFixPushFailureWithAI: (promptOverride?: string) => Promise<boolean> | boolean
   onPrimaryAction: () => void
   onDropdownAction: (kind: DropdownActionKind) => void
 }
@@ -6584,10 +6506,12 @@ export function CommitArea({
   commitMessage,
   commitError,
   commitFailureRecoveryPrompt,
+  pushRecovery,
   remoteActionError,
   createPrIntentNotice,
   isCommitting,
   isFixingCommitFailureWithAI,
+  isFixingPushFailureWithAI,
   isCreatingPr = false,
   isCreatePrIntentInFlight = false,
   showComposer = true,
@@ -6604,12 +6528,14 @@ export function CommitArea({
   primaryAction,
   dropdownItems,
   fixCommitFailureRecipe,
+  fixPushFailureRecipe,
   onCommitMessageChange,
   onGenerate,
   onCancelGenerate,
   onSaveLaunchActionDefault,
   onOpenSourceControlAiSettings,
   onFixCommitFailureWithAI,
+  onFixPushFailureWithAI,
   onPrimaryAction,
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
@@ -6649,7 +6575,8 @@ export function CommitArea({
     [commitError]
   )
   const commitFailureKindLabel = useMemo(
-    () => (commitFailureSummary ? getCommitFailureKindLabel(commitFailureSummary) : null),
+    () =>
+      commitFailureSummary ? getSourceControlRecoveryFailureKindLabel(commitFailureSummary) : null,
     [commitFailureSummary]
   )
   const hasCommitFailureDetails = useMemo(
@@ -6659,45 +6586,6 @@ export function CommitArea({
         : false,
     [commitError, commitFailureSummary]
   )
-  // Why: the details dialog is scoped to the worktree, not the exact stderr
-  // text, so a retried commit can refresh an open dialog with newer output.
-  const commitFailureWorktreeKey = getCommitFailureDialogWorktreeKey(worktreeId)
-  const [commitFailureDialogState, setCommitFailureDialogState] =
-    useState<CommitFailureDialogState>({
-      worktreeKey: commitFailureWorktreeKey,
-      open: false
-    })
-  const isCommitFailureDialogOpen = shouldShowCommitFailureDialog(
-    commitFailureDialogState,
-    commitFailureWorktreeKey,
-    hasCommitFailureDetails
-  )
-  const setCommitFailureDialogOpen = useCallback(
-    (open: boolean) => {
-      setCommitFailureDialogState({ worktreeKey: commitFailureWorktreeKey, open })
-    },
-    [commitFailureWorktreeKey]
-  )
-  const handleFixCommitFailureWithAI = useCallback(
-    async (promptOverride?: string): Promise<boolean> => {
-      const launched = await onFixCommitFailureWithAI(promptOverride)
-      if (launched) {
-        setCommitFailureDialogOpen(false)
-      }
-      return launched
-    },
-    [onFixCommitFailureWithAI, setCommitFailureDialogOpen]
-  )
-  const handleCommitFailureAgentPromptDelivered = useCallback(() => {
-    setCommitFailureDialogOpen(false)
-  }, [setCommitFailureDialogOpen])
-
-  useEffect(() => {
-    setCommitFailureDialogState((current) =>
-      syncCommitFailureDialogState(current, commitFailureWorktreeKey, hasCommitFailureDetails)
-    )
-  }, [commitFailureWorktreeKey, hasCommitFailureDetails])
-
   // Why: most primary-kind labels are anchored by a directional icon so
   // the affirmative Commit (✓) reads distinctly from the remote-state
   // labels sharing this slot — Push (↑), Sync (↕), Publish (☁︎↑). Pull is
@@ -6718,6 +6606,7 @@ export function CommitArea({
   })
   const describedBy = [
     commitError ? 'commit-area-error' : null,
+    pushRecovery ? 'commit-area-push-error' : null,
     remoteActionError ? 'commit-area-remote-error' : null,
     createPrIntentNotice ? 'commit-area-create-pr-intent' : null,
     generateError ? 'commit-area-generate-error' : null
@@ -6977,138 +6866,66 @@ export function CommitArea({
           </DropdownMenu>
         </div>
       </div>
-      {commitError && (
-        // Why: role="alert" + aria-live="polite" lets screen readers announce
-        // commit failures; the id ties the message to the textarea via
-        // aria-describedby so assistive tech associates the two.
-        <div
+      {commitError && commitFailureSummary ? (
+        <SourceControlRecoveryNotice
           id="commit-area-error"
-          role="alert"
-          aria-live="polite"
-          className="mt-2 min-w-0 overflow-hidden rounded-lg border border-destructive/20 bg-card text-card-foreground shadow-xs"
-        >
-          <div className="h-0.5 bg-destructive/70" aria-hidden="true" />
-          <div className="grid min-w-0 gap-2 px-2.5 py-2.5">
-            <div className="grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] gap-1.5">
-              <span className="mt-px inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                <TriangleAlert className="size-3" aria-hidden="true" />
-              </span>
-              <div className="flex min-w-0 items-center gap-1.5">
-                <span className="text-xs font-semibold text-foreground">
-                  {translate(
-                    'auto.components.right.sidebar.SourceControl.011f9713fc',
-                    'Commit blocked'
-                  )}
-                </span>
-                {commitFailureKindLabel ? (
-                  <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-destructive">
-                    {commitFailureKindLabel}
-                  </span>
-                ) : null}
-              </div>
-              <p className="col-start-2 mt-0.5 line-clamp-3 min-w-0 font-mono text-[11px] leading-4 break-words text-muted-foreground [overflow-wrap:anywhere]">
-                {commitFailureSummary}
-              </p>
-            </div>
-            <div className="ml-[1.375rem] flex min-w-0 items-center gap-1.5">
-              {sourceControlAiActionsVisible ? (
-                <CommitFailureFixSplitButton
-                  label={translate(
-                    'auto.components.right.sidebar.SourceControl.60bd988f0b',
-                    'AI Fix'
-                  )}
-                  worktreeId={worktreeId}
-                  groupId={groupId}
-                  connectionId={connectionId}
-                  repoId={repoId}
-                  launchPlatform={launchPlatform}
-                  prompt={commitFailureRecoveryPrompt}
-                  isLaunching={isFixingCommitFailureWithAI}
-                  variant="secondary"
-                  size="xs"
-                  iconClassName="size-3"
-                  primaryClassName="h-6 px-2 text-[11px]"
-                  chevronClassName="h-6 px-1.5"
-                  savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
-                  savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
-                  savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
-                  onSaveAgentDefault={onSaveLaunchActionDefault}
-                  onOpenSettings={onOpenSourceControlAiSettings}
-                  onFixWithDefaultAgent={handleFixCommitFailureWithAI}
-                  onPromptDelivered={handleCommitFailureAgentPromptDelivered}
-                />
-              ) : null}
-              {hasCommitFailureDetails && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  className="h-6 shrink-0 border-foreground/25 px-2 text-[11px] font-semibold"
-                  onClick={() => setCommitFailureDialogOpen(true)}
-                >
-                  {translate('auto.components.right.sidebar.SourceControl.03d238218c', 'Details')}
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {commitError && commitFailureSummary && hasCommitFailureDetails && (
-        <Dialog
-          key={commitFailureWorktreeKey}
-          open={isCommitFailureDialogOpen}
-          onOpenChange={setCommitFailureDialogOpen}
-        >
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {translate(
-                  'auto.components.right.sidebar.SourceControl.a9bf7c171a',
-                  'Commit Failed'
-                )}
-              </DialogTitle>
-              <DialogDescription>{commitFailureSummary}</DialogDescription>
-            </DialogHeader>
-            <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap text-foreground scrollbar-sleek">
-              {commitError}
-            </pre>
-            <DialogFooter>
-              {sourceControlAiActionsVisible ? (
-                <CommitFailureFixSplitButton
-                  label={translate(
-                    'auto.components.right.sidebar.SourceControl.834cb3f23d',
-                    'Fix with AI'
-                  )}
-                  worktreeId={worktreeId}
-                  groupId={groupId}
-                  connectionId={connectionId}
-                  repoId={repoId}
-                  launchPlatform={launchPlatform}
-                  prompt={commitFailureRecoveryPrompt}
-                  isLaunching={isFixingCommitFailureWithAI}
-                  variant="default"
-                  size="sm"
-                  iconClassName="size-4"
-                  primaryClassName="rounded-r-none"
-                  chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
-                  savedAgentId={readSourceControlLaunchRecipeAgentId(fixCommitFailureRecipe)}
-                  savedCommandInputTemplate={fixCommitFailureRecipe?.commandInputTemplate ?? null}
-                  savedAgentArgs={fixCommitFailureRecipe?.agentArgs ?? null}
-                  onSaveAgentDefault={onSaveLaunchActionDefault}
-                  onOpenSettings={onOpenSourceControlAiSettings}
-                  onFixWithDefaultAgent={handleFixCommitFailureWithAI}
-                  onPromptDelivered={handleCommitFailureAgentPromptDelivered}
-                />
-              ) : null}
-              <DialogClose asChild>
-                <Button type="button" variant="outline" size="sm">
-                  {translate('auto.components.right.sidebar.SourceControl.783a808870', 'Close')}
-                </Button>
-              </DialogClose>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+          recoveryKind="commit"
+          title={translate(
+            'auto.components.right.sidebar.SourceControl.011f9713fc',
+            'Commit blocked'
+          )}
+          detailsTitle={translate(
+            'auto.components.right.sidebar.SourceControl.a9bf7c171a',
+            'Commit Failed'
+          )}
+          summary={commitFailureSummary}
+          detailText={commitError}
+          hasDetails={hasCommitFailureDetails}
+          kindLabel={commitFailureKindLabel}
+          prompt={commitFailureRecoveryPrompt}
+          worktreeId={worktreeId}
+          groupId={groupId}
+          connectionId={connectionId}
+          repoId={repoId}
+          launchPlatform={launchPlatform}
+          sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+          isLaunching={isFixingCommitFailureWithAI}
+          recipe={fixCommitFailureRecipe}
+          onSaveLaunchActionDefault={onSaveLaunchActionDefault}
+          onOpenSourceControlAiSettings={onOpenSourceControlAiSettings}
+          onFixWithAI={onFixCommitFailureWithAI}
+        />
+      ) : null}
+      {pushRecovery ? (
+        <SourceControlRecoveryNotice
+          id="commit-area-push-error"
+          recoveryKind="push"
+          title={translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.011f9713fc',
+            'Push blocked'
+          )}
+          detailsTitle={translate(
+            'auto.components.right.sidebar.SourceControl.pushRecovery.a9bf7c171a',
+            'Push Failed'
+          )}
+          summary={pushRecovery.summary}
+          detailText={pushRecovery.detailText}
+          hasDetails={pushRecovery.hasDetails}
+          kindLabel={pushRecovery.kindLabel}
+          prompt={pushRecovery.prompt}
+          worktreeId={worktreeId}
+          groupId={groupId}
+          connectionId={connectionId}
+          repoId={repoId}
+          launchPlatform={launchPlatform}
+          sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+          isLaunching={isFixingPushFailureWithAI}
+          recipe={fixPushFailureRecipe}
+          onSaveLaunchActionDefault={onSaveLaunchActionDefault}
+          onOpenSourceControlAiSettings={onOpenSourceControlAiSettings}
+          onFixWithAI={onFixPushFailureWithAI}
+        />
+      ) : null}
       {remoteActionError && isPullPolicyRemoteActionError(remoteActionError) ? (
         <PullPolicyRemoteActionNotice id="commit-area-remote-error" />
       ) : remoteActionError ? (

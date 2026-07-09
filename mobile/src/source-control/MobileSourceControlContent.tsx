@@ -16,6 +16,7 @@ type Props = {
 export function MobileSourceControlContent({ state }: Props) {
   const {
     insets,
+    connState,
     busyAction,
     commitMessage,
     setCommitMessage,
@@ -56,6 +57,15 @@ export function MobileSourceControlContent({ state }: Props) {
 
   return (
     <>
+      {connState !== 'connected' ? (
+        // Why: once data has loaded the screen looks alive even when the
+        // desktop link is down, so taps appear to do nothing (STA-1511).
+        // Surface the reconnect state where the user is looking.
+        <View style={styles.reconnectBanner}>
+          <ActivityIndicator size="small" color={colors.statusAmber} />
+          <Text style={styles.reconnectBannerText}>Reconnecting to desktop...</Text>
+        </View>
+      ) : null}
       <View style={styles.summaryCard}>
         <View style={styles.summaryHeader}>
           <View style={styles.branchLine}>

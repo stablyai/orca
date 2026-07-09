@@ -17,6 +17,7 @@ import type {
   GitStatusEntry,
   Tab
 } from '../../../../shared/types'
+import { isSyncPushStageError } from '@/lib/source-control-remote-error'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -3498,6 +3499,20 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('maps pre-push hook failures to hook-specific guidance instead of remote access', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Push blocked — lint failed during push.')
+  })
+
   it('uses a fallback message for generic push errors', async () => {
     const store = createEditorStore()
     const pushError = new Error('network timeout')
@@ -3770,6 +3785,52 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Sync failed — remote moved while syncing. Try again.'
     )
+  })
+
+  it('marks syncBranch inner push hook failures as sync push-stage failures', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin feature\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    let thrown: unknown
+    try {
+      await store.getState().syncBranch('wt-1', '/repo')
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBe(pushError)
+    expect(isSyncPushStageError(thrown)).toBe(true)
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync blocked — pre-push hook failed.')
+  })
+
+  it('does not classify syncBranch fetch-stage hook-looking failures as push blocked', async () => {
+    const store = createEditorStore()
+    gitFetchMock.mockRejectedValueOnce(
+      new Error('fetch failed before push\npre-push hook docs mention eslint')
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
+    expect(gitPushMock).not.toHaveBeenCalled()
+  })
+
+  it('does not classify syncBranch upstream-status hook-looking failures as push blocked', async () => {
+    const store = createEditorStore()
+    gitUpstreamStatusMock.mockRejectedValueOnce(
+      new Error('upstream status failed before push\npre-push hook docs mention eslint')
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
+    expect(gitPushMock).not.toHaveBeenCalled()
   })
 
   it('surfaces the pull-blocked toast when syncBranch pull stage fails', async () => {

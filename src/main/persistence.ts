@@ -113,6 +113,10 @@ import {
   type ExecutionHostId
 } from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
+import {
+  migrateUiHostScopeSshTargetId,
+  migrateWorkspaceSessionSshTargetId
+} from './ssh/ssh-target-id-migration'
 import { isWslUncPath } from '../shared/wsl-paths'
 import {
   isTerminalLeafId,
@@ -215,8 +219,10 @@ import {
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
+  getProfileTerminalScrollbackSnapshotRoot,
   migrateWorkspaceSessionTerminalScrollbackSnapshots,
-  readTerminalScrollbackSnapshotSync
+  readTerminalScrollbackSnapshotSync,
+  type TerminalScrollbackSnapshotStorage
 } from './terminal-scrollback-snapshots'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
@@ -338,8 +344,8 @@ function getDataFile(): string {
 // the content-hash guard by design). It lives in memory during the session
 // and is snapshotted here best-effort at quit so PR/issue badges still paint
 // instantly on the next launch. Loss of this file costs nothing.
-function getGithubCacheFile(): string {
-  return join(dirname(getDataFile()), 'orca-github-cache.json')
+function getGithubCacheFile(dataFile = getDataFile()): string {
+  return join(dirname(dataFile), 'orca-github-cache.json')
 }
 
 // Why: worktrees deleted outside Orca (git CLI worktree remove, rm -rf,
@@ -418,9 +424,9 @@ function gcStaleWorktreeMeta(state: PersistedState): number {
   return removed
 }
 
-function readGithubCacheSnapshot(): PersistedState['githubCache'] | null {
+function readGithubCacheSnapshot(dataFile: string): PersistedState['githubCache'] | null {
   try {
-    const parsed = JSON.parse(readFileSync(getGithubCacheFile(), 'utf-8')) as unknown
+    const parsed = JSON.parse(readFileSync(getGithubCacheFile(dataFile), 'utf-8')) as unknown
     const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
       typeof value === 'object' && value !== null && !Array.isArray(value)
     if (
@@ -2570,7 +2576,8 @@ function backfillFolderScopeConnectionIds(state: PersistedState): {
 
 function deleteRemovedTerminalScrollbackSnapshots(
   prior: WorkspaceSessionState | undefined,
-  next: WorkspaceSessionState
+  next: WorkspaceSessionState,
+  storage?: TerminalScrollbackSnapshotStorage
 ): void {
   if (!prior) {
     return
@@ -2578,16 +2585,26 @@ function deleteRemovedTerminalScrollbackSnapshots(
   const nextRefs = collectTerminalScrollbackSnapshotRefs(next)
   for (const ref of collectTerminalScrollbackSnapshotRefs(prior)) {
     if (!nextRefs.has(ref)) {
-      deleteTerminalScrollbackSnapshotSync(ref)
+      deleteTerminalScrollbackSnapshotSync(ref, storage)
     }
   }
 }
 
+export type StoreOptions = {
+  dataFile?: string
+}
+
 export class Store {
   private state: PersistedState
+  private readonly dataFile: string
+  private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
+  // Why: after a profile transfer rewrites this store's file on disk behind
+  // its back, the stale in-memory state must never be persisted again — a
+  // late sync flush before the relaunch would resurrect the moved project.
+  private writesFrozen = false
   // Why: hash of the plaintext state as of the last successful write. Saves
   // triggered by mutations that net out to identical state skip the full
   // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
@@ -2607,7 +2624,16 @@ export class Store {
   >()
   private uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
 
-  constructor() {
+  constructor(options: StoreOptions = {}) {
+    // Why: profile switching creates more than one possible state path. Capture
+    // the path per Store instance so late async writes cannot follow a global path.
+    this.dataFile = options.dataFile ?? getDataFile()
+    const profileSnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(this.dataFile)
+    const legacySnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(getDataFile())
+    this.terminalScrollbackSnapshotStorage = {
+      snapshotRoot: profileSnapshotRoot,
+      fallbackSnapshotRoot: legacySnapshotRoot === profileSnapshotRoot ? null : legacySnapshotRoot
+    }
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
@@ -2816,7 +2842,7 @@ export class Store {
     // would be absent on every pre-telemetry install and misclassify existing
     // users as fresh, flipping them to default-on in violation of the
     // social contract we installed them under.
-    const dataFile = getDataFile()
+    const dataFile = this.dataFile
     const fileExistedOnLoad = existsSync(dataFile)
     logPersistenceStartupMilestone('persistence-load-start', {
       fileExists: fileExistedOnLoad
@@ -3408,7 +3434,10 @@ export class Store {
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
     )
-    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(workspaceSession)
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
+      workspaceSession,
+      this.terminalScrollbackSnapshotStorage
+    )
     if (migratedScrollback.changed) {
       this.loadNeedsSave = true
     }
@@ -3464,7 +3493,7 @@ export class Store {
       // poll refresh happens this session — the seed survives the migration.
       this.githubCacheDirty = true
     } else {
-      migrated.githubCache = readGithubCacheSnapshot() ?? migrated.githubCache
+      migrated.githubCache = readGithubCacheSnapshot(this.dataFile) ?? migrated.githubCache
     }
 
     logPersistenceStartupMilestone('persistence-load-done', {
@@ -3612,6 +3641,9 @@ export class Store {
   // Why: async writes avoid blocking the main Electron thread on every
   // debounced save during active use.
   private async writeToDiskAsync(): Promise<void> {
+    if (this.writesFrozen) {
+      return
+    }
     const gen = this.writeGeneration
     const stateHash = this.computeStateHash()
     // Why: a mutation burst that nets out to already-persisted state (or a
@@ -3620,7 +3652,7 @@ export class Store {
       return
     }
     const payload = this.buildStateToSave()
-    const dataFile = getDataFile()
+    const dataFile = this.dataFile
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
@@ -3665,6 +3697,9 @@ export class Store {
   // Why: synchronous variant kept only for flush() at shutdown, where the
   // process may exit before an async write completes.
   private writeToDiskSync(opts: { force?: boolean } = {}): void {
+    if (this.writesFrozen) {
+      return
+    }
     const stateHash = this.computeStateHash()
     // Why: skipping is safe under flushOrThrow's durability contract — a
     // matching hash means this exact state is already the file's content.
@@ -3674,7 +3709,7 @@ export class Store {
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
       return
     }
-    const dataFile = getDataFile()
+    const dataFile = this.dataFile
     const dir = dirname(dataFile)
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
@@ -5529,7 +5564,7 @@ export class Store {
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
-    return readTerminalScrollbackSnapshotSync(ref)
+    return readTerminalScrollbackSnapshotSync(ref, this.terminalScrollbackSnapshotStorage)
   }
 
   /** Resolve the worktree a terminal tab belongs to, from the session's
@@ -5703,9 +5738,12 @@ export class Store {
       }
     }
     session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
-    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(session)
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
+      session,
+      this.terminalScrollbackSnapshotStorage
+    )
     session = migratedScrollback.session
-    deleteRemovedTerminalScrollbackSnapshots(prior, session)
+    deleteRemovedTerminalScrollbackSnapshots(prior, session, this.terminalScrollbackSnapshotStorage)
     this.state.workspaceSession = session
     this.scheduleSave()
   }
@@ -6131,13 +6169,71 @@ export class Store {
         metaChanged = true
       }
     }
-    // Why: repo-row rewrites can affect host-setup compatibility, but meta-only
-    // rewrites cannot — keep that sync under the repo gate. Persist whenever
-    // either repos OR metas changed, so meta-only re-points aren't lost on quit.
-    if (repoCount > 0) {
+    // Why: the old id also survives in session pty ids, the startup reconnect
+    // list, sleeping-agent records, host setups, host-scope UI, and pty leases;
+    // any un-migrated carrier later throws `SSH target not found` (STA-1468).
+    let carrierChanged = migrateWorkspaceSessionSshTargetId(
+      this.state.workspaceSession,
+      oldTargetId,
+      newTargetId
+    )
+    for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
+      if (session && migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)) {
+        carrierChanged = true
+      }
+    }
+    // Why: partitions are read by host id, so one stored under the removed id
+    // would be orphaned. No writer keys partitions by ssh host today, but the
+    // schema tolerates it — re-key rather than strand it. If the new key
+    // already has a partition, that one is live; drop the dead old one.
+    const partitions = this.state.workspaceSessionsByHostId
+    const oldPartition = partitions?.[oldHostId]
+    if (partitions && oldPartition) {
+      delete partitions[oldHostId]
+      partitions[newHostId] ??= oldPartition
+      carrierChanged = true
+    }
+    if (migrateUiHostScopeSshTargetId(this.state.ui, oldTargetId, newTargetId)) {
+      carrierChanged = true
+    }
+    for (const lease of this.state.sshRemotePtyLeases ?? []) {
+      if (lease.targetId === oldTargetId) {
+        lease.targetId = newTargetId
+        carrierChanged = true
+      }
+    }
+    let setupsChanged = false
+    const keptSetups: ProjectHostSetup[] = []
+    for (const setup of this.state.projectHostSetups) {
+      if (setup.hostId !== oldHostId) {
+        keptSetups.push(setup)
+        continue
+      }
+      const duplicate = this.state.projectHostSetups.some(
+        (entry) =>
+          entry !== setup && entry.projectId === setup.projectId && entry.hostId === newHostId
+      )
+      // Why: a setup already exists for the re-added host — the old row is a
+      // stale ghost that would violate the (projectId, hostId) uniqueness.
+      if (duplicate) {
+        setupsChanged = true
+        continue
+      }
+      setup.hostId = newHostId
+      setup.updatedAt = Date.now()
+      keptSetups.push(setup)
+      setupsChanged = true
+    }
+    if (setupsChanged) {
+      this.state.projectHostSetups = keptSetups
+    }
+    // Why: repo-row and host-setup rewrites can affect host-setup compatibility,
+    // but meta-only rewrites cannot — keep that sync under this gate. Persist
+    // whenever anything changed, so partial re-points aren't lost on quit.
+    if (repoCount > 0 || setupsChanged) {
       this.syncProjectHostSetupCompatibilityState()
     }
-    if (repoCount > 0 || metaChanged) {
+    if (repoCount > 0 || metaChanged || carrierChanged || setupsChanged) {
       this.scheduleSave()
     }
     return repoCount
@@ -6352,13 +6448,24 @@ export class Store {
     this.writeGithubCacheSnapshotSync()
   }
 
+  // Why: called after a project move rewrote this store's data file directly.
+  // From that point until relaunch, the in-memory state is stale and any
+  // write (debounced, sync, or shutdown flush) would undo the transfer.
+  freezeWrites(): void {
+    this.writesFrozen = true
+    if (this.writeTimer) {
+      clearTimeout(this.writeTimer)
+      this.writeTimer = null
+    }
+  }
+
   // Why best-effort: the sidecar is a refetchable cache — a failed write only
   // costs a cold badge paint on next launch, never data.
   private writeGithubCacheSnapshotSync(): void {
     if (!this.githubCacheDirty) {
       return
     }
-    const cacheFile = getGithubCacheFile()
+    const cacheFile = getGithubCacheFile(this.dataFile)
     const tmpFile = `${cacheFile}.${process.pid}.tmp`
     try {
       writeFileSync(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')

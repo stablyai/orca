@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
@@ -73,6 +73,13 @@ export function useCloseWith({
   startTimeRef,
   setError
 }: CloseWithDeps) {
+  // Why: onboarding closes exactly once. On the final notifications step both
+  // the "Add your first project" handoff (completed) and a click-off/Escape
+  // dismissal (dismissed) can reach closeWith, and next()'s persist window
+  // leaves the modal interactive with no busy flag. This latch makes closeWith
+  // idempotent so the first close wins — no double onboarding.update write and
+  // no double completed/dismissed telemetry.
+  const closedRef = useRef(false)
   return useCallback(
     async (
       outcome: 'completed' | 'dismissed',
@@ -81,6 +88,10 @@ export function useCloseWith({
       completedPath?: 'open_folder' | 'clone_url' | 'add_project_modal',
       dismissedExtras?: DismissedExtras
     ): Promise<boolean> => {
+      if (closedRef.current) {
+        return false
+      }
+      closedRef.current = true
       let nextState: OnboardingState
       try {
         // Why: main-process updateOnboarding already merges with current state,
@@ -97,6 +108,9 @@ export function useCloseWith({
           }
         })
       } catch (err) {
+        // Why: the persist failed, so onboarding did not actually close — clear
+        // the latch so the user can retry the close action.
+        closedRef.current = false
         setError(err instanceof Error ? err.message : String(err))
         return false
       }

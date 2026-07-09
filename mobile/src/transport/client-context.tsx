@@ -133,6 +133,11 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
           return null
         }
         if (!host) {
+          // Why: returning silently leaves mounted screens on a permanent
+          // spinner (STA-1511) — surface 'disconnected' so they can render
+          // their waiting/retry affordance instead.
+          notifyHostState(hostId, 'disconnected')
+          notifyAllHosts()
           return null
         }
       }
@@ -405,6 +410,12 @@ export function useHostClient(hostId: string | undefined): {
       const found = ctx.getAllClients().find((entry) => entry.hostId === hostId)
       if (found && found.client !== clientRef.current) {
         clientRef.current = found.client
+        force((n) => n + 1)
+      } else if (!found && clientRef.current) {
+        // Why: closeHost deletes the entry without a replacement; holding the
+        // closed client would let screens keep issuing requests that can never
+        // resolve (STA-1511). Null it so they render disconnected states.
+        clientRef.current = null
         force((n) => n + 1)
       }
     })

@@ -157,6 +157,29 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(true)
   })
 
+  it('persists new browser session profiles under the active Orca profile directory', async () => {
+    const fsState = createFsState()
+    const profileMetaPath = '/user-data/profiles/local-work/browser-session-meta.json'
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId: 'local-work',
+      profileDirectory: '/user-data/profiles/local-work'
+    })
+    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser')
+
+    expect(profile).not.toBeNull()
+    expect(fsState.files.has(profileMetaPath)).toBe(true)
+    expect(fsState.files.has(META_PATH)).toBe(false)
+    expect(JSON.parse(fsState.files.get(profileMetaPath) ?? '{}').profiles[0]).toMatchObject({
+      id: profile!.id,
+      partition: profile!.partition,
+      label: 'Work Browser'
+    })
+  })
+
   it('merges partition-keyed pending entries without clobbering unrelated entries', async () => {
     const fsState = createFsState()
     seedMeta(fsState, {

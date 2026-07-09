@@ -6,7 +6,7 @@ import {
   markComplexScriptOutput,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { attachLigatures, openTerminal } from './pane-lifecycle'
+import { attachLigatures, disposePane, openTerminal } from './pane-lifecycle'
 import {
   buildDefaultTerminalOptions,
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -410,24 +410,27 @@ describe('attachLigatures', () => {
   })
 })
 
-describe('openTerminal — Unicode 11 ordering', () => {
+describe('openTerminal — addon and provider wiring', () => {
   beforeEach(() => {
     vi.stubGlobal('requestAnimationFrame', () => 1)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  // Why: CJK / emoji / ZWJ widths get baked into the buffer at the active
-  // unicode version on write. If anything writes bytes through xterm before
-  // unicode v11 is activated (still on default v6 width tables), wide chars
-  // lay out as single cells. The bug surfaces as the broken `?`-style glyphs
-  // users saw on worktree switch.
-  it('activates unicode 11 before any caller-driven write would be possible', () => {
+  function createOpenTerminalHarness(): {
+    pane: ManagedPaneInternal
+    events: string[]
+    getRegisteredJoinHandler: () => ((text: string) => [number, number][]) | null
+  } {
     const events: string[] = []
+    let registeredJoinHandler: ((text: string) => [number, number][]) | null = null
 
-    const fitAddon = { fit: vi.fn() } as unknown as ManagedPaneInternal['fitAddon']
+    const fitAddon = {
+      fit: vi.fn()
+    } as unknown as ManagedPaneInternal['fitAddon']
     const searchAddon = {} as unknown as ManagedPaneInternal['searchAddon']
     const serializeAddon = {} as unknown as ManagedPaneInternal['serializeAddon']
     const unicode11Addon = {} as unknown as ManagedPaneInternal['unicode11Addon']
@@ -493,6 +496,14 @@ describe('openTerminal — Unicode 11 ordering', () => {
       write: vi.fn(() => {
         events.push('write')
       }),
+      registerCharacterJoiner: vi.fn((handler: (text: string) => [number, number][]) => {
+        events.push('registerCharacterJoiner')
+        registeredJoinHandler = handler
+        return 3
+      }),
+      deregisterCharacterJoiner: vi.fn((joinerId: number) => {
+        events.push(`deregisterCharacterJoiner:${joinerId}`)
+      }),
       unicode: unicodeProxy,
       buffer: { active: { cursorX: 0, cursorY: 0 } }
     } as unknown as ManagedPaneInternal['terminal']
@@ -525,26 +536,70 @@ describe('openTerminal — Unicode 11 ordering', () => {
       debugLabel: null
     }
 
-    try {
-      openTerminal(pane)
+    return { pane, events, getRegisteredJoinHandler: () => registeredJoinHandler }
+  }
 
-      expect(fakePaneContainer.appendChild).toHaveBeenCalledWith(fakeTooltip)
-      expect(fakeXtermContainer.appendChild).not.toHaveBeenCalled()
-      expect(fakeTerminalElement.appendChild).not.toHaveBeenCalled()
-      expect(events).toContain('loadAddon:unicode11')
-      expect(events).toContain('activeVersion=11')
+  // Why: CJK / emoji / ZWJ widths get baked into the buffer at the active
+  // unicode version on write. If anything writes bytes through xterm before
+  // unicode v11 is activated (still on default v6 width tables), wide chars
+  // lay out as single cells. The bug surfaces as the broken `?`-style glyphs
+  // users saw on worktree switch.
+  it('activates unicode 11 before any caller-driven write would be possible', () => {
+    const { pane, events } = createOpenTerminalHarness()
 
-      const unicodeIdx = events.indexOf('activeVersion=11')
-      const writeIdx = events.indexOf('write')
-      if (writeIdx !== -1) {
-        expect(unicodeIdx).toBeLessThan(writeIdx)
-      }
+    openTerminal(pane)
 
-      const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
-      expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
-      expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
-    } finally {
-      vi.unstubAllGlobals()
+    expect(pane.container.appendChild).toHaveBeenCalledWith(pane.linkTooltip)
+    expect(pane.xtermContainer.appendChild).not.toHaveBeenCalled()
+    expect(pane.terminal.element!.appendChild).not.toHaveBeenCalled()
+    expect(events).toContain('loadAddon:unicode11')
+    expect(events).toContain('activeVersion=11')
+
+    const unicodeIdx = events.indexOf('activeVersion=11')
+    const writeIdx = events.indexOf('write')
+    if (writeIdx !== -1) {
+      expect(unicodeIdx).toBeLessThan(writeIdx)
     }
+
+    const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
+    expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
+    expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
+  })
+
+  // Why: terminal.dispose() does not deregister character joiners, so the
+  // pane lifecycle must — this locks the register/deregister pairing that
+  // makes Arabic/RTL shaping (#5262) actually reach a real terminal.
+  it('registers the Arabic shaping joiner on open and deregisters it on dispose', () => {
+    const { pane, events } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+
+    expect(events).toContain('registerCharacterJoiner')
+    expect(events.indexOf('open')).toBeLessThan(events.indexOf('registerCharacterJoiner'))
+    expect(pane.arabicShapingJoinerCleanup).toBeTypeOf('function')
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+
+    expect(events).toContain('deregisterCharacterJoiner:3')
+    expect(pane.arabicShapingJoinerCleanup).toBeNull()
+  })
+
+  // Why: the DOM renderer misrenders joined spans (per-character
+  // letter-spacing blowout), so the joiner must only join while this pane's
+  // WebGL addon is live — locked here against the real openTerminal wiring.
+  it('joins RTL runs only while the pane has a live WebGL addon', () => {
+    const { pane, getRegisteredJoinHandler } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+    const handler = getRegisteredJoinHandler()!
+
+    expect(pane.webglAddon).toBeNull()
+    expect(handler('مرحبا')).toEqual([])
+
+    pane.webglAddon = {} as never
+    expect(handler('مرحبا')).toEqual([[0, 5]])
+
+    pane.webglAddon = null
+    expect(handler('مرحبا')).toEqual([])
   })
 })

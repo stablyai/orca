@@ -182,6 +182,16 @@ export function createRemoteRuntimePtyTransport(
     return null
   }
 
+  async function listHostSessionHandle(hostTabId: string): Promise<string | null> {
+    if (!worktreeId) {
+      return null
+    }
+    const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+      worktree: toRuntimeWorktreeSelector(worktreeId)
+    })
+    return findReadyHostSessionHandle(listed, hostTabId)
+  }
+
   async function attachHostSessionMirror(
     options: Parameters<PtyTransport['connect']>[0]
   ): Promise<PtyConnectResult | undefined> {
@@ -280,7 +290,9 @@ export function createRemoteRuntimePtyTransport(
       }
       return true
     } catch (error) {
-      storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+      // Why: stale-handle errors must retire the mirror (recoverable via the
+      // next snapshot) rather than dead-end in a red xterm banner (#7718).
+      handleRemoteTerminalError(error)
       return false
     }
   }
@@ -298,7 +310,7 @@ export function createRemoteRuntimePtyTransport(
       text,
       client: { id: clientId, type: 'desktop' }
     }).catch((error) => {
-      storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+      handleRemoteTerminalError(error)
     })
   })
 
@@ -369,6 +381,31 @@ export function createRemoteRuntimePtyTransport(
       return
     }
     storedCallbacks.onError?.(message)
+  }
+
+  // Why: after a transport drop the host may have re-minted this pane's
+  // handle (reconnect, epoch or PTY change). Re-derive it from the current
+  // session snapshot instead of resubscribing the stale closure value, which
+  // would mirror (and type into) whatever PTY now sits behind it (#7718).
+  async function resubscribeAfterTransportClose(previousHandle: string): Promise<void> {
+    if (tabId && isWebTerminalSurfaceTabId(tabId)) {
+      const nextHandle = await listHostSessionHandle(toHostSessionTabId(tabId))
+      if (destroyed || !connected || handle !== previousHandle) {
+        return
+      }
+      if (!nextHandle) {
+        // Why: the host no longer publishes this surface; retire quietly and
+        // let the next session-tabs snapshot drive respawn/removal.
+        retireRemoteTerminalId()
+        return
+      }
+      if (nextHandle !== previousHandle) {
+        handle = nextHandle
+        remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
+        onPtySpawn?.(remotePtyId)
+      }
+    }
+    await subscribeToHandle()
   }
 
   async function subscribeToHandle(): Promise<void> {
@@ -453,10 +490,9 @@ export function createRemoteRuntimePtyTransport(
           }
           resubscribing = true
           const resubscribeHandle = handle
-          const resubscribePtyId = remotePtyId
-          void subscribeToHandle()
+          void resubscribeAfterTransportClose(resubscribeHandle)
             .catch((error) => {
-              if (isCurrentRemoteTerminal(resubscribeHandle, resubscribePtyId)) {
+              if (!destroyed && connected && handle) {
                 handleRemoteTerminalError(error)
               }
             })
@@ -659,7 +695,7 @@ export function createRemoteRuntimePtyTransport(
         text,
         client: { id: clientId, type: 'desktop' }
       }).catch((error) => {
-        storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+        handleRemoteTerminalError(error)
       })
       return true
     },

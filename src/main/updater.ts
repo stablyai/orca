@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
 import { app, BrowserWindow, powerMonitor } from 'electron'
-import type { NsisUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateCheckOptions, UpdateStatus } from '../shared/types'
 import { killAllPty } from './ipc/pty'
@@ -1269,15 +1268,11 @@ export function setupAutoUpdater(
     debug: (m: unknown) => console.debug('[autoUpdater]', m)
   } as never
 
-  // Why: older Windows installs either have no publisherName or have the
-  // stale macOS Apple Developer ID publisherName from issue #631. Keep the
-  // migration path open while SignPath-signed builds roll out.
-  //
-  // TODO: re-enable after SignPath-signed builds with the explicit Windows
-  // publisherName have been the minimum supported updater source for a while.
-  if (process.platform === 'win32') {
-    ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
-  }
+  // Why: Windows update integrity is enforced by electron-updater's built-in
+  // Authenticode check against the `publisherName` (SignPath Foundation) that
+  // electron-builder embeds in app-update.yml. Do NOT re-add a
+  // `verifyUpdateCodeSignature` override — a no-op override silently accepts
+  // every downloaded installer, disabling signature verification entirely.
 
   // Use the generic provider with GitHub's /releases/latest/download/ URL as
   // the startup fallback so electron-updater can fetch the manifest

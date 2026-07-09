@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-07",
+  "updatedAt": "2026-07-08",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -104,6 +104,163 @@
         "SSH and remote providers are intentionally unknown-liveness paths and need separate provider-contract gates."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
+    },
+    {
+      "id": "terminal-session.startup-cwd-missing-dir-recovery",
+      "title": "Fresh local terminal creation cannot be bricked by a deleted startup cwd",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "shared-main-renderer-contract",
+      "surfaces": [
+        "terminal lifecycle",
+        "tab creation",
+        "PTY spawn",
+        "startup cwd persistence"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows",
+        "mobile"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "ssh",
+        "remote-runtime"
+      ],
+      "coverageNotes": "Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the probe by design and lack a live run; Linux/Windows and mobile/API strictness are gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7239",
+        "https://github.com/stablyai/orca/pull/7750",
+        "https://github.com/stablyai/orca/pull/7678"
+      ],
+      "invariant": "A fresh local renderer terminal spawn may recover from a saved startup cwd whose directory no longer exists only by spawning at the selected workspace root and printing a generic in-terminal notice; existing directories — including ones outside the worktree (#7685) — spawn as requested, and reattach, SSH, remote-runtime, runtime/API, and mobile callers keep exact cwd semantics.",
+      "oracle": "The shared resolver falls back to the workspace root only when the injected existence probe reports the resolved cwd missing and the workspace root present, and never probes floating terminals or a cwd equal to the root. The renderer sends cwdFallback only for fresh local IPC spawns, main honors it only when connectionId and sessionId are absent, WSL UNC paths never engage the probe-based fallback, main returns fallback metadata only after an actual fallback, the IPC transport preserves that metadata, and the connection layer writes a generic notice that omits the missing path.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/terminal-startup-cwd.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/terminal-startup-cwd.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/terminal-startup-cwd.test.ts",
+          "assertions": [
+            "a missing requested cwd falls back to the workspace root and reports the missing path to the callback",
+            "existing cwds — nested or outside the worktree (#7685) — are never remapped",
+            "no fallback happens when the workspace root is missing too",
+            "floating terminal cwds and root-equal requests are never probed",
+            "non-ASCII worktree roots and folder workspace roots are recovered verbatim"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "local pty:spawn with cwdFallback worktree spawns at the worktree root when the saved cwd is missing and returns fallback metadata",
+            "a missing cwd without the flag still surfaces the provider's missing-directory error",
+            "an existing outside-worktree cwd spawns as requested without fallback metadata",
+            "session reattach spawns ignore the fallback flag and keep exact cwd semantics"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "assertions": [
+            "IPC transport sends cwdFallback only for local fresh spawns",
+            "SSH-tagged and session reattach spawns omit cwdFallback",
+            "IPC transport returns startup cwd fallback metadata to the connection layer"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "fresh local IPC worktree spawns are marked with cwdFallback worktree",
+            "startup cwd fallback metadata prints a generic in-terminal notice",
+            "remote-runtime worktree spawns are not marked with cwdFallback"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/terminal-startup-cwd.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.2,
+          "summary": "1 test file passed, 21 tests passed; covers the missing-dir fallback policy, #7685 outside-worktree preservation, and root-missing/floating exemptions."
+        },
+        {
+          "date": "2026-07-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.9,
+          "summary": "1 test file passed, 225 tests passed; covers main pty:spawn recovery, fallback metadata, and no-flag/reattach provider-error strictness."
+        },
+        {
+          "date": "2026-07-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.4,
+          "summary": "1 test file passed, 58 tests passed; covers cwdFallback forwarding only for local fresh spawns and metadata handoff."
+        },
+        {
+          "date": "2026-07-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "result": "passed",
+          "durationSeconds": 6.5,
+          "summary": "1 test file passed, 341 tests passed; covers local IPC marking, the generic terminal fallback notice, and remote-runtime omission."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused unit and IPC contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental gate added with local deterministic evidence only; needs CI soak before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The main IPC missing-cwd tests fail with the provider's 'Working directory ... does not exist.' error when the fallback is removed and pass with it. Full live Electron reproduction from a production persisted session is not captured."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The runtime change adds at most two statSync probes on the fresh-local spawn path (the provider already stats the same paths during validation) and one bounded terminal write only when fallback actually occurs; no polling, provider listing, hidden-pane work, startup awaits, subprocesses, or render-loop work was added."
+      },
+      "promotionCriteria": [
+        "Attach CI evidence for all declared test files.",
+        "Add a live Electron regression that opens a local terminal whose persisted startupCwd was deleted and proves visible shell input/output at the workspace root.",
+        "Add WSL/mobile/API provider-contract coverage or explicitly narrow their risk scope."
+      ],
+      "knownGaps": [
+        "No live Electron fixture seeds a persisted tab whose startupCwd directory was deleted.",
+        "Daemon coverage is via the shared pre-provider main cwd decision, not a live daemon provider spawn.",
+        "WSL UNC paths bypass the probe by design and have no live existence-recovery run; Linux, Windows, and mobile/API strictness are not directly exercised."
+      ],
+      "demotionRule": "Demote or quarantine if the gate flakes without a product bug, if an existing directory is ever remapped away from the requested cwd, or if a reattach/remote/API caller can engage the fallback."
     },
     {
       "id": "agent-session.provider-ownership",

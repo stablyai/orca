@@ -30,6 +30,10 @@ export type SharedControlLogicalSubscription<TResult = unknown> = {
   closed: boolean
   closeAfterReady: boolean
   remoteSubscriptionId: string | null
+  // Why: set while awaiting the first response after a reconnect replay; that
+  // response is the authoritative re-emitted snapshot and gets tagged so
+  // monotonic freshness gates don't drop it (#7718).
+  pendingReplayTag?: boolean
 }
 
 export type SharedControlReadyWaiter = {

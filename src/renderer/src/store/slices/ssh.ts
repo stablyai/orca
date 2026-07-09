@@ -37,6 +37,11 @@ export type SshSlice = {
    * tombstones). Lets ghost-host UI show a friendly name instead of the raw id
    * for a workspace still pinned to a deleted target. */
   removedSshTargetLabels: Map<string, string>
+  /** True once a target list actually loaded (even an empty one). Distinguishes
+   * "this client knows the target set" from "never hydrated" (e.g. a paired
+   * client on a host without the ssh RPC), so absence from sshTargetLabels
+   * only counts as removal evidence when this is set. */
+  sshTargetsHydrated: boolean
   remoteWorkspaceHydratedTargetIds: Set<string>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
@@ -71,6 +76,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   removedSshTargetLabels: new Map(),
+  sshTargetsHydrated: false,
   remoteWorkspaceHydratedTargetIds: new Set(),
   remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
@@ -101,10 +107,13 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   setSshTargetsMetadata: (targets) =>
     set((s) => {
       if (sshTargetLabelsEqual(s.sshTargetLabels, targets)) {
-        return s
+        // Why: an unchanged (even empty) list is still a successful load — the
+        // hydration flag must flip on the first fetch of an empty target set.
+        return s.sshTargetsHydrated ? s : { sshTargetsHydrated: true }
       }
       return {
-        sshTargetLabels: new Map(targets.map((target) => [target.id, target.label]))
+        sshTargetLabels: new Map(targets.map((target) => [target.id, target.label])),
+        sshTargetsHydrated: true
       }
     }),
   clearRemovedSshTargetState: (targetId) =>

@@ -137,6 +137,9 @@
         "e3bcd082ac": "Orca に接続",
         "mobileScopeRejected": "この QR コードは制限付き（モバイル）アクセスを許可します。完全な Web アプリを使うには、設定 → リモート Orca サーバー → この Orca サーバーを共有する → 新規リンク からブラウザー用アクセスリンクを開いてください。"
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "この実行ホストでは Agent セッション履歴を使用できません。"
+      },
       "web": {
         "preload": {
           "api": {
@@ -244,7 +247,9 @@
           "a8e4b3af5b": "プロジェクトはすでに追加されています",
           "6d3318e813": "repos のインポートに失敗しました",
           "3be0f7df04": "選択したランタイムでフォルダーを開けません",
-          "15cf5319ec": "{{path}} は {{hostName}} でチェックされましたが、そのホストは使用可能なフォルダーを報告しませんでした。"
+          "15cf5319ec": "{{path}} は {{hostName}} でチェックされましたが、そのホストは使用可能なフォルダーを報告しませんでした。",
+          "2dcd706774": "プロジェクトは別のプロファイルにも存在します",
+          "presenceProfileOverflow": "{{names}} 他 {{count}} 件"
         },
         "settings": {
           "e12dab333b": "サーバーの切り替えに失敗しました",
@@ -259,6 +264,24 @@
         },
         "linear": {
           "37d36984d0": "Linear 接続は新しいリクエストに置き換えられました。"
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "プロファイルの作成に失敗しました",
+            "319d7cf39b": "クラウド プロファイルが作成されました",
+            "d6e764e7db": "このプロファイルを再接続してください",
+            "f0c9e11a6d": "クラウド プロファイルの作成に失敗しました",
+            "8b8fa73174": "Orca Cloud のサインインが構成されていません",
+            "33290e88ed": "プロファイルの接続に失敗しました",
+            "9fcb07a796": "プロファイルが接続されました",
+            "2f6c78a039": "プロファイル認証の更新に失敗しました",
+            "a37b5e6d37": "プロファイルからサインアウトしました",
+            "83600521e7": "サインアウトに失敗しました",
+            "76deec8f58": "組織の切り替えに失敗しました",
+            "7d4bc516ee": "プロファイルの切り替えに失敗しました",
+            "f518e89aa5": "プロジェクトはそのプロファイルに既に存在します",
+            "f03ae7f27b": "プロジェクトの転送に失敗しました"
+          }
         }
       }
     },
@@ -542,6 +565,13 @@
       },
       "ephemeralVmWorkspaceTarget": {
         "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
+      },
+      "blocked": {
+        "notification": {
+          "fallback": {
+            "de50bef680": "macOS が Orca の通知をブロックしています"
+          }
+        }
       }
     },
     "hooks": {
@@ -2562,7 +2592,10 @@
             "connectFailed": "SSH 接続に失敗しました",
             "title": "SSH 接続が必要です",
             "connectingButton": "接続中...",
-            "connectButton": "接続"
+            "connectButton": "接続",
+            "removedTitle": "SSH host removed",
+            "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
+            "removeWorkspaceButton": "Remove workspace"
           }
         }
       },
@@ -2588,8 +2621,7 @@
             "localWorkspacesOnly": "履歴からの再開はローカルワークスペースでのみ利用できます。",
             "openLocalWorkspace": "セッションを再開する前にローカルワークスペースを開いてください。",
             "sessionQueued": "セッションをキューに追加しました",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースにドロップしてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。同じホスト上のワークスペースにドロップしてください。"
           },
@@ -3684,7 +3716,8 @@
           "d36883e046": "キャンセル",
           "8c097ef04e": "Orca から。それはまだディスク上にあります。",
           "e62415c3d0": "これは削除するだけです",
-          "b79b39d865": "プロジェクトの削除"
+          "b79b39d865": "プロジェクトの削除",
+          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "アクティブなワークスペースを表示する"
@@ -4400,7 +4433,16 @@
           "5e6f7a8b9c": "This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.",
           "6f7a8b9c0d": "キャンセル",
           "7a8b9c0d1e": "Open settings",
-          "8b9c0d1e2f": "ホストを削除"
+          "8b9c0d1e2f": "ホストを削除",
+          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "oneWorkspace": "1 workspace",
+          "manyWorkspaces": "{{count}} workspaces",
+          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
+          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
+          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
+          "advanced": "Advanced",
+          "alsoDeleteRemoteHint": "Permanently deletes the remote Git worktrees and their branches. Cannot be undone.",
+          "alsoForgetLocalHint": "Clears them from Orca only. Remote files, worktrees, and branches are left untouched."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Rename host",
@@ -4513,6 +4555,16 @@
           "importing": "インポート中...",
           "importSshConfig": "~/.ssh/config をインポートします",
           "sshPersistenceDefault": "このホスト上のリモートターミナルは、終了するかリレーをリセットするまで動作し続けます。"
+        },
+        "ForgetSshWorkspaceDialog": {
+          "reconnectFailed": "Reconnection failed",
+          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
+          "title": "Delete “{{name}}”?",
+          "disconnectedBody": "The SSH host for this workspace is not connected. Reconnect to delete it on the remote too, or remove it from Orca only.",
+          "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
+          "cancel": "Cancel",
+          "forget": "Remove from Orca",
+          "reconnectAndDelete": "Reconnect & Delete"
         }
       },
       "shared": {
@@ -8377,7 +8429,8 @@
                   "customCommand": "カスタムコマンド",
                   "supportedAgents": "このレシピでサポートされている agent: {{value0}}。",
                   "unsupportedSavedAgent": "{{value0}} はこのテキスト生成レシピを実行できません。以下からサポートされている agent のいずれかを選択してください。",
-                  "resolveComments": "選択した未解決の PR または MR コメントから agent を開始します。"
+                  "resolveComments": "選択した未解決の PR または MR コメントから agent を開始します。",
+                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails."
                 }
               }
             }
@@ -8714,7 +8767,14 @@
           "behindBaseRefToastDescription": "インラインの設定リンクとフッターアクション付きの永続プロンプト。",
           "notificationPlayground": "Notification playground",
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
-          "devOnly": "Dev only"
+          "devOnly": "Dev only",
+          "orcaCloud": "Orca Cloud",
+          "orcaCloudDescription": "Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.",
+          "orcaCloudStatus": "Status",
+          "orcaCloudSignOut": "Sign out",
+          "orcaCloudConnect": "Connect profile",
+          "orcaCloudRefresh": "Refresh status",
+          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build."
         },
         "EphemeralVmRecipeRow": {
           "useInWorkspace": "ワークスペースでの使用"
@@ -9249,7 +9309,22 @@
             "d2b9g4f315": "{{value1}}より{{value0}}commits 遅れています",
             "e9c2a5d416": "{{value0}}と同じ状態",
             "4b4a7de138": "Open review page in browser",
-            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR."
+            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
+            "pushRecovery": {
+              "4b37ae99b0": "Start the default AI agent to fix this push failure",
+              "30b8d4f181": "Fix push failure with AI",
+              "dd43c47089": "Choose an agent for this push failure",
+              "ec7bfced55": "Choose agent to fix push failure",
+              "9e5ccd00aa": "Push failure context unavailable",
+              "054ead86b1": "Fix Push Failure With AI",
+              "15b7f210d7": "Choose the agent and edit the full command input before launch.",
+              "011f9713fc": "Push blocked",
+              "60bd988f0b": "AI Fix",
+              "03d238218c": "Details",
+              "a9bf7c171a": "Push Failed",
+              "834cb3f23d": "Fix with AI",
+              "783a808870": "Close"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -9498,6 +9573,35 @@
                       "216f762bd7": "ワークスペース接続を解決できません。"
                     }
                   }
+                },
+                "push": {
+                  "failure": {
+                    "launch": {
+                      "216f762bd7": "Unable to resolve the workspace connection.",
+                      "4f4e0418a0": "Could not build the agent prompt.",
+                      "f2b47026e8": "Push failure prompt is empty. Update Source Control AI settings.",
+                      "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                      "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                      "5540ff50cc": "Could not build the agent launch command.",
+                      "a8b97d2318": "Started an AI agent for the push failure."
+                    }
+                  }
+                },
+                "recovery": {
+                  "launch": {
+                    "4f4e0418a0": "Could not build the agent prompt.",
+                    "push": {
+                      "empty": "Push failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "commit": {
+                      "empty": "Commit failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                    "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                    "5540ff50cc": "Could not build the agent launch command.",
+                    "216f762bd7": "Unable to resolve the workspace connection.",
+                    "success": "Started an AI agent for the {{value0}} failure."
+                  }
                 }
               },
               "discard": {
@@ -9648,9 +9752,7 @@
             "sessionsShownCompact": "{{value0}} 件表示",
             "originalPaneUnavailable": "元のペインは利用できなくなりました。",
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。"
           },
@@ -9735,7 +9837,13 @@
             "sessionRole": "セッション",
             "jumpToOriginalPane": "元のペインにジャンプ",
             "worktree": "ワークツリー",
-            "jumpToWorktree": "ワークツリーにジャンプ"
+            "jumpToWorktree": "ワークツリーにジャンプ",
+            "conversationNotSaved": "会話が保存されていません",
+            "recoverableEmptyDetail": "このセッションには保存された会話がありませんが、{{value0}} 件の復元可能な項目が残っています。",
+            "recoverableEmptyOpenLogHint": "ログを開いて復元できます。",
+            "emptyConversationDetail": "このセッションには保存された会話がなく、再開できません。",
+            "queuedMessages": "キュー内のメッセージ {{value0}} 件",
+            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} セッションを再開",
@@ -9762,6 +9870,7 @@
             "sessionRole": "セッション",
             "jumpToOriginalPane": "元のペインにジャンプ",
             "jumpToWorktree": "ワークツリーにジャンプ",
+            "recoverableBadge": "未保存",
             "subagentCount": "{{value0}} subagents",
             "subagentCountSingular": "1 subagent",
             "subagentCountPlural": "{{value0}} subagents"
@@ -9948,7 +10057,15 @@
           "3cd5374e22": "通知設定をまだ読み込み中です",
           "b6a994e36e": "通知音が再生できませんでした",
           "c0692baa52": "カスタムファイルの選択",
-          "ac80d97e02": "カスタムファイルの変更"
+          "ac80d97e02": "カスタムファイルの変更",
+          "56b836215c": "通知の権限を確認しています…",
+          "fd84d3e9b8": "通知は有効です",
+          "4f7bce5644": "エージェントの完了やターミナルの要対応時に macOS が通知します。",
+          "95d99b52fa": "Orca の通知を許可",
+          "94562ba367": "macOS が権限を求めています。ダイアログで許可をクリックすると、このステップは自動的に更新されます。",
+          "4f6a1da718": "システム設定を開く",
+          "90b5d2e363": "macOS が Orca の通知を配信していません",
+          "2c47f5465f": "システム設定で Orca の通知を許可するをオンにします。有効になると、このステップは自動的に更新されます。"
         },
         "OnboardingFlow": {
           "1b5e182e9f": "Orca へようこそ",
@@ -10074,6 +10191,17 @@
           "windowsDefault": "Windows の既定",
           "rightClickBehavior": "右クリックの動作",
           "rightClickBehaviorDescription": "Windows で慣れた terminal のマウス操作に合うものを選びます。"
+        },
+        "mac": {
+          "notification": {
+            "permission": {
+              "card": {
+                "f696515944": "macOS のダイアログで許可をクリックします。",
+                "3d18cf71f9": "自動的に更新されます。",
+                "721d2bedb6": "システム設定で Orca の通知を許可するをオンにします。"
+              }
+            }
+          }
         }
       },
       "new": {
@@ -10369,6 +10497,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "フローティングワークスペースを表示",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "フローティングワークスペースを最小限に抑える",
             "bfe7809a70": "{{value0}} フローティング ワークスペース ({{value1}})"
           },
@@ -11737,7 +11866,7 @@
             "f2d0c22d67": "注釈 {{value0}} を削除",
             "11c5084aa2": "注釈をクリアする",
             "734e4343ec": "ブラウザの注釈をクリアする",
-            "95af781091": "新規 agent にフィードバックを送信する",
+            "95af781091": "agent にフィードバックを送信する",
             "ac39b9366b": "送信",
             "a3508d7e6e": "{{value0}} アノテーション{{value1}} が準備されました。別の要素を選択するか、すべてのフィードバックをコピーします。",
             "f796c774a4": "上に URL を入力して閲覧を開始します。",
@@ -12398,6 +12527,158 @@
         "contextMenu": {
           "copy": "コピー"
         }
+      },
+      "orca": {
+        "profiles": {
+          "switcher": {
+            "cloud": {
+              "unavailable": "クラウド サインインは利用できません"
+            },
+            "reconnect": "プロファイルを再接続",
+            "connect": "プロファイルを接続",
+            "organization": "組織",
+            "create": {
+              "profile": {
+                "for": {
+                  "org": "組織用のプロファイルを作成"
+                }
+              }
+            },
+            "signout": "サインアウト",
+            "16e3681072": "新しいローカル プロファイル",
+            "e3b91a3d90": "プロジェクトとワークツリーを分けるための空のプロファイルを作成します。",
+            "f322e1f4d6": "プロファイル名",
+            "cfa59f8ad1": "作成して切り替え",
+            "b4f9d1125d": "ローカル",
+            "4815f7d163": "プロファイルを切り替え",
+            "d00d853e2a": "プロファイルを管理",
+            "c106c674fe": "新しいローカル プロファイル",
+            "account": "アカウント",
+            "org": {
+              "members": "組織のメンバー"
+            }
+          },
+          "management": {
+            "04e7bd2a23": "転送",
+            "128c7dfe64": "コピー先",
+            "df8b7d876b": "移動先",
+            "9aa26347b3": "プロジェクトを移動しました",
+            "816ce624b6": "プロジェクトをコピーしました",
+            "2c45bda8d3": "プロファイルを管理",
+            "2db945e4a0": "アクティブなプロファイルから別のローカル プロファイルへプロジェクトをコピーまたは移動します。",
+            "8668cb2946": "このプロファイルにはプロジェクトがありません。",
+            "93034915ab": "プロジェクトをコピーする前に、別のプロファイルを作成してください。",
+            "projectCountSingular": "{{count}} 件のプロジェクト",
+            "projectCountPlural": "{{count}} 件のプロジェクト"
+          },
+          "project": {
+            "transfer": {
+              "confirm": {
+                "move": {
+                  "title": "プロジェクトを移動しますか？",
+                  "description": "{{repoName}} を {{targetName}} に移動します。Orca は {{activeProfileName}} から削除し、ファイルはそのまま残して {{targetName}} で再起動します。",
+                  "action": "プロジェクトを移動"
+                },
+                "copy": {
+                  "title": "プロジェクトをコピーしますか？",
+                  "description": "{{repoName}} を {{targetName}} にコピーします。両方のプロファイルは同じファイルを参照し、Orca のメタデータは別々に保持されます。",
+                  "action": "プロジェクトをコピー"
+                },
+                "live": {
+                  "work": "このプロジェクトで実行中の作業"
+                },
+                "cancel": "キャンセル",
+                "terminalSingular": "{{count}} 個の実行中ターミナル タブ",
+                "terminalPlural": "{{count}} 個の実行中ターミナル タブ",
+                "agentSingular": "{{count}} 個のアクティブなエージェント",
+                "agentPlural": "{{count}} 個のアクティブなエージェント",
+                "browserSingular": "{{count}} 個のブラウザ ワークスペース",
+                "browserPlural": "{{count}} 個のブラウザ ワークスペース"
+              }
+            }
+          },
+          "signout": {
+            "confirm": {
+              "title": "サインアウトしますか？",
+              "description": "{{profileName}} からサインアウトし、そのプロジェクト、ワークツリー、ローカル メタデータはこのデバイスに保持します。",
+              "cancel": "キャンセル",
+              "action": "サインアウト"
+            }
+          },
+          "switch": {
+            "confirm": {
+              "target": "選択したプロファイル",
+              "title": "プロファイルを切り替えますか？",
+              "description": "{{targetName}} に切り替えると、Orca が再起動し、{{activeProfileName}} のワークスペースが再読み込みされます。",
+              "live": {
+                "work": "このプロファイルで実行中の作業"
+              },
+              "cancel": "キャンセル",
+              "switch": "プロファイルを切り替え",
+              "terminalSingular": "{{count}} 個の実行中ターミナル タブ",
+              "terminalPlural": "{{count}} 個の実行中ターミナル タブ",
+              "agentSingular": "{{count}} 個のアクティブなエージェント",
+              "agentPlural": "{{count}} 個のアクティブなエージェント",
+              "browserSingular": "{{count}} 個のブラウザ ワークスペース",
+              "browserPlural": "{{count}} 個のブラウザ ワークスペース"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "ロール",
+                "owner": "オーナー",
+                "admin": "管理者",
+                "member": "メンバー"
+              },
+              "not": {
+                "signed": {
+                  "in": "まだ Orca にサインインしていません。"
+                }
+              },
+              "remove": {
+                "confirm": "削除",
+                "cancel": "キャンセル",
+                "label": "メンバーを削除"
+              },
+              "title": "組織のメンバー",
+              "load": {
+                "error": "組織のメンバーを読み込めませんでした。"
+              },
+              "retry": "再試行",
+              "pending": {
+                "title": "保留中の招待",
+                "revoke": "取り消す"
+              },
+              "invite": {
+                "title": "招待",
+                "placeholder": "teammate@example.com",
+                "role": "招待するロール",
+                "submit": "送信"
+              },
+              "error": {
+                "forbidden": "あなたのロールではこの操作を実行できません。",
+                "conflict": "すでにメンバーまたは招待済みです。",
+                "remove": {
+                  "self": "自分自身を削除することはできません。"
+                },
+                "own": {
+                  "role": "自分のロールは変更できません。"
+                },
+                "not": {
+                  "found": "そのメンバーはこの組織に存在しません。"
+                },
+                "reconnect": "メンバーを管理するにはプロファイルを再接続してください。",
+                "unconfigured": "このビルドでは組織の管理を利用できません。",
+                "failed": "問題が発生しました。もう一度お試しください。"
+              },
+              "subtitle": {
+                "named": "{{orgName}} で Orca を共同利用できるメンバーです。",
+                "default": "組織内で Orca を共同利用できるメンバーです。"
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {
@@ -12430,7 +12711,10 @@
         "noSkills": "一致するスキルがありません",
         "localAttachmentUnsupported": "ローカル添付ファイルはリモート セッションでは使用できません。",
         "removeAttachment": "添付ファイルを削除する",
-        "pastedImageLabel": "貼り付けた画像"
+        "pastedImageLabel": "貼り付けた画像",
+        "imagePasteFailed": "Image paste failed.",
+        "worktreeNotReady": "Worktree not ready — try again in a moment.",
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "実行中…",

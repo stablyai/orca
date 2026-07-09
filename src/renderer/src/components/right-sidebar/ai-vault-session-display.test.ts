@@ -30,6 +30,8 @@ const baseSession: AiVaultSession = {
     { role: 'assistant', text: 'I updated the fixture ordering', timestamp: null },
     { role: 'system', text: 'hidden runtime bookkeeping', timestamp: null }
   ],
+  queuedMessageCount: 0,
+  subagentTranscriptCount: 0,
   resumeCommand: "cd '/Users/ada/repo/app' && codex resume 'session-1'",
   subagent: null,
   subagentCount: 0

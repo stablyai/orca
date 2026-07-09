@@ -436,6 +436,13 @@ const agentErrorSchema = z
   })
   .strict()
 
+// Why: emitted when the terminal daemon cannot start and terminals fall back to
+// the (non-persistent) local provider. Enum-only `error_class` — the raw daemon
+// stderr tail stays in local logs and never reaches the wire (paths/usernames).
+// A spike in this event is the fleet-wide signal for a daemon outage like
+// v1.4.129-rc.1, which was otherwise invisible until users filed bug reports.
+const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
+
 const settingsChangedSchema = z
   .object({
     setting_key: settingsChangedKeySchema,
@@ -1419,6 +1426,8 @@ export const eventSchemas = {
   agent_error: agentErrorSchema,
   agent_hook_install_failed: agentHookInstallFailedSchema,
   agent_hook_unattributed: agentHookUnattributedSchema,
+
+  daemon_start_failed: daemonStartFailedSchema,
 
   settings_changed: settingsChangedSchema,
 

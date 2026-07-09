@@ -2,13 +2,14 @@ import { useEffect } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, X } from 'lucide-react-native'
+import { ChevronLeft, ExternalLink, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
 import { useMobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
 import { MobilePRSidebar } from '../MobilePRSidebar'
+import { openMobilePrUrl } from '../MobilePrComposeSheet'
 
 type Props = {
   client: RpcClient | null
@@ -73,6 +74,27 @@ export function MobilePrViewPanel({
             message: 'Current branch unavailable.'
           } as const)
         : controller.prSidebarState
+  // Why: open-on-host lives in the chrome so the PR URL is always flush-right of
+  // the screen title, even when the body is scrolled past the PR header.
+  const prUrl =
+    sidebarState.kind === 'ready' && sidebarState.data.pr.url ? sidebarState.data.pr.url : null
+  const prNumber = sidebarState.kind === 'ready' ? sidebarState.data.pr.number : null
+  const openPr = prUrl ? () => openMobilePrUrl(prUrl) : undefined
+  const openPrControl = openPr ? (
+    <Pressable
+      style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+      onPress={openPr}
+      hitSlop={8}
+      accessibilityRole="link"
+      accessibilityLabel={
+        prNumber != null
+          ? `Open pull request #${prNumber} on the web`
+          : 'Open pull request on the web'
+      }
+    >
+      <ExternalLink size={18} color={colors.textSecondary} strokeWidth={2.2} />
+    </Pressable>
+  ) : null
   const sidebar = (
     <MobilePRSidebar
       state={sidebarState}
@@ -104,6 +126,7 @@ export function MobilePrViewPanel({
             <Text style={styles.title} numberOfLines={1}>
               Pull Request
             </Text>
+            {openPrControl}
           </View>
         </View>
         {sidebar}
@@ -126,6 +149,7 @@ export function MobilePrViewPanel({
           <Text style={styles.title} numberOfLines={1}>
             Pull Request
           </Text>
+          {openPrControl}
         </View>
       </View>
       {sidebar}

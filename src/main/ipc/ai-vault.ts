@@ -5,12 +5,11 @@ import { listClaudeSubagentSessions } from '../ai-vault/session-scanner-claude-s
 import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-source-discovery'
 import { scanAiVaultSessions } from '../ai-vault/session-scanner'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { sessionSortTime } from '../ai-vault/session-scanner-accumulator'
+import { aiVaultScanIssueResult, mergeAiVaultListResults } from '../ai-vault/session-list-results'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import type {
   AiVaultListArgs,
   AiVaultListResult,
-  AiVaultScanIssue,
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../../shared/ai-vault-types'
@@ -18,6 +17,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostScope,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostScope
 } from '../../shared/execution-host'
@@ -28,15 +28,31 @@ import {
 import { getActiveSshAiVaultHostInfo, getActiveSshAiVaultHostInfos } from './ssh'
 
 const AI_VAULT_CACHE_TTL_MS = 15_000
+const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 
 type AiVaultHandlerOptions = {
   getAdditionalCodexHomePaths?: () => readonly string[]
+  getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
+  scanRuntimeAiVaultSessions?: (
+    environmentId: string,
+    args: AiVaultListArgs,
+    options?: RuntimeAiVaultScanOptions
+  ) => Promise<AiVaultListResult>
+}
+
+type RuntimeAiVaultScanOptions = {
+  timeoutMs?: number
 }
 
 type CachedAiVaultList = {
   key: string
   result: AiVaultListResult
   expiresAt: number
+}
+
+type RuntimeAiVaultHostInfo = {
+  environmentId: string
+  executionHostId: `runtime:${string}`
 }
 
 let cachedList: CachedAiVaultList | null = null
@@ -94,12 +110,20 @@ async function scanAiVaultSessionsByHostScope(
   }
 
   if (executionHostScope === 'all') {
+    const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
+    const runtimeResults = runtimeHosts.issue ? [runtimeHosts.issue] : []
     return mergeAiVaultListResults(
       await Promise.all([
         scanLocalAiVaultSessions(args),
         ...getActiveSshAiVaultHostInfos().map((hostInfo) =>
           scanSshAiVaultSessions(hostInfo.targetId, args)
-        )
+        ),
+        ...runtimeHosts.hostInfos.map((hostInfo) =>
+          scanRuntimeAiVaultSessions(hostInfo, args, {
+            timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS
+          })
+        ),
+        ...runtimeResults
       ]),
       args?.limit
     )
@@ -109,19 +133,88 @@ async function scanAiVaultSessionsByHostScope(
   if (parsed?.kind === 'ssh') {
     return scanSshAiVaultSessions(parsed.targetId, args)
   }
-
-  return {
-    sessions: [],
-    issues: [
+  if (parsed?.kind === 'runtime') {
+    return scanRuntimeAiVaultSessions(
       {
-        executionHostId: executionHostScope,
-        agent: 'codex',
-        path: executionHostScope,
-        message: 'Agent Session History is not available for this execution host.'
-      }
-    ],
-    scannedAt: new Date().toISOString()
+        environmentId: parsed.environmentId,
+        executionHostId: toRuntimeExecutionHostId(parsed.environmentId)
+      },
+      args
+    )
   }
+
+  return aiVaultScanIssueResult({
+    executionHostId: executionHostScope,
+    path: executionHostScope,
+    message: 'Agent Session History is not available for this execution host.'
+  })
+}
+
+function getActiveRuntimeAiVaultHostInfos(): readonly RuntimeAiVaultHostInfo[] {
+  return handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? []
+}
+
+function getActiveRuntimeAiVaultHostInfosResult(): {
+  hostInfos: readonly RuntimeAiVaultHostInfo[]
+  issue?: AiVaultListResult
+} {
+  try {
+    return { hostInfos: getActiveRuntimeAiVaultHostInfos() }
+  } catch (error) {
+    return {
+      hostInfos: [],
+      issue: runtimeHostDiscoveryIssueResult(
+        error instanceof Error ? error.message : 'Runtime hosts are unavailable.'
+      )
+    }
+  }
+}
+
+async function scanRuntimeAiVaultSessions(
+  hostInfo: RuntimeAiVaultHostInfo,
+  args?: AiVaultListArgs,
+  options: RuntimeAiVaultScanOptions = {}
+): Promise<AiVaultListResult> {
+  const scanner = handlerOptions.scanRuntimeAiVaultSessions
+  if (!scanner) {
+    return runtimeScanIssueResult(
+      hostInfo,
+      'Agent Session History is not available for this execution host.'
+    )
+  }
+  const scanArgs: AiVaultListArgs = { executionHostScope: hostInfo.executionHostId }
+  if (args?.limit !== undefined) {
+    scanArgs.limit = args.limit
+  }
+  if (args?.force !== undefined) {
+    scanArgs.force = args.force
+  }
+  if (args?.scopePaths !== undefined) {
+    scanArgs.scopePaths = args.scopePaths
+  }
+  try {
+    return await scanner(hostInfo.environmentId, scanArgs, options)
+  } catch (error) {
+    return runtimeScanIssueResult(
+      hostInfo,
+      error instanceof Error ? error.message : 'Remote Orca server is unavailable.'
+    )
+  }
+}
+
+function runtimeScanIssueResult(
+  hostInfo: RuntimeAiVaultHostInfo,
+  message: string
+): AiVaultListResult {
+  return aiVaultScanIssueResult({
+    executionHostId: hostInfo.executionHostId,
+    path: hostInfo.environmentId,
+    message
+  })
+}
+
+function runtimeHostDiscoveryIssueResult(message: string): AiVaultListResult {
+  return aiVaultScanIssueResult({ path: 'runtime environments', message })
 }
 
 async function scanLocalAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
@@ -166,40 +259,11 @@ function sshScanIssueResult(args: {
   targetId: string
   message: string
 }): AiVaultListResult {
-  return {
-    sessions: [],
-    issues: [
-      {
-        executionHostId: args.executionHostId,
-        agent: 'codex',
-        path: args.targetId,
-        message: args.message
-      }
-    ],
-    scannedAt: new Date().toISOString()
-  }
-}
-
-function mergeAiVaultListResults(
-  results: readonly AiVaultListResult[],
-  rawLimit: number | undefined
-): AiVaultListResult {
-  const limit = rawLimit && rawLimit > 0 ? Math.floor(rawLimit) : 1000
-  const byId = new Map<string, AiVaultListResult['sessions'][number]>()
-  const issues: AiVaultScanIssue[] = []
-  for (const result of results) {
-    for (const session of result.sessions) {
-      byId.set(session.id, session)
-    }
-    issues.push(...result.issues)
-  }
-  return {
-    sessions: [...byId.values()]
-      .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-      .slice(0, limit),
-    issues,
-    scannedAt: new Date().toISOString()
-  }
+  return aiVaultScanIssueResult({
+    executionHostId: args.executionHostId,
+    path: args.targetId,
+    message: args.message
+  })
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {

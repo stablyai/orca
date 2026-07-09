@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn(),
   scanRemoteAiVaultSessions: vi.fn(),
   listClaudeSubagentSessions: vi.fn(),
+  scanRuntimeAiVaultSessions: vi.fn(),
   getAiVaultWslHomeDirs: vi.fn(),
   getSshFilesystemProvider: vi.fn(),
   getActiveSshAiVaultHostInfo: vi.fn(),
@@ -48,7 +49,7 @@ vi.mock('./ssh', () => ({
   getActiveSshAiVaultHostInfos: mocks.getActiveSshAiVaultHostInfos
 }))
 
-const { _internals } = await import('./ai-vault')
+const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
 
 const provider = {} as IFilesystemProvider
 
@@ -60,6 +61,9 @@ beforeEach(() => {
     result([session('ssh:dev-box', 'remote-session')])
   )
   mocks.listClaudeSubagentSessions.mockResolvedValue({ sessions: [], issues: [] })
+  mocks.scanRuntimeAiVaultSessions.mockResolvedValue(
+    result([session('runtime:remote-server', 'runtime-session')])
+  )
   mocks.getSshFilesystemProvider.mockReturnValue(provider)
   mocks.getActiveSshAiVaultHostInfo.mockReturnValue(hostInfo('dev-box'))
   mocks.getActiveSshAiVaultHostInfos.mockReturnValue([hostInfo('dev-box')])
@@ -102,6 +106,77 @@ describe('listAiVaultSessions host routing', () => {
     expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
     expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
     expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
+  })
+
+  it('merges paired runtime servers for all hosts', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => [
+        {
+          environmentId: 'remote-server',
+          executionHostId: 'runtime:remote-server'
+        }
+      ],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith(
+      'remote-server',
+      {
+        executionHostScope: 'runtime:remote-server'
+      },
+      expect.objectContaining({ timeoutMs: expect.any(Number) })
+    )
+    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual([
+      'runtime:remote-server',
+      'ssh:dev-box',
+      'local'
+    ])
+  })
+
+  it('keeps local and SSH results when runtime host discovery fails', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => {
+        throw new Error('runtime store is invalid')
+      },
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    const result = await _internals.listAiVaultSessions({ executionHostScope: 'all' })
+
+    expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
+    expect(mocks.scanRuntimeAiVaultSessions).not.toHaveBeenCalled()
+    expect(result.sessions.map((entry) => entry.executionHostId)).toEqual(['ssh:dev-box', 'local'])
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        agent: 'codex',
+        path: 'runtime environments',
+        message: 'runtime store is invalid'
+      })
+    ])
+  })
+
+  it('keeps direct runtime host scans on the normal runtime timeout', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => [],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    await _internals.listAiVaultSessions({
+      executionHostScope: 'runtime:remote-server',
+      force: true
+    })
+
+    expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledWith(
+      'remote-server',
+      {
+        executionHostScope: 'runtime:remote-server',
+        force: true
+      },
+      {}
+    )
   })
 
   it('returns a scan issue for a disconnected SSH target', async () => {
@@ -237,11 +312,17 @@ function session(
     codexHome: null,
     createdAt: null,
     updatedAt:
-      sessionId === 'remote-session' ? '2026-07-04T02:00:00.000Z' : '2026-07-04T01:00:00.000Z',
+      sessionId === 'runtime-session'
+        ? '2026-07-04T03:00:00.000Z'
+        : sessionId === 'remote-session'
+          ? '2026-07-04T02:00:00.000Z'
+          : '2026-07-04T01:00:00.000Z',
     modifiedAt: '2026-07-04T00:00:00.000Z',
     messageCount: 1,
     totalTokens: 0,
     previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
     resumeCommand: `codex resume ${sessionId}`,
     subagent: null,
     subagentCount: 0

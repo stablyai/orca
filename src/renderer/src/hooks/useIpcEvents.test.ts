@@ -5,6 +5,7 @@ import {
   buildRuntimeClientEventEnvironmentKey,
   buildNewWorkspaceShortcutModalData,
   getNewlyConnectedRuntimeEnvironmentIds,
+  getNewlyDisconnectedRuntimeEnvironmentIds,
   getRuntimeProjectRefreshEnvironmentIds,
   openNewWorkspaceFromShortcut,
   resolveBrowserSessionTabTarget,
@@ -54,6 +55,15 @@ describe('getNewlyConnectedRuntimeEnvironmentIds', () => {
       'env-a',
       'env-b'
     ])
+  })
+})
+
+describe('getNewlyDisconnectedRuntimeEnvironmentIds', () => {
+  it('returns only environments whose transport was just observed down', () => {
+    expect(getNewlyDisconnectedRuntimeEnvironmentIds(['env-a', 'env-b'], ['env-a'])).toEqual([
+      'env-b'
+    ])
+    expect(getNewlyDisconnectedRuntimeEnvironmentIds(['env-a'], ['env-a', 'env-b'])).toEqual([])
   })
 })
 

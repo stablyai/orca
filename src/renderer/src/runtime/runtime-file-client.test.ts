@@ -3,6 +3,7 @@ preload API plus remote fallbacks; keeping route coverage together makes local
 versus environment behavior easy to audit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  cancelRuntimeFileList,
   copyRuntimePath,
   createRuntimePath,
   deleteRuntimePath,
@@ -37,6 +38,8 @@ const fsDeletePath = vi.fn()
 const fsStat = vi.fn()
 const fsPathExists = vi.fn()
 const fsSearch = vi.fn()
+const fsListFiles = vi.fn()
+const fsCancelListFiles = vi.fn()
 const fsDownloadFile = vi.fn()
 const fsSaveDownloadedFile = vi.fn()
 const fsStartDownloadedFile = vi.fn()
@@ -63,6 +66,9 @@ beforeEach(() => {
   fsStat.mockReset()
   fsPathExists.mockReset()
   fsSearch.mockReset()
+  fsListFiles.mockReset()
+  fsCancelListFiles.mockReset()
+  fsCancelListFiles.mockResolvedValue(undefined)
   fsDownloadFile.mockReset()
   fsSaveDownloadedFile.mockReset()
   fsStartDownloadedFile.mockReset()
@@ -102,6 +108,8 @@ beforeEach(() => {
         stat: fsStat,
         pathExists: fsPathExists,
         search: fsSearch,
+        listFiles: fsListFiles,
+        cancelListFiles: fsCancelListFiles,
         downloadFile: fsDownloadFile,
         saveDownloadedFile: fsSaveDownloadedFile,
         startDownloadedFile: fsStartDownloadedFile,
@@ -1355,6 +1363,56 @@ describe('runtime file client', () => {
       params: { worktree: 'id:wt-1', excludePaths: ['/remote/repo-other'] },
       timeoutMs: 15_000
     })
+  })
+
+  it('passes the cancellation token through the IPC file listing path (#7721)', async () => {
+    fsListFiles.mockResolvedValue(['src/index.ts'])
+
+    await expect(
+      listRuntimeFiles(
+        {
+          settings: {},
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo',
+          connectionId: 'ssh-1'
+        },
+        {
+          rootPath: '/remote/repo',
+          requestToken: 'token-1'
+        }
+      )
+    ).resolves.toEqual(['src/index.ts'])
+
+    expect(fsListFiles).toHaveBeenCalledWith({
+      rootPath: '/remote/repo',
+      connectionId: 'ssh-1',
+      excludePaths: undefined,
+      requestToken: 'token-1'
+    })
+  })
+
+  it('cancelRuntimeFileList aborts the IPC listing but not environment listings (#7721)', () => {
+    cancelRuntimeFileList(
+      {
+        settings: {},
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1'
+      },
+      'token-1'
+    )
+    expect(fsCancelListFiles).toHaveBeenCalledWith({ requestToken: 'token-1' })
+
+    fsCancelListFiles.mockClear()
+    cancelRuntimeFileList(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      'token-2'
+    )
+    expect(fsCancelListFiles).not.toHaveBeenCalled()
   })
 
   it('routes markdown document listing and stat through the selected runtime', async () => {

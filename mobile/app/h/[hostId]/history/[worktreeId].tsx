@@ -3,14 +3,15 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native'
-import { useHostClient } from '../../../../src/transport/client-context'
+import { useForceReconnect, useHostClient } from '../../../../src/transport/client-context'
 import type { RpcSuccess } from '../../../../src/transport/types'
-import { colors, spacing, typography } from '../../../../src/theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../../src/theme/mobile-theme'
 import {
   fetchMobileGitHistory,
   mapMobileCommitRows,
   type MobileCommitRow
 } from '../../../../src/source-control/mobile-git-history'
+import { resolveMobileHistoryScreenView } from '../../../../src/source-control/mobile-history-screen-state'
 import type { GitBranchChangeEntry } from '../../../../../src/shared/types'
 
 function firstParam(value: string | string[] | undefined): string {
@@ -27,9 +28,11 @@ export default function HistoryScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useHostClient(hostId)
+  const forceReconnect = useForceReconnect()
 
   const [rows, setRows] = useState<MobileCommitRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [filesById, setFilesById] = useState<Record<string, GitBranchChangeEntry[] | 'loading'>>({})
 
@@ -57,7 +60,20 @@ export default function HistoryScreen() {
     return () => {
       active = false
     }
-  }, [client, connState, worktreeId])
+  }, [client, connState, reloadNonce, worktreeId])
+
+  const retry = useCallback(() => {
+    setError(null)
+    // Why: retrying the fetch is useless while the transport's reconnect loop
+    // is parked at its backoff cap — revive the connection instead (mirrors
+    // MobileSourceControlPanel / issue #5049). The load effect re-runs via
+    // connState once the fresh client connects.
+    if (connState !== 'connected' && hostId) {
+      void forceReconnect(hostId)
+      return
+    }
+    setReloadNonce((n) => n + 1)
+  }, [connState, forceReconnect, hostId])
 
   const toggleCommit = useCallback(
     (row: MobileCommitRow) => {
@@ -130,6 +146,12 @@ export default function HistoryScreen() {
     [expanded, filesById, toggleCommit]
   )
 
+  const view = resolveMobileHistoryScreenView({
+    connected: client !== null && connState === 'connected',
+    rows,
+    error
+  })
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -138,21 +160,26 @@ export default function HistoryScreen() {
         </Pressable>
         <Text style={styles.title}>Commit History</Text>
       </View>
-      {error ? (
+      {view.kind === 'error' || view.kind === 'waiting' ? (
         <View style={styles.state}>
-          <Text style={styles.stateText}>{error}</Text>
+          <Text style={styles.stateText}>
+            {view.kind === 'waiting' ? 'Waiting for desktop...' : view.message}
+          </Text>
+          <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel="Retry">
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
         </View>
-      ) : rows === null ? (
+      ) : view.kind === 'loading' ? (
         <View style={styles.state}>
           <ActivityIndicator color={colors.textSecondary} />
         </View>
-      ) : rows.length === 0 ? (
+      ) : view.kind === 'empty' ? (
         <View style={styles.state}>
           <Text style={styles.stateText}>No commits.</Text>
         </View>
       ) : (
         <FlatList
-          data={rows}
+          data={view.rows}
           renderItem={renderCommit}
           keyExtractor={(row) => row.id}
           contentContainerStyle={{ paddingBottom: spacing.lg + insets.bottom }}
@@ -175,6 +202,14 @@ const styles = StyleSheet.create({
   title: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
   state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   stateText: { color: colors.textMuted, fontSize: typography.bodySize },
+  retryButton: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised
+  },
+  retryText: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
   commit: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
   commitHeader: {
     flexDirection: 'row',

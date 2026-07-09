@@ -51,6 +51,24 @@ export function isPiTerminalTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)
 }
 
+// Why: Grok Build's working OSC titles use a fixed frame shape —
+// "spinner - <rotating phrase> - grok" — so every frame is a distinct title
+// that flips tab and sidebar labels. Require BOTH the post-spinner " - "
+// delimiter and the trailing identity " - grok" so Claude/Codex task text
+// like "⠋ fix the flaky suite - grok" or "⠋ wire up grok" is not mislabeled.
+// Spinner marks working; no-spinner session titles ("Fix the auth bug - grok")
+// pass through. The bare "spinner + grok" branch keeps our own collapsed
+// label idempotent under re-normalization.
+const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
+const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
+
+export function isGrokRotatingWorkingTitle(title: string): boolean {
+  if (!containsBrailleSpinner(title)) {
+    return false
+  }
+  return GROK_ROTATING_FRAME_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
+}
+
 export function isPiAgentTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title)
 }

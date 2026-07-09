@@ -215,6 +215,115 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
   })
 
+  it('re-derives the host session handle after a transport close instead of resubscribing the stale one', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtySpawn = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1',
+      onPtySpawn
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-1' })
+
+    // Why: while the tunnel was down the host re-minted this pane's handle;
+    // resubscribing the stale closure handle would bind the mirror to a
+    // different PTY (#7718). The transport must re-derive from the snapshot.
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'session.tabs.list'
+        ? {
+            ok: true,
+            result: {
+              worktree: 'wt-1',
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 2,
+              activeGroupId: null,
+              activeTabId: 'tab-1::pane:1',
+              activeTabType: 'terminal',
+              tabs: [
+                {
+                  type: 'terminal',
+                  id: 'tab-1::pane:1',
+                  parentTabId: 'tab-1',
+                  leafId: 'pane:1',
+                  title: 'Terminal',
+                  isActive: true,
+                  status: 'ready',
+                  terminal: 'terminal-2'
+                }
+              ]
+            }
+          }
+        : { ok: true, result: {} }
+    )
+    const subscribeCallsBefore = runtimeSubscribe.mock.calls.length
+
+    // The dedicated multiplex socket dies (liveness/close) → onTransportClose.
+    subscriptionCallbacks?.onClose?.()
+
+    await vi.waitFor(() =>
+      expect(runtimeSubscribe.mock.calls.length).toBeGreaterThan(subscribeCallsBefore)
+    )
+    await vi.waitFor(() =>
+      expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-2' })
+    )
+    expect(transport.getPtyId()).toContain('terminal-2')
+    expect(onPtySpawn).toHaveBeenCalledWith(expect.stringContaining('terminal-2'))
+  })
+
+  it('retires the mirror when the host no longer publishes the surface after a transport close', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'session.tabs.list'
+        ? {
+            ok: true,
+            result: {
+              worktree: 'wt-1',
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 2,
+              activeGroupId: null,
+              activeTabId: null,
+              activeTabType: null,
+              tabs: []
+            }
+          }
+        : { ok: true, result: {} }
+    )
+
+    subscriptionCallbacks?.onClose?.()
+
+    // Why: no red xterm error — retire quietly and let the next session-tabs
+    // snapshot drive respawn/removal.
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1'))
+    expect(transport.getPtyId()).toBeNull()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
   it('does not close host-owned terminal handles attached from session snapshots', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {

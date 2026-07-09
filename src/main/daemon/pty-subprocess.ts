@@ -64,6 +64,12 @@ const PANE_IDENTITY_ENV_KEYS = [
 ] as const
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
+// Why: a Windows refresh forks a powershell.exe whole-process-table CIM scan
+// (~10-40x heavier than POSIX `ps`). An idle shell with no agent identity and
+// no recent output retries far slower; output re-arms the 5s retry so an agent
+// start (which always prints) is still resolved promptly.
+const WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS = 15_000
+const SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS = 10_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 // Why: a busy machine right after an upgrade can make one short-lived shell
@@ -840,7 +846,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
   }
 
+  let lastOutputAt = 0
   proc.onData((data) => {
+    if (data.length > 0) {
+      lastOutputAt = Date.now()
+    }
     if (onDataCb) {
       onDataCb(data)
     } else {
@@ -912,10 +922,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       return
     }
     const now = Date.now()
-    const retryMs =
+    const idleNoEvidenceShell =
       fallbackIsShell && !getActiveStartupAgentForeground(now) && !cachedAgentForeground
-        ? SHELL_FOREGROUND_REFRESH_RETRY_MS
-        : FOREGROUND_AGENT_CACHE_TTL_MS
+    // Why: on Windows each refresh is a whole-table CIM scan; only shells with
+    // no agent evidence and no recent output relax, so agent-identity refresh
+    // (cached identity → 1s TTL) and post-output starts keep the fast retry.
+    const retryMs = !idleNoEvidenceShell
+      ? FOREGROUND_AGENT_CACHE_TTL_MS
+      : process.platform === 'win32' && now - lastOutputAt > SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS
+        ? WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS
+        : SHELL_FOREGROUND_REFRESH_RETRY_MS
     if (foregroundRefreshInFlight || now - lastForegroundRefreshStartedAt < retryMs) {
       return
     }

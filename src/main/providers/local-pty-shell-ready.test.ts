@@ -14,20 +14,24 @@ import {
   writeStartupCommandWhenShellReady
 } from './local-pty-shell-ready'
 
-const { getUserDataPathMock } = vi.hoisted(() => ({
-  getUserDataPathMock: vi.fn<() => string>()
-}))
+// Why: the wrapper root is resolved from ORCA_USER_DATA_PATH (main
+// canonicalizes it at startup; the daemon fork sets it explicitly). This
+// module must not import electron because it is bundled into the plain-node
+// daemon-entry fork, so tests point the root through the env var rather than
+// mocking electron's app.
+function setTestUserDataPath(path: string): void {
+  process.env.ORCA_USER_DATA_PATH = path
+}
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: (name: string) => {
-      if (name === 'userData') {
-        return getUserDataPathMock()
-      }
-      throw new Error(`unexpected app.getPath(${name})`)
-    }
+const ORIGINAL_ORCA_USER_DATA_PATH = process.env.ORCA_USER_DATA_PATH
+
+afterEach(() => {
+  if (ORIGINAL_ORCA_USER_DATA_PATH === undefined) {
+    delete process.env.ORCA_USER_DATA_PATH
+  } else {
+    process.env.ORCA_USER_DATA_PATH = ORIGINAL_ORCA_USER_DATA_PATH
   }
-}))
+})
 
 async function importFreshLocalPtyShellReady(): Promise<typeof LocalPtyShellReadyModule> {
   vi.resetModules()
@@ -279,6 +283,23 @@ describe('scanForShellReady', () => {
   })
 })
 
+describe('shell-ready wrapper root resolution', () => {
+  // Why: regression guard — the daemon-entry fork runs as plain Node and cannot
+  // import electron, so the wrapper root must resolve from ORCA_USER_DATA_PATH
+  // (set by main at startup and by the daemon fork) rather than app.getPath.
+  it('resolves the wrapper root from ORCA_USER_DATA_PATH', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-userdata-env-'))
+    try {
+      setTestUserDataPath(root)
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      expect(config.env.ZDOTDIR).toBe(`${root}/shell-ready/zsh`)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
@@ -342,7 +363,7 @@ describePosix('local PTY shell-ready launch config', () => {
     previousOrcaOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
     delete process.env.ORCA_ORIG_ZDOTDIR
     userDataPath = mkdtempSync(join(tmpdir(), 'local-pty-shell-ready-test-'))
-    getUserDataPathMock.mockReturnValue(userDataPath)
+    setTestUserDataPath(userDataPath)
   })
 
   afterEach(() => {
@@ -723,7 +744,7 @@ describePosix('live zsh subprocess tests', () => {
     beforeEach(async () => {
       testHome = mkdtempSync(join(tmpdir(), 'orca-zsh-test-home-'))
       userDataPath = mkdtempSync(join(tmpdir(), 'orca-zsh-test-userdata-'))
-      getUserDataPathMock.mockReturnValue(userDataPath)
+      setTestUserDataPath(userDataPath)
     })
 
     afterEach(() => {
@@ -957,7 +978,7 @@ export MY_VAR=foo
     beforeEach(async () => {
       testHome = mkdtempSync(join(tmpdir(), 'orca-zsh-edge-'))
       userDataPath = mkdtempSync(join(tmpdir(), 'orca-zsh-userdata-'))
-      getUserDataPathMock.mockReturnValue(userDataPath)
+      setTestUserDataPath(userDataPath)
     })
 
     afterEach(() => {
@@ -1283,7 +1304,7 @@ export MY_VAR=foo
     beforeEach(async () => {
       testHome = mkdtempSync(join(tmpdir(), 'orca-term-'))
       userDataPath = mkdtempSync(join(tmpdir(), 'orca-term-userdata-'))
-      getUserDataPathMock.mockReturnValue(userDataPath)
+      setTestUserDataPath(userDataPath)
     })
 
     afterEach(() => {
@@ -1516,7 +1537,7 @@ export MY_VAR=foo
     beforeEach(async () => {
       testHome = mkdtempSync(join(tmpdir(), 'orca-auto-'))
       userDataPath = mkdtempSync(join(tmpdir(), 'orca-auto-userdata-'))
-      getUserDataPathMock.mockReturnValue(userDataPath)
+      setTestUserDataPath(userDataPath)
     })
 
     afterEach(() => {

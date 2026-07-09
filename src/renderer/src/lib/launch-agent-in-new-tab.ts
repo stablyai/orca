@@ -69,6 +69,7 @@ export type LaunchAgentInNewTabResult = {
   tabId: string | null
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
+  promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
 } | null
 
 /**
@@ -153,6 +154,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   let pasteDraftAfterLaunch: string | null = null
   let submitPastedPrompt = false
   let forcePasteAfterLaunch = false
+  let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
 
   if (hasPrompt && promptDelivery === 'submit-after-ready') {
     // Why: generated multi-line prompts are too large to echo through a shell
@@ -300,9 +302,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     // the user closed the tab or switched worktrees so the toast/telemetry
     // don't fire for user-initiated cancellation (mirrors the 5s launch
     // watchdog in QuickLaunchButton).
-    const tabId = tab.id
-    void deliverLaunchPromptToAgentTab({
-      tabId,
+    let failureNotified = false
+    const deliveryPromise = deliverLaunchPromptToAgentTab({
+      tabId: tab.id,
       content: pasteDraftAfterLaunch,
       agent,
       submit: submitPastedPrompt,
@@ -310,28 +312,28 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       onTimeout: () => {
         const state = useAppStore.getState()
         const tabsForWorktree = state.tabsByWorktree[worktreeId] ?? []
-        const tab = tabsForWorktree.find((t) => t.id === tabId)
-        // Why: if the PTY never spawned, QuickLaunch's 5s watchdog already
-        // surfaced the launch failure. Don't double-toast for the same root
-        // cause. Looking up directly in `worktreeId` (not scanning every
-        // worktree) also preserves "still in this worktree" intent.
-        if (!tab) {
-          return // tab closed by user
-        }
-        if (tab.ptyId === null) {
-          return // launch failed; QuickLaunch handled the user-facing toast
-        }
-        if (state.activeWorktreeId !== worktreeId) {
+        const currentTab = tabsForWorktree.find((t) => t.id === tab.id)
+        if (currentTab?.ptyId === null) {
+          // Why: PTY never spawned — a genuine launch failure. Stay silent so
+          // the single notice comes from the caller (source-control dialog
+          // toast, or QuickLaunch's watchdog); leaving failureNotified false lets it fire.
           return
         }
-        const label = submitPastedPrompt ? 'prompt' : 'notes'
+        if (!currentTab || state.activeWorktreeId !== worktreeId) {
+          // Why: user-initiated cancellation (closed the tab or switched
+          // worktrees) — mark notified so the deferred source-control caller
+          // suppresses its generic "couldn't start" toast too, not just this nudge.
+          failureNotified = true
+          return
+        }
         toast.message(
           translate(
             'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
             "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-            { value0: label }
+            { value0: submitPastedPrompt ? 'prompt' : 'notes' }
           )
         )
+        failureNotified = true
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)
@@ -342,11 +344,19 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         if (agent === 'command-code' && submitPastedPrompt) {
           // Why: Command Code has no prompt-submit hook; when Orca submits a
           // generated prompt after readiness, seed working at delivery time.
-          seedCommandCodeSubmittedPromptStatus(tabId, trimmedPrompt)
+          seedCommandCodeSubmittedPromptStatus(tab.id, trimmedPrompt)
         }
         onPromptDelivered?.()
       }
+      return { delivered, failureNotified: !delivered && failureNotified }
     })
+    if (promptDelivery === 'submit-after-ready') {
+      promptDeliveryResult = deliveryPromise
+    } else {
+      void deliveryPromise.catch((error) =>
+        console.error('Prompt delivery failed after launch', error)
+      )
+    }
   } else if (hasPrompt) {
     onPromptDelivered?.()
   }
@@ -373,5 +383,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   order.push(tab.id)
   fresh.setTabBarOrder(worktreeId, order)
 
-  return { tabId: tab.id, startupPlan, pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null }
+  return {
+    tabId: tab.id,
+    startupPlan,
+    pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
+    ...(promptDeliveryResult ? { promptDeliveryResult } : {})
+  }
 }

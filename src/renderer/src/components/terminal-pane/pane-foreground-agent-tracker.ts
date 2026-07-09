@@ -176,25 +176,24 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       // can identify the foreground — that pair is exactly a leaked nested-shell
       // command under a full-screen agent (or a fast real shell command), so on a
       // no-identity pane confirm it rather than trusting the D as a prompt return.
-      // A pending confirming read counts too: user shell integrations double up
-      // Orca's OSC 133, and the duplicate D must re-confirm, not fast-path past
-      // the in-flight confirmation it just cancelled.
-      const commandReadWasPending =
-        scheduledReadReason === 'command' ||
-        activeReadReason === 'command' ||
-        scheduledReadReason === 'command-finished' ||
-        activeReadReason === 'command-finished'
+      // ANY in-flight read counts: a command-start read, a prior confirming read
+      // (user shell integrations double up Orca's OSC 133), or the reattach/visible
+      // recovery probe. All three are attempts to establish this pane's identity, so
+      // a D that cancels one must re-confirm — never fast-path to shell, which the
+      // sampleVisiblePaneForegroundAgent gate would then latch, permanently hiding
+      // an idle reattached agent's icon (the "codex reattached at rest" bug).
+      const identityReadWasPending = scheduledReadReason !== null || activeReadReason !== null
       cancelPendingRead()
       if (!trackablePtyId()) {
         return
       }
       // Why: trust the 133;D and mark shell without an RPC only when nothing hints
       // at an agent — no prior agent evidence, no launch/hook identity, and no
-      // command-start read racing this finish.
+      // identity read racing this finish.
       if (
         !hasForegroundAgentEvidence &&
         deps.hasKnownAgentIdentity?.() !== true &&
-        !commandReadWasPending
+        !identityReadWasPending
       ) {
         deps.publish({ agent: null, shellForeground: true })
         return

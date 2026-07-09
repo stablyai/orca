@@ -49,7 +49,8 @@ import {
   type PanePtyResizeHoldFlushDetail
 } from '@/lib/pane-manager/pane-pty-resize-hold'
 import {
-  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+  buildPostReplayLiveAgentReattachReset,
+  POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
@@ -190,6 +191,10 @@ const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
+// Why: the notice deliberately omits the rejected path — saved cwds can
+// contain private repo/user names; the terminal itself shows where it opened.
+export const STARTUP_CWD_FALLBACK_NOTICE =
+  '\r\n[Orca opened this terminal at the workspace root because its saved start folder no longer exists.]\r\n'
 const STARTUP_DRAFT_PASTE_TIMEOUT_MS = 8000
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
@@ -1993,6 +1998,17 @@ export function connectPanePty(
       }),
     shouldPollProcessCadence: () =>
       isAgentTaskCompleteTrackingEnabled() && deps.isVisibleRef.current,
+    isProcessInspectionCostly: () => {
+      // Why: local Windows inspection forks a powershell.exe whole-process-table
+      // CIM scan per poll (~10-40x heavier than POSIX `ps`); SSH/remote PTYs run
+      // their scans on the remote host, so only local Windows panes relax the
+      // no-evidence cadence.
+      if (!navigator.userAgent.includes('Windows')) {
+        return false
+      }
+      const ptyId = transport.getPtyId()
+      return ptyId !== null && !isRemoteRuntimePtyId(ptyId) && parseAppSshPtyId(ptyId) === null
+    },
     isLive: () => {
       if (disposed) {
         return false
@@ -2748,6 +2764,10 @@ export function connectPanePty(
     : undefined
   const transportOptions = {
     cwd: deps.cwd,
+    // Why: only fresh local IPC spawns may recover from a saved startup cwd
+    // whose directory was deleted (#7239); remote-runtime and SSH spawns
+    // resolve cwd on another host and must keep exact cwd semantics.
+    ...(runtimeEnvironmentId === null && !connectionId ? { cwdFallback: 'worktree' as const } : {}),
     env: paneEnv,
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
     startupCommandDelivery: shouldDeliverStartupViaTerminalPaste
@@ -3780,6 +3800,15 @@ export function connectPanePty(
             })
           }
           if (resolvedPtyId) {
+            if (
+              spawnedPtyId &&
+              typeof spawnedPtyId === 'object' &&
+              spawnedPtyId.startupCwdFallback?.kind === 'worktree'
+            ) {
+              writeTerminalOutput(pane.terminal, STARTUP_CWD_FALLBACK_NOTICE, {
+                foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+              })
+            }
             if (coldRestoreOverride?.hasSleepingRecord) {
               showSessionRestoredBanner()
             }
@@ -3990,9 +4019,9 @@ export function connectPanePty(
       return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data)
     }
 
-    const reattachReplayResetSequence = (): string => {
+    const reattachReplayResetSequence = (payload: string): string => {
       return shouldPreserveAgentReattachModes()
-        ? POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+        ? buildPostReplayLiveAgentReattachReset(payload)
         : POST_REPLAY_REATTACH_RESET
     }
 
@@ -4036,7 +4065,9 @@ export function connectPanePty(
         ) {
           if (parsedViewportShowsParkedCursorAgentScreen(pane.terminal) === false) {
             reattachReplayPayloadHasCursorAgentSignal = false
-            writeReplayData(FOCUS_REPORTING_DISABLE_SEQUENCE)
+            // Why: the live-agent reset preserved the payload's ?25l; a plain
+            // shell never re-shows the cursor itself.
+            writeReplayData(`${CURSOR_SHOW_SEQUENCE}${FOCUS_REPORTING_DISABLE_SEQUENCE}`)
             return
           }
         }
@@ -4080,7 +4111,7 @@ export function connectPanePty(
         }
         await writeReplayDataAsync(data)
         if (clearBeforeReplay || data.length > 0) {
-          await writeReplayDataAsync(reattachReplayResetSequence())
+          await writeReplayDataAsync(reattachReplayResetSequence(data))
           sendFocusedReattachFocusInAfterReplay()
         }
         // Why: the daemon could not serialize a PTY read that ended mid-escape,
@@ -5026,7 +5057,14 @@ export function connectPanePty(
         writeReplayData('\x1b[?1049h\x1b[2J\x1b[H')
       }
       writeReplayData(snapshot.data)
-      writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
+      // Why: status/title-corroborated live agents own ?25l/?1004h (a forced
+      // ?1004l here would silence focus events until the agent restarts, since
+      // agents only enable focus reporting at startup).
+      writeReplayData(
+        hasLiveAgentReattachStatusOrTitleSignal()
+          ? POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET
+          : POST_REPLAY_LIVE_SNAPSHOT_RESET
+      )
       if (snapshot.pendingEscapeTailAnsi) {
         // Why last: the snapshot was serialized while the emulator sat mid-escape;
         // re-arm the dangling sequence as the FINAL replay write (any later ESC —
@@ -5229,6 +5267,9 @@ export function connectPanePty(
       if (data.length > 0) {
         hasReceivedPtyOutput = true
         recordAgentHibernationPaneOutput(cacheKey)
+        // Why: output is the agent-start escalation signal that ends the relaxed
+        // no-evidence process-scan cadence (a starting agent always prints).
+        agentCompletionCoordinator.observeOutputActivity()
       }
       if (sshShellReadyMarkerScan) {
         const scanned = scanForShellReadyMarker(sshShellReadyMarkerScan, data)
@@ -5460,7 +5501,7 @@ export function connectPanePty(
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. We only drop renderer-owned state that should not leak from
         // replay bytes into the restored renderer terminal.
-        writeReplayData(reattachReplayResetSequence())
+        writeReplayData(reattachReplayResetSequence(connectResult.snapshot))
         if (connectResult.pendingEscapeTailAnsi) {
           // Why last: re-arm the daemon's dangling mid-escape sequence AFTER the
           // reset (whose ESC would abort it) so the racing live continuation
@@ -5483,7 +5524,7 @@ export function connectPanePty(
         // tearing down the still-running TUI's live modes.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.replay)
-        writeReplayData(reattachReplayResetSequence())
+        writeReplayData(reattachReplayResetSequence(connectResult.replay))
         sendFocusedReattachFocusInAfterReplay()
         if (connectResult.coldRestore) {
           if (!isRemoteRuntimePtyId(ptyId)) {

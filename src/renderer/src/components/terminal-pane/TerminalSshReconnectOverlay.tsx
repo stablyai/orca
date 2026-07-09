@@ -7,6 +7,10 @@ import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
+import {
+  connectRuntimeEnvironmentSshTarget,
+  resyncRuntimeEnvironmentSshTargets
+} from '@/runtime/runtime-environment-ssh-state'
 
 type TerminalSshReconnectOverlayProps = {
   targetId: string
@@ -16,6 +20,10 @@ type TerminalSshReconnectOverlayProps = {
   // remove the workspace instead of a Connect button that can only fail.
   targetRemoved?: boolean
   worktreeId?: string
+  // Set when the SSH target belongs to a remote Orca server (runtime
+  // environment): Connect and the failed-connect resync then route to that
+  // environment's runtime RPC and bucket instead of the local ssh.* API.
+  sshOwnerEnvironmentId?: string | null
 }
 
 // Why: relay deployment/reconnect are host-driven transient states; the
@@ -70,7 +78,8 @@ export function TerminalSshReconnectOverlay({
   targetLabel,
   status,
   targetRemoved = false,
-  worktreeId
+  worktreeId,
+  sshOwnerEnvironmentId = null
 }: TerminalSshReconnectOverlayProps): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
   const mountedRef = useMountedRef()
@@ -85,11 +94,16 @@ export function TerminalSshReconnectOverlay({
     }
     setConnecting(true)
     try {
-      const connectState = await window.api.ssh.connect({ targetId })
-      if (connectState) {
-        // Why: ssh.connect can resolve before the global state-change IPC lands;
-        // the waiting deferred PTY reattach path keys off this renderer store.
-        setSshConnectionState(targetId, connectState)
+      if (sshOwnerEnvironmentId) {
+        // Bucket state is written inside the helper, mirroring the local path.
+        await connectRuntimeEnvironmentSshTarget(sshOwnerEnvironmentId, targetId)
+      } else {
+        const connectState = await window.api.ssh.connect({ targetId })
+        if (connectState) {
+          // Why: ssh.connect can resolve before the global state-change IPC lands;
+          // the waiting deferred PTY reattach path keys off this renderer store.
+          setSshConnectionState(targetId, connectState)
+        }
       }
     } catch (err) {
       toast.error(
@@ -100,12 +114,27 @@ export function TerminalSshReconnectOverlay({
               'SSH connection failed'
             )
       )
+      // Why: a failed connect usually means the renderer's target metadata is
+      // stale (target removed, or re-added under a new id). Resync it so the
+      // overlay converges to the ghost/re-adopted state instead of offering
+      // the same failing Connect forever (STA-1468). Apply the target list
+      // first — a removed-labels failure must not discard it.
+      if (sshOwnerEnvironmentId) {
+        void resyncRuntimeEnvironmentSshTargets(sshOwnerEnvironmentId).catch(() => {})
+      } else {
+        void (async () => {
+          const targets = await window.api.ssh.listTargets()
+          useAppStore.getState().setSshTargetsMetadata(targets)
+          const removedLabels = await window.api.ssh.listRemovedTargetLabels()
+          useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
+        })().catch(() => {})
+      }
     } finally {
       if (mountedRef.current) {
         setConnecting(false)
       }
     }
-  }, [isConnecting, mountedRef, setSshConnectionState, targetId])
+  }, [isConnecting, mountedRef, setSshConnectionState, sshOwnerEnvironmentId, targetId])
 
   return (
     <div

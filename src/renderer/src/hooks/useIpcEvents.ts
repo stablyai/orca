@@ -83,6 +83,11 @@ import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import {
+  applyRuntimeEnvironmentSshStateChanged,
+  hydrateRuntimeEnvironmentSshState
+} from '@/runtime/runtime-environment-ssh-state'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
@@ -769,6 +774,15 @@ export function getNewlyConnectedRuntimeEnvironmentIds(
   return [...new Set(next)].filter((environmentId) => !known.has(environmentId))
 }
 
+/** Ids in `previous` not in `next` — runtime environments whose transport was
+ *  just observed down. Their mirrored SSH buckets get downgraded to unknown. */
+export function getNewlyDisconnectedRuntimeEnvironmentIds(
+  previous: readonly string[],
+  next: readonly string[]
+): string[] {
+  return getNewlyConnectedRuntimeEnvironmentIds(next, previous)
+}
+
 export function getRuntimeProjectRefreshEnvironmentIds(args: {
   previousDesired: readonly string[]
   nextDesired: readonly string[]
@@ -954,6 +968,13 @@ export function useIpcEvents(): void {
 
     const runtimeProjectRefreshScheduler = createRuntimeProjectRefreshScheduler({
       refresh: async (environmentId) => {
+        if (!isPairedWebClientWindow()) {
+          // Why: mirrored SSH-backed workspaces read the owning environment's
+          // SSH bucket; refresh it whenever the environment (re)connects so a
+          // pre-drop snapshot can't keep a reconnect overlay stale. The web
+          // client mirrors host SSH state through the global store instead.
+          void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
+        }
         const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
         await refreshRuntimeProjectWorktrees(repos)
         await useAppStore.getState().fetchWorktreeLineage()
@@ -963,9 +984,26 @@ export function useIpcEvents(): void {
       }
     })
 
+    // Assigned later in this effect, next to the ssh.onStateChanged wiring;
+    // events can't fire before that because subscriptions attach asynchronously.
+    let handleSshStateChangedEvent: ((data: { targetId: string; state: unknown }) => void) | null =
+      null
+
     const handleRuntimeClientEvent = (environmentId: string, event: RuntimeClientEvent): void => {
       if (event.type === 'reposChanged') {
         runtimeProjectRefreshScheduler.request(environmentId)
+        return
+      }
+      if (event.type === 'sshStateChanged') {
+        // Why: a paired web client mirrors host SSH state in the global store —
+        // its whole ssh.* API routes to that one host (STA-1468). A desktop
+        // client owns a local SSH surface those maps must keep describing, so a
+        // remote host's state goes into that environment's own bucket instead.
+        if (isPairedWebClientWindow()) {
+          handleSshStateChangedEvent?.({ targetId: event.targetId, state: event.state })
+        } else {
+          applyRuntimeEnvironmentSshStateChanged(environmentId, event.targetId, event.state)
+        }
         return
       }
       if (event.type === 'worktreesChanged') {
@@ -992,7 +1030,17 @@ export function useIpcEvents(): void {
 
     const runtimeClientEventsSync = createRuntimeClientEventsSync({
       getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
-      subscribe: subscribeRuntimeClientEvents,
+      subscribe: (environmentId, onEvent, onError) =>
+        subscribeRuntimeClientEvents(environmentId, onEvent, onError, () => {
+          if (isPairedWebClientWindow()) {
+            return
+          }
+          // Why: sshStateChanged events during the transport gap are lost, so
+          // the pre-drop bucket may hold a stale "connected". Downgrade to
+          // unknown, then refetch the authoritative state.
+          useAppStore.getState().markEnvironmentSshStateStale(environmentId)
+          void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
+        }),
       onEvent: handleRuntimeClientEvent
     })
 
@@ -1032,6 +1080,13 @@ export function useIpcEvents(): void {
           nextReachable: nextReachableEnvironmentIds
         })) {
           runtimeProjectRefreshScheduler.request(environmentId)
+        }
+        for (const environmentId of getNewlyDisconnectedRuntimeEnvironmentIds(
+          reachableRuntimeEnvironmentIds,
+          nextReachableEnvironmentIds
+        )) {
+          // No-op when the environment has no SSH bucket (e.g. web client).
+          useAppStore.getState().markEnvironmentSshStateStale(environmentId)
         }
         runtimeClientEventEnvironmentIds = nextEnvironmentIds
         runtimeClientEventEnvironmentKey = nextKey
@@ -2667,49 +2722,49 @@ export function useIpcEvents(): void {
     let sshTargetStateEventId = 0
     const latestSshTargetStateEventByTargetId = new Map<string, number>()
 
-    unsubs.push(
-      window.api.ssh.onStateChanged((data: { targetId: string; state: unknown }) => {
-        const store = useAppStore.getState()
-        const state = data.state as SshConnectionState
-        const stateEventId = ++sshTargetStateEventId
-        latestSshTargetStateEventByTargetId.set(data.targetId, stateEventId)
-        if (!store.sshTargetLabels.has(data.targetId)) {
-          // Why: targets added after boot aren't in the labels map, while
-          // removed targets can still race a final disconnect event. Confirm
-          // with main before mutating renderer state for an unknown target id.
-          window.api.ssh
-            .listTargets()
-            // Why: this refresh is now a deletion guard, not just a label fetch.
-            // Retry once so a transient IPC failure does not drop a real added-target event.
-            .catch(() => window.api.ssh.listTargets())
-            .then((targets) => {
-              if (latestSshTargetStateEventByTargetId.get(data.targetId) !== stateEventId) {
-                return
-              }
+    handleSshStateChangedEvent = (data: { targetId: string; state: unknown }): void => {
+      const store = useAppStore.getState()
+      const state = data.state as SshConnectionState
+      const stateEventId = ++sshTargetStateEventId
+      latestSshTargetStateEventByTargetId.set(data.targetId, stateEventId)
+      if (!store.sshTargetLabels.has(data.targetId)) {
+        // Why: targets added after boot aren't in the labels map, while
+        // removed targets can still race a final disconnect event. Confirm
+        // with main before mutating renderer state for an unknown target id.
+        window.api.ssh
+          .listTargets()
+          // Why: this refresh is now a deletion guard, not just a label fetch.
+          // Retry once so a transient IPC failure does not drop a real added-target event.
+          .catch(() => window.api.ssh.listTargets())
+          .then((targets) => {
+            if (latestSshTargetStateEventByTargetId.get(data.targetId) !== stateEventId) {
+              return
+            }
+            latestSshTargetStateEventByTargetId.delete(data.targetId)
+            const latestStore = useAppStore.getState()
+            if (!targets.some((target) => target.id === data.targetId)) {
+              // Why: disconnect/state events can race after target removal.
+              // Treat absence from main's target list as deletion, not a new target.
+              latestStore.clearRemovedSshTargetState(data.targetId)
+              return
+            }
+            latestStore.setSshTargetsMetadata(targets)
+            applySshConnectionStateChange(data.targetId, state)
+          })
+          .catch(() => {
+            if (latestSshTargetStateEventByTargetId.get(data.targetId) === stateEventId) {
               latestSshTargetStateEventByTargetId.delete(data.targetId)
-              const latestStore = useAppStore.getState()
-              if (!targets.some((target) => target.id === data.targetId)) {
-                // Why: disconnect/state events can race after target removal.
-                // Treat absence from main's target list as deletion, not a new target.
-                latestStore.clearRemovedSshTargetState(data.targetId)
-                return
-              }
-              latestStore.setSshTargetsMetadata(targets)
               applySshConnectionStateChange(data.targetId, state)
-            })
-            .catch(() => {
-              if (latestSshTargetStateEventByTargetId.get(data.targetId) === stateEventId) {
-                latestSshTargetStateEventByTargetId.delete(data.targetId)
-                applySshConnectionStateChange(data.targetId, state)
-              }
-            })
-          return
-        }
+            }
+          })
+        return
+      }
 
-        latestSshTargetStateEventByTargetId.delete(data.targetId)
-        applySshConnectionStateChange(data.targetId, state)
-      })
-    )
+      latestSshTargetStateEventByTargetId.delete(data.targetId)
+      applySshConnectionStateChange(data.targetId, state)
+    }
+
+    unsubs.push(window.api.ssh.onStateChanged(handleSshStateChangedEvent))
 
     let remoteWorkspaceClientId: string | null = null
     let remoteWorkspaceClientIdPromise: Promise<string | null> | null = null

@@ -170,11 +170,72 @@ describe('shared agent-hook-listener', () => {
     )
 
     expect(event?.payload.toolName).toBe('AskUserQuestion')
+    // Why: the auto-allowed AskUserQuestion PreToolUse is a human-input boundary,
+    // so it must read as waiting (amber attention) rather than a working spinner.
+    expect(event?.payload.state).toBe('waiting')
     const expected = JSON.stringify(questions)
     expect(event?.payload.interactivePrompt).toBe(expected)
     // Why: must NOT be truncated to the 160-char toolInput preview cap.
     expect(expected.length).toBeGreaterThan(200)
     expect(event?.payload.interactivePrompt!.length).toBe(expected.length)
+  })
+
+  it('maps Claude AskUserQuestion PreToolUse to waiting, then back to working on answer', () => {
+    const question = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_response: { selected: ['a'] }
+        }
+      },
+      'production'
+    )
+
+    expect(question?.payload).toMatchObject({
+      agentType: 'claude',
+      state: 'waiting',
+      toolName: 'AskUserQuestion'
+    })
+    expect(answered?.payload).toMatchObject({
+      agentType: 'claude',
+      state: 'working',
+      toolName: 'AskUserQuestion'
+    })
+  })
+
+  it('keeps a normal Claude PreToolUse tool call as working', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.toolName).toBe('Bash')
   })
 
   it('leaves interactivePrompt undefined for a normal tool call', () => {

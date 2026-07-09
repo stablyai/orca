@@ -29,8 +29,8 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
   const baseRef = item?.baseRefName ?? null
   const headRef = item?.branchName ?? null
   const editable = canEditPRTitle(pr.state)
-  // Tapping the state badge or the #number opens the PR on its host (GitHub/etc.)
-  // in the phone browser — pr.url is the canonical web URL.
+  // Badge, #number, and the flush-right external-link control all open pr.url
+  // (canonical host web URL) in the phone browser.
   const openPr = pr.url ? () => openMobilePrUrl(pr.url) : undefined
 
   return (

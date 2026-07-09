@@ -1,5 +1,6 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
+import { throwIfFileListingCancelled } from './file-listing-cancellation'
 import {
   HIDDEN_DIR_BLOCKLIST,
   shouldExcludeQuickOpenRelPath,
@@ -157,6 +158,7 @@ export async function listQuickOpenFilesWithReaddir(
   opts: {
     excludePathPrefixes?: readonly string[]
     budget?: QuickOpenReaddirBudget
+    signal?: AbortSignal
   } = {}
 ): Promise<string[]> {
   const files: string[] = []
@@ -164,6 +166,9 @@ export async function listQuickOpenFilesWithReaddir(
   const excludePathPrefixes = opts.excludePathPrefixes ?? []
 
   async function walk(dir: string): Promise<void> {
+    // Why: an abandoned scan (workspace switch) must stop consuming IO and
+    // event-loop time on the single-threaded relay, not just run to budget.
+    throwIfFileListingCancelled(opts.signal)
     assertWithinDeadline(budget)
 
     let entries
@@ -176,6 +181,7 @@ export async function listQuickOpenFilesWithReaddir(
     }
 
     for (const entry of entries) {
+      throwIfFileListingCancelled(opts.signal)
       assertWithinDeadline(budget)
 
       const name = entry.name
@@ -206,6 +212,7 @@ export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
   gitPaths: Iterable<string>
   excludePathPrefixes?: readonly string[]
   budget?: QuickOpenReaddirBudget
+  signal?: AbortSignal
 }): Promise<string[]> {
   const files = new Set<string>()
   const excludePathPrefixes = opts.excludePathPrefixes ?? []
@@ -224,6 +231,7 @@ export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
   }
 
   for (const rawPath of opts.gitPaths) {
+    throwIfFileListingCancelled(opts.signal)
     assertWithinDeadline(budget)
 
     const { kind, relPath } = await classifyQuickOpenGitEntry(opts.rootPath, rawPath)
@@ -240,7 +248,8 @@ export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
       // nested repo so the walk prunes excluded subtrees during traversal
       // instead of burning the shared budget and filtering them at the end.
       excludePathPrefixes: rebaseExcludePrefixesForNestedRepo(excludePathPrefixes, relPath),
-      budget
+      budget,
+      signal: opts.signal
     })
     for (const nestedFile of nestedFiles) {
       addFinalPath(`${relPath}/${nestedFile}`)

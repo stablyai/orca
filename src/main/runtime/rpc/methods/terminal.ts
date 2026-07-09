@@ -904,7 +904,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalSend,
     handler: async (params, { runtime }) => {
       await assertTerminalSendTextWithinLimit(params.text)
-      const leaf = runtime.resolveLeafForHandle(params.terminal)
+      // Why: guarded resolution — a stale handle must fail with
+      // terminal_handle_stale (clients recover by re-deriving the handle)
+      // instead of evaluating driver/lock state against the wrong PTY (#7718).
+      const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null
       if (leaf?.ptyId && isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
         return {
@@ -1436,8 +1439,19 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         const request = parsed.data
         detachStream(request.streamId, false)
 
-        let leaf = runtime.resolveLeafForHandle(request.terminal)
         const isMobile = request.client?.type === 'mobile'
+        let leaf: { ptyId: string | null } | null
+        try {
+          // Why: guarded resolution — binding the output stream to whatever
+          // PTY now occupies a stale handle's pane silently mirrors the wrong
+          // terminal after a reconnect (#7718). terminal_handle_stale lets the
+          // client re-derive the handle from the current session snapshot.
+          leaf = runtime.resolveLiveLeafForHandle(request.terminal)
+        } catch {
+          sendStreamError(request.streamId, 'terminal_handle_stale')
+          emit({ type: 'end', streamId: request.streamId })
+          return
+        }
         if (!leaf?.ptyId && isMobile) {
           try {
             const ptyId = await runtime.waitForLeafPtyId(request.terminal, 10_000, signal)

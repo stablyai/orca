@@ -441,4 +441,55 @@ describe('WebSocketTransport', () => {
     expect(serverClosed).toBe(true)
     expect(wss.clients.size).toBe(0)
   }, 5_000)
+
+  // Why: paired mobile devices store ws://ip:port endpoints, so the fallback
+  // port must stay stable across restarts or pairings go permanently dead
+  // when the preferred port is held by another instance (STA-1511).
+  describe('fallback port stability', () => {
+    async function reserveFreePort(): Promise<number> {
+      const scratch = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      await scratch.start()
+      const port = scratch.resolvedPort
+      await scratch.stop()
+      return port
+    }
+
+    it('retries the persisted fallback port before an OS-assigned one', async () => {
+      const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(holder)
+      await holder.start()
+      const takenPort = holder.resolvedPort
+      const fallbackPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: takenPort,
+        fallbackPort
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(fallbackPort)
+    })
+
+    it('falls back to an OS-assigned port when the persisted port is also taken', async () => {
+      const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      const fallbackHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(holder, fallbackHolder)
+      await holder.start()
+      await fallbackHolder.start()
+      const takenPort = holder.resolvedPort
+      const takenFallbackPort = fallbackHolder.resolvedPort
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: takenPort,
+        fallbackPort: takenFallbackPort
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).not.toBe(takenPort)
+      expect(transport.resolvedPort).not.toBe(takenFallbackPort)
+      expect(transport.resolvedPort).toBeGreaterThan(0)
+    })
+  })
 })

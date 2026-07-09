@@ -110,6 +110,39 @@ describe('computer-use e2e workflow', () => {
     }
   })
 
+  it('boots the built daemon under plain Node in the PR native-smoke job after the main build', () => {
+    const workflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
+    )
+    const steps = workflow.jobs['native-smoke'].steps
+    const runs = steps.map((step) => step.run).filter((run) => typeof run === 'string')
+    const buildIndex = runs.indexOf('pnpm build:electron-vite')
+    const daemonSmokeIndex = runs.indexOf('node config/scripts/daemon-boot-smoke.mjs')
+
+    expect(daemonSmokeIndex, 'native-smoke must boot the built daemon').toBeGreaterThanOrEqual(0)
+    expect(
+      buildIndex,
+      'daemon boot smoke must run after the main bundle is built'
+    ).toBeGreaterThanOrEqual(0)
+    expect(daemonSmokeIndex).toBeGreaterThan(buildIndex)
+  })
+
+  it('re-runs the native-smoke job when the daemon bundle graph changes', () => {
+    const workflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
+    )
+    const triggerPaths = workflow.on.pull_request.paths
+
+    expect(triggerPaths).toEqual(
+      expect.arrayContaining([
+        'config/scripts/daemon-boot-smoke.mjs',
+        'electron.vite.config.ts',
+        'build-plugins/**',
+        'src/main/daemon/**'
+      ])
+    )
+  })
+
   it('runs Linux computer-use e2e in the PR native-smoke job under Xvfb', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')

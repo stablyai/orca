@@ -125,6 +125,24 @@ const baseStyles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'capitalize'
   },
+  reconnectBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: -spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.statusAmber
+  },
+  reconnectBannerText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize
+  },
   actionError: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,

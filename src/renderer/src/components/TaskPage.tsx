@@ -199,6 +199,12 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
+import {
+  isNewIssueDraftContentful,
+  resolveNewIssueOpenSeed,
+  resolveUserRepoSwitchReset,
+  resolveVanishedNewIssueRepoReset
+} from '@/components/task-page-new-issue-draft'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import {
@@ -4052,6 +4058,16 @@ export default function TaskPage(): React.JSX.Element {
   const [newIssueAssignees, setNewIssueAssignees] = useState<GitHubAssignableUser[]>([])
   const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
   const [newIssueRepoId, setNewIssueRepoId] = useState<string | null>(null)
+  // Why: session-only draft slice backs recovery of an in-progress issue after
+  // an accidental dismissal (outside click/Escape/Cancel) and across a Tasks
+  // view unmount. Component `useState` stays the inputs' immediate source; the
+  // store is the durable-across-remount backing. See task-page-new-issue-draft.
+  // The draft value is read imperatively at open time (getState) rather than
+  // subscribed: it's only consumed in the `+` open handler, and the write-through
+  // rewrites it on every keystroke — subscribing would re-render all of TaskPage
+  // per keystroke while the modal is open. Actions are stable refs (no churn).
+  const setNewIssueDraft = useAppStore((s) => s.setNewIssueDraft)
+  const clearNewIssueDraft = useAppStore((s) => s.clearNewIssueDraft)
 
   // Why: resolve the target repo from the user's choice, falling back to the
   // first selected repo if the chosen id drops out of the selection while the
@@ -4096,10 +4112,62 @@ export default function TaskPage(): React.JSX.Element {
     { runtimeEnvironmentId: newIssueOpen ? (newIssueRuntimeTarget?.environmentId ?? null) : null }
   )
 
+  // Why: repo-scoped labels/assignees can't cross repos. A reactive clear keyed
+  // on the derived target id can't tell a restore apart from a user switch, so
+  // it would wipe just-restored fields and corrupt the recovery draft via the
+  // write-through below. Decompose by cause instead: this guard only handles the
+  // "chosen repo vanished from the selection" case (removed/deselected). A
+  // genuine user switch clears imperatively in the repo Select's handler; a
+  // restore always seeds an in-selection repoId, so neither path fires here.
   useEffect(() => {
+    const reset = resolveVanishedNewIssueRepoReset(
+      newIssueRepoId,
+      selectedRepos.map((r) => r.id)
+    )
+    if (!reset) {
+      return
+    }
     setNewIssueLabels([])
     setNewIssueAssignees([])
-  }, [newIssueTargetRepo?.id])
+    setNewIssueRepoId(reset.repoId)
+  }, [newIssueRepoId, selectedRepos])
+
+  // Why: mirror the live fields into the session draft while the modal is open
+  // so an accidental dismissal doesn't lose input. Content-gate the write so an
+  // untouched open never pins a meaningless draft (repoId alone is not content),
+  // and clear any stale draft once the form is emptied back out.
+  useEffect(() => {
+    if (!newIssueOpen) {
+      return
+    }
+    if (
+      isNewIssueDraftContentful({
+        title: newIssueTitle,
+        body: newIssueBody,
+        labels: newIssueLabels,
+        assignees: newIssueAssignees
+      })
+    ) {
+      setNewIssueDraft({
+        title: newIssueTitle,
+        body: newIssueBody,
+        labels: newIssueLabels,
+        assignees: newIssueAssignees,
+        repoId: newIssueRepoId
+      })
+    } else {
+      clearNewIssueDraft()
+    }
+  }, [
+    newIssueOpen,
+    newIssueTitle,
+    newIssueBody,
+    newIssueLabels,
+    newIssueAssignees,
+    newIssueRepoId,
+    setNewIssueDraft,
+    clearNewIssueDraft
+  ])
 
   const [selectedLinearIssueId, setSelectedLinearIssueId] = useState<string | null>(null)
   const [selectedLinearIssueFallback, setSelectedLinearIssueFallback] =
@@ -6633,6 +6701,10 @@ export default function TaskPage(): React.JSX.Element {
       setNewIssueBody('')
       setNewIssueLabels([])
       setNewIssueAssignees([])
+      // Why: a successful submit is the only path that discards the recovery
+      // draft. Closing `newIssueOpen` in the same commit keeps the write-through
+      // effect (gated on it) from re-persisting the emptied fields.
+      clearNewIssueDraft()
       // Why: bump the nonce so the list refetches and shows the new issue.
       setTaskRefreshNonce((current) => current + 1)
 
@@ -6700,7 +6772,8 @@ export default function TaskPage(): React.JSX.Element {
     newIssueTargetRepo,
     newIssueTitle,
     openGitHubDetailPage,
-    setDialogWorkItem
+    setDialogWorkItem,
+    clearNewIssueDraft
   ])
 
   const handleCreateNewLinearProject = useCallback(async (): Promise<void> => {
@@ -8234,11 +8307,20 @@ export default function TaskPage(): React.JSX.Element {
                               variant="outline"
                               size="icon"
                               onClick={() => {
-                                setNewIssueTitle('')
-                                setNewIssueBody('')
-                                setNewIssueLabels([])
-                                setNewIssueAssignees([])
-                                setNewIssueRepoId(primaryRepo?.id ?? null)
+                                // Why: restore a content-non-empty draft instead
+                                // of resetting, so an accidental dismissal is
+                                // recoverable. The empty-default branch stays live
+                                // so a stale draft never hijacks a fresh open after
+                                // the user changed their primary/selected repo.
+                                const seed = resolveNewIssueOpenSeed({
+                                  draft: useAppStore.getState().newIssueDraft,
+                                  selectedRepoIds: selectedRepos.map((r) => r.id)
+                                })
+                                setNewIssueTitle(seed.title)
+                                setNewIssueBody(seed.body)
+                                setNewIssueLabels(seed.labels)
+                                setNewIssueAssignees(seed.assignees)
+                                setNewIssueRepoId(seed.repoId)
                                 setNewIssueOpen(true)
                               }}
                               disabled={!newIssueTargetRepo}
@@ -11057,7 +11139,15 @@ export default function TaskPage(): React.JSX.Element {
                 </label>
                 <Select
                   value={newIssueRepoId ?? undefined}
-                  onValueChange={(v) => setNewIssueRepoId(v)}
+                  onValueChange={(v) => {
+                    // Why: repo-scoped labels/assignees can't cross a genuine
+                    // user repo switch, so clear them imperatively here (co-located
+                    // with the cause). Restore never routes through this handler.
+                    setNewIssueRepoId(v)
+                    const reset = resolveUserRepoSwitchReset()
+                    setNewIssueLabels(reset.labels)
+                    setNewIssueAssignees(reset.assignees)
+                  }}
                   disabled={newIssueSubmitting}
                 >
                   <SelectTrigger>

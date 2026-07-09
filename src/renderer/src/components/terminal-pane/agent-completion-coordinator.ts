@@ -25,6 +25,8 @@ import {
 type CompletionSource = 'hook' | 'title' | 'process-exit'
 type CompletionIdentitySource = 'hook' | 'title' | 'process-exit'
 
+type PollCadenceTier = 'active' | 'idle' | 'hidden' | 'no-evidence'
+
 type LastCompletionIdentity = {
   source: CompletionIdentitySource
   identity: string
@@ -43,11 +45,29 @@ const ACTIVE_POLL_INTERVAL_MS = 750
 // shared SSH relays. Follow-up to #6288 / PR #6667, which deduped scans within a
 // tick; this throttles the number of ticks. Visible panes keep full cadence.
 const HIDDEN_POLL_INTERVAL_MS = 3_000
+// Why: on hosts where one inspection is a whole-process-table scan (local
+// Windows forks a powershell.exe CIM query, ~10-40x heavier than POSIX `ps`),
+// a visible idle shell with no agent evidence must not pay that every 2s
+// forever. It relaxes to this cadence; output/title/hook activity re-arms the
+// hot cadence (see NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS), so agent starts are
+// detected event-driven rather than by burning idle scans.
+const NO_EVIDENCE_POLL_INTERVAL_MS = 15_000
+// Why: pane activity (PTY output, title change, hook) means an agent may be
+// starting; poll at the full idle cadence this long after the last activity so
+// agent-start detection stays prompt without keeping idle panes hot.
+const NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS = 10_000
 const INSPECTION_TIMEOUT_MS = 15_000
 const PENDING_TITLE_TTL_MS = Math.max(2_000, INSPECTION_TIMEOUT_MS + 500)
 const PENDING_TITLE_MAX_TTL_MS = Math.max(30_000, PENDING_TITLE_TTL_MS)
 const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
+
+const POLL_TIER_INTERVAL_MS: Record<PollCadenceTier, number> = {
+  active: ACTIVE_POLL_INTERVAL_MS,
+  idle: IDLE_POLL_INTERVAL_MS,
+  hidden: HIDDEN_POLL_INTERVAL_MS,
+  'no-evidence': NO_EVIDENCE_POLL_INTERVAL_MS
+}
 
 function isCompletionHookState(state: ParsedAgentStatusPayload['state']): boolean {
   // Why: only a genuine 'done' ends a turn. 'waiting'/'blocked' are handled by
@@ -99,10 +119,15 @@ export function createAgentCompletionCoordinator(
   let inspectionInFlight = false
   let inspectionGeneration = 0
   let consecutiveInspectionErrors = 0
-  // Why: tracks whether the armed poll timer is the slow hidden-backstop cadence,
-  // so a hidden→visible flip can re-arm it promptly instead of waiting out the
+  // Why: output/title activity can arrive before async PTY bind; it should
+  // only re-arm cadence after the bind path starts process tracking.
+  let pollTrackingStarted = false
+  // Why: tracks which cadence tier the armed poll timer was scheduled at, so a
+  // tier change toward a faster cadence (hidden→visible flip, no-evidence pane
+  // gaining activity or evidence) re-arms promptly instead of waiting out the
   // long delay (scheduleNextPoll otherwise no-ops while a timer is pending).
-  let pollTimerIsHiddenBackstop = false
+  let pollTimerTier: PollCadenceTier | null = null
+  let lastPaneActivityAt = 0
 
   function clearPollTimer(): void {
     if (pollTimer === null) {
@@ -110,7 +135,7 @@ export function createAgentCompletionCoordinator(
     }
     clearTimeout(pollTimer)
     pollTimer = null
-    pollTimerIsHiddenBackstop = false
+    pollTimerTier = null
   }
 
   function clearPendingTitleTimer(): void {
@@ -560,31 +585,57 @@ export function createAgentCompletionCoordinator(
     return options.shouldPollProcessCadence?.() === false
   }
 
-  function nextPollInterval(): number {
+  function paneActivityWithinHotWindow(): boolean {
+    return (
+      lastPaneActivityAt > 0 && Date.now() - lastPaneActivityAt < NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS
+    )
+  }
+
+  function currentPollTier(): PollCadenceTier {
+    if (isHiddenBackstop()) {
+      return 'hidden'
+    }
+    if (lastForegroundAgent) {
+      return 'active'
+    }
+    if (hasAgentRunEvidence) {
+      return 'idle'
+    }
+    // Why: only costly hosts relax the no-evidence cadence; recent pane
+    // activity keeps it hot so an agent start is inspected promptly.
+    if (options.isProcessInspectionCostly?.() === true && !paneActivityWithinHotWindow()) {
+      return 'no-evidence'
+    }
+    return 'idle'
+  }
+
+  function nextPollInterval(tier: PollCadenceTier): number {
     // Why: a hidden pane polls slowly (backstop only); a visible pane keeps full
     // cadence so the foreground experience is unchanged.
-    const base = isHiddenBackstop()
-      ? HIDDEN_POLL_INTERVAL_MS
-      : lastForegroundAgent
-        ? ACTIVE_POLL_INTERVAL_MS
-        : IDLE_POLL_INTERVAL_MS
+    const base = POLL_TIER_INTERVAL_MS[tier]
     const backoff =
       consecutiveInspectionErrors > 0
-        ? Math.min(10_000, base * 2 ** consecutiveInspectionErrors)
+        ? // Why: max(base, ...) keeps error backoff from *accelerating* tiers
+          // already slower than the 10s backoff ceiling (no-evidence is 15s).
+          Math.min(Math.max(10_000, base), base * 2 ** consecutiveInspectionErrors)
         : base
     const jitter = 1 + (Math.random() * 0.2 - 0.1)
     return Math.round(backoff * jitter)
   }
 
   function scheduleNextPoll(): void {
-    if (disposed || !options.isLive() || pendingTitle) {
+    if (disposed || !pollTrackingStarted || !options.isLive() || pendingTitle) {
       return
     }
+    const tier = currentPollTier()
     if (pollTimer !== null) {
-      // Why: a hidden pane that became visible has a slow backstop timer armed;
-      // re-arm it at full cadence now instead of waiting out the long delay.
-      // scheduleNextPoll runs on every visibility flip via startProcessTracking.
-      if (pollTimerIsHiddenBackstop && !isHiddenBackstop()) {
+      // Why: a pane whose tier moved to a faster cadence (hidden pane became
+      // visible, no-evidence pane saw activity or evidence) has a slow timer
+      // armed; re-arm at the faster cadence now instead of waiting it out.
+      if (
+        pollTimerTier !== null &&
+        POLL_TIER_INTERVAL_MS[tier] < POLL_TIER_INTERVAL_MS[pollTimerTier]
+      ) {
         clearPollTimer()
       } else {
         return
@@ -597,12 +648,26 @@ export function createAgentCompletionCoordinator(
     if (!ptyId) {
       return
     }
-    pollTimerIsHiddenBackstop = isHiddenBackstop()
+    pollTimerTier = tier
     pollTimer = setTimeout(() => {
       pollTimer = null
-      pollTimerIsHiddenBackstop = false
+      pollTimerTier = null
       requestInspection('cadence')
-    }, nextPollInterval())
+    }, nextPollInterval(tier))
+  }
+
+  function recordPaneActivity(): void {
+    lastPaneActivityAt = Date.now()
+    // Why: activity is the escalation signal that ends the relaxed no-evidence
+    // cadence — re-arm only when the armed timer is the slow tier (or none is
+    // armed) so per-output-chunk calls stay near-free on hot panes.
+    if (pollTimer === null || pollTimerTier === 'no-evidence') {
+      scheduleNextPoll()
+    }
+  }
+
+  function observeOutputActivity(): void {
+    recordPaneActivity()
   }
 
   function recordTitleWorking(): boolean {
@@ -628,6 +693,7 @@ export function createAgentCompletionCoordinator(
   }
 
   function observeTitle(title: string): void {
+    recordPaneActivity()
     const status = detectAgentStatusFromTitle(title)
     const isInconclusiveNativeDroidTitle = titleIsInconclusiveNativeDroidTitle(title)
     const hasExplicitAgentIdentity =
@@ -701,6 +767,7 @@ export function createAgentCompletionCoordinator(
   }
 
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
+    recordPaneActivity()
     if (options.shouldSuppressHookCompletion?.(payload)) {
       // Why: a suppressed permission pause must still cancel a provisional 'done'
       // so the quiet-window timer never fires a false completion notification.
@@ -792,6 +859,7 @@ export function createAgentCompletionCoordinator(
   }
 
   function startProcessTracking(): void {
+    pollTrackingStarted = true
     scheduleNextPoll()
   }
 
@@ -835,6 +903,7 @@ export function createAgentCompletionCoordinator(
     observeTitle,
     observeClassifiedTitleCompletion,
     observeTitleWorking,
+    observeOutputActivity,
     observeHookStatus,
     startProcessTracking,
     hasPendingHookDoneCompletion,

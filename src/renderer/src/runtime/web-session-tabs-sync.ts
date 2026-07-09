@@ -66,6 +66,7 @@ import {
   endWebRuntimeWakeTerminalRespawn,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from './web-runtime-wake-terminal-respawn'
+import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -170,6 +171,18 @@ export function getLastKnownHostTerminalTabCount(
   return (
     lastHostTerminalTabCountByWorktree.get(sessionTabsFreshnessKey(environmentId, worktreeId)) ?? 0
   )
+}
+
+// Why: a post-reconnect subscription replay re-emits the current snapshot with
+// an unchanged epoch/version; dropping the freshness entry lets the monotonic
+// gate accept that replay as authoritative instead of freezing the mirror
+// (#7718). Normal-operation ordering protection is untouched — this only runs
+// for responses the connection tagged as reconnect replays.
+export function acceptReplayedWebSessionTabsSnapshot(
+  environmentId: string,
+  worktreeId: string
+): void {
+  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
 }
 
 export function shouldApplyWebSessionTabsSnapshot(
@@ -2500,7 +2513,13 @@ export function useWebSessionTabsSync(): void {
                 return
               }
               const event = response.result as SessionTabsStreamEvent
+              const replayed = isRuntimeSubscriptionReplayResponse(response)
               if (event.type === 'snapshots') {
+                if (replayed) {
+                  for (const snapshot of event.snapshots) {
+                    acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
+                  }
+                }
                 useAppStore.setState((state) =>
                   applyFreshWebSessionTabsSnapshots(state, event.snapshots, environmentId)
                 )
@@ -2508,6 +2527,9 @@ export function useWebSessionTabsSync(): void {
               }
               if (event.type !== 'snapshot' && event.type !== 'updated') {
                 return
+              }
+              if (replayed) {
+                acceptReplayedWebSessionTabsSnapshot(environmentId, event.worktree)
               }
               useAppStore.setState((state) =>
                 applyFreshWebSessionTabsSnapshot(state, event, environmentId)
@@ -2586,6 +2608,9 @@ export function useWebSessionTabsSync(): void {
             const event = response.result as SessionTabsStreamEvent
             if (event.type !== 'snapshot' && event.type !== 'updated') {
               return
+            }
+            if (isRuntimeSubscriptionReplayResponse(response)) {
+              acceptReplayedWebSessionTabsSnapshot(environmentId, event.worktree)
             }
             const fresh = shouldApplyWebSessionTabsSnapshot(event, environmentId)
             const syncState = useAppStore.getState()

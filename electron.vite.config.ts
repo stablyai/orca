@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createPlainNodeEntryGuardPlugin } from './build-plugins/plain-node-entry-guard'
 
 // Why: the telemetry transport is gated by two compile-time constants that
 // only the official CI release workflow sets. Contributor / `pnpm dev` /
@@ -191,7 +192,7 @@ export default defineConfig({
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           )
         },
-        plugins: [createStartupDiagnosticsBootstrapPlugin()]
+        plugins: [createStartupDiagnosticsBootstrapPlugin(), createPlainNodeEntryGuardPlugin()]
       }
     },
     // Why: compile-time substitution for the telemetry gate. See the block

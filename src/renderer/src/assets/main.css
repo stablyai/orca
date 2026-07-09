@@ -957,6 +957,11 @@
   color: var(--muted-foreground);
 }
 
+.titlebar-profile-switcher {
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+
 .editor-header {
   display: flex;
   align-items: center;

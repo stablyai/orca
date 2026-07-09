@@ -48,6 +48,11 @@ export type WebSocketTransportOptions = {
   // Why: the pairing server can also serve the browser client, so users do
   // not need a second dev/static server once the web bundle is built.
   staticRoot?: string
+  // Why: when the preferred port is taken, an unstable OS-assigned port would
+  // change on every restart and permanently orphan existing mobile pairings
+  // (their stored ws://ip:port endpoint goes dead — STA-1511). Callers pass
+  // the previously assigned fallback port so it is retried first.
+  fallbackPort?: number
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -58,6 +63,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly heartbeatIntervalMs: number
   private readonly preAuthTimeoutMs: number
   private readonly staticRoot: string | undefined
+  private readonly fallbackPort: number | undefined
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -81,7 +87,8 @@ export class WebSocketTransport implements RpcTransport {
     tlsKey,
     heartbeatIntervalMs,
     preAuthTimeoutMs,
-    staticRoot
+    staticRoot,
+    fallbackPort
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -90,6 +97,7 @@ export class WebSocketTransport implements RpcTransport {
     this.heartbeatIntervalMs = heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS
     this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
     this.staticRoot = staticRoot
+    this.fallbackPort = fallbackPort
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -144,19 +152,37 @@ export class WebSocketTransport implements RpcTransport {
     // Why: when the preferred port is occupied (e.g. another Orca instance is
     // already running), fall back to an OS-assigned port so mobile pairing
     // still works. The QR code reads resolvedPort after start, so it will
-    // advertise the correct port regardless.
+    // advertise the correct port regardless. A persisted fallback port is
+    // retried before port 0 so paired devices keep a stable endpoint across
+    // restarts (STA-1511).
     let port = this.port
     try {
       await this.tryListen(port)
+      return
     } catch (error: unknown) {
-      if (isEAddressInUse(error) && port !== 0) {
-        console.warn(`[ws-transport] Port ${port} is in use, falling back to OS-assigned port`)
-        port = 0
-        await this.tryListen(port)
-      } else {
+      if (!isEAddressInUse(error) || port === 0) {
         throw error
       }
     }
+    if (
+      this.fallbackPort !== undefined &&
+      this.fallbackPort !== 0 &&
+      this.fallbackPort !== this.port
+    ) {
+      try {
+        console.warn(
+          `[ws-transport] Port ${port} is in use, retrying previous fallback port ${this.fallbackPort}`
+        )
+        await this.tryListen(this.fallbackPort)
+        return
+      } catch (error: unknown) {
+        if (!isEAddressInUse(error)) {
+          throw error
+        }
+      }
+    }
+    console.warn(`[ws-transport] Port ${port} is in use, falling back to OS-assigned port`)
+    await this.tryListen(0)
   }
 
   private createHttpServer(): HttpServer | HttpsServer {

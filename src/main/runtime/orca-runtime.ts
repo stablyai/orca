@@ -5,7 +5,8 @@ import {
   extractLastOscTitle,
   detectAgentStatusFromTitle,
   isClaudeManagementTitle,
-  isShellProcess
+  isShellProcess,
+  normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -130,6 +131,7 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
+import type { SshConnectionState } from '../../shared/ssh-types'
 import type {
   LinearCurrentIssueContextHints,
   LinearAttachResult,
@@ -1182,6 +1184,10 @@ const RECENT_PTY_OUTPUT_LIMIT = 64 * 1024
 const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
 const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
 const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
+
+function isClientDisconnectedError(error: unknown): boolean {
+  return error instanceof Error && error.message === 'client_disconnected'
+}
 
 function createTerminalRevealWarning(handle: string, error?: unknown): string {
   const reason =
@@ -2806,6 +2812,12 @@ export class OrcaRuntimeService {
     this.emitClientEvent({ type: 'reposChanged' })
   }
 
+  // Why: SSH state changes originate in main's ssh handlers, not in runtime
+  // methods, so they need a public entry point onto the client-event stream.
+  notifySshStateChanged(targetId: string, state: SshConnectionState): void {
+    this.emitClientEvent({ type: 'sshStateChanged', targetId, state })
+  }
+
   private notifyActivateWorktree(
     repoId: string,
     worktreeId: string,
@@ -3990,6 +4002,25 @@ export class OrcaRuntimeService {
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
+        // Why: a pending agent tab may exist without its startup command ever
+        // having been delivered (the create's renderer stalled, #7587), so a
+        // bare materialize would put a plain shell under the agent icon.
+        // Re-resolve the launch like the create path; providers skip startup
+        // commands when attaching to live sessions, so this cannot double-launch.
+        let agentStartup: Awaited<
+          ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
+        > = {}
+        if (tab.launchAgent) {
+          try {
+            const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+            agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
+              agent: tab.launchAgent
+            })
+          } catch {
+            // Why: a disabled or unresolvable agent must not make the tab
+            // untappable; fall back to the plain-shell materialize.
+          }
+        }
         try {
           await this.createHeadlessMobileSessionTerminal(worktreeId, true, undefined, {
             identity: {
@@ -3998,6 +4029,10 @@ export class OrcaRuntimeService {
               sessionId
             },
             cwd: tab.startupCwd,
+            command: agentStartup.command,
+            env: agentStartup.env,
+            startupCommandDelivery: agentStartup.startupCommandDelivery,
+            launchConfig: agentStartup.launchConfig,
             launchAgent: tab.launchAgent,
             targetGroupId
           })
@@ -5302,8 +5337,15 @@ export class OrcaRuntimeService {
     // strips the escape sequences. Agent CLIs (Claude Code, Gemini, etc.)
     // announce status via OSC 0/1/2 title sequences — this is the same
     // detection path the renderer uses for notifications and sidebar badges.
-    const oscTitle = this.extractLastOscTitleForPty(ptyId, data)
-    const agentStatus = oscTitle ? detectAgentStatusFromTitle(oscTitle) : null
+    const rawOscTitle = this.extractLastOscTitleForPty(ptyId, data)
+    // Why: collapse high-churn agent titles (Grok/Pi spinner frames, Gemini
+    // per-keystroke updates) once at the observation boundary so lastOscTitle —
+    // and the mobile session-tab titles/snapshots derived from it — stays
+    // stable instead of changing every animation frame. Status is detected
+    // from the raw title (mirroring the renderer's tracker) so working/idle
+    // transitions are unaffected by normalization.
+    const oscTitle = rawOscTitle === null ? null : normalizeTerminalTitle(rawOscTitle)
+    const agentStatus = rawOscTitle ? detectAgentStatusFromTitle(rawOscTitle) : null
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     let shouldTouchPtyBackedSessionTabs = false
@@ -5941,18 +5983,22 @@ export class OrcaRuntimeService {
       return
     }
     const status = detectAgentStatusFromTitle(title)
+    // Why: live observations store normalized titles, so seeds must match —
+    // otherwise the first live frame after hydration compares unequal and
+    // touches session tabs once for no visible change.
+    const seededTitle = normalizeTerminalTitle(title)
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       const observedAt = this.nextTitleObservationSequence()
-      pty.lastOscTitle = title
+      pty.lastOscTitle = seededTitle
       pty.lastOscTitleAt = observedAt
-      this.setPtyManagementTitleFromObservedTitle(pty, title, observedAt)
+      this.setPtyManagementTitleFromObservedTitle(pty, seededTitle, observedAt)
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // Why: seed lastOscTitle even when the seeded title doesn't classify
       // as an agent state, so worktree.ps recomputes status from the live
       // title rather than treating the leaf as agentless.
-      leaf.lastOscTitle = title
+      leaf.lastOscTitle = seededTitle
       leaf.lastOscTitleAt = this.nextTitleObservationSequence()
       if (status !== null) {
         leaf.lastAgentStatus = status
@@ -6228,6 +6274,32 @@ export class OrcaRuntimeService {
     const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
     if (!leaf) {
       return null
+    }
+    return { ptyId: leaf.ptyId }
+  }
+
+  // Why: remote clients hold handles across transport reconnects. A handle
+  // minted for a concrete PTY must never silently adopt a different PTY that
+  // later occupies the same pane — that misroutes keystrokes (#7718). Handles
+  // still awaiting their first PTY (ptyId null) may adopt it, which preserves
+  // the mobile pre-spawn subscribe flow.
+  resolveLiveLeafForHandle(handle: string): { ptyId: string | null } | null {
+    const record = this.handles.get(handle)
+    if (!record) {
+      return null
+    }
+    if (record.tabId.startsWith('pty:')) {
+      return { ptyId: record.ptyId }
+    }
+    const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
+    if (!leaf) {
+      return null
+    }
+    if (
+      record.ptyId !== null &&
+      (leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration)
+    ) {
+      throw new Error('terminal_handle_stale')
     }
     return { ptyId: leaf.ptyId }
   }
@@ -16256,6 +16328,7 @@ export class OrcaRuntimeService {
       launchAgent?: TuiAgent
       activate?: boolean
       clientMutationId?: string
+      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const mutationId = opts.clientMutationId
@@ -16297,6 +16370,7 @@ export class OrcaRuntimeService {
       launchAgent?: TuiAgent
       activate?: boolean
       clientMutationId?: string
+      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.assertGraphReady()
@@ -16336,8 +16410,16 @@ export class OrcaRuntimeService {
     const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
       const timer = setTimeout(() => {
         ipcMain.removeListener('terminal:tabCreateReply', handler)
+        opts.signal?.removeEventListener('abort', onAbort)
         reject(new Error('Terminal creation timed out'))
       }, 10_000)
+      // Why: a dead client connection cancels the wait; the renderer tab (and
+      // its shell) stays alive for the host and mirrors on reconnect (#7718).
+      const onAbort = (): void => {
+        clearTimeout(timer)
+        ipcMain.removeListener('terminal:tabCreateReply', handler)
+        reject(new Error('client_disconnected'))
+      }
 
       const handler = (
         event: Electron.IpcMainEvent,
@@ -16348,12 +16430,14 @@ export class OrcaRuntimeService {
         }
         clearTimeout(timer)
         ipcMain.removeListener('terminal:tabCreateReply', handler)
+        opts.signal?.removeEventListener('abort', onAbort)
         if (r.error) {
           reject(new Error(r.error))
         } else {
           resolve({ tabId: r.tabId!, title: r.title ?? '' })
         }
       }
+      opts.signal?.addEventListener('abort', onAbort, { once: true })
       ipcMain.on('terminal:tabCreateReply', handler)
       win.webContents.send('terminal:requestTabCreate', {
         requestId,
@@ -16391,17 +16475,24 @@ export class OrcaRuntimeService {
       // wait resolves without depending on a graph sync.
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
       const surface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
-        timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
+        timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
+        signal: opts.signal
       })
       if (this.isReadyMobileTerminalSurface(surface)) {
         return surface
       }
       const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
         timeoutMs: MOBILE_TERMINAL_READY_FALLBACK_MS,
-        requireReady: true
+        requireReady: true,
+        signal: opts.signal
       }).catch(() => null)
       if (readySurface) {
         return readySurface
+      }
+      if (opts.signal?.aborted) {
+        // Why: nobody is waiting for this create anymore; do not materialize
+        // or roll back — the renderer's own publication settles the tab.
+        throw new Error('client_disconnected')
       }
       const pendingSurface = this.findMobileTerminalSurface(worktreeId, reply.tabId)
       if (!pendingSurface) {
@@ -16435,6 +16526,16 @@ export class OrcaRuntimeService {
         if (rescued) {
           return rescued
         }
+      }
+      // Why: don't roll back when (a) the client connection died — the wait
+      // was cancelled, not the spawn — or (b) a live shell already backs the
+      // tab (its pane key may simply not be registered yet). Killing a real
+      // terminal the host user can see is the "tab dies after ~10s" bug (#7718).
+      if (
+        isClientDisconnectedError(error) ||
+        this.hasLiveShellForRendererTab(worktreeId, reply.tabId)
+      ) {
+        throw error
       }
       // Why: the renderer created the tab but no live PTY backs it (true PTY
       // spawn/handle failure). Roll the half-created tab back via the renderer
@@ -16655,33 +16756,44 @@ export class OrcaRuntimeService {
   private waitForMobileTerminalSurface(
     worktreeId: string,
     parentTabId: string,
-    options: { timeoutMs?: number; requireReady?: boolean } = {}
+    options: { timeoutMs?: number; requireReady?: boolean; signal?: AbortSignal } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const timeoutMs = options.timeoutMs ?? MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
     const existing = this.findMobileTerminalSurface(worktreeId, parentTabId, options)
     if (existing) {
       return Promise.resolve(existing)
     }
+    if (options.signal?.aborted) {
+      return Promise.reject(new Error('client_disconnected'))
+    }
 
     return new Promise<RuntimeMobileSessionCreateTerminalResult>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        options.signal?.removeEventListener('abort', onAbort)
         const idx = this.graphSyncCallbacks.indexOf(check)
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
+      }
+      const timer = setTimeout(() => {
+        cleanup()
         reject(new Error('Timed out waiting for terminal surface after creation'))
       }, timeoutMs)
+      // Why: a dead client connection cancels the wait immediately instead of
+      // running down the timeout and triggering rollback (#7718).
+      const onAbort = (): void => {
+        cleanup()
+        reject(new Error('client_disconnected'))
+      }
+      options.signal?.addEventListener('abort', onAbort, { once: true })
 
       const check = (): void => {
         const next = this.findMobileTerminalSurface(worktreeId, parentTabId, options)
         if (!next) {
           return
         }
-        clearTimeout(timer)
-        const idx = this.graphSyncCallbacks.indexOf(check)
-        if (idx !== -1) {
-          this.graphSyncCallbacks.splice(idx, 1)
-        }
+        cleanup()
         resolve(next)
       }
       this.graphSyncCallbacks.push(check)
@@ -16769,6 +16881,18 @@ export class OrcaRuntimeService {
       }
     }
     return null
+  }
+
+  // Why: rollback guard, looser than findLiveRegisteredPtyForRendererTab — a
+  // shell whose pane key hasn't registered yet can't be surface-rescued, but
+  // it is still a real terminal the create timeout must not kill (#7718).
+  private hasLiveShellForRendererTab(worktreeId: string, tabId: string): boolean {
+    for (const pty of this.ptysById.values()) {
+      if (pty.worktreeId === worktreeId && pty.tabId === tabId && pty.connected) {
+        return true
+      }
+    }
+    return false
   }
 
   private isReadyMobileTerminalSurface(

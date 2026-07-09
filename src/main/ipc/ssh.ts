@@ -90,6 +90,16 @@ export function getRegisteredSshState(targetId: string): SshConnectionState | un
   return registeredGetSshState?.(targetId)
 }
 
+/** Public targets for runtime RPC clients — same list the desktop renderer gets. */
+export function listRegisteredSshTargets(): SshTarget[] {
+  return sshStore?.listTargets() ?? []
+}
+
+/** Removed-target id → last known label, for ghost-host display on paired clients. */
+export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
+  return sshStore?.listRemovedTargetLabels() ?? {}
+}
+
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   if (!connectionManager) {
     return
@@ -235,13 +245,14 @@ function broadcastSshState(
   if (isRuntimeOwnedSshTargetId(targetId)) {
     return
   }
+  const enrichedState = withSshRemotePlatform(targetId, state)
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:state-changed', {
-      targetId,
-      state: withSshRemotePlatform(targetId, state)
-    })
+    win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
   }
+  // Why: paired remote clients have no ssh:state-changed IPC; without this
+  // their terminals keep a stale reconnect overlay after the host connects.
+  currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
 }
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
@@ -431,6 +442,24 @@ function registerAdvertisedUrlRefresh(getMainWindow: () => BrowserWindow | null)
   })
 }
 
+// Why: macOS can resume the process before the network stack is back up, so
+// a failed first probe gets one retry before the link is declared dead (#7773).
+const RESUME_PROBE_TIMEOUT_MS = 5_000
+const RESUME_PROBE_ATTEMPTS = 2
+
+async function isRelayLinkAliveAfterResume(session: SshRelaySession): Promise<boolean> {
+  const mux = session.getMux()
+  if (!mux || mux.isDisposed()) {
+    return false
+  }
+  for (let attempt = 0; attempt < RESUME_PROBE_ATTEMPTS; attempt++) {
+    if (await mux.probeLiveness(RESUME_PROBE_TIMEOUT_MS)) {
+      return true
+    }
+  }
+  return false
+}
+
 function registerPowerMonitorReconnect(): void {
   powerMonitorUnsubscribe?.()
   const onSuspend = (): void => {
@@ -439,19 +468,35 @@ function registerPowerMonitorReconnect(): void {
     }
   }
   const onResume = (): void => {
-    for (const targetId of activeSessions.keys()) {
-      const conn = connectionManager?.getConnection(targetId)
+    for (const [targetId, session] of activeSessions) {
+      const manager = connectionManager
+      const conn = manager?.getConnection(targetId)
       if (!conn) {
         continue
       }
-      const reconnect = connectionManager?.reconnect(targetId)
-      void reconnect?.catch((err) => {
-        console.warn(
-          `[ssh] Failed to reconnect ${targetId} after system resume: ${
-            err instanceof Error ? err.message : String(err)
-          }`
-        )
-      })
+      void (async () => {
+        // Why: unconditional reconnect on every wake tore down live sessions
+        // and flashed the reconnect overlay (#7773). Only reconnect targets
+        // whose relay link actually died during sleep.
+        if (await isRelayLinkAliveAfterResume(session)) {
+          return
+        }
+        // Why: the probe can take ~10s. If the user disconnected or the
+        // session/connection was replaced meanwhile, reconnecting would
+        // resurrect a connection that was intentionally torn down.
+        if (activeSessions.get(targetId) !== session || manager?.getConnection(targetId) !== conn) {
+          return
+        }
+        try {
+          await manager?.reconnect(targetId)
+        } catch (err) {
+          console.warn(
+            `[ssh] Failed to reconnect ${targetId} after system resume: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          )
+        }
+      })()
     }
   }
   powerMonitor.on('suspend', onSuspend)

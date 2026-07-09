@@ -25,7 +25,19 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
   )
 }
 
-export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
+// Why: the SSH relay bridge executes this CLI on the Orca host while the
+// caller's shell cwd lives on the remote machine (which cannot be chdir'd
+// into). ORCA_CLI_CWD carries that remote cwd so cwd-based selectors like
+// `--worktree active` resolve against the caller's directory.
+function resolveInvocationCwd(): string {
+  const override = process.env.ORCA_CLI_CWD
+  return typeof override === 'string' && override.length > 0 ? override : process.cwd()
+}
+
+export async function main(
+  argv = process.argv.slice(2),
+  cwd = resolveInvocationCwd()
+): Promise<void> {
   if (argv[0] === 'agent-teams-tmux') {
     await runAgentTeamsTmuxShim(argv.slice(1))
     return

@@ -75,9 +75,34 @@ describe('terminal send RPC', () => {
     expect(runtime.getTerminalAgentStatus).toHaveBeenCalledWith('terminal-1')
   })
 
+  it('fails terminal.send with terminal_handle_stale for a stale handle instead of probing the wrong PTY', async () => {
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn(() => {
+        throw new Error('terminal_handle_stale')
+      }),
+      sendTerminal: vi.fn()
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'stale-terminal',
+        text: 'x',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    if (response.ok) {
+      throw new Error('expected stale handle error')
+    }
+    expect(response.error.message).toContain('terminal_handle_stale')
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
   it('drops desktop input while a mobile client owns the terminal floor', async () => {
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
       sendTerminal: vi.fn(),
       mobileTookFloor: vi.fn()
@@ -109,7 +134,7 @@ describe('terminal send RPC', () => {
 
   it('accepts legacy clientless mobile input when the current driver is mobile', async () => {
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
       sendTerminal: vi.fn().mockResolvedValue({
         handle: 'terminal-1',
@@ -198,7 +223,7 @@ describe('terminal send RPC', () => {
     vi.useFakeTimers()
     const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       sendTerminal: vi.fn().mockResolvedValue({
         handle: 'terminal-1',
@@ -236,7 +261,7 @@ describe('terminal send RPC', () => {
 
   it('refuses guarded terminal sends when the agent needs permission', async () => {
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       getTerminalAgentStatus: vi.fn().mockResolvedValue({
         handle: 'terminal-1',
@@ -274,7 +299,7 @@ describe('terminal send RPC', () => {
 
   it('allows guarded terminal sends when the agent is sendable', async () => {
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       getTerminalAgentStatus: vi.fn().mockResolvedValue({
         handle: 'terminal-1',
@@ -316,7 +341,7 @@ describe('terminal send RPC', () => {
 
   it('refuses guarded combined text and submit sends before any PTY write', async () => {
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       getTerminalAgentStatus: vi.fn(),
       sendTerminal: vi.fn()
@@ -350,7 +375,7 @@ describe('terminal send RPC', () => {
 
   it('rechecks the mobile floor lock immediately before guarded PTY writes', async () => {
     const runtime = stubRuntime({
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi
         .fn()
         .mockReturnValueOnce({ kind: 'desktop' })

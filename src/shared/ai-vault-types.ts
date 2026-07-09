@@ -84,6 +84,11 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // Recoverable signal for sessions whose conversation transcript persisted zero
+  // user/assistant turns: queued (never-flushed) prompts and sibling subagent
+  // transcripts survive even when the main conversation was lost.
+  queuedMessageCount: number
+  subagentTranscriptCount: number
   resumeCommand: string
   subagent: AiVaultSessionSubagentInfo | null
   // Number of Task subagent transcripts stored beside this session; always 0
@@ -102,6 +107,40 @@ export type AiVaultSubagentListArgs = {
 export type AiVaultSubagentListResult = {
   sessions: AiVaultSession[]
   issues: AiVaultScanIssue[]
+}
+
+// A session is only offered for normal resume when its transcript actually holds
+// conversation turns; resuming a zero-turn transcript lands in an empty session.
+// Conversation previews count as evidence too: some parsers (e.g. Grok, OpenCode
+// fallback schemas) only learn the turn count from metadata that may be absent.
+export function isAiVaultSessionResumableContent(
+  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>
+): boolean {
+  return (
+    session.messageCount > 0 ||
+    session.previewMessages.some(
+      (message) => message.role === 'user' || message.role === 'assistant'
+    )
+  )
+}
+
+export function aiVaultSessionRecoverableSignalCount(
+  session: Pick<AiVaultSession, 'queuedMessageCount' | 'subagentTranscriptCount'>
+): number {
+  return Math.max(0, session.queuedMessageCount) + Math.max(0, session.subagentTranscriptCount)
+}
+
+// Zero-turn transcript that still carries recoverable content (queued prompts
+// and/or subagent transcripts). Surfaced distinctly instead of hidden as empty.
+export function isAiVaultSessionRecoverableEmpty(
+  session: Pick<
+    AiVaultSession,
+    'messageCount' | 'previewMessages' | 'queuedMessageCount' | 'subagentTranscriptCount'
+  >
+): boolean {
+  return (
+    !isAiVaultSessionResumableContent(session) && aiVaultSessionRecoverableSignalCount(session) > 0
+  )
 }
 
 export type AiVaultScanIssue = {
@@ -149,7 +188,13 @@ export function buildAiVaultResumeCommand(args: {
     : quoteShellArg(resumeTarget, platform)
   const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
-  return buildAiVaultResumeShellCommand({ resumeCommand, cwd, platform, codexHome, shell })
+  return buildAiVaultResumeShellCommand({
+    resumeCommand,
+    cwd,
+    platform,
+    codexHome,
+    shell
+  })
 }
 
 export function buildAiVaultResumeShellCommand(args: {

@@ -137,6 +137,9 @@
         "e3bcd082ac": "Orca에 연결",
         "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다."
+      },
       "web": {
         "preload": {
           "api": {
@@ -244,7 +247,9 @@
           "a8e4b3af5b": "프로젝트가 이미 추가되었습니다.",
           "6d3318e813": "repos를 가져오지 못했습니다.",
           "3be0f7df04": "선택한 런타임에서 폴더를 열 수 없습니다.",
-          "15cf5319ec": "{{path}}이(가) {{hostName}}에서 확인되었지만 해당 호스트가 사용 가능한 폴더를 보고하지 않았습니다."
+          "15cf5319ec": "{{path}}이(가) {{hostName}}에서 확인되었지만 해당 호스트가 사용 가능한 폴더를 보고하지 않았습니다.",
+          "2dcd706774": "프로젝트가 다른 프로필에도 있습니다",
+          "presenceProfileOverflow": "{{names}} 외 {{count}}개"
         },
         "settings": {
           "e12dab333b": "서버를 전환하지 못했습니다.",
@@ -259,6 +264,24 @@
         },
         "linear": {
           "37d36984d0": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "프로필을 생성하지 못했습니다",
+            "319d7cf39b": "클라우드 프로필이 생성되었습니다",
+            "d6e764e7db": "이 프로필을 다시 연결하세요",
+            "f0c9e11a6d": "클라우드 프로필을 생성하지 못했습니다",
+            "8b8fa73174": "Orca Cloud 로그인이 구성되어 있지 않습니다",
+            "33290e88ed": "프로필을 연결하지 못했습니다",
+            "9fcb07a796": "프로필이 연결되었습니다",
+            "2f6c78a039": "프로필 인증을 새로 고치지 못했습니다",
+            "a37b5e6d37": "프로필에서 로그아웃했습니다",
+            "83600521e7": "로그아웃하지 못했습니다",
+            "76deec8f58": "조직을 전환하지 못했습니다",
+            "7d4bc516ee": "프로필을 전환하지 못했습니다",
+            "f518e89aa5": "프로젝트가 해당 프로필에 이미 있습니다",
+            "f03ae7f27b": "프로젝트를 전송하지 못했습니다"
+          }
         }
       }
     },
@@ -542,6 +565,13 @@
       },
       "ephemeralVmWorkspaceTarget": {
         "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
+      },
+      "blocked": {
+        "notification": {
+          "fallback": {
+            "de50bef680": "macOS가 Orca 알림을 차단하고 있습니다"
+          }
+        }
       }
     },
     "hooks": {
@@ -2562,7 +2592,10 @@
             "connectFailed": "SSH 연결 실패",
             "title": "SSH 연결 필요",
             "connectingButton": "연결 중...",
-            "connectButton": "연결"
+            "connectButton": "연결",
+            "removedTitle": "SSH host removed",
+            "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
+            "removeWorkspaceButton": "Remove workspace"
           }
         }
       },
@@ -2588,8 +2621,7 @@
             "localWorkspacesOnly": "기록에서 재개하기는 로컬 워크스페이스에서만 사용할 수 있습니다.",
             "openLocalWorkspace": "세션을 재개하기 전에 로컬 워크스페이스를 여세요.",
             "sessionQueued": "세션이 대기열에 추가됨",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스에 놓으세요.",
             "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 같은 호스트의 워크스페이스에 놓으세요."
           },
@@ -3684,7 +3716,8 @@
           "d36883e046": "취소",
           "8c097ef04e": "Orca에서. 아직 디스크에 있습니다.",
           "e62415c3d0": "다음 항목만 제거합니다",
-          "b79b39d865": "프로젝트 제거"
+          "b79b39d865": "프로젝트 제거",
+          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "활성 워크스페이스로 이동"
@@ -4400,7 +4433,16 @@
           "5e6f7a8b9c": "이 컴퓨터에서 저장된 SSH 호스트와 인증 정보를 제거합니다. 원격 파일은 삭제되지 않습니다.",
           "6f7a8b9c0d": "취소",
           "7a8b9c0d1e": "설정 열기",
-          "8b9c0d1e2f": "호스트 제거"
+          "8b9c0d1e2f": "호스트 제거",
+          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "oneWorkspace": "1 workspace",
+          "manyWorkspaces": "{{count}} workspaces",
+          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
+          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
+          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
+          "advanced": "Advanced",
+          "alsoDeleteRemoteHint": "Permanently deletes the remote Git worktrees and their branches. Cannot be undone.",
+          "alsoForgetLocalHint": "Clears them from Orca only. Remote files, worktrees, and branches are left untouched."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "호스트 이름 바꾸기",
@@ -4513,6 +4555,16 @@
           "importing": "가져오는 중...",
           "importSshConfig": "~/.ssh/config 가져오기",
           "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다."
+        },
+        "ForgetSshWorkspaceDialog": {
+          "reconnectFailed": "Reconnection failed",
+          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
+          "title": "Delete “{{name}}”?",
+          "disconnectedBody": "The SSH host for this workspace is not connected. Reconnect to delete it on the remote too, or remove it from Orca only.",
+          "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
+          "cancel": "Cancel",
+          "forget": "Remove from Orca",
+          "reconnectAndDelete": "Reconnect & Delete"
         }
       },
       "shared": {
@@ -8340,7 +8392,8 @@
                   "customCommand": "사용자 지정 명령",
                   "supportedAgents": "이 레시피에 지원되는 agent: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}}은(는) 이 텍스트 생성 레시피를 실행할 수 없습니다. 아래에서 지원되는 agent 중 하나를 선택하세요.",
-                  "resolveComments": "선택한 해결되지 않은 PR 또는 MR 댓글에서 agent를 시작합니다."
+                  "resolveComments": "선택한 해결되지 않은 PR 또는 MR 댓글에서 agent를 시작합니다.",
+                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails."
                 }
               }
             }
@@ -8714,7 +8767,14 @@
           "behindBaseRefToastDescription": "인라인 설정 링크와 바닥글 작업이 있는 영구 프롬프트입니다.",
           "notificationPlayground": "Notification playground",
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
-          "devOnly": "Dev only"
+          "devOnly": "Dev only",
+          "orcaCloud": "Orca Cloud",
+          "orcaCloudDescription": "Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.",
+          "orcaCloudStatus": "Status",
+          "orcaCloudSignOut": "Sign out",
+          "orcaCloudConnect": "Connect profile",
+          "orcaCloudRefresh": "Refresh status",
+          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build."
         },
         "EphemeralVmRecipeRow": {
           "useInWorkspace": "워크스페이스에서 사용"
@@ -9249,7 +9309,22 @@
             "d2b9g4f315": "{{value1}}보다 {{value0}} commits 뒤처짐",
             "e9c2a5d416": "{{value0}}와 동일한 상태",
             "4b4a7de138": "Open review page in browser",
-            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR."
+            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
+            "pushRecovery": {
+              "4b37ae99b0": "Start the default AI agent to fix this push failure",
+              "30b8d4f181": "Fix push failure with AI",
+              "dd43c47089": "Choose an agent for this push failure",
+              "ec7bfced55": "Choose agent to fix push failure",
+              "9e5ccd00aa": "Push failure context unavailable",
+              "054ead86b1": "Fix Push Failure With AI",
+              "15b7f210d7": "Choose the agent and edit the full command input before launch.",
+              "011f9713fc": "Push blocked",
+              "60bd988f0b": "AI Fix",
+              "03d238218c": "Details",
+              "a9bf7c171a": "Push Failed",
+              "834cb3f23d": "Fix with AI",
+              "783a808870": "Close"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -9498,6 +9573,35 @@
                       "216f762bd7": "워크스페이스 연결을 확인할 수 없습니다."
                     }
                   }
+                },
+                "push": {
+                  "failure": {
+                    "launch": {
+                      "216f762bd7": "Unable to resolve the workspace connection.",
+                      "4f4e0418a0": "Could not build the agent prompt.",
+                      "f2b47026e8": "Push failure prompt is empty. Update Source Control AI settings.",
+                      "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                      "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                      "5540ff50cc": "Could not build the agent launch command.",
+                      "a8b97d2318": "Started an AI agent for the push failure."
+                    }
+                  }
+                },
+                "recovery": {
+                  "launch": {
+                    "4f4e0418a0": "Could not build the agent prompt.",
+                    "push": {
+                      "empty": "Push failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "commit": {
+                      "empty": "Commit failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                    "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                    "5540ff50cc": "Could not build the agent launch command.",
+                    "216f762bd7": "Unable to resolve the workspace connection.",
+                    "success": "Started an AI agent for the {{value0}} failure."
+                  }
                 }
               },
               "discard": {
@@ -9648,9 +9752,7 @@
             "sessionsShownCompact": "{{value0}} 표시됨",
             "originalPaneUnavailable": "원래 창은 더 이상 사용할 수 없습니다.",
             "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "이 세션의 기록은 이 컴퓨터에 저장되어 있어 SSH 워크스페이스에서는 재개할 수 없습니다. 대신 로컬 워크스페이스를 여세요.",
             "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요."
           },
@@ -9735,7 +9837,13 @@
             "sessionRole": "세션",
             "jumpToOriginalPane": "원래 창으로 이동",
             "worktree": "작업 트리",
-            "jumpToWorktree": "작업 트리로 이동"
+            "jumpToWorktree": "작업 트리로 이동",
+            "conversationNotSaved": "대화가 저장되지 않음",
+            "recoverableEmptyDetail": "이 세션에는 저장된 대화가 없지만 복구 가능한 항목이 {{value0}}개 남아 있습니다.",
+            "recoverableEmptyOpenLogHint": "로그를 열어 복구하세요.",
+            "emptyConversationDetail": "이 세션에는 저장된 대화가 없어 재개할 수 없습니다.",
+            "queuedMessages": "대기 중인 메시지 {{value0}}개",
+            "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",
@@ -9762,6 +9870,7 @@
             "sessionRole": "세션",
             "jumpToOriginalPane": "원래 창으로 이동",
             "jumpToWorktree": "작업 트리로 이동",
+            "recoverableBadge": "저장 안 됨",
             "subagentCount": "{{value0}} subagents",
             "subagentCountSingular": "1 subagent",
             "subagentCountPlural": "{{value0}} subagents"
@@ -9948,7 +10057,15 @@
           "3cd5374e22": "알림 설정이 아직 로드 중입니다.",
           "b6a994e36e": "알림음을 재생할 수 없습니다.",
           "c0692baa52": "사용자 정의 파일 선택",
-          "ac80d97e02": "사용자 정의 파일 변경"
+          "ac80d97e02": "사용자 정의 파일 변경",
+          "56b836215c": "알림 권한을 확인하는 중…",
+          "fd84d3e9b8": "알림이 활성화되었습니다",
+          "4f7bce5644": "에이전트가 완료되거나 터미널에 주의가 필요할 때 macOS가 알려 줍니다.",
+          "95d99b52fa": "Orca 알림 허용",
+          "94562ba367": "macOS가 권한을 요청하고 있습니다. 대화 상자에서 허용을 클릭하면 이 단계가 자동으로 업데이트됩니다.",
+          "4f6a1da718": "시스템 설정 열기",
+          "90b5d2e363": "macOS가 Orca 알림을 전달하지 않고 있습니다",
+          "2c47f5465f": "시스템 설정에서 Orca에 대한 알림 허용을 켜세요. 활성화되면 이 단계가 자동으로 업데이트됩니다."
         },
         "OnboardingFlow": {
           "1b5e182e9f": "Orca에 오신 것을 환영합니다",
@@ -10074,6 +10191,17 @@
           "windowsDefault": "Windows 기본값",
           "rightClickBehavior": "오른쪽 클릭 동작",
           "rightClickBehaviorDescription": "Windows에서 익숙한 terminal 마우스 동작을 선택하세요."
+        },
+        "mac": {
+          "notification": {
+            "permission": {
+              "card": {
+                "f696515944": "macOS 대화 상자에서 허용을 클릭하세요.",
+                "3d18cf71f9": "자동으로 업데이트됩니다.",
+                "721d2bedb6": "시스템 설정에서 Orca에 대한 알림 허용을 켜세요."
+              }
+            }
+          }
         }
       },
       "new": {
@@ -10369,6 +10497,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "플로팅 워크스페이스 표시",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "플로팅 워크스페이스 최소화",
             "bfe7809a70": "{{value0}} 플로팅 워크스페이스({{value1}})"
           },
@@ -11737,7 +11866,7 @@
             "f2d0c22d67": "주석 {{value0}} 삭제",
             "11c5084aa2": "주석 지우기",
             "734e4343ec": "브라우저 주석 지우기",
-            "95af781091": "새 agent에게 피드백 보내기",
+            "95af781091": "agent에게 피드백 보내기",
             "ac39b9366b": "보내기",
             "a3508d7e6e": "{{value0}} 주석{{value1}}이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요.",
             "f796c774a4": "탐색을 시작하려면 위에 URL을 입력하세요.",
@@ -12398,6 +12527,158 @@
         "contextMenu": {
           "copy": "복사"
         }
+      },
+      "orca": {
+        "profiles": {
+          "switcher": {
+            "cloud": {
+              "unavailable": "클라우드 로그인을 사용할 수 없습니다"
+            },
+            "reconnect": "프로필 다시 연결",
+            "connect": "프로필 연결",
+            "organization": "조직",
+            "create": {
+              "profile": {
+                "for": {
+                  "org": "조직용 프로필 만들기"
+                }
+              }
+            },
+            "signout": "로그아웃",
+            "16e3681072": "새 로컬 프로필",
+            "e3b91a3d90": "프로젝트와 워크트리를 분리할 빈 프로필을 만듭니다.",
+            "f322e1f4d6": "프로필 이름",
+            "cfa59f8ad1": "만들고 전환",
+            "b4f9d1125d": "로컬",
+            "4815f7d163": "프로필 전환",
+            "d00d853e2a": "프로필 관리",
+            "c106c674fe": "새 로컬 프로필",
+            "account": "계정",
+            "org": {
+              "members": "조직 구성원"
+            }
+          },
+          "management": {
+            "04e7bd2a23": "전송",
+            "128c7dfe64": "복사 대상",
+            "df8b7d876b": "이동 대상",
+            "9aa26347b3": "프로젝트를 이동했습니다",
+            "816ce624b6": "프로젝트를 복사했습니다",
+            "2c45bda8d3": "프로필 관리",
+            "2db945e4a0": "활성 프로필의 프로젝트를 다른 로컬 프로필로 복사하거나 이동합니다.",
+            "8668cb2946": "이 프로필에는 프로젝트가 없습니다.",
+            "93034915ab": "프로젝트를 복사하려면 먼저 다른 프로필을 만드세요.",
+            "projectCountSingular": "{{count}}개의 프로젝트",
+            "projectCountPlural": "{{count}}개의 프로젝트"
+          },
+          "project": {
+            "transfer": {
+              "confirm": {
+                "move": {
+                  "title": "프로젝트를 이동하시겠습니까?",
+                  "description": "{{repoName}}을(를) {{targetName}}(으)로 이동합니다. Orca가 {{activeProfileName}}에서 제거하고 파일은 그대로 유지한 채 {{targetName}}(으)로 다시 시작합니다.",
+                  "action": "프로젝트 이동"
+                },
+                "copy": {
+                  "title": "프로젝트를 복사하시겠습니까?",
+                  "description": "{{repoName}}을(를) {{targetName}}(으)로 복사합니다. 두 프로필은 같은 파일을 가리키며 Orca 메타데이터는 별도로 유지됩니다.",
+                  "action": "프로젝트 복사"
+                },
+                "live": {
+                  "work": "이 프로젝트에서 진행 중인 작업"
+                },
+                "cancel": "취소",
+                "terminalSingular": "{{count}}개의 실행 중인 터미널 탭",
+                "terminalPlural": "{{count}}개의 실행 중인 터미널 탭",
+                "agentSingular": "{{count}}개의 활성 에이전트",
+                "agentPlural": "{{count}}개의 활성 에이전트",
+                "browserSingular": "{{count}}개의 브라우저 워크스페이스",
+                "browserPlural": "{{count}}개의 브라우저 워크스페이스"
+              }
+            }
+          },
+          "signout": {
+            "confirm": {
+              "title": "로그아웃하시겠습니까?",
+              "description": "{{profileName}}에서 로그아웃하고 해당 프로젝트, 워크트리 및 로컬 메타데이터는 이 기기에 유지합니다.",
+              "cancel": "취소",
+              "action": "로그아웃"
+            }
+          },
+          "switch": {
+            "confirm": {
+              "target": "선택한 프로필",
+              "title": "프로필을 전환하시겠습니까?",
+              "description": "{{targetName}}(으)로 전환하면 Orca가 다시 시작되고 {{activeProfileName}}의 워크스페이스가 다시 로드됩니다.",
+              "live": {
+                "work": "이 프로필에서 진행 중인 작업"
+              },
+              "cancel": "취소",
+              "switch": "프로필 전환",
+              "terminalSingular": "{{count}}개의 실행 중인 터미널 탭",
+              "terminalPlural": "{{count}}개의 실행 중인 터미널 탭",
+              "agentSingular": "{{count}}개의 활성 에이전트",
+              "agentPlural": "{{count}}개의 활성 에이전트",
+              "browserSingular": "{{count}}개의 브라우저 워크스페이스",
+              "browserPlural": "{{count}}개의 브라우저 워크스페이스"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "역할",
+                "owner": "소유자",
+                "admin": "관리자",
+                "member": "구성원"
+              },
+              "not": {
+                "signed": {
+                  "in": "아직 Orca에 로그인하지 않았습니다."
+                }
+              },
+              "remove": {
+                "confirm": "삭제",
+                "cancel": "취소",
+                "label": "구성원 삭제"
+              },
+              "title": "조직 구성원",
+              "load": {
+                "error": "조직 구성원을 불러오지 못했습니다."
+              },
+              "retry": "다시 시도",
+              "pending": {
+                "title": "대기 중인 초대",
+                "revoke": "철회"
+              },
+              "invite": {
+                "title": "초대",
+                "placeholder": "teammate@example.com",
+                "role": "초대 역할",
+                "submit": "보내기"
+              },
+              "error": {
+                "forbidden": "현재 역할로는 이 작업을 수행할 수 없습니다.",
+                "conflict": "이미 구성원이거나 초대되었습니다.",
+                "remove": {
+                  "self": "자신은 삭제할 수 없습니다."
+                },
+                "own": {
+                  "role": "자신의 역할은 변경할 수 없습니다."
+                },
+                "not": {
+                  "found": "해당 구성원이 더 이상 이 조직에 없습니다."
+                },
+                "reconnect": "구성원을 관리하려면 프로필을 다시 연결하세요.",
+                "unconfigured": "이 빌드에서는 조직 관리를 사용할 수 없습니다.",
+                "failed": "문제가 발생했습니다. 다시 시도하세요."
+              },
+              "subtitle": {
+                "named": "{{orgName}}에서 Orca로 협업할 수 있는 사용자입니다.",
+                "default": "조직에서 Orca로 협업할 수 있는 사용자입니다."
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {
@@ -12430,7 +12711,10 @@
         "noSkills": "어울리는 스킬 없음",
         "localAttachmentUnsupported": "원격 세션에는 로컬 첨부 파일을 사용할 수 없습니다.",
         "removeAttachment": "첨부파일 삭제",
-        "pastedImageLabel": "붙여넣은 이미지"
+        "pastedImageLabel": "붙여넣은 이미지",
+        "imagePasteFailed": "Image paste failed.",
+        "worktreeNotReady": "Worktree not ready — try again in a moment.",
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "실행 중…",

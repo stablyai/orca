@@ -42,6 +42,7 @@ import type { RemoteOpKind } from '@/components/right-sidebar/source-control-pri
 import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
 import {
   isNonFastForwardRemoteError,
+  markSyncPushStageError,
   resolveRemoteOperationErrorMessage
 } from '@/lib/source-control-remote-error'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
@@ -3848,9 +3849,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           await pushRuntimeGit(context, { pushTarget, forceWithLease: true })
           pushed = true
         } catch (error) {
-          toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
+          toast.error(
+            resolveRemoteOperationErrorMessage(error, {
+              isSync: true,
+              isSyncPushStage: true
+            })
+          )
           pushStageToastShown = true
-          throw error
+          throw markSyncPushStageError(error)
         }
       } else {
         await pullRuntimeGit(context, pushTarget)
@@ -3867,9 +3873,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             // Why: format under the user-facing operation (sync) rather than
             // the inner step (push) — the user clicked Sync and shouldn't see
             // a "Push failed" toast for a step they didn't directly invoke.
-            toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
+            toast.error(
+              resolveRemoteOperationErrorMessage(error, {
+                isSync: true,
+                isSyncPushStage: true
+              })
+            )
             pushStageToastShown = true
-            throw error
+            throw markSyncPushStageError(error)
           }
         }
       }

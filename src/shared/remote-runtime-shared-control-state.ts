@@ -9,6 +9,7 @@ import type {
   SharedControlReadyWaiter
 } from './remote-runtime-shared-control-types'
 import { getSubscriptionId, isEndResult } from './remote-runtime-shared-control-protocol'
+import { tagRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
 
 export function buildSharedControlDiagnostics(args: {
   state: SharedControlConnectionState
@@ -149,7 +150,14 @@ export function handleSharedControlSubscriptionResponse(
       subscription.remoteSubscriptionId = subscriptionId
     }
   }
-  subscription.callbacks.onResponse(response)
+  let delivered = response
+  if (subscription.pendingReplayTag) {
+    subscription.pendingReplayTag = false
+    if (response.ok) {
+      delivered = tagRuntimeSubscriptionReplayResponse(response)
+    }
+  }
+  subscription.callbacks.onResponse(delivered)
   if (response.ok && isEndResult(response.result)) {
     finishSharedControlSubscription(subscriptions, subscription, false)
   }

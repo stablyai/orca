@@ -654,14 +654,15 @@ export async function searchRuntimeFiles(
 
 export async function listRuntimeFiles(
   context: RuntimeFileOperationArgs,
-  args: { rootPath: string; excludePaths?: string[] }
+  args: { rootPath: string; excludePaths?: string[]; requestToken?: string }
 ): Promise<string[]> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId) {
     return window.api.fs.listFiles({
       rootPath: args.rootPath,
       connectionId: context.connectionId,
-      excludePaths: args.excludePaths
+      excludePaths: args.excludePaths,
+      requestToken: args.requestToken
     })
   }
   return callRuntimeRpc<string[]>(
@@ -673,6 +674,24 @@ export async function listRuntimeFiles(
     },
     { timeoutMs: 15_000 }
   )
+}
+
+/**
+ * Best-effort abort of an in-flight listRuntimeFiles call (#7721). Switching
+ * workspaces must stop the previous workspace's full-tree scan — over SSH an
+ * abandoned scan keeps loading the relay and starves fs.readDir/fs.stat.
+ */
+export function cancelRuntimeFileList(
+  context: RuntimeFileOperationArgs,
+  requestToken: string
+): void {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind !== 'environment' || !context.worktreeId) {
+    void window.api.fs.cancelListFiles({ requestToken }).catch(() => {
+      /* cancellation is advisory; the request path has its own timeouts */
+    })
+  }
+  // Environment runtimes bound files.listAll with their own RPC timeout.
 }
 
 export async function listRuntimeMarkdownDocuments(

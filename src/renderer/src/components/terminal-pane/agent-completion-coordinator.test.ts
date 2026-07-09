@@ -115,6 +115,7 @@ describe('agent completion coordinator', () => {
       shouldPollProcessCadence: () => false
     })
 
+    coordinator.startProcessTracking()
     coordinator.observeTitle('Codex working')
     await vi.advanceTimersByTimeAsync(60_000)
 
@@ -136,6 +137,7 @@ describe('agent completion coordinator', () => {
       shouldPollProcessCadence: () => true
     })
 
+    coordinator.startProcessTracking()
     coordinator.observeTitle('Codex working')
     await vi.advanceTimersByTimeAsync(60_000)
 
@@ -156,6 +158,7 @@ describe('agent completion coordinator', () => {
       shouldPollProcessCadence: () => visible
     })
 
+    coordinator.startProcessTracking()
     coordinator.observeTitle('Codex working')
     // First hidden poll runs and arms the next 3s backstop timer.
     await vi.advanceTimersByTimeAsync(3_000)
@@ -188,6 +191,7 @@ describe('agent completion coordinator', () => {
       shouldPollProcessCadence: () => false
     })
 
+    coordinator.startProcessTracking()
     coordinator.observeTitle('Codex working')
     await vi.advanceTimersByTimeAsync(3_000)
 

@@ -7,7 +7,11 @@ import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
-import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  isAiVaultSessionRecoverableEmpty,
+  type AiVaultScope,
+  type AiVaultSession
+} from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { SessionTime } from './AiVaultSessionDetails'
 import { sessionModelLabel } from './ai-vault-session-display'
@@ -68,6 +72,17 @@ export function SessionMetadata({
                     '{{value0}} subagents',
                     { value0: session.subagentCount }
                   )}
+            </span>
+          </>
+        ) : null}
+        {isAiVaultSessionRecoverableEmpty(session) ? (
+          <>
+            <span className="shrink-0 text-muted-foreground/55">·</span>
+            <span className="shrink-0 rounded-sm border border-dashed border-border/70 px-1 py-0 text-[10px] font-medium leading-4 text-muted-foreground">
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.recoverableBadge',
+                'Not saved'
+              )}
             </span>
           </>
         ) : null}

@@ -13,10 +13,16 @@ export type DraftPasteReadySignal =
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
 
+export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
+
 export type TuiAgentConfig = {
   detectCmd: string
   /** Additional executable names that identify the same agent on PATH. */
   detectCmdAliases?: readonly string[]
+  /** Other commands that must also be present before this agent counts as installed. */
+  detectRequiredCommands?: readonly string[]
+  /** Detection runtimes where this launch mode is not available as a detected agent. */
+  detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
   launchCmd: string
   /** Platform-specific launch command when the public binary name differs. */
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
@@ -71,10 +77,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   },
   'claude-agent-teams': {
     // Why: this is an Orca-provided launch mode, not a separate upstream
-    // binary. Detection follows the Orca CLI, while the wrapper validates the
-    // real Claude binary when it starts.
+    // binary. Detection follows the Orca CLI and requires Claude below.
     detectCmd: 'orca',
     detectCmdAliases: ['orca-dev', 'orca-ide'],
+    // Why: the Orca shim alone exists on fresh installs. Require Claude too so
+    // onboarding does not report Agent Teams when no agent CLI is installed.
+    detectRequiredCommands: ['claude'],
+    // Why: native Windows and WSL use Claude's in-process Agent Teams fallback,
+    // not the Orca native-pane/tmux-shim wrapper exposed by this agent entry.
+    detectUnsupportedRuntimes: ['win32', 'wsl'],
     launchCmd: 'orca claude-teams',
     launchCmdByPlatform: {
       linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,

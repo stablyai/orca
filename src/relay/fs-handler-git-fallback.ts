@@ -7,6 +7,7 @@
  * a git-focused app.
  */
 import { spawn } from 'node:child_process'
+import { fileListingCancellationError } from '../shared/file-listing-cancellation'
 import type { SearchOptions, SearchResult } from './fs-handler-utils'
 import { buildGitLsFilesArgsForQuickOpen } from '../shared/quick-open-filter'
 import { expandQuickOpenGitFilesWithNestedRepos } from '../shared/quick-open-readdir-walk'
@@ -31,8 +32,13 @@ import { buildRelayCommandEnv } from './relay-command-env'
  */
 export function listFilesWithGit(
   rootPath: string,
-  excludePathPrefixes: readonly string[] = []
+  excludePathPrefixes: readonly string[] = [],
+  options: { signal?: AbortSignal } = {}
 ): Promise<string[]> {
+  const { signal } = options
+  if (signal?.aborted) {
+    return Promise.reject(fileListingCancellationError(signal))
+  }
   const gitPaths = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
@@ -145,7 +151,7 @@ export function listFilesWithGit(
     })
   }
 
-  const killSurvivors = (): void => {
+  const killSurvivors = (reason: string): void => {
     // Why: Promise.all returns after the first failed pass, but the sibling
     // git process can keep streaming on SSH unless we cancel it explicitly.
     for (const entry of children) {
@@ -155,21 +161,34 @@ export function listFilesWithGit(
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         entry.child.kill()
       }
-      entry.reject(new Error('git ls-files canceled after sibling failure'))
+      entry.reject(new Error(reason))
     }
   }
+
+  // Why: a cancelled scan (workspace switch, superseded request) must stop
+  // its git children right away instead of streaming a huge tree the caller
+  // has already abandoned over the shared SSH channel.
+  const onAbort = (): void => killSurvivors('git ls-files cancelled')
+  signal?.addEventListener('abort', onAbort, { once: true })
 
   return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
     .then(() =>
       expandQuickOpenGitFilesWithNestedRepos({
         rootPath,
         gitPaths,
-        excludePathPrefixes
+        excludePathPrefixes,
+        signal
       })
     )
     .catch((err) => {
-      killSurvivors()
+      killSurvivors('git ls-files canceled after sibling failure')
+      if (signal?.aborted) {
+        throw fileListingCancellationError(signal)
+      }
       throw err
+    })
+    .finally(() => {
+      signal?.removeEventListener('abort', onAbort)
     })
 }
 

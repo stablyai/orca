@@ -37,6 +37,10 @@ export const getActionDescriptions = createLocalizedCatalog(
       'auto.components.settings.source.control.action.recipe.options.fixCommitFailure',
       'Start an agent when a commit hook or git commit fails.'
     ),
+    fixPushFailure: translate(
+      'auto.components.settings.source.control.action.recipe.options.fixPushFailure',
+      'Start an agent when a pre-push hook or git push fails.'
+    ),
     fixChecks: translate(
       'auto.components.settings.source.control.action.recipe.options.fixChecks',
       'Start an agent from failed hosted-review checks.'

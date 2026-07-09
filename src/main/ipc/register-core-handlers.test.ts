@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  getPathMock,
+  listEnvironmentsMock,
+  callRuntimeEnvironmentMock,
   registerCliHandlersMock,
   registerPreflightHandlersMock,
   registerClaudeUsageHandlersMock,
@@ -28,6 +31,7 @@ const {
   registerRuntimeEnvironmentHandlersMock,
   registerEphemeralVmHandlersMock,
   registerAiVaultHandlersMock,
+  registerOrcaProfileHandlersMock,
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
@@ -57,6 +61,9 @@ const {
   registerEmulatorFrameStreamHandlersMock,
   registerEmulatorVideoStreamHandlersMock
 } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/test/user-data'),
+  listEnvironmentsMock: vi.fn(() => []),
+  callRuntimeEnvironmentMock: vi.fn(),
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
   registerClaudeUsageHandlersMock: vi.fn(),
@@ -84,6 +91,7 @@ const {
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
   registerEphemeralVmHandlersMock: vi.fn(),
   registerAiVaultHandlersMock: vi.fn(),
+  registerOrcaProfileHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
@@ -112,6 +120,20 @@ const {
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
   registerEmulatorVideoStreamHandlersMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: getPathMock
+  }
+}))
+
+vi.mock('../../shared/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
+}))
+
+vi.mock('./runtime-environment-transport-routing', () => ({
+  callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 
 vi.mock('./onboarding', () => ({
@@ -263,6 +285,10 @@ vi.mock('./ai-vault', () => ({
   registerAiVaultHandlers: registerAiVaultHandlersMock
 }))
 
+vi.mock('./orca-profiles', () => ({
+  registerOrcaProfileHandlers: registerOrcaProfileHandlersMock
+}))
+
 vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
@@ -326,6 +352,11 @@ import { registerCoreHandlers } from './register-core-handlers'
 
 describe('registerCoreHandlers', () => {
   beforeEach(() => {
+    getPathMock.mockReset()
+    getPathMock.mockReturnValue('/test/user-data')
+    listEnvironmentsMock.mockReset()
+    listEnvironmentsMock.mockReturnValue([])
+    callRuntimeEnvironmentMock.mockReset()
     registerCliHandlersMock.mockReset()
     registerPreflightHandlersMock.mockReset()
     registerClaudeUsageHandlersMock.mockReset()
@@ -353,6 +384,7 @@ describe('registerCoreHandlers', () => {
     registerRuntimeEnvironmentHandlersMock.mockReset()
     registerEphemeralVmHandlersMock.mockReset()
     registerAiVaultHandlersMock.mockReset()
+    registerOrcaProfileHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
@@ -382,7 +414,7 @@ describe('registerCoreHandlers', () => {
     registerEmulatorVideoStreamHandlersMock.mockReset()
   })
 
-  it('passes the store through to handler registrars that need it', () => {
+  it('passes the store through to handler registrars that need it', async () => {
     const store = { marker: 'store' }
     const runtime = { marker: 'runtime', getAgentBrowserBridge: () => null }
     const stats = { marker: 'stats' }
@@ -415,6 +447,14 @@ describe('registerCoreHandlers', () => {
       { getAdditionalAiVaultCodexHomePaths, onBeforeRelaunch }
     )
 
+    const aiVaultOptions = registerAiVaultHandlersMock.mock.calls[0]?.[0]
+    expect(aiVaultOptions).toBeDefined()
+
+    callRuntimeEnvironmentMock.mockResolvedValueOnce({
+      ok: true,
+      result: { sessions: 'bad-shape' }
+    })
+
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
@@ -443,6 +483,7 @@ describe('registerCoreHandlers', () => {
     expect(registerWorkspacePortHandlersMock).toHaveBeenCalledWith(store)
     expect(registerLocalhostWorktreeLabelHandlersMock).toHaveBeenCalledWith(store)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerOrcaProfileHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)
     expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
@@ -451,9 +492,14 @@ describe('registerCoreHandlers', () => {
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
     expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store)
-    expect(registerAiVaultHandlersMock).toHaveBeenCalledWith({
-      getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths
-    })
+    expect(registerAiVaultHandlersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,
+        getActiveRuntimeAiVaultHostInfos: expect.any(Function),
+        scanRuntimeAiVaultSessions: expect.any(Function)
+      })
+    )
+    expect(aiVaultOptions.getActiveRuntimeAiVaultHostInfos()).toEqual([])
     expect(registerNativeChatHandlersMock).toHaveBeenCalled()
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
@@ -466,6 +512,40 @@ describe('registerCoreHandlers', () => {
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
     expect(registerSpeechHandlersMock).toHaveBeenCalledWith(store)
+
+    await expect(
+      aiVaultOptions.scanRuntimeAiVaultSessions(
+        'env-123',
+        {
+          limit: 10,
+          scopePaths: ['/workspace']
+        },
+        { timeoutMs: 3000 }
+      )
+    ).resolves.toEqual({
+      sessions: [],
+      issues: [
+        expect.objectContaining({
+          executionHostId: 'runtime:env-123',
+          agent: 'codex',
+          path: 'env-123',
+          message: expect.stringContaining('Invalid aiVault.listSessions response')
+        })
+      ],
+      scannedAt: expect.any(String)
+    })
+    expect(callRuntimeEnvironmentMock).toHaveBeenCalledWith(
+      '/test/user-data',
+      'env-123',
+      'aiVault.listSessions',
+      {
+        limit: 10,
+        force: undefined,
+        scopePaths: ['/workspace'],
+        executionHostId: 'runtime:env-123'
+      },
+      3000
+    )
   })
 
   it('only registers IPC handlers once but always updates web contents id', () => {

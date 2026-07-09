@@ -44,14 +44,20 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 //                         `?25l` when the cursor was hidden at snapshot time;
 //                         without an explicit `?25h` here the cursor stays
 //                         invisible in the restored terminal)
-//   1000/1002/1003/1006 — mouse reporting variants
+//   9/1000/1002/1003    — mouse reporting protocols
+//   1006/1016           — SGR mouse encodings
 //   1004                — focus event reporting (the actual bug source)
 //   2004                — bracketed paste
 //   <99u/=0u            — Kitty keyboard flags pushed by TUIs such as Codex
 export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
 export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+// Every mouse mode the daemon's buildRehydrateSequences can re-arm from a
+// snapshot: reporting protocols (9/1000/1002/1003) and SGR encodings
+// (1006/1016).
+export const RESET_MOUSE_REPORTING =
+  '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
 
-export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l`
+export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l\x1b[?2004l`
 
 // Why: hidden-output recovery replays a snapshot of the same live renderer
 // session. Keep cursor/focus cleanup, but preserve Kitty keyboard flags that
@@ -59,7 +65,7 @@ export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KIT
 export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
-// full POST_REPLAY_MODE_RESET bundle there. The default still clears the two
+// full POST_REPLAY_MODE_RESET bundle there. The default still clears the
 // stale mode bits most harmful to a plain shell after a TUI exits badly:
 //
 //   0 q  — DECSCUSR cursor style/blink reset: raw replay can contain a stale
@@ -73,17 +79,46 @@ export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x
 //   1004 — focus event reporting: snapshots can preserve focus reporting from
 //          a no-longer-running TUI; reset by default so shells do not receive
 //          stray focus-in/focus-out bytes.
+//   mouse — the daemon's rehydrateSequences re-arm the mouse mode observed
+//           before an uncleanly-killed TUI, so every reattach resurrects it;
+//           a plain shell then echoes motion reports (`35;x;yM`) as literal
+//           input on each pointer move. Live agents keep mouse modes via
+//           POST_REPLAY_LIVE_AGENT_REATTACH_RESET.
 //   <99u/=0u — Kitty keyboard mode is renderer-side xterm state; stale copies
 //              can make the next Ctrl+C encode as CSI-u after reattach.
-export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1004l`
+export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l`
 
 // Why: a live agent TUI legitimately owns focus reporting; resetting `?1004h`
 // would suppress the post-reattach focus-in the agent needs to move its real
-// cursor back to the input caret (the IME anchor). Cursor visibility is still
-// reset: agent detection can false-positive on a dead TUI's leftovers, and a
-// permanently invisible shell cursor is far worse than the brief flash a live
-// agent re-hides on its post-reattach SIGWINCH repaint.
+// cursor back to the input caret (the IME anchor).
 export const POST_REPLAY_LIVE_AGENT_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h`
+
+// Why: DECTCEM applies in emission order, so the payload's last ?25l/?25h is
+// the state the TUI left the cursor in.
+export function replayPayloadEndsWithCursorHidden(payload: string): boolean {
+  const hideIndex = payload.lastIndexOf('\x1b[?25l')
+  return hideIndex !== -1 && hideIndex > payload.lastIndexOf('\x1b[?25h')
+}
+
+// Why: some live agents (Cursor Agent) intentionally hide the real cursor and
+// draw their own caret; re-showing it paints a stray cursor on the parked row.
+// Preserve the payload's own final cursor-visibility state instead of forcing
+// ?25h. Agent detection can still false-positive on a dead TUI's leftovers —
+// the post-replay viewport check in pty-connection re-shows the cursor once
+// the parsed screen disproves a live parked agent, so a shell cannot inherit
+// a permanently invisible cursor.
+export function buildPostReplayLiveAgentReattachReset(payload: string): string {
+  return replayPayloadEndsWithCursorHidden(payload)
+    ? `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+    : POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+}
+
+// Why: hidden-output recovery replays into the same live session. When a live
+// agent still owns the pane it also owns cursor visibility and focus
+// reporting: forcing ?25h re-shows a parked cursor the agent hid on purpose,
+// and ?1004l permanently silences the focus-in the agent needs to unpark
+// (agents only enable ?1004h at startup, so nothing ever re-arms it).
+export const POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET = RESET_TERMINAL_CURSOR_STYLE
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are
