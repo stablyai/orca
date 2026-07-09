@@ -22,8 +22,8 @@ import {
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
-  getResetSummary,
   getUsageBarState,
+  getWindowResetLabel,
   hasActiveProviderUsage,
   UsageBar
 } from '../../../src/components/AccountUsage'
@@ -145,7 +145,6 @@ export default function AccountsScreen() {
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
     const activeSessionBar = getUsageBarState(activeUsage, 'session')
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
-    const activeResetSummary = getResetSummary(activeUsage, now)
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     return (
       <View style={styles.section}>
@@ -173,19 +172,16 @@ export default function AccountsScreen() {
                     usedPercent={activeSessionBar.usedPercent}
                     unavailable={activeSessionBar.unavailable}
                     loading={activeSessionBar.loading}
+                    resetText={getWindowResetLabel(activeUsage, 'session', now)}
                   />
                   <UsageBar
                     label="7d"
                     usedPercent={activeWeeklyBar.usedPercent}
                     unavailable={activeWeeklyBar.unavailable}
                     loading={activeWeeklyBar.loading}
+                    resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
                   />
                 </View>
-              ) : null}
-              {state.activeAccountId === null && activeResetSummary ? (
-                <Text style={styles.resetText} numberOfLines={1}>
-                  {activeResetSummary}
-                </Text>
               ) : null}
             </View>
             <View style={styles.rowTrailing}>
@@ -208,7 +204,6 @@ export default function AccountsScreen() {
               (!isActive && inactiveEntry?.isFetching === true)
             const sessionBar = getUsageBarState(usage, 'session', isFetching)
             const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
-            const resetSummary = getResetSummary(usage, now)
             return (
               <View key={account.id}>
                 <View style={styles.separator} />
@@ -227,19 +222,16 @@ export default function AccountsScreen() {
                         usedPercent={sessionBar.usedPercent}
                         unavailable={sessionBar.unavailable}
                         loading={sessionBar.loading}
+                        resetText={getWindowResetLabel(usage, 'session', now)}
                       />
                       <UsageBar
                         label="7d"
                         usedPercent={weeklyBar.usedPercent}
                         unavailable={weeklyBar.unavailable}
                         loading={weeklyBar.loading}
+                        resetText={getWindowResetLabel(usage, 'weekly', now)}
                       />
                     </View>
-                    {resetSummary ? (
-                      <Text style={styles.resetText} numberOfLines={1}>
-                        {resetSummary}
-                      </Text>
-                    ) : null}
                     {usage?.error ? (
                       <Text style={styles.errorText} numberOfLines={1}>
                         {usage.error}

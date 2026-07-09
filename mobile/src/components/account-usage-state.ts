@@ -141,25 +141,25 @@ function formatResetPhrase(ms: number): string {
 }
 
 /**
- * Builds the reset countdown line shown under the usage bars, e.g.
- * "5h resets in 3h 54m · 7d resets in 6d 7h", or null when no window
- * has a reset timestamp.
+ * Reset countdown for one window, e.g. "Resets in 3h 54m" / "Resets now",
+ * or null when the window has no reset timestamp (so the UI degrades to
+ * today's bars-only layout).
  *
- * Why: reuses the bar labels ("5h"/"7d") instead of desktop's
- * "Session"/"Weekly" headings so the line reads against the bars above it.
- * `now` is a parameter so the function stays pure and unit-testable.
+ * Why: rendered under each bar, so no window label is needed — the copy
+ * matches desktop's status-bar tooltip exactly. `now` is a parameter so
+ * the function stays pure and unit-testable.
  */
-export function getResetSummary(limits: ProviderRateLimits | null, now: number): string | null {
-  const parts: string[] = []
-  const sessionResetsAt = limits?.session?.resetsAt
-  if (sessionResetsAt != null) {
-    parts.push(`5h resets ${formatResetPhrase(sessionResetsAt - now)}`)
+export function getWindowResetLabel(
+  limits: ProviderRateLimits | null,
+  windowKey: 'session' | 'weekly',
+  now: number
+): string | null {
+  const resetsAt = limits?.[windowKey]?.resetsAt
+  if (resetsAt == null) {
+    return null
   }
-  const weeklyResetsAt = limits?.weekly?.resetsAt
-  if (weeklyResetsAt != null) {
-    parts.push(`7d resets ${formatResetPhrase(weeklyResetsAt - now)}`)
-  }
-  return parts.length > 0 ? parts.join(' · ') : null
+  const phrase = formatResetPhrase(resetsAt - now)
+  return phrase === 'now' ? 'Resets now' : `Resets ${phrase}`
 }
 
 // Why: the usage UI must render for the system-default login, not only for
