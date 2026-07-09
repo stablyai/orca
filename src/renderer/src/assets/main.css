@@ -473,12 +473,12 @@
   scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent) transparent;
 }
 
-/* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
+/* Why: no reserved `scrollbar-gutter` — paired with `overflow-y: auto`, a list
+   that fits shows no scrollbar (and no Windows scrollbar arrow buttons), so its
+   rows stay flush with the fixed header controls, matching macOS. The gutter is
+   only taken while actually scrolling. Thumb still fades in on hover. */
 .worktree-sidebar-scrollbar {
-  /* Why: the scrollbar gutter is paint-only in Chromium; this keeps card
-     surfaces clear of Orca's resize handle and right-edge sidebar chrome. */
   padding-right: 4px;
-  scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
 
