@@ -773,8 +773,30 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: see claude/hook-service.ts for rationale. Sourcing refreshes
     // PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps
     // reporting after a restart.
+    'load_hook_endpoint() {',
+    '  endpoint_path="$1"',
+    '  case "$endpoint_path" in',
+    '    *.cmd)',
+    // Why: Windows passes endpoint.cmd into WSL through WSLENV path translation.
+    // Parse only Orca's known assignments; cmd.exe `set` lines are not shell syntax.
+    '      endpoint_cr=$(printf "\\r")',
+    '      while IFS= read -r endpoint_line || [ -n "$endpoint_line" ]; do',
+    '        endpoint_line=${endpoint_line%"$endpoint_cr"}',
+    '        case "$endpoint_line" in',
+    '          "set ORCA_AGENT_HOOK_PORT="*) ORCA_AGENT_HOOK_PORT=${endpoint_line#*=} ;;',
+    '          "set ORCA_AGENT_HOOK_TOKEN="*) ORCA_AGENT_HOOK_TOKEN=${endpoint_line#*=} ;;',
+    '          "set ORCA_AGENT_HOOK_ENV="*) ORCA_AGENT_HOOK_ENV=${endpoint_line#*=} ;;',
+    '          "set ORCA_AGENT_HOOK_VERSION="*) ORCA_AGENT_HOOK_VERSION=${endpoint_line#*=} ;;',
+    '        esac',
+    '      done < "$endpoint_path"',
+    '      ;;',
+    '    *)',
+    '      . "$endpoint_path" 2>/dev/null || :',
+    '      ;;',
+    '  esac',
+    '}',
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    '  load_hook_endpoint "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
@@ -1383,3 +1405,9 @@ export class CodexHookService {
 }
 
 export const codexHookService = new CodexHookService()
+
+export const _internals = {
+  getManagedScript,
+  installManagedHooksIntoWslRuntime,
+  refreshWslRuntimeUserHooks
+}
