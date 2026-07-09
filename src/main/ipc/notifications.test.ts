@@ -15,7 +15,8 @@ const {
   notificationCtorMock,
   notificationIsSupportedMock,
   getAllWindowsMock,
-  shellOpenExternalMock
+  shellOpenExternalMock,
+  setBadgeMock
 } = vi.hoisted(() => {
   const removeHandlerMock = vi.fn()
   const handleMock = vi.fn()
@@ -36,6 +37,7 @@ const {
   const notificationIsSupportedMock = vi.fn(() => true)
   const getAllWindowsMock = vi.fn(() => [])
   const shellOpenExternalMock = vi.fn()
+  const setBadgeMock = vi.fn()
   return {
     removeHandlerMock,
     handleMock,
@@ -47,7 +49,8 @@ const {
     notificationCtorMock,
     notificationIsSupportedMock,
     getAllWindowsMock,
-    shellOpenExternalMock
+    shellOpenExternalMock,
+    setBadgeMock
   }
 })
 
@@ -63,7 +66,10 @@ vi.mock('electron', () => ({
     getAllWindows: getAllWindowsMock
   },
   app: {
-    focus: vi.fn()
+    focus: vi.fn(),
+    dock: {
+      setBadge: setBadgeMock
+    }
   },
   shell: {
     openExternal: shellOpenExternalMock
@@ -101,6 +107,7 @@ describe('registerNotificationHandlers', () => {
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
     shellOpenExternalMock.mockClear()
+    setBadgeMock.mockClear()
   })
 
   afterEach(() => {
@@ -121,6 +128,32 @@ describe('registerNotificationHandlers', () => {
       throw new Error('notifications:dismiss handler not registered')
     }
     return call[1] as (event: unknown, args: unknown) => unknown
+  }
+
+  function getInboxHandler(): (event: unknown) => unknown {
+    const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === 'notifications:getInbox')
+    if (!call) {
+      throw new Error('notifications:getInbox handler not registered')
+    }
+    return call[1] as (event: unknown) => unknown
+  }
+
+  function getMarkInboxReadHandler(): (event: unknown) => unknown {
+    const call = handleMock.mock.calls.find(
+      (c: unknown[]) => c[0] === 'notifications:markInboxRead'
+    )
+    if (!call) {
+      throw new Error('notifications:markInboxRead handler not registered')
+    }
+    return call[1] as (event: unknown) => unknown
+  }
+
+  function getClearInboxHandler(): (event: unknown) => unknown {
+    const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === 'notifications:clearInbox')
+    if (!call) {
+      throw new Error('notifications:clearInbox handler not registered')
+    }
+    return call[1] as (event: unknown) => unknown
   }
 
   function getOpenSystemSettingsHandler(): (event: unknown) => unknown {
@@ -310,6 +343,210 @@ describe('registerNotificationHandlers', () => {
       })
     )
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('records allowed non-test notifications in a bounded inbox', () => {
+    notificationIsSupportedMock.mockReturnValue(false)
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const dispatchHandler = getDispatchHandler()
+    const inboxHandler = getInboxHandler()
+
+    for (let i = 0; i < 24; i++) {
+      vi.advanceTimersByTime(5001)
+      expect(
+        dispatchHandler(
+          {},
+          {
+            source: 'terminal-bell',
+            worktreeId: `repo::wt-${i}`,
+            worktreeLabel: `wt-${i}`,
+            repoLabel: 'orca'
+          }
+        )
+      ).toEqual({ delivered: false, reason: 'not-supported' })
+    }
+
+    vi.advanceTimersByTime(5001)
+    expect(
+      dispatchHandler(
+        {},
+        {
+          source: 'agent-task-complete',
+          notificationId: 'agent:latest',
+          worktreeId: 'repo::wt-latest',
+          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+          repoLabel: 'orca',
+          worktreeLabel: 'feat/notis',
+          agentType: 'codex',
+          agentState: 'done',
+          agentLastAssistantMessage: 'Updated the notification inbox.'
+        }
+      )
+    ).toEqual({ delivered: false, reason: 'not-supported' })
+
+    expect(inboxHandler({})).toMatchObject({
+      supported: true,
+      unreadCount: 20,
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'agent:latest',
+          notificationId: 'agent:latest',
+          source: 'agent-task-complete',
+          title: 'feat/notis - Codex finished',
+          body: 'Updated the notification inbox.',
+          worktreeId: 'repo::wt-latest',
+          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+          repoLabel: 'orca',
+          worktreeLabel: 'feat/notis',
+          unread: true
+        })
+      ])
+    })
+    expect((inboxHandler({}) as { entries: unknown[] }).entries).toHaveLength(20)
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  it('does not record disabled, source-disabled, focused, or cooldown-suppressed dispatches', () => {
+    let notifications = {
+      enabled: false,
+      agentTaskComplete: true,
+      terminalBell: true,
+      suppressWhenFocused: false
+    }
+    registerNotificationHandlers({
+      getSettings: () => ({ notifications })
+    } as never)
+
+    const dispatchHandler = getDispatchHandler()
+    const inboxHandler = getInboxHandler()
+    expect(dispatchHandler({}, { source: 'agent-task-complete' })).toEqual({
+      delivered: false,
+      reason: 'disabled'
+    })
+
+    notifications = {
+      enabled: true,
+      agentTaskComplete: false,
+      terminalBell: true,
+      suppressWhenFocused: false
+    }
+    expect(dispatchHandler({}, { source: 'agent-task-complete' })).toEqual({
+      delivered: false,
+      reason: 'source-disabled'
+    })
+
+    notifications = {
+      enabled: true,
+      agentTaskComplete: true,
+      terminalBell: true,
+      suppressWhenFocused: true
+    }
+    getAllWindowsMock.mockReturnValue([
+      {
+        isDestroyed: () => false,
+        isFocused: () => true
+      } as never
+    ])
+    expect(
+      dispatchHandler(
+        {},
+        { source: 'agent-task-complete', worktreeId: 'repo::focused', isActiveWorktree: true }
+      )
+    ).toEqual({ delivered: false, reason: 'suppressed-focus' })
+
+    getAllWindowsMock.mockReturnValue([])
+    expect(dispatchHandler({}, { source: 'terminal-bell', worktreeId: 'repo::wt1' })).toEqual({
+      delivered: true
+    })
+    expect(dispatchHandler({}, { source: 'terminal-bell', worktreeId: 'repo::wt1' })).toEqual({
+      delivered: false,
+      reason: 'cooldown'
+    })
+
+    expect(inboxHandler({})).toMatchObject({
+      unreadCount: 1,
+      entries: [expect.objectContaining({ worktreeId: 'repo::wt1' })]
+    })
+  })
+
+  it('marks inbox entries read without touching the macOS badge or closing native notifications', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never)
+
+      const dispatchHandler = getDispatchHandler()
+      const markReadHandler = getMarkInboxReadHandler()
+      const clearHandler = getClearInboxHandler()
+      expect(
+        dispatchHandler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1' })
+      ).toEqual({ delivered: true })
+      expect(setBadgeMock).not.toHaveBeenCalled()
+
+      expect(markReadHandler({})).toMatchObject({
+        unreadCount: 0,
+        entries: [expect.objectContaining({ unread: false })]
+      })
+      expect(setBadgeMock).not.toHaveBeenCalled()
+      expect(notificationCloseMock).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(5001)
+      expect(dispatchHandler({}, { source: 'terminal-bell', worktreeId: 'repo::wt2' })).toEqual({
+        delivered: true
+      })
+      expect(setBadgeMock).not.toHaveBeenCalled()
+      expect(clearHandler({})).toEqual({ supported: true, entries: [], unreadCount: 0 })
+      expect(setBadgeMock).not.toHaveBeenCalled()
+      expect(notificationCloseMock).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
+  it('does not touch the dock badge on non-macOS inbox mutations', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    try {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never)
+
+      const dispatchHandler = getDispatchHandler()
+      expect(
+        dispatchHandler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1' })
+      ).toEqual({ delivered: true })
+      expect(getMarkInboxReadHandler()({})).toMatchObject({ unreadCount: 0 })
+      expect(getClearInboxHandler()({})).toEqual({ supported: true, entries: [], unreadCount: 0 })
+      expect(setBadgeMock).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
   })
 
   it('uses the macOS default notification sound when no custom sound is configured', () => {
@@ -929,6 +1166,10 @@ describe('registerNotificationHandlers', () => {
     const dismissHandler = getDismissHandler()
     expect(dismissHandler({}, ['agent:one', 'agent:one', ''])).toEqual({ dismissed: 1 })
 
+    expect(getInboxHandler()({})).toMatchObject({
+      unreadCount: 1,
+      entries: [expect.objectContaining({ notificationId: 'agent:one' })]
+    })
     expect(notificationCloseMock).toHaveBeenCalledTimes(1)
     expect(notificationRemoveListenerMock).toHaveBeenCalledWith('close', expect.any(Function))
     expect(dismissMobileNotification).toHaveBeenCalledTimes(1)

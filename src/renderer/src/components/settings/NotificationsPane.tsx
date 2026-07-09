@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type {
+  GlobalSettings,
+  NotificationInboxEntry,
+  NotificationInboxResult
+} from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, Siren } from 'lucide-react'
+import { BellRing, Bot, Inbox, MailCheck, Siren, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { NotificationSoundSection } from './NotificationSoundSection'
+import { UnreadBadgeSection } from './UnreadBadgeSection'
 import {
   createNotificationVolumeDraftState,
   resolveNotificationVolumeDraftState,
@@ -24,12 +29,113 @@ type NotificationsPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
 
+function getNotificationSourceLabel(source: NotificationInboxEntry['source']): string {
+  switch (source) {
+    case 'agent-task-complete':
+      return translate('auto.components.settings.NotificationsPane.1cbe92dd41', 'Agent task')
+    case 'terminal-bell':
+      return translate('auto.components.settings.NotificationsPane.830de12dfc', 'Terminal bell')
+  }
+}
+
+function getNotificationEntryContext(entry: NotificationInboxEntry): string {
+  const sourceLabel = getNotificationSourceLabel(entry.source)
+  if (entry.repoLabel && entry.worktreeLabel) {
+    return `${sourceLabel} - ${entry.repoLabel} / ${entry.worktreeLabel}`
+  }
+  if (entry.worktreeLabel) {
+    return `${sourceLabel} - ${entry.worktreeLabel}`
+  }
+  if (entry.repoLabel) {
+    return `${sourceLabel} - ${entry.repoLabel}`
+  }
+  return sourceLabel
+}
+
+function formatNotificationInboxTime(createdAt: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(createdAt))
+}
+
 export function NotificationsPane({
   settings,
   updateSettings
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
+  const [inbox, setInbox] = useState<NotificationInboxResult | null>(null)
+  const [inboxLoading, setInboxLoading] = useState(false)
+  const [inboxMutating, setInboxMutating] = useState(false)
+  const [inboxError, setInboxError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadInbox(): Promise<void> {
+      setInboxLoading(true)
+      setInboxError(null)
+      try {
+        const result = await window.api.notifications.getInbox()
+        if (!cancelled) {
+          setInbox(result)
+        }
+      } catch {
+        if (!cancelled) {
+          setInboxError(
+            translate(
+              'auto.components.settings.NotificationsPane.a331f7a7a8',
+              'Could not load recent notifications.'
+            )
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setInboxLoading(false)
+        }
+      }
+    }
+    void loadInbox()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleMarkInboxRead = async (): Promise<void> => {
+    setInboxMutating(true)
+    setInboxError(null)
+    try {
+      setInbox(await window.api.notifications.markInboxRead())
+    } catch {
+      setInboxError(
+        translate(
+          'auto.components.settings.NotificationsPane.679b197b62',
+          'Could not mark notifications as read.'
+        )
+      )
+    } finally {
+      setInboxMutating(false)
+    }
+  }
+
+  const handleClearInbox = async (): Promise<void> => {
+    setInboxMutating(true)
+    setInboxError(null)
+    try {
+      setInbox(await window.api.notifications.clearInbox())
+    } catch {
+      setInboxError(
+        translate(
+          'auto.components.settings.NotificationsPane.1a2a47495a',
+          'Could not clear recent notifications.'
+        )
+      )
+    } finally {
+      setInboxMutating(false)
+    }
+  }
 
   const updateNotificationSettings = async (
     updates: Partial<GlobalSettings['notifications']>
@@ -182,6 +288,113 @@ export function NotificationsPane({
           )}
         </Button>
       </div>
+
+      <Separator />
+
+      <UnreadBadgeSection />
+
+      <Separator />
+
+      <section className="space-y-3 pt-3" aria-labelledby="notification-inbox-heading">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <Inbox className="size-4 text-muted-foreground" />
+            <div className="min-w-0">
+              <h3 id="notification-inbox-heading" className="text-sm font-medium">
+                {translate(
+                  'auto.components.settings.NotificationsPane.30e6463632',
+                  'Notification Inbox'
+                )}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {inbox && inbox.unreadCount > 0
+                  ? translate(
+                      'auto.components.settings.NotificationsPane.1f01232dad',
+                      '{{count}} unread',
+                      { count: inbox.unreadCount }
+                    )
+                  : translate(
+                      'auto.components.settings.NotificationsPane.4b47bbd2bb',
+                      'No unread notifications'
+                    )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="xs"
+              className="gap-1.5"
+              disabled={!inbox || inbox.unreadCount === 0 || inboxMutating}
+              onClick={() => void handleMarkInboxRead()}
+            >
+              <MailCheck className="size-3.5" />
+              {translate('auto.components.settings.NotificationsPane.b9375a63b5', 'Mark Read')}
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              className="gap-1.5"
+              disabled={!inbox || inbox.entries.length === 0 || inboxMutating}
+              onClick={() => void handleClearInbox()}
+            >
+              <Trash2 className="size-3.5" />
+              {translate('auto.components.settings.NotificationsPane.96b751e90c', 'Clear')}
+            </Button>
+          </div>
+        </div>
+
+        {inboxError ? <p className="text-xs text-destructive">{inboxError}</p> : null}
+
+        <div className="space-y-2">
+          {inboxLoading && !inbox ? (
+            <div className="rounded-md border border-border px-3 py-3 text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.NotificationsPane.b6401b8f5f',
+                'Loading recent notifications...'
+              )}
+            </div>
+          ) : inbox && inbox.entries.length > 0 ? (
+            inbox.entries.map((entry) => (
+              <article
+                key={entry.id}
+                className="rounded-md border border-border bg-card px-3 py-2 text-card-foreground"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <h4 className="truncate text-sm font-medium">{entry.title}</h4>
+                      {entry.unread ? (
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                          {translate(
+                            'auto.components.settings.NotificationsPane.bf95906231',
+                            'Unread'
+                          )}
+                        </span>
+                      ) : null}
+                    </div>
+                    {entry.body ? (
+                      <p className="line-clamp-2 text-xs text-muted-foreground">{entry.body}</p>
+                    ) : null}
+                    <p className="text-xs text-muted-foreground">
+                      {getNotificationEntryContext(entry)} -{' '}
+                      {formatNotificationInboxTime(entry.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.NotificationsPane.170f7a1a6a',
+                'No recent notifications'
+              )}
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   )
 }

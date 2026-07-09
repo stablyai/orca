@@ -3040,6 +3040,26 @@ export type NotificationDismissResult = {
   dismissed: number
 }
 
+export type NotificationInboxEntry = {
+  id: string
+  source: Exclude<NotificationEventSource, 'test'>
+  title: string
+  body: string
+  createdAt: number
+  unread: boolean
+  notificationId?: string
+  worktreeId?: string
+  paneKey?: string
+  repoLabel?: string
+  worktreeLabel?: string
+}
+
+export type NotificationInboxResult = {
+  supported: boolean
+  entries: NotificationInboxEntry[]
+  unreadCount: number
+}
+
 export type NotificationSoundResult = {
   played: boolean
   reason?:
