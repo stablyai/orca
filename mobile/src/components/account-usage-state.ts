@@ -117,9 +117,11 @@ export function getUsageBarState(
   }
 }
 
-// Why: mirrors desktop status-bar tooltip.tsx duration formatting so the
-// countdown copy matches across surfaces ("3h 54m", "6d 7h"). Duplicated
-// because the mobile bundle must not import renderer code.
+/**
+ * Why: mirrors desktop status-bar tooltip.tsx duration formatting so the
+ * countdown copy matches across surfaces ("3h 54m", "6d 7h"). Duplicated
+ * because the mobile bundle must not import renderer code.
+ */
 function formatResetPhrase(ms: number): string {
   if (ms <= 0) {
     return 'now'
@@ -138,9 +140,15 @@ function formatResetPhrase(ms: number): string {
   return mins > 0 ? `in ${hours}h ${mins}m` : `in ${hours}h`
 }
 
-// Why: reuses the bar labels ("5h"/"7d") instead of desktop's
-// "Session"/"Weekly" headings so the line reads against the bars above it.
-// `now` is a parameter so the function stays pure and unit-testable.
+/**
+ * Builds the reset countdown line shown under the usage bars, e.g.
+ * "5h resets in 3h 54m · 7d resets in 6d 7h", or null when no window
+ * has a reset timestamp.
+ *
+ * Why: reuses the bar labels ("5h"/"7d") instead of desktop's
+ * "Session"/"Weekly" headings so the line reads against the bars above it.
+ * `now` is a parameter so the function stays pure and unit-testable.
+ */
 export function getResetSummary(limits: ProviderRateLimits | null, now: number): string | null {
   const parts: string[] = []
   const sessionResetsAt = limits?.session?.resetsAt
