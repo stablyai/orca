@@ -352,6 +352,25 @@ describe('ghExecFileAsync WSL fallback', () => {
     )
   })
 
+  it('does not start default WSL for cwd-less glab when the fallback is disabled', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock.mockImplementationOnce((_binary, _args, _options, callback) => {
+      callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+    })
+
+    await expect(
+      glabExecFileAsync(['auth', 'status'], { allowDefaultWslFallback: false })
+    ).rejects.toThrow('spawn glab ENOENT')
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'glab',
+      ['auth', 'status'],
+      expect.objectContaining({ cwd: undefined }),
+      expect.any(Function)
+    )
+  })
+
   it('still retries idempotent glab transient failures', async () => {
     execFileMock
       .mockImplementationOnce((_binary, _args, _options, callback) => {
