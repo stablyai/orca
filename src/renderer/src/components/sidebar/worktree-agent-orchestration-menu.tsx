@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Copy, MessagesSquare, Workflow } from 'lucide-react'
+import { Copy, MessagesSquare, Send, Workflow } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenuItem,
@@ -15,6 +15,7 @@ import {
   buildWorktreeGroupAddress,
   resolveTerminalHandleForPaneKey
 } from '@/components/dashboard/agent-row-orchestration-clipboard'
+import type { OrchestrationActionKind } from './agent-row-orchestration-actions'
 
 /** Marker so the worktree context menu can offer agent orchestration actions. */
 export const AGENT_ROW_ORCHESTRATION_ATTR = 'data-agent-row-orchestration'
@@ -81,12 +82,13 @@ export function agentRowOrchestrationDataProps(target: {
 
 type Props = {
   target: AgentRowOrchestrationTarget
+  onRequestAction: (kind: OrchestrationActionKind) => void
 }
 
 // Why: live on the worktree context menu (not a nested Radix ContextMenu) so
 // right-click on an agent row cannot be swallowed by WorktreeContextMenu's
 // capture handler — the same menu users already open on the card.
-export function WorktreeAgentOrchestrationMenuSection({ target }: Props) {
+export function WorktreeAgentOrchestrationMenuSection({ target, onRequestAction }: Props) {
   const worktreeAddress = target.worktreeId ? buildWorktreeGroupAddress(target.worktreeId) : null
   const coordinator = target.coordinatorHandle
 
@@ -135,6 +137,37 @@ export function WorktreeAgentOrchestrationMenuSection({ target }: Props) {
         <DropdownMenuSubContent className="min-w-56">
           <DropdownMenuItem
             onSelect={() => {
+              onRequestAction('dispatch')
+            }}
+          >
+            <Send className="size-3.5" />
+            {translate(
+              'auto.components.dashboard.AgentRowContextMenu.dispatchToAgent',
+              'Dispatch to this agent…'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              onRequestAction('send')
+            }}
+          >
+            <MessagesSquare className="size-3.5" />
+            {translate(
+              'auto.components.dashboard.AgentRowContextMenu.sendToAgent',
+              'Send message to this agent…'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              onRequestAction('ask')
+            }}
+          >
+            <MessagesSquare className="size-3.5" />
+            {translate('auto.components.dashboard.AgentRowContextMenu.askAgent', 'Ask this agent…')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => {
               void copyResolvedHandle(
                 (handle) => handle,
                 translate(
@@ -161,7 +194,7 @@ export function WorktreeAgentOrchestrationMenuSection({ target }: Props) {
               )
             }}
           >
-            <MessagesSquare className="size-3.5" />
+            <Copy className="size-3.5" />
             {translate(
               'auto.components.dashboard.AgentRowContextMenu.copySendCommand',
               'Copy send command'
@@ -178,7 +211,7 @@ export function WorktreeAgentOrchestrationMenuSection({ target }: Props) {
               )
             }}
           >
-            <MessagesSquare className="size-3.5" />
+            <Copy className="size-3.5" />
             {translate(
               'auto.components.dashboard.AgentRowContextMenu.copyAskCommand',
               'Copy ask command'
