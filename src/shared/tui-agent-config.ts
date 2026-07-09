@@ -12,6 +12,7 @@ export type DraftPasteReadySignal =
   | 'render-quiet-after-bracketed-paste'
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
+  | 'process-ready'
 
 export type TuiAgentConfig = {
   detectCmd: string
@@ -306,7 +307,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `--tui` starts the full-screen agent UI Orca is designed to host.
     launchCmd: 'hermes --tui',
     expectedProcess: 'hermes',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: Hermes's TUI (prompt_toolkit) does not emit the DECSET 2004
+    // bracketed-paste handshake that `render-quiet-after-bracketed-paste`
+    // waits for, so the draft paste never fires and the agent sits idle.
+    // Fall back to process-presence + PTY-quiet readiness detection.
+    draftPasteReadySignal: 'process-ready'
   },
   openclaw: {
     detectCmd: 'openclaw',
