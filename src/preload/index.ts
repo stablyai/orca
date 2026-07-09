@@ -3732,7 +3732,7 @@ const api = {
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
       ipcRenderer.invoke('runtime:call', args),
     getTerminalFitOverrides: (): Promise<
-      { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
+      { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
     getTerminalDrivers: (): Promise<
       {
@@ -3753,14 +3753,19 @@ const api = {
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
-        mode: 'mobile-fit' | 'desktop-fit'
+        mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
         cols: number
         rows: number
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { ptyId: string; mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }
+        data: {
+          ptyId: string
+          mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
+          cols: number
+          rows: number
+        }
       ) => callback(data)
       ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)

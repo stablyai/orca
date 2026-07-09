@@ -58,6 +58,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
         getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)

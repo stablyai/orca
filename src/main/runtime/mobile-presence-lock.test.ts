@@ -363,14 +363,17 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
-  it('updateDesktopViewport resizes the source PTY and records desktop geometry', async () => {
+  it('updateDesktopViewport resizes the source PTY without clobbering host restore baseline', async () => {
     const { runtime, ptySizes, resizes } = createRuntime()
 
     expect(await runtime.updateDesktopViewport('pty-1', { cols: 132, rows: 44 })).toBe(true)
 
     expect(ptySizes.get('pty-1')).toEqual({ cols: 132, rows: 44 })
     expect(resizes.at(-1)).toEqual({ ptyId: 'pty-1', cols: 132, rows: 44 })
-    expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 132, rows: 44 })
+    // Why: lastRendererSizes is the host reclaim baseline. Remote control
+    // stashes the pre-remote grid once and must not overwrite it with the
+    // remote pane dims (multi-desktop size arbitration).
+    expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 
   it('updateMobileViewport records viewport without applying layout in desktop mode', async () => {

@@ -15600,6 +15600,47 @@ describe('connectPanePty', () => {
       }
     })
 
+    it('does not control-resize a remote PTY on passive geometry while remote-desktop-fit is active', async () => {
+      // Why (Codex #2): under mobile-fit, remote transport.resize is measurement-only
+      // server-side. remote-desktop-fit is NOT in terminalFitOverrides, so the same
+      // passive ResizeObserver path would claim ownership — must stay silent.
+      const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+      const pane = createPane(2)
+      const observer = installObservedPane(pane)
+      const remotePtyId = 'remote:env-1@@pty-held'
+      try {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport(remotePtyId)
+        transportFactoryQueue.push(transport)
+        const manager = createManager(2)
+        const deps = createDeps({
+          restoredLeafId: LEAF_2,
+          paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+        })
+        pane.fitAddon = {
+          ...pane.fitAddon,
+          proposeDimensions: vi.fn(() => ({ cols: 101, rows: 33 }))
+        } as never
+
+        connectPanePty(pane as never, manager as never, deps as never)
+        await flushAsyncTicks()
+        setFitOverride(remotePtyId, 'remote-desktop-fit', 150, 40)
+        transport.resize.mockClear()
+        vi.mocked(window.api.pty.getSize).mockClear()
+        vi.mocked(window.api.pty.reportGeometry).mockClear()
+
+        observer.trigger()
+        await flushAsyncTicks()
+
+        expect(window.api.pty.getSize).not.toHaveBeenCalled()
+        expect(window.api.pty.reportGeometry).not.toHaveBeenCalled()
+        expect(transport.resize).not.toHaveBeenCalled()
+      } finally {
+        setFitOverride(remotePtyId, 'desktop-fit', 0, 0)
+        observer.restore()
+      }
+    })
+
     it('skips observed desktop reassertion while mobile owns the PTY without a fit override', async () => {
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
       const pane = createPane(2)

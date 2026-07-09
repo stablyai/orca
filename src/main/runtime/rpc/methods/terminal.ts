@@ -561,13 +561,17 @@ async function updateViewportForClient(
   ptyId: string,
   client: TerminalViewportClient,
   viewport: { cols: number; rows: number },
-  defaultType: 'mobile' | 'desktop'
+  defaultType: 'mobile' | 'desktop',
+  intent: 'observe' | 'control' = 'control'
 ): Promise<{ updated: boolean; applied: boolean }> {
   const type = client.type ?? defaultType
   if (type === 'mobile') {
     return runtime.updateMobileViewport(ptyId, client.id, viewport)
   }
-  const updated = await runtime.updateDesktopViewport(ptyId, viewport)
+  const updated = await runtime.updateDesktopViewport(ptyId, viewport, {
+    clientId: client.id,
+    intent
+  })
   return { updated, applied: updated }
 }
 
@@ -1522,12 +1526,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (isMobile && request.client?.id) {
             await runtime.handleMobileSubscribe(ptyId, request.client.id, request.viewport)
           } else if (request.viewport && request.client) {
+            // Why: subscribe only measures. Applying as control would steal
+            // host size the moment a second desktop opens (tug-of-war start).
             await updateViewportForClient(
               runtime,
               ptyId,
               request.client,
               request.viewport,
-              'desktop'
+              'desktop',
+              'observe'
             )
           }
           if (closed || streams.get(request.streamId) !== stream) {
@@ -1535,14 +1542,21 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
 
           if (!isMobile) {
-            stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+            const emitFitHoldForViewer = (): void => {
+              const hold = runtime.getFitHoldForViewer(
+                ptyId,
+                request.client?.id ?? 'remote-unknown'
+              )
               emit({
                 type: 'fit-override-changed',
                 streamId: request.streamId,
-                mode: event.mode,
-                cols: event.cols,
-                rows: event.rows
+                mode: hold.mode,
+                cols: hold.cols,
+                rows: hold.rows
               })
+            }
+            stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, () => {
+              emitFitHoldForViewer()
             })
             stream.unsubscribeDriver = runtime.subscribeToDriverChanges(ptyId, (driver) => {
               emit({
@@ -1581,13 +1595,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const snapshotFrameSeq = serialized?.seq ?? layoutSeq
           const snapshotOutputSeq = serialized?.seq
           if (!isMobile) {
-            const fitOverride = runtime.getTerminalFitOverride(ptyId)
+            const hold = runtime.getFitHoldForViewer(
+              ptyId,
+              request.client?.id ?? 'remote-unknown'
+            )
             emit({
               type: 'fit-override-changed',
               streamId: request.streamId,
-              mode: fitOverride?.mode ?? 'desktop-fit',
-              cols: fitOverride?.cols ?? size?.cols ?? 0,
-              rows: fitOverride?.rows ?? size?.rows ?? 0
+              mode: hold.mode,
+              cols: hold.cols || size?.cols || 0,
+              rows: hold.rows || size?.rows || 0
             })
             emit({
               type: 'driver-changed',
@@ -1808,13 +1825,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data) => {
             outputBatcher.push(data)
           })
-          const unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+          const unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, () => {
             outputBatcher.flush()
+            const hold = runtime.getFitHoldForViewer(ptyId, clientId ?? 'remote-unknown')
             emit({
               type: 'fit-override-changed',
-              mode: event.mode,
-              cols: event.cols,
-              rows: event.rows
+              mode: hold.mode,
+              cols: hold.cols,
+              rows: hold.rows
             })
           })
           runtime.registerSubscriptionCleanup(
@@ -2126,12 +2144,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
         // Legacy fit-override-changed for non-mobile (desktop) subscribers
         unsubscribeFit = !isMobile
-          ? runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+          ? runtime.subscribeToFitOverrideChanges(ptyId, () => {
+              const hold = runtime.getFitHoldForViewer(ptyId, clientId ?? 'remote-unknown')
               emit({
                 type: 'fit-override-changed',
-                mode: event.mode,
-                cols: event.cols,
-                rows: event.rows
+                mode: hold.mode,
+                cols: hold.cols,
+                rows: hold.rows
               })
             })
           : () => {}

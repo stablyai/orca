@@ -153,6 +153,11 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
   }
 
   const provider = normalizeProvider(input.provider) ?? baseRepo.provider ?? headRepo.provider
+  // Why: provider can still be null when remotes are unparseable / non-forge.
+  // Narrow before the switch so switch-exhaustiveness covers every ManualReviewProvider.
+  if (provider == null) {
+    return null
+  }
   // Prefer the pushed branch name (pushTarget, else the tracking upstream on the
   // base remote) so the link matches what exists remotely, not the local name.
   const headBranch =

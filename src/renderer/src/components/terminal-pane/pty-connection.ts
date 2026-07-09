@@ -33,6 +33,7 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import { shouldForwardRemotePassiveGeometryWhileHeld } from './fit-hold-passive-geometry'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
 import { createPtySizeReassertion } from './pty-size-reassertion'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
@@ -3212,10 +3213,16 @@ export function connectPanePty(
       return
     }
     if (isRemoteRuntimePtyId(currentPtyId)) {
-      transport.resize(proposed.cols, proposed.rows)
-    } else {
-      window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
+      // Why: under mobile-fit the server treats desktop viewport as
+      // measurement-only (terminalFitOverrides gate). remote-desktop-fit is
+      // NOT in that map — the same passive ResizeObserver → transport.resize
+      // would arrive as control and re-claim ownership (tug-of-war).
+      if (shouldForwardRemotePassiveGeometryWhileHeld(fitOverride.mode)) {
+        transport.resize(proposed.cols, proposed.rows)
+      }
+      return
     }
+    window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
   }
   const geometryReportObserver =
     typeof ResizeObserver === 'undefined'

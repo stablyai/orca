@@ -429,15 +429,12 @@ export default function TerminalPane({
           (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
           event.ptyId
         )
-      if (event.mode === 'mobile-fit') {
-        // Why: when mobile starts driving, the agent re-renders its output at
-        // phone width and that phone-wrapped byte stream flows live into this
-        // passive watcher's xterm. xterm must shrink to the phone dims now or
-        // the wide desktop grid renders the narrow stream as overlapping,
-        // garbled lines. safeFit honors the active override and parks xterm at
-        // override.cols/rows, matching the incoming stream. rAF lets the DOM
-        // settle before the resize; no loud fallback is needed because the
-        // override branch of safeFit is itself the authoritative resize.
+      if (event.mode === 'mobile-fit' || event.mode === 'remote-desktop-fit') {
+        // Why: when another client owns the grid (phone or remote desktop), the
+        // agent re-renders at that width and the stream flows into this passive
+        // watcher. xterm must shrink to the held dims or the local grid renders
+        // the foreign stream as overlapping/garbled lines. safeFit parks at
+        // override.cols/rows. rAF lets the DOM settle before the resize.
         // Why: override events fan out to every terminal tab; skip the rAF
         // unless this tab has a pane still parked at the wrong grid.
         const panesNeedingFit = getPanesNeedingOverrideFit(
@@ -3180,7 +3177,8 @@ export default function TerminalPane({
         // same local/remote desktop-restore route.
         const driver = getDriverForPty(ptyId)
         const isMobileDriving = driver.kind === 'mobile'
-        const hasFitOverride = getFitOverrideForPty(ptyId) !== null
+        const fitOverride = getFitOverrideForPty(ptyId)
+        const hasFitOverride = fitOverride !== null
         if (!isMobileDriving && !hasFitOverride) {
           return null
         }
@@ -3196,6 +3194,7 @@ export default function TerminalPane({
             key={`mobile-driver-${pane.id}-${ptyId}`}
             driver={driver}
             hasFitOverride={hasFitOverride}
+            fitHoldMode={fitOverride?.mode ?? null}
             rootClassName="mobile-driver-banner"
             onAction={() => restorePaneTerminalFit(pane, ptyId)}
             onAllAction={() => restoreAllTerminalFits(pane)}

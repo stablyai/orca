@@ -24,7 +24,7 @@ type TerminalMultiplexEvent =
   | {
       type: 'fit-override-changed'
       streamId: number
-      mode: 'mobile-fit' | 'desktop-fit'
+      mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
       cols: number
       rows: number
     }
@@ -42,7 +42,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onEnd?: () => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
-    mode: 'mobile-fit' | 'desktop-fit'
+    mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
     cols: number
     rows: number
   }) => void
@@ -304,7 +304,9 @@ class RemoteRuntimeTerminalMultiplexer {
       )
     } else if (event.type === 'fit-override-changed') {
       if (
-        (event.mode !== 'mobile-fit' && event.mode !== 'desktop-fit') ||
+        (event.mode !== 'mobile-fit' &&
+          event.mode !== 'remote-desktop-fit' &&
+          event.mode !== 'desktop-fit') ||
         typeof event.cols !== 'number' ||
         typeof event.rows !== 'number'
       ) {

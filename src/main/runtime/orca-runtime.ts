@@ -716,6 +716,14 @@ import {
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
+import {
+  fitHoldModeForLocalHost,
+  fitHoldModeForViewer,
+  isLocalDesktopOwner,
+  LOCAL_DESKTOP_CLIENT_ID,
+  type DesktopSizeOwner,
+  type TerminalFitHoldMode
+} from './desktop-size-ownership'
 
 function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
@@ -1306,7 +1314,7 @@ type RuntimeNotifier = {
   resumeSleepingAgents?(worktreeId: string): void
   terminalFitOverrideChanged(
     ptyId: string,
-    mode: 'mobile-fit' | 'desktop-fit',
+    mode: TerminalFitHoldMode,
     cols: number,
     rows: number
   ): void
@@ -2101,8 +2109,12 @@ export class OrcaRuntimeService {
   // invoked from resizeForClient and onClientDisconnected/onPtyExit.
   private fitOverrideListeners = new Map<
     string,
-    Set<(event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void>
+    Set<(event: { mode: TerminalFitHoldMode; cols: number; rows: number }) => void>
   >()
+  // Why: multi-desktop size arbitration. Keyed by ptyId → last client that
+  // successfully control-resized the PTY (`local` = host Electron renderer).
+  // Non-owners park via remote-desktop-fit and must not reassert.
+  private desktopSizeOwners = new Map<string, DesktopSizeOwner>()
   private driverListeners = new Map<string, Set<(driver: DriverState) => void>>()
   private subscriptionCleanups = new Map<string, () => void>()
   // Why: index of subscriptionIds by per-WebSocket connectionId so the
@@ -5771,7 +5783,7 @@ export class OrcaRuntimeService {
 
   subscribeToFitOverrideChanges(
     ptyId: string,
-    listener: (event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void
+    listener: (event: { mode: TerminalFitHoldMode; cols: number; rows: number }) => void
   ): () => void {
     return addListenerToMap(this.fitOverrideListeners, ptyId, listener)
   }
@@ -5782,7 +5794,7 @@ export class OrcaRuntimeService {
 
   private notifyFitOverrideListeners(
     ptyId: string,
-    mode: 'mobile-fit' | 'desktop-fit',
+    mode: TerminalFitHoldMode,
     cols: number,
     rows: number
   ): void {
@@ -5793,6 +5805,71 @@ export class OrcaRuntimeService {
     for (const listener of listeners) {
       listener({ mode, cols, rows })
     }
+  }
+
+  // Why: per-viewer fit hold for multi-desktop arbitration. Mobile-fit still
+  // wins when present; otherwise non-owners park at the desktop size owner's
+  // grid and the owner stays free to refit.
+  getFitHoldForViewer(
+    ptyId: string,
+    viewerClientId: string
+  ): { mode: TerminalFitHoldMode; cols: number; rows: number } {
+    const mobile = this.terminalFitOverrides.get(ptyId)
+    if (mobile) {
+      return { mode: 'mobile-fit', cols: mobile.cols, rows: mobile.rows }
+    }
+    const owner = this.desktopSizeOwners.get(ptyId)
+    const size = this.getTerminalSize(ptyId)
+    const cols = owner?.cols ?? size?.cols ?? 0
+    const rows = owner?.rows ?? size?.rows ?? 0
+    if (!owner) {
+      return { mode: 'desktop-fit', cols, rows }
+    }
+    return {
+      mode: fitHoldModeForViewer(owner.clientId, viewerClientId),
+      cols,
+      rows
+    }
+  }
+
+  getDesktopSizeOwner(ptyId: string): DesktopSizeOwner | null {
+    return this.desktopSizeOwners.get(ptyId) ?? null
+  }
+
+  private claimDesktopSizeOwner(ptyId: string, clientId: string, cols: number, rows: number): void {
+    const prev = this.desktopSizeOwners.get(ptyId)
+    if (prev && prev.clientId === clientId && prev.cols === cols && prev.rows === rows) {
+      return
+    }
+    this.desktopSizeOwners.set(ptyId, {
+      clientId,
+      cols,
+      rows,
+      updatedAt: Date.now()
+    })
+    // Why: mobile-fit is a higher-priority hold; do not clobber its park signal
+    // with a desktop multi-client hold while a phone still owns the floor.
+    if (this.terminalFitOverrides.has(ptyId)) {
+      return
+    }
+    const prevHostMode = prev ? fitHoldModeForLocalHost(prev.clientId) : 'desktop-fit'
+    const hostMode = fitHoldModeForLocalHost(clientId)
+    // Why: routine host refits while local still owns must not fan out
+    // desktop-fit events (they trigger renderer cascade suppress). Only
+    // owner flips and remote-held dim changes need a park/release signal.
+    const shouldNotifyHost =
+      prevHostMode !== hostMode ||
+      (hostMode === 'remote-desktop-fit' && (prev?.cols !== cols || prev?.rows !== rows))
+    if (shouldNotifyHost) {
+      this.notifier?.terminalFitOverrideChanged(ptyId, hostMode, cols, rows)
+    }
+    // Why: multiplex viewers each compute their own hold via getFitHoldForViewer;
+    // always notify so remote owner/non-owner streams can re-park or release.
+    this.notifyFitOverrideListeners(ptyId, hostMode, cols, rows)
+  }
+
+  private clearDesktopSizeOwner(ptyId: string): void {
+    this.desktopSizeOwners.delete(ptyId)
   }
 
   serializeTerminalBuffer(
@@ -6983,10 +7060,28 @@ export class OrcaRuntimeService {
     return this.terminalFitOverrides.get(ptyId) ?? null
   }
 
-  getAllTerminalFitOverrides(): Map<string, { mode: 'mobile-fit'; cols: number; rows: number }> {
-    const result = new Map<string, { mode: 'mobile-fit'; cols: number; rows: number }>()
+  getAllTerminalFitOverrides(): Map<
+    string,
+    { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
+  > {
+    const result = new Map<
+      string,
+      { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
+    >()
     for (const [ptyId, override] of this.terminalFitOverrides) {
       result.set(ptyId, { mode: override.mode, cols: override.cols, rows: override.rows })
+    }
+    // Why: host renderer hydrates remote-desktop holds the same way as phone
+    // holds so a reload mid-tug-of-war re-parks instead of reasserting.
+    for (const [ptyId, owner] of this.desktopSizeOwners) {
+      if (result.has(ptyId) || isLocalDesktopOwner(owner.clientId)) {
+        continue
+      }
+      result.set(ptyId, {
+        mode: 'remote-desktop-fit',
+        cols: owner.cols,
+        rows: owner.rows
+      })
     }
     return result
   }
@@ -7223,6 +7318,14 @@ export class OrcaRuntimeService {
       this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
       this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
     }
+    const desktopOwner = this.desktopSizeOwners.get(ptyId)
+    if (desktopOwner && !isLocalDesktopOwner(desktopOwner.clientId)) {
+      this.clearDesktopSizeOwner(ptyId)
+      this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
+      this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
+    } else {
+      this.clearDesktopSizeOwner(ptyId)
+    }
     // Why: clear driver state and notify the renderer so any lock banner on
     // this dead pane unmounts. Without this, the pane shows a stuck banner
     // until tab teardown, and `getDriver(deadPtyId)` would keep returning a
@@ -7387,13 +7490,17 @@ export class OrcaRuntimeService {
   }
 
   // Why: remote desktop clients do not have the local `pty:resize` IPC path.
-  // Their measured xterm size still has to resize the source PTY so TUIs
-  // reflow to the visible client dimensions.
+  // Control-intent viewports claim size ownership so TUIs reflow to the
+  // controlling client's grid; observe-intent (subscribe) only records geometry
+  // so opening a second desktop does not steal size from the host.
   async updateDesktopViewport(
     ptyId: string,
-    viewport: { cols: number; rows: number }
+    viewport: { cols: number; rows: number },
+    options?: { clientId?: string; intent?: 'observe' | 'control' }
   ): Promise<boolean> {
     const { cols, rows } = clampTerminalViewport(viewport.cols, viewport.rows)
+    const clientId = options?.clientId ?? 'remote-unknown'
+    const intent = options?.intent ?? 'control'
     if (this.terminalFitOverrides.has(ptyId)) {
       // Why: remote desktop panes do not have the local pty:reportGeometry
       // IPC. While phone-fit holds the PTY, treat their viewport RPC as a
@@ -7401,8 +7508,28 @@ export class OrcaRuntimeService {
       this.recordRendererGeometry(ptyId, cols, rows)
       return true
     }
+    if (intent === 'observe') {
+      // Why: pure observation — must not touch lastRendererSizes. That map is
+      // the host reclaim baseline; a remote subscribe viewport (e.g. 80×24)
+      // must not pollute restore after a later remote control (100×30).
+      return true
+    }
     if (this.isResizeSuppressed() || this.getDriver(ptyId).kind === 'mobile') {
       return false
+    }
+    // Why: control intent is only sent after the client unparks (intentional
+    // layout change). Passive safeFit while remote-desktop-fit is held is
+    // suppressed client-side, so accepting control here is last-writer among
+    // intentional actors — not the reassertion tug-of-war.
+    // Why: lastRendererSizes is the host restore baseline. Stash the pre-remote
+    // grid once so reclaim does not fall back to the remote dims we are about
+    // to apply.
+    const priorSize = this.getTerminalSize(ptyId)
+    if (priorSize && !this.lastRendererSizes.has(ptyId)) {
+      this.lastRendererSizes.set(ptyId, {
+        cols: priorSize.cols,
+        rows: priorSize.rows
+      })
     }
     let resized = false
     try {
@@ -7413,7 +7540,10 @@ export class OrcaRuntimeService {
     if (!resized) {
       return false
     }
-    this.onExternalPtyResize(ptyId, cols, rows)
+    // Why: do not route through onExternalPtyResize — that claims *local*
+    // ownership and would overwrite lastRendererSizes with remote dims.
+    this.resizeHeadlessTerminal(ptyId, cols, rows)
+    this.claimDesktopSizeOwner(ptyId, clientId, cols, rows)
     return true
   }
 
@@ -7455,6 +7585,29 @@ export class OrcaRuntimeService {
       // switches back to the terminal tab on the phone) must default to
       // phone-fit again, not stay in passive desktop-watch mode.
       this.setMobileDisplayMode(ptyId, 'auto')
+      return true
+    }
+    // Why: multi-desktop size hold (remote client owns the grid). Restore to
+    // host geometry and reclaim local ownership so the host reassertion path
+    // is free again and remotes re-park at the host size.
+    const remoteOwner = this.desktopSizeOwners.get(ptyId)
+    if (remoteOwner && !isLocalDesktopOwner(remoteOwner.clientId)) {
+      const fallback = this.resolveDesktopRestoreTarget(ptyId)
+      const renderer = this.lastRendererSizes.get(ptyId)
+      const cols = renderer?.cols ?? fallback.cols
+      const rows = renderer?.rows ?? fallback.rows
+      let resized = false
+      try {
+        resized = this.ptyController?.resize?.(ptyId, cols, rows) ?? false
+      } catch {
+        resized = false
+      }
+      if (!resized) {
+        return false
+      }
+      this.resizeHeadlessTerminal(ptyId, cols, rows)
+      this.refreshRendererGeometry(ptyId, cols, rows)
+      this.claimDesktopSizeOwner(ptyId, LOCAL_DESKTOP_CLIENT_ID, cols, rows)
       return true
     }
     const heldOverride = this.terminalFitOverrides.get(ptyId)
@@ -8308,6 +8461,8 @@ export class OrcaRuntimeService {
   // Why: called after a desktop renderer path has successfully resized the
   // PTY (local IPC or remote desktop viewport). The runtime mirror must take
   // the same accepted geometry so hidden-output restore parses at PTY width.
+  // Local host resizes also claim desktop size ownership so a later remote
+  // reassert cannot silently keep a stale remote-desktop-fit hold.
   onExternalPtyResize(ptyId: string, cols: number, rows: number): void {
     // The pty:resize IPC handler is supposed to gate via `isResizeSuppressed`
     // before calling here, but defend against callers that don't.
@@ -8327,8 +8482,21 @@ export class OrcaRuntimeService {
     if (activeOverride && activeOverride.cols === cols && activeOverride.rows === rows) {
       return
     }
+    // Why: while a remote desktop owns size, the host renderer parks xterm at
+    // the remote grid and must not reclaim via passive reassertion. Intentional
+    // host layout changes clear the park client-side before calling pty:resize.
+    const desktopOwner = this.desktopSizeOwners.get(ptyId)
+    if (
+      desktopOwner &&
+      !isLocalDesktopOwner(desktopOwner.clientId) &&
+      desktopOwner.cols === cols &&
+      desktopOwner.rows === rows
+    ) {
+      return
+    }
     this.resizeHeadlessTerminal(ptyId, cols, rows)
     this.refreshRendererGeometry(ptyId, cols, rows)
+    this.claimDesktopSizeOwner(ptyId, LOCAL_DESKTOP_CLIENT_ID, cols, rows)
   }
 
   // Why: pty:reportGeometry IPC sibling. The renderer calls this when a

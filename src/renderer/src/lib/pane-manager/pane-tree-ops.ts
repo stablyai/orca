@@ -6,7 +6,11 @@ import type {
   PaneStyleOptions
 } from './pane-manager-types'
 import { createDivider, disposeDivider } from './pane-divider'
-import { getFitOverrideForPty } from './mobile-fit-overrides'
+import {
+  getFitOverrideForPty,
+  setFitOverride,
+  shouldTakeDesktopSizeControl
+} from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import {
   captureTerminalWriteScrollIntent,
@@ -75,22 +79,35 @@ export function safeFit(pane: ManagedPane): void {
   let scrollIntent = null as ReturnType<typeof captureTerminalWriteScrollIntent>
   let shouldRestoreScroll = false
   try {
-    // Why: when a mobile client has resized this PTY to phone dimensions,
-    // the desktop must keep xterm at those dimensions instead of fitting to
-    // the desktop pane geometry. This prevents desktop auto-fit from undoing
-    // the mobile resize. Uses data-pty-id (set by bindPanePtyId) to look up
-    // the override by ptyId directly, avoiding pane ID collisions across tabs.
+    // Why: when another client owns the PTY grid (phone or remote desktop),
+    // park xterm at the held dims instead of fitting to local pane geometry.
+    // remote-desktop-fit releases on intentional local layout change so the
+    // user can reclaim size by dragging a splitter (not via passive reassert).
+    // Uses data-pty-id (set by bindPanePtyId) to look up the override by ptyId
+    // directly, avoiding pane ID collisions across tabs.
     const ptyId = pane.container.dataset.ptyId
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
     if (override) {
-      if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
-        if (canPreserveScrollIntentForFit(pane)) {
-          scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
-          shouldRestoreScroll = true
+      const proposed = getProposedDimensions(pane)
+      if (
+        ptyId &&
+        override.mode === 'remote-desktop-fit' &&
+        shouldTakeDesktopSizeControl(pane.leafId, ptyId, proposed)
+      ) {
+        // Why: clear the local park before fit so onResize is not suppressed
+        // by shouldSuppressDesktopPtyResize / isParked. Server claims this
+        // client as size owner when the control resize arrives.
+        setFitOverride(ptyId, 'desktop-fit', 0, 0)
+      } else {
+        if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
+          if (canPreserveScrollIntentForFit(pane)) {
+            scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+            shouldRestoreScroll = true
+          }
+          pane.terminal.resize(override.cols, override.rows)
         }
-        pane.terminal.resize(override.cols, override.rows)
+        return
       }
-      return
     }
 
     const dims = getProposedDimensions(pane)

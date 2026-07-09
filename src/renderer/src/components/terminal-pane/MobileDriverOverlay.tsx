@@ -3,6 +3,7 @@ import { Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
+import type { FitHoldMode } from '@/lib/pane-manager/mobile-fit-overrides'
 import { shouldFocusMobileDriverAction } from './mobile-driver-overlay-focus'
 import {
   createMobileDriverOverlayCollapseState,
@@ -13,6 +14,8 @@ import { translate } from '@/i18n/i18n'
 type Props = {
   driver: DriverState
   hasFitOverride: boolean
+  /** Distinguishes phone hold vs another desktop client's size ownership. */
+  fitHoldMode?: Exclude<FitHoldMode, 'desktop-fit'> | null
   onAction: () => void | Promise<void>
   onAllAction?: () => void | Promise<void>
   /** Identifier class on the rendered root, used by e2e selectors. */
@@ -25,12 +28,14 @@ type Props = {
 export function MobileDriverOverlay({
   driver,
   hasFitOverride,
+  fitHoldMode = null,
   onAction,
   onAllAction,
   rootClassName
 }: Props): ReactElement | null {
   const isMobileDriving = driver.kind === 'mobile'
   const isHeldAtPhoneFit = !isMobileDriving && hasFitOverride
+  const isRemoteDesktopHold = isHeldAtPhoneFit && fitHoldMode === 'remote-desktop-fit'
   const driverClientId = driver.kind === 'mobile' ? driver.clientId : null
 
   const [collapseState, setCollapseState] = useState(() =>
@@ -90,6 +95,39 @@ export function MobileDriverOverlay({
   }
 
   if (isHeldAtPhoneFit) {
+    if (isRemoteDesktopHold) {
+      return (
+        <LoudOverlay
+          eyebrow={translate(
+            'auto.components.terminal.pane.MobileDriverOverlay.remoteDesktopEyebrow',
+            'Another desktop'
+          )}
+          title={translate(
+            'auto.components.terminal.pane.MobileDriverOverlay.remoteDesktopTitle',
+            'Sized for another desktop'
+          )}
+          body={translate(
+            'auto.components.terminal.pane.MobileDriverOverlay.remoteDesktopBody',
+            'Another Orca window is driving this terminal size. Restore to use your pane size, or drag a splitter to take size control.'
+          )}
+          actionLabel={translate(
+            'auto.components.terminal.pane.MobileDriverOverlay.b3d8e1f42a',
+            'Restore this terminal'
+          )}
+          actionPending={actionPending}
+          allActionLabel={translate(
+            'auto.components.terminal.pane.MobileDriverOverlay.e8c4f2a91b',
+            'Restore all terminals'
+          )}
+          allActionPending={allActionPending}
+          onAction={handleAction}
+          onAllAction={onAllAction ? handleAllAction : undefined}
+          tone="held"
+          rootRef={setOverlayRootRef}
+          rootClassName={rootClassName}
+        />
+      )
+    }
     return (
       <LoudOverlay
         eyebrow={translate(

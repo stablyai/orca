@@ -64,6 +64,7 @@ describe('terminal multiplex RPC', () => {
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
         getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
@@ -130,10 +131,11 @@ describe('terminal multiplex RPC', () => {
           })
         ])
       )
-      expect(runtime.updateDesktopViewport).toHaveBeenCalledWith('pty-1', {
-        cols: 300,
-        rows: 150
-      })
+      expect(runtime.updateDesktopViewport).toHaveBeenCalledWith(
+        'pty-1',
+        { cols: 300, rows: 150 },
+        { clientId: 'desktop-1', intent: 'observe' }
+      )
       expect(handlers.has(5)).toBe(true)
 
       dataListenerRef.current?.('a')
@@ -176,10 +178,11 @@ describe('terminal multiplex RPC', () => {
         )!
       )
       await vi.waitFor(() =>
-        expect(runtime.updateDesktopViewport).toHaveBeenLastCalledWith('pty-1', {
-          cols: 100,
-          rows: 30
-        })
+        expect(runtime.updateDesktopViewport).toHaveBeenLastCalledWith(
+          'pty-1',
+          { cols: 100, rows: 30 },
+          { clientId: 'desktop-1', intent: 'control' }
+        )
       )
 
       const snapshotStartFrame = binaryFrames
@@ -283,6 +286,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -394,6 +398,7 @@ describe('terminal multiplex RPC', () => {
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
         getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
@@ -490,6 +495,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -588,6 +594,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -696,6 +703,7 @@ describe('terminal multiplex RPC', () => {
         cols: 49,
         rows: 20
       }),
+      getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'mobile-fit', cols: 49, rows: 20 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'phone-1' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -792,6 +800,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -879,6 +888,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -968,6 +978,7 @@ describe('terminal multiplex RPC', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
@@ -1054,6 +1065,7 @@ describe('terminal multiplex RPC', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
@@ -1138,6 +1150,7 @@ describe('terminal multiplex RPC', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
@@ -1235,6 +1248,7 @@ describe('terminal multiplex RPC', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
@@ -1476,6 +1490,7 @@ describe('terminal multiplex RPC', () => {
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
         getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
@@ -1585,6 +1600,7 @@ describe('terminal multiplex RPC', () => {
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
         getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
@@ -1702,6 +1718,7 @@ describe('terminal multiplex RPC', () => {
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
         getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
         registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
           cleanups.set(id, cleanup)
