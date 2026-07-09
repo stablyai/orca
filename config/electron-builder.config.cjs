@@ -159,7 +159,7 @@ module.exports = {
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacNotificationStatusHelper(
-        join(resourcesDir, 'orca-notification-status'),
+        join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
         context.packager
       )
     }
@@ -251,11 +251,16 @@ module.exports = {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
       },
+      featureWallResources
+    ],
+    // Why: the notification-status helper must execute from Contents/MacOS —
+    // on macOS 26 UNUserNotificationCenter aborts (bundleProxyForCurrentProcess
+    // is nil) for executables launched out of Contents/Resources (#7929).
+    extraFiles: [
       {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
-        to: 'orca-notification-status'
-      },
-      featureWallResources
+        to: 'MacOS/orca-notification-status'
+      }
     ],
     target: [
       {

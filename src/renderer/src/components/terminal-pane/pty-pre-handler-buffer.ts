@@ -15,6 +15,11 @@ const preHandlerPtyExit = new Map<string, number>()
 // and dropping the first setup-script bytes.
 const PRE_HANDLER_PTY_DATA_MAX_BYTES = 512 * 1024
 const PRE_HANDLER_PTY_DATA_MAX_PTYS = 64
+// Why: legit pre-attach windows drain within milliseconds and hold little
+// data. Sustained accumulation means a pane lost its data handler (the
+// frozen-pane detach/attach race) — leave a breadcrumb for trace capture.
+const PRE_HANDLER_PTY_DATA_WARN_BYTES = 64 * 1024
+const warnedLostHandlerPtyIds = new Set<string>()
 
 export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyDataMeta): void {
   const chunk = clampUtf8Tail(data, PRE_HANDLER_PTY_DATA_MAX_BYTES)
@@ -42,6 +47,13 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
     totalBytes -= chunks.shift()?.bytes ?? 0
   }
   preHandlerPtyData.set(ptyId, chunks)
+  if (totalBytes > PRE_HANDLER_PTY_DATA_WARN_BYTES && !warnedLostHandlerPtyIds.has(ptyId)) {
+    warnedLostHandlerPtyIds.add(ptyId)
+    console.warn(
+      `[pty] ${ptyId}: ${totalBytes} bytes buffered with no registered data handler; ` +
+        'the owning pane may have lost its handler to a detach/attach race'
+    )
+  }
 }
 
 export function drainPreHandlerPtyData(
@@ -49,6 +61,7 @@ export function drainPreHandlerPtyData(
   handler: (data: string, meta?: PtyDataMeta) => void
 ): void {
   const chunks = preHandlerPtyData.get(ptyId)
+  warnedLostHandlerPtyIds.delete(ptyId)
   if (!chunks) {
     return
   }
@@ -73,9 +86,11 @@ export function drainPreHandlerPtyExit(ptyId: string, handler: (code: number) =>
 
 export function clearPreHandlerPtyData(ptyId: string): void {
   preHandlerPtyData.delete(ptyId)
+  warnedLostHandlerPtyIds.delete(ptyId)
 }
 
 export function clearPreHandlerPtyState(ptyId: string): void {
   preHandlerPtyData.delete(ptyId)
   preHandlerPtyExit.delete(ptyId)
+  warnedLostHandlerPtyIds.delete(ptyId)
 }

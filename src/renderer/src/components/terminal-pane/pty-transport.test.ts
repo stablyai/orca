@@ -137,6 +137,65 @@ describe('createIpcPtyTransport', () => {
     expect(onReplayData).toHaveBeenCalledWith('new replay')
   })
 
+  it('keeps the live handler when detach() runs after a newer transport attached to the same PTY', async () => {
+    // Why: pane->tab detach and split-group moves rehome the React subtree, so
+    // the NEW TerminalPane can attach to the same ptyId BEFORE the old pane's
+    // unmount detach() runs. An unconditional unregister deletes the live
+    // handler and the pane freezes with the PTY still alive (frozen-pane bug).
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const receivedByNewPane = vi.fn()
+    const replayedToNewPane = vi.fn()
+    const exitSeenByNewPane = vi.fn()
+    const receivedByOldPane = vi.fn()
+
+    const oldPane = createIpcPtyTransport({})
+    await oldPane.connect({ url: '', callbacks: { onData: receivedByOldPane } })
+
+    const newPane = createIpcPtyTransport({})
+    newPane.attach?.({
+      existingPtyId: 'pty-1',
+      callbacks: {
+        onData: receivedByNewPane,
+        onReplayData: replayedToNewPane,
+        onExit: exitSeenByNewPane
+      }
+    })
+    oldPane.detach?.()
+
+    onData?.({ id: 'pty-1', data: 'live output' })
+    onReplay?.({ id: 'pty-1', data: 'replay output' })
+
+    expect(receivedByNewPane).toHaveBeenCalledWith('live output')
+    expect(replayedToNewPane).toHaveBeenCalledWith('replay output')
+    expect(receivedByOldPane).not.toHaveBeenCalled()
+
+    onExit?.({ id: 'pty-1', code: 0 })
+    expect(exitSeenByNewPane).toHaveBeenCalledWith(0)
+  })
+
+  it('buffers data across a normal detach-then-attach gap and drains it to the next pane', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const receivedByNewPane = vi.fn()
+
+    const oldPane = createIpcPtyTransport({})
+    await oldPane.connect({ url: '', callbacks: { onData: vi.fn() } })
+    oldPane.detach?.()
+
+    onData?.({ id: 'pty-1', data: 'buffered while detached' })
+    expect(receivedByNewPane).not.toHaveBeenCalled()
+
+    const newPane = createIpcPtyTransport({})
+    newPane.attach?.({
+      existingPtyId: 'pty-1',
+      callbacks: { onData: receivedByNewPane }
+    })
+
+    expect(receivedByNewPane).toHaveBeenCalledWith('buffered while detached')
+
+    onData?.({ id: 'pty-1', data: 'live after reattach' })
+    expect(receivedByNewPane).toHaveBeenCalledWith('live after reattach')
+  })
+
   it('exposes the connection identity captured at transport creation', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
 

@@ -165,6 +165,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
+import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import {
   isExpectedAgentProcess,
@@ -1497,11 +1498,13 @@ export function connectPanePty(
       (entry) => entry.id === deps.tabId
     )
     return (
-      tab?.launchAgent ??
-      paneStartup?.launchAgent ??
-      paneStartup?.initialAgentStatus?.agent ??
-      commandInferredPaneAgent ??
-      state.agentStatusByPaneKey[cacheKey]?.agentType
+      resolvePaneAgentOwner({
+        launchAgent: tab?.launchAgent,
+        startupLaunchAgent: paneStartup?.launchAgent,
+        initialStatusAgent: paneStartup?.initialAgentStatus?.agent,
+        commandInferredAgent: commandInferredPaneAgent,
+        hookAgent: state.agentStatusByPaneKey[cacheKey]?.agentType
+      }) ?? undefined
     )
   }
   // Why: the renderer veto (owner evidence beating a Gemini-looking title) must

@@ -12,10 +12,11 @@ let cachedHelperPath: string | null | undefined
 /**
  * Resolves the bundled notification-status helper binary.
  *
- * Why: the helper must live inside the app bundle — NSBundle resolves the
- * process's bundle by walking up from the executable path, and macOS keys
- * notification records to that identity. Both dev copies and packaged builds
- * place it next to the Electron executable in Contents/MacOS.
+ * Why: the helper must live in Contents/MacOS next to the Electron executable
+ * — NSBundle resolves the process's bundle by walking up from the executable
+ * path, macOS keys notification records to that identity, and macOS 26 aborts
+ * UNUserNotificationCenter for executables run from Contents/Resources
+ * (#7929). Dev copies and packaged builds (extraFiles) both place it there.
  */
 function resolveHelperPath(): string | null {
   if (cachedHelperPath !== undefined) {
@@ -25,14 +26,8 @@ function resolveHelperPath(): string | null {
     cachedHelperPath = null
     return cachedHelperPath
   }
-  // Dev copies place the helper next to the Electron executable; packaged
-  // builds ship it via extraResources. Both are inside the .app, which is
-  // what NSBundle resolution requires.
-  const candidates = [
-    join(dirname(process.execPath), HELPER_EXECUTABLE),
-    ...(process.resourcesPath ? [join(process.resourcesPath, HELPER_EXECUTABLE)] : [])
-  ]
-  cachedHelperPath = candidates.find((candidate) => existsSync(candidate)) ?? null
+  const candidate = join(dirname(process.execPath), HELPER_EXECUTABLE)
+  cachedHelperPath = existsSync(candidate) ? candidate : null
   return cachedHelperPath
 }
 

@@ -63,6 +63,22 @@ describe('electron-builder config', () => {
     )
   })
 
+  // Why: on macOS 26 UNUserNotificationCenter aborts for executables launched
+  // from Contents/Resources, so the helper must ship in Contents/MacOS (#7929).
+  it('ships the mac notification-status helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/notification-status-macos/.build/release/orca-notification-status',
+          to: 'MacOS/orca-notification-status'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-notification-status' })])
+    )
+  })
+
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])

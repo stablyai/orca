@@ -5061,9 +5061,10 @@ export default function SessionScreen() {
                       }
                       style={styles.textInput}
                       value={input}
-                      onChangeText={(text) =>
-                        setInput((previousText) => normalizeTerminalTextInput(text, previousText))
-                      }
+                      // Why: iOS kills an active dictation/IME session when JS
+                      // writes a value that differs from the native field text;
+                      // store the raw field text and normalize at send time.
+                      onChangeText={setInput}
                       placeholder="Type a command…"
                       placeholderTextColor={colors.textMuted}
                       autoCapitalize="none"

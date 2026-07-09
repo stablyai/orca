@@ -3988,7 +3988,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         onWheel={markDirectScrollInput}
         onDragOver={handleWorktreeDragOver}
         onDrop={handleWorktreeDrop}
-        className="worktree-sidebar-scrollbar h-full overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+        className="worktree-sidebar-scrollbar h-full overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
         style={WORKTREE_SIDEBAR_SCROLL_STYLE}
       >
         <div
@@ -6722,7 +6722,7 @@ const WorktreeList = React.memo(function WorktreeList({
         data-contextual-tour-target="workspace-list"
         className="relative min-h-0 flex-1"
       >
-        <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek pt-px">
+        <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek pt-px">
           <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
             <span>
               {translate('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
