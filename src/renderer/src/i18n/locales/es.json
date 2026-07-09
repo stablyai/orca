@@ -9871,7 +9871,6 @@
             "jumpToOriginalPane": "Saltar al panel original",
             "jumpToWorktree": "Saltar al worktree",
             "recoverableBadge": "No guardada",
-            "subagentCount": "{{value0}} subagents",
             "subagentCountSingular": "1 subagent",
             "subagentCountPlural": "{{value0}} subagents"
           },

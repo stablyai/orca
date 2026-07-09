@@ -9871,7 +9871,6 @@
             "sessionRole": "Session",
             "jumpToOriginalPane": "Jump to Original Pane",
             "jumpToWorktree": "Jump to Worktree",
-            "subagentCount": "{{value0}} subagents",
             "subagentCountSingular": "1 subagent",
             "subagentCountPlural": "{{value0}} subagents"
           },

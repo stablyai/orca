@@ -9871,7 +9871,6 @@
             "jumpToOriginalPane": "跳转到原始窗格",
             "jumpToWorktree": "跳转到工作树",
             "recoverableBadge": "未保存",
-            "subagentCount": "{{value0}} subagents",
             "subagentCountSingular": "1 subagent",
             "subagentCountPlural": "{{value0}} subagents"
           },

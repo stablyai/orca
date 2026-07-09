@@ -9871,7 +9871,6 @@
             "jumpToOriginalPane": "원래 창으로 이동",
             "jumpToWorktree": "작업 트리로 이동",
             "recoverableBadge": "저장 안 됨",
-            "subagentCount": "{{value0}} subagents",
             "subagentCountSingular": "1 subagent",
             "subagentCountPlural": "{{value0}} subagents"
           },
