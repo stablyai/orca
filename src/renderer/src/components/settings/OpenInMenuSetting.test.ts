@@ -40,6 +40,44 @@ describe('OpenInMenuSetting presets', () => {
 
     expect(icon.props.className).toContain('dark:invert')
   })
+
+  it('offers the JetBrains IDE suite as grouped presets', () => {
+    const jetbrains = getOpenInAppPresets().filter((preset) => preset.group === 'jetbrains')
+
+    expect(jetbrains.map((preset) => preset.command)).toEqual([
+      'idea',
+      'webstorm',
+      'pycharm',
+      'phpstorm',
+      'goland',
+      'rider',
+      'clion',
+      'rubymine',
+      'datagrip',
+      'rustrover'
+    ])
+    const iconSrcs = jetbrains.map((preset) => preset.iconSrc)
+    expect(iconSrcs.every((src) => typeof src === 'string' && src.length > 0)).toBe(true)
+    expect(new Set(iconSrcs).size).toBe(jetbrains.length)
+  })
+
+  it('renders the bundled product icon for JetBrains presets', () => {
+    const icon = OpenInApplicationIcon({ application: { command: 'webstorm' } })
+
+    // Bundled asset (data URI or hashed .svg), never the shared favicon fallback.
+    expect(icon.props.src).not.toContain('google.com/s2/favicons')
+    expect(icon.props.src).toMatch(/^data:image\/svg|\.svg$/)
+  })
+
+  it('creates stable rows for JetBrains presets', () => {
+    const webstorm = requirePreset('webstorm')
+
+    expect(createPresetOpenInApplication(webstorm)).toEqual({
+      id: 'webstorm',
+      label: 'WebStorm',
+      command: 'webstorm'
+    })
+  })
 })
 
 describe('OpenInMenuSetting application drafts', () => {

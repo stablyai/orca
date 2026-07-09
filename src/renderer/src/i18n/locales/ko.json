@@ -424,7 +424,17 @@
             "catalog": {
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
-              "173553f73a": "VS Code"
+              "173553f73a": "VS Code",
+              "00451c5ef5": "IntelliJ IDEA",
+              "20e6751d0c": "WebStorm",
+              "ac4b2e2652": "PyCharm",
+              "520eebd9c1": "PhpStorm",
+              "842d2bc8d0": "GoLand",
+              "5016fdc052": "Rider",
+              "d48f6a7431": "CLion",
+              "e6db8efa01": "RubyMine",
+              "5fdf7d47cd": "DataGrip",
+              "366f2eaebc": "RustRover"
             }
           }
         },
@@ -5856,7 +5866,8 @@
           "810ef39b56": "Cursor",
           "3ebe650f74": "앱 이름",
           "3743ed080c": "명령 설정",
-          "f79084947b": "새로운 앱"
+          "f79084947b": "새로운 앱",
+          "78c15aee1e": "JetBrains IDEs"
         },
         "OrchestrationExamplesDialog": {
           "3d1aa105e3": "프롬프트 복사",
@@ -7673,7 +7684,10 @@
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "편집기 자동 줄 바꿈",
-            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
+            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
+            "19f5fffa01": "jetbrains",
+            "33fb604df4": "intellij",
+            "f4253b2869": "webstorm"
           }
         },
         "git": {

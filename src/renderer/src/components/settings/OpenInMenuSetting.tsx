@@ -9,6 +9,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { Input } from '../ui/input'
@@ -286,6 +289,31 @@ export function OpenInMenuSetting({
     setEditingIds((current) => new Set([...current, application.id]))
   }
 
+  const presets = getOpenInAppPresets()
+  const standalonePresets = presets.filter((preset) => preset.group === undefined)
+  const jetbrainsPresets = presets.filter((preset) => preset.group === 'jetbrains')
+
+  const renderPresetItem = (preset: OpenInAppPreset): React.JSX.Element => {
+    const isAdded = isOpenInAppPresetAdded(draft, preset)
+    return (
+      <DropdownMenuItem
+        key={preset.id}
+        disabled={isAdded || isAtLimit}
+        onSelect={() => addPreset(preset)}
+        className="gap-2"
+      >
+        <OpenInApplicationIcon application={preset} size={14} />
+        <span className="min-w-0 truncate">{preset.label}</span>
+        {isAdded && (
+          <DropdownMenuShortcut className="inline-flex items-center gap-1">
+            <Check className="size-3" />
+            {translate('auto.components.settings.OpenInMenuSetting.c1d817e027', 'Added')}
+          </DropdownMenuShortcut>
+        )}
+      </DropdownMenuItem>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -315,26 +343,23 @@ export function OpenInMenuSetting({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
-            {getOpenInAppPresets().map((preset) => {
-              const isAdded = isOpenInAppPresetAdded(draft, preset)
-              return (
-                <DropdownMenuItem
-                  key={preset.id}
-                  disabled={isAdded || isAtLimit}
-                  onSelect={() => addPreset(preset)}
-                  className="gap-2"
-                >
-                  <OpenInApplicationIcon application={preset} size={14} />
-                  <span className="min-w-0 truncate">{preset.label}</span>
-                  {isAdded && (
-                    <DropdownMenuShortcut className="inline-flex items-center gap-1">
-                      <Check className="size-3" />
-                      {translate('auto.components.settings.OpenInMenuSetting.c1d817e027', 'Added')}
-                    </DropdownMenuShortcut>
-                  )}
-                </DropdownMenuItem>
-              )
-            })}
+            {standalonePresets.map(renderPresetItem)}
+            {jetbrainsPresets.length > 0 && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="gap-2">
+                  <OpenInApplicationIcon application={jetbrainsPresets[0]} size={14} />
+                  <span className="min-w-0 truncate">
+                    {translate(
+                      'auto.components.settings.OpenInMenuSetting.78c15aee1e',
+                      'JetBrains IDEs'
+                    )}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56">
+                  {jetbrainsPresets.map(renderPresetItem)}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
             <DropdownMenuItem disabled={isAtLimit} onSelect={addCustomApp} className="gap-2">
               <OpenInApplicationIcon application={{ command: '' }} size={14} />
               <span className="min-w-0 truncate">

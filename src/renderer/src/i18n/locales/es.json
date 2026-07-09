@@ -424,7 +424,17 @@
             "catalog": {
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
-              "173553f73a": "VS Code"
+              "173553f73a": "VS Code",
+              "00451c5ef5": "IntelliJ IDEA",
+              "20e6751d0c": "WebStorm",
+              "ac4b2e2652": "PyCharm",
+              "520eebd9c1": "PhpStorm",
+              "842d2bc8d0": "GoLand",
+              "5016fdc052": "Rider",
+              "d48f6a7431": "CLion",
+              "e6db8efa01": "RubyMine",
+              "5fdf7d47cd": "DataGrip",
+              "366f2eaebc": "RustRover"
             }
           }
         },
@@ -5871,7 +5881,8 @@
           "810ef39b56": "cursor",
           "3ebe650f74": "Nombre de la aplicación",
           "3743ed080c": "Establecer comando",
-          "f79084947b": "Nueva aplicación"
+          "f79084947b": "Nueva aplicación",
+          "78c15aee1e": "JetBrains IDEs"
         },
         "OrchestrationExamplesDialog": {
           "3d1aa105e3": "Copiar prompt",
@@ -7688,7 +7699,10 @@
             "d2d2d929c0": "Corrector ortográfico de Rich Markdown",
             "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
             "e61157e926": "Ajuste de línea en el editor",
-            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal."
+            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
+            "19f5fffa01": "jetbrains",
+            "33fb604df4": "intellij",
+            "f4253b2869": "webstorm"
           }
         },
         "git": {

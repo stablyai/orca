@@ -424,7 +424,17 @@
             "catalog": {
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
-              "173553f73a": "VS Code"
+              "173553f73a": "VS Code",
+              "00451c5ef5": "IntelliJ IDEA",
+              "20e6751d0c": "WebStorm",
+              "ac4b2e2652": "PyCharm",
+              "520eebd9c1": "PhpStorm",
+              "842d2bc8d0": "GoLand",
+              "5016fdc052": "Rider",
+              "d48f6a7431": "CLion",
+              "e6db8efa01": "RubyMine",
+              "5fdf7d47cd": "DataGrip",
+              "366f2eaebc": "RustRover"
             }
           }
         },
@@ -5908,7 +5918,8 @@
           "810ef39b56": "cursor",
           "3ebe650f74": "App name",
           "3743ed080c": "Set command",
-          "f79084947b": "New app"
+          "f79084947b": "New app",
+          "78c15aee1e": "JetBrains IDEs"
         },
         "OrchestrationExamplesDialog": {
           "3d1aa105e3": "Copy prompt",
@@ -7691,6 +7702,9 @@
             "6c2ce8457c": "file explorer",
             "c9d9636f24": "finder",
             "68d03d9980": "vscode",
+            "19f5fffa01": "jetbrains",
+            "33fb604df4": "intellij",
+            "f4253b2869": "webstorm",
             "ebf8f056b5": "zed",
             "0cb3d94f00": "cursor",
             "8fb00fcd05": "launcher",
