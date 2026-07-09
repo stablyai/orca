@@ -4,6 +4,10 @@ import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
 import {
+  promoteCodexRuntimeSettingsToSystem,
+  snapshotCodexRuntimeSettingsBaseline
+} from './config-settings-promotion'
+import {
   createTomlLineScanState,
   getTomlTableHeader,
   isTomlStructuralLine,
@@ -19,11 +23,19 @@ function getSystemCodexConfigTomlPath(): string {
 }
 
 export function syncSystemConfigIntoManagedCodexHome(): void {
+  // Why: the mirror overwrites runtime settings from ~/.codex, so changes the
+  // user made inside Orca-launched Codex (/model, /approvals) must be written
+  // back to ~/.codex first or this very pass silently reverts them.
+  promoteCodexRuntimeSettingsToSystem()
   try {
     syncSystemConfigIntoManagedCodexHomeUnsafe()
   } catch (error) {
     console.warn('[codex-config] Failed to mirror system Codex config:', error)
+    return
   }
+  // Why: the baseline advances only after a successful mirror; recording an
+  // unpromoted runtime change as Orca-written would strand it forever.
+  snapshotCodexRuntimeSettingsBaseline()
 }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
