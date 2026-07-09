@@ -640,6 +640,11 @@ export default function TerminalPane({
     (store) => store.consumePendingCodexPaneRestart
   )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
+  const pendingClaudePaneRestartIds = useAppStore((store) => store.pendingClaudePaneRestartIds)
+  const consumePendingClaudePaneRestart = useAppStore(
+    (store) => store.consumePendingClaudePaneRestart
+  )
+  const clearClaudeRestartNotice = useAppStore((store) => store.clearClaudeRestartNotice)
   // Why: when this tab is in native chat view the chat surface is the active
   // layer above the still-mounted terminal, so the terminal's own mobile-driver
   // overlay must not render on top of it; the chat composer's guarded canSend
@@ -1653,8 +1658,8 @@ export default function TerminalPane({
     }
   }, [])
 
-  const handleRestartCodexPane = useCallback(
-    (paneId: number) => {
+  const handleRestartAccountPane = useCallback(
+    (paneId: number, command: 'claude' | 'codex', clearRestartNotice: (ptyId: string) => void) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
@@ -1667,11 +1672,11 @@ export default function TerminalPane({
 
       if (existingPtyId) {
         suppressPtyExit(existingPtyId)
-        clearCodexRestartNotice(existingPtyId)
-        // Why: pane-scoped Codex restarts should preserve the split layout and
-        // replace only the stale session in place. Clearing the PTY binding and
-        // consuming the upcoming suppressed exit keeps the pane mounted while a
-        // fresh PTY reconnects under the newly selected Codex account.
+        clearRestartNotice(existingPtyId)
+        // Why: pane-scoped account restarts should preserve the split layout
+        // and replace only the stale session in place. Clearing the PTY
+        // binding and consuming the upcoming suppressed exit keeps the pane
+        // mounted while a fresh PTY reconnects under the selected account.
         clearTabPtyId(tabId, existingPtyId)
       }
 
@@ -1687,7 +1692,7 @@ export default function TerminalPane({
         tabId,
         worktreeId,
         cwd,
-        startup: { command: 'codex' },
+        startup: { command },
         paneTransportsRef,
         paneMode2031Ref,
         paneLastThemeModeRef,
@@ -1718,7 +1723,6 @@ export default function TerminalPane({
       manager.setActivePane(paneId, { focus: true })
     },
     [
-      clearCodexRestartNotice,
       clearExitedPanePtyLayoutBinding,
       clearRuntimePaneTitle,
       clearTabPtyId,
@@ -1751,17 +1755,29 @@ export default function TerminalPane({
 
     for (const pane of manager.getPanes()) {
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (!ptyId || !pendingCodexPaneRestartIds[ptyId]) {
+      if (!ptyId) {
         continue
       }
-      // Why: the status-bar switcher can request a global restart for stale
-      // Codex sessions, but the actual execution must stay pane scoped so a
-      // split tab does not lose unrelated non-Codex panes.
-      if (consumePendingCodexPaneRestart(ptyId)) {
-        handleRestartCodexPane(pane.id)
+      if (pendingCodexPaneRestartIds[ptyId] && consumePendingCodexPaneRestart(ptyId)) {
+        handleRestartAccountPane(pane.id, 'codex', clearCodexRestartNotice)
+        continue
+      }
+      if (!pendingClaudePaneRestartIds[ptyId]) {
+        continue
+      }
+      if (consumePendingClaudePaneRestart(ptyId)) {
+        handleRestartAccountPane(pane.id, 'claude', clearClaudeRestartNotice)
       }
     }
-  }, [consumePendingCodexPaneRestart, handleRestartCodexPane, pendingCodexPaneRestartIds])
+  }, [
+    clearClaudeRestartNotice,
+    clearCodexRestartNotice,
+    consumePendingClaudePaneRestart,
+    consumePendingCodexPaneRestart,
+    handleRestartAccountPane,
+    pendingClaudePaneRestartIds,
+    pendingCodexPaneRestartIds
+  ])
 
   useTerminalFontZoom({ isActive, containerRef, managerRef, paneFontSizesRef, settingsRef })
 

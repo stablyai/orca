@@ -58,6 +58,11 @@ import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from 
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+import {
+  getLiveClaudeSessionRestartPlan,
+  markClaudeSessionsForRestart,
+  type LiveClaudeSessionRestartPlan
+} from '@/lib/claude-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
@@ -66,7 +71,10 @@ import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
-import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
+import {
+  summarizeAccountRestartStatus,
+  summarizeCodexRestartStatus
+} from './codex-restart-status-summary'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
@@ -150,6 +158,16 @@ function getCodexAccountLabel(
 
 function getCodexAccountDisplayLabel(account: CodexStatusAccount): string {
   return account.workspaceLabel ? `${account.email} (${account.workspaceLabel})` : account.email
+}
+
+function getClaudeAccountLabel(
+  state: ClaudeRateLimitAccountsState,
+  accountId: string | null | undefined
+): string {
+  if (accountId == null) {
+    return 'System default'
+  }
+  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Claude account'
 }
 
 function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
@@ -575,6 +593,68 @@ function CodexRestartStatusPrompt(): React.JSX.Element | null {
   )
 }
 
+function ClaudeRestartStatusPrompt(): React.JSX.Element | null {
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const claudeRestartNoticeByPtyId = useAppStore((s) => s.claudeRestartNoticeByPtyId)
+  const queueClaudePaneRestarts = useAppStore((s) => s.queueClaudePaneRestarts)
+
+  const staleClaudeStatus = useMemo(
+    () =>
+      summarizeAccountRestartStatus({
+        tabsByWorktree,
+        ptyIdsByTabId,
+        restartNoticeByPtyId: claudeRestartNoticeByPtyId
+      }),
+    [claudeRestartNoticeByPtyId, ptyIdsByTabId, tabsByWorktree]
+  )
+
+  if (staleClaudeStatus.staleTabCount === 0) {
+    return null
+  }
+
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <div className="px-2 py-2">
+        <div className="text-[11px] text-muted-foreground">
+          {staleClaudeStatus.staleSessionCount === 1
+            ? translate(
+                'auto.components.status.bar.StatusBar.84a41c5fd9',
+                '1 Claude session is still on the old account'
+              )
+            : translate(
+                'auto.components.status.bar.StatusBar.17c96496c6',
+                '{{value0}} Claude sessions are still on the old account.',
+                { value0: staleClaudeStatus.staleSessionCount }
+              )}
+          {staleClaudeStatus.staleWorktreeCount > 1 ? (
+            <span className="mt-0.5 block">
+              {translate(
+                'auto.components.status.bar.StatusBar.5a455b9b43',
+                'Visible sessions restart now. Others restart when their worktree becomes active.'
+              )}
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => queueClaudePaneRestarts(staleClaudeStatus.stalePtyIds)}
+          className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+        >
+          {staleClaudeStatus.staleSessionCount === 1
+            ? translate('auto.components.status.bar.StatusBar.c1f47b86ef', 'Restart Session')
+            : translate(
+                'auto.components.status.bar.StatusBar.463b064b78',
+                'Restart {{value0}} Sessions',
+                { value0: staleClaudeStatus.staleSessionCount }
+              )}
+        </button>
+      </div>
+    </>
+  )
+}
+
 function AccountRuntimeToggle<TGroup extends { key: string; label: string }>({
   groups,
   value,
@@ -632,6 +712,11 @@ function ClaudeSwitcherMenu({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(false)
+  const [pendingClaudeSwitch, setPendingClaudeSwitch] = useState<{
+    accountId: string | null
+    target: CodexStatusRuntimeTarget
+    restartPlan: LiveClaudeSessionRestartPlan
+  } | null>(null)
   const [accounts, setAccounts] = useState<ClaudeRateLimitAccountsState>({
     accounts: [],
     activeAccountId: null,
@@ -645,6 +730,7 @@ function ClaudeSwitcherMenu({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
+  const queueClaudePaneRestarts = useAppStore((s) => s.queueClaudePaneRestarts)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
@@ -702,13 +788,15 @@ function ClaudeSwitcherMenu({
     }
   }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
 
-  const handleSelectAccount = async (
+  const performClaudeAccountSwitch = async (
     accountId: string | null,
-    target: CodexStatusRuntimeTarget
+    target: CodexStatusRuntimeTarget,
+    restartPlan: LiveClaudeSessionRestartPlan
   ): Promise<void> => {
     if (isSwitching) {
       return
     }
+    const previousActiveAccountId = getClaudeStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
       const next = await window.api.claudeAccounts.select({
@@ -721,6 +809,18 @@ function ClaudeSwitcherMenu({
         setAccounts(next)
       }
       await fetchSettings()
+      const nextActiveAccountId = getClaudeStatusActiveId(next, target)
+      if (previousActiveAccountId !== nextActiveAccountId && restartPlan.livePtyIds.length > 0) {
+        markClaudeSessionsForRestart({
+          ptyIds: restartPlan.livePtyIds,
+          previousAccountLabel: getClaudeAccountLabel(accountState, previousActiveAccountId),
+          nextAccountLabel: getClaudeAccountLabel(next, nextActiveAccountId)
+        })
+        const stillStalePtyIds = restartPlan.livePtyIds.filter((ptyId) =>
+          Boolean(useAppStore.getState().claudeRestartNoticeByPtyId[ptyId])
+        )
+        queueClaudePaneRestarts(stillStalePtyIds)
+      }
       if (mountedRef.current) {
         setAccountsExpanded(false)
       }
@@ -731,6 +831,36 @@ function ClaudeSwitcherMenu({
         setIsSwitching(false)
       }
     }
+  }
+
+  const handleSelectAccount = async (
+    accountId: string | null,
+    target: CodexStatusRuntimeTarget
+  ): Promise<void> => {
+    if (isSwitching) {
+      return
+    }
+    try {
+      const restartPlan = await getLiveClaudeSessionRestartPlan()
+      if (restartPlan.livePtyIds.length > 0 && restartPlan.workInProgressPtyIds.length > 0) {
+        setPendingClaudeSwitch({ accountId, target, restartPlan })
+        setAccountsExpanded(false)
+        setOpen(false)
+        return
+      }
+      await performClaudeAccountSwitch(accountId, target, restartPlan)
+    } catch (error) {
+      console.error('Failed to inspect live Claude sessions before account switch:', error)
+    }
+  }
+
+  const handleConfirmPendingClaudeSwitch = (): void => {
+    const pending = pendingClaudeSwitch
+    if (!pending) {
+      return
+    }
+    setPendingClaudeSwitch(null)
+    void performClaudeAccountSwitch(pending.accountId, pending.target, pending.restartPlan)
   }
 
   const handleSelectRuntime = async (group: ClaudeStatusSwitchGroup): Promise<void> => {
@@ -768,118 +898,178 @@ function ClaudeSwitcherMenu({
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
 
   return (
-    <ProviderDetailsMenu
-      provider={claude}
-      compact={compact}
-      iconOnly={iconOnly}
-      ariaLabel={translate(
-        'auto.components.status.bar.StatusBar.3dd7ddfae1',
-        'Open Claude details and account switcher'
-      )}
-      topContent={
-        <AccountRuntimeToggle
-          groups={switchGroups}
-          value={selectedGroup?.key ?? selectedRuntimeKey}
-          onChange={(group) => void handleSelectRuntime(group)}
-          ariaLabel={translate(
-            'auto.components.status.bar.StatusBar.11e2354daf',
-            'Claude usage runtime'
-          )}
-        />
-      }
-      open={open}
-      onOpenChange={handleOpenChange}
-    >
-      <DropdownMenuLabel>
-        {translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
-      </DropdownMenuLabel>
-      <DropdownMenuItem
-        onSelect={(event) => {
-          event.preventDefault()
-          handleAccountsExpandedToggle()
-        }}
-      >
-        <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {activeTarget?.label ??
-            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
-        </span>
-        {accountsExpanded ? (
-          <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
-        ) : (
-          <ChevronRight className="ml-auto size-3.5 text-muted-foreground/85" />
+    <>
+      <ProviderDetailsMenu
+        provider={claude}
+        compact={compact}
+        iconOnly={iconOnly}
+        ariaLabel={translate(
+          'auto.components.status.bar.StatusBar.3dd7ddfae1',
+          'Open Claude details and account switcher'
         )}
-      </DropdownMenuItem>
-      {accountsExpanded ? (
-        <div className="px-1 pb-1">
-          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            {translate('auto.components.status.bar.StatusBar.9332ba8684', 'Switch to')}
-          </div>
-          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
-            {selectedGroup?.targets.length === 0 ? (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                {translate('auto.components.status.bar.StatusBar.c98ea88392', 'No other accounts')}
-              </div>
-            ) : null}
-            {selectedGroup?.targets.map((target) => {
-              const inactiveUsage = target.id
-                ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
-                : null
+        topContent={
+          <AccountRuntimeToggle
+            groups={switchGroups}
+            value={selectedGroup?.key ?? selectedRuntimeKey}
+            onChange={(group) => void handleSelectRuntime(group)}
+            ariaLabel={translate(
+              'auto.components.status.bar.StatusBar.11e2354daf',
+              'Claude usage runtime'
+            )}
+          />
+        }
+        open={open}
+        onOpenChange={handleOpenChange}
+      >
+        <DropdownMenuLabel>
+          {translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
+        </DropdownMenuLabel>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault()
+            handleAccountsExpandedToggle()
+          }}
+        >
+          <span className="max-w-[180px] truncate text-[12px] text-foreground">
+            {activeTarget?.label ??
+              translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
+          </span>
+          {accountsExpanded ? (
+            <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
+          ) : (
+            <ChevronRight className="ml-auto size-3.5 text-muted-foreground/85" />
+          )}
+        </DropdownMenuItem>
+        {accountsExpanded ? (
+          <div className="px-1 pb-1">
+            <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              {translate('auto.components.status.bar.StatusBar.9332ba8684', 'Switch to')}
+            </div>
+            <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
+              {selectedGroup?.targets.length === 0 ? (
+                <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.status.bar.StatusBar.c98ea88392',
+                    'No other accounts'
+                  )}
+                </div>
+              ) : null}
+              {selectedGroup?.targets.map((target) => {
+                const inactiveUsage = target.id
+                  ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
+                  : null
 
-              return (
-                <DropdownMenuItem
-                  key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-                  disabled={isSwitching || target.active}
-                  onSelect={(event) => {
-                    event.preventDefault()
-                    if (!target.active) {
-                      void handleSelectAccount(target.id, target.runtimeTarget)
-                    }
-                  }}
-                >
-                  <div className="flex w-full flex-col gap-0.5">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate">{target.label}</span>
-                      {target.active ? (
-                        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
-                          {translate('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}
-                        </span>
+                return (
+                  <DropdownMenuItem
+                    key={`${selectedGroup.key}:${target.id ?? 'system'}`}
+                    disabled={isSwitching || target.active}
+                    onSelect={(event) => {
+                      event.preventDefault()
+                      if (!target.active) {
+                        void handleSelectAccount(target.id, target.runtimeTarget)
+                      }
+                    }}
+                  >
+                    <div className="flex w-full flex-col gap-0.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                        {target.active ? (
+                          <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                            {translate('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}
+                          </span>
+                        ) : null}
+                      </div>
+                      {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                        <InlineUsageSkeleton />
+                      ) : inactiveUsage?.rateLimits ? (
+                        <InlineUsageBars
+                          limits={inactiveUsage.rateLimits}
+                          isFetching={inactiveUsage.isFetching}
+                        />
                       ) : null}
                     </div>
-                    {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-                      <InlineUsageSkeleton />
-                    ) : inactiveUsage?.rateLimits ? (
-                      <InlineUsageBars
-                        limits={inactiveUsage.rateLimits}
-                        isFetching={inactiveUsage.isFetching}
-                      />
-                    ) : null}
-                  </div>
-                </DropdownMenuItem>
-              )
-            })}
+                  </DropdownMenuItem>
+                )
+              })}
+            </div>
+            <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
+              {translate(
+                'auto.components.status.bar.StatusBar.8295903d17',
+                'Restart live Claude terminals before continuing old conversations after switching.'
+              )}
+            </div>
           </div>
-          <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-            {translate(
-              'auto.components.status.bar.StatusBar.8295903d17',
-              'Restart live Claude terminals before continuing old conversations after switching.'
-            )}
-          </div>
-        </div>
-      ) : null}
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        onSelect={() => {
-          openSettingsTarget({
-            pane: 'accounts',
-            repoId: null,
-            sectionId: 'accounts-claude'
-          })
-          openSettingsPage()
+        ) : null}
+        {open ? <ClaudeRestartStatusPrompt /> : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            openSettingsTarget({
+              pane: 'accounts',
+              repoId: null,
+              sectionId: 'accounts-claude'
+            })
+            openSettingsPage()
+          }}
+        >
+          {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
+        </DropdownMenuItem>
+      </ProviderDetailsMenu>
+      <Dialog
+        open={pendingClaudeSwitch !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !isSwitching) {
+            setPendingClaudeSwitch(null)
+          }
         }}
       >
-        {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
-      </DropdownMenuItem>
-    </ProviderDetailsMenu>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-4 text-destructive" />
+              {translate(
+                'auto.components.status.bar.StatusBar.df5d2c1384',
+                'Active Claude work is running'
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {(pendingClaudeSwitch?.restartPlan.workInProgressPtyIds.length ?? 0) === 1
+                ? translate(
+                    'auto.components.status.bar.StatusBar.a0e249e2d2',
+                    '1 Claude session appears to be working or waiting for input. Switching accounts will stop and restart it so the new account is used.'
+                  )
+                : translate(
+                    'auto.components.status.bar.StatusBar.3ca963aa09',
+                    '{{value0}} Claude sessions appear to be working or waiting for input. Switching accounts will stop and restart them so the new account is used.',
+                    {
+                      value0: pendingClaudeSwitch?.restartPlan.workInProgressPtyIds.length ?? 0
+                    }
+                  )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingClaudeSwitch(null)}
+              disabled={isSwitching}
+            >
+              {translate('auto.components.status.bar.StatusBar.625fb26b4b', 'Cancel')}
+            </Button>
+            <Button type="button" onClick={handleConfirmPendingClaudeSwitch} disabled={isSwitching}>
+              {isSwitching ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {translate('auto.components.status.bar.StatusBar.c31c67d31f', 'Switching...')}
+                </>
+              ) : (
+                translate('auto.components.status.bar.StatusBar.c15d5d972a', 'Switch and Restart')
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

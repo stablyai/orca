@@ -52,6 +52,10 @@ import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import {
+  getLiveClaudeSessionRestartPlan,
+  markClaudeSessionsForRestart
+} from '@/lib/claude-session-restart'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -340,6 +344,7 @@ export function AccountsPane({
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const queueClaudePaneRestarts = useAppStore((s) => s.queueClaudePaneRestarts)
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
@@ -690,6 +695,7 @@ export function AccountsPane({
     )
     setClaudeAction(action)
     try {
+      const restartPlan = await getLiveClaudeSessionRestartPlan({ target: accountRuntime })
       const next = await operation()
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
@@ -701,17 +707,55 @@ export function AccountsPane({
           nextActiveAccountId !== null &&
           action === `reauth:${nextActiveAccountId}`)
       if (shouldPromptRestart) {
-        toast.info(
-          translate('auto.components.settings.AccountsPane.f921d32606', 'Claude account updated.'),
+        const isActiveReauth =
+          action.startsWith('reauth:') &&
+          nextActiveAccountId !== null &&
+          action === `reauth:${nextActiveAccountId}`
+        const previousAccountLabel = getClaudeAccountLabel(claudeAccounts, previousActiveAccountId)
+        const nextAccountLabel = getClaudeAccountLabel(next, nextActiveAccountId)
+        markClaudeSessionsForRestart({
+          ptyIds: restartPlan.livePtyIds,
+          previousAccountLabel,
+          nextAccountLabel,
+          previousAccountId: previousActiveAccountId,
+          nextAccountId: nextActiveAccountId,
+          forceRestart: isActiveReauth
+        })
+        const stillStalePtyIds = restartPlan.livePtyIds.filter((ptyId) =>
+          Boolean(useAppStore.getState().claudeRestartNoticeByPtyId[ptyId])
+        )
+        queueClaudePaneRestarts(stillStalePtyIds)
+        const hasActiveWork = restartPlan.workInProgressPtyIds.length > 0
+        const notify = hasActiveWork ? toast.warning : toast.info
+        notify(
+          hasActiveWork
+            ? translate(
+                'auto.components.settings.AccountsPane.36a122b91d',
+                'Claude account updated. Restarting active sessions.'
+              )
+            : translate(
+                'auto.components.settings.AccountsPane.f921d32606',
+                'Claude account updated.'
+              ),
           {
-            description: translate(
-              'auto.components.settings.AccountsPane.b15ce90870',
-              '{{value0}} -> {{value1}}. Restart live Claude terminals before continuing old sessions.',
-              {
-                value0: getClaudeAccountLabel(claudeAccounts, previousActiveAccountId),
-                value1: getClaudeAccountLabel(next, nextActiveAccountId)
-              }
-            )
+            description:
+              stillStalePtyIds.length > 0
+                ? translate(
+                    'auto.components.settings.AccountsPane.d129385b6b',
+                    '{{value0}} -> {{value1}}. Live Claude sessions are restarting under the selected account.',
+                    {
+                      value0: previousAccountLabel,
+                      value1: nextAccountLabel
+                    }
+                  )
+                : translate(
+                    'auto.components.settings.AccountsPane.5cd45d5f33',
+                    '{{value0}} -> {{value1}}.',
+                    {
+                      value0: previousAccountLabel,
+                      value1: nextAccountLabel
+                    }
+                  )
           }
         )
       }

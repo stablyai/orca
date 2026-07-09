@@ -97,7 +97,8 @@ import { e2eConfig } from '@/lib/e2e-config'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
-  type AgentType
+  type AgentType,
+  type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
@@ -662,11 +663,16 @@ function isStatefulRendererReplyCsiQuery(sequence: string): boolean {
   return sequence === '\x1b[6n' || (sequence.startsWith('\x1b[?') && sequence.endsWith('$p'))
 }
 
-let codexRestartNoticePresenceSource: Record<
+type AccountRestartNoticesByPtyId = Record<
   string,
   { previousAccountLabel: string; nextAccountLabel: string }
-> | null = null
-let codexRestartNoticePresence = false
+>
+
+let accountRestartNoticePresenceSource: {
+  codex: AccountRestartNoticesByPtyId
+  claude: AccountRestartNoticesByPtyId
+} | null = null
+let accountRestartNoticePresence = false
 let inactiveForegroundImmediateBudgetChars = 0
 let inactiveForegroundImmediateBudgetWindowStart = 0
 
@@ -823,14 +829,22 @@ function consumeInactiveForegroundImmediateBudget(dataLength: number): boolean {
   return true
 }
 
-function hasCodexRestartNotices(
-  noticesByPtyId: Record<string, { previousAccountLabel: string; nextAccountLabel: string }>
+function hasAccountRestartNotices(
+  codexNoticesByPtyId: AccountRestartNoticesByPtyId,
+  claudeNoticesByPtyId: AccountRestartNoticesByPtyId
 ): boolean {
-  if (codexRestartNoticePresenceSource !== noticesByPtyId) {
-    codexRestartNoticePresenceSource = noticesByPtyId
-    codexRestartNoticePresence = Object.keys(noticesByPtyId).length > 0
+  if (
+    accountRestartNoticePresenceSource?.codex !== codexNoticesByPtyId ||
+    accountRestartNoticePresenceSource?.claude !== claudeNoticesByPtyId
+  ) {
+    accountRestartNoticePresenceSource = {
+      codex: codexNoticesByPtyId,
+      claude: claudeNoticesByPtyId
+    }
+    accountRestartNoticePresence =
+      Object.keys(codexNoticesByPtyId).length > 0 || Object.keys(claudeNoticesByPtyId).length > 0
   }
-  return codexRestartNoticePresence
+  return accountRestartNoticePresence
 }
 
 function sshPromptConnectOutcomeForStatus(
@@ -881,22 +895,28 @@ async function waitForSshConnection(connectionId: string): Promise<SshConnectRes
   return promise
 }
 
-function isCodexPaneStale(args: {
+function isAccountSwitchPaneStale(args: {
   tabId: string
   worktreeId: string
   panePtyId: string | null
 }): boolean {
   const state = useAppStore.getState()
-  const { codexRestartNoticeByPtyId } = state
-  if (!hasCodexRestartNotices(codexRestartNoticeByPtyId)) {
+  const { claudeRestartNoticeByPtyId, codexRestartNoticeByPtyId } = state
+  if (!hasAccountRestartNotices(codexRestartNoticeByPtyId, claudeRestartNoticeByPtyId)) {
     return false
   }
-  if (args.panePtyId && codexRestartNoticeByPtyId[args.panePtyId]) {
+  if (
+    args.panePtyId &&
+    (codexRestartNoticeByPtyId[args.panePtyId] || claudeRestartNoticeByPtyId[args.panePtyId])
+  ) {
     return true
   }
 
   const tab = (state.tabsByWorktree[args.worktreeId] ?? []).find((entry) => entry.id === args.tabId)
-  if (tab?.ptyId && codexRestartNoticeByPtyId[tab.ptyId]) {
+  if (
+    tab?.ptyId &&
+    (codexRestartNoticeByPtyId[tab.ptyId] || claudeRestartNoticeByPtyId[tab.ptyId])
+  ) {
     return true
   }
 
@@ -1668,22 +1688,20 @@ export function connectPanePty(
   const interruptInference = createAgentInterruptInference({
     paneKey: cacheKey,
     getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[cacheKey],
-    inferInterrupt: (request) => {
+    inferInterrupt: async (request) => {
       // Why: the explicit hook row is the authority for an in-flight agent turn.
       // Codex can reset its terminal title while handling Ctrl+C/Escape, so title
       // state must not veto clearing the row's working state.
-      return window.api.agentStatus
-        .inferInterrupt(request)
-        .then((applied) => {
-          if (applied) {
-            clearInferredInterruptWorkingTitle()
-          }
-          return applied
-        })
-        .catch((err) => {
-          console.warn('[agent-interrupt] inferInterrupt failed:', err)
-          return false
-        })
+      try {
+        const applied = await window.api.agentStatus.inferInterrupt(request)
+        if (applied) {
+          clearInferredInterruptWorkingTitle()
+        }
+        return applied
+      } catch (err) {
+        console.warn('[agent-interrupt] inferInterrupt failed:', err)
+        return false
+      }
     }
   })
   const dropCommandFinishedStatusIfSameTurn = (
@@ -2805,7 +2823,7 @@ export function connectPanePty(
     // local main, so the renderer remains their status owner for now.
     ...(shouldOwnAgentStatusInRenderer
       ? {
-          onAgentStatus: (payload) => {
+          onAgentStatus: (payload: ParsedAgentStatusPayload) => {
             if (
               shouldSuppressCodexAutoApprovalStatus(payload, {
                 paneKey: cacheKey,
@@ -2896,14 +2914,14 @@ export function connectPanePty(
       return
     }
     const currentPtyId = transport.getPtyId()
-    // Why: after a Codex account switch, the runtime auth has already moved to
-    // the newly selected account. Stale panes must not keep sending input until
-    // they restart, or work can execute under the wrong account while the UI
-    // still says the pane is stale. Fall back to the tab's persisted PTY ID so
-    // the block still holds during reconnect races before the live transport has
+    // Why: after an account switch, runtime auth has already moved to the newly
+    // selected account. Stale panes must not keep sending input until they
+    // restart, or work can execute under the wrong account while the UI still
+    // says the pane is stale. Fall back to the tab's persisted PTY ID so the
+    // block still holds during reconnect races before the live transport has
     // updated its local PTY binding.
     if (
-      isCodexPaneStale({
+      isAccountSwitchPaneStale({
         tabId: deps.tabId,
         worktreeId: deps.worktreeId,
         panePtyId: currentPtyId

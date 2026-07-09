@@ -6,28 +6,36 @@ export type CodexRestartStatusSummaryInput = {
   codexRestartNoticeByPtyId: Record<string, unknown>
 }
 
-export type CodexRestartStatusSummary = {
+export type AccountRestartStatusSummaryInput = {
+  tabsByWorktree: TabLookup
+  ptyIdsByTabId: Record<string, string[]>
+  restartNoticeByPtyId: Record<string, unknown>
+}
+
+export type AccountRestartStatusSummary = {
   stalePtyIds: string[]
   staleSessionCount: number
   staleTabCount: number
   staleWorktreeCount: number
 }
 
-const EMPTY_CODEX_RESTART_STATUS_SUMMARY: CodexRestartStatusSummary = {
+export type CodexRestartStatusSummary = AccountRestartStatusSummary
+
+const EMPTY_ACCOUNT_RESTART_STATUS_SUMMARY: AccountRestartStatusSummary = {
   stalePtyIds: [],
   staleSessionCount: 0,
   staleTabCount: 0,
   staleWorktreeCount: 0
 }
 
-export function summarizeCodexRestartStatus({
+export function summarizeAccountRestartStatus({
   tabsByWorktree,
   ptyIdsByTabId,
-  codexRestartNoticeByPtyId
-}: CodexRestartStatusSummaryInput): CodexRestartStatusSummary {
-  const stalePtyIds = Object.keys(codexRestartNoticeByPtyId)
+  restartNoticeByPtyId
+}: AccountRestartStatusSummaryInput): AccountRestartStatusSummary {
+  const stalePtyIds = Object.keys(restartNoticeByPtyId)
   if (stalePtyIds.length === 0) {
-    return EMPTY_CODEX_RESTART_STATUS_SUMMARY
+    return EMPTY_ACCOUNT_RESTART_STATUS_SUMMARY
   }
 
   const stalePtyIdSet = new Set(stalePtyIds)
@@ -51,4 +59,16 @@ export function summarizeCodexRestartStatus({
     staleTabCount: staleTabIds.size,
     staleWorktreeCount: staleWorktreeIds.size
   }
+}
+
+export function summarizeCodexRestartStatus({
+  tabsByWorktree,
+  ptyIdsByTabId,
+  codexRestartNoticeByPtyId
+}: CodexRestartStatusSummaryInput): CodexRestartStatusSummary {
+  return summarizeAccountRestartStatus({
+    tabsByWorktree,
+    ptyIdsByTabId,
+    restartNoticeByPtyId: codexRestartNoticeByPtyId
+  })
 }
