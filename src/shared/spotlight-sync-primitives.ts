@@ -101,14 +101,10 @@ export async function assertNoUntrackedCollisions(
   }
 }
 
-/**
- * Commit the worktree's current file state (tracked changes plus untracked,
- * non-ignored files) without touching its HEAD, real index, or working tree.
- *
- * Why a temporary index instead of `git stash create`: stash omits untracked
- * files, but agents routinely create new source files without staging them —
- * those must reach the root too. `.gitignore` still excludes build artifacts.
- */
+/** Snapshot the worktree's file state (tracked + untracked, non-ignored) without
+ *  touching HEAD/index/worktree — via a temp index rather than `git stash
+ *  create`, which omits the unstaged new files agents routinely create.
+ *  `.gitignore` still excludes build artifacts. */
 export async function createCheckpointCommit(
   ctx: SpotlightGitContext,
   worktreePath: string,
@@ -123,16 +119,9 @@ export async function createCheckpointCommit(
     'orca-spotlight-index'
   ])
   const env = { GIT_INDEX_FILE: indexPath }
-  // Why the reuse path: `read-tree` wipes the temp index's stat cache, forcing
-  // the following `add -A` to lstat + re-hash the entire worktree on every
-  // watcher-debounced sync. When THIS worktree's index was already seeded from
-  // this same HEAD, reuse it so `add -A` only re-stats changed files.
-  //
-  // Reuse requires a HEAD-seeded index: `add -A` against an empty/absent index
-  // treats tracked-but-gitignored files (e.g. a force-added dist/config) as
-  // ignored and drops them from the tree, which the root reset would then
-  // DELETE. The caller must only pass reuseIndexForHead for a worktree whose
-  // temp index it previously seeded (keyed per worktree, not per repo).
+  // Reuse the seeded temp index to skip a full-worktree re-hash on each debounced
+  // sync. Only valid for the same worktree+HEAD: `add -A` on an absent index drops
+  // force-added (tracked-but-gitignored) files, which the root reset would DELETE.
   if (opts.reuseIndexForHead !== head) {
     await git(ctx, worktreePath, ['read-tree', 'HEAD'], { env })
   }
@@ -225,15 +214,10 @@ export async function backupRootState(
   }
 }
 
-/** Undo a fresh activation's root mutations after a mid-flight failure, fully
- *  restoring the root to its pre-activation state (reset to the original commit,
- *  re-attach the branch, re-apply the captured index+worktree — the same
- *  sequence deactivate uses). The backup ref is the ONLY reference to the user's
- *  uncommitted root state (a `stash create` commit with no reflog entry), so the
- *  refs are deleted ONLY after the working-tree restore is confirmed — if the
- *  restore throws (e.g. a still-locked file or a stash-apply conflict) the refs
- *  stay reachable for a later deactivate or a manual recovery, instead of
- *  stranding that state as a dangling commit findable only via `git fsck`. */
+/** Roll back a failed fresh activation to its pre-activation state (same sequence
+ *  deactivate uses). Delete the refs only AFTER the restore succeeds: the backup
+ *  ref is the sole handle on the user's uncommitted state (a reflog-less stash
+ *  commit), so on failure we keep it reachable for a later retry. */
 export async function rollbackFreshActivation(
   ctx: SpotlightGitContext,
   rootPath: string,
@@ -327,12 +311,9 @@ export async function assertWorktreeBelongsToRoot(
   }
 }
 
-/** Absolute git common dir. git >= 2.31 returns it directly via
- *  `--path-format=absolute`; older git ignores that flag — either erroring, or
- *  echoing it to stdout and exiting 0 — and may return a RELATIVE common dir, so
- *  fall back to a bare `--git-common-dir` and resolve the last real path line
- *  against `cwdPath`. Without this, Spotlight fails with a misleading
- *  'worktree-not-found' on git < 2.31 (e.g. Ubuntu 20.04's git 2.25). */
+/** Absolute git common dir, with a fallback for git < 2.31, which ignores
+ *  `--path-format=absolute` and may return a relative path — without it,
+ *  Spotlight wrongly fails 'worktree-not-found' on old git (e.g. Ubuntu 20.04). */
 async function resolveGitCommonDir(
   ctx: SpotlightGitContext,
   cwdPath: string

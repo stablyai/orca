@@ -7,12 +7,10 @@ import {
   stopSpotlightLogCapture
 } from '../spotlight/spotlight-log-mirror'
 
-// Why a module singleton with a mutable window ref: attachMainWindowServices
-// re-runs on macOS dock re-activation. Reconstructing the service there would
-// discard its per-repo mutex/syncing overlay while old-instance git operations
-// may still be in flight, letting two instances race destructive git commands
-// on the same root. Keep ONE service for the process lifetime; only retarget
-// the window it notifies.
+// Module singleton with a mutable window ref: attachMainWindowServices re-runs on
+// macOS dock re-activation, and rebuilding the service would drop its per-repo
+// mutex while old git operations are still in flight — letting two instances race
+// destructive git on the same root. One service per process; only retarget the window.
 let service: SpotlightService | null = null
 let currentWindow: BrowserWindow | null = null
 let reconciled = false
@@ -27,6 +25,13 @@ export async function deactivateSpotlightBeforeTeardown(repoId: string): Promise
     return
   }
   await service.deactivate(repoId)
+  // If deactivate couldn't finish (merge/rebase in the root, or a restore
+  // conflict), removeProject is about to drop the record — orphaning the refs
+  // with no reconcile left to reach them. Force-clean them, keeping the backup
+  // ref for manual recovery. No-op when deactivate already cleared the record.
+  if (service.getState(repoId)) {
+    await service.purgeForTeardown(repoId)
+  }
   // Even if deactivate couldn't complete (e.g. a merge/rebase in progress), the
   // repo is being removed — stop the capture so its PTY listener, .orca watcher,
   // and file handle don't leak. No-op when deactivate already stopped it.

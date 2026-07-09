@@ -147,12 +147,9 @@ export const createSpotlightSlice: StateCreator<AppState, [], [], SpotlightSlice
         )
         return result
       }
-      // Open/adopt the repo's server terminal. Only claim logs are mirrored
-      // when a terminal actually exists to feed them (C13: a missing main
-      // worktree would otherwise leave agents tailing an empty file).
-      // Dynamic import: open-spotlight-terminal-tab reaches back into this
-      // store, so a static import would create an init-time cycle that leaves
-      // createSpotlightSlice undefined.
+      // Dynamic import: open-spotlight-terminal-tab imports this store, so a
+      // static import would form an init-time cycle. Only claim log mirroring
+      // when a terminal actually exists to feed it.
       const { openSpotlightTerminalTab } = await import('@/lib/open-spotlight-terminal-tab')
       const opened = openSpotlightTerminalTab({ repoId, reveal: false })
       if (opened.ok) {

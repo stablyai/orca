@@ -84,13 +84,10 @@ export async function activateSpotlightCore(
   }
 
   const refs = await inspectSpotlightRefsCore(ctx, rootPath)
-  // Require ALL three refs: an interrupted deactivate (it deletes snapshot
-  // first) can leave orphaned {backup, originalHead} with no snapshot. Keying
-  // "already active" on those two alone would then hit the takeover guard below
-  // with snapshotSha=null and throw a permanent root-diverged, wedging the repo
-  // out of Spotlight. Treating a partial ref set as NOT active lets a fresh
-  // activation re-establish clean refs (the root was already restored before
-  // those deletes ran).
+  // Require all three refs: an interrupted deactivate can orphan {backup,
+  // originalHead} without a snapshot, and treating that partial set as "active"
+  // would wedge the repo in a permanent root-diverged — so let a fresh activation
+  // re-establish clean refs (the root was already restored before those deletes).
   const alreadyActive = Boolean(refs.originalHeadSha && refs.backupSha && refs.snapshotSha)
 
   // Fresh activation must start from the root on its primary branch so there's a
@@ -283,4 +280,18 @@ export async function deactivateSpotlightCore(
     await gitTry(ctx, rootPath, ['symbolic-ref', '--delete', SPOTLIGHT_REFS.originalBranch])
   }
   return { branchMissing, originalBranch: refs.originalBranch, branchInUse }
+}
+
+/** Best-effort deletion of Spotlight's anchor refs when a repo is being removed
+ *  and a normal deactivate couldn't finish — otherwise they orphan once the
+ *  persisted record is gone and reconcile can no longer reach them. Keeps the
+ *  backup ref: the root's uncommitted state is reachable only through it (its
+ *  first parent is the original HEAD), so this preserves a recoverable handle. */
+export async function purgeSpotlightRefsCore(
+  ctx: SpotlightGitContext,
+  rootPath: string
+): Promise<void> {
+  await gitTry(ctx, rootPath, ['update-ref', '-d', SPOTLIGHT_REFS.snapshot])
+  await gitTry(ctx, rootPath, ['update-ref', '-d', SPOTLIGHT_REFS.originalHead])
+  await gitTry(ctx, rootPath, ['symbolic-ref', '--delete', SPOTLIGHT_REFS.originalBranch])
 }

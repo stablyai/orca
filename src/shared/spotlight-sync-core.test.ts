@@ -9,6 +9,7 @@ import {
   createCheckpointCommit,
   deactivateSpotlightCore,
   inspectSpotlightRefsCore,
+  purgeSpotlightRefsCore,
   syncSpotlightCore,
   SpotlightCoreError,
   type SpotlightGitContext,
@@ -214,6 +215,25 @@ describe('spotlight-sync-core', () => {
     expect(run(rootPath, 'rev-parse', 'HEAD')).toBe(originalHead)
     expect(() => run(rootPath, 'symbolic-ref', '-q', 'HEAD')).toThrow()
     expect((await inspectSpotlightRefsCore(ctx, rootPath)).originalHeadSha).toBeNull()
+  })
+
+  it('purge removes the anchor refs but keeps the backup for recovery', async () => {
+    // Dirty the root so the backup ref is a distinct stash commit, not originalHead.
+    write(rootPath, 'a.txt', 'a-dirty-in-root\n')
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+    const before = await inspectSpotlightRefsCore(ctx, rootPath)
+    expect(before.snapshotSha).not.toBeNull()
+    expect(before.originalHeadSha).not.toBeNull()
+    expect(before.backupSha).not.toBeNull()
+
+    await purgeSpotlightRefsCore(ctx, rootPath)
+
+    const after = await inspectSpotlightRefsCore(ctx, rootPath)
+    expect(after.snapshotSha).toBeNull()
+    expect(after.originalHeadSha).toBeNull()
+    expect(after.originalBranch).toBeNull()
+    // Backup preserved: the root's uncommitted state stays recoverable.
+    expect(after.backupSha).toBe(before.backupSha)
   })
 
   it('handles renames', async () => {

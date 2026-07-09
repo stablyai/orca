@@ -1,6 +1,10 @@
 import type { Repo } from '../../shared/types'
 import type { SpotlightError, SpotlightRepoState } from '../../shared/spotlight'
-import type { SpotlightGitContext } from '../../shared/spotlight-sync-core'
+import type {
+  SpotlightActivateOutcome,
+  SpotlightGitContext,
+  SpotlightSyncOutcome
+} from '../../shared/spotlight-sync-core'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
@@ -13,16 +17,10 @@ export type ResolvedRepoContext =
   | { repo: Repo; ctx: SpotlightGitContext }
   | { error: SpotlightError }
 
-/** Enforce Spotlight eligibility in MAIN, not just the UI: activate/sync run
- *  `checkout --detach` + `reset --hard` on the root, so a renderer bug or
- *  crafted IPC must not rewrite the root of a repo that never opted in, a
- *  folder project, or a remote repo. Mirrors the renderer's canHoldSpotlight.
- *
- *  `requireEnabled: false` skips only the opt-in-flag check — used by deactivate
- *  so the root can always be RESTORED even after the user turns the toggle off
- *  while Spotlight is live (the flag is off but the root is still mirrored). The
- *  folder/host checks stay, since those govern whether a local git context even
- *  exists. */
+/** Re-check Spotlight eligibility in main, not just the UI: activate/sync reset
+ *  the root, so a renderer bug or crafted IPC must not rewrite a repo that never
+ *  opted in. `requireEnabled: false` skips only the opt-in flag so deactivate can
+ *  still restore the root after the toggle is turned off mid-session. */
 export function resolveRepoContext(
   store: Store,
   repoId: string,
@@ -101,6 +99,43 @@ export async function resolvePrimaryBranch(
   const configured = repo.worktreeBaseRef?.trim()
   const raw = configured || (await resolveDefaultBaseRefViaExec((argv) => ctx.git(argv, rootPath)))
   return raw ? toShortBranchName(raw) : null
+}
+
+/** Persisted state for a just-completed activation; carries the original
+ *  activation timestamp across a takeover so it reads as one continuous session. */
+export function activeStateFromActivation(
+  repoId: string,
+  worktreeId: string,
+  outcome: SpotlightActivateOutcome,
+  previousActivatedAt: number | undefined
+): SpotlightRepoState {
+  const now = Date.now()
+  return {
+    repoId,
+    holderWorktreeId: worktreeId,
+    status: 'active',
+    originalBranch: outcome.originalBranch,
+    originalHeadSha: outcome.originalHeadSha,
+    backupSha: outcome.backupSha,
+    lastSnapshotSha: outcome.snapshotSha,
+    activatedAt: previousActivatedAt ?? now,
+    lastSyncAt: now,
+    lastError: null
+  }
+}
+
+/** Persisted state after a sync; a skipped no-op keeps the prior sync time. */
+export function syncedSpotlightState(
+  state: SpotlightRepoState,
+  outcome: SpotlightSyncOutcome
+): SpotlightRepoState {
+  return {
+    ...state,
+    status: 'active',
+    lastSnapshotSha: outcome.snapshotSha,
+    lastSyncAt: outcome.skipped ? state.lastSyncAt : Date.now(),
+    lastError: null
+  }
 }
 
 /** Optimistic placeholder shown while the first activation of a repo is in

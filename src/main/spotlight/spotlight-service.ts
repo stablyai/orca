@@ -9,15 +9,18 @@ import {
   activateSpotlightCore,
   deactivateSpotlightCore,
   inspectSpotlightRefsCore,
+  purgeSpotlightRefsCore,
   syncSpotlightCore
 } from '../../shared/spotlight-sync-core'
 import { appendSpotlightLogNote, stopSpotlightLogCapture } from './spotlight-log-mirror'
 import { writeSpotlightStateFile } from './spotlight-state-file'
 import {
+  activeStateFromActivation,
   isRootHolderPath,
   pendingSpotlightState,
   resolvePrimaryBranch,
   resolveRepoContext,
+  syncedSpotlightState,
   toSpotlightError,
   worktreePathFromId,
   type ResolvedRepoContext
@@ -32,12 +35,9 @@ export class SpotlightService {
   // promise chain serializes them so watcher-driven syncs can't interleave
   // with an in-flight takeover or deactivation.
   private readonly locks = new Map<string, Promise<unknown>>()
-  /** Which worktree + HEAD each repo's temp index was last seeded from, so the
-   *  next checkpoint can reuse it (skip a full-worktree rescan). Keyed per repo
-   *  but records the WORKTREE too: the temp index lives per worktree, so a
-   *  takeover to a different worktree must NOT reuse — the new worktree's index
-   *  doesn't exist yet, and `add -A` against an absent index drops
-   *  tracked-but-gitignored files. In-memory; a miss just costs one rescan. */
+  /** Last worktree+HEAD each repo's temp index was seeded from, to skip a rescan
+   *  on the next checkpoint. Records the worktree so a takeover doesn't reuse a
+   *  different worktree's index (a miss just costs one rescan). */
   private readonly lastCheckpointByRepo = new Map<string, { worktreeId: string; headSha: string }>()
 
   /** The HEAD to pass as reuseIndexForHead, only when the last checkpoint was
@@ -109,18 +109,7 @@ export class SpotlightService {
           worktreeId,
           headSha: outcome.checkpointHeadSha
         })
-        const state: SpotlightRepoState = {
-          repoId,
-          holderWorktreeId: worktreeId,
-          status: 'active',
-          originalBranch: outcome.originalBranch,
-          originalHeadSha: outcome.originalHeadSha,
-          backupSha: outcome.backupSha,
-          lastSnapshotSha: outcome.snapshotSha,
-          activatedAt: previous?.activatedAt ?? Date.now(),
-          lastSyncAt: Date.now(),
-          lastError: null
-        }
+        const state = activeStateFromActivation(repoId, worktreeId, outcome, previous?.activatedAt)
         this.store.setSpotlightState(repoId, state)
         this.emitChanged(repoId, state)
         void writeSpotlightStateFile(resolved.repo.path, state)
@@ -180,13 +169,7 @@ export class SpotlightService {
         if (outcome.skipped && !state.lastError) {
           return { ok: true, state }
         }
-        const next: SpotlightRepoState = {
-          ...state,
-          status: 'active',
-          lastSnapshotSha: outcome.snapshotSha,
-          lastSyncAt: outcome.skipped ? state.lastSyncAt : Date.now(),
-          lastError: null
-        }
+        const next = syncedSpotlightState(state, outcome)
         this.store.setSpotlightState(repoId, next)
         this.emitChanged(repoId, next)
         void writeSpotlightStateFile(resolved.repo.path, next)
@@ -268,12 +251,9 @@ export class SpotlightService {
       try {
         const refs = await inspectSpotlightRefsCore(resolved.ctx, resolved.repo.path)
         if (!refs.originalHeadSha || !refs.snapshotSha) {
-          // Distinguish "refs genuinely removed" from "git read failed": every
-          // ref goes through gitTry, which swallows ALL errors (concurrent
-          // git gc / index.lock, EBUSY on Windows, a slow network .git) and
-          // returns null. rootHeadSha is a plain `rev-parse HEAD` — if IT is
-          // also null the read didn't succeed, so keep the record and retry
-          // later instead of tearing down a still-active Spotlight.
+          // gitTry returns null on read failure too, not only for missing refs.
+          // A null rootHeadSha means the read itself failed, so keep the record
+          // and retry later rather than tear down a still-active Spotlight.
           if (!refs.rootHeadSha) {
             return
           }
@@ -308,16 +288,30 @@ export class SpotlightService {
     return resolveRepoContext(this.store, repoId, opts)
   }
 
-  /** Tear down every Spotlight resource for a repo once its refs are gone or
-   *  restored: the log capture + restart-trigger watcher (main owns the
-   *  Spotlight lifecycle, not the PTY), the index-reuse cache, the persisted
-   *  record, and the agent-facing state file, then notify the renderer. */
-  private clearSpotlightRecord(repoId: string, rootPath: string): void {
+  /** Tear down all Spotlight resources for a repo once its refs are gone/restored.
+   *  Main owns the lifecycle (not the PTY), so it also stops the log capture. */
+  private clearSpotlightRecord(repoId: string, rootPath: string | null): void {
     stopSpotlightLogCapture({ repoId })
     this.lastCheckpointByRepo.delete(repoId)
     this.store.clearSpotlightState(repoId)
     this.emitChanged(repoId, null)
-    void writeSpotlightStateFile(rootPath, null)
+    if (rootPath) {
+      void writeSpotlightStateFile(rootPath, null)
+    }
+  }
+
+  /** Force-clean Spotlight refs + the persisted record when a repo is being
+   *  removed and a normal deactivate couldn't finish. Preserves the backup ref. */
+  async purgeForTeardown(repoId: string): Promise<void> {
+    await this.withRepoLock(repoId, async () => {
+      const resolved = this.resolveRepoContext(repoId, { requireEnabled: false })
+      if ('error' in resolved) {
+        this.clearSpotlightRecord(repoId, null)
+        return
+      }
+      await purgeSpotlightRefsCore(resolved.ctx, resolved.repo.path)
+      this.clearSpotlightRecord(repoId, resolved.repo.path)
+    })
   }
 
   private failure(

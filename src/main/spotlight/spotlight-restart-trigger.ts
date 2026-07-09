@@ -11,12 +11,9 @@ export const SPOTLIGHT_RESTART_TRIGGER_FILENAME = 'spotlight-restart'
 // Delay between the interrupt and re-running the command: long enough for the
 // server to release the prompt, short enough to feel immediate.
 const RESTART_RERUN_DELAY_MS = 700
-// Grace window when deciding a pre-existing trigger is "stale" (prior session)
-// vs written during this capture's setup. Filesystem mtime granularity is
-// coarse (ext4 can be 1s, FAT/exFAT 2s, some network mounts worse), so a
-// just-written trigger's mtime can round to a whole second below our in-process
-// start time. Only treat a trigger as stale when it predates the start by MORE
-// than this, so a legitimate touch during setup is never silently swallowed.
+// Grace window for the stale-trigger check: coarse fs mtime granularity (1-2s+)
+// can round a just-written trigger below our start time, so only treat it as a
+// prior-session leftover when it predates the start by more than this.
 const STALE_TRIGGER_GRACE_MS = 5000
 
 /** Minimal capture surface the restart needs — avoids a circular import on
@@ -56,15 +53,10 @@ export function sendServerRestart(target: RestartTarget): boolean {
   return true
 }
 
-/** Start watching .orca/ for the restart trigger file. Calls `onRestart` once
- *  per trigger (after deleting the file so a slow restart can't loop). Returns
- *  the watcher (close it on teardown) or null if watching failed.
- *
- *  `captureStartedAtMs` is when this capture began (before the async watcher
- *  setup). A leftover trigger OLDER than that is stale (agent touched it, then
- *  Orca closed/crashed) and is cleared without restarting; a trigger at-or-after
- *  it was written during this session — including in the setup gap before the
- *  watcher armed — so it is honored rather than silently deleted. */
+/** Watch .orca/ for the restart trigger; deletes it before firing so a slow
+ *  restart can't loop. Returns the watcher (or null on failure). A leftover
+ *  trigger older than captureStartedAtMs is a stale prior-session touch (cleared,
+ *  not run); one at-or-after it is honored. */
 export function watchRestartTrigger(
   orcaDir: string,
   onRestart: () => void,
