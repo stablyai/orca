@@ -9,28 +9,32 @@ import {
 } from './CliSkillRuntimeSetup'
 
 describe('CliSkillRuntimeSetup runtime helpers', () => {
-  it('wraps WSL skill installs in the selected distro login shell', () => {
+  it('wraps WSL skill installs as a directly runnable selected-distro command', () => {
     const command = buildSkillInstallCommandForRuntime('npx skills add orchestration --global', {
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
       label: 'WSL Ubuntu'
     })
 
-    expect(command).toContain("wsl.exe -d 'Ubuntu' -- sh -c")
-    expect(command).toContain('getent passwd')
+    expect(command).toBe("wsl.exe -d 'Ubuntu' -- bash -ilc 'npx skills add orchestration --global'")
     expect(command).toContain('npx skills add orchestration --global')
+    expect(command).not.toContain('\\$(')
+    expect(command).not.toContain("''")
   })
 
-  it('wraps WSL skill updates with the same selected distro login shell', () => {
+  it('wraps WSL skill updates as a directly runnable selected-distro command', () => {
     const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
       runtime: 'wsl',
       wslDistro: 'Fedora Remix',
       label: 'WSL Fedora Remix'
     })
 
-    expect(command).toContain("wsl.exe -d 'Fedora Remix' -- sh -c")
-    expect(command).toContain('getent passwd')
+    expect(command).toBe(
+      "wsl.exe -d 'Fedora Remix' -- bash -ilc 'npx skills update orchestration --global'"
+    )
     expect(command).toContain('npx skills update orchestration --global')
+    expect(command).not.toContain('\\$(')
+    expect(command).not.toContain("''")
   })
 
   it('reinstalls Windows-host skill updates through the add path', () => {

@@ -3,10 +3,6 @@ import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeGlobalWindowsRuntimeDefault
 } from '../../../../shared/project-execution-runtime'
-import {
-  buildWslLoginShellCommand,
-  escapeWslShCommandForWindows
-} from '../../../../shared/wsl-login-shell-command'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -86,8 +82,8 @@ export function buildSkillCommandForRuntime(
   const distroArg = resolvedRuntime.wslDistro?.trim()
     ? ` -d ${quotePowerShellSingle(resolvedRuntime.wslDistro.trim())}`
     : ''
-  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(normalizedCommand))
-  return `wsl.exe${distroArg} -- sh -c ${quotePowerShellSingle(wslCommand)}`
+  // Why: Bash login mode keeps WSL skill commands pasteable and PATH-aware.
+  return `wsl.exe${distroArg} -- bash -ilc ${quotePowerShellSingle(normalizedCommand)}`
 }
 
 function normalizeWindowsSkillUpdateCommand(
