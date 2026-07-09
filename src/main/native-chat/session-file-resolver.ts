@@ -4,6 +4,11 @@ import { basename, dirname, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import {
+  GROK_CHAT_HISTORY_FILE,
+  findGrokChatHistoryBySessionIdSync,
+  resolveGrokSessionsDir
+} from '../../shared/grok-session-paths'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -29,9 +34,7 @@ function codexSessionsDirs(): string[] {
 }
 
 function grokSessionsDir(): string {
-  return process.env.GROK_HOME?.trim()
-    ? join(process.env.GROK_HOME.trim(), 'sessions')
-    : join(homedir(), '.grok', 'sessions')
+  return resolveGrokSessionsDir(process.env, homedir())
 }
 
 export type ResolveSessionFileOptions = {
@@ -131,17 +134,19 @@ async function resolveGrokSessionFile(
   sessionId: string,
   sessionsDir: string
 ): Promise<string | null> {
-  // Why: Grok nests chat_history.jsonl under encodeURIComponent(cwd)/sessionId/
-  // (same layout agent-hook-listener getGrokChatHistoryPath uses). Walk the
-  // sessions tree for that exact leaf name under a directory named sessionId.
+  // Why: walk by session id so long-cwd slug groups and GROK_HOME layouts still
+  // resolve (shared with hook last-assistant path resolution).
+  const syncHit = findGrokChatHistoryBySessionIdSync(sessionsDir, sessionId)
+  if (syncHit) {
+    return syncHit
+  }
   if (!existsSync(sessionsDir)) {
     return null
   }
-  const targetName = 'chat_history.jsonl'
   const files = await walkSessionFiles(sessionsDir, 'grok', [], {
     extensions: new Set(['.jsonl']),
     filePredicate: (path) =>
-      basename(path) === targetName && basename(dirname(path)) === sessionId
+      basename(path) === GROK_CHAT_HISTORY_FILE && basename(dirname(path)) === sessionId
   })
   return files[0] ?? null
 }

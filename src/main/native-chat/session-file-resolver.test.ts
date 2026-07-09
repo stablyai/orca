@@ -50,6 +50,36 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('resolves Grok chat_history by session id under a long-cwd slug group', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-long-')
+    const grokSessionsDir = join(root, 'grok-sessions')
+    const sessionDir = join(grokSessionsDir, 'slug-hash-ab12', 'sess-long-1')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'chat_history.jsonl')
+    await writeFile(join(grokSessionsDir, 'slug-hash-ab12', '.cwd'), `/${'x'.repeat(400)}\n`)
+    await writeFile(target, '{"type":"assistant","content":"ok"}\n')
+
+    await expect(resolveSessionFilePath('grok', 'sess-long-1', { grokSessionsDir })).resolves.toBe(
+      target
+    )
+  })
+
+  it('resolves Grok sessions under GROK_HOME when no override is passed', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-home-')
+    const sessionsDir = join(root, 'sessions')
+    const sessionDir = join(sessionsDir, encodeURIComponent('/repo'), 'sess-env-1')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'chat_history.jsonl')
+    await writeFile(target, '{}\n')
+    const previous = process.env.GROK_HOME
+    process.env.GROK_HOME = root
+    try {
+      await expect(resolveSessionFilePath('grok', 'sess-env-1')).resolves.toBe(target)
+    } finally {
+      restoreEnv('GROK_HOME', previous)
+    }
+  })
+
   it('matches Codex rollout files by session id suffix', async () => {
     const root = await makeRoot('orca-native-chat-resolve-codex-')
     const codexSessionsDir = join(root, 'codex-sessions')

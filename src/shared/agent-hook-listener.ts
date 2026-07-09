@@ -36,6 +36,11 @@ import {
 } from './agent-session-resume'
 import { parsePaneKey } from './stable-pane-id'
 import { isHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import {
+  buildGrokChatHistoryPathCandidates,
+  resolveGrokChatHistoryPathSync,
+  resolveGrokSessionsDir
+} from './grok-session-paths'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -1050,21 +1055,38 @@ function getGrokChatHistoryPath(hookPayload: Record<string, unknown>): string | 
     ['sessionId', 'session_id'],
     GROK_SESSION_ID_MAX_LENGTH
   )
+  if (!sessionId || !isSafeGrokSessionId(sessionId)) {
+    return undefined
+  }
   const cwd = readBoundedString(
     hookPayload,
     ['cwd', 'workspaceRoot', 'workspace_root'],
     GROK_SESSION_CWD_MAX_LENGTH
   )
-  if (!sessionId || !cwd || !isSafeGrokSessionId(sessionId)) {
+  // Why: honor GROK_HOME and find sessions under long-cwd slug groups by
+  // walking for sessionId — encodeURIComponent(cwd) alone misses both cases.
+  const resolved = resolveGrokChatHistoryPathSync({
+    sessionId,
+    cwd: cwd ?? null,
+    env: process.env,
+    homeDir: homedir()
+  })
+  if (resolved) {
+    return resolved
+  }
+  // Why: hasPendingAgentResultText only needs a plausible on-disk target when
+  // the file may not exist yet (SessionEnd can race the last write). Prefer a
+  // short-cwd candidate when available; long-cwd sessions still resolve once
+  // the file appears via the walk above on a later read.
+  if (!cwd) {
     return undefined
   }
-  return join(
-    homedir(),
-    '.grok',
-    'sessions',
-    encodeURIComponent(cwd),
-    sessionId,
-    'chat_history.jsonl'
+  return (
+    buildGrokChatHistoryPathCandidates({
+      sessionId,
+      cwd,
+      sessionsDir: resolveGrokSessionsDir(process.env, homedir())
+    })[0] ?? undefined
   )
 }
 
