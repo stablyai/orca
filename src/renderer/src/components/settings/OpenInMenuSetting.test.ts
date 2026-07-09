@@ -69,6 +69,16 @@ describe('OpenInMenuSetting presets', () => {
     expect(icon.props.src).toMatch(/^data:image\/svg|\.svg$/)
   })
 
+  it('renders every preset in one of the Add app menu partitions', () => {
+    const presets = getOpenInAppPresets()
+    const standalone = presets.filter((preset) => preset.group === undefined)
+    const jetbrains = presets.filter((preset) => preset.group === 'jetbrains')
+
+    // Why: the Add app dropdown renders exactly these two partitions; a new
+    // group literal needs its own submenu there or its presets silently vanish.
+    expect(standalone.length + jetbrains.length).toBe(presets.length)
+  })
+
   it('creates stable rows for JetBrains presets', () => {
     const webstorm = requirePreset('webstorm')
 
