@@ -13,6 +13,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   CircleDot,
@@ -4538,6 +4539,19 @@ export default function TaskPage(): React.JSX.Element {
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
+  const [collapsedJiraGroups, setCollapsedJiraGroups] = useState<Set<string>>(new Set())
+
+  const toggleJiraGroup = useCallback((groupKey: string) => {
+    setCollapsedJiraGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) {
+        next.delete(groupKey)
+      } else {
+        next.add(groupKey)
+      }
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -5497,6 +5511,30 @@ export default function TaskPage(): React.JSX.Element {
       ),
     [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache, jiraTaskSourceContext]
   )
+
+  const jiraIssueSections = useMemo(() => {
+    const sections: { key: string; label: string; issues: JiraIssue[] }[] = []
+    const sectionsMap = new Map<string, JiraIssue[]>()
+
+    for (const issue of displayedJiraIssues) {
+      const statusName = issue.status.name
+      if (!sectionsMap.has(statusName)) {
+        sectionsMap.set(statusName, [])
+      }
+      sectionsMap.get(statusName)!.push(issue)
+    }
+
+    sectionsMap.forEach((issues, statusName) => {
+      sections.push({
+        key: statusName,
+        label: statusName,
+        issues
+      })
+    })
+
+    sections.sort((a, b) => a.label.localeCompare(b.label))
+    return sections
+  }, [displayedJiraIssues])
 
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
@@ -9896,182 +9934,229 @@ export default function TaskPage(): React.JSX.Element {
                   ) : null}
 
                   <div className="divide-y divide-border/50">
-                    {displayedJiraIssues.map((issue) => {
-                      const selected = issue.key === selectedJiraIssueKey
-                      const labels = issue.labels.slice(0, 3)
-                      const contextLabel =
-                        selectedJiraSiteId === 'all' && issue.siteName
-                          ? `${issue.siteName} / ${issue.project.key}`
-                          : issue.project.key
-                      return (
+                    {jiraIssueSections.flatMap((section) => {
+                      const isCollapsed = collapsedJiraGroups.has(section.key)
+                      return [
                         <div
-                          key={`${issue.siteId ?? 'site'}:${issue.key}`}
+                          key={`section:${section.key}`}
                           role="button"
                           tabIndex={0}
-                          aria-current={selected ? 'true' : undefined}
-                          data-current={selected ? 'true' : undefined}
-                          onClick={() => openJiraDetailPage(issue)}
+                          onClick={() => toggleJiraGroup(section.key)}
                           onKeyDown={(e) => {
-                            if (e.target !== e.currentTarget) {
-                              return
-                            }
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault()
-                              openJiraDetailPage(issue)
+                              toggleJiraGroup(section.key)
                             }
                           }}
-                          className={cn(
-                            'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]',
-                            selected && 'bg-accent'
-                          )}
+                          className="flex h-9 cursor-pointer select-none items-center gap-2 bg-muted/35 px-3 hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none transition-colors"
                         >
-                          <span className="block truncate font-mono text-[12px] text-muted-foreground max-md:!hidden">
-                            {issue.key}
+                          {isCollapsed ? (
+                            <ChevronUp className="size-3 shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+                          )}
+                          <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                            {section.label}
                           </span>
-
-                          <div className="min-w-0">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0 font-mono text-[11px] text-muted-foreground md:hidden">
-                                {issue.key}
-                              </span>
-                              <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                                {issue.title}
-                              </h3>
-                            </div>
-                            <div className="mt-1 flex min-w-0 items-center gap-1.5 md:!hidden">
-                              <span
-                                className={cn(
-                                  'inline-flex min-w-0 items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium',
-                                  getJiraStatusTone(issue.status.categoryKey)
-                                )}
-                              >
-                                <span className="truncate">{issue.status.name}</span>
-                              </span>
-                              <span className="shrink-0 text-[11px] text-muted-foreground">
-                                {issue.priority?.name ??
-                                  translate('auto.components.TaskPage.713179dfdc', 'No priority')}
-                              </span>
-                              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                {issue.assignee?.displayName ??
-                                  translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
-                              <span className="max-w-[160px] truncate text-[10px] text-muted-foreground xl:!hidden">
-                                {contextLabel}
-                              </span>
-                              {labels.map((label) => (
-                                <span
-                                  key={label}
-                                  className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                >
-                                  {label}
-                                </span>
-                              ))}
-                              {issue.labels.length > labels.length ? (
-                                <span className="text-[10px] text-muted-foreground">
-                                  +{issue.labels.length - labels.length}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <div className="flex min-w-0 max-md:!hidden">
-                            <span
-                              className={cn(
-                                'inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                                getJiraStatusTone(issue.status.categoryKey)
-                              )}
-                            >
-                              <span className="truncate">{issue.status.name}</span>
-                            </span>
-                          </div>
-
-                          <span className="block truncate text-[12px] text-muted-foreground max-md:!hidden">
-                            {issue.priority?.name ??
-                              translate('auto.components.TaskPage.713179dfdc', 'No priority')}
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            {section.issues.length}
                           </span>
-
-                          <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-                            {issue.assignee?.avatarUrl ? (
-                              <img
-                                src={issue.assignee.avatarUrl}
-                                alt={issue.assignee.displayName}
-                                className="size-5 shrink-0 rounded-full"
-                              />
-                            ) : (
-                              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
-                                {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
-                              </span>
-                            )}
-                            <span className="truncate">
-                              {issue.assignee?.displayName ??
-                                translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
-                            </span>
-                          </div>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-md:!hidden">
-                                {formatRelativeTime(issue.updatedAt)}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" sideOffset={6}>
-                              {new Date(issue.updatedAt).toLocaleString()}
-                            </TooltipContent>
-                          </Tooltip>
-
-                          <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    handleUseJiraItem(issue)
+                        </div>,
+                        ...(isCollapsed
+                          ? []
+                          : section.issues.map((issue) => {
+                              const selected = issue.key === selectedJiraIssueKey
+                              const labels = issue.labels.slice(0, 3)
+                              const contextLabel =
+                                selectedJiraSiteId === 'all' && issue.siteName
+                                  ? `${issue.siteName} / ${issue.project.key}`
+                                  : issue.project.key
+                              return (
+                                <div
+                                  key={`${issue.siteId ?? 'site'}:${issue.key}`}
+                                  role="button"
+                                  tabIndex={0}
+                                  aria-current={selected ? 'true' : undefined}
+                                  data-current={selected ? 'true' : undefined}
+                                  onClick={() => openJiraDetailPage(issue)}
+                                  onKeyDown={(e) => {
+                                    if (e.target !== e.currentTarget) {
+                                      return
+                                    }
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault()
+                                      openJiraDetailPage(issue)
+                                    }
                                   }}
-                                  aria-label={translate(
-                                    'auto.components.TaskPage.ff90d0abc7',
-                                    'Start workspace from {{value0}}',
-                                    { value0: issue.key }
+                                  className={cn(
+                                    'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]',
+                                    selected && 'bg-accent'
                                   )}
                                 >
-                                  <ArrowRight className="size-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" sideOffset={6}>
-                                {translate(
-                                  'auto.components.TaskPage.9497f2787c',
-                                  'Start workspace'
-                                )}
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    window.api.shell.openUrl(issue.url)
-                                  }}
-                                  aria-label={translate(
-                                    'auto.components.TaskPage.4ac8ff2275',
-                                    'Open {{value0}} in Jira',
-                                    { value0: issue.key }
-                                  )}
-                                >
-                                  <ExternalLink className="size-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" sideOffset={6}>
-                                {translate('auto.components.TaskPage.eee68073b2', 'Open in Jira')}
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      )
+                                  <span className="block truncate font-mono text-[12px] text-muted-foreground max-md:!hidden">
+                                    {issue.key}
+                                  </span>
+
+                                  <div className="min-w-0">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground md:hidden">
+                                        {issue.key}
+                                      </span>
+                                      <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                                        {issue.title}
+                                      </h3>
+                                    </div>
+                                    <div className="mt-1 flex min-w-0 items-center gap-1.5 md:!hidden">
+                                      <span
+                                        className={cn(
+                                          'inline-flex min-w-0 items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium',
+                                          getJiraStatusTone(issue.status.categoryKey)
+                                        )}
+                                      >
+                                        <span className="truncate">{issue.status.name}</span>
+                                      </span>
+                                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                                        {issue.priority?.name ??
+                                          translate(
+                                            'auto.components.TaskPage.713179dfdc',
+                                            'No priority'
+                                          )}
+                                      </span>
+                                      <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                                        {issue.assignee?.displayName ??
+                                          translate(
+                                            'auto.components.TaskPage.42a9160321',
+                                            'Unassigned'
+                                          )}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
+                                      <span className="max-w-[160px] truncate text-[10px] text-muted-foreground xl:!hidden">
+                                        {contextLabel}
+                                      </span>
+                                      {labels.map((label) => (
+                                        <span
+                                          key={label}
+                                          className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                        >
+                                          {label}
+                                        </span>
+                                      ))}
+                                      {issue.labels.length > labels.length ? (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          +{issue.labels.length - labels.length}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex min-w-0 max-md:!hidden">
+                                    <span
+                                      className={cn(
+                                        'inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                                        getJiraStatusTone(issue.status.categoryKey)
+                                      )}
+                                    >
+                                      <span className="truncate">{issue.status.name}</span>
+                                    </span>
+                                  </div>
+
+                                  <span className="block truncate text-[12px] text-muted-foreground max-md:!hidden">
+                                    {issue.priority?.name ??
+                                      translate(
+                                        'auto.components.TaskPage.713179dfdc',
+                                        'No priority'
+                                      )}
+                                  </span>
+
+                                  <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
+                                    {issue.assignee?.avatarUrl ? (
+                                      <img
+                                        src={issue.assignee.avatarUrl}
+                                        alt={issue.assignee.displayName}
+                                        className="size-5 shrink-0 rounded-full"
+                                      />
+                                    ) : (
+                                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
+                                        {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
+                                      </span>
+                                    )}
+                                    <span className="truncate">
+                                      {issue.assignee?.displayName ??
+                                        translate(
+                                          'auto.components.TaskPage.42a9160321',
+                                          'Unassigned'
+                                        )}
+                                    </span>
+                                  </div>
+
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-md:!hidden">
+                                        {formatRelativeTime(issue.updatedAt)}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" sideOffset={6}>
+                                      {new Date(issue.updatedAt).toLocaleString()}
+                                    </TooltipContent>
+                                  </Tooltip>
+
+                                  <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            handleUseJiraItem(issue)
+                                          }}
+                                          aria-label={translate(
+                                            'auto.components.TaskPage.ff90d0abc7',
+                                            'Start workspace from {{value0}}',
+                                            { value0: issue.key }
+                                          )}
+                                        >
+                                          <ArrowRight className="size-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" sideOffset={6}>
+                                        {translate(
+                                          'auto.components.TaskPage.9497f2787c',
+                                          'Start workspace'
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            window.api.shell.openUrl(issue.url)
+                                          }}
+                                          aria-label={translate(
+                                            'auto.components.TaskPage.4ac8ff2275',
+                                            'Open {{value0}} in Jira',
+                                            { value0: issue.key }
+                                          )}
+                                        >
+                                          <ExternalLink className="size-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" sideOffset={6}>
+                                        {translate(
+                                          'auto.components.TaskPage.eee68073b2',
+                                          'Open in Jira'
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                </div>
+                              )
+                            }))
+                      ]
                     })}
                   </div>
                 </div>
