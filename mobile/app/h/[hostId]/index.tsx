@@ -44,6 +44,7 @@ import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
 import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
+import { AddProjectIconButton, AddProjectModal } from '../../../src/components/AddProjectModal'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
@@ -181,6 +182,7 @@ export function HostScreen({
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
+  const [showAddProject, setShowAddProject] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
   const [hostCapabilities, setHostCapabilities] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
@@ -1016,6 +1018,12 @@ export function HostScreen({
                 />
               </Pressable>
 
+              <AddProjectIconButton
+                style={styles.embeddedToolbarIconButton}
+                connected={connState === 'connected'}
+                onPress={() => setShowAddProject(true)}
+              />
+
               <Pressable
                 style={[
                   styles.embeddedToolbarIconButton,
@@ -1109,6 +1117,12 @@ export function HostScreen({
                 color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
               />
             </Pressable>
+
+            <AddProjectIconButton
+              style={styles.searchToggle}
+              connected={connState === 'connected'}
+              onPress={() => setShowAddProject(true)}
+            />
 
             <Pressable style={styles.searchToggle} onPress={() => setShowSearch((s) => !s)}>
               {showSearch ? (
@@ -1419,6 +1433,13 @@ export function HostScreen({
         destructive
         onConfirm={() => void handleRemoveHost()}
         onCancel={() => setConfirmRemoveHost(false)}
+      />
+
+      <AddProjectModal
+        visible={showAddProject}
+        client={client}
+        onClose={() => setShowAddProject(false)}
+        onAdded={() => void fetchRepoMetadata({ force: true })}
       />
 
       <NewWorktreeModalController
