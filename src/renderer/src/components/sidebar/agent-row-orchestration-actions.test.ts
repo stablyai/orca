@@ -3,6 +3,7 @@ import {
   askAgent,
   dispatchTaskToAgent,
   getActiveTerminalPaneKey,
+  resolveCoordinatorPaneKey,
   sendMessageToAgent
 } from './agent-row-orchestration-actions'
 
@@ -31,10 +32,17 @@ function resolvePaneResponse(handle: string) {
   })
 }
 
+const emptyStateBase = {
+  activeWorktreeId: 'wt-1' as string | null,
+  tabsByWorktree: {} as Record<string, { id: string }[] | undefined>,
+  agentStatusByPaneKey: {} as Record<string, unknown>
+}
+
 describe('getActiveTerminalPaneKey', () => {
   it('returns pane key for the focused terminal leaf', () => {
     expect(
       getActiveTerminalPaneKey({
+        ...emptyStateBase,
         activeTabType: 'terminal',
         activeTabId: 'tab-1',
         terminalLayoutsByTabId: {
@@ -47,6 +55,7 @@ describe('getActiveTerminalPaneKey', () => {
   it('returns null when no terminal is focused', () => {
     expect(
       getActiveTerminalPaneKey({
+        ...emptyStateBase,
         activeTabType: 'browser',
         activeTabId: 'tab-1',
         terminalLayoutsByTabId: {
@@ -54,6 +63,50 @@ describe('getActiveTerminalPaneKey', () => {
         }
       })
     ).toBeNull()
+  })
+})
+
+describe('resolveCoordinatorPaneKey', () => {
+  it('prefers a focused terminal that is not the worker', () => {
+    expect(
+      resolveCoordinatorPaneKey({
+        workerPaneKey: WORKER_PANE,
+        workerWorktreeId: 'wt-1',
+        state: {
+          ...emptyStateBase,
+          activeTabType: 'terminal',
+          activeTabId: 'tab-coord',
+          terminalLayoutsByTabId: {
+            'tab-coord': { activeLeafId: LEAF_A },
+            'tab-worker': { activeLeafId: LEAF_B }
+          },
+          tabsByWorktree: {
+            'wt-1': [{ id: 'tab-coord' }, { id: 'tab-worker' }]
+          }
+        }
+      })
+    ).toBe(COORD_PANE)
+  })
+
+  it('falls back to another terminal in the worktree when focused is the worker', () => {
+    expect(
+      resolveCoordinatorPaneKey({
+        workerPaneKey: WORKER_PANE,
+        workerWorktreeId: 'wt-1',
+        state: {
+          ...emptyStateBase,
+          activeTabType: 'terminal',
+          activeTabId: 'tab-worker',
+          terminalLayoutsByTabId: {
+            'tab-coord': { activeLeafId: LEAF_A, root: { type: 'leaf', leafId: LEAF_A } },
+            'tab-worker': { activeLeafId: LEAF_B, root: { type: 'leaf', leafId: LEAF_B } }
+          },
+          tabsByWorktree: {
+            'wt-1': [{ id: 'tab-coord' }, { id: 'tab-worker' }]
+          }
+        }
+      })
+    ).toBe(COORD_PANE)
   })
 })
 

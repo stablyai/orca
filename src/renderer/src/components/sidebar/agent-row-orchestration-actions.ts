@@ -1,5 +1,6 @@
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveTerminalHandleForPaneKey } from '@/components/dashboard/agent-row-orchestration-clipboard'
 
 type CallRuntime = (request: {
@@ -12,7 +13,13 @@ export type OrchestrationActionKind = 'dispatch' | 'send' | 'ask'
 export type ActiveTerminalPaneKeyState = {
   activeTabType: string | null
   activeTabId: string | null
-  terminalLayoutsByTabId: Record<string, { activeLeafId?: string | null } | undefined>
+  activeWorktreeId: string | null
+  tabsByWorktree: Record<string, { id: string }[] | undefined>
+  terminalLayoutsByTabId: Record<
+    string,
+    { activeLeafId?: string | null; root?: TerminalPaneLayoutNode | null } | undefined
+  >
+  agentStatusByPaneKey?: Record<string, unknown>
 }
 
 // Why: the focused terminal is the natural coordinator for sidebar-driven
@@ -26,6 +33,84 @@ export function getActiveTerminalPaneKey(state: ActiveTerminalPaneKeyState): str
     return null
   }
   return makePaneKey(state.activeTabId, activeLeafId)
+}
+
+function collectLeafIds(node: TerminalPaneLayoutNode | null | undefined): string[] {
+  if (!node) {
+    return []
+  }
+  if (node.type === 'leaf') {
+    return [node.leafId]
+  }
+  return [...collectLeafIds(node.first), ...collectLeafIds(node.second)]
+}
+
+function collectWorktreeTerminalPaneKeys(
+  state: ActiveTerminalPaneKeyState,
+  worktreeId: string
+): string[] {
+  const keys: string[] = []
+  const seen = new Set<string>()
+  const push = (paneKey: string): void => {
+    if (seen.has(paneKey)) {
+      return
+    }
+    seen.add(paneKey)
+    keys.push(paneKey)
+  }
+
+  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+    const layout = state.terminalLayoutsByTabId[tab.id]
+    const leafIds = collectLeafIds(layout?.root ?? null)
+    if (leafIds.length === 0 && layout?.activeLeafId) {
+      leafIds.push(layout.activeLeafId)
+    }
+    for (const leafId of leafIds) {
+      if (isTerminalLeafId(leafId)) {
+        push(makePaneKey(tab.id, leafId))
+      }
+    }
+  }
+
+  // Why: agent rows can exist before layout leaves are fully hydrated; also
+  // prefer known agents as coordinator candidates.
+  for (const paneKey of Object.keys(state.agentStatusByPaneKey ?? {})) {
+    const parsed = parsePaneKey(paneKey)
+    if (!parsed) {
+      continue
+    }
+    const tabBelongs = (state.tabsByWorktree[worktreeId] ?? []).some(
+      (tab) => tab.id === parsed.tabId
+    )
+    if (tabBelongs) {
+      push(paneKey)
+    }
+  }
+
+  return keys
+}
+
+// Why: right-clicking an agent often focuses that same terminal, so "focused =
+// coordinator" would equal the worker. Prefer focused only when distinct; else
+// pick another terminal in the worker's worktree.
+export function resolveCoordinatorPaneKey(args: {
+  workerPaneKey: string
+  workerWorktreeId: string | null
+  state: ActiveTerminalPaneKeyState
+}): string | null {
+  const focused = getActiveTerminalPaneKey(args.state)
+  if (focused && focused !== args.workerPaneKey) {
+    return focused
+  }
+
+  const worktreeId = args.workerWorktreeId ?? args.state.activeWorktreeId
+  if (!worktreeId) {
+    return null
+  }
+
+  const candidates = collectWorktreeTerminalPaneKeys(args.state, worktreeId)
+  const other = candidates.find((paneKey) => paneKey !== args.workerPaneKey)
+  return other ?? null
 }
 
 function assertOk(response: RuntimeRpcResponse<unknown>): unknown {
@@ -62,12 +147,12 @@ export async function resolveCoordinatorAndWorkerHandles(args: {
 }): Promise<{ coordinatorHandle: string; workerHandle: string }> {
   if (!args.coordinatorPaneKey) {
     throw new Error(
-      'No focused terminal to use as coordinator. Focus a terminal pane first, then try again.'
+      'No other terminal found to use as coordinator. Open/focus another agent terminal in this worktree, then try again.'
     )
   }
   if (args.coordinatorPaneKey === args.workerPaneKey) {
     throw new Error(
-      'Coordinator and worker are the same terminal. Focus a different terminal as coordinator.'
+      'Coordinator and worker are the same terminal. Open/focus another agent terminal as coordinator.'
     )
   }
   const callRuntimeForPane = args.callRuntime as Parameters<

@@ -17,7 +17,7 @@ import { isOrchestrationSetupEnabled } from '@/lib/orchestration-setup-state'
 import {
   askAgent,
   dispatchTaskToAgent,
-  getActiveTerminalPaneKey,
+  resolveCoordinatorPaneKey,
   sendMessageToAgent,
   type OrchestrationActionKind
 } from './agent-row-orchestration-actions'
@@ -49,7 +49,7 @@ function dialogCopy(kind: OrchestrationActionKind): {
         ),
         description: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.description',
-          'Creates an orchestration task and dispatches it to this agent. The focused terminal is the coordinator.'
+          'Creates an orchestration task and dispatches it to this agent. Coordinator: focused terminal if different, otherwise another terminal in this worktree.'
         ),
         primaryLabel: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.submit',
@@ -72,7 +72,7 @@ function dialogCopy(kind: OrchestrationActionKind): {
         ),
         description: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.send.description',
-          'Sends an orchestration status message. The focused terminal is used as --from.'
+          'Sends an orchestration status message. Coordinator (--from): focused terminal if different, otherwise another terminal in this worktree.'
         ),
         primaryLabel: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.send.submit',
@@ -95,7 +95,7 @@ function dialogCopy(kind: OrchestrationActionKind): {
         ),
         description: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.description',
-          'Sends a blocking ask to this agent and waits up to 2 minutes for a reply. Focused terminal is the coordinator.'
+          'Sends a blocking ask to this agent and waits up to 2 minutes for a reply. Coordinator: focused terminal if different, otherwise another terminal in this worktree.'
         ),
         primaryLabel: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.submit',
@@ -148,7 +148,13 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
     setSubmitting(true)
     try {
       const store = useAppStore.getState()
-      const coordinatorPaneKey = getActiveTerminalPaneKey(store)
+      // Why: right-click often focuses the worker row; do not require the user to
+      // re-focus another tab if this worktree already has another terminal.
+      const coordinatorPaneKey = resolveCoordinatorPaneKey({
+        workerPaneKey: target.paneKey,
+        workerWorktreeId: target.worktreeId,
+        state: store
+      })
       // Why: window.api.runtime.call is a method-union; actions accept a narrow
       // call surface for taskCreate/dispatch/send/ask + terminal.resolvePane.
       const callRuntime = window.api.runtime.call as (request: {
