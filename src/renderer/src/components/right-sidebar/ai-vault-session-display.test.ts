@@ -33,8 +33,7 @@ const baseSession: AiVaultSession = {
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
   resumeCommand: "cd '/Users/ada/repo/app' && codex resume 'session-1'",
-  subagent: null,
-  subagentCount: 0
+  subagent: null
 }
 
 describe('ai vault session display', () => {

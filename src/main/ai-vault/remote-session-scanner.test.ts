@@ -283,7 +283,7 @@ describe('scanRemoteAiVaultSessions', () => {
     })
   })
 
-  it('ignores remote subagent siblings for Claude sessions with real turns', async () => {
+  it('counts remote subagent siblings for Claude sessions with real turns', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
       '/home/ada/.claude/projects/repo/live-session.jsonl',
@@ -311,10 +311,12 @@ describe('scanRemoteAiVaultSessions', () => {
 
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(1)
+    // The walk listing supplies the count for every session (the row badge),
+    // not only zero-turn recoverable ones.
     expect(result.sessions[0]).toMatchObject({
       sessionId: 'live-session',
       messageCount: 1,
-      subagentTranscriptCount: 0
+      subagentTranscriptCount: 1
     })
   })
 

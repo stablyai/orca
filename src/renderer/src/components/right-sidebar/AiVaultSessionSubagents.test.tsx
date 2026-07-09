@@ -38,9 +38,10 @@ function makeSession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
     messageCount: 3,
     totalTokens: 0,
     previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 1,
     resumeCommand: 'claude --resume parent-session',
     subagent: null,
-    subagentCount: 1,
     ...overrides
   }
 }
@@ -51,7 +52,7 @@ function makeSubagent(title: string): AiVaultSession {
     title,
     filePath: `/tmp/parent-session/subagents/agent-${title}.jsonl`,
     subagent: { parentSessionId: 'parent-session', agentType: null, status: 'running' },
-    subagentCount: 0
+    subagentTranscriptCount: 0
   })
 }
 
@@ -83,5 +84,16 @@ describe('SessionSubagentsSection', () => {
     })
     expect(queryByText('Second pass')).not.toBeNull()
     expect(queryByText('First pass')).toBeNull()
+  })
+
+  it('does not fetch for remote sessions even when the scan counted transcripts', async () => {
+    const { container } = render(
+      <SessionSubagentsSection
+        session={makeSession({ executionHostId: 'ssh:dev-box', subagentTranscriptCount: 2 })}
+      />
+    )
+    await act(async () => {})
+    expect(listSubagentSessions).not.toHaveBeenCalled()
+    expect(container.firstChild).toBeNull()
   })
 })

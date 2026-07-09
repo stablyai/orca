@@ -75,8 +75,8 @@ const aiVaultListResultSchema = z.object({
       queuedMessageCount: z.number().default(0),
       subagentTranscriptCount: z.number().default(0),
       resumeCommand: z.string(),
-      // Defaults keep remote hosts running an older build (no subagent listing
-      // fields) parseable; they simply report no subagent transcripts.
+      // The default keeps remote hosts running an older build (no subagent
+      // field) parseable; scanned top-level sessions carry null anyway.
       subagent: z
         .object({
           parentSessionId: z.string(),
@@ -84,8 +84,7 @@ const aiVaultListResultSchema = z.object({
           status: z.enum(['running', 'completed', 'failed', 'stopped']).nullable()
         })
         .nullable()
-        .default(null),
-      subagentCount: z.number().default(0)
+        .default(null)
     })
   ),
   issues: z.array(

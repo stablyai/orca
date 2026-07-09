@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, extname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type {
   AiVaultScanIssue,
@@ -10,6 +10,7 @@ import type {
 } from '../../shared/ai-vault-types'
 import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumulator'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
+import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcripts'
 import {
   asRecord,
   errorMessage,
@@ -20,9 +21,6 @@ import {
 } from './session-scanner-values'
 
 const SUBAGENT_TRANSCRIPT_PREFIX = 'agent-'
-// Exported so discovery can prune these subtrees using the same literal that
-// locates them here — the pruning comment and behavior can't drift.
-export const SUBAGENT_DIR_NAME = 'subagents'
 // A subagent writing nothing for this long without a terminal notification is
 // treated as no longer running (its status stays unknown rather than stale).
 const SUBAGENT_RUNNING_RECENCY_MS = 5 * 60_000
@@ -49,26 +47,6 @@ type ClaudeSubagentMeta = {
   agentType: string | null
 }
 
-// Claude stores Task subagent transcripts beside the parent transcript:
-// <dir>/<sessionId>.jsonl -> <dir>/<sessionId>/subagents/agent-*.jsonl
-export function claudeSubagentsDirForSessionFile(sessionFilePath: string): string {
-  const sessionDirName = basename(sessionFilePath, extname(sessionFilePath))
-  return join(dirname(sessionFilePath), sessionDirName, SUBAGENT_DIR_NAME)
-}
-
-/** Count a session's subagent transcripts with one readdir (no parsing). */
-export async function countClaudeSubagentTranscripts(sessionFilePath: string): Promise<number> {
-  try {
-    const entries = await readdir(claudeSubagentsDirForSessionFile(sessionFilePath), {
-      withFileTypes: true
-    })
-    return entries.filter((entry) => isSubagentTranscriptEntry(entry.name, entry.isFile())).length
-  } catch {
-    // Most sessions never spawned a subagent; a missing directory is normal.
-    return 0
-  }
-}
-
 /**
  * List the Task subagent transcripts of one Claude session, on demand. The
  * main scan prunes `subagents/` subtrees for speed, so this is the only path
@@ -82,7 +60,7 @@ export async function listClaudeSubagentSessions(args: {
   const platform = args.platform ?? process.platform
   const now = args.now ?? Date.now()
   const issues: AiVaultScanIssue[] = []
-  const subagentsDir = claudeSubagentsDirForSessionFile(args.parentFilePath)
+  const subagentsDir = subagentTranscriptsDirFor(args.parentFilePath)
 
   let entries
   try {

@@ -2,7 +2,6 @@ import { createReadStream } from 'node:fs'
 import { open } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
-import { countClaudeSubagentTranscripts } from './session-scanner-claude-subagents'
 import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
@@ -223,22 +222,11 @@ async function parseResumableCandidate(args: {
     displayState.consumeLine(readResult.trailingPartialLine)
   }
 
-  let session = await displayState.finalize(args.platform)
-  // Why: the row UI shows the subagent count without expanding details. The
-  // resumable path bypasses parseAgentSessionFile, so keep parity with its
-  // Claude case — one readdir is noise next to streaming the transcript.
-  if (session && args.candidate.agent === 'claude') {
-    session = {
-      ...session,
-      subagentCount: await countClaudeSubagentTranscripts(file.path)
-    }
-  }
-
   return {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform: args.platform,
-    session,
+    session: await displayState.finalize(args.platform),
     resume: { state, byteOffset: readResult.consumedThrough }
   }
 }

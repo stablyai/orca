@@ -58,11 +58,11 @@ export function SessionMetadata({
             { value0: session.messageCount }
           )}
         </span>
-        {session.subagentCount > 0 ? (
+        {session.subagentTranscriptCount > 0 ? (
           <>
             <span className="shrink-0 text-muted-foreground/55">·</span>
             <span className="shrink-0 tabular-nums">
-              {session.subagentCount === 1
+              {session.subagentTranscriptCount === 1
                 ? translate(
                     'auto.components.right.sidebar.AiVaultSessionRow.subagentCountSingular',
                     '1 subagent'
@@ -70,7 +70,7 @@ export function SessionMetadata({
                 : translate(
                     'auto.components.right.sidebar.AiVaultSessionRow.subagentCountPlural',
                     '{{value0}} subagents',
-                    { value0: session.subagentCount }
+                    { value0: session.subagentTranscriptCount }
                   )}
             </span>
           </>

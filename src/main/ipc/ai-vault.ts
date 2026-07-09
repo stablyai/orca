@@ -300,9 +300,9 @@ async function listAiVaultSubagentSessions(
   ) {
     return { sessions: [], issues: [] }
   }
-  // Why: subagent transcripts are read from the local filesystem. Remote
-  // Claude sessions already report subagentCount 0 (finalizeSession), so the
-  // UI never asks; return empty defensively rather than reading local paths.
+  // Why: subagent transcripts are read from the local filesystem. The UI
+  // skips remote sessions (their transcripts live on the remote host); return
+  // empty defensively rather than reading local paths for a remote session.
   const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return { sessions: [], issues: [] }

@@ -85,15 +85,15 @@ export type AiVaultSession = {
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
   // Recoverable signal for sessions whose conversation transcript persisted zero
-  // user/assistant turns: queued (never-flushed) prompts and sibling subagent
-  // transcripts survive even when the main conversation was lost.
+  // user/assistant turns: queued (never-flushed) prompts survive even when the
+  // main conversation was lost.
   queuedMessageCount: number
+  // Number of Task subagent transcripts stored beside this session; always 0
+  // for agents that don't materialize subagent transcripts. Doubles as the
+  // recoverable signal for zero-turn sessions.
   subagentTranscriptCount: number
   resumeCommand: string
   subagent: AiVaultSessionSubagentInfo | null
-  // Number of Task subagent transcripts stored beside this session; always 0
-  // for agents that don't materialize subagent transcripts.
-  subagentCount: number
 }
 
 export type AiVaultSubagentListArgs = {

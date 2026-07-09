@@ -1,13 +1,17 @@
 import { readdir } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 
+// Exported so discovery can prune these subtrees using the same literal that
+// locates them here — the pruning comment and behavior can't drift.
+export const SUBAGENT_DIR_NAME = 'subagents'
+
 // Claude writes subagent transcripts to a sibling directory named after the
 // parent transcript file (…/<enc>/<uuid>.jsonl → …/<enc>/<uuid>/subagents/).
 // These survive intact even when the parent conversation persisted zero turns,
 // so they are the recoverable signal that keeps such a session from being hidden.
 export function subagentTranscriptsDirFor(transcriptFilePath: string): string {
   const stem = basename(transcriptFilePath, extname(transcriptFilePath))
-  return join(dirname(transcriptFilePath), stem, 'subagents')
+  return join(dirname(transcriptFilePath), stem, SUBAGENT_DIR_NAME)
 }
 
 /**

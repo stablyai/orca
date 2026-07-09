@@ -55,7 +55,7 @@ describe('scanAiVaultSessions Claude subagent pruning', () => {
     expect(result.sessions).toHaveLength(1)
     expect(result.sessions[0]).toMatchObject({
       sessionId: 'claude-session',
-      subagentCount: 1
+      subagentTranscriptCount: 1
     })
   })
 })

@@ -33,8 +33,7 @@ const baseSession: AiVaultSession = {
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
   resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'",
-  subagent: null,
-  subagentCount: 0
+  subagent: null
 }
 
 describe('filterAiVaultSessions', () => {

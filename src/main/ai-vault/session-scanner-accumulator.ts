@@ -122,8 +122,7 @@ export function finalizeSession(
       platform,
       codexHome: options.codexHome
     }),
-    subagent: null,
-    subagentCount: 0
+    subagent: null
   }
 }
 

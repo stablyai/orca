@@ -1,5 +1,4 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { countClaudeSubagentTranscripts } from './session-scanner-claude-subagents'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseDroidSessionFile } from './session-scanner-droid-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
@@ -32,18 +31,8 @@ export async function parseAgentSessionFile(
   platform: NodeJS.Platform
 ): Promise<AiVaultSession | null> {
   switch (candidate.agent) {
-    case 'claude': {
-      const session = await parseClaudeSessionFile(candidate.file, platform)
-      if (!session) {
-        return null
-      }
-      // Why: the row UI shows the subagent count without expanding details;
-      // one readdir here is noise next to streaming the whole transcript.
-      return {
-        ...session,
-        subagentCount: await countClaudeSubagentTranscripts(candidate.file.path)
-      }
-    }
+    case 'claude':
+      return parseClaudeSessionFile(candidate.file, platform)
     case 'codex':
       return parseCodexSessionFile(candidate.file, platform, candidate.codexHome)
     case 'gemini':

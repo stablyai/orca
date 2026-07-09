@@ -2,10 +2,8 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  countClaudeSubagentTranscripts,
-  listClaudeSubagentSessions
-} from './session-scanner-claude-subagents'
+import { listClaudeSubagentSessions } from './session-scanner-claude-subagents'
+import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 
 let tempRoots: string[] = []
 
@@ -211,7 +209,7 @@ describe('listClaudeSubagentSessions', () => {
       'Task for stale': null,
       'Task for syncdone': 'completed'
     })
-    expect(await countClaudeSubagentTranscripts(parentFilePath)).toBe(5)
+    expect(await countSubagentTranscripts(parentFilePath)).toBe(5)
   })
 
   it('links to the parent derived from its file path even when the transcript has no sessionId', async () => {

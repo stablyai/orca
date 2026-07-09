@@ -24,8 +24,7 @@ const baseSession: AiVaultSession = {
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
   resumeCommand: "cd '/Users/ada/orca' && claude --resume 'session-1'",
-  subagent: null,
-  subagentCount: 0
+  subagent: null
 }
 
 describe('toAiVaultProjectKey', () => {

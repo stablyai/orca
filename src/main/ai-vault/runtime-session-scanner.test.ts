@@ -142,7 +142,6 @@ function session(
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
     resumeCommand: `codex resume ${sessionId}`,
-    subagent: null,
-    subagentCount: 0
+    subagent: null
   }
 }

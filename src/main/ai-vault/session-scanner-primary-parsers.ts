@@ -153,13 +153,14 @@ export async function finalizeClaudeSessionParseState(
   // session name (ai-title) should outrank the raw first prompt when present.
   snapshot.accumulator.fallbackTitle =
     snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
-  // Only a zero-turn transcript needs its sibling subagent transcripts counted;
-  // for normal sessions the extra directory read is skipped. The sibling dir
+  // Every session's sibling subagent transcripts are counted (one readdir):
+  // the row UI shows the count without expanding details, and for zero-turn
+  // transcripts it doubles as the recoverable-content signal. The sibling dir
   // lives on the host that owns the transcript, so content fetched from a
   // remote (SSH) host must not readdir this machine's disk.
   const ownsTranscriptDisk =
     !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
-  if (snapshot.accumulator.messageCount === 0 && ownsTranscriptDisk) {
+  if (ownsTranscriptDisk) {
     snapshot.accumulator.subagentTranscriptCount = await countSubagentTranscripts(
       snapshot.accumulator.filePath
     )

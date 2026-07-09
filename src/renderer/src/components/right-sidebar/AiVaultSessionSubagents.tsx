@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession, AiVaultSubagentRunStatus } from '../../../../shared/ai-vault-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 type SubagentListState = { status: 'loading' } | { status: 'loaded'; sessions: AiVaultSession[] }
@@ -53,8 +54,12 @@ function useSubagentSessions(session: AiVaultSession): SubagentListState {
 
   useEffect(() => {
     // The scan already counted the transcripts; skip the IPC round-trip when
-    // there is nothing to list.
-    if (session.subagentCount === 0) {
+    // there is nothing to list. Remote sessions can carry a count (from the
+    // remote walk listing), but their transcripts aren't local files to list.
+    if (
+      session.subagentTranscriptCount === 0 ||
+      session.executionHostId !== LOCAL_EXECUTION_HOST_ID
+    ) {
       setState({ status: 'loaded', sessions: [] })
       return
     }
@@ -89,7 +94,7 @@ function useSubagentSessions(session: AiVaultSession): SubagentListState {
     session.agent,
     session.filePath,
     session.executionHostId,
-    session.subagentCount,
+    session.subagentTranscriptCount,
     session.modifiedAt
   ])
 
