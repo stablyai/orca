@@ -207,7 +207,7 @@ export class SpotlightService {
         this.emitSyncing(repoId, state)
       }
       try {
-        await deactivateSpotlightCore(resolved.ctx, resolved.repo.path, {
+        const outcome = await deactivateSpotlightCore(resolved.ctx, resolved.repo.path, {
           discardBackup: opts.discardBackup
         })
         // Why here (not the renderer): log capture + the restart-trigger watcher
@@ -221,9 +221,15 @@ export class SpotlightService {
         void writeSpotlightStateFile(resolved.repo.path, null)
         void appendSpotlightLogNote(
           resolved.repo.path,
-          'Spotlight off — the root shows its own code again'
+          outcome.branchMissing
+            ? `Spotlight off — root restored but left detached (branch "${
+                outcome.originalBranch ?? '?'
+              }" was unavailable)`
+            : 'Spotlight off — the root shows its own code again'
         )
-        return { ok: true, state: null }
+        return outcome.branchMissing
+          ? { ok: true, state: null, leftDetachedFromBranch: outcome.originalBranch }
+          : { ok: true, state: null }
       } catch (error) {
         const spotlightError = toSpotlightError(error)
         if (spotlightError.code === 'not-active') {

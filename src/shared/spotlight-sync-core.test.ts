@@ -195,6 +195,23 @@ describe('spotlight-sync-core', () => {
     expect(() => run(rootPath, 'symbolic-ref', '-q', 'HEAD')).toThrow()
   })
 
+  it('deactivate stays detached when the original branch is checked out elsewhere', async () => {
+    // Root on 'main'. Activate detaches it, which frees 'main' for another
+    // worktree to grab — then deactivate can't re-checkout 'main' in the root.
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+    const originalHead = (await inspectSpotlightRefsCore(ctx, rootPath)).originalHeadSha
+    const other = path.join(baseDir, 'other')
+    run(rootPath, 'worktree', 'add', other, 'main')
+
+    // Must NOT throw (the old code hard-failed on `checkout main` → wedged).
+    const outcome = await deactivateSpotlightCore(ctx, rootPath)
+    expect(outcome.branchMissing).toBe(true)
+    // Root restored to its original commit, left detached, spotlight refs gone.
+    expect(run(rootPath, 'rev-parse', 'HEAD')).toBe(originalHead)
+    expect(() => run(rootPath, 'symbolic-ref', '-q', 'HEAD')).toThrow()
+    expect((await inspectSpotlightRefsCore(ctx, rootPath)).originalHeadSha).toBeNull()
+  })
+
   it('handles renames', async () => {
     run(worktreePath, 'mv', 'a.txt', 'renamed.txt')
     await activateSpotlightCore(ctx, rootPath, worktreePath)

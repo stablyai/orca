@@ -227,7 +227,29 @@ export const createSpotlightSlice: StateCreator<AppState, [], [], SpotlightSlice
     deactivateSpotlight: async (repoId) => {
       const result = await window.api.spotlight.deactivate({ repoId })
       applyState(repoId, result.state)
-      if (result.ok) {
+      if (result.ok && result.leftDetachedFromBranch !== undefined) {
+        // Root restored, but it couldn't return to its branch — warn instead of
+        // a plain success so a detached root isn't a silent surprise.
+        const branch = result.leftDetachedFromBranch
+        toast.warning(
+          translate(
+            'auto.store.slices.spotlight.releasedDetached',
+            'Spotlight off — project root left detached'
+          ),
+          {
+            description: branch
+              ? translate(
+                  'auto.store.slices.spotlight.releasedDetachedInUse',
+                  'Its branch "{{branch}}" is checked out in another workspace, so the root could not switch back to it. Free that branch (or check out any branch in the root) to re-attach.'
+                ).replace('{{branch}}', branch)
+              : translate(
+                  'auto.store.slices.spotlight.releasedDetachedGone',
+                  "The root's original branch no longer exists, so it was left detached at its original commit."
+                ),
+            duration: ERROR_TOAST_DURATION
+          }
+        )
+      } else if (result.ok) {
         toast.success(
           translate('auto.store.slices.spotlight.released', 'Spotlight off — project root restored')
         )

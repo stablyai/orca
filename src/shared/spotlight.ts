@@ -53,7 +53,14 @@ export type SpotlightStateSnapshot = {
 }
 
 export type SpotlightOpResult =
-  | { ok: true; state: SpotlightRepoState | null }
+  | {
+      ok: true
+      state: SpotlightRepoState | null
+      /** Set by deactivate when the root couldn't return to its original branch
+       *  (deleted, or checked out in another worktree) and was left detached.
+       *  The value is that branch's name, or null if it no longer exists. */
+      leftDetachedFromBranch?: string | null
+    }
   | { ok: false; error: SpotlightError; state: SpotlightRepoState | null }
 
 /** Pushed by main on every state transition (activate/sync/deactivate/takeover/reconcile). */
