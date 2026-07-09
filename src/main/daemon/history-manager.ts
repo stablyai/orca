@@ -308,6 +308,13 @@ export class HistoryManager {
     })
   }
 
+  // Why: hibernated terminals must leave meta.endedAt null for cold restore, but
+  // the dead session's writer must not be closed later by dispose().
+  detachSessionWriter(sessionId: string): void {
+    this.writers.delete(sessionId)
+    this.disabledSessions.delete(sessionId)
+  }
+
   isSessionDisabled(sessionId: string): boolean {
     return this.disabledSessions.has(sessionId)
   }

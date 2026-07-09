@@ -9,7 +9,10 @@ const {
   mkdirSyncMock,
   writeFileSyncMock,
   spawnMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  requestWindowsProcessTreeExitMock,
+  forceKillWindowsProcessTreeMock,
+  waitForWindowsProcessTreeForceKillMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -17,7 +20,18 @@ const {
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
-  resolveAgentForegroundProcessMock: vi.fn()
+  resolveAgentForegroundProcessMock: vi.fn(),
+  requestWindowsProcessTreeExitMock: vi.fn(),
+  forceKillWindowsProcessTreeMock: vi.fn(),
+  waitForWindowsProcessTreeForceKillMock: vi.fn()
+}))
+
+// Why: never let provider teardown paths spawn a real `taskkill` from tests —
+// on a Windows runner that would signal an arbitrary live pid.
+vi.mock('../pty/windows-process-tree-kill', () => ({
+  requestWindowsProcessTreeExit: requestWindowsProcessTreeExitMock,
+  forceKillWindowsProcessTree: forceKillWindowsProcessTreeMock,
+  waitForWindowsProcessTreeForceKill: waitForWindowsProcessTreeForceKillMock
 }))
 
 vi.mock('fs', () => ({
@@ -122,15 +136,29 @@ describe('LocalPtyProvider', () => {
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
     )
+    requestWindowsProcessTreeExitMock.mockReset()
+    forceKillWindowsProcessTreeMock.mockReset()
+    waitForWindowsProcessTreeForceKillMock.mockReset()
+    waitForWindowsProcessTreeForceKillMock.mockResolvedValue(undefined)
 
     exitCb = undefined
+    // Why: real node-pty supports multiple onExit listeners (spawn's cleanup
+    // handler + drainAndKillAll's waiter); mirror that so both fire.
+    let exitCallbacks: ((info: { exitCode: number }) => void)[] = []
     mockProc = {
       onData: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
-        exitCb = cb
+        exitCallbacks.push(cb)
+        exitCb = (info) => {
+          // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may dispose during iteration
+          for (const registered of [...exitCallbacks]) {
+            registered(info)
+          }
+        }
         return {
           dispose: () => {
-            if (exitCb === cb) {
+            exitCallbacks = exitCallbacks.filter((registered) => registered !== cb)
+            if (exitCallbacks.length === 0) {
               exitCb = undefined
             }
           }
@@ -953,6 +981,119 @@ describe('LocalPtyProvider', () => {
     it('is a no-op for unknown PTY ids', async () => {
       await provider.shutdown('nonexistent', { immediate: true })
       expect(mockProc.kill).not.toHaveBeenCalled()
+    })
+
+    it('graceful shutdown signals SIGHUP and lets the natural exit path clean up', async () => {
+      const onExit = vi.fn()
+      provider.configure({ onExit })
+      const killSpy = mockProc.kill
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      // mockProc.kill fires the registered exit callback, simulating a shell
+      // that exits promptly on SIGHUP.
+      await provider.shutdown(id, { immediate: false })
+
+      expect(killSpy).toHaveBeenCalledWith()
+      expect(onExit).toHaveBeenCalledWith(id, -1)
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('graceful shutdown keeps a SIGHUP-ignoring PTY alive for the drain window', async () => {
+      const onExit = vi.fn()
+      provider.configure({ onExit })
+      // Why: capture the spy — teardown neutralizes proc.kill afterwards.
+      const killSpy = vi.fn() // shell ignores SIGHUP: no exit fires
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: false })
+
+      expect(onExit).not.toHaveBeenCalled()
+      expect(provider.hasPty(id)).toBe(true)
+
+      // The drain caller escalates; the immediate path must SIGKILL.
+      await provider.shutdown(id, { immediate: true })
+      expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+      expect(onExit).toHaveBeenCalledWith(id, -1)
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('graceful shutdown on Windows asks the process tree to close', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const killSpy = vi.fn()
+      spawnMock.mockReturnValue({ ...mockProc, kill: killSpy })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.shutdown(id, { immediate: false })
+
+      expect(requestWindowsProcessTreeExitMock).toHaveBeenCalledWith(12345)
+      expect(killSpy).not.toHaveBeenCalled()
+      expect(provider.hasPty(id)).toBe(true)
+
+      await provider.shutdown(id, { immediate: true })
+      expect(waitForWindowsProcessTreeForceKillMock).toHaveBeenCalledWith(12345)
+      expect(killSpy).toHaveBeenCalled()
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('awaits Windows force taskkill before clearing local PTY state', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      let releaseForceKill = (): void => {
+        throw new Error('force kill waiter was not installed')
+      }
+      waitForWindowsProcessTreeForceKillMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseForceKill = resolve
+          })
+      )
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      let settled = false
+      const shutdown = provider.shutdown(id, { immediate: true }).then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+
+      expect(settled).toBe(false)
+      expect(provider.hasPty(id)).toBe(true)
+      releaseForceKill()
+      await shutdown
+
+      expect(settled).toBe(true)
+      expect(provider.hasPty(id)).toBe(false)
+    })
+  })
+
+  describe('drainAndKillAll', () => {
+    it('resolves once PTYs exit inside the drain window without force-killing', async () => {
+      const killSpy = mockProc.kill
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      await provider.drainAndKillAll(1_000)
+
+      // mockProc.kill fires exit synchronously, so no force-kill escalation.
+      expect(killSpy).toHaveBeenCalledTimes(1)
+      expect(killSpy).toHaveBeenCalledWith()
+    })
+
+    it('force-kills PTYs that outlive the drain window', async () => {
+      vi.useFakeTimers()
+      try {
+        // Why: capture the spy — teardown neutralizes proc.kill afterwards.
+        const killSpy = vi.fn() // ignores SIGHUP
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const drain = provider.drainAndKillAll(1_000)
+        await vi.advanceTimersByTimeAsync(1_000)
+        await drain
+
+        expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+        expect(provider.hasPty(id)).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 

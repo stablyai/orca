@@ -40,10 +40,14 @@ import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
   SSH_SESSION_EXPIRED_ERROR,
-  isSshPtyIdentityMismatchError,
-  isSshPtyNotFoundError
+  isSshPtyIdentityMismatchError
 } from '../providers/ssh-pty-provider'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
+import {
+  APP_QUIT_PTY_DRAIN_MS,
+  isPtyAlreadyGoneError,
+  shutdownPtyWithDrain
+} from '../providers/pty-shutdown-drain'
 import { createPtySpawnTiming } from './pty-spawn-timing'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
@@ -426,11 +430,6 @@ function normalizeNodePtySpawnError(err: unknown): Error {
     return err
   }
   return new Error(hintedMessage)
-}
-
-function isPtyAlreadyGoneError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err)
-  return isSshPtyNotFoundError(err) || /Session not found/i.test(message)
 }
 
 function delay(ms: number): Promise<void> {
@@ -1791,25 +1790,6 @@ export function registerPtyHandlers(
     mainWindow.webContents.send('pty:exit', payload)
   }
 
-  async function shutdownProviderAndDetectExit(
-    provider: IPtyProvider,
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean }
-  ): Promise<boolean> {
-    let providerExitObserved = false
-    const unsubscribe = provider.onExit((payload) => {
-      if (payload.id === id) {
-        providerExitObserved = true
-      }
-    })
-    try {
-      await provider.shutdown(id, opts)
-    } finally {
-      unsubscribe()
-    }
-    return providerExitObserved
-  }
-
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
   // adapter after replaceDaemonProvider runs. Both the startup registration
   // and the post-restart rebind go through the same code path — no risk of
@@ -2025,6 +2005,10 @@ export function registerPtyHandlers(
         ptyOwnership.delete(id)
         markClaudePtyExited(id)
         runtime?.onPtyExit(id, -1)
+        // Why: the sweep now drains gracefully, so the spawn-time exit handler
+        // stays armed and can deliver the natural exit seconds later; swallow
+        // that duplicate so the fresh renderer never sees a stray pty:exit.
+        rememberSyntheticKillExit(id)
       }
     }
     didFinishLoadWebContents = mainWindow.webContents
@@ -2465,7 +2449,7 @@ export function registerPtyHandlers(
       // Same synthetic-exit contract as the renderer pty:kill handler: when the
       // provider emitted its own exit during shutdown, the exit listener already
       // delivered runtime + renderer exits — synthesizing again would double-fire.
-      void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
+      void shutdownPtyWithDrain(provider, ptyId, {})
         .then((providerExitObserved) => {
           finishPtyShutdown(ptyId, connectionId, store)
           if (!providerExitObserved) {
@@ -2514,8 +2498,9 @@ export function registerPtyHandlers(
       }
       let providerExitObserved = false
       try {
-        providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
-          immediate: true,
+        // Why: graceful-drain-then-force (not immediate) so an agent CLI in
+        // the pane can flush its transcript before the SIGKILL escalation.
+        providerExitObserved = await shutdownPtyWithDrain(provider, ptyId, {
           keepHistory: opts?.keepHistory ?? false
         })
       } catch (err) {
@@ -3723,8 +3708,10 @@ export function registerPtyHandlers(
     const shutdownProvider = provider ?? getProviderForPty(args.id)
     let providerExitObserved = false
     try {
-      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
-        immediate: true,
+      // Why: tab close / worktree close land here. Drain gracefully so agent
+      // CLIs can flush transcripts; shutdownPtyWithDrain force-kills on
+      // timeout, so this stays bounded and the PTY is dead when we resolve.
+      providerExitObserved = await shutdownPtyWithDrain(shutdownProvider, args.id, {
         keepHistory: args.keepHistory ?? false
       })
     } catch (err) {
@@ -3929,9 +3916,15 @@ export function registerHeadlessPtyRuntime(
 
 /**
  * Kill all PTY processes. Call on app quit.
+ *
+ * Returns a bounded promise: agent CLIs get a short graceful-drain window to
+ * flush transcripts, then leftovers are force-killed. Quit paths should fold
+ * this into their async teardown wait (will-quit already defers for the
+ * daemon disconnect) so the drain completes before the process exits.
  */
-export function killAllPty(): void {
+export function killAllPty(): Promise<void> {
   if (localProvider instanceof LocalPtyProvider) {
-    localProvider.killAll()
+    return localProvider.drainAndKillAll(APP_QUIT_PTY_DRAIN_MS)
   }
+  return Promise.resolve()
 }

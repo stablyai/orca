@@ -132,6 +132,11 @@ export type IPtyProvider = {
    */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
 
+  /** Stop the PTY. `immediate: false` is a graceful request (SIGTERM/SIGHUP
+   *  or Windows taskkill /T) that lets agent CLIs flush transcripts before
+   *  exiting; `immediate: true` force-kills. Callers that need death-before-
+   *  return should use shutdownPtyWithDrain, which bounds the graceful wait
+   *  and escalates to immediate on timeout. */
   shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>

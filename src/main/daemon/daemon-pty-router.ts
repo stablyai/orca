@@ -84,7 +84,9 @@ export class DaemonPtyRouter implements IPtyProvider {
     // lived on a legacy adapter (different protocolVersion), the wake-side
     // createOrAttach lands on the wrong adapter and creates a fresh session,
     // losing the cold-restore from the legacy adapter's history dir.
-    if (!opts.keepHistory) {
+    // Graceful shutdown is only the first half of drain-then-force teardown;
+    // keep the route so timeout escalation still targets the owning daemon.
+    if (opts.immediate === true && !opts.keepHistory) {
       this.sessionAdapters.delete(id)
     }
   }

@@ -174,7 +174,8 @@ vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
   clearMigrationUnsupportedPty: clearMigrationUnsupportedPtyMock,
   clearMigrationUnsupportedPtysForPaneKey: clearMigrationUnsupportedPtysForPaneKeyMock
 }))
-import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { GRACEFUL_TEARDOWN_FORCE_KILL_MS, LocalPtyProvider } from '../providers/local-pty-provider'
+import { PTY_EXIT_DRAIN_WINDOW_MS } from '../providers/pty-shutdown-drain'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import {
@@ -2484,12 +2485,14 @@ describe('registerPtyHandlers', () => {
           kill: (ptyId: string) => boolean
         }
 
+        vi.useFakeTimers()
         expect(controller.kill('remote-pty')).toBe(true)
-        // Why: kill's shutdown now runs through the exit-detection wrapper,
-        // which adds async hops; a single microtask flush is no longer enough.
-        await new Promise((resolve) => setImmediate(resolve))
+        // Why: kill now drains gracefully before escalating; advance past the
+        // drain window so the escalation + lease cleanup complete.
+        await vi.advanceTimersByTimeAsync(PTY_EXIT_DRAIN_WINDOW_MS)
 
         expect(shutdown).toHaveBeenCalledWith('remote-pty', { immediate: false })
+        expect(shutdown).toHaveBeenLastCalledWith('remote-pty', { immediate: true })
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
           'ssh-1',
           'remote-pty',
@@ -2652,10 +2655,15 @@ describe('registerPtyHandlers', () => {
         }
 
         const stopPromise = controller.stopAndWait('remote-pty', { keepHistory: true })
-        await vi.advanceTimersByTimeAsync(1_200)
+        // Why: cover the graceful drain window plus the keepHistory settle poll.
+        await vi.advanceTimersByTimeAsync(PTY_EXIT_DRAIN_WINDOW_MS + 1_200)
         await expect(stopPromise).resolves.toBe(true)
 
         expect(shutdown).toHaveBeenCalledWith('remote-pty', {
+          immediate: false,
+          keepHistory: true
+        })
+        expect(shutdown).toHaveBeenLastCalledWith('remote-pty', {
           immediate: true,
           keepHistory: true
         })
@@ -2707,7 +2715,8 @@ describe('registerPtyHandlers', () => {
         }
 
         const stopPromise = controller.stopAndWait('local-pty', { keepHistory: true })
-        await vi.advanceTimersByTimeAsync(200)
+        // Why: cover the graceful drain window plus the keepHistory settle poll.
+        await vi.advanceTimersByTimeAsync(PTY_EXIT_DRAIN_WINDOW_MS + 1_200)
 
         await expect(stopPromise).resolves.toBe(false)
         expect(shutdown).toHaveBeenCalledWith('local-pty', {
@@ -2828,8 +2837,10 @@ describe('registerPtyHandlers', () => {
           kill: (ptyId: string) => boolean
         }
 
+        vi.useFakeTimers()
         expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(true)
-        await new Promise((resolve) => setImmediate(resolve))
+        // Why: kill drains gracefully before escalating; advance past the window.
+        await vi.advanceTimersByTimeAsync(PTY_EXIT_DRAIN_WINDOW_MS)
 
         expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', { immediate: false })
         expect(localShutdown).not.toHaveBeenCalled()
@@ -3715,8 +3726,22 @@ describe('registerPtyHandlers', () => {
 
   it('lists duplicate SSH relay session ids as distinct app sessions', async () => {
     registerPtyHandlers(mainWindow as never)
-    const shutdownA = vi.fn(async () => undefined)
-    const shutdownB = vi.fn(async () => undefined)
+    const exitListenersA = new Set<(payload: { id: string; code: number }) => void>()
+    const exitListenersB = new Set<(payload: { id: string; code: number }) => void>()
+    const shutdownA = vi.fn(async (id: string, opts: { immediate?: boolean }) => {
+      if (!opts.immediate) {
+        for (const listener of exitListenersA) {
+          listener({ id, code: 0 })
+        }
+      }
+    })
+    const shutdownB = vi.fn(async (id: string, opts: { immediate?: boolean }) => {
+      if (!opts.immediate) {
+        for (const listener of exitListenersB) {
+          listener({ id, code: 0 })
+        }
+      }
+    })
     registerSshPtyProvider('ssh-a', {
       spawn: vi.fn(),
       write: vi.fn(),
@@ -3729,7 +3754,10 @@ describe('registerPtyHandlers', () => {
       acknowledgeDataEvent: vi.fn(),
       onData: vi.fn(() => () => {}),
       onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
+      onExit: vi.fn((cb: (payload: { id: string; code: number }) => void) => {
+        exitListenersA.add(cb)
+        return () => exitListenersA.delete(cb)
+      }),
       listProcesses: vi.fn(async () => [
         { id: 'ssh:ssh-a@@pty-1', cwd: '/repo-a', title: 'ssh-a' }
       ]),
@@ -3753,7 +3781,10 @@ describe('registerPtyHandlers', () => {
       acknowledgeDataEvent: vi.fn(),
       onData: vi.fn(() => () => {}),
       onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
+      onExit: vi.fn((cb: (payload: { id: string; code: number }) => void) => {
+        exitListenersB.add(cb)
+        return () => exitListenersB.delete(cb)
+      }),
       listProcesses: vi.fn(async () => [
         { id: 'ssh:ssh-b@@pty-1', cwd: '/repo-b', title: 'ssh-b' }
       ]),
@@ -3783,11 +3814,11 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-b@@pty-1' })
 
     expect(shutdownA).toHaveBeenCalledWith('ssh:ssh-a@@pty-1', {
-      immediate: true,
+      immediate: false,
       keepHistory: false
     })
     expect(shutdownB).toHaveBeenCalledWith('ssh:ssh-b@@pty-1', {
-      immediate: true,
+      immediate: false,
       keepHistory: false
     })
   })
@@ -8370,13 +8401,21 @@ describe('registerPtyHandlers', () => {
       rows: 24
     })) as { id: string }
 
-    await handlers.get('pty:kill')!(null, { id: spawnResult.id })
+    vi.useFakeTimers()
+    const killPromise = handlers.get('pty:kill')!(null, { id: spawnResult.id })
+    await vi.advanceTimersByTimeAsync(PTY_EXIT_DRAIN_WINDOW_MS)
+    await killPromise
 
+    // Why: the graceful signal (first kill call) intentionally keeps listeners
+    // attached so the natural exit path can flow. The dispose-before-kill
+    // NAPI-crash invariant now applies to the SIGKILL escalation.
+    expect(killSpy.mock.calls[0]).toEqual([])
+    expect(killSpy.mock.calls[1]).toEqual(['SIGKILL'])
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[1]
     )
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[1]
     )
   })
 
@@ -8411,12 +8450,19 @@ describe('registerPtyHandlers', () => {
       kill: (ptyId: string) => boolean
     }
 
+    vi.useFakeTimers()
     expect(runtimeController.kill(spawnResult.id)).toBe(true)
+    await vi.advanceTimersByTimeAsync(PTY_EXIT_DRAIN_WINDOW_MS)
+
+    // Why: the graceful signal (first kill call) intentionally keeps listeners
+    // attached; the dispose-before-kill invariant applies to the escalation.
+    expect(killSpy.mock.calls[0]).toEqual([])
+    expect(killSpy.mock.calls[1]).toEqual(['SIGKILL'])
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[1]
     )
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[1]
     )
   })
 
@@ -8451,14 +8497,20 @@ describe('registerPtyHandlers', () => {
 
     // The first load after spawn only advances generation. The second one sees
     // this PTY as belonging to a prior page load and kills it as orphaned.
+    vi.useFakeTimers()
     didFinishLoad?.()
     didFinishLoad?.()
+    // Why: the orphan sweep drains gracefully first; the force-kill (and its
+    // dispose-before-kill invariant) fires after the fallback window.
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TEARDOWN_FORCE_KILL_MS)
 
+    expect(killSpy.mock.calls[0]).toEqual([])
+    expect(killSpy.mock.calls[1]).toEqual(['SIGKILL'])
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[1]
     )
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
+      killSpy.mock.invocationCallOrder[1]
     )
   })
 
@@ -8607,11 +8659,15 @@ describe('registerPtyHandlers', () => {
 
     // First load only advances the generation; the second sees this PTY as a
     // prior-load orphan. With the flag false the guard must NOT suppress the sweep.
+    vi.useFakeTimers()
     didFinishLoad?.()
     didFinishLoad?.()
 
     expect(killSpy).toHaveBeenCalled()
     expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1)
+    // Why: the sweep drains gracefully; the force-kill fallback reaps the
+    // SIGHUP-ignoring PTY (this stub never exits) after the bounded window.
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TEARDOWN_FORCE_KILL_MS)
     const listed = await getLocalPtyProvider().listProcesses()
     expect(listed.some((info) => info.id === spawnResult.id)).toBe(false)
   })

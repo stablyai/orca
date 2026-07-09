@@ -52,6 +52,11 @@ import {
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import {
+  forceKillWindowsProcessTree,
+  requestWindowsProcessTreeExit,
+  waitForWindowsProcessTreeForceKill
+} from '../pty/windows-process-tree-kill'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
@@ -268,18 +273,95 @@ function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } 
 }
 
 /**
- * Kills a local PTY and clears all associated local provider state.
+ * Asks a local PTY's process tree to exit without force-killing it.
  */
-function safeKillAndClean(id: string, proc: pty.IPty): void {
-  runPtyCleanup(id)
-  disposePtyListeners(id)
+function requestGracefulPtyExit(proc: pty.IPty): void {
+  // Why: agent CLIs buffer transcript writes and need a drain window to flush.
+  // On POSIX, node-pty's kill() sends SIGHUP — the PTY-native hangup signal,
+  // which shells forward to their foreground job. Deliberately no destroy()
+  // here: closing the master fd right away would collapse the drain window.
+  if (process.platform === 'win32') {
+    requestWindowsProcessTreeExit(proc.pid)
+    return
+  }
   try {
     proc.kill()
   } catch {
     /* Process may already be dead */
   }
+}
+
+/**
+ * Force-kills a local PTY's process tree (the post-drain escalation).
+ */
+function forceKillPtyProcess(proc: pty.IPty): void {
+  try {
+    if (process.platform === 'win32') {
+      // Why: taskkill /T /F reaps the whole console tree; proc.kill() then
+      // releases the ConPTY handle itself.
+      forceKillWindowsProcessTree(proc.pid)
+      proc.kill()
+    } else {
+      // Why: SIGKILL, not SIGHUP — the graceful path already sent SIGHUP and
+      // this escalation must reap even a signal-ignoring child.
+      proc.kill('SIGKILL')
+    }
+  } catch {
+    /* Process may already be dead */
+  }
+}
+
+async function forceKillPtyProcessAndWait(proc: pty.IPty): Promise<void> {
+  try {
+    if (process.platform === 'win32') {
+      // Why: worktree deletion on Windows needs the tree gone before return,
+      // otherwise live descendants can keep cwd/files locked with EPERM.
+      await waitForWindowsProcessTreeForceKill(proc.pid)
+      proc.kill()
+    } else {
+      proc.kill('SIGKILL')
+    }
+  } catch {
+    /* Process may already be dead */
+  }
+}
+
+/**
+ * Force-kills a local PTY and clears all associated local provider state.
+ */
+function safeKillAndClean(id: string, proc: pty.IPty): void {
+  runPtyCleanup(id)
+  disposePtyListeners(id)
+  forceKillPtyProcess(proc)
   destroyPtyProcess(proc, { alreadyKilled: true })
   clearPtyState(id)
+}
+
+async function safeKillAndCleanAndWait(id: string, proc: pty.IPty): Promise<void> {
+  runPtyCleanup(id)
+  disposePtyListeners(id)
+  await forceKillPtyProcessAndWait(proc)
+  destroyPtyProcess(proc, { alreadyKilled: true })
+  clearPtyState(id)
+}
+
+/** Force-kill fallback for graceful teardowns that no caller escalates
+ *  (orphan sweeps, app quit): bounded so nothing can linger forever. */
+export const GRACEFUL_TEARDOWN_FORCE_KILL_MS = 5_000
+
+/**
+ * Starts a graceful teardown and arms a bounded force-kill fallback.
+ * The natural spawn()-time onExit handler owns cleanup when the process
+ * exits inside the window; the timer only fires for signal-ignoring children.
+ */
+function beginGracefulPtyTeardown(id: string, proc: pty.IPty, forceAfterMs: number): void {
+  requestGracefulPtyExit(proc)
+  const timer = setTimeout(() => {
+    if (ptyProcesses.get(id) === proc) {
+      safeKillAndClean(id, proc)
+    }
+  }, forceAfterMs)
+  timer.unref?.()
 }
 
 export type LocalPtyProviderOptions = {
@@ -855,9 +937,17 @@ export class LocalPtyProvider implements IPtyProvider {
     return { cols: proc.cols, rows: proc.rows }
   }
 
-  async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     const proc = ptyProcesses.get(id)
     if (!proc) {
+      return
+    }
+    if (!opts.immediate) {
+      // Why: graceful shutdown only signals; the spawn()-time onExit handler
+      // still owns cleanup + exit fanout when the child drains and exits. The
+      // caller (pty-shutdown-drain) bounds the wait and escalates to the
+      // immediate path below on timeout, so nothing can linger forever.
+      requestGracefulPtyExit(proc)
       return
     }
     // Why: disposePtyListeners removes the onExit callback, so the natural
@@ -867,11 +957,7 @@ export class LocalPtyProvider implements IPtyProvider {
     // the natural onExit callback from running the usual clearPtyState path.
     runPtyCleanup(id)
     disposePtyListeners(id)
-    try {
-      proc.kill()
-    } catch {
-      /* Process may already be dead */
-    }
+    await forceKillPtyProcessAndWait(proc)
     destroyPtyProcess(proc, { alreadyKilled: true })
     clearPtyState(id)
     this.opts.onExit?.(id, -1)
@@ -1027,7 +1113,9 @@ export class LocalPtyProvider implements IPtyProvider {
     const killed: { id: string }[] = []
     for (const [id, proc] of ptyProcesses) {
       if ((ptyLoadGeneration.get(id) ?? -1) < currentGeneration) {
-        safeKillAndClean(id, proc)
+        // Why: an orphan can still host an agent CLI mid-flush (reload while
+        // an agent runs); drain gracefully instead of an instant kill.
+        beginGracefulPtyTeardown(id, proc, GRACEFUL_TEARDOWN_FORCE_KILL_MS)
         killed.push({ id })
       }
     }
@@ -1044,10 +1132,57 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.get(id)
   }
 
-  /** Kill all PTYs. Call on app quit. */
+  /** Kill all PTYs immediately. Prefer drainAndKillAll on quit paths. */
   killAll(): void {
     for (const [id, proc] of ptyProcesses) {
       safeKillAndClean(id, proc)
     }
+  }
+
+  /** Gracefully drain all PTYs, force-killing leftovers after `drainMs`.
+   *  Resolves once every PTY has exited or been force-killed, so quit paths
+   *  can await it inside their bounded async-teardown window. */
+  async drainAndKillAll(drainMs: number): Promise<void> {
+    const entries = Array.from(ptyProcesses.entries())
+    await Promise.all(
+      entries.map(
+        ([id, proc]) =>
+          new Promise<void>((resolve) => {
+            let settled = false
+            let disposable: { dispose: () => void } | undefined
+            let timer: ReturnType<typeof setTimeout> | null = null
+            const finish = (): void => {
+              settled = true
+              if (timer) {
+                clearTimeout(timer)
+                timer = null
+              }
+              disposable?.dispose()
+              disposable = undefined
+              resolve()
+            }
+            try {
+              disposable = proc.onExit(() => finish())
+            } catch {
+              /* already torn down — the timer path still resolves */
+            }
+            requestGracefulPtyExit(proc)
+            // Why: a shell can exit synchronously inside the graceful signal
+            // (fast SIGHUP death); don't arm a stale force-kill timer then.
+            if (settled) {
+              return
+            }
+            timer = setTimeout(() => {
+              void (async () => {
+                if (ptyProcesses.get(id) === proc) {
+                  await safeKillAndCleanAndWait(id, proc)
+                }
+                finish()
+              })()
+            }, drainMs)
+            timer.unref?.()
+          })
+      )
+    )
   }
 }

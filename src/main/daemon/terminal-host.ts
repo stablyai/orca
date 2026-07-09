@@ -10,8 +10,7 @@ import type {
   ShellReadyState
 } from './types'
 import { SessionNotFoundError } from './types'
-
-const DEFAULT_MAX_TOMBSTONES = 1000
+import { TerminalHostShutdown } from './terminal-host-shutdown'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -31,7 +30,10 @@ export type CreateOrAttachOptions = {
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
   shellReadyTimeoutMs?: number
-  streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
+  streamClient: {
+    onData: (data: string) => void
+    onExit: (code: number, finalOutput?: TakePendingOutputResult) => void
+  }
 }
 
 export type CreateOrAttachResult = {
@@ -71,15 +73,15 @@ export type TerminalHostOptions = {
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
-  private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
-  private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
-  private maxTombstones: number
+  private shutdownController: TerminalHostShutdown
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
-    this.onFinalCheckpoint = opts.onFinalCheckpoint
-    this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
+    this.shutdownController = new TerminalHostShutdown(this.sessions, {
+      maxTombstones: opts.maxTombstones,
+      onFinalCheckpoint: opts.onFinalCheckpoint
+    })
   }
 
   /**
@@ -116,7 +118,7 @@ export class TerminalHost {
     }
 
     // Clear tombstone if re-creating a killed session
-    this.killedTombstones.delete(opts.sessionId)
+    this.shutdownController.clearTombstone(opts.sessionId)
     const size = normalizePtySize(opts.cols, opts.rows)
 
     const subprocess = this.spawnSubprocess({
@@ -192,9 +194,9 @@ export class TerminalHost {
     this.getAliveSession(sessionId).resize(cols, rows)
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
+  kill(sessionId: string, opts: { immediate?: boolean; collectFinalOutput?: boolean } = {}): void {
     const session = this.getAliveSession(sessionId)
-    this.recordTombstone(sessionId)
+    this.shutdownController.recordTombstone(sessionId)
     if (opts.immediate) {
       session.forceKillAndDisposeSubprocess()
       // Why: the immediate path tears down synchronously without firing the
@@ -202,6 +204,26 @@ export class TerminalHost {
       // through Session.handleSubprocessExit -> onExit -> reapSession.
       this.reapSession(sessionId)
       return
+    }
+    if (opts.collectFinalOutput) {
+      session.requestFinalOutputOnExit()
+    }
+    session.kill()
+  }
+
+  async killAndWait(
+    sessionId: string,
+    opts: { immediate?: boolean; collectFinalOutput?: boolean } = {}
+  ): Promise<void> {
+    const session = this.getAliveSession(sessionId)
+    this.shutdownController.recordTombstone(sessionId)
+    if (opts.immediate) {
+      await session.forceKillAndDisposeSubprocessAndWait()
+      this.reapSession(sessionId)
+      return
+    }
+    if (opts.collectFinalOutput) {
+      session.requestFinalOutputOnExit()
     }
     session.kill()
   }
@@ -295,7 +317,7 @@ export class TerminalHost {
   }
 
   isKilled(sessionId: string): boolean {
-    return this.killedTombstones.has(sessionId)
+    return this.shutdownController.isKilled(sessionId)
   }
 
   listSessions(): SessionInfo[] {
@@ -321,43 +343,16 @@ export class TerminalHost {
     return result
   }
 
-  dispose(): void {
-    // Why: write final checkpoints before killing sessions so graceful shutdown
-    // has zero data loss. The checkpoint callback writes synchronously to disk.
-    if (this.onFinalCheckpoint) {
-      for (const [sessionId, session] of this.sessions) {
-        if (!session.isAlive) {
-          continue
-        }
-        const take = session.takePendingOutput(true, { teardownSnapshot: true })
-        if (take?.snapshot) {
-          try {
-            this.onFinalCheckpoint(sessionId, take.snapshot, take.records)
-          } catch {
-            // Best-effort — don't block shutdown
-          }
-        }
-      }
-    }
+  async drainLiveSessions(drainMs: number): Promise<void> {
+    await this.shutdownController.drainLiveSessions(drainMs)
+  }
 
-    for (const [, session] of this.sessions) {
-      session.detachAllClients()
-      // Why: live-vs-exited is load-bearing. For LIVE sessions we use
-      // forceKillAndDisposeSubprocess (SIGKILL + destroy) to reap stubborn
-      // children AND release the ptmx fd on the same tick, bypassing the 5s
-      // KILL_TIMEOUT_MS fallback that would otherwise outlive the daemon
-      // process. For sessions that have already exited but are still in the
-      // map, SIGKILL would target a reaped pid — on POSIX that pid can be
-      // recycled to an unrelated process, so we MUST only release the fd via
-      // disposeSubprocess() (destroy without kill). See docs/fix-pty-fd-leak.md.
-      if (session.isAlive) {
-        session.forceKillAndDisposeSubprocess()
-      } else {
-        session.disposeSubprocess()
-      }
-    }
-    this.sessions.clear()
-    this.killedTombstones.clear()
+  dispose(): void {
+    this.shutdownController.dispose()
+  }
+
+  async disposeAndWaitForForceKill(opts: { checkpointDirtyOnly?: boolean } = {}): Promise<void> {
+    await this.shutdownController.disposeAndWaitForForceKill(opts)
   }
 
   private getAliveSession(sessionId: string): Session {
@@ -366,17 +361,5 @@ export class TerminalHost {
       throw new SessionNotFoundError(sessionId)
     }
     return session
-  }
-
-  private recordTombstone(sessionId: string): void {
-    this.killedTombstones.delete(sessionId)
-    this.killedTombstones.set(sessionId, Date.now())
-
-    if (this.killedTombstones.size > this.maxTombstones) {
-      const oldest = this.killedTombstones.keys().next().value
-      if (oldest) {
-        this.killedTombstones.delete(oldest)
-      }
-    }
   }
 }

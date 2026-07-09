@@ -145,6 +145,20 @@ describe('DaemonPtyRouter', () => {
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
+  it('keeps the routed adapter between graceful shutdown and force escalation', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await router.discoverLegacySessions()
+    await router.shutdown('legacy-session', { immediate: false })
+    await router.shutdown('legacy-session', { immediate: true })
+
+    expect(legacy.shutdown).toHaveBeenNthCalledWith(1, 'legacy-session', { immediate: false })
+    expect(legacy.shutdown).toHaveBeenNthCalledWith(2, 'legacy-session', { immediate: true })
+    expect(current.shutdown).not.toHaveBeenCalled()
+  })
+
   it('fails listProcesses closed when any routed adapter cannot list sessions', async () => {
     const current = createAdapter('current', ['current-session'])
     const legacy = createAdapter('legacy', ['legacy-session'])

@@ -936,6 +936,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect.objectContaining({ snapshotAnsi: expect.stringContaining('fresh output') })
       )
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
+      historyAdapter.dispose()
+      const meta = JSON.parse(
+        readFileSync(join(historyDir, getHistorySessionDirName(id), 'meta.json'), 'utf-8')
+      )
+      expect(meta.endedAt).toBeNull()
     })
 
     it('persists final take records that are not represented in the snapshot', async () => {
@@ -957,6 +962,127 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(appendSpy).toHaveBeenCalledWith(id, expect.any(Number), [
         { kind: 'output', data: '\x1b]777;orca-shell-ready' }
       ])
+    })
+
+    it('preserves output emitted after graceful keepHistory shutdown starts', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: 'sleep-graceful-tail'
+      })
+      const exits: { id: string; code: number }[] = []
+      historyAdapter.onExit((payload) => exits.push(payload))
+
+      lastSubprocess._simulateData('fresh output before graceful sleep\r\n')
+      vi.mocked(lastSubprocess.kill).mockImplementation(() => {
+        lastSubprocess._simulateData('tail after graceful signal\r\n')
+        setTimeout(() => lastSubprocess._simulateExit(0), 5)
+      })
+
+      await historyAdapter.shutdown(id, { immediate: false, keepHistory: true })
+      await waitFor(() => exits.some((exit) => exit.id === id && exit.code === 0))
+
+      const meta = JSON.parse(
+        readFileSync(join(historyDir, getHistorySessionDirName(id), 'meta.json'), 'utf-8')
+      )
+      expect(meta.endedAt).toBeNull()
+
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: id
+      })
+      expect(result.coldRestore?.scrollback).toContain('tail after graceful signal')
+    })
+
+    it('does not preserve history for a respawned id after a leaked pending-exit flag', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: 'stale-flag-reuse'
+      })
+      const exits: { id: string; code: number }[] = []
+      historyAdapter.onExit((payload) => exits.push(payload))
+
+      // Session dies on its own; the exit is fully processed.
+      lastSubprocess._simulateExit(0)
+      await waitFor(() => exits.length === 1)
+
+      // Hibernate races the death: the kill RPC hits a dead session and
+      // throws, deliberately leaving the pending-exit flag set for the
+      // possibly-in-flight exit event.
+      await expect(
+        historyAdapter.shutdown(id, { immediate: false, keepHistory: true })
+      ).rejects.toThrow(/Session not found/i)
+
+      // The renderer respawns the same persisted ptyId; its eventual real
+      // exit must take the normal closeSession path (endedAt set), not the
+      // preserve-history path the stale flag would trigger.
+      await historyAdapter.spawn({ cols: 80, rows: 24, cwd: '/home/user', sessionId: id })
+      lastSubprocess._simulateExit(0)
+      await waitFor(() => exits.length === 2)
+      await waitFor(() => {
+        const meta = JSON.parse(
+          readFileSync(join(historyDir, getHistorySessionDirName(id), 'meta.json'), 'utf-8')
+        )
+        return meta.endedAt !== null
+      })
+    })
+
+    it('keeps a mid-persist exit from detaching a freshly respawned session', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: 'wake-race'
+      })
+      lastSubprocess._simulateData('output before sleep\r\n')
+      vi.mocked(lastSubprocess.kill).mockImplementation(() => {
+        setTimeout(() => lastSubprocess._simulateExit(0), 5)
+      })
+
+      await historyAdapter.shutdown(id, { immediate: false, keepHistory: true })
+
+      // Park the exit handler inside persistFinalExitHistory's disk write.
+      const historyManager = historyAdapter.getHistoryManager()!
+      const originalCheckpoint = historyManager.checkpoint.bind(historyManager)
+      let releaseCheckpoint!: () => void
+      const checkpointGate = new Promise<void>((resolve) => {
+        releaseCheckpoint = resolve
+      })
+      const checkpointSpy = vi
+        .spyOn(historyManager, 'checkpoint')
+        .mockImplementation(async (sessionId, snapshot) => {
+          await checkpointGate
+          return originalCheckpoint(sessionId, snapshot)
+        })
+      await waitFor(() => checkpointSpy.mock.calls.length > 0)
+
+      // Wake respawns the same id while the persist is still in flight.
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        sessionId: id
+      })
+      expect(result.coldRestore?.scrollback).toContain('output before sleep')
+
+      releaseCheckpoint()
+      await new Promise((r) => setTimeout(r, 50))
+
+      // Why: the resumed handler must not tear down the woken generation —
+      // hasPty flipping false here means checkpoints silently stopped.
+      expect(historyAdapter.hasPty(id)).toBe(true)
+      checkpointSpy.mockRestore()
     })
 
     it('returns cold restore data when disk history has unclean shutdown', async () => {

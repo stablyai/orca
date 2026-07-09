@@ -2,6 +2,11 @@
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
+import {
+  forceKillWindowsProcessTree,
+  requestWindowsProcessTreeExit,
+  waitForWindowsProcessTreeForceKill
+} from '../main/pty/windows-process-tree-kill'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
@@ -81,6 +86,42 @@ type ManagedStartupCommand = {
   waitForShellReady: boolean
   scanState: ShellReadyScanState | null
   timer: ReturnType<typeof setTimeout> | null
+}
+
+/** Ask a PTY's process tree to exit gracefully so agent CLIs can flush. */
+function requestPtyTreeExit(proc: IPty): void {
+  // Why: Windows node-pty kill() ignores the signal and tears the ConPTY down
+  // immediately; taskkill /T keeps the graceful window real on Windows hosts.
+  if (process.platform === 'win32') {
+    requestWindowsProcessTreeExit(proc.pid)
+    return
+  }
+  proc.kill('SIGTERM')
+}
+
+/** Force-kill a PTY's process tree (post-drain escalation). */
+function forceKillPtyTree(proc: IPty): void {
+  if (process.platform === 'win32') {
+    forceKillWindowsProcessTree(proc.pid)
+  }
+  // Why: called from bare setTimeout callbacks — a throw on an already-torn-
+  // down ConPTY would otherwise crash the relay process.
+  try {
+    proc.kill('SIGKILL')
+  } catch {
+    /* child may already be dead */
+  }
+}
+
+async function forceKillPtyTreeAndWait(proc: IPty): Promise<void> {
+  try {
+    if (process.platform === 'win32') {
+      await waitForWindowsProcessTreeForceKill(proc.pid)
+    }
+    proc.kill('SIGKILL')
+  } catch {
+    /* child may already be dead */
+  }
 }
 
 function disposeManagedPty(managed: ManagedPty): void {
@@ -657,11 +698,11 @@ export class PtyHandler {
       // response is discarded and no renderer can own this PTY. Shut it down
       // immediately so it does not linger as an unreachable remote shell.
       this.releaseStartupCommand(managed)
-      term.kill('SIGTERM')
+      requestPtyTreeExit(term)
       managed.killTimer = setTimeout(() => {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
-          still.pty.kill('SIGKILL')
+          forceKillPtyTree(still.pty)
           // Why: stale-spawn cleanup has no client who will ever attach. If
           // SIGKILL's onExit is missed (kernel edge case, uninterruptible
           // sleep), the managed entry + ptmx fd would leak forever. Dispose
@@ -786,7 +827,10 @@ export class PtyHandler {
     if (immediate) {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
-      managed.pty.kill('SIGKILL')
+      await forceKillPtyTreeAndWait(managed.pty)
+      if (this.ptys.get(id) !== managed || managed.disposed) {
+        return
+      }
       // Why: SIGKILL has already reaped the child; release the ptmx fd on the
       // same tick. Deferring to onExit leaves a window where the fd is live
       // with a dead child. Idempotent via the disposed guard — if onExit fires
@@ -805,7 +849,7 @@ export class PtyHandler {
       this.clearPtyFlowState(id)
     } else {
       this.releaseStartupCommand(managed)
-      managed.pty.kill('SIGTERM')
+      requestPtyTreeExit(managed.pty)
 
       // Why: Some processes ignore SIGTERM (e.g. a hung child, a custom signal
       // handler). Without a SIGKILL fallback the PTY process would leak and the
@@ -819,7 +863,22 @@ export class PtyHandler {
       managed.killTimer = setTimeout(() => {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
-          still.pty.kill('SIGKILL')
+          if (process.platform === 'win32') {
+            void (async () => {
+              await forceKillPtyTreeAndWait(still.pty)
+              if (this.ptys.get(id) !== still || still.disposed) {
+                return
+              }
+              this.flushPtyOutput(id)
+              this.dispatcher.notify('pty.exit', { id, code: -1 })
+              this.notifyExitListener(still)
+              disposeManagedPty(still)
+              this.ptys.delete(id)
+              this.clearPtyFlowState(id)
+            })()
+            return
+          }
+          forceKillPtyTree(still.pty)
           this.flushPtyOutput(id)
           // Why: emit pty.exit BEFORE disposeManagedPty sets disposed=true.
           // The natural onExit short-circuits on `managed.disposed`, so
@@ -1068,7 +1127,7 @@ export class PtyHandler {
       // ptmx fd release via disposeManagedPty is synchronous, so there is
       // no graceful-shutdown window to preserve at this point.
       try {
-        managed.pty.kill('SIGKILL')
+        forceKillPtyTree(managed.pty)
       } catch {
         /* child may already be dead */
       }

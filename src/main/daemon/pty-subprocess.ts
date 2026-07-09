@@ -29,6 +29,11 @@ import {
 } from '../providers/windows-shell-fallback-chain'
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
+import {
+  forceKillWindowsProcessTree,
+  requestWindowsProcessTreeExit,
+  waitForWindowsProcessTreeForceKill
+} from '../pty/windows-process-tree-kill'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
@@ -1082,6 +1087,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       if (dead) {
         return
       }
+      // Why: on Windows node-pty's kill() tears the ConPTY down immediately —
+      // no drain window for agent CLIs flushing transcripts. Ask the tree to
+      // close instead; session.ts's KILL_TIMEOUT_MS fallback force-kills any
+      // process that refuses.
+      if (process.platform === 'win32') {
+        requestWindowsProcessTreeExit(proc.pid)
+        return
+      }
       try {
         nodePtyKillIssued = true
         proc.kill()
@@ -1095,6 +1108,44 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // terminate an unrelated process. The fd release is handled by
       // dispose()/destroy(); forceKill is strictly for signalling a live child.
       if (dead) {
+        return
+      }
+      if (process.platform === 'win32') {
+        // Why: taskkill /T /F reaps the whole console tree (process.kill hits
+        // only the shell pid); proc.kill() then releases the ConPTY itself.
+        forceKillWindowsProcessTree(proc.pid)
+        try {
+          nodePtyKillIssued = true
+          proc.kill()
+        } catch {
+          // Process may already be dead
+        }
+        return
+      }
+      try {
+        process.kill(proc.pid, 'SIGKILL')
+      } catch {
+        try {
+          nodePtyKillIssued = true
+          proc.kill()
+        } catch {
+          // Process may already be dead
+        }
+      }
+    },
+    forceKillAndWait: async () => {
+      if (dead) {
+        return
+      }
+      if (process.platform === 'win32') {
+        onExitCb = null
+        await waitForWindowsProcessTreeForceKill(proc.pid)
+        try {
+          nodePtyKillIssued = true
+          proc.kill()
+        } catch {
+          // Process may already be dead
+        }
         return
       }
       try {

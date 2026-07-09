@@ -151,6 +151,20 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).not.toHaveBeenCalled()
   })
 
+  it('keeps the owning provider between graceful shutdown and force escalation', async () => {
+    const current = createDaemonAdapter('daemon', ['daemon-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    await provider.discoverDaemonSessions()
+    await provider.shutdown('daemon-session', { immediate: false })
+    await provider.shutdown('daemon-session', { immediate: true })
+
+    expect(current.shutdown).toHaveBeenNthCalledWith(1, 'daemon-session', { immediate: false })
+    expect(current.shutdown).toHaveBeenNthCalledWith(2, 'daemon-session', { immediate: true })
+    expect(fallback.shutdown).not.toHaveBeenCalled()
+  })
+
   it('forwards replay output from fallback and daemon providers', () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')

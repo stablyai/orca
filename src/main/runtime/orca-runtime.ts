@@ -677,6 +677,7 @@ import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { closeLocalWatcherForWorktreePath } from '../ipc/filesystem-watcher'
 import { HeadlessEmulator, type HeadlessEmulatorOptions } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import { runWorktreePtyShutdownsWithBoundedConcurrency } from './worktree-pty-shutdown-concurrency'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { IFilesystemProvider, IPtyProvider, PtyProcessInfo } from '../providers/types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -17303,9 +17304,22 @@ export class OrcaRuntimeService {
       }
     }
 
+    const controller = this.ptyController
+    if (!controller) {
+      return { stopped: 0 }
+    }
+
+    const stopAndWait = controller.stopAndWait
+    if (stopAndWait) {
+      const results = await runWorktreePtyShutdownsWithBoundedConcurrency([...ptyIds], (ptyId) =>
+        stopAndWait(ptyId)
+      )
+      return { stopped: results.filter(Boolean).length }
+    }
+
     let stopped = 0
     for (const ptyId of ptyIds) {
-      if (this.ptyController?.kill(ptyId)) {
+      if (controller.kill(ptyId)) {
         stopped += 1
       }
     }
