@@ -3,6 +3,7 @@ import {
   askAgent,
   dispatchTaskToAgent,
   getActiveTerminalPaneKey,
+  listCoordinatorCandidates,
   resolveCoordinatorPaneKey,
   sendMessageToAgent
 } from './agent-row-orchestration-actions'
@@ -111,8 +112,7 @@ describe('resolveCoordinatorPaneKey', () => {
 })
 
 describe('listCoordinatorCandidates', () => {
-  it('excludes the worker and marks the focused terminal', async () => {
-    const { listCoordinatorCandidates } = await import('./agent-row-orchestration-actions')
+  it('excludes the worker and marks the focused terminal', () => {
     const candidates = listCoordinatorCandidates({
       workerPaneKey: WORKER_PANE,
       workerWorktreeId: 'wt-1',

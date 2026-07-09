@@ -60,17 +60,16 @@ export async function resolveCoordinatorAndWorkerHandles(args: {
       'Coordinator and worker are the same terminal. Open/focus another agent terminal as coordinator.'
     )
   }
-  const callRuntimeForPane = args.callRuntime as Parameters<
-    typeof resolveTerminalHandleForPaneKey
-  >[0]['callRuntime']
+  // Why: CallRuntime accepts a wider method string than resolveTerminalHandleForPaneKey's
+  // literal 'terminal.resolvePane'; parameter contravariance still allows this call.
   const [coordinatorHandle, workerHandle] = await Promise.all([
     resolveTerminalHandleForPaneKey({
       paneKey: args.coordinatorPaneKey,
-      callRuntime: callRuntimeForPane
+      callRuntime: args.callRuntime
     }),
     resolveTerminalHandleForPaneKey({
       paneKey: args.workerPaneKey,
-      callRuntime: callRuntimeForPane
+      callRuntime: args.callRuntime
     })
   ])
   if (coordinatorHandle === workerHandle) {
