@@ -4471,7 +4471,8 @@ describe('Store', () => {
       repoIcon: {
         type: 'image',
         source: 'upload',
-        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+        // Why: GIF is still unsupported; PNG/WebP/SVG are allowed after #7902.
+        src: 'data:image/gif;base64,aGVsbG8='
       } as never
     })
 
@@ -4507,7 +4508,7 @@ describe('Store', () => {
         repoIcon: {
           type: 'image',
           source: 'upload',
-          src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+          src: 'data:image/gif;base64,aGVsbG8='
         } as never
       })
     )

@@ -1,4 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
+import { buildImageDataUri } from '../shared/image-data-uri'
 import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
 import {
   faviconUrlFromWebsite,
@@ -13,19 +14,33 @@ import { detectGitRemoteIdentity } from './repo-git-remote-identity'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
 
-const REPO_ICON_FILE_CANDIDATES = [
-  'favicon.png',
-  'public/favicon.png',
-  'app/favicon.png',
-  'app/icon.png',
-  'src/favicon.png',
-  'src/app/icon.png',
-  'assets/favicon.png',
-  'assets/icon.png',
-  'static/favicon.png',
-  'logo.png',
-  'public/logo.png'
-]
+// Why: conventional locations only — keep the list short so add-repo stays
+// snappy. Keep format support to raster images with bounded dimensions.
+const REPO_ICON_FILE_STEMS = [
+  'favicon',
+  'public/favicon',
+  'app/favicon',
+  'app/icon',
+  'src/favicon',
+  'src/app/icon',
+  'assets/favicon',
+  'assets/icon',
+  'static/favicon',
+  'logo',
+  'public/logo',
+  // Why: CLI tools and branded assets often use public/icon.* (issue #7902).
+  'public/icon',
+  // Why: Tauri's default bundle icon path (issue #7902).
+  'src-tauri/icons/icon',
+  'app-icon',
+  'icon'
+] as const
+
+const REPO_ICON_FILE_EXTENSIONS = ['.png', '.webp'] as const
+
+export const REPO_ICON_FILE_CANDIDATES = REPO_ICON_FILE_STEMS.flatMap((stem) =>
+  REPO_ICON_FILE_EXTENSIONS.map((extension) => `${stem}${extension}`)
+)
 
 const REPO_ICON_SOURCE_FILE_CANDIDATES = [
   'index.html',
@@ -55,6 +70,10 @@ const WEBSITE_HOSTS_TO_SKIP = new Set([
   'www.bitbucket.org'
 ])
 
+type DetectedImageFormat = {
+  mimeType: 'image/png' | 'image/webp'
+}
+
 function isPngBuffer(buffer: Buffer): boolean {
   return (
     buffer.length >= 8 &&
@@ -67,6 +86,32 @@ function isPngBuffer(buffer: Buffer): boolean {
     buffer[6] === 0x1a &&
     buffer[7] === 0x0a
   )
+}
+
+function isWebpBuffer(buffer: Buffer): boolean {
+  // Why: RIFF container with WEBP fourcc — enough to reject non-images without
+  // a full decoder; the sidebar only needs a valid data URL for <img>.
+  return (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  )
+}
+
+function detectImageFormat(buffer: Buffer): DetectedImageFormat | null {
+  if (isPngBuffer(buffer)) {
+    return { mimeType: 'image/png' }
+  }
+  if (isWebpBuffer(buffer)) {
+    return { mimeType: 'image/webp' }
+  }
+  return null
 }
 
 function shouldUseWebsiteFavicon(rawUrl: string): boolean {
@@ -82,25 +127,37 @@ function extractIconHref(source: string): string | null {
   return source.match(LINK_ICON_HTML_RE)?.[1] ?? source.match(LINK_ICON_OBJECT_RE)?.[1] ?? null
 }
 
-async function readLocalPngIcon(repoPath: string, relativePath: string): Promise<RepoIcon | null> {
+function repoIconFromImageBuffer(buffer: Buffer, relativePath: string): RepoIcon | null {
+  const format = detectImageFormat(buffer)
+  if (!format) {
+    return null
+  }
+  const src = buildImageDataUri(format.mimeType, buffer.toString('base64'))
+  if (!src) {
+    return null
+  }
+  return {
+    type: 'image',
+    src,
+    source: 'file',
+    label: relativePath
+  }
+}
+
+async function readLocalImageIcon(
+  repoPath: string,
+  relativePath: string
+): Promise<RepoIcon | null> {
   const filePath = joinWorktreeRelativePath(repoPath, relativePath)
   const info = await stat(filePath)
   if (!info.isFile() || info.size > MAX_REPO_ICON_UPLOAD_BYTES) {
     return null
   }
   const buffer = await readFile(filePath)
-  if (!isPngBuffer(buffer)) {
-    return null
-  }
-  return {
-    type: 'image',
-    src: `data:image/png;base64,${buffer.toString('base64')}`,
-    source: 'file',
-    label: relativePath
-  }
+  return repoIconFromImageBuffer(buffer, relativePath)
 }
 
-async function readRemotePngIcon(
+async function readRemoteImageIcon(
   repoPath: string,
   fsProvider: IFilesystemProvider,
   relativePath: string
@@ -111,25 +168,21 @@ async function readRemotePngIcon(
     return null
   }
   const result = await fsProvider.readFile(filePath)
-  if (!result.isBinary || result.mimeType !== 'image/png' || !result.content) {
+  if (!result.content) {
     return null
   }
-  const buffer = Buffer.from(result.content, 'base64')
-  if (!isPngBuffer(buffer)) {
-    return null
-  }
-  return {
-    type: 'image',
-    src: `data:image/png;base64,${buffer.toString('base64')}`,
-    source: 'file',
-    label: relativePath
-  }
+  // Why: PNG/WebP are binary; SVG often arrives as text from remote FS
+  // providers. Detect format from bytes either way.
+  const buffer = result.isBinary
+    ? Buffer.from(result.content, 'base64')
+    : Buffer.from(result.content, 'utf8')
+  return repoIconFromImageBuffer(buffer, relativePath)
 }
 
-async function detectLocalPngIcon(repoPath: string): Promise<RepoIcon | null> {
+async function detectLocalImageIcon(repoPath: string): Promise<RepoIcon | null> {
   for (const relativePath of REPO_ICON_FILE_CANDIDATES) {
     try {
-      const icon = await readLocalPngIcon(repoPath, relativePath)
+      const icon = await readLocalImageIcon(repoPath, relativePath)
       if (icon) {
         return icon
       }
@@ -151,7 +204,7 @@ async function detectLocalPngIcon(repoPath: string): Promise<RepoIcon | null> {
       }
       for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
-          const icon = await readLocalPngIcon(repoPath, relativePath)
+          const icon = await readLocalImageIcon(repoPath, relativePath)
           if (icon) {
             return icon
           }
@@ -166,13 +219,13 @@ async function detectLocalPngIcon(repoPath: string): Promise<RepoIcon | null> {
   return null
 }
 
-async function detectRemotePngIcon(
+async function detectRemoteImageIcon(
   repoPath: string,
   fsProvider: IFilesystemProvider
 ): Promise<RepoIcon | null> {
   for (const relativePath of REPO_ICON_FILE_CANDIDATES) {
     try {
-      const icon = await readRemotePngIcon(repoPath, fsProvider, relativePath)
+      const icon = await readRemoteImageIcon(repoPath, fsProvider, relativePath)
       if (icon) {
         return icon
       }
@@ -197,7 +250,7 @@ async function detectRemotePngIcon(
       }
       for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
-          const icon = await readRemotePngIcon(repoPath, fsProvider, relativePath)
+          const icon = await readRemoteImageIcon(repoPath, fsProvider, relativePath)
           if (icon) {
             return icon
           }
@@ -285,8 +338,8 @@ export async function detectRepoIcon({
   try {
     const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
     const fileIcon = fsProvider
-      ? await detectRemotePngIcon(repoPath, fsProvider)
-      : await detectLocalPngIcon(repoPath)
+      ? await detectRemoteImageIcon(repoPath, fsProvider)
+      : await detectLocalImageIcon(repoPath)
     if (fileIcon) {
       return fileIcon
     }

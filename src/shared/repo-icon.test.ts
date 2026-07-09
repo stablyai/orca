@@ -3,6 +3,7 @@ import { githubAvatarIcon, sanitizeRepoIcon } from './repo-icon'
 
 const PNG_1X1_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
+const WEBP_1X1_BASE64 = 'UklGRhoAAABXRUJQVlA4IA4AAAAwAQCdASoBAAEAAQIlSkwAAA=='
 
 function pngBase64(width: number, height: number): string {
   const bytes = Buffer.alloc(24)
@@ -83,6 +84,17 @@ describe('sanitizeRepoIcon', () => {
       src: `data:image/png;base64,${PNG_1X1_BASE64}`,
       source: 'file'
     })
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: `data:image/webp;base64,${WEBP_1X1_BASE64}`,
+        source: 'file'
+      })
+    ).toEqual({
+      type: 'image',
+      src: `data:image/webp;base64,${WEBP_1X1_BASE64}`,
+      source: 'file'
+    })
   })
 
   it('keeps null as an explicit reset', () => {
@@ -114,7 +126,7 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
-        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+        src: 'data:image/gif;base64,aGVsbG8=',
         source: 'upload'
       })
     ).toBeUndefined()
