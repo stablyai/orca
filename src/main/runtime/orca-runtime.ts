@@ -1199,6 +1199,13 @@ function createTerminalRevealWarning(handle: string, error?: unknown): string {
   ].join(' ')
 }
 
+function createTerminalRendererFallbackWarning(handle: string): string {
+  return [
+    `Terminal ${handle} is running in a background surface because Orca had no renderer window for this interactive session.`,
+    `Interactive terminal UIs may need an open Orca window to complete their display handshake. Run \`orca terminal focus --terminal ${handle}\` to reveal and focus it.`
+  ].join(' ')
+}
+
 function resolveTerminalPresentation(opts: {
   presentation?: RuntimeTerminalPresentation
   focus?: boolean
@@ -16010,6 +16017,9 @@ export class OrcaRuntimeService {
     // the renderer IPC path to preserve that behavior.
     const rendererWindow =
       opts.rendererBacked === true ? this.getAvailableAuthoritativeWindow() : null
+    // Why: focused requests need the existing reveal fallback path when no renderer is available.
+    const rendererBackedWithoutWindow =
+      opts.rendererBacked === true && rendererWindow === null && !requiresRendererFocus
     const shouldCreateInBackground =
       worktreeSelector !== undefined &&
       ((!requiresRendererFocus && opts.rendererBacked !== true) ||
@@ -16168,7 +16178,9 @@ export class OrcaRuntimeService {
       }
       let surface: RuntimeTerminalCreate['surface'] = 'background'
       let warning: string | undefined
-      if (presentation !== 'background' && this.notifier?.revealTerminalSession) {
+      if (rendererBackedWithoutWindow) {
+        warning = createTerminalRendererFallbackWarning(handle)
+      } else if (presentation !== 'background' && this.notifier?.revealTerminalSession) {
         try {
           // Why: after the PTY is spawned, renderer tab adoption is best-effort;
           // failing here must not strand a live process without returning a handle.

@@ -8509,6 +8509,30 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('warns when an interactive renderer-backed terminal falls back to a background surface without a renderer window', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude',
+      rendererBacked: true
+    })
+
+    expect(created).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      surface: 'background'
+    })
+    expect(created.warning).toContain('background surface')
+    expect(created.warning).toContain('open Orca window')
+    expect(created.warning).toContain(`orca terminal focus --terminal ${created.handle}`)
+  })
+
   it('accepts renderer-backed terminal create replies only from the target renderer', async () => {
     const webContents = { send: vi.fn() }
     const send = vi.fn((_channel: string, payload: { requestId: string }) => {
