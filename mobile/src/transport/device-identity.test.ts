@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const constantsMock = vi.hoisted(() => ({
-  platform: {
-    ios: { model: null as string | null }
-  }
+const deviceMock = vi.hoisted(() => ({
+  modelName: null as string | null
 }))
 
 const platformMock = vi.hoisted(() => ({
@@ -11,9 +9,7 @@ const platformMock = vi.hoisted(() => ({
   constants: {} as Record<string, string>
 }))
 
-vi.mock('expo-constants', () => ({
-  default: constantsMock
-}))
+vi.mock('expo-device', () => deviceMock)
 
 vi.mock('react-native', () => ({
   Platform: platformMock
@@ -37,18 +33,18 @@ describe('resolveMobileDeviceDisplayName', () => {
   afterEach(() => {
     platformMock.OS = 'ios'
     platformMock.constants = {}
-    constantsMock.platform.ios.model = null
+    deviceMock.modelName = null
   })
 
-  it('prefers iOS marketing model from expo-constants', () => {
+  it('prefers iOS marketing model from expo-device', () => {
     platformMock.OS = 'ios'
-    constantsMock.platform.ios.model = 'iPhone 15 Pro Max'
+    deviceMock.modelName = 'iPhone 15 Pro Max'
     expect(resolveMobileDeviceDisplayName()).toBe('iPhone 15 Pro Max')
   })
 
   it('falls back to iPhone when model is unavailable', () => {
     platformMock.OS = 'ios'
-    constantsMock.platform.ios.model = null
+    deviceMock.modelName = null
     expect(resolveMobileDeviceDisplayName()).toBe('iPhone')
   })
 

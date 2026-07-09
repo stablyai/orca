@@ -1,4 +1,4 @@
-import Constants from 'expo-constants'
+import * as Device from 'expo-device'
 import { Platform } from 'react-native'
 
 // Why: desktop Settings → Paired Devices currently shows the placeholder name
@@ -8,9 +8,14 @@ import { Platform } from 'react-native'
 const MAX_DEVICE_NAME_LENGTH = 64
 
 export function resolveMobileDeviceDisplayName(): string {
-  const iosModel = Constants.platform?.ios?.model
-  if (typeof iosModel === 'string' && iosModel.trim()) {
-    return sanitizeDeviceDisplayName(iosModel) ?? fallbackPlatformLabel()
+  // Why: expo-constants dropped Constants.platform.ios.model in SDK 52+; use
+  // expo-device's marketing name so iOS reports "iPhone 15 Pro" instead of
+  // the bare "iPhone" fallback.
+  if (Platform.OS === 'ios') {
+    const modelName = typeof Device.modelName === 'string' ? Device.modelName.trim() : ''
+    if (modelName) {
+      return sanitizeDeviceDisplayName(modelName) ?? fallbackPlatformLabel()
+    }
   }
 
   // Why: AndroidManifest in expo-constants has no marketing model field, but

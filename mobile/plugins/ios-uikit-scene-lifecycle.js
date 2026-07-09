@@ -56,14 +56,24 @@ function rewriteAppDelegate(contents) {
     return contents
   }
 
-  // Ensure launchOptions storage + factory fields stay public for SceneDelegate.
-  let next = contents.replace(
-    /var reactNativeFactory: RCTReactNativeFactory\?/,
-    `var reactNativeFactory: RCTReactNativeFactory?
+  let next = contents
+  // Why: prebuild re-runs; never inject a second launchOptions property or the
+  // Swift build fails with a redeclaration error.
+  if (!/\bvar\s+launchOptions\s*:/.test(next)) {
+    const withLaunchOptions = next.replace(
+      /var reactNativeFactory: RCTReactNativeFactory\?/,
+      `var reactNativeFactory: RCTReactNativeFactory?
   // Why: SceneDelegate starts RN after the UIWindowScene connects; keep the
   // original launchOptions so deep links / cold-start params still work.
   var launchOptions: [UIApplication.LaunchOptionsKey: Any]?`
-  )
+    )
+    if (withLaunchOptions === next) {
+      throw new Error(
+        'ios-uikit-scene-lifecycle: could not find reactNativeFactory field to attach launchOptions'
+      )
+    }
+    next = withLaunchOptions
+  }
 
   // Replace window-owned RN bootstrap with deferred SceneDelegate bootstrap.
   const oldBootstrap = `#if os(iOS) || os(tvOS)
@@ -79,6 +89,7 @@ function rewriteAppDelegate(contents) {
     // Why: do not create UIWindow here — SceneDelegate owns the window under
     // the UIScene lifecycle required by iOS 27.`
 
+  const beforeBootstrap = next
   if (!next.includes(oldBootstrap)) {
     // Fallback for slightly reformatted templates.
     next = next.replace(
@@ -87,6 +98,11 @@ function rewriteAppDelegate(contents) {
     )
   } else {
     next = next.replace(oldBootstrap, newBootstrap)
+  }
+  if (next === beforeBootstrap) {
+    throw new Error(
+      'ios-uikit-scene-lifecycle: AppDelegate bootstrap pattern not found; refuse silent no-op rewrite'
+    )
   }
 
   if (!next.includes('configurationForConnecting')) {

@@ -11,6 +11,10 @@ describe('displayHostEndpoint', () => {
   it('returns the raw string when not a URL', () => {
     expect(displayHostEndpoint('not-a-url')).toBe('not-a-url')
   })
+
+  it('brackets IPv6 hostnames for round-trip safety', () => {
+    expect(displayHostEndpoint('ws://[fd7a:115c:a1e0::1]:6768')).toBe('[fd7a:115c:a1e0::1]:6768')
+  })
 })
 
 describe('endpointPort', () => {
@@ -98,6 +102,25 @@ describe('normalizeHostEndpoint', () => {
     expect(normalizeHostEndpoint('[fd7a:115c:a1e0::1]:6768')).toEqual({
       ok: true,
       endpoint: 'ws://[fd7a:115c:a1e0::1]:6768'
+    })
+  })
+
+  it('preserves wss when re-normalizing bare host:port via fallbackScheme', () => {
+    expect(
+      normalizeHostEndpoint('desk.example:8443', { fallbackScheme: 'wss', fallbackPort: '8443' })
+    ).toEqual({
+      ok: true,
+      endpoint: 'wss://desk.example:8443'
+    })
+  })
+
+  it('round-trips displayed IPv6 endpoints without port corruption', () => {
+    const original = 'ws://[fd7a:115c:a1e0::1]:6768'
+    const displayed = displayHostEndpoint(original)
+    expect(displayed).toBe('[fd7a:115c:a1e0::1]:6768')
+    expect(normalizeHostEndpoint(displayed, { fallbackPort: '6768' })).toEqual({
+      ok: true,
+      endpoint: original
     })
   })
 })

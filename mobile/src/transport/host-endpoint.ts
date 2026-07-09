@@ -12,7 +12,10 @@ const DEFAULT_PORT = '6768'
 export function displayHostEndpoint(endpoint: string): string {
   try {
     const url = new URL(endpoint)
-    return `${url.hostname}${url.port ? `:${url.port}` : ''}`
+    // Why: URL.hostname strips IPv6 brackets; re-wrap so round-trip through
+    // normalizeHostEndpoint does not treat "addr:port" as a single host.
+    const host = url.hostname.includes(':') ? `[${url.hostname}]` : url.hostname
+    return `${host}${url.port ? `:${url.port}` : ''}`
   } catch {
     return endpoint
   }
@@ -27,9 +30,18 @@ export function endpointPort(endpoint: string): string | undefined {
   }
 }
 
+export function endpointScheme(endpoint: string): 'ws' | 'wss' {
+  try {
+    const protocol = new URL(endpoint).protocol.replace(':', '')
+    return protocol === 'wss' ? 'wss' : 'ws'
+  } catch {
+    return 'ws'
+  }
+}
+
 export function normalizeHostEndpoint(
   input: string,
-  options?: { fallbackPort?: string | number }
+  options?: { fallbackPort?: string | number; fallbackScheme?: 'ws' | 'wss' }
 ): NormalizeHostEndpointResult {
   const trimmed = input.trim()
   if (!trimmed) {
@@ -37,12 +49,13 @@ export function normalizeHostEndpoint(
   }
 
   const fallbackPort = resolveFallbackPort(options?.fallbackPort)
+  const fallbackScheme = options?.fallbackScheme === 'wss' ? 'wss' : 'ws'
 
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
     return normalizeSchemeUrl(trimmed, fallbackPort)
   }
 
-  return normalizeHostPort(trimmed, fallbackPort)
+  return normalizeHostPort(trimmed, fallbackPort, fallbackScheme)
 }
 
 function resolveFallbackPort(value: string | number | undefined): string {
@@ -81,7 +94,11 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
   return { ok: true, endpoint: `${url.protocol}//${formatHostForUrl(url.hostname)}:${port}` }
 }
 
-function normalizeHostPort(input: string, fallbackPort: string): NormalizeHostEndpointResult {
+function normalizeHostPort(
+  input: string,
+  fallbackPort: string,
+  fallbackScheme: 'ws' | 'wss'
+): NormalizeHostEndpointResult {
   let host: string
   let port: string | undefined
 
@@ -122,7 +139,7 @@ function normalizeHostPort(input: string, fallbackPort: string): NormalizeHostEn
   }
 
   const finalPort = port ?? fallbackPort
-  return { ok: true, endpoint: `ws://${formatHostForUrl(host)}:${finalPort}` }
+  return { ok: true, endpoint: `${fallbackScheme}://${formatHostForUrl(host)}:${finalPort}` }
 }
 
 function formatHostForUrl(host: string): string {

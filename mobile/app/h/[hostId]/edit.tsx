@@ -22,6 +22,7 @@ import {
 import {
   displayHostEndpoint,
   endpointPort,
+  endpointScheme,
   normalizeHostEndpoint
 } from '../../../src/transport/host-endpoint'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
@@ -69,11 +70,12 @@ export default function EditHostScreen() {
   }, [load])
 
   const fallbackPort = host ? endpointPort(host.endpoint) : undefined
+  const fallbackScheme = host ? endpointScheme(host.endpoint) : 'ws'
 
   const normalizedPreview = useMemo(() => {
-    const result = normalizeHostEndpoint(address, { fallbackPort })
+    const result = normalizeHostEndpoint(address, { fallbackPort, fallbackScheme })
     return result.ok ? result.endpoint : null
-  }, [address, fallbackPort])
+  }, [address, fallbackPort, fallbackScheme])
 
   const nameTrimmed = name.trim()
   const nameChanged = host != null && nameTrimmed.length > 0 && nameTrimmed !== host.name
@@ -96,7 +98,8 @@ export default function EditHostScreen() {
       return
     }
     const normalized = normalizeHostEndpoint(address, {
-      fallbackPort: endpointPort(host.endpoint)
+      fallbackPort: endpointPort(host.endpoint),
+      fallbackScheme: endpointScheme(host.endpoint)
     })
     if (!normalized.ok) {
       setSaveError(normalized.error)
