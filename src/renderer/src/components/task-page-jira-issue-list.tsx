@@ -22,6 +22,7 @@ type TaskPageJiraIssueListProps = {
   onStartWorkspace: (issue: JiraIssue) => void
   selectedIssue: JiraIssue | null
   showSiteContext: boolean
+  statusDirection?: 'asc' | 'desc'
   statusOrder: JiraProjectStatusOrder | null
 }
 
@@ -50,7 +51,8 @@ function sectionColumnRank(
 
 export function groupJiraIssuesByStatus(
   issues: readonly JiraIssue[],
-  statusOrder: JiraProjectStatusOrder | null
+  statusOrder: JiraProjectStatusOrder | null,
+  statusDirection: 'asc' | 'desc' = 'asc'
 ): TaskPageJiraIssueSection[] {
   const sections = new Map<string, TaskPageJiraIssueSection>()
   for (const issue of issues) {
@@ -67,11 +69,12 @@ export function groupJiraIssuesByStatus(
   const sectionRanks = new Map(
     [...sections.values()].map((section) => [section.key, sectionColumnRank(section, ranks)])
   )
-  return [...sections.values()].sort((a, b) => {
+  const sortedSections = [...sections.values()].sort((a, b) => {
     const rankA = sectionRanks.get(a.key) ?? Number.POSITIVE_INFINITY
     const rankB = sectionRanks.get(b.key) ?? Number.POSITIVE_INFINITY
     return rankA === rankB ? a.label.localeCompare(b.label) : rankA - rankB
   })
+  return statusDirection === 'desc' ? sortedSections.reverse() : sortedSections
 }
 
 function isSelectedIssue(issue: JiraIssue, selectedIssue: JiraIssue | null): boolean {
@@ -280,12 +283,13 @@ export function TaskPageJiraIssueList({
   onStartWorkspace,
   selectedIssue,
   showSiteContext,
+  statusDirection = 'asc',
   statusOrder
 }: TaskPageJiraIssueListProps): React.JSX.Element {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const sections = useMemo(
-    () => groupJiraIssuesByStatus(issues, statusOrder),
-    [issues, statusOrder]
+    () => groupJiraIssuesByStatus(issues, statusOrder, statusDirection),
+    [issues, statusDirection, statusOrder]
   )
 
   return (

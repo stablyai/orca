@@ -9,6 +9,8 @@ import {
   AlertCircle,
   ArrowDownUp,
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
   Ban,
   Check,
   CheckCircle2,
@@ -284,6 +286,7 @@ import type {
   JiraIssueType,
   JiraProject,
   JiraProjectStatusOrder,
+  JiraPriority,
   LinearIssue,
   LinearProjectDetail,
   LinearProjectSummary,
@@ -323,7 +326,8 @@ import {
   jiraGetIssue,
   jiraListCreateFields,
   jiraListIssueTypes,
-  jiraListProjects
+  jiraListProjects,
+  jiraListPriorities
 } from '@/runtime/runtime-jira-client'
 import {
   normalizeVisibleTaskProviders,
@@ -4589,6 +4593,39 @@ export default function TaskPage(): React.JSX.Element {
     order: JiraProjectStatusOrder
     scopeKey: string
   } | null>(null)
+  const [jiraOrderBy, setJiraOrderBy] = useState<
+    'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'
+  >('updated')
+  const [jiraOrderDirection, setJiraOrderDirection] = useState<'asc' | 'desc'>('desc')
+  const [jiraPriorities, setJiraPriorities] = useState<JiraPriority[]>([])
+
+  useEffect(() => {
+    if (!jiraConnected) {
+      setJiraPriorities([])
+      return
+    }
+    const siteId =
+      jiraTaskSourceContext?.providerIdentity?.provider === 'jira'
+        ? jiraTaskSourceContext.providerIdentity.siteId
+        : undefined
+    jiraListPriorities(jiraTaskSourceContext ?? settings, siteId)
+      .then((p) => {
+        setJiraPriorities(p)
+      })
+      .catch(() => {})
+  }, [jiraConnected, jiraTaskSourceContext, settings])
+
+  const handleJiraSort = useCallback(
+    (column: 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated') => {
+      if (jiraOrderBy === column) {
+        setJiraOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'))
+      } else {
+        setJiraOrderBy(column)
+        setJiraOrderDirection(column === 'updated' || column === 'status' ? 'desc' : 'asc')
+      }
+    },
+    [jiraOrderBy]
+  )
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -5620,6 +5657,71 @@ export default function TaskPage(): React.JSX.Element {
     jiraProjectStatusOrder && displayedJiraStatusOrderScopeKey === jiraProjectStatusOrder.scopeKey
       ? jiraProjectStatusOrder.order
       : null
+
+  const getJiraPriorityWeight = useCallback(
+    (priorityName?: string, priorityId?: string): number => {
+      if (!priorityName) {
+        return 99
+      }
+      if (jiraPriorities.length > 0) {
+        const idx = jiraPriorities.findIndex(
+          (p) => p.id === priorityId || p.name.toLowerCase() === priorityName.toLowerCase()
+        )
+        if (idx !== -1) {
+          return idx
+        }
+      }
+      const nameKey = priorityName.toLowerCase()
+      const JIRA_PRIORITY_ORDER: Record<string, number> = {
+        blocker: 1,
+        highest: 1,
+        critical: 1,
+        high: 2,
+        major: 2,
+        medium: 3,
+        normal: 3,
+        low: 4,
+        minor: 4,
+        lowest: 5,
+        trivial: 5
+      }
+      if (nameKey in JIRA_PRIORITY_ORDER) {
+        return JIRA_PRIORITY_ORDER[nameKey]
+      }
+      if (priorityId) {
+        const parsed = Number.parseInt(priorityId, 10)
+        if (!Number.isNaN(parsed)) {
+          return parsed
+        }
+      }
+      return 3
+    },
+    [jiraPriorities]
+  )
+
+  const sortedJiraIssues = useMemo(() => {
+    return [...displayedJiraIssues].sort((a, b) => {
+      let comparison = 0
+      if (jiraOrderBy === 'key') {
+        comparison = a.key.localeCompare(b.key, undefined, { numeric: true })
+      } else if (jiraOrderBy === 'title') {
+        comparison = a.title.localeCompare(b.title)
+      } else if (jiraOrderBy === 'status') {
+        comparison = 0
+      } else if (jiraOrderBy === 'priority') {
+        const weightA = getJiraPriorityWeight(a.priority?.name, a.priority?.id)
+        const weightB = getJiraPriorityWeight(b.priority?.name, b.priority?.id)
+        comparison = weightB - weightA
+      } else if (jiraOrderBy === 'assignee') {
+        const userA = a.assignee?.displayName ?? ''
+        const userB = b.assignee?.displayName ?? ''
+        comparison = userA.localeCompare(userB)
+      } else if (jiraOrderBy === 'updated') {
+        comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+      }
+      return jiraOrderDirection === 'asc' ? comparison : -comparison
+    })
+  }, [displayedJiraIssues, jiraOrderBy, jiraOrderDirection, getJiraPriorityWeight])
 
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
@@ -10011,14 +10113,54 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
 
                 <div className="grid h-8 flex-none grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]">
-                  <span>{translate('auto.components.TaskPage.37e7ee311e', 'Key')}</span>
-                  <span>{translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}</span>
-                  <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
-                  <span>{translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}</span>
-                  <span className="block max-lg:!hidden">
-                    {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
-                  </span>
-                  <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+                  {(
+                    [
+                      { id: 'key', label: translate('auto.components.TaskPage.37e7ee311e', 'Key') },
+                      {
+                        id: 'title',
+                        label: translate('auto.components.TaskPage.b1eaa18ace', 'Issue')
+                      },
+                      {
+                        id: 'status',
+                        label: translate('auto.components.TaskPage.154b0fa623', 'Status')
+                      },
+                      {
+                        id: 'priority',
+                        label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')
+                      },
+                      {
+                        id: 'assignee',
+                        label: translate('auto.components.TaskPage.d2a876ca53', 'Assignee'),
+                        className: 'block max-lg:!hidden'
+                      },
+                      {
+                        id: 'updated',
+                        label: translate('auto.components.TaskPage.f362667d55', 'Updated')
+                      }
+                    ] as {
+                      id: 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'
+                      label: string
+                      className?: string
+                    }[]
+                  ).map((col) => (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => handleJiraSort(col.id)}
+                      className={cn(
+                        'flex items-center gap-1 hover:text-foreground text-left focus:outline-none uppercase font-semibold text-[11px] tracking-[0.08em] select-none',
+                        col.className
+                      )}
+                    >
+                      {col.label}
+                      {jiraOrderBy === col.id &&
+                        (jiraOrderDirection === 'asc' ? (
+                          <ArrowUp className="size-3" />
+                        ) : (
+                          <ArrowDown className="size-3" />
+                        ))}
+                    </button>
+                  ))}
                   <span />
                 </div>
 
@@ -10075,11 +10217,12 @@ export default function TaskPage(): React.JSX.Element {
                   <TaskPageJiraIssueList
                     formatUpdatedAt={formatRelativeTime}
                     getStatusTone={getJiraStatusTone}
-                    issues={displayedJiraIssues}
+                    issues={sortedJiraIssues}
                     onOpenIssue={openJiraDetailPage}
                     onStartWorkspace={handleUseJiraItem}
                     selectedIssue={selectedJiraIssue}
                     showSiteContext={selectedJiraSiteId === 'all'}
+                    statusDirection={jiraOrderBy === 'status' ? jiraOrderDirection : 'asc'}
                     statusOrder={displayedJiraStatusOrder}
                   />
                 </div>
