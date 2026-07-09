@@ -275,5 +275,23 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',
       'orca terminal split --terminal term_abc123 --command "codex"'
     ]
+  },
+  {
+    path: ['notify'],
+    summary: 'Fire a native Orca notification that deep-links to a pane',
+    usage:
+      'orca notify --message <text> [--title <text>] [--pane <handle>|--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'message', 'title', 'pane', 'terminal', 'worktree'],
+    notes: [
+      'Delivers to the desktop app and any paired mobile device; clicking the notification jumps to the target pane.',
+      'Omit --pane and --worktree to target the active terminal in the current worktree.',
+      'Pass --pane with a terminal handle (from `orca terminal list --json`) to focus that exact pane on tap.',
+      'A bare `orca notify --message "…"` still fires when no terminal can be resolved, but the tap has no pane to focus.'
+    ],
+    examples: [
+      'orca notify --message "Tests passed — ready for review"',
+      'orca notify --pane term_abc123 --title "Blocked" --message "Needs your input on the migration" --json',
+      'orca notify --worktree active --message "Deploy finished"'
+    ]
   }
 ]
