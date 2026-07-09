@@ -429,8 +429,8 @@ describe('fetchCodexRateLimits', () => {
       weekly: { usedPercent: 20, windowMinutes: 10080 },
       status: 'ok'
     })
+    // Preferred codex meters stay on session/weekly only — buckets lists extras.
     expect(result.buckets).toEqual([
-      expect.objectContaining({ name: 'Codex', usedPercent: 10, windowMinutes: 300 }),
       expect.objectContaining({ name: 'Codex other', usedPercent: 40, windowMinutes: 300 }),
       expect.objectContaining({
         name: 'Codex other weekly',

@@ -600,14 +600,15 @@ function mapRpcRateLimitsPayload(wrapper: RpcRateLimitsResponse | undefined): {
 
   const buckets: RateLimitBucket[] = []
   for (const [id, snapshot] of entries) {
+    // Why: session/weekly already carry the preferred primary/secondary; putting
+    // them in buckets too duplicates the same meter in tooltip/status-bar UI.
+    if (id === preferredId) {
+      continue
+    }
     const name = limitSnapshotDisplayName(id, snapshot)
     const primary = mapRpcWindow(snapshot.primary, 300)
     if (primary) {
       buckets.push({ name, ...primary })
-    }
-    if (id === preferredId) {
-      // Preferred secondary is already exposed as weekly.
-      continue
     }
     const secondary = mapRpcWindow(snapshot.secondary, 10080)
     if (secondary) {
