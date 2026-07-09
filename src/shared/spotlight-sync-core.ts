@@ -2,6 +2,7 @@
 // deactivate / inspect). Low-level git primitives and guards live in
 // ./spotlight-sync-primitives.
 import { SPOTLIGHT_REFS } from './spotlight'
+import { stripHeadsPrefix } from './spotlight-git-exec'
 import {
   applySnapshotToRoot,
   assertNoConflictOperation,
@@ -65,7 +66,14 @@ export async function activateSpotlightCore(
   ctx: SpotlightGitContext,
   rootPath: string,
   worktreePath: string,
-  opts: { force?: boolean; reuseIndexForHead?: string | null } = {}
+  opts: {
+    force?: boolean
+    reuseIndexForHead?: string | null
+    /** Short branch name the root MUST be on for a fresh activation (its primary
+     *  branch), so there's a clean branch to restore to. Skipped on takeover
+     *  (the root is legitimately detached-by-Spotlight then). Null = no check. */
+    requiredBranch?: string | null
+  } = {}
 ): Promise<SpotlightActivateOutcome> {
   await assertNoConflictOperation(ctx, rootPath)
   await assertNoConflictOperation(ctx, worktreePath)
@@ -84,6 +92,23 @@ export async function activateSpotlightCore(
   // activation re-establish clean refs (the root was already restored before
   // those deletes ran).
   const alreadyActive = Boolean(refs.originalHeadSha && refs.backupSha && refs.snapshotSha)
+
+  // Fresh activation must start from the root on its primary branch so there's a
+  // clean, predictable branch to restore to on deactivate. (Takeover finds the
+  // root detached-by-Spotlight, so this only applies when not already active.)
+  if (!alreadyActive && opts.requiredBranch) {
+    const head = await gitTry(ctx, rootPath, ['symbolic-ref', '-q', 'HEAD'])
+    const current = head ? stripHeadsPrefix(head) : null
+    if (current !== opts.requiredBranch) {
+      throw new SpotlightCoreError(
+        'not-on-primary-branch',
+        `Spotlight needs the project root on its primary branch "${opts.requiredBranch}" (it's currently ${
+          current ? `on "${current}"` : 'detached'
+        }). Check out "${opts.requiredBranch}" in the project root, then try again.`
+      )
+    }
+  }
+
   const rootStatus = await readRootStatus(ctx, rootPath)
 
   // Takeover/re-activate must honor the same divergence guards as sync — the

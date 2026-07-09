@@ -66,6 +66,7 @@ function spotlightErrorDescription(error: SpotlightError): string {
     case 'branch-missing':
     case 'git-failed':
     case 'not-active':
+    case 'not-on-primary-branch':
     case 'repo-not-found':
     case 'root-is-holder':
     case 'unborn-head':

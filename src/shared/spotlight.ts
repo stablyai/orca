@@ -21,6 +21,9 @@ export type SpotlightErrorCode =
   | 'bare-root'
   /** The main worktree cannot hold the Spotlight (it IS the sync target). */
   | 'root-is-holder'
+  /** The repo root isn't on its primary branch, so there's no clean branch to
+   *  return it to — the user must check the primary branch out first. */
+  | 'not-on-primary-branch'
   | 'repo-not-found'
   | 'worktree-not-found'
   | 'not-active'

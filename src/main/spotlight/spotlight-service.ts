@@ -16,6 +16,7 @@ import { writeSpotlightStateFile } from './spotlight-state-file'
 import {
   isRootHolderPath,
   pendingSpotlightState,
+  resolvePrimaryBranch,
   resolveRepoContext,
   toSpotlightError,
   worktreePathFromId,
@@ -85,6 +86,11 @@ export class SpotlightService {
       }
 
       const previous = this.store.getSpotlightState(repoId)
+      // Only gate a FRESH activation on the primary branch; a takeover finds the
+      // root detached-by-Spotlight. The engine enforces requiredBranch.
+      const requiredBranch = previous
+        ? null
+        : await resolvePrimaryBranch(resolved.ctx, resolved.repo, resolved.repo.path)
       this.emitSyncing(repoId, {
         ...(previous ?? pendingSpotlightState(repoId, worktreeId, Date.now())),
         holderWorktreeId: worktreeId
@@ -95,7 +101,8 @@ export class SpotlightService {
           resolved.repo.path,
           worktreePath,
           {
-            reuseIndexForHead: this.reuseIndexHeadFor(repoId, worktreeId)
+            reuseIndexForHead: this.reuseIndexHeadFor(repoId, worktreeId),
+            requiredBranch
           }
         )
         this.lastCheckpointByRepo.set(repoId, {

@@ -333,6 +333,35 @@ describe('spotlight-sync-core', () => {
     expect(run(rootPath, 'show', `${refs.backupSha}:a.txt`)).toBe('root-dirty')
   })
 
+  it('blocks a fresh activation when the root is not on the required primary branch', async () => {
+    write(worktreePath, 'a.txt', 'a-changed\n')
+    await expect(
+      activateSpotlightCore(ctx, rootPath, worktreePath, { requiredBranch: 'develop' })
+    ).rejects.toMatchObject({ code: 'not-on-primary-branch' })
+    // Root untouched — still on main, no spotlight refs written.
+    expect(run(rootPath, 'symbolic-ref', '--short', 'HEAD')).toBe('main')
+    expect((await inspectSpotlightRefsCore(ctx, rootPath)).snapshotSha).toBeNull()
+  })
+
+  it('allows a fresh activation when the root is on the required primary branch', async () => {
+    write(worktreePath, 'a.txt', 'a-changed\n')
+    const outcome = await activateSpotlightCore(ctx, rootPath, worktreePath, {
+      requiredBranch: 'main'
+    })
+    expect(outcome.alreadyActive).toBe(false)
+  })
+
+  it('does not re-check the primary branch on takeover', async () => {
+    await activateSpotlightCore(ctx, rootPath, worktreePath, { requiredBranch: 'main' })
+    write(worktreePath, 'a.txt', 'again\n')
+    // Second activation is a takeover (refs exist) — the mismatched requiredBranch
+    // must be ignored since the root is legitimately detached-by-Spotlight.
+    const outcome = await activateSpotlightCore(ctx, rootPath, worktreePath, {
+      requiredBranch: 'develop'
+    })
+    expect(outcome.alreadyActive).toBe(true)
+  })
+
   it('recovers instead of wedging when a prior deactivate left orphan refs', async () => {
     write(worktreePath, 'a.txt', 'a-changed\n')
     await activateSpotlightCore(ctx, rootPath, worktreePath)
