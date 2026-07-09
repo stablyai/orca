@@ -8,6 +8,7 @@ import {
   Plug,
   ChevronDown,
   ChevronRight,
+  History,
   Loader2,
   PanelsTopLeft,
   RefreshCw,
@@ -91,6 +92,11 @@ const PortsStatusSegment = lazyWithRetry(() =>
 )
 const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+)
+const LineBlameStatusSegment = lazyWithRetry(() =>
+  import('./LineBlameStatusSegment').then((module) => ({
+    default: module.LineBlameStatusSegment
+  }))
 )
 
 export type CodexStatusRuntimeTarget = {
@@ -1879,6 +1885,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
+  const showLineBlame = statusBarItems.includes('line-blame')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible =
@@ -2027,6 +2034,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       <div className="flex items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
+          {showLineBlame ? <LineBlameStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
           {petEnabled ? <PetStatusSegment /> : null}
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
@@ -2177,6 +2185,16 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           >
             <Plug className="size-3.5" />
             {translate('auto.components.status.bar.StatusBar.9659e38343', 'Ports')}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('line-blame')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('line-blame')
+              toggleStatusBarItem('line-blame')
+            }}
+          >
+            <History className="size-3.5" />
+            {translate('auto.components.status.bar.StatusBar.lineBlameMenuLabel', 'Line Author')}
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>

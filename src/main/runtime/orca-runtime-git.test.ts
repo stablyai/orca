@@ -19,7 +19,12 @@ const mocks = vi.hoisted(() => ({
   generatePullRequestFieldsFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
   resolveHostedReviewBodyForGeneration: vi.fn(),
-  getSshGitProvider: vi.fn()
+  getSshGitProvider: vi.fn(),
+  getLineBlame: vi.fn()
+}))
+
+vi.mock('../git/line-blame', () => ({
+  getLineBlame: mocks.getLineBlame
 }))
 
 vi.mock('../git/status', async () => ({
@@ -96,6 +101,7 @@ describe('RuntimeGitCommands', () => {
     mocks.getSshGitProvider.mockReset()
     mocks.checkoutBranch.mockReset()
     mocks.listLocalBranches.mockReset()
+    mocks.getLineBlame.mockReset()
   })
 
   afterEach(() => {
@@ -158,6 +164,41 @@ describe('RuntimeGitCommands', () => {
 
     expect(provider.abortRebase).toHaveBeenCalledWith('/remote/repo')
     expect(mocks.abortRebase).not.toHaveBeenCalled()
+  })
+
+  it('blames a local line through the resolved worktree', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const commands = makeCommands(worktreePath)
+    const blame = {
+      sha: 'a'.repeat(40),
+      author: 'Neil',
+      authorTimeMs: 1,
+      summary: 's',
+      isUncommitted: false
+    }
+    mocks.getLineBlame.mockResolvedValue(blame)
+
+    await expect(commands.getRuntimeGitLineBlame('id:wt-1', 'src/index.ts', 5)).resolves.toEqual(
+      blame
+    )
+    expect(mocks.getLineBlame).toHaveBeenCalledWith(worktreePath, 'src/index.ts', 5, {})
+  })
+
+  it('blames a remote line through the SSH git provider', async () => {
+    const provider = { getLineBlame: vi.fn().mockResolvedValue(null) }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/remote/repo'),
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await expect(commands.getRuntimeGitLineBlame('id:wt-1', 'src/index.ts', 5)).resolves.toBeNull()
+    expect(provider.getLineBlame).toHaveBeenCalledWith('/remote/repo', 'src/index.ts', 5)
+    expect(mocks.getLineBlame).not.toHaveBeenCalled()
   })
 
   it('checks out a local branch through the resolved worktree', async () => {

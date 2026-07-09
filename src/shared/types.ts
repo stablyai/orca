@@ -3157,6 +3157,7 @@ export type StatusBarItem =
   | 'ssh'
   | 'resource-usage'
   | 'ports'
+  | 'line-blame'
 export type FloatingTerminalTriggerLocation = 'floating-button' | 'status-bar'
 
 export type TaskResumeState = {
@@ -3641,6 +3642,16 @@ export type GitDiffBinaryResult = {
 )
 
 export type GitDiffResult = GitDiffTextResult | GitDiffBinaryResult
+
+// Why: per-line authorship for the status-bar git-blame segment. `isUncommitted`
+// marks git's all-zero "not committed yet" sha (a local, unsaved/uncommitted line).
+export type GitLineBlameResult = {
+  sha: string
+  author: string
+  authorTimeMs: number
+  summary: string
+  isUncommitted: boolean
+}
 
 // ─── Search ─────────────────────────────────────────────
 export type SearchMatch = {

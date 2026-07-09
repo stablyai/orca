@@ -7,6 +7,7 @@ import type { GitProviderStatusOptions, IGitProvider } from './types'
 import type {
   GitStatusResult,
   GitDiffResult,
+  GitLineBlameResult,
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
@@ -20,6 +21,7 @@ import type {
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
+import { parseBlamePorcelain } from '../git/line-blame'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
@@ -380,6 +382,36 @@ export class SshGitProvider implements IGitProvider {
           compareAgainstHead
         })) as GitDiffResult
     ) as Promise<GitDiffResult>
+  }
+
+  async getLineBlame(
+    worktreePath: string,
+    repoRelativeFilePath: string,
+    line1Indexed: number
+  ): Promise<GitLineBlameResult | null> {
+    if (!Number.isInteger(line1Indexed) || line1Indexed < 1) {
+      return null
+    }
+    // Why: reuse the generic git.exec relay channel + shared porcelain parser so
+    // this works on existing relays without a new dedicated RPC channel.
+    try {
+      const { stdout } = await this.exec(
+        [
+          'blame',
+          '--porcelain',
+          '-L',
+          `${line1Indexed},${line1Indexed}`,
+          '--',
+          repoRelativeFilePath
+        ],
+        worktreePath,
+        // Cap it so a slow remote blame can't stall cursor-driven updates.
+        { timeoutMs: 5000 }
+      )
+      return parseBlamePorcelain(stdout)
+    } catch {
+      return null
+    }
   }
 
   async stageFile(worktreePath: string, filePath: string): Promise<void> {

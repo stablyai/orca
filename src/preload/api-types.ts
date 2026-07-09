@@ -75,6 +75,7 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitLineBlameResult,
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
@@ -2416,6 +2417,12 @@ export type PreloadApi = {
       compareAgainstHead?: boolean
       connectionId?: string
     }) => Promise<GitDiffResult>
+    lineBlame: (args: {
+      worktreePath: string
+      filePath: string
+      line: number
+      connectionId?: string
+    }) => Promise<GitLineBlameResult | null>
     branchCompare: (args: {
       worktreePath: string
       baseRef: string

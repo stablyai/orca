@@ -3,6 +3,7 @@ import type {
   FsChangeEvent,
   GitStatusResult,
   GitDiffResult,
+  GitLineBlameResult,
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
@@ -239,6 +240,11 @@ export type IGitProvider = {
     staged: boolean,
     compareAgainstHead?: boolean
   ): Promise<GitDiffResult>
+  getLineBlame(
+    worktreePath: string,
+    repoRelativeFilePath: string,
+    line1Indexed: number
+  ): Promise<GitLineBlameResult | null>
   stageFile(worktreePath: string, filePath: string): Promise<void>
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>
