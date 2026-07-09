@@ -167,6 +167,10 @@ describe('pasteDraftWhenAgentReady', () => {
       'pty-1',
       PASTED_ISSUE_URL
     )
+    // Guard against a duplicate paste: the quiet window should fire exactly once.
+    // Boundary stays aligned with BRACKETED_PASTE_QUIET_MS (1500) via the
+    // 1499ms + 1ms split above.
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the render-quiet wait for agents without the Codex ready signal', async () => {
