@@ -17,6 +17,7 @@ import {
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
+  resolveSourceControlGenerationTimeoutMs,
   trimGeneratedCommitMessage
 } from './commit-message-text-generation'
 
@@ -36,6 +37,7 @@ vi.mock('child_process', async (importOriginal) => {
 
 const execMock = vi.mocked(exec)
 const spawnMock = vi.mocked(spawn)
+const timeoutEnvKey = 'ORCA_SOURCE_CONTROL_AI_TIMEOUT_MS'
 
 type MockDiscoveryChild = EventEmitter & {
   pid: number
@@ -78,9 +80,56 @@ function expectChildTerminated(child: { pid: number; kill: ReturnType<typeof vi.
   expect(child.kill).toHaveBeenCalledWith('SIGKILL')
 }
 
+async function withTimeoutEnv<T>(value: string | undefined, fn: () => T | Promise<T>): Promise<T> {
+  const previous = process.env[timeoutEnvKey]
+  if (value === undefined) {
+    delete process.env[timeoutEnvKey]
+  } else {
+    process.env[timeoutEnvKey] = value
+  }
+  try {
+    return await fn()
+  } finally {
+    if (previous === undefined) {
+      delete process.env[timeoutEnvKey]
+    } else {
+      process.env[timeoutEnvKey] = previous
+    }
+  }
+}
+
 beforeEach(() => {
   execMock.mockClear()
   spawnMock.mockClear()
+})
+
+describe('resolveSourceControlGenerationTimeoutMs', () => {
+  it('uses 60 seconds by default', async () => {
+    await withTimeoutEnv(undefined, () => {
+      expect(resolveSourceControlGenerationTimeoutMs()).toBe(60_000)
+    })
+  })
+
+  it('accepts configured timeouts from 30 to 300 seconds', async () => {
+    await withTimeoutEnv('120000', () => {
+      expect(resolveSourceControlGenerationTimeoutMs()).toBe(120_000)
+    })
+  })
+
+  it('clamps configured timeouts to the supported range', async () => {
+    await withTimeoutEnv('5000', () => {
+      expect(resolveSourceControlGenerationTimeoutMs()).toBe(30_000)
+    })
+    await withTimeoutEnv('999999', () => {
+      expect(resolveSourceControlGenerationTimeoutMs()).toBe(300_000)
+    })
+  })
+
+  it('ignores invalid configured timeouts', async () => {
+    await withTimeoutEnv('not-a-number', () => {
+      expect(resolveSourceControlGenerationTimeoutMs()).toBe(60_000)
+    })
+  })
 })
 
 describe('resolveCommitMessageSettings', () => {
@@ -615,7 +664,45 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
-  it('exposes raw CLI failure output only after path sanitization', async () => {
+  it('uses the configured timeout for remote commit-message generation', async () => {
+    await withTimeoutEnv('120000', async () => {
+      let requestedTimeout = 0
+      const result = await generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          stagedPatch: '+hello'
+        },
+        {
+          agentId: 'custom',
+          model: '',
+          customAgentCommand: 'agent'
+        },
+        {
+          kind: 'remote',
+          cwd: '/repo',
+          missingBinaryLocation: 'remote PATH',
+          execute: async (_plan, _cwd, timeoutMs) => {
+            requestedTimeout = timeoutMs
+            return {
+              stdout: '',
+              stderr: '',
+              exitCode: null,
+              timedOut: true
+            }
+          }
+        }
+      )
+
+      expect(requestedTimeout).toBe(120_000)
+      expect(result).toEqual({
+        success: false,
+        error: 'Generation timed out after 120s.'
+      })
+    })
+  })
+
+  it('does not expose unstructured raw CLI failure output', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
