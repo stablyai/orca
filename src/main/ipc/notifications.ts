@@ -312,6 +312,175 @@ function pruneRecentNotifications(recentNotifications: Map<string, number>, now:
   }
 }
 
+// Why: the native-delivery core (build options → mobile push → native
+// Notification with click-to-focus routing) is shared by the renderer-driven
+// IPC dispatch and the agent-driven runtime dispatch (`notifications.dispatch`).
+// The renderer-only gates (tray attention, focus suppression, burst dedupe)
+// stay in the IPC handler; this function is the part both paths reuse so a
+// notification behaves identically however it was triggered.
+export function performNotificationDelivery(
+  store: Store,
+  runtime: OrcaRuntimeService | undefined,
+  args: NotificationDispatchRequest
+): NotificationDispatchResult | Promise<NotificationDispatchResult> {
+  const settings = store.getSettings().notifications
+  const notificationOptions = buildNotificationOptions(args)
+
+  // Why: paired mobile clients should follow the same user-facing
+  // notification gates as desktop delivery, while still working on hosts
+  // where Electron native notifications are unavailable.
+  if (runtime && args.source !== 'test') {
+    runtime.dispatchMobileNotification({
+      type: 'notification',
+      source: args.source,
+      title: notificationOptions.title,
+      body: notificationOptions.body,
+      worktreeId: args.worktreeId,
+      // Why: carry the pane key so a mobile tap can land on the exact split
+      // pane, not just the worktree. Desktop already routes to the pane via
+      // the native click handler below.
+      ...(args.paneKey ? { paneKey: args.paneKey } : {}),
+      ...(args.notificationId ? { notificationId: args.notificationId } : {})
+    })
+  }
+
+  if (!Notification.isSupported()) {
+    return { delivered: false, reason: 'not-supported' }
+  }
+
+  function deliverNativeNotification():
+    | NotificationDispatchResult
+    | Promise<NotificationDispatchResult> {
+    if (getEffectiveNotificationSoundId(settings) !== 'system') {
+      notificationOptions.silent = true
+    } else if (process.platform === 'darwin') {
+      // Why: macOS treats an unset notification sound as silent. When Orca is
+      // using the OS sound, ask Electron for the default notification sound.
+      notificationOptions.sound = 'default'
+    }
+    const notification = new Notification(notificationOptions)
+    if (args.notificationId) {
+      const previous = activeNotificationsById.get(args.notificationId)
+      if (previous) {
+        previous.notification.close()
+        previous.release()
+      }
+    }
+
+    // Why: prevent GC from collecting the notification (and its click
+    // handler) while it's still visible in macOS Notification Center.
+    let clickHandler: (() => void) | null = null
+    let failedHandler: ((_event: unknown, error?: string) => void) | null = null
+    const entryForId: { notification: Notification; release: () => void } | null =
+      args.notificationId ? { notification, release: () => {} } : null
+    const release = retainNotificationUntilRelease(notification, () => {
+      if (clickHandler) {
+        notification.removeListener('click', clickHandler)
+        clickHandler = null
+      }
+      if (failedHandler) {
+        notification.removeListener('failed', failedHandler)
+        failedHandler = null
+      }
+      if (args.notificationId && activeNotificationsById.get(args.notificationId) === entryForId) {
+        activeNotificationsById.delete(args.notificationId)
+      }
+    })
+    if (entryForId && args.notificationId) {
+      entryForId.release = release
+      activeNotificationsById.set(args.notificationId, entryForId)
+    }
+
+    failedHandler = (_event, error) => {
+      // Why: Electron 42's macOS UNNotification backend reports unsigned
+      // apps and native delivery errors here; release immediately instead
+      // of retaining a dead notification until the fallback timer.
+      logNativeNotificationFailure(args.source, error)
+      // A definitive rejection — feeds the permission card's evidence.
+      lastObservedDeliveryOutcome = 'failed'
+      release()
+    }
+    notification.on('failed', failedHandler)
+
+    // Why: clicking a notification should bring Orca to the foreground and
+    // switch to the worktree/pane that triggered it. Worktree activation owns
+    // repo/sidebar state; the optional focusTerminal follow-up uses the stable
+    // pane leaf id so split-pane notifications land on the exact pane.
+    // Why: worktreeId is formatted as "repoId::worktreePath".  If the
+    // separator is missing we cannot reliably extract a repoId, so skip
+    // the click-to-navigate binding — the notification still fires but
+    // clicking it will not attempt to switch to an unknown worktree.
+    if (args.worktreeId && args.worktreeId.includes('::')) {
+      const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+      clickHandler = () => {
+        release()
+        const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+        if (!win) {
+          return
+        }
+        if (process.platform === 'darwin') {
+          app.focus({ steal: true })
+        }
+        if (win.isMinimized()) {
+          win.restore()
+        }
+        win.focus()
+        win.webContents.send('ui:activateWorktree', {
+          repoId,
+          worktreeId: args.worktreeId
+        })
+        const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
+        if (paneTarget) {
+          win.webContents.send('ui:focusTerminal', {
+            tabId: paneTarget.tabId,
+            worktreeId: args.worktreeId,
+            leafId: paneTarget.leafId,
+            ackPaneKeyOnSuccess: args.paneKey,
+            flashFocusedPane: true,
+            scrollToBottomIfOutputSinceLastView: true
+          })
+        }
+      }
+      notification.on('click', clickHandler)
+    }
+
+    const displayConfirmation = args.requireDisplayConfirmation
+      ? waitForNotificationDisplay(notification)
+      : null
+    notification.show()
+
+    if (displayConfirmation) {
+      return displayConfirmation.then((displayed) => {
+        if (!displayed) {
+          release()
+          return { delivered: false, reason: 'not-displayed' }
+        }
+        lastObservedDeliveryOutcome = 'delivered'
+        return { delivered: true }
+      })
+    }
+
+    return { delivered: true }
+  }
+
+  if (process.platform !== 'darwin') {
+    return deliverNativeNotification()
+  }
+  // Why: macOS silently swallows accepted notifications while permission
+  // is denied or the permission dialog is unanswered (verified on macOS
+  // 26). Skip the doomed native notification and tell the caller, so the
+  // renderer can surface an in-app fallback pointing at System Settings.
+  // The mobile dispatch above is unaffected — paired devices have their
+  // own notification channel.
+  return readNotificationAuthorizationStatus().then((authorization) => {
+    if (authorization === 'denied' || authorization === 'not-determined') {
+      lastObservedDeliveryOutcome = 'failed'
+      return { delivered: false, reason: 'blocked-by-system' }
+    }
+    return deliverNativeNotification()
+  })
+}
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
   // Why: handler registration marks a fresh session — permission evidence
@@ -471,162 +640,21 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         pruneRecentNotifications(recentNotifications, now)
       }
 
-      const notificationOptions = buildNotificationOptions(args)
-
-      // Why: paired mobile clients should follow the same user-facing
-      // notification gates as desktop delivery, while still working on hosts
-      // where Electron native notifications are unavailable.
-      if (runtime && args.source !== 'test') {
-        runtime.dispatchMobileNotification({
-          type: 'notification',
-          source: args.source,
-          title: notificationOptions.title,
-          body: notificationOptions.body,
-          worktreeId: args.worktreeId,
-          ...(args.notificationId ? { notificationId: args.notificationId } : {})
-        })
-      }
-
-      if (!Notification.isSupported()) {
-        return { delivered: false, reason: 'not-supported' }
-      }
-
-      function deliverNativeNotification():
-        | NotificationDispatchResult
-        | Promise<NotificationDispatchResult> {
-        if (getEffectiveNotificationSoundId(settings) !== 'system') {
-          notificationOptions.silent = true
-        } else if (process.platform === 'darwin') {
-          // Why: macOS treats an unset notification sound as silent. When Orca is
-          // using the OS sound, ask Electron for the default notification sound.
-          notificationOptions.sound = 'default'
-        }
-        const notification = new Notification(notificationOptions)
-        if (args.notificationId) {
-          const previous = activeNotificationsById.get(args.notificationId)
-          if (previous) {
-            previous.notification.close()
-            previous.release()
-          }
-        }
-
-        // Why: prevent GC from collecting the notification (and its click
-        // handler) while it's still visible in macOS Notification Center.
-        let clickHandler: (() => void) | null = null
-        let failedHandler: ((_event: unknown, error?: string) => void) | null = null
-        const entryForId: { notification: Notification; release: () => void } | null =
-          args.notificationId ? { notification, release: () => {} } : null
-        const release = retainNotificationUntilRelease(notification, () => {
-          if (clickHandler) {
-            notification.removeListener('click', clickHandler)
-            clickHandler = null
-          }
-          if (failedHandler) {
-            notification.removeListener('failed', failedHandler)
-            failedHandler = null
-          }
-          if (
-            args.notificationId &&
-            activeNotificationsById.get(args.notificationId) === entryForId
-          ) {
-            activeNotificationsById.delete(args.notificationId)
-          }
-        })
-        if (entryForId && args.notificationId) {
-          entryForId.release = release
-          activeNotificationsById.set(args.notificationId, entryForId)
-        }
-
-        failedHandler = (_event, error) => {
-          // Why: Electron 42's macOS UNNotification backend reports unsigned
-          // apps and native delivery errors here; release immediately instead
-          // of retaining a dead notification until the fallback timer.
-          logNativeNotificationFailure(args.source, error)
-          // A definitive rejection — feeds the permission card's evidence.
-          lastObservedDeliveryOutcome = 'failed'
-          release()
-        }
-        notification.on('failed', failedHandler)
-
-        // Why: clicking a notification should bring Orca to the foreground and
-        // switch to the worktree/pane that triggered it. Worktree activation owns
-        // repo/sidebar state; the optional focusTerminal follow-up uses the stable
-        // pane leaf id so split-pane notifications land on the exact pane.
-        // Why: worktreeId is formatted as "repoId::worktreePath".  If the
-        // separator is missing we cannot reliably extract a repoId, so skip
-        // the click-to-navigate binding — the notification still fires but
-        // clicking it will not attempt to switch to an unknown worktree.
-        if (args.worktreeId && args.worktreeId.includes('::')) {
-          const repoId = getRepoIdFromWorktreeId(args.worktreeId)
-          clickHandler = () => {
-            release()
-            const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-            if (!win) {
-              return
-            }
-            if (process.platform === 'darwin') {
-              app.focus({ steal: true })
-            }
-            if (win.isMinimized()) {
-              win.restore()
-            }
-            win.focus()
-            win.webContents.send('ui:activateWorktree', {
-              repoId,
-              worktreeId: args.worktreeId
-            })
-            const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
-            if (paneTarget) {
-              win.webContents.send('ui:focusTerminal', {
-                tabId: paneTarget.tabId,
-                worktreeId: args.worktreeId,
-                leafId: paneTarget.leafId,
-                ackPaneKeyOnSuccess: args.paneKey,
-                flashFocusedPane: true,
-                scrollToBottomIfOutputSinceLastView: true
-              })
-            }
-          }
-          notification.on('click', clickHandler)
-        }
-
-        const displayConfirmation = args.requireDisplayConfirmation
-          ? waitForNotificationDisplay(notification)
-          : null
-        notification.show()
-
-        if (displayConfirmation) {
-          return displayConfirmation.then((displayed) => {
-            if (!displayed) {
-              release()
-              return { delivered: false, reason: 'not-displayed' }
-            }
-            lastObservedDeliveryOutcome = 'delivered'
-            return { delivered: true }
-          })
-        }
-
-        return { delivered: true }
-      }
-
-      if (process.platform !== 'darwin') {
-        return deliverNativeNotification()
-      }
-      // Why: macOS silently swallows accepted notifications while permission
-      // is denied or the permission dialog is unanswered (verified on macOS
-      // 26). Skip the doomed native notification and tell the caller, so the
-      // renderer can surface an in-app fallback pointing at System Settings.
-      // The mobile dispatch above is unaffected — paired devices have their
-      // own notification channel.
-      return readNotificationAuthorizationStatus().then((authorization) => {
-        if (authorization === 'denied' || authorization === 'not-determined') {
-          lastObservedDeliveryOutcome = 'failed'
-          return { delivered: false, reason: 'blocked-by-system' }
-        }
-        return deliverNativeNotification()
-      })
+      return performNotificationDelivery(store, runtime, args)
     }
   )
+
+  // Why: agents/orchestrators fire notifications through the runtime RPC
+  // (`notifications.dispatch`), which has no access to Electron's main-process
+  // Notification API. Register the native+mobile delivery here — where `store`
+  // and `runtime` are already in scope — so a `dispatch` notification reuses
+  // the exact same path as the renderer, honoring the global enable toggle.
+  runtime?.setNotificationDispatcher?.((request) => {
+    if (!store.getSettings().notifications.enabled) {
+      return { delivered: false, reason: 'disabled' }
+    }
+    return performNotificationDelivery(store, runtime, request)
+  })
 
   // Why: the preload caches the decoded blob keyed by path. Returning just
   // the validated path lets it skip the 10MB IPC round-trip on every dispatch

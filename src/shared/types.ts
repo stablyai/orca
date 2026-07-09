@@ -3000,7 +3000,14 @@ export type GhosttyImportPreview = {
 // schema-vs-renderer enum sync guard.
 export type DiscoveryStatusEmitted = 'found' | 'absent' | 'imported'
 
-export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+export type NotificationEventSource =
+  | 'agent-task-complete'
+  | 'terminal-bell'
+  | 'test'
+  // Why: an explicit notification fired on demand by an agent/orchestrator via
+  // `orca notify` (runtime RPC `notifications.dispatch`), carrying a custom
+  // message. Bypasses the renderer's per-source enable gates and burst dedupe.
+  | 'dispatch'
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
@@ -3010,6 +3017,10 @@ export type NotificationDispatchRequest = {
   worktreeId?: string
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
+  /** Custom heading for `source: 'dispatch'` notifications; ignored otherwise. */
+  title?: string
+  /** Custom body for `source: 'dispatch'` notifications; ignored otherwise. */
+  message?: string
   repoLabel?: string
   worktreeLabel?: string
   hasMultipleActiveRepos?: boolean

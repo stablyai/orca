@@ -420,7 +420,9 @@ import type {
   GitLabMRInlineCommentInput,
   GitLabProjectRef,
   GitLabWorkItem,
-  MRListState
+  MRListState,
+  NotificationDispatchRequest,
+  NotificationDispatchResult
 } from '../../shared/types'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import type {
@@ -1944,10 +1946,12 @@ type ResolvedWorktreeInFlight = {
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
-  source: 'agent-task-complete' | 'terminal-bell' | 'test'
+  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'dispatch'
   title: string
   body: string
   worktreeId?: string
+  /** Stable `${tabId}:${leafId}` pane key so a mobile tap can focus the exact pane. */
+  paneKey?: string
   notificationId?: string
 }
 
@@ -1959,6 +1963,12 @@ export type MobileNotificationDismissEvent = {
 export type MobileNotificationEvent =
   | MobileNotificationDispatchEvent
   | MobileNotificationDismissEvent
+
+// Why: the native notification dispatcher may deliver synchronously (non-macOS)
+// or await the macOS authorization readout before delivering.
+type NotificationDispatchResultAsync =
+  | NotificationDispatchResult
+  | Promise<NotificationDispatchResult>
 
 // Why: presence-based driver state for the mobile-presence lock. Exactly one
 // driver per PTY at any moment. See docs/mobile-presence-lock.md.
@@ -2113,6 +2123,14 @@ export class OrcaRuntimeService {
   // mobile client gets its own listener, and dispatchMobileNotification
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
+  // Why: the native desktop notification path (Electron Notification + mobile
+  // push) lives in the main-process IPC layer. `notifications.dispatch` runs in
+  // the runtime and reaches it through this injected dispatcher, set by
+  // registerNotificationHandlers. Null when no window/notification layer is
+  // attached (e.g. headless serve) — dispatch reports delivered:false.
+  private notificationDispatcher:
+    | ((request: NotificationDispatchRequest) => NotificationDispatchResultAsync)
+    | null = null
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
@@ -6443,6 +6461,26 @@ export class OrcaRuntimeService {
     for (const listener of this.notificationListeners) {
       listener(event)
     }
+  }
+
+  // Why: injected by registerNotificationHandlers so the runtime can fire a
+  // native desktop + mobile notification (used by `notifications.dispatch`)
+  // without importing Electron's main-process Notification API directly.
+  setNotificationDispatcher(
+    dispatcher: ((request: NotificationDispatchRequest) => NotificationDispatchResultAsync) | null
+  ): void {
+    this.notificationDispatcher = dispatcher
+  }
+
+  async dispatchNotification(
+    request: NotificationDispatchRequest
+  ): Promise<NotificationDispatchResult> {
+    if (!this.notificationDispatcher) {
+      // Why: no notification layer attached (e.g. headless serve). Report the
+      // miss instead of throwing so callers can degrade gracefully.
+      return { delivered: false, reason: 'not-supported' }
+    }
+    return this.notificationDispatcher(request)
   }
 
   dismissMobileNotification(notificationId: string): void {
