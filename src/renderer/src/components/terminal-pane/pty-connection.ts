@@ -49,7 +49,8 @@ import {
   type PanePtyResizeHoldFlushDetail
 } from '@/lib/pane-manager/pane-pty-resize-hold'
 import {
-  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+  buildPostReplayLiveAgentReattachReset,
+  POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
@@ -4018,9 +4019,9 @@ export function connectPanePty(
       return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data)
     }
 
-    const reattachReplayResetSequence = (): string => {
+    const reattachReplayResetSequence = (payload: string): string => {
       return shouldPreserveAgentReattachModes()
-        ? POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+        ? buildPostReplayLiveAgentReattachReset(payload)
         : POST_REPLAY_REATTACH_RESET
     }
 
@@ -4064,7 +4065,9 @@ export function connectPanePty(
         ) {
           if (parsedViewportShowsParkedCursorAgentScreen(pane.terminal) === false) {
             reattachReplayPayloadHasCursorAgentSignal = false
-            writeReplayData(FOCUS_REPORTING_DISABLE_SEQUENCE)
+            // Why: the live-agent reset preserved the payload's ?25l; a plain
+            // shell never re-shows the cursor itself.
+            writeReplayData(`${CURSOR_SHOW_SEQUENCE}${FOCUS_REPORTING_DISABLE_SEQUENCE}`)
             return
           }
         }
@@ -4108,7 +4111,7 @@ export function connectPanePty(
         }
         await writeReplayDataAsync(data)
         if (clearBeforeReplay || data.length > 0) {
-          await writeReplayDataAsync(reattachReplayResetSequence())
+          await writeReplayDataAsync(reattachReplayResetSequence(data))
           sendFocusedReattachFocusInAfterReplay()
         }
         // Why: the daemon could not serialize a PTY read that ended mid-escape,
@@ -5054,7 +5057,14 @@ export function connectPanePty(
         writeReplayData('\x1b[?1049h\x1b[2J\x1b[H')
       }
       writeReplayData(snapshot.data)
-      writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
+      // Why: status/title-corroborated live agents own ?25l/?1004h (a forced
+      // ?1004l here would silence focus events until the agent restarts, since
+      // agents only enable focus reporting at startup).
+      writeReplayData(
+        hasLiveAgentReattachStatusOrTitleSignal()
+          ? POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET
+          : POST_REPLAY_LIVE_SNAPSHOT_RESET
+      )
       if (snapshot.pendingEscapeTailAnsi) {
         // Why last: the snapshot was serialized while the emulator sat mid-escape;
         // re-arm the dangling sequence as the FINAL replay write (any later ESC —
@@ -5491,7 +5501,7 @@ export function connectPanePty(
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. We only drop renderer-owned state that should not leak from
         // replay bytes into the restored renderer terminal.
-        writeReplayData(reattachReplayResetSequence())
+        writeReplayData(reattachReplayResetSequence(connectResult.snapshot))
         if (connectResult.pendingEscapeTailAnsi) {
           // Why last: re-arm the daemon's dangling mid-escape sequence AFTER the
           // reset (whose ESC would abort it) so the racing live continuation
@@ -5514,7 +5524,7 @@ export function connectPanePty(
         // tearing down the still-running TUI's live modes.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.replay)
-        writeReplayData(reattachReplayResetSequence())
+        writeReplayData(reattachReplayResetSequence(connectResult.replay))
         sendFocusedReattachFocusInAfterReplay()
         if (connectResult.coldRestore) {
           if (!isRemoteRuntimePtyId(ptyId)) {

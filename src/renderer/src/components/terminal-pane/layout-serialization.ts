@@ -79,11 +79,35 @@ export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET
 
 // Why: a live agent TUI legitimately owns focus reporting; resetting `?1004h`
 // would suppress the post-reattach focus-in the agent needs to move its real
-// cursor back to the input caret (the IME anchor). Cursor visibility is still
-// reset: agent detection can false-positive on a dead TUI's leftovers, and a
-// permanently invisible shell cursor is far worse than the brief flash a live
-// agent re-hides on its post-reattach SIGWINCH repaint.
+// cursor back to the input caret (the IME anchor).
 export const POST_REPLAY_LIVE_AGENT_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h`
+
+// Why: DECTCEM applies in emission order, so the payload's last ?25l/?25h is
+// the state the TUI left the cursor in.
+export function replayPayloadEndsWithCursorHidden(payload: string): boolean {
+  const hideIndex = payload.lastIndexOf('\x1b[?25l')
+  return hideIndex !== -1 && hideIndex > payload.lastIndexOf('\x1b[?25h')
+}
+
+// Why: some live agents (Cursor Agent) intentionally hide the real cursor and
+// draw their own caret; re-showing it paints a stray cursor on the parked row.
+// Preserve the payload's own final cursor-visibility state instead of forcing
+// ?25h. Agent detection can still false-positive on a dead TUI's leftovers —
+// the post-replay viewport check in pty-connection re-shows the cursor once
+// the parsed screen disproves a live parked agent, so a shell cannot inherit
+// a permanently invisible cursor.
+export function buildPostReplayLiveAgentReattachReset(payload: string): string {
+  return replayPayloadEndsWithCursorHidden(payload)
+    ? `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+    : POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+}
+
+// Why: hidden-output recovery replays into the same live session. When a live
+// agent still owns the pane it also owns cursor visibility and focus
+// reporting: forcing ?25h re-shows a parked cursor the agent hid on purpose,
+// and ?1004l permanently silences the focus-in the agent needs to unpark
+// (agents only enable ?1004h at startup, so nothing ever re-arms it).
+export const POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET = RESET_TERMINAL_CURSOR_STYLE
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are
