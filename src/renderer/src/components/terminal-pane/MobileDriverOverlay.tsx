@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
-import { Smartphone } from 'lucide-react'
+import { Monitor, Smartphone, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
@@ -122,6 +122,8 @@ export function MobileDriverOverlay({
           allActionPending={allActionPending}
           onAction={handleAction}
           onAllAction={onAllAction ? handleAllAction : undefined}
+          // Why: phone glyph mislabels desktop-to-desktop size ownership (#7854 review).
+          Icon={Monitor}
           tone="held"
           rootRef={setOverlayRootRef}
           rootClassName={rootClassName}
@@ -218,6 +220,8 @@ type LoudOverlayProps = {
   onAction: () => void | Promise<void>
   onAllAction?: () => void | Promise<void>
   onCollapse?: () => void
+  /** Defaults to Smartphone; remote-desktop hold uses Monitor. */
+  Icon?: LucideIcon
   tone: 'driving' | 'held'
   rootRef?: (node: HTMLDivElement | null) => void
   rootClassName?: string
@@ -234,6 +238,7 @@ function LoudOverlay({
   onAction,
   onAllAction,
   onCollapse,
+  Icon = Smartphone,
   tone,
   rootRef: outerRootRef,
   rootClassName
@@ -282,7 +287,7 @@ function LoudOverlay({
               tone === 'driving' ? 'bg-muted' : 'bg-muted/60'
             )}
           >
-            <Smartphone className="size-5 text-foreground" aria-hidden="true" />
+            <Icon className="size-5 text-foreground" aria-hidden="true" />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div
