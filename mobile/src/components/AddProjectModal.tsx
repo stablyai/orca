@@ -74,6 +74,9 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
   const requestEpochRef = useRef(0)
+  // Why: each drawer opening is a distinct session. An in-flight repo.add from
+  // a previous opening must not close/refresh the freshly reopened modal.
+  const sessionEpochRef = useRef(0)
 
   const browse = useCallback(
     async (target: string) => {
@@ -115,6 +118,7 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
       return
     }
     // Each open is a fresh session starting from the host user's home.
+    sessionEpochRef.current += 1
     setListing(null)
     setAdding(false)
     void browse('~')
@@ -135,6 +139,7 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
     if (!client || !path) {
       return
     }
+    const session = sessionEpochRef.current
     setAdding(true)
     setError('')
     try {
@@ -143,6 +148,9 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
         { path, kind: isGitRepo ? 'git' : 'folder' },
         { timeoutMs: 30_000 }
       )
+      if (sessionEpochRef.current !== session) {
+        return
+      }
       if (!response.ok) {
         setError(response.error.message)
         return
@@ -150,9 +158,13 @@ export function AddProjectModal({ visible, client, onAdded, onClose }: Props) {
       onClose()
       onAdded()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to add project')
+      if (sessionEpochRef.current === session) {
+        setError(e instanceof Error ? e.message : 'Failed to add project')
+      }
     } finally {
-      setAdding(false)
+      if (sessionEpochRef.current === session) {
+        setAdding(false)
+      }
     }
   }
 
