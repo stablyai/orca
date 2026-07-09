@@ -31,4 +31,22 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
     expect(contextSection).toContain('repo: resolvedDialogRepo')
     expect(dialogSection).toContain('sourceContext={resolvedDialogSourceContext}')
   })
+
+  it('routes both project-view "Use" launches through the fixed submit-after-ready waiter', () => {
+    const source = componentSource('ProjectViewWrapper.tsx')
+    // Both direct launchWorkItemDirect call sites must request submit-after-ready
+    // so the prompt is pasted AND submitted (the draft default pastes but never
+    // submits, which leaves Hermes idle). Regression guard for the #7862 gap.
+    const launchSites = source.split('launchWorkItemDirect({').slice(1)
+    expect(launchSites.length).toBeGreaterThanOrEqual(2)
+    let submitReadyCount = 0
+    for (const site of launchSites) {
+      // Each site's args block ends before the closing `})`
+      const block = site.slice(0, site.indexOf('})'))
+      if (block.includes("promptDelivery: 'submit-after-ready'")) {
+        submitReadyCount += 1
+      }
+    }
+    expect(submitReadyCount).toBe(launchSites.length)
+  })
 })
