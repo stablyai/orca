@@ -23,9 +23,14 @@ let reconciled = false
  *  own errors, so callers (repo removal, worktree deletion) can await it
  *  unconditionally without failing the teardown. */
 export async function deactivateSpotlightBeforeTeardown(repoId: string): Promise<void> {
-  if (service && service.getState(repoId)) {
-    await service.deactivate(repoId)
+  if (!service || !service.getState(repoId)) {
+    return
   }
+  await service.deactivate(repoId)
+  // Even if deactivate couldn't complete (e.g. a merge/rebase in progress), the
+  // repo is being removed — stop the capture so its PTY listener, .orca watcher,
+  // and file handle don't leak. No-op when deactivate already stopped it.
+  stopSpotlightLogCapture({ repoId })
 }
 
 /** Deactivate before the CURRENT holder worktree is deleted, so the root is
@@ -36,9 +41,13 @@ export async function deactivateSpotlightIfHolder(
   repoId: string,
   worktreeId: string
 ): Promise<void> {
-  if (service && service.getState(repoId)?.holderWorktreeId === worktreeId) {
-    await service.deactivate(repoId)
+  if (!service || service.getState(repoId)?.holderWorktreeId !== worktreeId) {
+    return
   }
+  await service.deactivate(repoId)
+  // As above: the holder worktree is about to be deleted, so release the capture
+  // even if the restore couldn't complete.
+  stopSpotlightLogCapture({ repoId })
 }
 
 export function registerSpotlightHandlers(mainWindow: BrowserWindow, store: Store): void {

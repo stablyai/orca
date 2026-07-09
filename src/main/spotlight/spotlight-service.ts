@@ -31,8 +31,6 @@ export class SpotlightService {
   // promise chain serializes them so watcher-driven syncs can't interleave
   // with an in-flight takeover or deactivation.
   private readonly locks = new Map<string, Promise<unknown>>()
-  /** In-memory status overlay: persisted state never stores 'syncing'. */
-  private readonly syncingRepoIds = new Set<string>()
   /** Which worktree + HEAD each repo's temp index was last seeded from, so the
    *  next checkpoint can reuse it (skip a full-worktree rescan). Keyed per repo
    *  but records the WORKTREE too: the temp index lives per worktree, so a
@@ -61,7 +59,7 @@ export class SpotlightService {
   getStateSnapshot(): SpotlightStateSnapshot {
     const byRepo: Record<string, SpotlightRepoState> = {}
     for (const [repoId, state] of Object.entries(this.store.getAllSpotlightStates())) {
-      byRepo[repoId] = this.withLiveStatus(repoId, state)
+      byRepo[repoId] = state
     }
     return { byRepo }
   }
@@ -263,6 +261,15 @@ export class SpotlightService {
       try {
         const refs = await inspectSpotlightRefsCore(resolved.ctx, resolved.repo.path)
         if (!refs.originalHeadSha || !refs.snapshotSha) {
+          // Distinguish "refs genuinely removed" from "git read failed": every
+          // ref goes through gitTry, which swallows ALL errors (concurrent
+          // git gc / index.lock, EBUSY on Windows, a slow network .git) and
+          // returns null. rootHeadSha is a plain `rev-parse HEAD` — if IT is
+          // also null the read didn't succeed, so keep the record and retry
+          // later instead of tearing down a still-active Spotlight.
+          if (!refs.rootHeadSha) {
+            return
+          }
           // Refs were removed outside Orca — the repo is no longer in Spotlight
           // mode, so the persisted record is stale.
           this.clearSpotlightRecord(repoId, resolved.repo.path)
@@ -292,10 +299,6 @@ export class SpotlightService {
     opts: { requireEnabled?: boolean } = {}
   ): ResolvedRepoContext {
     return resolveRepoContext(this.store, repoId, opts)
-  }
-
-  private withLiveStatus(repoId: string, state: SpotlightRepoState): SpotlightRepoState {
-    return this.syncingRepoIds.has(repoId) ? { ...state, status: 'syncing' } : state
   }
 
   /** Tear down every Spotlight resource for a repo once its refs are gone or
@@ -332,12 +335,10 @@ export class SpotlightService {
   }
 
   private emitSyncing(repoId: string, state: SpotlightRepoState): void {
-    this.syncingRepoIds.add(repoId)
     this.send(repoId, { ...state, status: 'syncing' })
   }
 
   private emitChanged(repoId: string, state: SpotlightRepoState | null): void {
-    this.syncingRepoIds.delete(repoId)
     this.send(repoId, state)
   }
 

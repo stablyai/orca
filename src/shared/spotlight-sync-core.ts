@@ -76,7 +76,14 @@ export async function activateSpotlightCore(
   }
 
   const refs = await inspectSpotlightRefsCore(ctx, rootPath)
-  const alreadyActive = Boolean(refs.originalHeadSha && refs.backupSha)
+  // Require ALL three refs: an interrupted deactivate (it deletes snapshot
+  // first) can leave orphaned {backup, originalHead} with no snapshot. Keying
+  // "already active" on those two alone would then hit the takeover guard below
+  // with snapshotSha=null and throw a permanent root-diverged, wedging the repo
+  // out of Spotlight. Treating a partial ref set as NOT active lets a fresh
+  // activation re-establish clean refs (the root was already restored before
+  // those deletes ran).
+  const alreadyActive = Boolean(refs.originalHeadSha && refs.backupSha && refs.snapshotSha)
   const rootStatus = await readRootStatus(ctx, rootPath)
 
   // Takeover/re-activate must honor the same divergence guards as sync — the
@@ -145,8 +152,6 @@ export async function syncSpotlightCore(
   worktreePath: string,
   opts: { force?: boolean; reuseIndexForHead?: string | null } = {}
 ): Promise<SpotlightSyncOutcome> {
-  await assertNoConflictOperation(ctx, rootPath)
-  await assertNoConflictOperation(ctx, worktreePath)
   const refs = await inspectSpotlightRefsCore(ctx, rootPath)
   if (!refs.snapshotSha || !refs.originalHeadSha) {
     throw new SpotlightCoreError('not-active', 'Spotlight is not active for this repository.')
@@ -157,13 +162,17 @@ export async function syncSpotlightCore(
   })
   const snapshotTree = await git(ctx, rootPath, ['rev-parse', `${refs.snapshotSha}^{tree}`])
   // Fast no-op path: the workspace tree already matches the root's snapshot and
-  // the root hasn't moved. Return BEFORE the `status -uall` root scan so
-  // watcher-debounced idle syncs don't enumerate the whole root working tree.
+  // the root hasn't moved. Return BEFORE the conflict checks + `status -uall`
+  // root scan so watcher-debounced idle syncs (the common case) don't pay their
+  // synchronous fs stats / whole-tree enumeration when nothing will be mirrored.
   if (checkpoint.treeSha === snapshotTree && refs.rootHeadSha === refs.snapshotSha && !opts.force) {
     return { snapshotSha: refs.snapshotSha, checkpointHeadSha: checkpoint.headSha, skipped: true }
   }
 
-  // A reset will run — now pay for the guards that protect the root's own state.
+  // A reset will run — enforce the no-merge/rebase guard and the root-state
+  // guards before mutating the root.
+  await assertNoConflictOperation(ctx, rootPath)
+  await assertNoConflictOperation(ctx, worktreePath)
   const rootStatus = opts.force ? null : await readRootStatus(ctx, rootPath)
   if (rootStatus) {
     if (refs.rootHeadSha !== refs.snapshotSha) {

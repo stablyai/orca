@@ -333,6 +333,24 @@ describe('spotlight-sync-core', () => {
     expect(run(rootPath, 'show', `${refs.backupSha}:a.txt`)).toBe('root-dirty')
   })
 
+  it('recovers instead of wedging when a prior deactivate left orphan refs', async () => {
+    write(worktreePath, 'a.txt', 'a-changed\n')
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+    // Simulate a deactivate interrupted after it restored the root but before it
+    // finished deleting refs (snapshot is deleted first) — leaving orphaned
+    // backup + originalHead refs with no snapshot.
+    const originalHead = (await inspectSpotlightRefsCore(ctx, rootPath)).originalHeadSha as string
+    run(rootPath, 'reset', '--hard', originalHead)
+    run(rootPath, 'checkout', 'main', '--')
+    run(rootPath, 'update-ref', '-d', 'refs/orca/spotlight/snapshot')
+
+    // Old code keyed alreadyActive on backup+originalHead only, so this threw a
+    // permanent root-diverged. It must instead re-activate cleanly.
+    const outcome = await activateSpotlightCore(ctx, rootPath, worktreePath)
+    expect(outcome.alreadyActive).toBe(false)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('a-changed\n')
+  })
+
   it('rejects a worktree that does not belong to the repo', async () => {
     const otherBase = mkdtempSync(path.join(tmpdir(), 'orca-spotlight-other-'))
     try {
