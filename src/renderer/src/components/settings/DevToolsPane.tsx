@@ -10,8 +10,12 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
 const LONG_WORKSPACE_NAME = 'feature/dev-toast-layout-with-a-long-workspace-name'
-const DEV_TOAST_DESCRIPTION =
-  'This is intentionally long copy for checking width, line wrapping, icon alignment, action placement, and close-button overlap in the shared toast frame.'
+function getDevToastDescription(): string {
+  return translate(
+    'auto.components.settings.DevToolsPane.devToastDescription',
+    'This is intentionally long copy for checking width, line wrapping, icon alignment, action placement, and close-button overlap in the shared toast frame.'
+  )
+}
 
 type DevToastAction = {
   title: string
@@ -45,7 +49,7 @@ function showNativeActionToast(): void {
       'Native action layout check'
     ),
     {
-      description: DEV_TOAST_DESCRIPTION,
+      description: getDevToastDescription(),
       duration: 10000,
       cancel: {
         label: translate('auto.components.settings.DevToolsPane.secondary', 'Secondary'),
@@ -220,7 +224,7 @@ export function DevToolsPane(): React.JSX.Element {
             'Local canary is behind origin/canary'
           ),
           {
-            description: DEV_TOAST_DESCRIPTION,
+            description: getDevToastDescription(),
             duration: 10000
           }
         )
@@ -257,7 +261,7 @@ export function DevToolsPane(): React.JSX.Element {
             'Failed to sync workspace metadata'
           ),
           {
-            description: DEV_TOAST_DESCRIPTION,
+            description: getDevToastDescription(),
             duration: 10000
           }
         )

@@ -17,7 +17,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "portuguese": "Português (Brasil)"
       },
       "statusBar": {
         "claudeToggleDescription": "Muestra el consumo de tokens y el costo de Claude para el espacio de trabajo activo.",
@@ -3132,7 +3133,8 @@
             "42fdd4da1d": "Se está actualizando el inicio de sesión de Claude. Las sesiones de agentes pueden seguir iniciadas.",
             "c06c1d215d": "No se pudo actualizar el uso de Claude porque falló la solicitud de red.",
             "cabdc2a9e0": "No se pudieron leer las credenciales de inicio de sesión de Claude.",
-            "a7517cccb6": "El uso de Claude no está disponible ahora."
+            "a7517cccb6": "El uso de Claude no está disponible ahora.",
+            "claudeRateLimited": "Claude usage is rate limited right now."
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
@@ -8774,7 +8776,8 @@
           "orcaCloudSignOut": "Sign out",
           "orcaCloudConnect": "Connect profile",
           "orcaCloudRefresh": "Refresh status",
-          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build."
+          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build.",
+          "devToastDescription": "This is intentionally long copy for checking width, line wrapping, icon alignment, action placement, and close-button overlap in the shared toast frame."
         },
         "EphemeralVmRecipeRow": {
           "useInWorkspace": "Usar en el espacio de trabajo"

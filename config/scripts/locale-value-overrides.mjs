@@ -1,5 +1,6 @@
 import { JA_VALUE_OVERRIDES } from './locale-ja-value-overrides.mjs'
 import { KO_VALUE_OVERRIDES } from './locale-ko-value-overrides.mjs'
+import { PT_VALUE_OVERRIDES } from './locale-pt-value-overrides.mjs'
 import { ZH_VALUE_OVERRIDES } from './locale-zh-value-overrides.mjs'
 
 export const LOCALE_VALUE_OVERRIDES = {
@@ -516,5 +517,8 @@ export const LOCALE_VALUE_OVERRIDES = {
     Open: 'オープン',
     'Join Discord': 'Discord に参加',
     ...JA_VALUE_OVERRIDES
+  },
+  pt: {
+    ...PT_VALUE_OVERRIDES
   }
 }

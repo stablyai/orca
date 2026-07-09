@@ -327,14 +327,72 @@ export const BRAND_MISTRANSLATIONS = {
     Repos: ['Repositorios', 'repositorios'],
     repo: ['repositorio'],
     repos: ['repositorios']
+  },
+  pt: {
+    Codex: ['códice', 'Códice', 'códex'],
+    Gemini: ['Gêmeos', 'Gémeos'],
+    Claude: ['cláudio', 'Cláudio'],
+    Orca: ['orca'],
+    OpenCode: ['código aberto', 'Código Aberto'],
+    OpenClaude: ['Openclaude'],
+    Antigravity: ['antigravidade', 'Antigravidade'],
+    'GitHub Copilot': ['Copiloto do GitHub', 'copiloto do GitHub'],
+    Discord: ['discórdia'],
+    Linear: ['linear', 'Linear'],
+    Jira: ['jira'],
+    Commit: ['Comprometer', 'comprometer', 'Compromisso', 'compromisso'],
+    Commits: ['Compromissos', 'compromissos'],
+    commit: ['comprometer', 'compromisso'],
+    commits: ['compromissos'],
+    Markdown: ['Redução', 'redução', 'Remarcação', 'remarcação'],
+    markdown: ['redução', 'remarcação'],
+    Repo: ['Repositório', 'repositório'],
+    Repos: ['Repositórios', 'repositórios'],
+    repo: ['repositório'],
+    repos: ['repositórios'],
+    Terminal: ['Terminal'],
+    terminal: ['terminal'],
+    Terminals: ['Terminais'],
+    terminals: ['terminais']
   }
 }
 
 export const NATIVE_PICKER_LABELS = {
-  zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ko: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  es: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' }
+  zh: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    portuguese: 'Português (Brasil)'
+  },
+  ko: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    portuguese: 'Português (Brasil)'
+  },
+  ja: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    portuguese: 'Português (Brasil)'
+  },
+  es: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    portuguese: 'Português (Brasil)'
+  },
+  pt: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    portuguese: 'Português (Brasil)'
+  }
 }
 
 const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')
@@ -566,24 +624,18 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
   }
 
   if (localeCatalog.menu) {
-    if (locale === 'zh') {
-      if (localeCatalog.menu.exploreOrca !== '探索 Orca') {
-        localeCatalog.menu.exploreOrca = '探索 Orca'
-        repaired += 1
-      }
-      if (localeCatalog.menu.gettingStarted !== 'Orca 入门') {
-        localeCatalog.menu.gettingStarted = 'Orca 入门'
-        repaired += 1
-      }
+    const MENU_LABEL_FIXES = {
+      zh: { exploreOrca: '探索 Orca', gettingStarted: 'Orca 入门' },
+      ko: { exploreOrca: 'Orca 둘러보기', gettingStarted: 'Orca 시작하기' },
+      pt: { exploreOrca: 'Explorar Orca', gettingStarted: 'Primeiros passos com Orca' }
     }
-    if (locale === 'ko') {
-      if (localeCatalog.menu.exploreOrca !== 'Orca 둘러보기') {
-        localeCatalog.menu.exploreOrca = 'Orca 둘러보기'
-        repaired += 1
-      }
-      if (localeCatalog.menu.gettingStarted !== 'Orca 시작하기') {
-        localeCatalog.menu.gettingStarted = 'Orca 시작하기'
-        repaired += 1
+    const fixes = MENU_LABEL_FIXES[locale]
+    if (fixes) {
+      for (const [menuKey, target] of Object.entries(fixes)) {
+        if (localeCatalog.menu[menuKey] !== target) {
+          localeCatalog.menu[menuKey] = target
+          repaired += 1
+        }
       }
     }
   }

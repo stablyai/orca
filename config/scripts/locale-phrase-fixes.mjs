@@ -1,7 +1,7 @@
-import { KO_PHRASE_FIXES_ROUND4 } from './locale-ko-phrase-fixes.mjs'
-import { ZH_PHRASE_FIXES_ROUND5 } from './locale-zh-phrase-fixes-round5.mjs'
-
 import { JA_PHRASE_FIXES } from './locale-ja-phrase-fixes.mjs'
+import { KO_PHRASE_FIXES_ROUND4 } from './locale-ko-phrase-fixes.mjs'
+import { PT_PHRASE_FIXES } from './locale-pt-phrase-fixes.mjs'
+import { ZH_PHRASE_FIXES_ROUND5 } from './locale-zh-phrase-fixes-round5.mjs'
 
 export const LOCALE_PHRASE_FIXES = {
   ko: [
@@ -386,5 +386,6 @@ export const LOCALE_PHRASE_FIXES = {
     // matches the actual `PR`/`PRs` token (not a loose "pr" substring) to avoid rewriting
     // English that is genuinely about public relations.
     { pattern: /relaciones públicas/g, replacement: 'PR', whenEnMatches: /\bPRs?\b/ }
-  ]
+  ],
+  pt: PT_PHRASE_FIXES
 }

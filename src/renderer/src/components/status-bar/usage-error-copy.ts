@@ -130,6 +130,10 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
         )
       case 'missing-credentials':
       case 'rate-limited':
+        return translate(
+          'auto.components.status.bar.tooltip.claudeRateLimited',
+          'Claude usage is rate limited right now.'
+        )
       case 'unknown':
       case undefined:
         break

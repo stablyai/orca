@@ -17,7 +17,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "portuguese": "Português (Brasil)"
       },
       "statusBar": {
         "claudeToggleDescription": "アクティブなワークスペースの Claude トークンとコストの使用状況を表示します。",
@@ -3132,7 +3133,8 @@
             "42fdd4da1d": "Claude サインインを更新中です。エージェントセッションはまだサインイン済みの場合があります。",
             "c06c1d215d": "ネットワークリクエストに失敗したため、Claude 使用量を更新できませんでした。",
             "cabdc2a9e0": "Claude サインイン認証情報を読み取れませんでした。",
-            "a7517cccb6": "Claude 使用量は現在利用できません。"
+            "a7517cccb6": "Claude 使用量は現在利用できません。",
+            "claudeRateLimited": "Claude usage is rate limited right now."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"
@@ -8774,7 +8776,8 @@
           "orcaCloudSignOut": "Sign out",
           "orcaCloudConnect": "Connect profile",
           "orcaCloudRefresh": "Refresh status",
-          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build."
+          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build.",
+          "devToastDescription": "This is intentionally long copy for checking width, line wrapping, icon alignment, action placement, and close-button overlap in the shared toast frame."
         },
         "EphemeralVmRecipeRow": {
           "useInWorkspace": "ワークスペースでの使用"
