@@ -1439,7 +1439,9 @@ export function HostScreen({
         visible={showAddProject}
         client={client}
         onClose={() => setShowAddProject(false)}
-        onAdded={() => void fetchRepoMetadata({ force: true })}
+        // Why: workspace sections come from worktree.ps, not repo.list; refresh
+        // both so the added project appears without waiting for the next poll.
+        onAdded={() => void Promise.all([fetchWorktrees(), fetchRepoMetadata({ force: true })])}
       />
 
       <NewWorktreeModalController
