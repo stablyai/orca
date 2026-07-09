@@ -159,4 +159,18 @@ describe('jira RPC methods', () => {
     expect(runtime.jiraListAssignableUsers).toHaveBeenCalledWith('ABC-3', 'Ada', 'site-1')
     expect(runtime.jiraListTransitions).toHaveBeenCalledWith('ABC-3', 'site-1')
   })
+
+  it('routes Jira project statuses request to the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      jiraGetProjectStatuses: vi.fn().mockResolvedValue(['To Do', 'In Progress', 'Done'])
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('jira.getProjectStatuses', { projectKey: 'ALP', siteId: 'site-1' })
+    )
+
+    expect(runtime.jiraGetProjectStatuses).toHaveBeenCalledWith('ALP', 'site-1')
+  })
 })

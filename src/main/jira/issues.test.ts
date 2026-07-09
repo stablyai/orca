@@ -398,4 +398,126 @@ describe('Jira issue operations', () => {
       }
     ])
   })
+
+  describe('getProjectStatuses', () => {
+    it('returns empty array when no clients are available', async () => {
+      getClientsMock.mockReturnValue([])
+      const { getProjectStatuses } = await import('./issues')
+
+      await expect(getProjectStatuses('ALP', 'site-1')).resolves.toEqual([])
+    })
+
+    it('returns statuses from project statuses API when no board configuration exists', async () => {
+      jiraRequestMock
+        .mockResolvedValueOnce([
+          {
+            name: 'Bug',
+            statuses: [
+              { id: '1', name: 'To Do' },
+              { id: '2', name: 'In Progress' },
+              { id: '3', name: 'Done' }
+            ]
+          }
+        ])
+        .mockResolvedValueOnce({ values: [] })
+
+      const { getProjectStatuses } = await import('./issues')
+
+      await expect(getProjectStatuses('ALP', 'site-1')).resolves.toEqual([
+        'To Do',
+        'In Progress',
+        'Done'
+      ])
+    })
+
+    it('orders statuses by agile board column configuration when available', async () => {
+      jiraRequestMock
+        .mockResolvedValueOnce([
+          {
+            name: 'Bug',
+            statuses: [
+              { id: '1', name: 'To Do' },
+              { id: '2', name: 'In Progress' },
+              { id: '3', name: 'Done' },
+              { id: '4', name: 'Closed' }
+            ]
+          }
+        ])
+        .mockResolvedValueOnce({
+          values: [{ id: 'board-1' }]
+        })
+        .mockResolvedValueOnce({
+          columnConfig: {
+            columns: [
+              {
+                statuses: [{ id: '3' }]
+              },
+              {
+                statuses: [{ id: '2' }]
+              },
+              {
+                statuses: [{ id: '1' }]
+              }
+            ]
+          }
+        })
+
+      const { getProjectStatuses } = await import('./issues')
+
+      await expect(getProjectStatuses('ALP', 'site-1')).resolves.toEqual([
+        'Done',
+        'In Progress',
+        'To Do',
+        'Closed'
+      ])
+    })
+
+    it('handles missing status IDs gracefully by falling back to unordered list', async () => {
+      jiraRequestMock
+        .mockResolvedValueOnce([
+          {
+            name: 'Bug',
+            statuses: [
+              { id: '1', name: 'To Do' },
+              { id: '2', name: 'In Progress' }
+            ]
+          }
+        ])
+        .mockResolvedValueOnce({
+          values: [{ id: 'board-1' }]
+        })
+        .mockResolvedValueOnce({
+          columnConfig: {
+            columns: [
+              {
+                statuses: [{ id: '999' }]
+              }
+            ]
+          }
+        })
+
+      const { getProjectStatuses } = await import('./issues')
+
+      await expect(getProjectStatuses('ALP', 'site-1')).resolves.toEqual(['To Do', 'In Progress'])
+    })
+
+    it('clears token on auth errors', async () => {
+      const authError = new Error('Unauthorized')
+      isAuthErrorMock.mockReturnValue(true)
+      jiraRequestMock.mockRejectedValueOnce(authError)
+
+      const { getProjectStatuses } = await import('./issues')
+
+      await expect(getProjectStatuses('ALP', 'site-1')).rejects.toThrow('Unauthorized')
+      expect(clearTokenMock).toHaveBeenCalledWith('site-1')
+    })
+
+    it('returns empty array on operational errors', async () => {
+      jiraRequestMock.mockRejectedValueOnce(new Error('Service Unavailable'))
+
+      const { getProjectStatuses } = await import('./issues')
+
+      await expect(getProjectStatuses('ALP', 'site-1')).resolves.toEqual([])
+    })
+  })
 })
