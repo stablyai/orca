@@ -42,6 +42,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
+import { resolveMainSurface } from './app-main-surface'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
@@ -527,6 +528,11 @@ function App(): React.JSX.Element {
     activeView,
     activePendingCreationId,
     hasActivePendingCreation: activePendingCreationExists
+  })
+  const mainSurface = resolveMainSurface({
+    activeView,
+    activeWorktreeId,
+    creationLayoutActive
   })
   const workspaceChromeActive =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
@@ -2433,19 +2439,10 @@ function App(): React.JSX.Element {
                               {activeView === 'skills' ? <SkillsPage /> : null}
                               {activeView === 'tasks' ? <TaskPage /> : null}
                               {activeView === 'automations' ? <AutomationsPage /> : null}
-                              {/* Why: Agents View must not stack under Landing / worktree-creation
-                                  panels (CodeRabbit on #7838). Those surfaces own the same slot
-                                  when there is no active worktree or a pending creation. */}
-                              {activeView === 'activity' &&
-                              activeWorktreeId &&
-                              !creationLayoutActive ? (
-                                <ActivityPrototypePage />
-                              ) : null}
+                              {mainSurface === 'activity' ? <ActivityPrototypePage /> : null}
                               {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                               {activeView === 'mobile' ? <MobilePage /> : null}
-                              {(activeView === 'terminal' || activeView === 'activity') &&
-                              creationLayoutActive &&
-                              activePendingCreationId ? (
+                              {mainSurface === 'creation' && activePendingCreationId ? (
                                 <WorktreeCreationPanel
                                   creationId={activePendingCreationId}
                                   reserveCollapsedSidebarHeaderSpace={
@@ -2453,11 +2450,7 @@ function App(): React.JSX.Element {
                                   }
                                 />
                               ) : null}
-                              {(activeView === 'terminal' || activeView === 'activity') &&
-                              !activeWorktreeId &&
-                              !creationLayoutActive ? (
-                                <Landing />
-                              ) : null}
+                              {mainSurface === 'landing' ? <Landing /> : null}
                             </RecoverableRenderErrorBoundary>
                           </Suspense>
                         </div>
