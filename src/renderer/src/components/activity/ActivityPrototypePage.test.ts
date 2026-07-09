@@ -6,7 +6,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Repo, TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
@@ -20,7 +20,6 @@ import {
   buildActivityEvents,
   buildAgentPaneThreads,
   getActivityThreadGroup,
-  groupActivityThreadsByStatus,
   isActivitySearchQueryTooLarge
 } from './ActivityPrototypePage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -82,6 +81,14 @@ function makeTab(): TerminalTab {
     color: null,
     sortOrder: 0,
     createdAt: 1
+  }
+}
+
+function makeSingleLayout(leafId: string): TerminalLayoutSnapshot {
+  return {
+    root: { type: 'leaf', leafId },
+    activeLeafId: leafId,
+    expandedLeafId: null
   }
 }
 
@@ -162,6 +169,9 @@ function makeActivityResult(args: {
   retained?: Record<string, RetainedAgentEntry>
   tab?: TerminalTab
   now?: number
+  runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
+  ptyIdsByTabId?: Record<string, string[]>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 }): ReturnType<typeof buildActivityEvents> {
   const repo = makeRepo()
   const worktree = makeWorktree()
@@ -173,6 +183,9 @@ function makeActivityResult(args: {
     tabsByWorktree: {
       [worktree.id]: [tab]
     },
+    runtimePaneTitlesByTabId: args.runtimePaneTitlesByTabId,
+    ptyIdsByTabId: args.ptyIdsByTabId,
+    terminalLayoutsByTabId: args.terminalLayoutsByTabId,
     worktreeMap: new Map([[worktree.id, worktree]]),
     repoMap: new Map([[repo.id, repo]]),
     acknowledgedAgentsByPaneKey: {},
@@ -291,6 +304,98 @@ describe('buildActivityEvents', () => {
       latestTimestamp: 3_000,
       latestEvent: null,
       unread: false
+    })
+  })
+
+  it('creates a live Hermes thread from title-derived terminal evidence', () => {
+    const result = makeActivityResult({
+      tab: { ...makeTab(), title: '\u280b Hermes', launchAgent: 'hermes' },
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '\u280b Hermes' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID) },
+      now: 4_000
+    })
+
+    expect(result.events).toHaveLength(0)
+    expect(result.liveAgentByPaneKey[PANE_KEY]).toMatchObject({
+      state: 'working',
+      timestamp: 4_000,
+      agentType: 'hermes',
+      entry: {
+        prompt: 'Hermes',
+        terminalTitle: '\u280b Hermes'
+      }
+    })
+
+    const threads = makeThreads(result)
+
+    expect(threads).toHaveLength(1)
+    expect(threads[0]).toMatchObject({
+      paneKey: PANE_KEY,
+      paneTitle: 'Hermes',
+      agentType: 'hermes',
+      currentAgentState: 'working',
+      latestTimestamp: 4_000,
+      latestEvent: null,
+      unread: false
+    })
+    expect(threads[0].tab.id).toBe('tab-1')
+  })
+
+  it('creates a live Hermes thread from a mirrored remote terminal tab title', () => {
+    const remotePtyId = 'remote:vps-env@@terminal-1'
+    const result = makeActivityResult({
+      tab: {
+        ...makeTab(),
+        ptyId: remotePtyId,
+        title: '\u280b Hermes',
+        launchAgent: 'hermes'
+      },
+      ptyIdsByTabId: { 'tab-1': [remotePtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          ...makeSingleLayout(LEAF_ID),
+          ptyIdsByLeafId: { [LEAF_ID]: remotePtyId }
+        }
+      },
+      now: 4_000
+    })
+
+    const threads = makeThreads(result)
+
+    expect(threads).toHaveLength(1)
+    expect(threads[0]).toMatchObject({
+      paneKey: PANE_KEY,
+      paneTitle: 'Hermes',
+      agentType: 'hermes',
+      currentAgentState: 'working',
+      latestEvent: null
+    })
+    expect(result.liveAgentByPaneKey[PANE_KEY].tab.ptyId).toBe(remotePtyId)
+  })
+
+  it('does not duplicate title-derived rows when explicit status owns the pane', () => {
+    const result = makeActivityResult({
+      entries: {
+        [PANE_KEY]: makeWorkingEntryWithoutHistory()
+      },
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '\u280b Hermes' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID) },
+      now: 3_000
+    })
+
+    const threads = makeThreads(result)
+
+    expect(threads).toHaveLength(1)
+    expect(threads[0]).toMatchObject({
+      paneKey: PANE_KEY,
+      paneTitle: 'New run',
+      agentType: 'claude'
     })
   })
 
@@ -552,11 +657,12 @@ describe('buildActivityEvents', () => {
       now: 5_000
     })
 
-    const groups = groupActivityThreadsByStatus(
+    const groups = buildActivityThreadGroups(
       buildAgentPaneThreads({
         events: result.events,
         liveAgentByPaneKey: result.liveAgentByPaneKey
-      })
+      }),
+      'status'
     )
 
     expect(groups.map((group) => group.id)).toEqual(['working', 'blocked', 'done'])
@@ -564,6 +670,42 @@ describe('buildActivityEvents', () => {
       [PANE_KEY],
       [PANE_KEY_2],
       [PANE_KEY_3]
+    ])
+  })
+
+  it('keeps tied live thread order stable across store entry order changes', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const firstTab = makeTab()
+    const secondTab = { ...makeTab(), id: 'tab-2', ptyId: 'pty-2' }
+    const firstEntry = makeWorkingEntryWithoutHistory()
+    const secondEntry: AgentStatusEntry = {
+      ...makeWorkingEntryWithoutHistory(),
+      prompt: 'Second tied run',
+      paneKey: PANE_KEY_2
+    }
+    const buildOrder = (entries: Record<string, AgentStatusEntry>): string[] => {
+      const { events, liveAgentByPaneKey } = buildActivityEvents({
+        agentStatusByPaneKey: entries,
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: {
+          [worktree.id]: [firstTab, secondTab]
+        },
+        worktreeMap: new Map([[worktree.id, worktree]]),
+        repoMap: new Map([[repo.id, repo]]),
+        acknowledgedAgentsByPaneKey: {},
+        now: 3_000
+      })
+      return buildAgentPaneThreads({ events, liveAgentByPaneKey }).map((thread) => thread.paneKey)
+    }
+
+    expect(buildOrder({ [PANE_KEY_2]: secondEntry, [PANE_KEY]: firstEntry })).toEqual([
+      PANE_KEY,
+      PANE_KEY_2
+    ])
+    expect(buildOrder({ [PANE_KEY]: firstEntry, [PANE_KEY_2]: secondEntry })).toEqual([
+      PANE_KEY,
+      PANE_KEY_2
     ])
   })
 })
@@ -612,10 +754,10 @@ describe('activity thread grouping', () => {
     const groups = buildActivityThreadGroups(threads, 'status')
 
     expect(groups).toHaveLength(2)
-    expect(groups[0].key).toBe('done:interrupted')
-    expect(groups[0].label).toBe('Interrupted')
-    expect(groups[1].key).toBe('done')
-    expect(groups[1].label).toBe('Done')
+    expect(groups[0].key).toBe('done')
+    expect(groups[0].label).toBe('Done')
+    expect(groups[1].key).toBe('interrupted')
+    expect(groups[1].label).toBe('Interrupted')
   })
 
   it('project grouping falls back to unknown project when repo is missing', () => {

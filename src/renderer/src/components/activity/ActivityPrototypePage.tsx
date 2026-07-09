@@ -53,12 +53,14 @@ import {
   setActivityTerminalPortals,
   type ActivityTerminalPortalTarget
 } from './activity-terminal-portal'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import { buildTitleDerivedAgentRows } from '../sidebar/worktree-title-derived-agent-rows'
+import type { Repo, TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
+  type AgentStatusOrchestrationContext,
   type AgentStatusState,
   type AgentType,
   type MigrationUnsupportedPtyEntry
@@ -604,11 +606,29 @@ function appendActivityEventsForEntry(args: {
   })
 }
 
+function compareActivityEventsNewestFirst(a: ActivityEvent, b: ActivityEvent): number {
+  const timestampOrder = b.timestamp - a.timestamp
+  if (timestampOrder !== 0) {
+    return timestampOrder
+  }
+  const paneOrder = a.entry.paneKey.localeCompare(b.entry.paneKey)
+  return paneOrder !== 0 ? paneOrder : a.id.localeCompare(b.id)
+}
+
+function compareActivityThreadsNewestFirst(a: AgentPaneThread, b: AgentPaneThread): number {
+  const timestampOrder = b.latestTimestamp - a.latestTimestamp
+  return timestampOrder !== 0 ? timestampOrder : a.paneKey.localeCompare(b.paneKey)
+}
+
 export function buildActivityEvents(args: {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   tabsByWorktree: Record<string, TerminalTab[]>
+  runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
+  ptyIdsByTabId?: Record<string, string[]>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
+  runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   worktreeMap: Map<string, Worktree>
   repoMap: Map<string, Repo>
   acknowledgedAgentsByPaneKey: Record<string, number>
@@ -704,6 +724,41 @@ export function buildActivityEvents(args: {
     })
   }
 
+  const titleDerivedSeenPaneKeys = new Set([
+    ...Object.keys(args.agentStatusByPaneKey),
+    ...Object.keys(liveAgentByPaneKey)
+  ])
+  for (const [worktreeId, tabs] of Object.entries(args.tabsByWorktree)) {
+    const worktree = args.worktreeMap.get(worktreeId) ?? standaloneActivityWorktree(worktreeId)
+    const repo = args.repoMap.get(worktree.repoId) ?? null
+    // Why: Hermes and other agents can be visible only through terminal title
+    // evidence before their hooks attach. Reuse the sidebar fallback so Agents
+    // can still show and portal the live terminal for those panes.
+    const rows = buildTitleDerivedAgentRows({
+      tabs,
+      runtimePaneTitlesByTabId: args.runtimePaneTitlesByTabId,
+      ptyIdsByTabId: args.ptyIdsByTabId,
+      terminalLayoutsByTabId: args.terminalLayoutsByTabId,
+      runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey,
+      seenPaneKeys: titleDerivedSeenPaneKeys,
+      now: args.now
+    })
+    for (const row of rows) {
+      if (row.state === 'idle' || !isActivityLiveAgentState(row.state)) {
+        continue
+      }
+      liveAgentByPaneKey[row.paneKey] = {
+        state: row.state,
+        timestamp: row.entry.stateStartedAt,
+        worktree,
+        repo,
+        entry: row.entry,
+        tab: row.tab,
+        agentType: row.agentType
+      }
+    }
+  }
+
   for (const [paneKey, retained] of Object.entries(args.retainedAgentsByPaneKey)) {
     if (!parsePaneKey(paneKey)) {
       continue
@@ -730,7 +785,7 @@ export function buildActivityEvents(args: {
     })
   }
 
-  const sorted = events.sort((a, b) => b.timestamp - a.timestamp)
+  const sorted = events.sort(compareActivityEventsNewestFirst)
   const perPaneCount = new Map<string, number>()
   const includedEventIds = new Set<string>()
   const capped: ActivityEvent[] = []
@@ -766,7 +821,7 @@ export function buildActivityEvents(args: {
     includedEventIds.add(event.id)
     capped.push(event)
   }
-  return { events: capped.sort((a, b) => b.timestamp - a.timestamp), liveAgentByPaneKey }
+  return { events: capped.sort(compareActivityEventsNewestFirst), liveAgentByPaneKey }
 }
 
 export function buildAgentPaneThreads(args: {
@@ -847,9 +902,9 @@ export function buildAgentPaneThreads(args: {
   return Array.from(byPaneKey.values())
     .map((thread) => ({
       ...thread,
-      events: [...thread.events].sort((a, b) => b.timestamp - a.timestamp)
+      events: [...thread.events].sort(compareActivityEventsNewestFirst)
     }))
-    .sort((a, b) => b.latestTimestamp - a.latestTimestamp)
+    .sort(compareActivityThreadsNewestFirst)
 }
 
 function EventTime({ timestamp }: { timestamp: number }): React.JSX.Element {
@@ -986,6 +1041,10 @@ export function buildActivityThreadGroups(
   threads: AgentPaneThread[],
   groupBy: ActivityGroupBy
 ): ActivityThreadGroup[] {
+  if (groupBy === 'status') {
+    return groupActivityThreadsByStatus(threads)
+  }
+
   const groups: ActivityThreadGroup[] = []
   const groupIndexByKey = new Map<string, number>()
   for (const thread of threads) {
@@ -1435,6 +1494,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
       retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
       tabsByWorktree: s.tabsByWorktree,
+      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+      ptyIdsByTabId: s.ptyIdsByTabId,
+      terminalLayoutsByTabId: s.terminalLayoutsByTabId,
+      runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
       worktreeMap: getWorktreeMapFromState(s),
       repoMap: getRepoMapFromState(s),
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
@@ -1454,6 +1517,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
         retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
         tabsByWorktree: storeData.tabsByWorktree,
+        runtimePaneTitlesByTabId: storeData.runtimePaneTitlesByTabId,
+        ptyIdsByTabId: storeData.ptyIdsByTabId,
+        terminalLayoutsByTabId: storeData.terminalLayoutsByTabId,
+        runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
         worktreeMap: storeData.worktreeMap,
         repoMap: storeData.repoMap,
         acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
@@ -1474,11 +1541,14 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const selectedPaneKeyIsLive =
     selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)
   const effectiveSelectedPaneKey = selectedPaneKeyIsLive ? selectedPaneKey : null
-  if (!selectedPaneKeyIsLive) {
+  useEffect(() => {
+    if (selectedPaneKeyIsLive) {
+      return
+    }
     // Why: Activity rows disappear when agent retention or tab state changes;
-    // clear stale selection before detail/portal rendering can target it.
+    // clear stale selection after render so detail/portal rendering targets null.
     setSelectedPaneKey(null)
-  }
+  }, [selectedPaneKeyIsLive])
 
   const visibleThreads = useMemo(() => {
     const normalizedQuery = isActivitySearchQueryTooLarge(query) ? null : query.trim().toLowerCase()
