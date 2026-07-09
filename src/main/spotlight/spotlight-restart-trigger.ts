@@ -11,6 +11,13 @@ export const SPOTLIGHT_RESTART_TRIGGER_FILENAME = 'spotlight-restart'
 // Delay between the interrupt and re-running the command: long enough for the
 // server to release the prompt, short enough to feel immediate.
 const RESTART_RERUN_DELAY_MS = 700
+// Grace window when deciding a pre-existing trigger is "stale" (prior session)
+// vs written during this capture's setup. Filesystem mtime granularity is
+// coarse (ext4 can be 1s, FAT/exFAT 2s, some network mounts worse), so a
+// just-written trigger's mtime can round to a whole second below our in-process
+// start time. Only treat a trigger as stale when it predates the start by MORE
+// than this, so a legitimate touch during setup is never silently swallowed.
+const STALE_TRIGGER_GRACE_MS = 5000
 
 /** Minimal capture surface the restart needs — avoids a circular import on
  *  the mirror's full LogCapture type. */
@@ -85,7 +92,7 @@ export function watchRestartTrigger(
     // before the watcher armed.
     void stat(triggerPath)
       .then((stats) => {
-        if (stats.mtimeMs < captureStartedAtMs) {
+        if (stats.mtimeMs < captureStartedAtMs - STALE_TRIGGER_GRACE_MS) {
           return rm(triggerPath, { force: true })
         }
         consumeTrigger()

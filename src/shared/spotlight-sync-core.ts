@@ -52,8 +52,13 @@ export type SpotlightDeactivateOutcome = {
    *  checked out in another worktree while Spotlight held the root detached. The
    *  root was still restored to the original commit, just left detached. */
   branchMissing: boolean
-  /** The original branch's name (for messaging), or null if it no longer exists. */
+  /** The recorded original branch name (for logging), regardless of why it
+   *  couldn't be re-attached. */
   originalBranch: string | null
+  /** True only when the branch still EXISTS but the re-checkout failed (e.g.
+   *  it's checked out in another worktree) — i.e. re-attach is recoverable by
+   *  freeing it. False when the branch was deleted. */
+  branchInUse: boolean
 }
 
 export async function activateSpotlightCore(
@@ -195,6 +200,7 @@ export async function deactivateSpotlightCore(
   await git(ctx, rootPath, ['reset', '--hard', refs.originalHeadSha])
 
   let branchMissing = false
+  let branchInUse = false
   if (refs.originalBranch) {
     const branchSha = await gitTry(ctx, rootPath, [
       'rev-parse',
@@ -212,8 +218,10 @@ export async function deactivateSpotlightCore(
         // Leave the root detached at originalHead so turn-off still completes
         // instead of getting wedged with the spotlight refs half-torn-down.
         branchMissing = true
+        branchInUse = true
       }
     } else {
+      // Branch was deleted while Spotlight was active.
       branchMissing = true
     }
   }
@@ -240,5 +248,5 @@ export async function deactivateSpotlightCore(
   if (refs.originalBranch) {
     await gitTry(ctx, rootPath, ['symbolic-ref', '--delete', SPOTLIGHT_REFS.originalBranch])
   }
-  return { branchMissing, originalBranch: refs.originalBranch }
+  return { branchMissing, originalBranch: refs.originalBranch, branchInUse }
 }

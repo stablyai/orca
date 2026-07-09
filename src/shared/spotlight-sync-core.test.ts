@@ -191,6 +191,8 @@ describe('spotlight-sync-core', () => {
 
     const outcome = await deactivateSpotlightCore(ctx, rootPath)
     expect(outcome.branchMissing).toBe(true)
+    // Deleted, not in use — so the renderer shows "no longer exists", not "in use".
+    expect(outcome.branchInUse).toBe(false)
     expect(run(rootPath, 'rev-parse', 'HEAD')).toBe(originalHead)
     expect(() => run(rootPath, 'symbolic-ref', '-q', 'HEAD')).toThrow()
   })
@@ -206,6 +208,8 @@ describe('spotlight-sync-core', () => {
     // Must NOT throw (the old code hard-failed on `checkout main` → wedged).
     const outcome = await deactivateSpotlightCore(ctx, rootPath)
     expect(outcome.branchMissing).toBe(true)
+    // Branch still exists (in use elsewhere) — recoverable by freeing it.
+    expect(outcome.branchInUse).toBe(true)
     // Root restored to its original commit, left detached, spotlight refs gone.
     expect(run(rootPath, 'rev-parse', 'HEAD')).toBe(originalHead)
     expect(() => run(rootPath, 'symbolic-ref', '-q', 'HEAD')).toThrow()

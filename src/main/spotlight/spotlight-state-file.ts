@@ -2,11 +2,12 @@
 // Agents read it (path derivable from $ORCA_SPOTLIGHT_LOG's directory) to know
 // whether THEIR workspace currently holds the Spotlight before treating server
 // log errors as their own.
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import type { SpotlightRepoState } from '../../shared/spotlight'
 import { SPOTLIGHT_STATE_RELATIVE_PATH } from '../../shared/spotlight'
 import { getWorktreePathBasenameFromId, splitWorktreeId } from '../../shared/worktree-id'
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 
 export async function writeSpotlightStateFile(
   rootPath: string,
@@ -26,7 +27,9 @@ export async function writeSpotlightStateFile(
           lastError: state.lastError
         }
       : { active: false, updatedAt: new Date().toISOString() }
-    await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8')
+    // Atomic (tmp + rename): agents in other worktrees read this file
+    // concurrently, so a plain write could expose truncated/partial JSON.
+    writeFileAtomically(filePath, `${JSON.stringify(payload, null, 2)}\n`)
   } catch {
     // Best-effort: the state file is advisory for agents; never block an op on it.
   }

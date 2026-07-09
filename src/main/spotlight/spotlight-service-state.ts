@@ -2,6 +2,7 @@ import type { Repo } from '../../shared/types'
 import type { SpotlightError, SpotlightRepoState } from '../../shared/spotlight'
 import type { SpotlightGitContext } from '../../shared/spotlight-sync-core'
 import { splitWorktreeId } from '../../shared/worktree-id'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { SpotlightCoreError } from '../../shared/spotlight-sync-core'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { createLocalSpotlightGitContext } from '../git/spotlight-sync'
@@ -65,6 +66,15 @@ export function toSpotlightError(error: unknown): SpotlightError {
 export function worktreePathFromId(repoId: string, worktreeId: string): string | null {
   const parsed = splitWorktreeId(worktreeId)
   return parsed && parsed.repoId === repoId ? parsed.worktreePath : null
+}
+
+/** Whether a holder path IS the repo root (the sync target). Normalized like
+ *  assertWorktreeBelongsToRoot — a raw === would miss a separator/case
+ *  difference and let activation detach + reset the root against itself. */
+export function isRootHolderPath(worktreePath: string, rootPath: string): boolean {
+  return (
+    normalizeRuntimePathForComparison(worktreePath) === normalizeRuntimePathForComparison(rootPath)
+  )
 }
 
 /** Optimistic placeholder shown while the first activation of a repo is in

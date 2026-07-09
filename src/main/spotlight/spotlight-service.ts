@@ -14,6 +14,7 @@ import {
 import { appendSpotlightLogNote, stopSpotlightLogCapture } from './spotlight-log-mirror'
 import { writeSpotlightStateFile } from './spotlight-state-file'
 import {
+  isRootHolderPath,
   pendingSpotlightState,
   resolveRepoContext,
   toSpotlightError,
@@ -78,7 +79,7 @@ export class SpotlightService {
           message: `Unknown worktree id: ${worktreeId}`
         })
       }
-      if (worktreePath === resolved.repo.path) {
+      if (isRootHolderPath(worktreePath, resolved.repo.path)) {
         return this.failure(repoId, {
           code: 'root-is-holder',
           message: 'The primary worktree cannot hold the Spotlight — it is the sync target.'
@@ -210,15 +211,7 @@ export class SpotlightService {
         const outcome = await deactivateSpotlightCore(resolved.ctx, resolved.repo.path, {
           discardBackup: opts.discardBackup
         })
-        // Why here (not the renderer): log capture + the restart-trigger watcher
-        // are tied to the Spotlight LIFECYCLE, which main owns. Stopping them on
-        // PTY death alone left a turned-off Spotlight still mirroring the
-        // terminal and honoring restart triggers.
-        stopSpotlightLogCapture({ repoId })
-        this.lastCheckpointByRepo.delete(repoId)
-        this.store.clearSpotlightState(repoId)
-        this.emitChanged(repoId, null)
-        void writeSpotlightStateFile(resolved.repo.path, null)
+        this.clearSpotlightRecord(repoId, resolved.repo.path)
         void appendSpotlightLogNote(
           resolved.repo.path,
           outcome.branchMissing
@@ -228,17 +221,20 @@ export class SpotlightService {
             : 'Spotlight off — the root shows its own code again'
         )
         return outcome.branchMissing
-          ? { ok: true, state: null, leftDetachedFromBranch: outcome.originalBranch }
+          ? {
+              ok: true,
+              state: null,
+              // Name only when the branch still exists but is in use elsewhere
+              // (recoverable by freeing it); null when it was deleted, so the
+              // renderer shows the correct "no longer exists" message.
+              leftDetachedFromBranch: outcome.branchInUse ? outcome.originalBranch : null
+            }
           : { ok: true, state: null }
       } catch (error) {
         const spotlightError = toSpotlightError(error)
         if (spotlightError.code === 'not-active') {
           // The refs are already gone (manual cleanup); drop the stale record.
-          stopSpotlightLogCapture({ repoId })
-          this.lastCheckpointByRepo.delete(repoId)
-          this.store.clearSpotlightState(repoId)
-          this.emitChanged(repoId, null)
-          void writeSpotlightStateFile(resolved.repo.path, null)
+          this.clearSpotlightRecord(repoId, resolved.repo.path)
           return { ok: true, state: null }
         }
         return this.failure(repoId, spotlightError, state)
@@ -267,18 +263,9 @@ export class SpotlightService {
       try {
         const refs = await inspectSpotlightRefsCore(resolved.ctx, resolved.repo.path)
         if (!refs.originalHeadSha || !refs.snapshotSha) {
-          // Refs were removed outside Orca — the repo is no longer in
-          // Spotlight mode, so the persisted record is stale.
-          // Stop any live capture too (a race with a reconnecting terminal's
-          // setLogPty can create one before this runs), or its PTY listener,
-          // .orca watcher, and file handle leak against a dead session.
-          stopSpotlightLogCapture({ repoId })
-          this.lastCheckpointByRepo.delete(repoId)
-          this.store.clearSpotlightState(repoId)
-          this.emitChanged(repoId, null)
-          // Why: keep the agent-facing state file from claiming active:true
-          // forever after the refs vanish (agents read it before trusting logs).
-          void writeSpotlightStateFile(resolved.repo.path, null)
+          // Refs were removed outside Orca — the repo is no longer in Spotlight
+          // mode, so the persisted record is stale.
+          this.clearSpotlightRecord(repoId, resolved.repo.path)
           return
         }
         if (refs.rootHeadSha !== refs.snapshotSha) {
@@ -309,6 +296,18 @@ export class SpotlightService {
 
   private withLiveStatus(repoId: string, state: SpotlightRepoState): SpotlightRepoState {
     return this.syncingRepoIds.has(repoId) ? { ...state, status: 'syncing' } : state
+  }
+
+  /** Tear down every Spotlight resource for a repo once its refs are gone or
+   *  restored: the log capture + restart-trigger watcher (main owns the
+   *  Spotlight lifecycle, not the PTY), the index-reuse cache, the persisted
+   *  record, and the agent-facing state file, then notify the renderer. */
+  private clearSpotlightRecord(repoId: string, rootPath: string): void {
+    stopSpotlightLogCapture({ repoId })
+    this.lastCheckpointByRepo.delete(repoId)
+    this.store.clearSpotlightState(repoId)
+    this.emitChanged(repoId, null)
+    void writeSpotlightStateFile(rootPath, null)
   }
 
   private failure(

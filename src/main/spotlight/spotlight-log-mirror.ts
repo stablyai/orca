@@ -41,13 +41,16 @@ function flushBackoffMs(failures: number): number {
 }
 
 function capPendingBytes(text: string): string {
-  if (Buffer.byteLength(text) <= MAX_PENDING_BYTES) {
+  const buf = Buffer.from(text, 'utf-8')
+  if (buf.length <= MAX_PENDING_BYTES) {
     return text
   }
-  // Keep the newest tail; older buffered output is lost but memory is bounded.
-  return `\n[Orca Spotlight: log write buffer overflowed — older output dropped]\n${text.slice(
-    text.length - MAX_PENDING_BYTES
-  )}`
+  // Keep the newest MAX_PENDING_BYTES *bytes* (slicing by string .length would
+  // undercount multibyte output — e.g. CJK/emoji — and never actually shrink
+  // the buffer, defeating the bound). A partial leading multibyte char at the
+  // cut decodes to U+FFFD, which is harmless in a log.
+  const tail = buf.subarray(buf.length - MAX_PENDING_BYTES).toString('utf-8')
+  return `\n[Orca Spotlight: log write buffer overflowed — older output dropped]\n${tail}`
 }
 
 type LogCapture = {

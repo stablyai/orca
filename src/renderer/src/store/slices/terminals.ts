@@ -1773,10 +1773,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const nextTabPtyId = remainingPtyIds.at(-1) ?? null
         if (tab.spotlightRepoRoot) {
           clearedSpotlightTab = true
-          // Why: the log mirror must follow the tab's PRIMARY pane (first pty),
-          // matching updateTabPtyId's `nextPtyIds[0]` rule — never a closing
-          // split pane, or unrelated shell noise would land in the server log.
-          nextSpotlightLogPtyId = remainingPtyIds[0] ?? null
+          // Why: the log mirror must follow the SAME pane the tab now points at
+          // (nextTabPtyId), never a closing split pane — otherwise the server
+          // log would capture an unrelated pane's shell noise and the restart
+          // trigger would target the wrong pane.
+          nextSpotlightLogPtyId = nextTabPtyId
         }
         const shouldRetainActivationSpawn =
           wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId)
