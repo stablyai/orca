@@ -386,29 +386,25 @@ export function useOnboardingFlow(
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
-  const visibleSteps = useMemo(
+  // Why: the stepper shows exactly the steps the user will land on. Skipped
+  // optional steps — Windows terminal off Windows, integrations when the GitHub
+  // CLI is already installed — are dropped entirely rather than rendered as
+  // dead, unreachable dots the user silently skips past on Continue.
+  const progressSteps = useMemo(
     () =>
       STEPS.map((step, index) => ({ step, index })).filter(
         ({ index }) => !isSkippedStepIndex(index, skipOptions)
       ),
     [skipOptions]
   )
-  const progressSteps = useMemo(
-    () =>
-      STEPS.map((step, index) => ({
-        step,
-        index,
-        isSkipped: isSkippedStepIndex(index, skipOptions)
-      })).filter(({ step }) => step.id !== 'windows_terminal' || !skipWindowsTerminal),
-    [skipOptions, skipWindowsTerminal]
-  )
-  const visibleStepIndex = Math.max(
-    0,
-    visibleSteps.findIndex(({ index }) => index === stepIndex)
-  )
+  // Why: while resuming, stepIndex can momentarily point at a step that just
+  // became skipped (preflight resolving to gh-installed) before the auto-skip
+  // effect advances it. Resolve forward so the count reflects the step we're
+  // about to land on instead of flashing "1 of N" with no active dot.
+  const displayedStepIndex = resolveStepIndex(stepIndex, skipOptions, 'forward')
   const progressStepIndex = Math.max(
     0,
-    progressSteps.findIndex(({ index }) => index === stepIndex)
+    progressSteps.findIndex(({ index }) => index === displayedStepIndex)
   )
   const hasExistingProject = repos.length > 0
 
@@ -1291,8 +1287,6 @@ export function useOnboardingFlow(
     settings,
     updateSettings,
     stepIndex,
-    visibleSteps,
-    visibleStepIndex,
     progressSteps,
     progressStepIndex,
     currentStep,
