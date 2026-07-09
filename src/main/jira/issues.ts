@@ -810,3 +810,98 @@ export async function listTransitions(
     release()
   }
 }
+
+export async function getProjectStatuses(
+  projectKey: string,
+  siteId?: string | null
+): Promise<string[]> {
+  const entry = getClients(siteId)[0]
+  if (!entry) {
+    return []
+  }
+  await acquire()
+  try {
+    const statusesResponse = await jiraRequest<unknown>(
+      entry,
+      `/rest/api/3/project/${encodeURIComponent(projectKey)}/statuses`
+    )
+    const statusMap = new Map<string, string>()
+    if (Array.isArray(statusesResponse)) {
+      for (const issueType of statusesResponse) {
+        const typeRecord = asRecord(issueType)
+        if (Array.isArray(typeRecord.statuses)) {
+          for (const s of typeRecord.statuses) {
+            const statusRecord = asRecord(s)
+            const id = asString(statusRecord.id)
+            const name = asString(statusRecord.name)
+            if (id && name) {
+              statusMap.set(id, name)
+            }
+          }
+        }
+      }
+    }
+
+    const boardsResponse = await jiraRequest<{ values?: unknown[] }>(
+      entry,
+      `/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}`
+    )
+
+    if (
+      boardsResponse &&
+      Array.isArray(boardsResponse.values) &&
+      boardsResponse.values.length > 0
+    ) {
+      const boardId = asRecord(boardsResponse.values[0]).id
+      if (boardId) {
+        const configResponse = await jiraRequest<{ columnConfig?: { columns?: unknown[] } }>(
+          entry,
+          `/rest/agile/1.0/board/${boardId}/configuration`
+        )
+
+        if (
+          configResponse &&
+          configResponse.columnConfig &&
+          Array.isArray(configResponse.columnConfig.columns)
+        ) {
+          const orderedNames: string[] = []
+          const seen = new Set<string>()
+          for (const col of configResponse.columnConfig.columns) {
+            const colRecord = asRecord(col)
+            if (Array.isArray(colRecord.statuses)) {
+              for (const statusRef of colRecord.statuses) {
+                const refRecord = asRecord(statusRef)
+                const refId = asString(refRecord.id)
+                if (refId) {
+                  const name = statusMap.get(refId)
+                  if (name && !seen.has(name)) {
+                    seen.add(name)
+                    orderedNames.push(name)
+                  }
+                }
+              }
+            }
+          }
+          for (const name of statusMap.values()) {
+            if (!seen.has(name)) {
+              seen.add(name)
+              orderedNames.push(name)
+            }
+          }
+          return orderedNames
+        }
+      }
+    }
+
+    return Array.from(statusMap.values())
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.site.id)
+      throw error
+    }
+    console.warn('[jira] getProjectStatuses failed:', error)
+    return []
+  } finally {
+    release()
+  }
+}

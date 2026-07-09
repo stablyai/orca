@@ -88,6 +88,11 @@ const AssignableUsers = z.object({
   siteId: OptionalString
 })
 
+const ProjectStatuses = z.object({
+  projectKey: requiredString('Project key is required'),
+  siteId: OptionalString
+})
+
 export const JIRA_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'jira.connect',
@@ -204,5 +209,11 @@ export const JIRA_METHODS: RpcMethod[] = [
     params: IssueKey,
     handler: async (params, { runtime }) =>
       runtime.jiraListTransitions(params.key.trim(), params.siteId)
+  }),
+  defineMethod({
+    name: 'jira.getProjectStatuses',
+    params: ProjectStatuses,
+    handler: async (params, { runtime }) =>
+      runtime.jiraGetProjectStatuses(params.projectKey.trim(), params.siteId)
   })
 ]

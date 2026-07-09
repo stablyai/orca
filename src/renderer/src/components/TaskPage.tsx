@@ -299,7 +299,8 @@ import {
   jiraGetIssue,
   jiraListCreateFields,
   jiraListIssueTypes,
-  jiraListProjects
+  jiraListProjects,
+  jiraGetProjectStatuses
 } from '@/runtime/runtime-jira-client'
 import {
   normalizeVisibleTaskProviders,
@@ -4540,6 +4541,7 @@ export default function TaskPage(): React.JSX.Element {
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
   const [collapsedJiraGroups, setCollapsedJiraGroups] = useState<Set<string>>(new Set())
+  const [jiraProjectStatuses, setJiraProjectStatuses] = useState<Record<string, string[]>>({})
 
   const toggleJiraGroup = useCallback((groupKey: string) => {
     setCollapsedJiraGroups((prev) => {
@@ -5512,6 +5514,43 @@ export default function TaskPage(): React.JSX.Element {
     [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache, jiraTaskSourceContext]
   )
 
+  useEffect(() => {
+    if (!jiraConnected || displayedJiraIssues.length === 0) {
+      return
+    }
+
+    const uniqueProjects = Array.from(
+      new Set(displayedJiraIssues.map((issue) => issue.project.key).filter(Boolean))
+    )
+
+    let cancelled = false
+
+    for (const projectKey of uniqueProjects) {
+      if (jiraProjectStatuses[projectKey]) {
+        continue
+      }
+      const issue = displayedJiraIssues.find((i) => i.project.key === projectKey)
+      const siteId = issue?.siteId ?? null
+
+      void jiraGetProjectStatuses(jiraTaskSourceContext ?? settings, projectKey, siteId)
+        .then((statuses) => {
+          if (!cancelled && statuses && statuses.length > 0) {
+            setJiraProjectStatuses((prev) => ({
+              ...prev,
+              [projectKey]: statuses
+            }))
+          }
+        })
+        .catch((err) => {
+          console.warn(`[jira] Failed to load statuses for project ${projectKey}:`, err)
+        })
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [displayedJiraIssues, jiraConnected, jiraTaskSourceContext, settings, jiraProjectStatuses])
+
   const jiraIssueSections = useMemo(() => {
     const sections: { key: string; label: string; issues: JiraIssue[] }[] = []
     const sectionsMap = new Map<string, JiraIssue[]>()
@@ -5532,9 +5571,30 @@ export default function TaskPage(): React.JSX.Element {
       })
     })
 
-    sections.sort((a, b) => a.label.localeCompare(b.label))
+    const getStatusIndex = (statusName: string): number => {
+      for (const projectKey of Object.keys(jiraProjectStatuses)) {
+        const list = jiraProjectStatuses[projectKey]
+        if (list) {
+          const idx = list.indexOf(statusName)
+          if (idx !== -1) {
+            return idx
+          }
+        }
+      }
+      return 99999
+    }
+
+    sections.sort((a, b) => {
+      const idxA = getStatusIndex(a.label)
+      const idxB = getStatusIndex(b.label)
+      if (idxA !== idxB) {
+        return idxA - idxB
+      }
+      return a.label.localeCompare(b.label)
+    })
+
     return sections
-  }, [displayedJiraIssues])
+  }, [displayedJiraIssues, jiraProjectStatuses])
 
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)

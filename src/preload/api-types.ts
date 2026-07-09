@@ -1854,6 +1854,7 @@ export type PreloadApi = {
       siteId?: string
     }) => Promise<JiraUser[]>
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
+    getProjectStatuses: (args: { projectKey: string; siteId?: string }) => Promise<string[]>
   }
   starNag: {
     onShow: (

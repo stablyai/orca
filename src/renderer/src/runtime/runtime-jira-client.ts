@@ -280,3 +280,15 @@ export async function jiraListTransitions(
     ? callRuntimeRpc<JiraTransition[]>(target, 'jira.listTransitions', args, { timeoutMs: 30_000 })
     : window.api.jira.listTransitions(args)
 }
+
+export async function jiraGetProjectStatuses(
+  settings: RuntimeJiraSettings,
+  projectKey: string,
+  siteId?: string | null
+): Promise<string[]> {
+  const target = getJiraRuntimeTarget(settings)
+  const args = { projectKey, siteId: siteId ?? undefined }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<string[]>(target, 'jira.getProjectStatuses', args, { timeoutMs: 30_000 })
+    : (window.api.jira.getProjectStatuses(args) as Promise<string[]>)
+}

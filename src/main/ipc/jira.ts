@@ -14,7 +14,8 @@ import {
   listProjects,
   listTransitions,
   searchIssues,
-  updateIssue
+  updateIssue,
+  getProjectStatuses
 } from '../jira/issues'
 import type {
   JiraConnectArgs,
@@ -259,4 +260,14 @@ export function registerJiraHandlers(): void {
     }
     return listTransitions(args.key.trim(), normalizeSiteId(args.siteId))
   })
+
+  ipcMain.handle(
+    'jira:getProjectStatuses',
+    async (_event, args: { projectKey: string; siteId?: string }) => {
+      if (typeof args?.projectKey !== 'string' || !args.projectKey.trim()) {
+        return []
+      }
+      return getProjectStatuses(args.projectKey.trim(), normalizeSiteId(args.siteId))
+    }
+  )
 }

@@ -536,7 +536,8 @@ import {
   listProjects as listJiraProjects,
   listTransitions as listJiraTransitions,
   searchIssues as searchJiraIssues,
-  updateIssue as updateJiraIssue
+  updateIssue as updateJiraIssue,
+  getProjectStatuses as getJiraProjectStatuses
 } from '../jira/issues'
 import {
   clearProjectItemFieldValue,
@@ -22566,6 +22567,13 @@ export class OrcaRuntimeService {
 
   jiraListTransitions(key: string, siteId?: string): ReturnType<typeof listJiraTransitions> {
     return listJiraTransitions(key, siteId)
+  }
+
+  jiraGetProjectStatuses(
+    projectKey: string,
+    siteId?: string
+  ): ReturnType<typeof getJiraProjectStatuses> {
+    return getJiraProjectStatuses(projectKey, siteId)
   }
 
   // ── Browser automation ──

@@ -1637,7 +1637,9 @@ const api = {
     }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsers', args),
 
     listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:listTransitions', args)
+      ipcRenderer.invoke('jira:listTransitions', args),
+    getProjectStatuses: (args: { projectKey: string; siteId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('jira:getProjectStatuses', args)
   },
 
   starNag: {
