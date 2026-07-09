@@ -1,7 +1,15 @@
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { TerminalPaneLayoutNode } from '../../../../shared/types'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveTerminalHandleForPaneKey } from '@/components/dashboard/agent-row-orchestration-clipboard'
+
+export type {
+  ActiveTerminalPaneKeyState,
+  CoordinatorCandidate
+} from './agent-row-orchestration-coordinator'
+export {
+  getActiveTerminalPaneKey,
+  listCoordinatorCandidates,
+  resolveCoordinatorPaneKey
+} from './agent-row-orchestration-coordinator'
 
 type CallRuntime = (request: {
   method: string
@@ -10,114 +18,15 @@ type CallRuntime = (request: {
 
 export type OrchestrationActionKind = 'dispatch' | 'send' | 'ask'
 
-export type ActiveTerminalPaneKeyState = {
-  activeTabType: string | null
-  activeTabId: string | null
-  activeWorktreeId: string | null
-  tabsByWorktree: Record<string, { id: string }[] | undefined>
-  terminalLayoutsByTabId: Record<
-    string,
-    { activeLeafId?: string | null; root?: TerminalPaneLayoutNode | null } | undefined
-  >
-  agentStatusByPaneKey?: Record<string, unknown>
-}
-
-// Why: the focused terminal is the natural coordinator for sidebar-driven
-// dispatch — same identity the agent list already highlights as "focused pane".
-export function getActiveTerminalPaneKey(state: ActiveTerminalPaneKeyState): string | null {
-  if (state.activeTabType !== 'terminal' || !state.activeTabId) {
-    return null
-  }
-  const activeLeafId = state.terminalLayoutsByTabId[state.activeTabId]?.activeLeafId
-  if (!activeLeafId || !isTerminalLeafId(activeLeafId)) {
-    return null
-  }
-  return makePaneKey(state.activeTabId, activeLeafId)
-}
-
-function collectLeafIds(node: TerminalPaneLayoutNode | null | undefined): string[] {
-  if (!node) {
-    return []
-  }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLeafIds(node.first), ...collectLeafIds(node.second)]
-}
-
-function collectWorktreeTerminalPaneKeys(
-  state: ActiveTerminalPaneKeyState,
-  worktreeId: string
-): string[] {
-  const keys: string[] = []
-  const seen = new Set<string>()
-  const push = (paneKey: string): void => {
-    if (seen.has(paneKey)) {
-      return
-    }
-    seen.add(paneKey)
-    keys.push(paneKey)
-  }
-
-  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    const layout = state.terminalLayoutsByTabId[tab.id]
-    const leafIds = collectLeafIds(layout?.root ?? null)
-    if (leafIds.length === 0 && layout?.activeLeafId) {
-      leafIds.push(layout.activeLeafId)
-    }
-    for (const leafId of leafIds) {
-      if (isTerminalLeafId(leafId)) {
-        push(makePaneKey(tab.id, leafId))
-      }
-    }
-  }
-
-  // Why: agent rows can exist before layout leaves are fully hydrated; also
-  // prefer known agents as coordinator candidates.
-  for (const paneKey of Object.keys(state.agentStatusByPaneKey ?? {})) {
-    const parsed = parsePaneKey(paneKey)
-    if (!parsed) {
-      continue
-    }
-    const tabBelongs = (state.tabsByWorktree[worktreeId] ?? []).some(
-      (tab) => tab.id === parsed.tabId
-    )
-    if (tabBelongs) {
-      push(paneKey)
-    }
-  }
-
-  return keys
-}
-
-// Why: right-clicking an agent often focuses that same terminal, so "focused =
-// coordinator" would equal the worker. Prefer focused only when distinct; else
-// pick another terminal in the worker's worktree.
-export function resolveCoordinatorPaneKey(args: {
-  workerPaneKey: string
-  workerWorktreeId: string | null
-  state: ActiveTerminalPaneKeyState
-}): string | null {
-  const focused = getActiveTerminalPaneKey(args.state)
-  if (focused && focused !== args.workerPaneKey) {
-    return focused
-  }
-
-  const worktreeId = args.workerWorktreeId ?? args.state.activeWorktreeId
-  if (!worktreeId) {
-    return null
-  }
-
-  const candidates = collectWorktreeTerminalPaneKeys(args.state, worktreeId)
-  const other = candidates.find((paneKey) => paneKey !== args.workerPaneKey)
-  return other ?? null
-}
-
 function assertOk(response: RuntimeRpcResponse<unknown>): unknown {
   if (!response.ok) {
     throw new Error(response.error.message)
   }
   return response.result
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 function readTaskId(result: unknown): string {
@@ -134,10 +43,6 @@ function readAskAnswer(result: unknown): { answer: string | null; timedOut: bool
   const answer = typeof result.answer === 'string' ? result.answer : null
   const timedOut = result.timedOut === true
   return { answer, timedOut }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
 }
 
 export async function resolveCoordinatorAndWorkerHandles(args: {

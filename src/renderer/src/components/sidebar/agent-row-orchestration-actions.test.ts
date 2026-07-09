@@ -110,6 +110,37 @@ describe('resolveCoordinatorPaneKey', () => {
   })
 })
 
+describe('listCoordinatorCandidates', () => {
+  it('excludes the worker and marks the focused terminal', async () => {
+    const { listCoordinatorCandidates } = await import('./agent-row-orchestration-actions')
+    const candidates = listCoordinatorCandidates({
+      workerPaneKey: WORKER_PANE,
+      workerWorktreeId: 'wt-1',
+      state: {
+        ...emptyStateBase,
+        activeTabType: 'terminal',
+        activeTabId: 'tab-coord',
+        terminalLayoutsByTabId: {
+          'tab-coord': { activeLeafId: LEAF_A, root: { type: 'leaf', leafId: LEAF_A } },
+          'tab-worker': { activeLeafId: LEAF_B, root: { type: 'leaf', leafId: LEAF_B } }
+        },
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-coord' }, { id: 'tab-worker' }]
+        },
+        agentStatusByPaneKey: {
+          [COORD_PANE]: { prompt: 'I am the boss', agentType: 'claude' },
+          [WORKER_PANE]: { prompt: 'I am the worker', agentType: 'codex' }
+        }
+      }
+    })
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]?.paneKey).toBe(COORD_PANE)
+    expect(candidates[0]?.isFocused).toBe(true)
+    expect(candidates[0]?.label).toContain('I am the boss')
+    expect(candidates[0]?.label).toContain('(focused)')
+  })
+})
+
 describe('dispatchTaskToAgent', () => {
   it('creates a task then dispatches with inject to the worker', async () => {
     const callRuntime = vi.fn(

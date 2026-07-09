@@ -17,6 +17,7 @@ import { isOrchestrationSetupEnabled } from '@/lib/orchestration-setup-state'
 import {
   askAgent,
   dispatchTaskToAgent,
+  listCoordinatorCandidates,
   resolveCoordinatorPaneKey,
   sendMessageToAgent,
   type OrchestrationActionKind
@@ -49,7 +50,7 @@ function dialogCopy(kind: OrchestrationActionKind): {
         ),
         description: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.description',
-          'Creates an orchestration task and dispatches it to this agent. Coordinator: focused terminal if different, otherwise another terminal in this worktree.'
+          'This agent is the worker. Choose which terminal is the coordinator (who owns the task and receives worker_done).'
         ),
         primaryLabel: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.dispatch.submit',
@@ -72,7 +73,7 @@ function dialogCopy(kind: OrchestrationActionKind): {
         ),
         description: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.send.description',
-          'Sends an orchestration status message. Coordinator (--from): focused terminal if different, otherwise another terminal in this worktree.'
+          'Sends a status message to this agent. Choose which terminal is --from (usually your coordinator).'
         ),
         primaryLabel: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.send.submit',
@@ -95,7 +96,7 @@ function dialogCopy(kind: OrchestrationActionKind): {
         ),
         description: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.description',
-          'Sends a blocking ask to this agent and waits up to 2 minutes for a reply. Coordinator: focused terminal if different, otherwise another terminal in this worktree.'
+          'Asks this agent and waits up to 2 minutes for a reply. Choose which terminal is the coordinator (--from).'
         ),
         primaryLabel: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.submit',
@@ -122,15 +123,55 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
   const [body, setBody] = useState('')
   const [inject, setInject] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [coordinatorPaneKey, setCoordinatorPaneKey] = useState<string>('')
+
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeTabType = useAppStore((s) => s.activeTabType)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const coordinatorOptions = useMemo(() => {
+    if (!target) {
+      return []
+    }
+    return listCoordinatorCandidates({
+      workerPaneKey: target.paneKey,
+      workerWorktreeId: target.worktreeId,
+      state: {
+        tabsByWorktree,
+        terminalLayoutsByTabId,
+        agentStatusByPaneKey,
+        activeTabId,
+        activeTabType,
+        activeWorktreeId
+      }
+    })
+  }, [
+    target,
+    tabsByWorktree,
+    terminalLayoutsByTabId,
+    agentStatusByPaneKey,
+    activeTabId,
+    activeTabType,
+    activeWorktreeId
+  ])
 
   useEffect(() => {
-    if (open) {
+    if (open && target) {
       setPrimary('')
       setBody('')
       setInject(true)
       setSubmitting(false)
+      const preferred =
+        resolveCoordinatorPaneKey({
+          workerPaneKey: target.paneKey,
+          workerWorktreeId: target.worktreeId,
+          state: useAppStore.getState()
+        }) ?? ''
+      setCoordinatorPaneKey(preferred)
     }
-  }, [open, kind, target?.paneKey])
+  }, [open, kind, target?.paneKey, target?.worktreeId, target])
 
   const submit = async (): Promise<void> => {
     if (!target) {
@@ -145,16 +186,17 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
       )
       return
     }
+    if (!coordinatorPaneKey) {
+      toast.error(
+        translate(
+          'auto.components.sidebar.agent.row.orchestration.action.dialog.no.coordinator',
+          'Select a coordinator terminal (must be different from this agent)'
+        )
+      )
+      return
+    }
     setSubmitting(true)
     try {
-      const store = useAppStore.getState()
-      // Why: right-click often focuses the worker row; do not require the user to
-      // re-focus another tab if this worktree already has another terminal.
-      const coordinatorPaneKey = resolveCoordinatorPaneKey({
-        workerPaneKey: target.paneKey,
-        workerWorktreeId: target.worktreeId,
-        state: store
-      })
       // Why: window.api.runtime.call is a method-union; actions accept a narrow
       // call surface for taskCreate/dispatch/send/ask + terminal.resolvePane.
       const callRuntime = window.api.runtime.call as (request: {
@@ -238,6 +280,42 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
+            <Label htmlFor="orchestration-action-coordinator">
+              {translate(
+                'auto.components.sidebar.agent.row.orchestration.action.dialog.coordinator',
+                'Coordinator (who owns this)'
+              )}
+            </Label>
+            <select
+              id="orchestration-action-coordinator"
+              value={coordinatorPaneKey}
+              onChange={(e) => setCoordinatorPaneKey(e.target.value)}
+              disabled={submitting || coordinatorOptions.length === 0}
+              className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {coordinatorOptions.length === 0 ? (
+                <option value="">
+                  {translate(
+                    'auto.components.sidebar.agent.row.orchestration.action.dialog.coordinator.empty',
+                    'No other terminal in this worktree'
+                  )}
+                </option>
+              ) : (
+                coordinatorOptions.map((option) => (
+                  <option key={option.paneKey} value={option.paneKey}>
+                    {option.label}
+                  </option>
+                ))
+              )}
+            </select>
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              {translate(
+                'auto.components.sidebar.agent.row.orchestration.action.dialog.coordinator.hint',
+                'Worker = the agent you right-clicked. Coordinator = who dispatches and receives worker_done.'
+              )}
+            </p>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="orchestration-action-primary">{copy.primaryFieldLabel}</Label>
             {kind === 'dispatch' || kind === 'ask' ? (
               <textarea
@@ -311,7 +389,7 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
             onClick={() => {
               void submit()
             }}
-            disabled={submitting || primary.trim().length === 0}
+            disabled={submitting || primary.trim().length === 0 || coordinatorPaneKey.length === 0}
           >
             {submitting
               ? translate(
