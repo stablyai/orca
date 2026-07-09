@@ -43,6 +43,11 @@ export function parseOrcaDeepLink(url: string): OrcaDeepLink | null {
   }
 }
 
+/**
+ * Build the `focus` route from a validated `orca://focus` URL, reading the
+ * optional `terminal` and `worktree` query params (both normalized to `null`
+ * when absent or blank).
+ */
 function parseFocusDeepLink(parsed: URL): OrcaFocusDeepLink {
   return {
     kind: 'focus',
@@ -51,6 +56,7 @@ function parseFocusDeepLink(parsed: URL): OrcaFocusDeepLink {
   }
 }
 
+/** Trim a raw query-param value, collapsing missing or whitespace-only input to `null`. */
 function normalizeParam(value: string | null): string | null {
   if (value === null) {
     return null

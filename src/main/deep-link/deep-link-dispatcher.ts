@@ -18,8 +18,10 @@ export type DeepLinkDispatcherOptions = {
   warn?: (message: string, error?: unknown) => void
   now?: () => number
   delay?: (ms: number) => Promise<void>
-  // Cold-start links can land before the renderer graph is ready; poll until it
-  // is so focus lands on the right pane instead of being dropped.
+  // Cold-start links land before the renderer graph is ready; the focus intent
+  // is buffered by polling for up to this budget so it applies once the graph
+  // reports `ready` instead of being dropped. Never blocks boot — the window is
+  // surfaced first; only the terminal reveal waits.
   graphReadyTimeoutMs?: number
   graphPollIntervalMs?: number
 }
@@ -28,15 +30,39 @@ export type DeepLinkDispatcher = {
   dispatch: (url: string) => Promise<void>
 }
 
-const DEFAULT_GRAPH_READY_TIMEOUT_MS = 15_000
+// Why: a protocol launch can COLD-START Orca — macOS relaunches the registered
+// handler, and the renderer graph only reports `ready` after the window loads,
+// which on a fresh/cold boot can take tens of seconds. The focus intent is
+// buffered (polled) for this whole budget so it lands once the graph is ready,
+// rather than being dropped by a timeout that races the load screen. The window
+// itself is surfaced immediately (see `dispatch`), so this wait never blocks the
+// boot — it only defers the terminal reveal. After the budget, we gracefully
+// no-op with the app already in the foreground.
+const DEFAULT_GRAPH_READY_TIMEOUT_MS = 60_000
 const DEFAULT_GRAPH_POLL_INTERVAL_MS = 150
 
+/**
+ * Create the deep-link dispatcher that turns an `orca://` URL into a focus
+ * action. `dispatch` always brings the main window forward first — so an
+ * unknown or malformed route still surfaces Orca — then, for a `focus` route
+ * that names a target, waits for the runtime graph to be ready and reuses the
+ * existing `resolveActiveTerminal`/`focusTerminal` actions to reveal the pane.
+ *
+ * All side effects (window focus, runtime lookup, timing) are injected via
+ * `options` so the dispatcher can be unit-tested without a live Electron or
+ * runtime instance.
+ */
 export function createDeepLinkDispatcher(options: DeepLinkDispatcherOptions): DeepLinkDispatcher {
   const now = options.now ?? Date.now
   const delay = options.delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
   const timeoutMs = options.graphReadyTimeoutMs ?? DEFAULT_GRAPH_READY_TIMEOUT_MS
   const pollIntervalMs = options.graphPollIntervalMs ?? DEFAULT_GRAPH_POLL_INTERVAL_MS
 
+  /**
+   * Poll `getRuntime` until the renderer graph reports `ready`, returning the
+   * runtime once it is. Returns `null` if the graph is still not ready by the
+   * deadline so a cold-start link degrades to a window-only focus.
+   */
   async function waitForRuntimeGraph(): Promise<FocusableRuntime | null> {
     const deadline = now() + timeoutMs
     for (;;) {
@@ -51,6 +77,12 @@ export function createDeepLinkDispatcher(options: DeepLinkDispatcherOptions): De
     }
   }
 
+  /**
+   * Reveal the pane named by a `focus` link. A bare `orca://focus` (no target)
+   * is satisfied by the window focus alone. Otherwise resolve the terminal
+   * handle — directly or via the worktree selector — and focus it, degrading to
+   * a no-op if the runtime is not ready or the handle cannot be resolved.
+   */
   async function focusTarget(link: OrcaFocusDeepLink): Promise<void> {
     if (!link.terminal && !link.worktree) {
       // Bare `orca://focus` — bringing the window forward is the whole action.
@@ -72,6 +104,10 @@ export function createDeepLinkDispatcher(options: DeepLinkDispatcherOptions): De
     }
   }
 
+  /**
+   * Bring the window forward, then route a parsed `focus` link to its target
+   * pane. Non-focus or unparseable URLs fall through to the window focus only.
+   */
   async function dispatch(url: string): Promise<void> {
     // Why: focus the window first so an unknown or malformed route still brings
     // Orca forward rather than silently doing nothing.

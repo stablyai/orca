@@ -126,6 +126,69 @@ describe('createDeepLinkDispatcher', () => {
     expect(focusTerminal).toHaveBeenCalledWith('term_abc')
   })
 
+  it('buffers a cold-start focus intent until a slow boot reports the graph ready', async () => {
+    // Regression: a real cold boot can take tens of seconds, longer than the old
+    // 15s budget, so the queued focus must survive until the graph is ready
+    // rather than being dropped mid-boot.
+    let clock = 0
+    let graphStatus: RuntimeGraphStatus = 'unavailable'
+    const focusTerminal = vi.fn(async (handle: string) => ({ handle, tabId: 't', worktreeId: 'w' }))
+    const runtime: FocusableRuntime = {
+      getStatus: () => ({ graphStatus }) as ReturnType<FocusableRuntime['getStatus']>,
+      focusTerminal,
+      resolveActiveTerminal: vi.fn(async () => 'term_active')
+    }
+    const { dispatcher, warn } = makeDispatcher(runtime, {
+      now: () => clock,
+      // Boot completes at 30s — past the old 15s timeout, within the 60s budget.
+      delay: async () => {
+        clock += 150
+        if (clock >= 30_000) {
+          graphStatus = 'ready'
+        }
+      }
+    })
+
+    await dispatcher.dispatch('orca://focus?terminal=term_abc')
+
+    expect(focusTerminal).toHaveBeenCalledWith('term_abc')
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the window before waiting on the graph so boot is never blocked', async () => {
+    // The window must come forward immediately; only the terminal reveal defers
+    // until the graph is ready. Record the order of side effects to prove it.
+    const order: string[] = []
+    let clock = 0
+    let graphStatus: RuntimeGraphStatus = 'reloading'
+    const runtime: FocusableRuntime = {
+      getStatus: () => ({ graphStatus }) as ReturnType<FocusableRuntime['getStatus']>,
+      focusTerminal: vi.fn(async (handle: string) => {
+        order.push('focusTerminal')
+        return { handle, tabId: 't', worktreeId: 'w' }
+      }),
+      resolveActiveTerminal: vi.fn(async () => 'term_active')
+    }
+    const focusWindow = vi.fn(() => order.push('focusWindow'))
+    const dispatcher = createDeepLinkDispatcher({
+      focusWindow,
+      getRuntime: () => runtime,
+      now: () => clock,
+      delay: async () => {
+        order.push('poll')
+        clock += 150
+        graphStatus = 'ready'
+      }
+    })
+
+    await dispatcher.dispatch('orca://focus?terminal=term_abc')
+
+    // Window is surfaced first, before any graph poll; the terminal reveal follows.
+    expect(order[0]).toBe('focusWindow')
+    expect(order.indexOf('focusWindow')).toBeLessThan(order.indexOf('poll'))
+    expect(order).toContain('focusTerminal')
+  })
+
   it('gives up gracefully when the graph never becomes ready', async () => {
     let clock = 0
     const focusTerminal = vi.fn(async (handle: string) => ({ handle, tabId: 't', worktreeId: 'w' }))

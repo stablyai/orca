@@ -39,6 +39,12 @@ export function acquireSingleInstanceLock(
   return true
 }
 
+/**
+ * Decide whether to skip the packaged single-instance lock. Only ever true on a
+ * packaged macOS build with `ORCA_BYPASS_SINGLE_INSTANCE_LOCK=1` set — a
+ * diagnostics-only escape hatch. Dev and serve-mode runs, and every non-darwin
+ * platform, always keep the lock. `env` and `platform` are injectable for tests.
+ */
 export function shouldBypassSingleInstanceLock(options: {
   env?: NodeJS.ProcessEnv
   isDev: boolean
@@ -55,10 +61,18 @@ export function shouldBypassSingleInstanceLock(options: {
   )
 }
 
+/**
+ * Emit the canonical lock-failure diagnostic (this launch could not acquire the
+ * single-instance lock and is exiting) through the startup diagnostic sink.
+ */
 export function logSingleInstanceLockFailure(write?: StartupDiagnosticSink): void {
   writeStartupDiagnosticLine(SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE, write)
 }
 
+/**
+ * Emit the diagnostic noting that the packaged macOS single-instance lock is
+ * being bypassed via `ORCA_BYPASS_SINGLE_INSTANCE_LOCK`.
+ */
 export function logSingleInstanceLockBypass(write?: StartupDiagnosticSink): void {
   writeStartupDiagnosticLine(SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE, write)
 }
