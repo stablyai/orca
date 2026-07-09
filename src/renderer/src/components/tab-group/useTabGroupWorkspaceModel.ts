@@ -71,6 +71,7 @@ export function useTabGroupWorkspaceModel({
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId,
+      maximizedGroupId: state.maximizedGroupIdByWorktree[worktreeId] ?? null,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
       mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
@@ -103,6 +104,7 @@ export function useTabGroupWorkspaceModel({
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
+  const toggleMaximizedTabGroup = useAppStore((state) => state.toggleMaximizedTabGroup)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
 
@@ -587,6 +589,7 @@ export function useTabGroupWorkspaceModel({
     tabBarOrder,
     groupTabs,
     expandedPaneByTabId: worktreeState.expandedPaneByTabId,
+    isGroupMaximized: worktreeState.maximizedGroupId === groupId,
     commands: {
       focusGroup: () => {
         focusGroup(worktreeId, groupId)
@@ -600,6 +603,9 @@ export function useTabGroupWorkspaceModel({
       closeOthers,
       closeToRight,
       createSplitGroup,
+      toggleGroupMaximize: () => {
+        toggleMaximizedTabGroup(worktreeId, groupId)
+      },
       newBrowserTab: () => {
         void openNewBrowserTabInActiveWorkspace(groupId)
       },

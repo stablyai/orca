@@ -3646,6 +3646,10 @@ describe('removeWorktree state cleanup', () => {
         'repo1::/path/wt1': 'group-1',
         'repo1::/path/wt2': 'group-2'
       },
+      maximizedGroupIdByWorktree: {
+        'repo1::/path/wt1': 'group-1',
+        'repo1::/path/wt2': 'group-2'
+      },
       layoutByWorktree: {
         'repo1::/path/wt1': { type: 'leaf', groupId: 'group-1' },
         'repo1::/path/wt2': { type: 'leaf', groupId: 'group-2' }
@@ -3664,6 +3668,9 @@ describe('removeWorktree state cleanup', () => {
       'repo1::/path/wt2': [{ id: 'group-2', worktreeId: 'repo1::/path/wt2', activeTabId: 'tab-2' }]
     })
     expect(store.getState().activeGroupIdByWorktree).toEqual({
+      'repo1::/path/wt2': 'group-2'
+    })
+    expect(store.getState().maximizedGroupIdByWorktree).toEqual({
       'repo1::/path/wt2': 'group-2'
     })
     expect(store.getState().layoutByWorktree).toEqual({
@@ -6530,6 +6537,7 @@ describe('migrateWorktreeIdentity', () => {
       recentlyClosedBrowserPagesByWorkspace: { browser1: [{ id: 'closed-page', worktreeId: OLD }] },
       unifiedTabsByWorktree: { [OLD]: [{ id: 'unified1', worktreeId: OLD }] },
       groupsByWorktree: { [OLD]: [{ id: 'group1', worktreeId: OLD }] },
+      maximizedGroupIdByWorktree: { [OLD]: 'group1' },
       gitStatusByWorktree: { [OLD]: [{ path: 'a.ts' }] },
       gitStatusHeadByWorktree: { [OLD]: 'head-old' },
       gitBranchCompareRequestStatusHeadByWorktree: { [OLD]: 'head-old' },
@@ -6573,6 +6581,8 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.recentlyClosedBrowserPagesByWorkspace.browser1?.[0]?.worktreeId).toBe(NEW)
     expect(s.unifiedTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(s.maximizedGroupIdByWorktree[OLD]).toBeUndefined()
+    expect(s.maximizedGroupIdByWorktree[NEW]).toBe('group1')
     expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
     expect(s.gitStatusHeadByWorktree[NEW]).toBe('head-old')
     expect(s.gitBranchCompareRequestStatusHeadByWorktree[NEW]).toBe('head-old')

@@ -263,6 +263,7 @@ function Terminal(): React.JSX.Element | null {
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
   const layoutByWorktree = useAppStore((s) => s.layoutByWorktree)
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
+  const maximizedGroupIdByWorktree = useAppStore((s) => s.maximizedGroupIdByWorktree)
   const ensureWorktreeRootGroup = useAppStore((s) => s.ensureWorktreeRootGroup)
   const reconcileWorktreeTabModel = useAppStore((s) => s.reconcileWorktreeTabModel)
 
@@ -1814,6 +1815,14 @@ function Terminal(): React.JSX.Element | null {
               if (!layout) {
                 return null
               }
+              const maximizedGroupIdCandidate = maximizedGroupIdByWorktree[workspace.id] ?? null
+              const maximizedGroupId =
+                maximizedGroupIdCandidate &&
+                (groupsByWorktree[workspace.id] ?? []).some(
+                  (group) => group.id === maximizedGroupIdCandidate
+                )
+                  ? maximizedGroupIdCandidate
+                  : null
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so the terminal/browser surface hides on the tasks page too.
               const isVisible =
@@ -1827,6 +1836,7 @@ function Terminal(): React.JSX.Element | null {
                   worktreePath={workspace.path}
                   layout={layout}
                   focusedGroupId={activeGroupIdByWorktree[workspace.id]}
+                  maximizedGroupId={maximizedGroupId}
                   isVisible={isVisible}
                   shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
                   activityTerminalPortals={activityTerminalPortals}
@@ -2105,6 +2115,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreePath,
   layout,
   focusedGroupId,
+  maximizedGroupId,
   isVisible,
   shouldMeasureHiddenWorktree,
   activityTerminalPortals
@@ -2113,6 +2124,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreePath: string
   layout: TabGroupLayoutNode
   focusedGroupId?: string
+  maximizedGroupId?: string | null
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
@@ -2149,15 +2161,25 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         worktreeId={worktreeId}
         focusedGroupId={focusedGroupId}
         isWorktreeActive={isVisible}
+        maximizedGroupId={maximizedGroupId}
       />
       <TerminalPaneOverlayLayer
         worktreeId={worktreeId}
         worktreePath={worktreePath}
         isWorktreeActive={isVisible}
         activityTerminalPortals={activityTerminalPortals}
+        maximizedGroupId={maximizedGroupId}
       />
-      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
-      <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+      <BrowserPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isVisible}
+        maximizedGroupId={maximizedGroupId}
+      />
+      <EmulatorPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isVisible}
+        maximizedGroupId={maximizedGroupId}
+      />
       <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </div>
   )

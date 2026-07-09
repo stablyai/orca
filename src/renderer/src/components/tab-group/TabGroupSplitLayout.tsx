@@ -11,6 +11,16 @@ import { type HoveredTabInsertion, useTabDragSplit } from './useTabDragSplit'
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
 
+function findLeafForGroup(
+  node: TabGroupLayoutNode,
+  groupId: string
+): Extract<TabGroupLayoutNode, { type: 'leaf' }> | null {
+  if (node.type === 'leaf') {
+    return node.groupId === groupId ? node : null
+  }
+  return findLeafForGroup(node.first, groupId) ?? findLeafForGroup(node.second, groupId)
+}
+
 function ResizeHandle({
   direction,
   onResizeStart,
@@ -235,15 +245,21 @@ export default function TabGroupSplitLayout({
   layout,
   worktreeId,
   focusedGroupId,
-  isWorktreeActive
+  isWorktreeActive,
+  maximizedGroupId
 }: {
   layout: TabGroupLayoutNode
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
+  maximizedGroupId?: string | null
 }): React.JSX.Element {
   const dragSplit = useTabDragSplit({ worktreeId, enabled: isWorktreeActive })
   const hasSplits = layout.type === 'split'
+  // Why: split chrome is derived from the full layout while maximize only swaps
+  // the mounted leaf below, so restore affordances and edge borders stay true.
+  const maximizedLeaf = maximizedGroupId ? findLeafForGroup(layout, maximizedGroupId) : null
+  const renderedLayout = maximizedLeaf ?? layout
 
   return (
     <TabDragProvider
@@ -288,7 +304,7 @@ export default function TabGroupSplitLayout({
           <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <SplitNode
-              node={layout}
+              node={renderedLayout}
               nodePath=""
               worktreeId={worktreeId}
               focusedGroupId={focusedGroupId}

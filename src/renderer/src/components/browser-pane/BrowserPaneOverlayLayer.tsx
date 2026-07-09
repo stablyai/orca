@@ -138,10 +138,12 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
 // entirely when its own props are unchanged keeps the fast path fastest.
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
-  isWorktreeActive
+  isWorktreeActive,
+  maximizedGroupId = null
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  maximizedGroupId?: string | null
 }): React.JSX.Element {
   const { browserTabs, unifiedTabs, groups } = useAppStore(
     useShallow((state) => ({
@@ -200,7 +202,12 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     <>
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
-        const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
+        const isActive = Boolean(
+          isWorktreeActive &&
+            assignment &&
+            assignment.isActiveInGroup &&
+            (maximizedGroupId === null || assignment.groupId === maximizedGroupId)
+        )
         return (
           <BrowserOverlaySlot
             key={browserTab.id}

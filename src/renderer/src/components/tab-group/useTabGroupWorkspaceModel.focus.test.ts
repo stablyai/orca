@@ -29,7 +29,8 @@ const mocks = vi.hoisted(() => ({
   setActiveTabType: vi.fn(),
   setActiveWorktree: vi.fn(),
   setTabColor: vi.fn(),
-  setTabCustomTitle: vi.fn()
+  setTabCustomTitle: vi.fn(),
+  toggleMaximizedTabGroup: vi.fn()
 }))
 
 const storeBox = vi.hoisted(() => ({
@@ -119,6 +120,7 @@ function resetStore(): void {
     activeWorktreeId: 'wt-1',
     browserTabsByWorktree: {},
     expandedPaneByTabId: {},
+    maximizedGroupIdByWorktree: {},
     groupsByWorktree: {
       'wt-1': [
         {
@@ -156,7 +158,8 @@ function resetStore(): void {
     setActiveTabType: mocks.setActiveTabType,
     setActiveWorktree: mocks.setActiveWorktree,
     setTabColor: mocks.setTabColor,
-    setTabCustomTitle: mocks.setTabCustomTitle
+    setTabCustomTitle: mocks.setTabCustomTitle,
+    toggleMaximizedTabGroup: mocks.toggleMaximizedTabGroup
   }
 }
 

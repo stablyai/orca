@@ -50,6 +50,7 @@ export type TabsSlice = {
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
+  maximizedGroupIdByWorktree: Record<string, string | undefined>
   createUnifiedTab: (
     worktreeId: string,
     contentType: TabContentType,
@@ -134,6 +135,8 @@ export type TabsSlice = {
   closeTabsToRight: (tabId: string) => string[]
   ensureWorktreeRootGroup: (worktreeId: string) => string
   focusGroup: (worktreeId: string, groupId: string) => void
+  toggleMaximizedTabGroup: (worktreeId: string, groupId: string) => void
+  setMaximizedTabGroup: (worktreeId: string, groupId: string | null) => void
   closeEmptyGroup: (worktreeId: string, groupId: string) => boolean
   createEmptySplitGroup: (
     worktreeId: string,
@@ -617,6 +620,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},
+  maximizedGroupIdByWorktree: {},
 
   createUnifiedTab: (worktreeId, contentType, init) => {
     const id = init?.id ?? createBrowserUuid()
@@ -1368,6 +1372,52 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
     }),
 
+  setMaximizedTabGroup: (worktreeId, groupId) => {
+    set((state) => {
+      const current = state.maximizedGroupIdByWorktree[worktreeId] ?? null
+      if (groupId === null) {
+        if (current === null) {
+          return {}
+        }
+        const { [worktreeId]: _removed, ...remaining } = state.maximizedGroupIdByWorktree
+        return { maximizedGroupIdByWorktree: remaining }
+      }
+      const groupExists = (state.groupsByWorktree[worktreeId] ?? []).some(
+        (group) => group.id === groupId
+      )
+      if (!groupExists || current === groupId) {
+        return {}
+      }
+      const nextActiveGroupIdByWorktree = {
+        ...state.activeGroupIdByWorktree,
+        [worktreeId]: groupId
+      }
+      const activeSurfacePatch = buildActiveSurfacePatch(
+        {
+          ...state,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        },
+        worktreeId,
+        groupId
+      )
+      return {
+        maximizedGroupIdByWorktree: {
+          ...state.maximizedGroupIdByWorktree,
+          [worktreeId]: groupId
+        },
+        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        ...activeSurfacePatch
+      }
+    })
+  },
+
+  toggleMaximizedTabGroup: (worktreeId, groupId) => {
+    const state = get()
+    const current = state.maximizedGroupIdByWorktree[worktreeId] ?? null
+    state.setMaximizedTabGroup(worktreeId, current === groupId ? null : groupId)
+    get().recordFeatureInteraction?.('terminal-panes')
+  },
+
   closeEmptyGroup: (worktreeId, groupId) => {
     const state = get()
     const group = (state.groupsByWorktree[worktreeId] ?? []).find(
@@ -1390,11 +1440,21 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       // Why: drop the dead group's recent-quick-command entry so the in-memory
       // map can't grow unbounded as users open/close groups.
       const { [groupId]: _droppedRecent, ...remainingRecent } = current.recentQuickCommandIdByGroup
+      const isMaximizedGroup = current.maximizedGroupIdByWorktree[worktreeId] === groupId
+      const nextMaximizedGroupIdByWorktree = isMaximizedGroup
+        ? (() => {
+            const { [worktreeId]: _removed, ...remaining } = current.maximizedGroupIdByWorktree
+            return remaining
+          })()
+        : current.maximizedGroupIdByWorktree
       return {
         groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
         layoutByWorktree: collapsedState.layoutByWorktree,
         activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
         recentQuickCommandIdByGroup: remainingRecent,
+        ...(nextMaximizedGroupIdByWorktree !== current.maximizedGroupIdByWorktree
+          ? { maximizedGroupIdByWorktree: nextMaximizedGroupIdByWorktree }
+          : {}),
         ...(current.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
               {

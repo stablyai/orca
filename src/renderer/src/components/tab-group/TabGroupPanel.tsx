@@ -1,7 +1,7 @@
 import { Suspense, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Ellipsis, X } from 'lucide-react'
+import { Ellipsis, Maximize2, Minimize2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
   DropdownMenu,
@@ -270,6 +270,51 @@ export default function TabGroupPanel({
               {isFocused ? (
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
               ) : null}
+              {/* Why: maximizing a single-pane group is a no-op; spanning only matters
+                  when there are sibling split panes to hide. */}
+              {isFocused && hasSplitGroups ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-pressed={model.isGroupMaximized}
+                      aria-label={
+                        model.isGroupMaximized
+                          ? translate(
+                              'auto.components.tab.group.TabGroupPanel.restoreSplitLayout',
+                              'Restore split layout'
+                            )
+                          : translate(
+                              'auto.components.tab.group.TabGroupPanel.maximizePane',
+                              'Maximize pane'
+                            )
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        commands.toggleGroupMaximize()
+                      }}
+                      className={menuButtonClassName}
+                    >
+                      {model.isGroupMaximized ? (
+                        <Minimize2 className="size-4" />
+                      ) : (
+                        <Maximize2 className="size-4" />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {model.isGroupMaximized
+                      ? translate(
+                          'auto.components.tab.group.TabGroupPanel.restoreSplitLayout',
+                          'Restore split layout'
+                        )
+                      : translate(
+                          'auto.components.tab.group.TabGroupPanel.maximizePane',
+                          'Maximize pane'
+                        )}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
               {isFocused && hasSplitGroups ? (
                 <Tooltip>
                   <DropdownMenu modal={false}>
@@ -291,6 +336,26 @@ export default function TabGroupPanel({
                       </DropdownMenuTrigger>
                     </TooltipTrigger>
                     <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          commands.toggleGroupMaximize()
+                        }}
+                      >
+                        {model.isGroupMaximized ? (
+                          <Minimize2 className="size-4" />
+                        ) : (
+                          <Maximize2 className="size-4" />
+                        )}
+                        {model.isGroupMaximized
+                          ? translate(
+                              'auto.components.tab.group.TabGroupPanel.restoreSplitLayout',
+                              'Restore split layout'
+                            )
+                          : translate(
+                              'auto.components.tab.group.TabGroupPanel.maximizePane',
+                              'Maximize pane'
+                            )}
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
                         onSelect={() => {
