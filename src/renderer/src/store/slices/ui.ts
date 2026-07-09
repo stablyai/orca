@@ -559,6 +559,14 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   if (typeof input.jiraQuery === 'string') {
     next.jiraQuery = input.jiraQuery
   }
+  if (Array.isArray(input.jiraStatuses)) {
+    const statuses = input.jiraStatuses.filter(
+      (status): status is string => typeof status === 'string'
+    )
+    if (statuses.length > 0) {
+      next.jiraStatuses = statuses
+    }
+  }
 
   return Object.keys(next).length > 0 ? next : undefined
 }

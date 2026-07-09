@@ -747,6 +747,36 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
 
+  it('hydrates persisted Jira status quick filters so they survive restart', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          jiraPreset: 'assigned',
+          jiraQuery: '',
+          jiraStatuses: ['In Progress', 'Developed']
+        }
+      })
+    )
+
+    expect(store.getState().taskResumeState?.jiraStatuses).toEqual(['In Progress', 'Developed'])
+  })
+
+  it('drops non-string Jira status entries during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          jiraStatuses: ['In Progress', 42, null] as unknown as string[]
+        }
+      })
+    )
+
+    expect(store.getState().taskResumeState?.jiraStatuses).toEqual(['In Progress'])
+  })
+
   it('hydrates a persisted open right sidebar preference', () => {
     const store = createUIStore()
 

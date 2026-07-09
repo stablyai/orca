@@ -1730,7 +1730,11 @@
         "searchIssues": "搜索议题",
         "useIssueNumber": "使用议题 #{{value0}}",
         "noMatchingIssuesLoaded": "没有加载到匹配的议题。",
-        "editReviewersWithCurrent": "编辑评审人：{{value0}}"
+        "editReviewersWithCurrent": "编辑评审人：{{value0}}",
+        "1e45ef3e8a": "Clear",
+        "692d2ea305": "Clear to see all statuses",
+        "57ac72bb8e": "Edit as JQL",
+        "a35c52c86e": "Status chips apply to preset views — clear the search to use them"
       },
       "Terminal": {
         "73768427cf": "关闭",

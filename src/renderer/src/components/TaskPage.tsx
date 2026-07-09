@@ -241,6 +241,11 @@ import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-su
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
 import {
+  composeJiraStatusJql,
+  getJiraPresetBaseJql,
+  orderJiraStatusCatalog
+} from '../../../shared/jira-preset-jql'
+import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
@@ -4537,6 +4542,11 @@ export default function TaskPage(): React.JSX.Element {
   const [jiraSearchInput, setJiraSearchInput] = useState('')
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
+  const [selectedJiraStatuses, setSelectedJiraStatuses] = useState<string[]>([])
+  const [jiraStatusCatalog, setJiraStatusCatalog] = useState<
+    { name: string; categoryKey: string }[]
+  >([])
+  const jiraStatusCatalogPresetRef = useRef<JiraPresetId | null>(null)
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
 
   useEffect(() => {
@@ -4579,6 +4589,7 @@ export default function TaskPage(): React.JSX.Element {
     setActiveJiraPreset(jiraPreset)
     setJiraSearchInput(jiraQuery)
     setAppliedJiraSearch(jiraQuery)
+    setSelectedJiraStatuses(taskResumeState?.jiraStatuses ?? [])
 
     // Why: settings and persisted UI hydrate asynchronously. Apply the restored
     // Tasks context exactly once so later source/filter clicks remain local.
@@ -5497,6 +5508,86 @@ export default function TaskPage(): React.JSX.Element {
       ),
     [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache, jiraTaskSourceContext]
   )
+
+  useEffect(() => {
+    if (
+      !taskResumeApplied ||
+      taskSource !== 'jira' ||
+      !jiraConnected ||
+      appliedJiraSearch.trim() !== '' ||
+      selectedJiraStatuses.length > 0
+    ) {
+      return
+    }
+
+    const statusByName = new Map<string, { name: string; categoryKey: string }>()
+    for (const issue of displayedJiraIssues) {
+      if (!statusByName.has(issue.status.name)) {
+        statusByName.set(issue.status.name, {
+          name: issue.status.name,
+          categoryKey: issue.status.categoryKey
+        })
+      }
+    }
+
+    setJiraStatusCatalog(orderJiraStatusCatalog([...statusByName.values()]))
+    jiraStatusCatalogPresetRef.current = activeJiraPreset
+  }, [
+    activeJiraPreset,
+    appliedJiraSearch,
+    displayedJiraIssues,
+    jiraConnected,
+    selectedJiraStatuses.length,
+    taskResumeApplied,
+    taskSource
+  ])
+
+  const renderedJiraStatusChips = useMemo(() => {
+    const seen = new Set<string>()
+    const chips: { name: string; categoryKey: string }[] = []
+
+    for (const status of jiraStatusCatalog) {
+      if (!seen.has(status.name)) {
+        seen.add(status.name)
+        chips.push(status)
+      }
+    }
+
+    for (const name of selectedJiraStatuses) {
+      if (!seen.has(name)) {
+        seen.add(name)
+        chips.push({ name, categoryKey: 'other' })
+      }
+    }
+
+    return orderJiraStatusCatalog(chips)
+  }, [jiraStatusCatalog, selectedJiraStatuses])
+
+  const effectiveJiraStatusJql = useMemo(
+    () =>
+      selectedJiraStatuses.length > 0
+        ? composeJiraStatusJql(getJiraPresetBaseJql(activeJiraPreset), selectedJiraStatuses)
+        : '',
+    [activeJiraPreset, selectedJiraStatuses]
+  )
+
+  const toggleJiraStatusFilter = useCallback(
+    (statusName: string): void => {
+      const next = selectedJiraStatuses.includes(statusName)
+        ? selectedJiraStatuses.filter((name) => name !== statusName)
+        : [...selectedJiraStatuses, statusName]
+      setSelectedJiraStatuses(next)
+      setTaskResumeState({ jiraStatuses: next })
+      setJiraRefreshNonce((n) => n + 1)
+    },
+    [selectedJiraStatuses, setTaskResumeState]
+  )
+
+  const clearJiraStatusFilters = useCallback((): void => {
+    setSelectedJiraStatuses([])
+    setTaskResumeState({ jiraStatuses: [] })
+    setJiraRefreshNonce((n) => n + 1)
+  }, [setTaskResumeState])
 
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
@@ -7661,9 +7752,15 @@ export default function TaskPage(): React.JSX.Element {
     const request =
       trimmed.length > 0
         ? searchJiraIssues(trimmed, JIRA_ITEM_LIMIT, { sourceContext: jiraTaskSourceContext })
-        : listJiraIssues(activeJiraPreset, JIRA_ITEM_LIMIT, {
-            sourceContext: jiraTaskSourceContext
-          })
+        : selectedJiraStatuses.length > 0
+          ? searchJiraIssues(
+              composeJiraStatusJql(getJiraPresetBaseJql(activeJiraPreset), selectedJiraStatuses),
+              JIRA_ITEM_LIMIT,
+              { sourceContext: jiraTaskSourceContext }
+            )
+          : listJiraIssues(activeJiraPreset, JIRA_ITEM_LIMIT, {
+              sourceContext: jiraTaskSourceContext
+            })
 
     void request
       .then((issues) => {
@@ -7693,6 +7790,7 @@ export default function TaskPage(): React.JSX.Element {
     selectedJiraSiteId,
     appliedJiraSearch,
     activeJiraPreset,
+    selectedJiraStatuses,
     jiraRefreshNonce,
     taskResumeApplied,
     jiraTaskSourceContext
@@ -8694,7 +8792,11 @@ export default function TaskPage(): React.JSX.Element {
                                 setJiraSearchInput('')
                                 setAppliedJiraSearch('')
                                 setActiveJiraPreset(preset.id)
-                                setTaskResumeState({ jiraPreset: preset.id, jiraQuery: '' })
+                                setTaskResumeState({
+                                  jiraPreset: preset.id,
+                                  jiraQuery: '',
+                                  jiraStatuses: selectedJiraStatuses
+                                })
                                 setJiraRefreshNonce((n) => n + 1)
                               }}
                               className={cn(
@@ -8777,55 +8879,136 @@ export default function TaskPage(): React.JSX.Element {
                         </Tooltip>
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="relative min-w-[320px] flex-1">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          value={jiraSearchInput}
-                          onChange={(e) => setJiraSearchInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              if (
-                                shouldSuppressEnterSubmit(
-                                  { isComposing: e.nativeEvent.isComposing, shiftKey: e.shiftKey },
-                                  false
-                                )
-                              ) {
-                                return
-                              }
-                              e.preventDefault()
-                              const trimmed = jiraSearchInput.trim()
-                              setJiraSearchInput(trimmed)
-                              setAppliedJiraSearch(trimmed)
-                              setTaskResumeState({ jiraQuery: trimmed })
-                              setJiraRefreshNonce((n) => n + 1)
-                            }
-                          }}
-                          placeholder={translate(
-                            'auto.components.TaskPage.99c2755218',
-                            'Jira JQL, e.g. project = ABC AND statusCategory != Done'
-                          )}
-                          className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
-                        />
-                        {jiraSearchInput ? (
-                          <button
+                    {jiraSearchInput.trim() === '' &&
+                    (renderedJiraStatusChips.length > 0 || selectedJiraStatuses.length > 0) ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {renderedJiraStatusChips.map((status) => {
+                          const active = selectedJiraStatuses.includes(status.name)
+                          return (
+                            <button
+                              key={status.name}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => toggleJiraStatusFilter(status.name)}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition',
+                                active
+                                  ? 'border-border bg-accent text-accent-foreground'
+                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {status.name}
+                            </button>
+                          )
+                        })}
+                        {selectedJiraStatuses.length > 0 ? (
+                          <Button
                             type="button"
-                            aria-label={translate(
-                              'auto.components.TaskPage.b797bdd7c3',
-                              'Clear search'
-                            )}
-                            onClick={() => {
-                              setJiraSearchInput('')
-                              setAppliedJiraSearch('')
-                              setTaskResumeState({ jiraQuery: '' })
-                              setJiraRefreshNonce((n) => n + 1)
-                            }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                            variant="ghost"
+                            size="xs"
+                            onClick={clearJiraStatusFilters}
+                            className="h-6 px-2 text-xs"
                           >
-                            <X className="size-4" />
-                          </button>
+                            {translate('auto.components.TaskPage.1e45ef3e8a', 'Clear')}
+                          </Button>
+                        ) : null}
+                        {selectedJiraStatuses.length > 0 &&
+                        (jiraStatusCatalogPresetRef.current === null ||
+                          jiraStatusCatalogPresetRef.current !== activeJiraPreset) ? (
+                          <span className="text-[11px] text-muted-foreground">
+                            {translate(
+                              'auto.components.TaskPage.692d2ea305',
+                              'Clear to see all statuses'
+                            )}
+                          </span>
                         ) : null}
                       </div>
+                    ) : null}
+                    <div className="mt-3 space-y-1.5">
+                      <div className="flex items-center gap-3">
+                        <div className="relative min-w-[320px] flex-1">
+                          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={jiraSearchInput}
+                            onChange={(e) => setJiraSearchInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (
+                                  shouldSuppressEnterSubmit(
+                                    {
+                                      isComposing: e.nativeEvent.isComposing,
+                                      shiftKey: e.shiftKey
+                                    },
+                                    false
+                                  )
+                                ) {
+                                  return
+                                }
+                                e.preventDefault()
+                                const trimmed = jiraSearchInput.trim()
+                                setJiraSearchInput(trimmed)
+                                setAppliedJiraSearch(trimmed)
+                                setTaskResumeState({ jiraQuery: trimmed })
+                                setJiraRefreshNonce((n) => n + 1)
+                              }
+                            }}
+                            placeholder={translate(
+                              'auto.components.TaskPage.99c2755218',
+                              'Jira JQL, e.g. project = ABC AND statusCategory != Done'
+                            )}
+                            className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+                          />
+                          {jiraSearchInput ? (
+                            <button
+                              type="button"
+                              aria-label={translate(
+                                'auto.components.TaskPage.b797bdd7c3',
+                                'Clear search'
+                              )}
+                              onClick={() => {
+                                setJiraSearchInput('')
+                                setAppliedJiraSearch('')
+                                setTaskResumeState({ jiraQuery: '' })
+                                setJiraRefreshNonce((n) => n + 1)
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                            >
+                              <X className="size-4" />
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {jiraSearchInput.trim() === '' && selectedJiraStatuses.length > 0 ? (
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+                            {effectiveJiraStatusJql}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => {
+                              const composed = effectiveJiraStatusJql
+                              setJiraSearchInput(composed)
+                              setAppliedJiraSearch(composed)
+                              setSelectedJiraStatuses([])
+                              setTaskResumeState({ jiraQuery: composed, jiraStatuses: [] })
+                              setJiraRefreshNonce((n) => n + 1)
+                            }}
+                            className="h-6 px-2 text-xs"
+                          >
+                            {translate('auto.components.TaskPage.57ac72bb8e', 'Edit as JQL')}
+                          </Button>
+                        </div>
+                      ) : null}
+                      {jiraSearchInput.trim() !== '' && selectedJiraStatuses.length > 0 ? (
+                        <div className="text-[11px] text-muted-foreground">
+                          {translate(
+                            'auto.components.TaskPage.a35c52c86e',
+                            'Status chips apply to preset views — clear the search to use them'
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : taskSource === 'gitlab' ? (

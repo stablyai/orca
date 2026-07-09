@@ -20,6 +20,7 @@ import type {
   JiraTransition,
   JiraUser
 } from '../../shared/types'
+import { getJiraPresetBaseJql } from '../../shared/jira-preset-jql'
 import {
   acquire,
   clearToken,
@@ -329,16 +330,7 @@ function sortAndLimitIssues(issues: JiraIssue[], limit: number): JiraIssue[] {
 }
 
 function filterToJql(filter: JiraIssueFilter): string {
-  if (filter === 'assigned') {
-    return 'assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC'
-  }
-  if (filter === 'reported') {
-    return 'reporter = currentUser() AND resolution = Unresolved ORDER BY updated DESC'
-  }
-  if (filter === 'done') {
-    return 'assignee = currentUser() AND resolution IS NOT EMPTY ORDER BY updated DESC'
-  }
-  return 'resolution = Unresolved ORDER BY updated DESC'
+  return getJiraPresetBaseJql(filter)
 }
 
 async function searchIssuesForClient(

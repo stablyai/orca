@@ -64,7 +64,13 @@ const TaskResumeState = z
     githubItemsQuery: z.string().optional(),
     githubProjectHiddenFieldIdsByView: z.record(z.string(), z.array(z.string())).optional(),
     linearPreset: z.enum(['assigned', 'created', 'all', 'completed']).optional(),
-    linearQuery: z.string().optional()
+    linearQuery: z.string().optional(),
+    // Jira tab context: the strict schema rejects unknown keys, so the remote
+    // (RPC) ui.set path must list these or it drops the whole taskResumeState
+    // write — including the persisted status quick-filter selection.
+    jiraPreset: z.enum(['assigned', 'reported', 'all', 'done']).optional(),
+    jiraQuery: z.string().optional(),
+    jiraStatuses: z.array(z.string()).optional()
   })
   .strict()
 const WorkspaceCleanupDismissal = z

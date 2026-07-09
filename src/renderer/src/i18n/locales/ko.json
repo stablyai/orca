@@ -1730,7 +1730,11 @@
         "searchIssues": "이슈 검색",
         "useIssueNumber": "이슈 #{{value0}} 사용",
         "noMatchingIssuesLoaded": "일치하는 이슈를 불러오지 않았습니다.",
-        "editReviewersWithCurrent": "리뷰어 편집: {{value0}}"
+        "editReviewersWithCurrent": "리뷰어 편집: {{value0}}",
+        "1e45ef3e8a": "Clear",
+        "692d2ea305": "Clear to see all statuses",
+        "57ac72bb8e": "Edit as JQL",
+        "a35c52c86e": "Status chips apply to preset views — clear the search to use them"
       },
       "Terminal": {
         "73768427cf": "닫기",
