@@ -2513,7 +2513,10 @@
             "f2a8b9c1d3": "From your phone",
             "c7e4a2b8f1": "Your phone is in control",
             "d9f3c6e2a4": "Desktop keyboard is paused. Take back this terminal to type here, take back all terminals your phone controls, or collapse to keep watching.",
-            "a6b1d8f3e2": "Your phone session ended. Restore to desktop size for this terminal, or for all terminals your phone left at phone size."
+            "a6b1d8f3e2": "Your phone session ended. Restore to desktop size for this terminal, or for all terminals your phone left at phone size.",
+            "remoteDesktopEyebrow": "Another desktop",
+            "remoteDesktopTitle": "Sized for another desktop",
+            "remoteDesktopBody": "Another Orca window is driving this terminal size. Restore to use your pane size, or drag a splitter to take size control."
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copy context",
