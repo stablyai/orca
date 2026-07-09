@@ -1277,6 +1277,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         stream.exitWaiterAbort.abort()
         if (stream.isMobile && stream.client?.id) {
           runtime.handleMobileUnsubscribe(stream.ptyId, stream.client.id)
+        } else if (stream.client?.id) {
+          runtime.releaseRemoteDesktopSizeOwner(stream.ptyId, stream.client.id)
         }
         if (emitEnd) {
           emit({ type: 'end', streamId })

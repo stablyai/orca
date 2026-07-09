@@ -5874,18 +5874,14 @@ export class OrcaRuntimeService {
 
   /**
    * Release a remote desktop size owner and restore host geometry when safe.
-   * Used by explicit host reclaim and by client disconnect so a closed window
-   * cannot leave host/viewers parked on a dead client's grid.
+   * The expected owner keeps delayed pane detach from releasing a newer claim.
    */
-  private releaseRemoteDesktopSizeOwner(
-    ptyId: string,
-    expectedClientId?: string
-  ): boolean {
+  releaseRemoteDesktopSizeOwner(ptyId: string, expectedClientId: string): boolean {
     const owner = this.desktopSizeOwners.get(ptyId)
     if (!owner || isLocalDesktopOwner(owner.clientId)) {
       return false
     }
-    if (expectedClientId != null && owner.clientId !== expectedClientId) {
+    if (owner.clientId !== expectedClientId) {
       return false
     }
     // Why: phone still owns layout. Drop the desktop-owner map entry only —

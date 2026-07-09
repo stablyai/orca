@@ -2,9 +2,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { LOCAL_DESKTOP_CLIENT_ID } from '../desktop-size-ownership'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -18,6 +19,7 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    releaseRemoteDesktopSizeOwner: () => false,
     ...overrides
   } as OrcaRuntimeService
 }
@@ -76,7 +78,8 @@ describe('terminal multiplex RPC', () => {
         }),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
-        updateDesktopViewport: vi.fn().mockResolvedValue(true)
+        updateDesktopViewport: vi.fn().mockResolvedValue(true),
+        releaseRemoteDesktopSizeOwner: vi.fn().mockReturnValue(true)
       })
       const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
@@ -107,7 +110,7 @@ describe('terminal multiplex RPC', () => {
             payload: encodeTerminalStreamJson({
               streamId: 5,
               terminal: 'terminal-1',
-              client: { id: 'desktop-1', type: 'desktop' },
+              client: { id: 'desktop:tab-1:leaf-1', type: 'desktop' },
               viewport: { cols: 300, rows: 150 }
             })
           })
@@ -134,7 +137,7 @@ describe('terminal multiplex RPC', () => {
       expect(runtime.updateDesktopViewport).toHaveBeenCalledWith(
         'pty-1',
         { cols: 300, rows: 150 },
-        { clientId: 'desktop-1', intent: 'observe' }
+        { clientId: 'desktop:tab-1:leaf-1', intent: 'observe' }
       )
       expect(handlers.has(5)).toBe(true)
 
@@ -181,7 +184,7 @@ describe('terminal multiplex RPC', () => {
         expect(runtime.updateDesktopViewport).toHaveBeenLastCalledWith(
           'pty-1',
           { cols: 100, rows: 30 },
-          { clientId: 'desktop-1', intent: 'control' }
+          { clientId: 'desktop:tab-1:leaf-1', intent: 'control' }
         )
       )
 
@@ -235,11 +238,269 @@ describe('terminal multiplex RPC', () => {
           .join('')
       ).toBe('snapshot')
 
+      handlers.get(5)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Unsubscribe,
+            streamId: 5,
+            seq: 5,
+            payload: new Uint8Array()
+          })
+        )!
+      )
+
+      expect(runtime.releaseRemoteDesktopSizeOwner).toHaveBeenCalledOnce()
+      expect(runtime.releaseRemoteDesktopSizeOwner).toHaveBeenCalledWith(
+        'pty-1',
+        'desktop:tab-1:leaf-1'
+      )
+      expect(handlers.has(5)).toBe(false)
+      expect(handlers.has(0)).toBe(true)
+
       runtime.cleanupSubscription('terminal-multiplex:conn-1')
       await dispatchPromise
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('routes pane-scoped detach cleanup by desktop and mobile ownership', async () => {
+    const messages: string[] = []
+    const handlers = new Map<
+      number,
+      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+    >()
+    const cleanups = new Map<string, () => void>()
+    const ptyIds = new Map([
+      ['terminal-1', 'pty-1'],
+      ['terminal-2', 'pty-2'],
+      ['terminal-phone', 'pty-phone']
+    ])
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn((terminal: string) => ({
+        ptyId: ptyIds.get(terminal) ?? null
+      })),
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      serializeTerminalBuffer: vi.fn().mockResolvedValue({ data: '', cols: 80, rows: 24 }),
+      getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+      handleMobileSubscribe: vi.fn().mockResolvedValue(undefined),
+      handleMobileUnsubscribe: vi.fn(),
+      releaseRemoteDesktopSizeOwner: vi.fn().mockReturnValue(true),
+      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+      subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+      getFitHoldForViewer: vi.fn().mockReturnValue({
+        mode: 'desktop-fit',
+        cols: 80,
+        rows: 24
+      }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      }),
+      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.multiplex', {}),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-multi-pane',
+        sendBinary: vi.fn(),
+        registerBinaryStreamHandler: (streamId, handler) => {
+          handlers.set(streamId, handler)
+          return () => handlers.delete(streamId)
+        }
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    const subscribe = (
+      streamId: number,
+      terminal: string,
+      client: { id: string; type: 'desktop' | 'mobile' }
+    ): void => {
+      handlers.get(0)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Subscribe,
+            streamId: 0,
+            seq: streamId,
+            payload: encodeTerminalStreamJson({ streamId, terminal, client })
+          })
+        )!
+      )
+    }
+    subscribe(1, 'terminal-1', { id: 'desktop:tab-1:leaf-1', type: 'desktop' })
+    subscribe(2, 'terminal-2', { id: 'desktop:tab-1:leaf-2', type: 'desktop' })
+    subscribe(3, 'terminal-phone', { id: 'phone-1', type: 'mobile' })
+
+    await vi.waitFor(() =>
+      expect(messages.filter((msg) => JSON.parse(msg).result?.type === 'subscribed')).toHaveLength(
+        3
+      )
+    )
+    const unsubscribe = (streamId: number): void => {
+      handlers.get(streamId)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Unsubscribe,
+            streamId,
+            seq: streamId + 10,
+            payload: new Uint8Array()
+          })
+        )!
+      )
+    }
+
+    unsubscribe(1)
+
+    expect(runtime.releaseRemoteDesktopSizeOwner).toHaveBeenCalledTimes(1)
+    expect(runtime.releaseRemoteDesktopSizeOwner).toHaveBeenLastCalledWith(
+      'pty-1',
+      'desktop:tab-1:leaf-1'
+    )
+    expect(handlers.has(1)).toBe(false)
+    expect(handlers.has(2)).toBe(true)
+    expect(handlers.has(3)).toBe(true)
+    expect(handlers.has(0)).toBe(true)
+
+    unsubscribe(3)
+
+    expect(runtime.handleMobileUnsubscribe).toHaveBeenCalledOnce()
+    expect(runtime.handleMobileUnsubscribe).toHaveBeenCalledWith('pty-phone', 'phone-1')
+    expect(runtime.releaseRemoteDesktopSizeOwner).toHaveBeenCalledTimes(1)
+    expect(handlers.has(2)).toBe(true)
+    expect(handlers.has(0)).toBe(true)
+
+    cleanups.get('terminal-multiplex:conn-multi-pane')?.()
+    await dispatchPromise
+
+    expect(runtime.releaseRemoteDesktopSizeOwner).toHaveBeenCalledTimes(2)
+    expect(runtime.releaseRemoteDesktopSizeOwner).toHaveBeenLastCalledWith(
+      'pty-2',
+      'desktop:tab-1:leaf-2'
+    )
+  })
+
+  it('restores host geometry when a real runtime owner detaches without closing multiplex', async () => {
+    const ptySizes = new Map([['pty-1', { cols: 150, rows: 40 }]])
+    const runtime = new OrcaRuntimeService()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      resize: (ptyId, cols, rows) => {
+        ptySizes.set(ptyId, { cols, rows })
+        return true
+      },
+      getSize: (ptyId) => ptySizes.get(ptyId) ?? null
+    })
+    const terminal = runtime.preAllocateHandleForPty('pty-1')
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Terminal',
+          activeLeafId: 'leaf-1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'leaf-1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    runtime.onExternalPtyResize('pty-1', 150, 40)
+
+    const messages: string[] = []
+    const handlers = new Map<
+      number,
+      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+    >()
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.multiplex', {}),
+      (message) => messages.push(message),
+      {
+        connectionId: 'conn-real-runtime',
+        sendBinary: vi.fn(),
+        registerBinaryStreamHandler: (streamId, handler) => {
+          handlers.set(streamId, handler)
+          return () => handlers.delete(streamId)
+        }
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((message) => JSON.parse(message).result?.type === 'ready')).toBe(true)
+    )
+    handlers.get(0)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          seq: 1,
+          payload: encodeTerminalStreamJson({
+            streamId: 1,
+            terminal,
+            client: { id: 'desktop:tab-1:leaf-1', type: 'desktop' }
+          })
+        })
+      )!
+    )
+    await vi.waitFor(() =>
+      expect(messages.some((message) => JSON.parse(message).result?.type === 'subscribed')).toBe(
+        true
+      )
+    )
+
+    handlers.get(1)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Resize,
+          streamId: 1,
+          seq: 2,
+          payload: encodeTerminalStreamJson({ cols: 100, rows: 30 })
+        })
+      )!
+    )
+    await vi.waitFor(() =>
+      expect(runtime.getDesktopSizeOwner('pty-1')?.clientId).toBe('desktop:tab-1:leaf-1')
+    )
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 100, rows: 30 })
+
+    handlers.get(1)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Unsubscribe,
+          streamId: 1,
+          seq: 3,
+          payload: new Uint8Array()
+        })
+      )!
+    )
+
+    expect(runtime.getDesktopSizeOwner('pty-1')?.clientId).toBe(LOCAL_DESKTOP_CLIENT_ID)
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(handlers.has(1)).toBe(false)
+    expect(handlers.has(0)).toBe(true)
+
+    runtime.cleanupSubscription('terminal-multiplex:conn-real-runtime')
+    await dispatchPromise
   })
 
   it('drops stale mobile resize re-stream completions for multiplex streams', async () => {
@@ -286,7 +547,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
-        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
+      getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -495,7 +756,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
-        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
+      getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -594,7 +855,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
-        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
+      getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
@@ -800,7 +1061,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
-        getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
+      getFitHoldForViewer: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 80, rows: 24 }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)

@@ -237,11 +237,8 @@ describe('desktop size arbitration (multi-client)', () => {
     })
   })
 
-  it('does not regress mobile-fit priority over remote desktop ownership', async () => {
-    const { runtime, ptySizes } = createRuntime()
-    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
-
+  it('releases remote ownership without disturbing mobile-fit priority', async () => {
+    const { runtime, ptySizes, resizes } = createRuntime()
     expect(
       await runtime.updateDesktopViewport(
         'pty-1',
@@ -249,10 +246,38 @@ describe('desktop size arbitration (multi-client)', () => {
         { clientId: 'desktop:b', intent: 'control' }
       )
     ).toBe(true)
-
-    // Measurement only while phone holds.
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    resizes.length = 0
+
+    expect(runtime.releaseRemoteDesktopSizeOwner('pty-1', 'desktop:b')).toBe(true)
+
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+    expect(resizes).toEqual([])
+    expect(runtime.getDesktopSizeOwner('pty-1')).toBeNull()
     expect(runtime.getTerminalFitOverride('pty-1')?.mode).toBe('mobile-fit')
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+  })
+
+  it('releases only the expected remote owner and restores host size', async () => {
+    const { runtime, ptySizes, fitOverrideEvents } = createRuntime()
+    runtime.onExternalPtyResize('pty-1', 150, 40)
+    await runtime.updateDesktopViewport(
+      'pty-1',
+      { cols: 100, rows: 30 },
+      { clientId: 'desktop:tab-b:leaf-b', intent: 'control' }
+    )
+    fitOverrideEvents.length = 0
+
+    expect(runtime.releaseRemoteDesktopSizeOwner('pty-1', 'desktop:tab-a:leaf-a')).toBe(false)
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 100, rows: 30 })
+    expect(runtime.getDesktopSizeOwner('pty-1')?.clientId).toBe('desktop:tab-b:leaf-b')
+    expect(fitOverrideEvents).toEqual([])
+
+    expect(runtime.releaseRemoteDesktopSizeOwner('pty-1', 'desktop:tab-b:leaf-b')).toBe(true)
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(runtime.getDesktopSizeOwner('pty-1')?.clientId).toBe(LOCAL_DESKTOP_CLIENT_ID)
+    expect(fitOverrideEvents.at(-1)?.mode).toBe('desktop-fit')
   })
 
   it('remote owner disconnect restores host size and clears the hold overlay', async () => {
