@@ -1170,6 +1170,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
       // Why: selected note sends submit with Enter. The runtime must recheck
       // permission/no-agent state immediately before accepting the PTY write.
+      // Use the guarded-send probe so a brief title/foreground miss does not
+      // refuse a live agent session (issue #7935).
       const assertSendPreconditions =
         params.requireAgentStatus === 'sendable'
           ? async (ptyId?: string): Promise<void> => {
@@ -1179,7 +1181,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               }
               let agentStatus
               try {
-                agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+                agentStatus = await runtime.getTerminalAgentStatusForGuardedSend(
+                  params.terminal
+                )
               } catch (error) {
                 if (isTerminalAgentStatusNotWritable(error)) {
                   throw new Error('terminal_guard_not_writable')

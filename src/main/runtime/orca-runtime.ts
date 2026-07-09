@@ -1253,6 +1253,11 @@ function getAgentLaunchPlatformForRepo(
 const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
+// Why: notes send re-checks isRunningAgent at write time (#7935). Title and
+// foreground can miss a live agent for about one cache TTL (1s); re-poll just
+// past that before hard-refusing no-agent so a flicker is not a user-facing error.
+const GUARDED_SEND_AGENT_STATUS_RETRY_INTERVAL_MS = FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS
+const GUARDED_SEND_AGENT_STATUS_RETRY_TIMEOUT_MS = 1_200
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
@@ -10285,6 +10290,31 @@ export class OrcaRuntimeService {
     const isRunningAgent = await this.isTerminalRunningAgent(handle)
     this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
     return { handle, isRunningAgent, status: null }
+  }
+
+  /**
+   * Agent status for guarded note sends. Retries briefly when the first probe
+   * reports no agent so a transient title/foreground gap does not refuse a live
+   * session (#7935). Permission is returned immediately — never retried as sendable.
+   */
+  async getTerminalAgentStatusForGuardedSend(
+    handle: string
+  ): Promise<RuntimeTerminalAgentStatus> {
+    const startedAt = Date.now()
+    let status = await this.getTerminalAgentStatus(handle)
+    if (status.isRunningAgent || status.status === 'permission') {
+      return status
+    }
+    while (Date.now() - startedAt < GUARDED_SEND_AGENT_STATUS_RETRY_TIMEOUT_MS) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, GUARDED_SEND_AGENT_STATUS_RETRY_INTERVAL_MS)
+      )
+      status = await this.getTerminalAgentStatus(handle)
+      if (status.isRunningAgent || status.status === 'permission') {
+        return status
+      }
+    }
+    return status
   }
 
   private getTerminalAgentStatusPtyId(handle: string): string {
@@ -26458,7 +26488,16 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
   if (isClaudeManagementTitle(title)) {
     return 'management'
   }
-  return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
+  if (detectAgentStatusFromTitle(title) !== null) {
+    return 'agent'
+  }
+  // Why: bare "Cursor Agent" is status-null by design (hooks own working/idle),
+  // but it still identifies a live Cursor session for is-running-agent and
+  // guarded note sends — without this, native title frames refuse the send (#7935).
+  if (isCursorAgentTitle(title)) {
+    return 'agent'
+  }
+  return 'neutral'
 }
 
 function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {

@@ -13568,6 +13568,97 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
   })
 
+  it('recognizes bare Cursor Agent native titles as a running agent session', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    // Why: cursor-agent's native OSC title is status-null by design, but still
+    // identifies a live Cursor session for guarded note sends (#7935).
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'Cursor Agent' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
+    await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      isRunningAgent: true,
+      status: null
+    })
+  })
+
+  it('retries guarded-send agent status through a transient no-agent gap', async () => {
+    vi.useFakeTimers()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const statusSpy = vi
+      .spyOn(runtime, 'getTerminalAgentStatus')
+      .mockResolvedValueOnce({
+        handle: terminal.handle,
+        isRunningAgent: false,
+        status: null
+      })
+      .mockResolvedValueOnce({
+        handle: terminal.handle,
+        isRunningAgent: false,
+        status: null
+      })
+      .mockResolvedValue({
+        handle: terminal.handle,
+        isRunningAgent: true,
+        status: 'idle'
+      })
+
+    const statusPromise = runtime.getTerminalAgentStatusForGuardedSend(terminal.handle)
+    await vi.advanceTimersByTimeAsync(150)
+    await vi.advanceTimersByTimeAsync(150)
+    await expect(statusPromise).resolves.toEqual({
+      handle: terminal.handle,
+      isRunningAgent: true,
+      status: 'idle'
+    })
+    expect(statusSpy.mock.calls.length).toBeGreaterThanOrEqual(3)
+    statusSpy.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it('refuses guarded-send agent status after the transient retry window', async () => {
+    vi.useFakeTimers()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const statusSpy = vi.spyOn(runtime, 'getTerminalAgentStatus').mockResolvedValue({
+      handle: terminal.handle,
+      isRunningAgent: false,
+      status: null
+    })
+
+    const statusPromise = runtime.getTerminalAgentStatusForGuardedSend(terminal.handle)
+    await vi.advanceTimersByTimeAsync(1_200)
+    await expect(statusPromise).resolves.toEqual({
+      handle: terminal.handle,
+      isRunningAgent: false,
+      status: null
+    })
+    expect(statusSpy.mock.calls.length).toBeGreaterThan(1)
+    statusSpy.mockRestore()
+    vi.useRealTimers()
+  })
+
   it('does not recognize runtime-created Claude agents management screens as agents', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
