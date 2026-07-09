@@ -9,6 +9,7 @@ import {
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
+import { getProjectTrustComparisonKey } from './codex-project-trust-key'
 
 function getRuntimeCodexConfigTomlPath(): string {
   return join(getOrcaManagedCodexHomePath(), 'config.toml')
@@ -156,17 +157,52 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
   // trust and project trust are written under Orca's managed CODEX_HOME and
   // must survive the copy unless the user explicitly revoked project trust in
   // the system config.
-  return joinTomlBlocks([
-    stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders),
-    ...runtimeSections
+  const preservedRuntimeSections = dedupeRuntimeProjectSections(
+    runtimeSections
       .filter((section) => isRuntimePreservedTomlSection(section.header))
       .filter(
         (section) =>
           !isRuntimeProjectTomlSection(section.header) ||
           !systemUntrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
       )
-      .map((section) => section.block)
+  )
+  return joinTomlBlocks([
+    stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders),
+    ...preservedRuntimeSections.map((section) => section.block)
   ])
+}
+
+// Why: the runtime config can hold two [projects....] tables that decode to one
+// key (a basic and a literal copy of the same path). Re-emitting both verbatim
+// produces a duplicate TOML key and Codex refuses to load the file, so collapse
+// them by decoded key. A later `untrusted` revocation wins so an explicit revoke
+// is never lost. hooks.state sections pass through untouched — their slash
+// variants are intentionally distinct TOML keys.
+function dedupeRuntimeProjectSections(sections: TomlSection[]): TomlSection[] {
+  const indexByKey = new Map<string, number>()
+  const result: TomlSection[] = []
+  for (const section of sections) {
+    if (!isRuntimeProjectTomlSection(section.header)) {
+      result.push(section)
+      continue
+    }
+    const key = getTomlSectionHeaderKey(section.header)
+    const existingIndex = indexByKey.get(key)
+    if (existingIndex === undefined) {
+      indexByKey.set(key, result.length)
+      result.push(section)
+      continue
+    }
+    const existing = result[existingIndex]
+    if (
+      existing !== undefined &&
+      getProjectTrustLevel(section.block) === 'untrusted' &&
+      getProjectTrustLevel(existing.block) !== 'untrusted'
+    ) {
+      result[existingIndex] = section
+    }
+  }
+  return result
 }
 
 type TomlSection = {
@@ -183,17 +219,20 @@ function stripRuntimeOwnedTomlSections(
   const sections = getTomlSections(config)
   const firstSectionIndex = sections[0]?.start ?? -1
   const preamble = firstSectionIndex === -1 ? config : lines.slice(0, firstSectionIndex).join('\n')
+  const kept = sections
+    .filter((section) => !isRuntimeHookTrustTomlSection(section.header))
+    .filter(
+      (section) =>
+        !isRuntimeProjectTomlSection(section.header) ||
+        !runtimeProjectHeaders.has(getTomlSectionHeaderKey(section.header)) ||
+        getProjectTrustLevel(section.block) === 'untrusted'
+    )
+  // Why: a system config can itself carry decoded-duplicate project tables (basic
+  // + literal for one path). Collapse them here so neither a fresh mirror nor a
+  // merge emits a duplicate TOML key into the managed config.
   return joinTomlBlocks([
     preamble,
-    ...sections
-      .filter((section) => !isRuntimeHookTrustTomlSection(section.header))
-      .filter(
-        (section) =>
-          !isRuntimeProjectTomlSection(section.header) ||
-          !runtimeProjectHeaders.has(getTomlSectionHeaderKey(section.header)) ||
-          getProjectTrustLevel(section.block) === 'untrusted'
-      )
-      .map((section) => section.block)
+    ...dedupeRuntimeProjectSections(kept).map((section) => section.block)
   ])
 }
 
@@ -246,7 +285,10 @@ function isRuntimeProjectTomlSection(header: string): boolean {
 }
 
 function getTomlSectionHeaderKey(header: string): string {
-  return header.trim()
+  // Why: project headers dedup by DECODED key so basic-vs-literal quote style,
+  // slash direction, and drive-letter case drift resolve to one section. Other
+  // headers (hooks.state) keep raw text — their slash variants are intentional.
+  return getProjectTrustComparisonKey(header) ?? header.trim()
 }
 
 function getProjectTrustLevel(block: string): 'trusted' | 'untrusted' | null {

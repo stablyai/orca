@@ -313,6 +313,196 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig.match(/\[projects\."\/repo"\]/g)?.length).toBe(1)
   })
 
+  it('collapses a literal system header against a basic runtime header for one path', () => {
+    // Why: Codex CLI writes Windows trust as a literal header while Orca writes a
+    // basic one. Same decoded key → merging both verbatim yields a duplicate TOML
+    // key and Codex refuses to load config.toml.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ['[projects."d:\\\\tools\\\\repo"]', 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ['model = "system"', '', "[projects.'d:\\tools\\repo']", 'trust_level = "trusted"', ''].join(
+        '\n'
+      ),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/^\s*\[projects\./gm)).toHaveLength(1)
+    expect(runtimeConfig).toContain('[projects."d:\\\\tools\\\\repo"]')
+    expect(runtimeConfig).toContain('model = "system"')
+  })
+
+  it('lets a system literal untrusted revocation override a runtime basic trust', () => {
+    // Why: an explicit revoke in ~/.codex must win even across quote-style drift.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ['[projects."d:\\\\tools\\\\repo"]', 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ["[projects.'d:\\tools\\repo']", 'trust_level = "untrusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/^\s*\[projects\./gm)).toHaveLength(1)
+    expect(runtimeConfig).toContain('trust_level = "untrusted"')
+    expect(runtimeConfig).not.toContain('trust_level = "trusted"')
+  })
+
+  it('collapses intra-runtime basic + literal duplicates for one path', () => {
+    // Why: when both quote styles already exist in the runtime config they would
+    // otherwise be re-emitted verbatim and re-create the crash on every merge.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [
+        '[projects."d:\\\\tools\\\\repo"]',
+        'trust_level = "trusted"',
+        '',
+        "[projects.'d:\\tools\\repo']",
+        'trust_level = "trusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(getSystemConfigPath(), ['model = "system"', ''].join('\n'), 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/^\s*\[projects\./gm)).toHaveLength(1)
+  })
+
+  it('dedupes a Windows project path that differs only by drive-letter case', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      ['[projects."D:\\\\Repo"]', 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      ['[projects."d:\\\\repo"]', 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/^\s*\[projects\./gm)).toHaveLength(1)
+  })
+
+  it('keeps POSIX project paths that differ only by case as two projects', () => {
+    // Why: /mnt/e/A and /mnt/e/a are distinct on case-sensitive filesystems.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [
+        '[projects."/mnt/e/A"]',
+        'trust_level = "trusted"',
+        '',
+        '[projects."/mnt/e/a"]',
+        'trust_level = "trusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(getSystemConfigPath(), ['model = "system"', ''].join('\n'), 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/^\s*\[projects\./gm)).toHaveLength(2)
+    expect(runtimeConfig).toContain('[projects."/mnt/e/A"]')
+    expect(runtimeConfig).toContain('[projects."/mnt/e/a"]')
+  })
+
+  it('collapses a system-side basic + literal duplicate during merge', () => {
+    // Why: the system config can itself carry both quote styles for one path.
+    // With no matching runtime section they would both be mirrored verbatim,
+    // seeding the managed config with a duplicate TOML key Codex cannot load.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(getRuntimeConfigPath(), ['model = "runtime"', ''].join('\n'), 'utf-8')
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        'model = "system"',
+        '',
+        '[projects."d:\\\\tools\\\\repo"]',
+        'trust_level = "trusted"',
+        '',
+        "[projects.'d:\\tools\\repo']",
+        'trust_level = "trusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/^\s*\[projects\./gm)).toHaveLength(1)
+  })
+
+  it('collapses a system-side duplicate when seeding a fresh runtime config', () => {
+    // Why: the fresh-mirror path (no runtime config yet) must also dedupe.
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        '[projects."d:\\\\tools\\\\repo"]',
+        'trust_level = "trusted"',
+        '',
+        "[projects.'d:\\tools\\repo']",
+        'trust_level = "trusted"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/^\s*\[projects\./gm)).toHaveLength(1)
+  })
+
+  it('preserves distinct hooks.state slash variants for one path (no project dedup leak)', () => {
+    // Why: hook trust intentionally writes both backslash and forward-slash key
+    // variants; they are genuinely distinct TOML keys and must never be deduped.
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [
+        "[hooks.state.'d:\\repo\\.orca\\hooks.json:stop:0:0']",
+        'enabled = true',
+        'trusted_hash = "sha256:a"',
+        '',
+        "[hooks.state.'d:/repo/.orca/hooks.json:stop:0:0']",
+        'enabled = true',
+        'trusted_hash = "sha256:a"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(getSystemConfigPath(), ['model = "system"', ''].join('\n'), 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/^\s*\[hooks\.state\./gm)).toHaveLength(2)
+  })
+
   it('does not treat TOML table headers inside multiline strings as sections', () => {
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(

@@ -1130,6 +1130,80 @@ describe('upsertProjectTrustLevel', () => {
     expect(readFileSync(configPath, 'utf-8')).toBe(firstWrite)
     expect(existsSync(`${configPath}.bak`)).toBe(false)
   })
+
+  it('updates a Codex-written literal Windows project header in place', () => {
+    // Why: Codex CLI writes Windows project trust as a TOML literal string
+    // (single quotes, raw backslashes). Orca must update it in place rather than
+    // append a second basic table — two tables that decode to one key crash
+    // Codex with "duplicate key".
+    const original = [
+      "[projects.'C:\\Users\\nw\\repo']",
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain("[projects.'C:\\Users\\nw\\repo']")
+    expect(updated).toContain('trust_level = "trusted"')
+    expect(updated).not.toContain('trust_level = "untrusted"')
+  })
+
+  it('matches a literal header across slash and drive-letter case drift', () => {
+    // Why: Codex may write the cwd with forward slashes and/or a lowercased
+    // drive letter; that must still resolve to the one existing table.
+    const original = ["[projects.'c:/Users/nw/repo']", 'notes = "keep"', ''].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain("[projects.'c:/Users/nw/repo']")
+    expect(updated).toContain('notes = "keep"')
+    expect(updated).toContain('trust_level = "trusted"')
+  })
+
+  it('keeps POSIX project paths case-sensitive (no false literal match)', () => {
+    // Why: /mnt/e/A and /mnt/e/a are distinct on case-sensitive filesystems, so
+    // an existing literal header for one path must not swallow the other.
+    const original = ["[projects.'/mnt/e/A']", 'trust_level = "trusted"', ''].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, '/mnt/e/a', 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(2)
+    expect(updated).toContain("[projects.'/mnt/e/A']")
+    expect(updated).toContain('[projects."/mnt/e/a"]')
+  })
+
+  it('collapses a pre-existing basic + literal duplicate for one path', () => {
+    // Why: an earlier run may have left both quote styles for the same path. The
+    // repair must remove the duplicate, not just update one table, or Codex still
+    // rejects config.toml with "duplicate key".
+    const original = [
+      '[projects."C:\\\\Users\\\\nw\\\\repo"]',
+      'trust_level = "untrusted"',
+      '',
+      "[projects.'C:\\Users\\nw\\repo']",
+      'trust_level = "untrusted"',
+      ''
+    ].join('\n')
+
+    const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted', {
+      alreadyCanonical: true
+    })
+
+    expect(updated.match(/\[projects\./g)).toHaveLength(1)
+    expect(updated).toContain('[projects."C:\\\\Users\\\\nw\\\\repo"]')
+    expect(updated).not.toContain("[projects.'")
+    expect(updated).toContain('trust_level = "trusted"')
+    expect(updated).not.toContain('untrusted')
+  })
 })
 
 describe('removeHookTrustEntries', () => {

@@ -9,13 +9,13 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { escapeRegex } from '../../shared/string-utils'
 import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import {
   createTomlLineScanState,
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
+import { getProjectTrustComparisonKey, normalizeProjectTrustKey } from './codex-project-trust-key'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
 // ~/.codex/config.toml under [hooks.state."<key>"]. Without it the hook is in
@@ -346,12 +346,17 @@ export function upsertProjectTrustLevelInContent(
   const trustedProjectPath = options?.alreadyCanonical
     ? projectPath
     : getCodexCanonicalProjectPath(projectPath)
-  const headerPattern = buildProjectHeaderPattern(trustedProjectPath)
-  const match = headerPattern.exec(existing)
+  // Why: match existing [projects....] sections by their DECODED key so a
+  // Codex-written literal header (single quotes, raw backslashes) is updated in
+  // place instead of shadowed by a second basic header. When an earlier run
+  // already left both quote styles for one path, collapse every duplicate to a
+  // single table — two tables that decode to one key make Codex reject
+  // config.toml with a "duplicate key" error.
+  const ranges = findProjectTrustSectionRanges(existing, trustedProjectPath)
   const eol = existing.includes('\r\n') ? '\r\n' : '\n'
   const trustLine = `trust_level = "${trustLevel}"`
 
-  if (!match) {
+  if (ranges.length === 0) {
     const block = [`[projects."${escapeTomlString(trustedProjectPath)}"]`, trustLine].join(eol)
     if (existing.length === 0) {
       return `${block}${eol}`
@@ -364,21 +369,62 @@ export function upsertProjectTrustLevelInContent(
     return `${existing}${separator}${block}${eol}`
   }
 
-  const headerLineEnd = match.index + match[0].length
-  const after = existing.slice(headerLineEnd)
-  const nextHeaderRel = findNextTableHeader(after)
-  const blockEnd = nextHeaderRel === -1 ? existing.length : headerLineEnd + nextHeaderRel
-  const existingBlock = existing.slice(headerLineEnd, blockEnd)
   const trustLevelLinePattern =
     /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(?:trusted|untrusted)"|'(?:trusted|untrusted)')[ \t\r]*(?:#.*)?$/m
-  if (trustLevelLinePattern.test(existingBlock)) {
-    return (
-      existing.slice(0, headerLineEnd) +
-      existingBlock.replace(trustLevelLinePattern, trustLine) +
-      existing.slice(blockEnd)
-    )
+  let result = ''
+  let cursor = 0
+  // Why: keep the first matching table (updated in place) and drop the rest, so a
+  // pre-existing decoded-duplicate no longer survives the repair.
+  ranges.forEach((range, index) => {
+    result += existing.slice(cursor, range.start)
+    if (index === 0) {
+      const headerLine = existing.slice(range.start, range.headerLineEnd)
+      const body = existing.slice(range.headerLineEnd, range.end)
+      result += trustLevelLinePattern.test(body)
+        ? headerLine + body.replace(trustLevelLinePattern, trustLine)
+        : `${headerLine}${eol}${trustLine}${body}`
+    }
+    cursor = range.end
+  })
+  return result + existing.slice(cursor)
+}
+
+type ProjectTrustSectionRange = {
+  start: number
+  headerLineEnd: number
+  end: number
+}
+
+// Why: collect every [projects....] table whose decoded+normalized key matches
+// the target, so basic/literal quote style, slash direction, and drive-letter
+// case all resolve to the same logical project. Mirrors findTrustBlockRanges'
+// multiline-aware line scan.
+function findProjectTrustSectionRanges(
+  content: string,
+  projectPath: string
+): ProjectTrustSectionRange[] {
+  const targetKey = normalizeProjectTrustKey(projectPath)
+  const ranges: ProjectTrustSectionRange[] = []
+  let cursor = 0
+  let scanState = createTomlLineScanState()
+  while (cursor < content.length) {
+    const newlineIdx = content.indexOf('\n', cursor)
+    const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
+    const rawLine = content.slice(cursor, lineEnd)
+    const line = rawLine.replace(/\r$/, '')
+    const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
+    const key = isTomlStructuralLine(scanState) ? getProjectTrustComparisonKey(line) : null
+    if (key !== null && key === targetKey) {
+      const headerLineEnd = rawLine.endsWith('\r') ? lineEnd - 1 : lineEnd
+      const after = content.slice(headerLineEnd)
+      const nextHeaderRel = findNextTableHeader(after)
+      const end = nextHeaderRel === -1 ? content.length : headerLineEnd + nextHeaderRel
+      ranges.push({ start: cursor, headerLineEnd, end })
+    }
+    scanState = updateTomlLineScanState(scanState, line)
+    cursor = nextCursor
   }
-  return `${existing.slice(0, headerLineEnd)}${eol}${trustLine}${existing.slice(headerLineEnd)}`
+  return ranges
 }
 
 // Why: build the canonical block we own. The two field names mirror what
@@ -550,20 +596,6 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
     cursor = nextCursor
   }
   return ranges
-}
-
-function buildProjectHeaderPattern(projectPath: string): RegExp {
-  const headerPathValues = [projectPath]
-  if (usesWindowsPathSeparators(projectPath)) {
-    headerPathValues.push(projectPath.replace(/\//g, '\\'), projectPath.replace(/\\/g, '/'))
-  }
-  const headerPaths = [...new Set(headerPathValues)].map((path) =>
-    escapeRegex(escapeTomlString(path))
-  )
-  return new RegExp(
-    `(^|\\r?\\n)[ \\t]*\\[projects\\."(?:${headerPaths.join('|')})"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`,
-    process.platform === 'win32' ? 'i' : undefined
-  )
 }
 
 type ParsedTomlString = {
