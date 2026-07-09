@@ -1654,6 +1654,54 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.sortEpoch).toBe(1)
   })
 
+  it('keeps the mirrored state start stable across same-agent spinner snapshots', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const terminalSurface = (updatedAt: number, stateStartedAt: number) => ({
+      type: 'terminal' as const,
+      id: HOST_SURFACE_ID,
+      title: '\u280b codex task',
+      parentTabId: 'host-tab-1',
+      leafId: LEAF_ID,
+      isActive: true,
+      status: 'ready' as const,
+      terminal: 'terminal-1',
+      agentStatus: {
+        state: 'working' as const,
+        prompt: 'fix web parity',
+        updatedAt,
+        stateStartedAt,
+        agentType: 'codex' as const,
+        paneKey: hostPaneKey,
+        terminalTitle: '\u280b codex task',
+        stateHistory: []
+      }
+    })
+    const initialPatch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([terminalSurface(NOW - 100, NOW - 1_000)]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const mirroredId = initialPatch.tabsByWorktree?.[WT]?.[0]?.id
+    const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
+    const initialStateStartedAt =
+      initialPatch.agentStatusByPaneKey?.[mirroredPaneKey]?.stateStartedAt
+
+    const nextPatch = applyWebSessionTabsSnapshot(
+      makeState(initialPatch),
+      makeSnapshot([terminalSurface(NOW + 100, NOW + 50)], { snapshotVersion: 2 }),
+      ENV,
+      NOW + 200
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(nextPatch.agentStatusByPaneKey?.[mirroredPaneKey]).toMatchObject({
+      updatedAt: NOW + 100,
+      stateStartedAt: initialStateStartedAt
+    })
+    expect(nextPatch.agentStatusEpoch).toBe(initialPatch.agentStatusEpoch)
+    expect(nextPatch.sortEpoch).toBe(initialPatch.sortEpoch)
+  })
+
   it('keeps mirrored OMP tabs from repainting to Pi-compatible titles', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const patch = applyWebSessionTabsSnapshot(

@@ -150,12 +150,17 @@ function buildTitleDerivedAgentRow(args: {
   const secondary =
     status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
   const entryState: AgentStatusState = rowState === 'waiting' ? 'waiting' : 'working'
+  // Title-only agents have no authoritative hook timestamp. Using `now` here
+  // made every unrelated store refresh look like a brand-new run, so mixed
+  // hook/title rows continuously reordered in the Agents page. The terminal
+  // creation time is the stable closest proxy for when this pane started.
+  const stateStartedAt = args.tab.createdAt
   const entry: AgentStatusEntry = {
     paneKey,
     state: entryState,
     prompt: label,
     updatedAt: args.now,
-    stateStartedAt: args.now,
+    stateStartedAt,
     stateHistory: [],
     agentType,
     terminalTitle: title,

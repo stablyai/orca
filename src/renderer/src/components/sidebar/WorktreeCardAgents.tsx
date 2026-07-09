@@ -408,10 +408,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   if (agentActivityDisplayMode === 'compact') {
     const summaryAgents = hasLineage ? rootAgents : agents
-    // Why: compact worktree cards keep multiple active agents to a single
-    // predictable status line, even when there are only two agents. In
-    // send-target mode, rows are the picker surface, so keep targets visible.
-    const shouldUseSummaryRow = summaryAgents.length > 1 && !isAgentSendTargetModeActive
+    // Keep the common coordinator + worker pair visible by identity. Collapsing
+    // two agents into icon-only status made an open Hermes session look absent
+    // beside Codex. Larger groups still use the compact summary.
+    const shouldUseSummaryRow = summaryAgents.length > 2 && !isAgentSendTargetModeActive
     const subjectLabel = `${hasLineage ? rootAgents.length : agents.length} agents`
 
     return (

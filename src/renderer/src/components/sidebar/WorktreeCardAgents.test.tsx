@@ -516,7 +516,7 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toBe('')
   })
 
-  it('renders a compact summary affordance for two flat agents', async () => {
+  it('keeps two compact agents individually visible', async () => {
     mockAgentActivityDisplayMode = 'compact'
     mockAgents = [
       mockAgent({ agentType: 'codex', state: 'done', startedAt: 1000, prompt: 'First agent' }),
@@ -532,17 +532,17 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
-    expect(markup).toContain('All 2 agents done')
-    expect(markup).toContain('Expand All 2 agents done')
-    expect(markup).not.toContain('title="Codex done"')
-    expect(markup).not.toContain('title="Claude done"')
-    expect(markup).not.toContain('>2 done<')
-    expect(markup).not.toContain('First agent')
-    expect(markup).not.toContain('Second agent')
+    expect(markup).not.toContain('All 2 agents done')
+    expect(markup).not.toContain('Expand All 2 agents done')
+    expect(markup).toContain('title="Codex"')
+    expect(markup).toContain('title="Claude"')
+    expect(markup).toContain('First agent')
+    expect(markup).toContain('Second agent')
+    expect(markup.match(/compact-agent-row/g)).toHaveLength(4)
     expect(markup).not.toContain('data-testid="agent-row"')
   })
 
-  it('does not show a prompt-cache timer on a collapsed compact summary row', async () => {
+  it('shows a prompt-cache timer on its visible row when there are two agents', async () => {
     mockAgentActivityDisplayMode = 'compact'
     const paneKey = makePaneKey('tab-1', LEAF_A)
     mockAgents = [
@@ -568,9 +568,9 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
-    expect(markup).toContain('All 2 agents done')
-    expect(markup).not.toContain('Prompt cache expires')
-    expect(markup).not.toContain('compact-agent-row')
+    expect(markup).not.toContain('All 2 agents done')
+    expect(markup).toContain('Prompt cache expires in 1:00')
+    expect(markup).toContain('compact-agent-row')
   })
 
   it('keeps compact agent messages with trusted data image markdown to the single-line preview', async () => {

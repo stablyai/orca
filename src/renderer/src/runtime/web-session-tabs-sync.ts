@@ -676,10 +676,22 @@ function buildMirroredAgentStatusPatch(
     // Why: active web streams can report a fresher OSC 9999 status for the same
     // mirrored pane before the next host snapshot arrives. Do not rewind that
     // row with an older host publication.
-    const nextEntry =
+    const freshestEntry =
       existing && existing.updatedAt > entry.updatedAt
         ? normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType)
         : entry
+    // Remote OSC spinner frames can republish the same working agent with a
+    // fresh stateStartedAt on every snapshot. Keep the original state boundary
+    // when identity, prompt, and state are unchanged so activity rows do not
+    // continuously reorder while only the decorative title is moving.
+    const nextEntry =
+      existing &&
+      freshestEntry !== existing &&
+      existing.state === freshestEntry.state &&
+      existing.agentType === freshestEntry.agentType &&
+      existing.prompt === freshestEntry.prompt
+        ? { ...freshestEntry, stateStartedAt: existing.stateStartedAt }
+        : freshestEntry
     nextByPaneKey.set(entry.paneKey, nextEntry)
   }
 

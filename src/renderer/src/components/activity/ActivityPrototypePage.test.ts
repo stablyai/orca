@@ -309,7 +309,7 @@ describe('buildActivityEvents', () => {
 
   it('creates a live Hermes thread from title-derived terminal evidence', () => {
     const result = makeActivityResult({
-      tab: { ...makeTab(), title: '\u280b Hermes', launchAgent: 'hermes' },
+      tab: { ...makeTab(), title: '\u280b Hermes', launchAgent: 'hermes', createdAt: 1_500 },
       runtimePaneTitlesByTabId: {
         'tab-1': { 1: '\u280b Hermes' }
       },
@@ -321,7 +321,7 @@ describe('buildActivityEvents', () => {
     expect(result.events).toHaveLength(0)
     expect(result.liveAgentByPaneKey[PANE_KEY]).toMatchObject({
       state: 'working',
-      timestamp: 4_000,
+      timestamp: 1_500,
       agentType: 'hermes',
       entry: {
         prompt: 'Hermes',
@@ -337,7 +337,7 @@ describe('buildActivityEvents', () => {
       paneTitle: 'Hermes',
       agentType: 'hermes',
       currentAgentState: 'working',
-      latestTimestamp: 4_000,
+      latestTimestamp: 1_500,
       latestEvent: null,
       unread: false
     })
@@ -707,6 +707,63 @@ describe('buildActivityEvents', () => {
       PANE_KEY,
       PANE_KEY_2
     ])
+  })
+
+  it('keeps mixed explicit and title-derived thread order stable across refreshes', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const explicitTab = { ...makeTab(), createdAt: 1_000 }
+    const secondTab = {
+      ...makeTabWithIds('tab-2', worktree.id, '\u280b Codex'),
+      launchAgent: 'codex' as const,
+      createdAt: 2_000
+    }
+    const thirdTab = {
+      ...makeTabWithIds('tab-3', worktree.id, '\u280b Codex'),
+      launchAgent: 'codex' as const,
+      createdAt: 3_000
+    }
+    const explicitEntry: AgentStatusEntry = {
+      ...makeWorkingEntryWithoutHistory(),
+      updatedAt: 6_000,
+      stateStartedAt: 6_000
+    }
+
+    const buildAt = (now: number) => {
+      const { events, liveAgentByPaneKey } = buildActivityEvents({
+        agentStatusByPaneKey: { [PANE_KEY]: explicitEntry },
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: { [worktree.id]: [explicitTab, secondTab, thirdTab] },
+        runtimePaneTitlesByTabId: {
+          'tab-2': { 1: '\u280b Codex' },
+          'tab-3': { 1: '\u280b Codex' }
+        },
+        ptyIdsByTabId: {
+          'tab-2': ['pty-tab-2'],
+          'tab-3': ['pty-tab-3']
+        },
+        terminalLayoutsByTabId: {
+          'tab-2': makeSingleLayout(LEAF_ID_2),
+          'tab-3': makeSingleLayout(LEAF_ID_3)
+        },
+        worktreeMap: new Map([[worktree.id, worktree]]),
+        repoMap: new Map([[repo.id, repo]]),
+        acknowledgedAgentsByPaneKey: {},
+        now
+      })
+      return buildAgentPaneThreads({ events, liveAgentByPaneKey }).map((thread) => ({
+        paneKey: thread.paneKey,
+        timestamp: thread.latestTimestamp
+      }))
+    }
+
+    const expected = [
+      { paneKey: PANE_KEY, timestamp: 6_000 },
+      { paneKey: PANE_KEY_3, timestamp: 3_000 },
+      { paneKey: PANE_KEY_2, timestamp: 2_000 }
+    ]
+    expect(buildAt(6_500)).toEqual(expected)
+    expect(buildAt(7_500)).toEqual(expected)
   })
 })
 
