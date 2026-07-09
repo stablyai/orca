@@ -56,10 +56,14 @@ describe('detectWslCommandsOnPath', () => {
     // Why: LeanCTX and similar tools alias claude/codex; command -v alone
     // returns alias text and fails absolute-path detection (#7816).
     // bash: type -P; zsh: type -p; dash/sh: command -v.
+    // Non-empty checks between steps avoid empty-success short-circuit.
     // `$` is escaped for Windows argv preprocessing before the WSL shell runs.
+    expect(payload).toContain('resolved=\\$(type -P "\\$cmd" 2>/dev/null)')
+    expect(payload).toContain('[ -n "\\$resolved" ] || resolved=\\$(type -p "\\$cmd" 2>/dev/null)')
     expect(payload).toContain(
-      'if resolved=\\$(type -P "\\$cmd" 2>/dev/null) || resolved=\\$(type -p "\\$cmd" 2>/dev/null) || resolved=\\$(command -v "\\$cmd" 2>/dev/null); then'
+      '[ -n "\\$resolved" ] || resolved=\\$(command -v "\\$cmd" 2>/dev/null)'
     )
+    expect(payload).toContain('if [ -n "\\$resolved" ]; then')
   })
 
   it('parses detected commands from prefixed stdout', async () => {

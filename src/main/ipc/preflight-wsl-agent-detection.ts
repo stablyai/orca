@@ -34,9 +34,14 @@ export async function detectWslCommandsOnPath(
   // hides installed agents (#7816). Bash needs `type -P` to force a PATH lookup
   // past aliases/functions; zsh's equivalent is lowercase `type -p` (uppercase
   // -P is not valid there). Dash/sh support neither, so fall back to `command -v`.
+  // Why non-empty checks between steps: bash `type -p` can exit 0 with empty
+  // stdout for alias-only names; a bare `||` chain would then skip `command -v`.
   const script = [
     `for cmd in ${commandList}; do`,
-    'if resolved=$(type -P "$cmd" 2>/dev/null) || resolved=$(type -p "$cmd" 2>/dev/null) || resolved=$(command -v "$cmd" 2>/dev/null); then',
+    'resolved=$(type -P "$cmd" 2>/dev/null)',
+    '[ -n "$resolved" ] || resolved=$(type -p "$cmd" 2>/dev/null)',
+    '[ -n "$resolved" ] || resolved=$(command -v "$cmd" 2>/dev/null)',
+    'if [ -n "$resolved" ]; then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',
     'done'

@@ -86,7 +86,10 @@ export async function isCommandOnPath(
         await execCommandInWsl(
           wslTarget,
           [
-            `if resolved=$(type -P ${shellQuote(command)} 2>/dev/null) || resolved=$(type -p ${shellQuote(command)} 2>/dev/null) || resolved=$(command -v ${shellQuote(command)} 2>/dev/null); then`,
+            `resolved=$(type -P ${shellQuote(command)} 2>/dev/null)`,
+            `[ -n "$resolved" ] || resolved=$(type -p ${shellQuote(command)} 2>/dev/null)`,
+            `[ -n "$resolved" ] || resolved=$(command -v ${shellQuote(command)} 2>/dev/null)`,
+            'if [ -n "$resolved" ]; then',
             'printf \'%s\\n\' "$resolved"',
             'fi'
           ].join('\n')

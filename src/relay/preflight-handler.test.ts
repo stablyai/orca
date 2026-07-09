@@ -38,7 +38,10 @@ function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
   return [
     mode,
     [
-      `if resolved=$(type -P ${command} 2>/dev/null) || resolved=$(type -p ${command} 2>/dev/null) || resolved=$(command -v ${command} 2>/dev/null); then`,
+      `resolved=$(type -P ${command} 2>/dev/null)`,
+      `[ -n "$resolved" ] || resolved=$(type -p ${command} 2>/dev/null)`,
+      `[ -n "$resolved" ] || resolved=$(command -v ${command} 2>/dev/null)`,
+      'if [ -n "$resolved" ]; then',
       'printf \'__ORCA_AGENT_PATH__%s\\n\' "$resolved"',
       'fi'
     ].join('\n')

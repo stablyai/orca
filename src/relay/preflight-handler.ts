@@ -223,9 +223,13 @@ function buildShCommandLookupScript(command: string): string {
   // Why: interactive login shells load aliases (e.g. LeanCTX wraps agent CLIs).
   // `command -v` then prints alias text, which fails absolute-path detection.
   // Bash needs `type -P` past aliases; zsh uses lowercase `type -p`; dash/sh
-  // support neither, so fall back to `command -v`.
+  // support neither, so fall back to `command -v`. Non-empty checks between
+  // steps avoid bash `type -p` empty success short-circuiting the chain.
   return [
-    `if resolved=$(type -P ${quotedCommand} 2>/dev/null) || resolved=$(type -p ${quotedCommand} 2>/dev/null) || resolved=$(command -v ${quotedCommand} 2>/dev/null); then`,
+    `resolved=$(type -P ${quotedCommand} 2>/dev/null)`,
+    `[ -n "$resolved" ] || resolved=$(type -p ${quotedCommand} 2>/dev/null)`,
+    `[ -n "$resolved" ] || resolved=$(command -v ${quotedCommand} 2>/dev/null)`,
+    'if [ -n "$resolved" ]; then',
     `printf '${AGENT_PATH_PREFIX}%s\\n' "$resolved"`,
     'fi'
   ].join('\n')
