@@ -162,6 +162,20 @@ describe('settings navigation metadata', () => {
     )
   })
 
+  it('keeps desktop local shell settings out of web metadata', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      repos: [repo]
+    })
+    const terminal = sections.find((section) => section.id === 'terminal')
+
+    expect(terminal?.searchEntries.some((entry) => (entry.keywords ?? []).includes('fish'))).toBe(
+      false
+    )
+  })
+
   it('places Advanced near the bottom on desktop without putting it under Experimental', () => {
     const desktopIds = ids()
 

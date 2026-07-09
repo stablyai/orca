@@ -44,6 +44,7 @@ import type {
   OrcaProfileOrgMembersListResult
 } from '../shared/orca-profiles'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
+import type { TerminalDefaultShellValidationResult } from '../shared/terminal-default-shell'
 import type { TaskSourceContext } from '../shared/task-source-context'
 import type { LinearIssueAttributeFilter } from '../shared/linear-issue-attribute-filter'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
@@ -2079,6 +2080,9 @@ export type PreloadApi = {
     getSync: () => GlobalSettings | null
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
     updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) => Promise<GlobalSettings>
+    validateTerminalDefaultShellPath: (
+      value: unknown
+    ) => Promise<TerminalDefaultShellValidationResult>
     listFonts: () => Promise<string[]>
     previewGhosttyImport: () => Promise<GhosttyImportPreview>
     previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>

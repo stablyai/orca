@@ -32,6 +32,7 @@ import {
   getTerminalWindowSearchEntries
 } from './terminal-window-setup-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { translate } from '@/i18n/i18n'
 
 export {
   getTerminalAdvancedTypographySearchEntries,
@@ -65,6 +66,22 @@ export {
 type TerminalAppearanceSearchOptions = {
   showWarpImport?: boolean
 }
+
+export const getTerminalDefaultShellSearchEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry[] => [
+    {
+      title: translate(
+        'auto.components.settings.terminal.search.defaultShell.title',
+        'Default Shell'
+      ),
+      description: translate(
+        'auto.components.settings.terminal.search.defaultShell.description',
+        'Choose the shell Orca opens for new local macOS and Linux terminal panes.'
+      ),
+      keywords: ['terminal', 'shell', 'default', 'zsh', 'bash', 'fish', 'macos', 'linux', 'local']
+    }
+  ]
+)
 
 const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -101,14 +118,18 @@ export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean
   isWindowsTerminalHost?: boolean
   isMac: boolean
+  supportsTerminalDefaultShell?: boolean
 }): SettingsSearchEntry[] {
   const isWindowsTerminalHost = platform.isWindowsTerminalHost ?? platform.isWindows
+  const supportsTerminalDefaultShell = platform.supportsTerminalDefaultShell ?? true
+  const showTerminalDefaultShell = supportsTerminalDefaultShell && !isWindowsTerminalHost
   // Why: the settings search index must mirror the visible controls. Keeping
   // platform-only controls out of other platforms' search results prevents
   // users from landing on an option the UI intentionally hides.
   return [
     ...getTerminalRenderingSearchEntries(),
     ...getTerminalPaneInteractionSearchEntries(),
+    ...(showTerminalDefaultShell ? getTerminalDefaultShellSearchEntry() : []),
     ...(isWindowsTerminalHost
       ? [
           ...getTerminalWindowsShellSearchEntry(),

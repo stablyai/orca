@@ -6759,6 +6759,22 @@
             "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
           }
         },
+        "TerminalDefaultShellSection": {
+          "ee7cb911e8": "本地 Shell",
+          "67a5341565": "新的本地 macOS 和 Linux 终端面板的默认 shell。",
+          "e52e156b21": "默认 Shell",
+          "771784d945": "选择 Orca 为新的本地 macOS 和 Linux 终端面板打开的 shell。",
+          "80099ab61e": "仅对新建的本地终端生效。现有面板会保留已经启动的 shell。",
+          "d884efa6ee": "系统",
+          "981c472a7d": "自定义",
+          "d2ad34c1f6": "使用 POSIX 绝对路径，例如 /bin/zsh 或 /usr/bin/fish。",
+          "95cca730e4": "Shell “{{value0}}” 不存在。",
+          "d96c7331bb": "Shell “{{value0}}” 不是文件。",
+          "6334403ed7": "Shell “{{value0}}” 不可执行。",
+          "ffcf81d40f": "Shell “{{value0}}” 不是可识别的 shell。请选择 bash、zsh、fish、sh、ksh、dash、tcsh、csh，或 /etc/shells 中列出的路径。",
+          "26d742c733": "自定义 POSIX 默认 shell 仅支持 macOS 和 Linux。",
+          "28b50d850b": "Shell “{{value0}}” 无效。"
+        },
         "TerminalSettingsPreview": {
           "a63953a48a": "预览 {{value0}} 主题",
           "2c248fcc27": "预览主题",
@@ -8268,6 +8284,10 @@
             }
           },
           "search": {
+            "defaultShell": {
+              "title": "默认 Shell",
+              "description": "选择 Orca 为新的本地 macOS 和 Linux 终端面板打开的 shell。"
+            },
             "c047f398cc": "启动",
             "b872de3926": "位置",
             "fd6c24313d": "新的",

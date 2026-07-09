@@ -17,6 +17,7 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../shell-templates'
+import { normalizeTerminalDefaultShellPath } from '../../shared/terminal-default-shell'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 const SHELL_READY_MARKER = '\\033]777;orca-shell-ready\\007'
@@ -353,11 +354,19 @@ export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
   return shellName === 'zsh' || shellName === 'bash'
 }
 
-export function supportsPtyStartupBarrier(env: Record<string, string>): boolean {
+export function supportsPtyStartupBarrier(
+  env: Record<string, string>,
+  shellOverride?: string
+): boolean {
   if (process.platform === 'win32') {
     return false
   }
-  return shellPathSupportsPtyStartupBarrier(resolvePtyShellPath(env))
+  // Why: a user-configured POSIX shell path is authoritative for this spawn.
+  // Falling back to inherited SHELL here can mark fish/other shells as
+  // shell-ready capable and make startup commands wait for markers they never emit.
+  const resolvedShell =
+    normalizeTerminalDefaultShellPath(shellOverride) || resolvePtyShellPath(env)
+  return shellPathSupportsPtyStartupBarrier(resolvedShell)
 }
 
 type ShellLaunchConfig = {

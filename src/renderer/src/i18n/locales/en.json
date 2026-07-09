@@ -6811,6 +6811,22 @@
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
           }
         },
+        "TerminalDefaultShellSection": {
+          "ee7cb911e8": "Local Shell",
+          "67a5341565": "Default shell for new local macOS and Linux terminal panes.",
+          "e52e156b21": "Default Shell",
+          "771784d945": "Choose the shell Orca opens for new local macOS and Linux terminal panes.",
+          "80099ab61e": "Takes effect for new local terminals. Existing panes keep the shell they already launched.",
+          "d884efa6ee": "System",
+          "981c472a7d": "Custom",
+          "d2ad34c1f6": "Use a POSIX absolute path, such as /bin/zsh or /usr/bin/fish.",
+          "95cca730e4": "Shell \"{{value0}}\" does not exist.",
+          "d96c7331bb": "Shell \"{{value0}}\" is not a file.",
+          "6334403ed7": "Shell \"{{value0}}\" is not executable.",
+          "ffcf81d40f": "Shell \"{{value0}}\" is not recognized. Choose bash, zsh, fish, sh, ksh, dash, tcsh, csh, or a path listed in /etc/shells.",
+          "26d742c733": "Custom POSIX default shells are only supported on macOS and Linux.",
+          "28b50d850b": "Shell \"{{value0}}\" is not valid."
+        },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
           "2c248fcc27": "Preview theme",
@@ -8320,6 +8336,10 @@
             }
           },
           "search": {
+            "defaultShell": {
+              "title": "Default Shell",
+              "description": "Choose the shell Orca opens for new local macOS and Linux terminal panes."
+            },
             "c047f398cc": "launch",
             "b872de3926": "location",
             "fd6c24313d": "new",

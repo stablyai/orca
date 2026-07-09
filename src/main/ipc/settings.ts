@@ -19,6 +19,10 @@ import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
+import {
+  requireValidTerminalDefaultShellPath,
+  validateTerminalDefaultShellPath
+} from '../terminal-default-shell-validation'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
@@ -90,6 +94,10 @@ export function registerSettingsHandlers(
     event.returnValue = store.getSettings()
   })
 
+  ipcMain.handle('settings:validateTerminalDefaultShellPath', (_event, value: unknown) => {
+    return validateTerminalDefaultShellPath(value)
+  })
+
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
     // Why: Floating Workspace grants are trusted only when written by the
@@ -121,6 +129,11 @@ export function registerSettingsHandlers(
     }
     if ('terminalLineHeight' in args) {
       sanitizedArgs.terminalLineHeight = normalizeTerminalLineHeight(args.terminalLineHeight)
+    }
+    if ('terminalDefaultShellPath' in args) {
+      sanitizedArgs.terminalDefaultShellPath = requireValidTerminalDefaultShellPath(
+        args.terminalDefaultShellPath
+      )
     }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)

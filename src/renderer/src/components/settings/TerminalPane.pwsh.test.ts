@@ -343,6 +343,51 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(text).not.toContain('WSL')
   })
 
+  it('hides local default shell controls in the web client', () => {
+    const globals = globalThis as typeof globalThis & {
+      window?: Window & { __ORCA_WEB_CLIENT__?: boolean }
+    }
+    const hadWindow = globals.window !== undefined
+    const webWindow =
+      globals.window ??
+      ({
+        location: { pathname: '/' }
+      } as Window & { __ORCA_WEB_CLIENT__?: boolean })
+    const previousWebFlag = webWindow.__ORCA_WEB_CLIENT__
+    globals.window = webWindow
+    webWindow.__ORCA_WEB_CLIENT__ = true
+    try {
+      const element = TerminalPane({
+        settings: {
+          terminalScrollbackRows: 5_000,
+          terminalWindowsShell: 'powershell.exe',
+          terminalWindowsPowerShellImplementation: 'auto',
+          terminalWordSeparator: ''
+        } as never,
+        updateSettings: () => {},
+        scrollbackMode: 'preset',
+        setScrollbackMode: () => {},
+        wslAvailable: false,
+        pwshAvailable: false,
+        gitBashAvailable: false,
+        isWindowsTerminalHost: false
+      })
+
+      const text = collectText(element)
+      expect(text).not.toContain('Local Shell')
+      expect(text).not.toContain('Default shell for new local macOS and Linux terminal panes')
+    } finally {
+      if (previousWebFlag === undefined) {
+        delete webWindow.__ORCA_WEB_CLIENT__
+      } else {
+        webWindow.__ORCA_WEB_CLIENT__ = previousWebFlag
+      }
+      if (!hadWindow) {
+        Reflect.deleteProperty(globals, 'window')
+      }
+    }
+  })
+
   it('hides WSL as a Windows default shell option when unavailable', () => {
     const element = TerminalPane({
       settings: {

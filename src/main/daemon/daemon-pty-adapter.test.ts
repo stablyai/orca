@@ -168,6 +168,20 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
       expect(lastSubprocess.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
     })
+
+    itOnPosix('does not inherit zsh shell-ready support when the shell override is fish', async () => {
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        command: "codex 'linked issue context'",
+        startupCommandDelivery: 'shell-ready',
+        env: { SHELL: '/bin/zsh' },
+        shellOverride: '/usr/bin/fish'
+      })
+
+      await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
+      expect(lastSubprocess.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
+    })
   })
 
   describe('write', () => {

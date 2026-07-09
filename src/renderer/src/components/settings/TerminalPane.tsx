@@ -3,9 +3,11 @@ import { Separator } from '../ui/separator'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getManageSessionsSearchEntries,
   getTerminalAdvancedSearchEntries,
+  getTerminalDefaultShellSearchEntry,
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries,
   getTerminalPaneInteractionSearchEntries,
@@ -22,6 +24,7 @@ import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './TerminalRenderingSection'
 import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
+import { TerminalDefaultShellSection } from './TerminalDefaultShellSection'
 import { TerminalWindowsShellSection } from './TerminalWindowsShellSection'
 
 type TerminalPaneProps = {
@@ -41,6 +44,8 @@ type TerminalPaneProps = {
   gitBashAvailable?: boolean
   /** Whether the active terminal host is Windows, even if the client is not. */
   isWindowsTerminalHost?: boolean
+  /** Whether this renderer can validate and launch a desktop-local POSIX shell. */
+  supportsTerminalDefaultShell?: boolean
 }
 
 export function TerminalPane({
@@ -50,11 +55,15 @@ export function TerminalPane({
   setScrollbackMode,
   pwshAvailable,
   gitBashAvailable = false,
-  isWindowsTerminalHost
+  isWindowsTerminalHost,
+  supportsTerminalDefaultShell: supportsTerminalDefaultShellProp
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
   const showWindowsHostSettings = isWindowsTerminalHost ?? isWindows
+  const isWebClient = isWebClientLocation()
+  const supportsTerminalDefaultShell = supportsTerminalDefaultShellProp ?? !isWebClient
+  const showTerminalDefaultShell = supportsTerminalDefaultShell && !showWindowsHostSettings
   const isMac = isMacUserAgent()
   const rawWindowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
   const windowsShell = rawWindowsShell === 'wsl.exe' ? 'powershell.exe' : rawWindowsShell
@@ -69,6 +78,14 @@ export function TerminalPane({
         updateSettings={updateSettings}
         windowsShell={windowsShell}
         gitBashAvailable={gitBashAvailable}
+      />
+    ) : null,
+    showTerminalDefaultShell &&
+    matchesSettingsSearch(searchQuery, getTerminalDefaultShellSearchEntry()) ? (
+      <TerminalDefaultShellSection
+        key="default-shell"
+        settings={settings}
+        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalRenderingSearchEntries()) ? (

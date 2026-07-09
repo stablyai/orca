@@ -798,6 +798,7 @@ function Settings(): React.JSX.Element {
   // Only the latter should render disabled WSL controls.
   const wslSupportedPlatform = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
   const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const supportsTerminalDefaultShell = !isWebClient && !isWindowsTerminalHost
 
   if ([...neededSectionIds].some((id) => !mountedSectionIds.has(id))) {
     // Why: lazy Settings sections are remembered for the session; record newly
@@ -1342,6 +1343,7 @@ function Settings(): React.JSX.Element {
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
                       gitBashAvailable={windowsTerminalCapabilities.gitBashAvailable}
                       isWindowsTerminalHost={isWindowsTerminalHost}
+                      supportsTerminalDefaultShell={supportsTerminalDefaultShell}
                     />
                   ) : null}
                 </SettingsSection>

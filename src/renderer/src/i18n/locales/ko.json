@@ -6759,6 +6759,22 @@
             "tuiDescription": "전체 화면 터미널 앱을 위한 개별 휠 보고."
           }
         },
+        "TerminalDefaultShellSection": {
+          "ee7cb911e8": "로컬 Shell",
+          "67a5341565": "새 로컬 macOS 및 Linux 터미널 창의 기본 shell입니다.",
+          "e52e156b21": "기본 Shell",
+          "771784d945": "Orca가 새 로컬 macOS 및 Linux 터미널 창에서 열 shell을 선택하세요.",
+          "80099ab61e": "새 로컬 터미널에 적용됩니다. 기존 창은 이미 시작한 shell을 유지합니다.",
+          "d884efa6ee": "시스템",
+          "981c472a7d": "사용자 지정",
+          "d2ad34c1f6": "/bin/zsh 또는 /usr/bin/fish 같은 POSIX 절대 경로를 사용하세요.",
+          "95cca730e4": "Shell \"{{value0}}\"이(가) 존재하지 않습니다.",
+          "d96c7331bb": "Shell \"{{value0}}\"은(는) 파일이 아닙니다.",
+          "6334403ed7": "Shell \"{{value0}}\"은(는) 실행할 수 없습니다.",
+          "ffcf81d40f": "Shell \"{{value0}}\"은(는) 인식된 shell이 아닙니다. bash, zsh, fish, sh, ksh, dash, tcsh, csh 또는 /etc/shells에 나열된 경로를 선택하세요.",
+          "26d742c733": "사용자 지정 POSIX 기본 shell은 macOS와 Linux에서만 지원됩니다.",
+          "28b50d850b": "Shell \"{{value0}}\"은(는) 유효하지 않습니다."
+        },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",
           "2c248fcc27": "테마 미리보기",
@@ -8268,6 +8284,10 @@
             }
           },
           "search": {
+            "defaultShell": {
+              "title": "기본 Shell",
+              "description": "Orca가 새 로컬 macOS 및 Linux 터미널 창에서 열 shell을 선택하세요."
+            },
             "c047f398cc": "실행",
             "b872de3926": "위치",
             "fd6c24313d": "새로운",

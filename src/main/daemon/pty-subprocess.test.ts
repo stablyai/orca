@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: exercises full PTY subprocess surface (spawn setup, signal routing, data events, platform-specific shell configs, and Windows PowerShell implementations) with co-located test scenarios to prevent fixture drift. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
@@ -1358,6 +1358,93 @@ describe('createPtySubprocess', () => {
       expect.any(String),
       expect.any(Array),
       expect.objectContaining({ cwd: '/' })
+    )
+  })
+
+  it('sets SHELL to the POSIX shell override before daemon spawn', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    const shellPath = join(userDataPath, 'fish')
+    writeFileSync(shellPath, '#!/bin/sh\n')
+    chmodSync(shellPath, 0o755)
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '/',
+        env: { SHELL: '/bin/zsh' },
+        shellOverride: shellPath
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      shellPath,
+      expect.any(Array),
+      expect.objectContaining({ env: expect.objectContaining({ SHELL: shellPath }) })
+    )
+  })
+
+  it('ignores stale non-POSIX shell overrides before daemon POSIX spawn', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '/',
+        env: { SHELL: '/bin/bash' },
+        shellOverride: 'powershell.exe'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/bash',
+      expect.any(Array),
+      expect.objectContaining({ env: expect.objectContaining({ SHELL: '/bin/bash' }) })
+    )
+  })
+
+  it('falls back to SHELL for stale absolute shell overrides before daemon POSIX spawn', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '/',
+        env: { SHELL: '/bin/bash' },
+        shellOverride: join(userDataPath, 'fish')
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/bash',
+      expect.any(Array),
+      expect.objectContaining({ env: expect.objectContaining({ SHELL: '/bin/bash' }) })
     )
   })
 

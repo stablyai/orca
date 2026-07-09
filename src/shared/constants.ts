@@ -249,6 +249,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // and Linux keep right-click available for the context menu by default.
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     terminalRightClickToPasteDefaultedForPlatform: true,
+    terminalDefaultShellPath: null,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsWslDistro: null,
     localAccountRuntime: 'host',

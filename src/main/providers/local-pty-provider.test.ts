@@ -7,6 +7,8 @@ const {
   statSyncMock,
   accessSyncMock,
   mkdirSyncMock,
+  readFileSyncMock,
+  realpathSyncMock,
   writeFileSyncMock,
   spawnMock,
   resolveAgentForegroundProcessMock
@@ -15,6 +17,8 @@ const {
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
   mkdirSyncMock: vi.fn(),
+  readFileSyncMock: vi.fn(),
+  realpathSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn()
@@ -25,6 +29,8 @@ vi.mock('fs', () => ({
   statSync: statSyncMock,
   accessSync: accessSyncMock,
   mkdirSync: mkdirSyncMock,
+  readFileSync: readFileSyncMock,
+  realpathSync: realpathSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
@@ -119,8 +125,10 @@ describe('LocalPtyProvider', () => {
     delete process.env.HISTFILE
 
     existsSyncMock.mockReturnValue(true)
-    statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
+    statSyncMock.mockReturnValue({ isDirectory: () => true, isFile: () => true, mode: 0o755 })
     accessSyncMock.mockReturnValue(undefined)
+    readFileSyncMock.mockReturnValue('')
+    realpathSyncMock.mockImplementation((value: string) => value)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
@@ -216,6 +224,50 @@ describe('LocalPtyProvider', () => {
           rows: 40,
           cwd: '/tmp'
         })
+      )
+    })
+
+    it('uses an explicit POSIX shell override for new local terminals', async () => {
+      await provider.spawn({ cols: 80, rows: 24, cwd: '/tmp', shellOverride: '/usr/bin/fish' })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('/usr/bin/fish')
+      expect(spawnCall[1]).toEqual(['-l'])
+      expect(spawnCall[2]).toEqual(
+        expect.objectContaining({ env: expect.objectContaining({ SHELL: '/usr/bin/fish' }) })
+      )
+    })
+
+    it('ignores stale non-POSIX shell overrides for local POSIX terminals', async () => {
+      await provider.spawn({ cols: 80, rows: 24, cwd: '/tmp', shellOverride: 'powershell.exe' })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('/bin/zsh')
+      expect(spawnCall[2]).toEqual(
+        expect.objectContaining({ env: expect.objectContaining({ SHELL: '/bin/zsh' }) })
+      )
+    })
+
+    it('falls back to SHELL for stale absolute POSIX shell overrides', async () => {
+      statSyncMock.mockImplementation((p: string) => {
+        if (p === '/usr/local/bin/fish') {
+          throw new Error('missing shell')
+        }
+        return { isDirectory: () => true, isFile: () => true, mode: 0o755 }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        env: { SHELL: '/bin/bash' },
+        shellOverride: '/usr/local/bin/fish'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('/bin/bash')
+      expect(spawnCall[2]).toEqual(
+        expect.objectContaining({ env: expect.objectContaining({ SHELL: '/bin/bash' }) })
       )
     })
 

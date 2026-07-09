@@ -1381,6 +1381,65 @@ describe('setActiveWorktree', () => {
     }
   })
 
+  it('stamps the POSIX default shell onto new local terminal tabs', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'repo1::/path/wt1'
+
+      seedStore(store, {
+        settings: { ...getDefaultSettings('/tmp'), terminalDefaultShellPath: '/usr/bin/fish' },
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt)
+      expect(terminal.shellOverride).toBe('/usr/bin/fish')
+
+      store.setState({
+        settings: { ...store.getState().settings!, terminalDefaultShellPath: '/bin/bash' }
+      })
+      expect(store.getState().tabsByWorktree[wt][0].shellOverride).toBe('/usr/bin/fish')
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
+  it('does not stamp invalid POSIX default shell paths onto new local terminal tabs', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'repo1::/path/wt1'
+
+      seedStore(store, {
+        settings: { ...getDefaultSettings('/tmp'), terminalDefaultShellPath: 'fish' },
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt)
+      expect(terminal.shellOverride).toBeUndefined()
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
   it('stamps host shell metadata when project runtime overrides stale WSL defaults', () => {
     const originalNavigator = globalThis.navigator
     Object.defineProperty(globalThis, 'navigator', {

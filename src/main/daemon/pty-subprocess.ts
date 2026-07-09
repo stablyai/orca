@@ -42,6 +42,7 @@ import {
 } from '../pty/powerlevel10k-wizard-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { getLaunchablePosixShellOverrideForSpawn } from '../terminal-default-shell-validation'
 import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
 import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
 import {
@@ -589,10 +590,23 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       ? getWslContextFromPreferredDistro(opts.terminalWindowsWslDistro)
       : undefined
   // Why: WSL worktree cwd is the repo's execution environment. Older persisted
-  // tabs can carry a PowerShell/cmd shellOverride; ignore it so reconnects and
-  // daemon-backed terminals enter the WSL distro just like LocalPtyProvider.
+  // tabs can carry a PowerShell/cmd shellOverride, and POSIX overrides can go
+  // stale after validation; ignore them so the spawn path can fall back.
+  const posixShellOverride =
+    process.platform === 'win32'
+      ? undefined
+      : getLaunchablePosixShellOverrideForSpawn(opts.shellOverride)
   let shellPath =
-    cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
+    cwdWslInfo || sessionWslContext
+      ? 'wsl.exe'
+      : process.platform === 'win32'
+        ? opts.shellOverride || resolvePtyShellPath(env)
+        : posixShellOverride || resolvePtyShellPath(env)
+  if (process.platform !== 'win32') {
+    // Why: shell-ready wrappers and user startup files read SHELL before
+    // spawn; keep it aligned with the actual configured POSIX shell.
+    env.SHELL = shellPath
+  }
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []

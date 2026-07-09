@@ -184,6 +184,15 @@ describePosix('daemon shell-ready launch config', () => {
     vi.restoreAllMocks()
   })
 
+  it('uses the POSIX shell override when deciding startup barrier support', async () => {
+    const { supportsPtyStartupBarrier } = await importFreshShellReady()
+
+    expect(supportsPtyStartupBarrier({ SHELL: '/bin/zsh' }, '/usr/bin/fish')).toBe(false)
+    expect(supportsPtyStartupBarrier({ SHELL: '/usr/bin/fish' }, '/bin/bash')).toBe(true)
+    expect(supportsPtyStartupBarrier({ SHELL: '/bin/zsh' }, 'powershell.exe')).toBe(true)
+    expect(supportsPtyStartupBarrier({ SHELL: '/usr/bin/fish' }, 'bash')).toBe(false)
+  })
+
   it('stores wrapper rcfiles under durable userData instead of tmp', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 

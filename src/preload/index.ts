@@ -1880,6 +1880,9 @@ const api = {
     updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('settings:update-pr-bot-author-override', args),
 
+    validateTerminalDefaultShellPath: (value: unknown): Promise<unknown> =>
+      ipcRenderer.invoke('settings:validateTerminalDefaultShellPath', value),
+
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 
     previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
