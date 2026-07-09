@@ -179,14 +179,6 @@ export async function authenticateWithGrokCli(
       timer.unref()
     }
 
-    if (options.signal) {
-      if (options.signal.aborted) {
-        finish(failed('Grok authentication aborted.', 'network'))
-        return
-      }
-      options.signal.addEventListener('abort', onAbort, { once: true })
-    }
-
     const onChildError = (error: Error): void => {
       finish(
         isEnoent(error)
@@ -227,10 +219,20 @@ export async function authenticateWithGrokCli(
       }
     }
 
+    // Why: attach child listeners before any finish()/abort path so cleanup
+    // never touches TDZ bindings and spawn errors are not missed.
     child.on('error', onChildError)
     child.on('close', onClose)
     child.stdin.on('error', onStdinError)
     child.stdout.on('data', onStdoutData)
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        finish(failed('Grok authentication aborted.', 'network'))
+        return
+      }
+      options.signal.addEventListener('abort', onAbort, { once: true })
+    }
 
     void (async () => {
       try {
