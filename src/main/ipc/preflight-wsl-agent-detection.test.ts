@@ -47,6 +47,21 @@ describe('detectWslCommandsOnPath', () => {
     expect(payload).toContain('fi\ndone')
   })
 
+  it('prefers type -P/-p over command -v so shell aliases do not mask PATH binaries', async () => {
+    execFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
+
+    const payload = lastShCommandPayload()
+    // Why: LeanCTX and similar tools alias claude/codex; command -v alone
+    // returns alias text and fails absolute-path detection (#7816).
+    // bash: type -P; zsh: type -p; dash/sh: command -v.
+    // `$` is escaped for Windows argv preprocessing before the WSL shell runs.
+    expect(payload).toContain(
+      'if resolved=\\$(type -P "\\$cmd" 2>/dev/null) || resolved=\\$(type -p "\\$cmd" 2>/dev/null) || resolved=\\$(command -v "\\$cmd" 2>/dev/null); then'
+    )
+  })
+
   it('parses detected commands from prefixed stdout', async () => {
     execFileAsyncMock.mockResolvedValue({
       stdout:
@@ -63,6 +78,18 @@ describe('detectWslCommandsOnPath', () => {
   it('ignores commands whose resolved path is not absolute', async () => {
     execFileAsyncMock.mockResolvedValue({
       stdout: '__ORCA_AGENT_PATH__claude\tclaude\n',
+      stderr: ''
+    })
+
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+
+    expect(found).toEqual(new Set())
+  })
+
+  it('ignores alias-style resolution output that is not an absolute path', async () => {
+    execFileAsyncMock.mockResolvedValue({
+      stdout:
+        '__ORCA_AGENT_PATH__claude\talias claude=\'LEAN_CTX_AGENT=1 BASH_ENV="$HOME/.bashenv" claude\'\n',
       stderr: ''
     })
 

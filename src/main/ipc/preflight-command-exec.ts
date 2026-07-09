@@ -81,12 +81,23 @@ export async function isCommandOnPath(
   const finder = process.platform === 'win32' ? 'where' : 'which'
   try {
     const { stdout } = wslTarget
-      ? await execCommandInWsl(wslTarget, `command -v ${shellQuote(command)}`)
+      ? // Why: match WSL agent discovery (#7816) — bash type -P, zsh type -p,
+        // then command -v so shell aliases do not mask PATH executables.
+        await execCommandInWsl(
+          wslTarget,
+          [
+            `if resolved=$(type -P ${shellQuote(command)} 2>/dev/null) || resolved=$(type -p ${shellQuote(command)} 2>/dev/null) || resolved=$(command -v ${shellQuote(command)} 2>/dev/null); then`,
+            'printf \'%s\\n\' "$resolved"',
+            'fi'
+          ].join('\n')
+        )
       : await execLocalPreflightCommand(finder, [command])
+    // Why: WSL returns POSIX paths; path.isAbsolute on win32 rejects /usr/bin/...
+    const isAbsolute = wslTarget ? path.posix.isAbsolute.bind(path.posix) : path.isAbsolute
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .some((line) => path.isAbsolute(line))
+      .some((line) => isAbsolute(line))
   } catch {
     return false
   }

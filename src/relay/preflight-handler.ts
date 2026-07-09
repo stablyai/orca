@@ -220,8 +220,12 @@ function buildPosixCommandLookupSpec(command: string, shell: string): CommandLoo
 
 function buildShCommandLookupScript(command: string): string {
   const quotedCommand = shellQuote(command)
+  // Why: interactive login shells load aliases (e.g. LeanCTX wraps agent CLIs).
+  // `command -v` then prints alias text, which fails absolute-path detection.
+  // Bash needs `type -P` past aliases; zsh uses lowercase `type -p`; dash/sh
+  // support neither, so fall back to `command -v`.
   return [
-    `if resolved=$(command -v ${quotedCommand} 2>/dev/null); then`,
+    `if resolved=$(type -P ${quotedCommand} 2>/dev/null) || resolved=$(type -p ${quotedCommand} 2>/dev/null) || resolved=$(command -v ${quotedCommand} 2>/dev/null); then`,
     `printf '${AGENT_PATH_PREFIX}%s\\n' "$resolved"`,
     'fi'
   ].join('\n')

@@ -28,9 +28,15 @@ export async function detectWslCommandsOnPath(
   // (it needs a separator before `done`); the login shell may be zsh, so a
   // space-joined script silently fails for every agent. Newlines are valid
   // statement separators in every POSIX shell and zsh.
+  //
+  // Why: interactive login shells load aliases (e.g. LeanCTX wraps claude/codex).
+  // `command -v` then prints alias text, which fails our absolute-path check and
+  // hides installed agents (#7816). Bash needs `type -P` to force a PATH lookup
+  // past aliases/functions; zsh's equivalent is lowercase `type -p` (uppercase
+  // -P is not valid there). Dash/sh support neither, so fall back to `command -v`.
   const script = [
     `for cmd in ${commandList}; do`,
-    'if resolved=$(command -v "$cmd" 2>/dev/null); then',
+    'if resolved=$(type -P "$cmd" 2>/dev/null) || resolved=$(type -p "$cmd" 2>/dev/null) || resolved=$(command -v "$cmd" 2>/dev/null); then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',
     'done'
