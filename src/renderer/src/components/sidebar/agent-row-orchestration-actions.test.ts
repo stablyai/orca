@@ -136,6 +136,8 @@ describe('listCoordinatorCandidates', () => {
     expect(candidates).toHaveLength(1)
     expect(candidates[0]?.paneKey).toBe(COORD_PANE)
     expect(candidates[0]?.isFocused).toBe(true)
+    expect(candidates[0]?.agentType).toBe('claude')
+    expect(candidates[0]?.label).toContain('claude')
     expect(candidates[0]?.label).toContain('I am the boss')
     expect(candidates[0]?.label).toContain('(focused)')
   })

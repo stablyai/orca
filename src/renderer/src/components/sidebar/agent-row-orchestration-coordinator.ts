@@ -84,6 +84,8 @@ function collectWorktreeTerminalPaneKeys(
 export type CoordinatorCandidate = {
   paneKey: string
   label: string
+  /** Raw agent type for icon mapping (claude, codex, grok, …). */
+  agentType: string | null
   isFocused: boolean
 }
 
@@ -91,14 +93,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function candidateLabel(args: {
+function readCandidateMeta(args: {
   paneKey: string
   state: ActiveTerminalPaneKeyState
   isFocused: boolean
-}): string {
+}): { label: string; agentType: string | null } {
   const entry = args.state.agentStatusByPaneKey?.[args.paneKey]
   let prompt = ''
-  let agentType = ''
+  let agentType: string | null = null
   if (isRecord(entry)) {
     if (typeof entry.prompt === 'string' && entry.prompt.trim()) {
       prompt = entry.prompt.trim()
@@ -117,13 +119,32 @@ function candidateLabel(args: {
     tab && 'title' in tab && typeof (tab as { title?: unknown }).title === 'string'
       ? String((tab as { title: string }).title).trim()
       : ''
+  // Why: tab titles like "Claude Code" often encode agent identity when status
+  // has not reported agentType yet.
+  if (!agentType && tabTitle) {
+    const lower = tabTitle.toLowerCase()
+    if (lower.includes('claude')) {
+      agentType = 'claude'
+    } else if (lower.includes('codex')) {
+      agentType = 'codex'
+    } else if (lower.includes('grok')) {
+      agentType = 'grok'
+    } else if (lower.includes('gemini')) {
+      agentType = 'gemini'
+    } else if (lower.includes('opencode')) {
+      agentType = 'opencode'
+    }
+  }
 
-  const base =
-    (prompt.length > 48 ? `${prompt.slice(0, 48)}…` : prompt) ||
+  const detail =
+    (prompt.length > 40 ? `${prompt.slice(0, 40)}…` : prompt) ||
     tabTitle ||
-    agentType ||
-    args.paneKey.slice(0, 20)
-  return args.isFocused ? `${base} (focused)` : base
+    args.paneKey.slice(0, 16)
+  const base = agentType ? `${agentType} · ${detail}` : detail
+  return {
+    agentType,
+    label: args.isFocused ? `${base} (focused)` : base
+  }
 }
 
 // Why: the dialog must list explicit coordinator choices; users should not have
@@ -140,15 +161,16 @@ export function listCoordinatorCandidates(args: {
   const focused = getActiveTerminalPaneKey(args.state)
   return collectWorktreeTerminalPaneKeys(args.state, worktreeId)
     .filter((paneKey) => paneKey !== args.workerPaneKey)
-    .map((paneKey) => ({
-      paneKey,
-      isFocused: paneKey === focused,
-      label: candidateLabel({
+    .map((paneKey) => {
+      const isFocused = paneKey === focused
+      const meta = readCandidateMeta({ paneKey, state: args.state, isFocused })
+      return {
         paneKey,
-        state: args.state,
-        isFocused: paneKey === focused
-      })
-    }))
+        isFocused,
+        label: meta.label,
+        agentType: meta.agentType
+      }
+    })
 }
 
 // Why: right-clicking an agent often focuses that same terminal, so "focused =

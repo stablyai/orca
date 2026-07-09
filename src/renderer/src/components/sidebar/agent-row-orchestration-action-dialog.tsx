@@ -22,6 +22,7 @@ import {
   sendMessageToAgent,
   type OrchestrationActionKind
 } from './agent-row-orchestration-actions'
+import { AgentRowOrchestrationCoordinatorPicker } from './agent-row-orchestration-coordinator-picker'
 import type { AgentRowOrchestrationTarget } from './worktree-agent-orchestration-menu'
 
 export type AgentRowOrchestrationActionDialogState = {
@@ -279,42 +280,12 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="orchestration-action-coordinator">
-              {translate(
-                'auto.components.sidebar.agent.row.orchestration.action.dialog.coordinator',
-                'Coordinator (who owns this)'
-              )}
-            </Label>
-            <select
-              id="orchestration-action-coordinator"
-              value={coordinatorPaneKey}
-              onChange={(e) => setCoordinatorPaneKey(e.target.value)}
-              disabled={submitting || coordinatorOptions.length === 0}
-              className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {coordinatorOptions.length === 0 ? (
-                <option value="">
-                  {translate(
-                    'auto.components.sidebar.agent.row.orchestration.action.dialog.coordinator.empty',
-                    'No other terminal in this worktree'
-                  )}
-                </option>
-              ) : (
-                coordinatorOptions.map((option) => (
-                  <option key={option.paneKey} value={option.paneKey}>
-                    {option.label}
-                  </option>
-                ))
-              )}
-            </select>
-            <p className="text-muted-foreground text-[11px] leading-snug">
-              {translate(
-                'auto.components.sidebar.agent.row.orchestration.action.dialog.coordinator.hint',
-                'Worker = the agent you right-clicked. Coordinator = who dispatches and receives worker_done.'
-              )}
-            </p>
-          </div>
+          <AgentRowOrchestrationCoordinatorPicker
+            options={coordinatorOptions}
+            value={coordinatorPaneKey}
+            disabled={submitting}
+            onChange={setCoordinatorPaneKey}
+          />
           <div className="space-y-2">
             <Label htmlFor="orchestration-action-primary">{copy.primaryFieldLabel}</Label>
             {kind === 'dispatch' || kind === 'ask' ? (
