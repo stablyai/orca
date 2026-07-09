@@ -20,6 +20,26 @@ describe('notification routing', () => {
     })
   })
 
+  it('carries the pane key through to locally scheduled notification data', () => {
+    expect(
+      buildLocalNotificationData(
+        {
+          source: 'dispatch',
+          worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+          paneKey: 'tab-9:11111111-1111-4111-8111-111111111111',
+          notificationId: 'dispatch:one'
+        },
+        'host-1'
+      )
+    ).toEqual({
+      source: 'dispatch',
+      hostId: 'host-1',
+      worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+      paneKey: 'tab-9:11111111-1111-4111-8111-111111111111',
+      notificationId: 'dispatch:one'
+    })
+  })
+
   it('routes notification taps to the worktree terminal screen', () => {
     expect(
       getNotificationNavigationPath({
@@ -27,6 +47,18 @@ describe('notification routing', () => {
         worktreeId: 'repo::/Users/me/orca/workspaces/feature'
       })
     ).toBe('/h/host-1/session/repo%3A%3A%2FUsers%2Fme%2Forca%2Fworkspaces%2Ffeature')
+  })
+
+  it('appends the pane key as a query param when the tap names a pane', () => {
+    expect(
+      getNotificationNavigationPath({
+        hostId: 'host-1',
+        worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+        paneKey: 'tab-9:11111111-1111-4111-8111-111111111111'
+      })
+    ).toBe(
+      '/h/host-1/session/repo%3A%3A%2FUsers%2Fme%2Forca%2Fworkspaces%2Ffeature?pane=tab-9%3A11111111-1111-4111-8111-111111111111'
+    )
   })
 
   it('falls back to the host screen when the payload has no worktree id', () => {

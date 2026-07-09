@@ -1,8 +1,14 @@
-export type DesktopNotificationSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+export type DesktopNotificationSource =
+  | 'agent-task-complete'
+  | 'terminal-bell'
+  | 'test'
+  | 'dispatch'
 
 export type DesktopNotificationEvent = {
   source: DesktopNotificationSource
   worktreeId?: string
+  /** Stable `${tabId}:${leafId}` pane key so the tap can focus the exact pane. */
+  paneKey?: string
   notificationId?: string
 }
 
@@ -10,6 +16,7 @@ export type LocalNotificationData = {
   source: DesktopNotificationSource
   hostId: string
   worktreeId?: string
+  paneKey?: string
   notificationId?: string
 }
 
@@ -31,6 +38,9 @@ export function buildLocalNotificationData(
   }
   if (event.worktreeId) {
     data.worktreeId = event.worktreeId
+  }
+  if (event.paneKey) {
+    data.paneKey = event.paneKey
   }
   if (event.notificationId) {
     data.notificationId = event.notificationId
@@ -61,5 +71,10 @@ export function getNotificationNavigationPath(
     return hostPath
   }
 
-  return `${hostPath}/session/${encodeURIComponent(worktreeId)}`
+  const sessionPath = `${hostPath}/session/${encodeURIComponent(worktreeId)}`
+  // Why: a `dispatch`/agent notification can name the exact pane. Carry it as a
+  // query param so the session screen can focus that split on load; taps
+  // without a pane keep the plain worktree-granular route.
+  const paneKey = readNonEmptyString(record.paneKey)
+  return paneKey ? `${sessionPath}?pane=${encodeURIComponent(paneKey)}` : sessionPath
 }

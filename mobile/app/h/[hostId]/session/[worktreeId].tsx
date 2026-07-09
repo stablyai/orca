@@ -812,13 +812,15 @@ export default function SessionScreen() {
     worktreeId,
     name: routeWorktreeName,
     created,
-    warning: createdWarning
+    warning: createdWarning,
+    pane: routePaneKey
   } = useLocalSearchParams<{
     hostId: string
     worktreeId: string
     name?: string
     created?: string
     warning?: string
+    pane?: string
   }>()
   const isFolderWorkspaceRoute = worktreeId.startsWith('folder:')
   const router = useRouter()
@@ -1031,6 +1033,11 @@ export default function SessionScreen() {
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
   const pendingActiveTerminalHandleRef = useRef<string | null>(null)
+  // Why: a `pane=` query param (from a dispatch/agent notification tap) names a
+  // specific split to focus on load. Resolve it to a live handle once, then
+  // activate it through the vetted switchTab path when its tab appears.
+  const routePaneResolvedHandleRef = useRef<string | null>(null)
+  const routePaneFocusAppliedRef = useRef(false)
   // Why: a browser tab opened from a terminal-tapped HTML must be focused as an
   // Orca session tab (bridge auto-activate only flags the live webContents, not
   // the app-level active tab). We remember the page id and, once its session tab
@@ -2885,6 +2892,50 @@ export default function SessionScreen() {
       worktreeId
     ]
   )
+
+  // Why: focus the pane named by a notification tap (`?pane=`). Resolve the
+  // stable pane key to a live terminal handle once, then hand off to switchTab
+  // when its session tab has loaded. Failure is a no-op — the worktree-level
+  // view (the pre-existing behavior) still shows.
+  useEffect(() => {
+    if (!routePaneKey || connState !== 'connected' || !client) {
+      return
+    }
+    if (routePaneFocusAppliedRef.current) {
+      return
+    }
+    const activeClient = client
+    let cancelled = false
+    void (async () => {
+      let handle = routePaneResolvedHandleRef.current
+      if (!handle) {
+        try {
+          const response = await activeClient.sendRequest('terminal.resolvePane', {
+            paneKey: routePaneKey
+          })
+          handle = (response as { terminal?: { handle?: string } })?.terminal?.handle ?? null
+        } catch {
+          handle = null
+        }
+        if (cancelled || !handle) {
+          return
+        }
+        routePaneResolvedHandleRef.current = handle
+      }
+      const resolvedHandle = handle
+      const hasTab = sessionTabs.some(
+        (tab) => tab.type === 'terminal' && tab.terminal === resolvedHandle
+      )
+      if (!hasTab) {
+        return
+      }
+      routePaneFocusAppliedRef.current = true
+      switchTab(resolvedHandle)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [routePaneKey, connState, client, sessionTabs, switchTab])
 
   const switchSessionTab = useCallback(
     (tab: MobileSessionTab) => {
