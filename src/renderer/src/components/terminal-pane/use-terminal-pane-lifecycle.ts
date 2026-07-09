@@ -1374,19 +1374,24 @@ export function useTerminalPaneLifecycle({
           (candidate) => candidate.id === tabId
         )
         const platformInfo = window.api.platform?.get?.()
+        // Why: Grok on local Windows ConPTY needs KKP for modified Enter; pass
+        // known agent so the ConPTY withhold (#2434) does not blank Grok chords.
+        const knownTuiAgent = startup?.launchAgent ?? currentTab?.launchAgent ?? null
         const ptyBackendContext = {
           userAgent: navigator.userAgent,
           osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
           shellOverride: currentTab?.shellOverride,
-          executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId)
+          executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId),
+          tuiAgent: knownTuiAgent
         }
         const windowsPtyCompatibilityOptions =
           buildWindowsPtyCompatibilityOptions(ptyBackendContext)
         // Why: local Windows ConPTY CLIs read the Kitty keyboard advertisement but
         // do not decode CSI-u, so withhold it there to restore Enter/Up/Down nav
         // (issue #2434); SSH and macOS/Linux panes keep enhanced reporting.
+        // Exception: Grok (tuiAgent) keeps the advertisement — see protocol module.
         const keyboardProtocolOptions = buildTerminalKeyboardProtocolOptions(ptyBackendContext)
         return {
           ...windowsPtyCompatibilityOptions,

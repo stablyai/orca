@@ -149,6 +149,25 @@ describe('buildDefaultTerminalOptions', () => {
     expect(merged.vtExtensions?.kittyKeyboard).toBe(false)
   })
 
+  it('keeps kitty keyboard when a local Windows ConPTY pane is launching Grok', () => {
+    // Why: Grok needs KKP for Ctrl+Enter interject / Shift+Enter newline; the
+    // ConPTY withhold must not win when launchAgent (or tuiAgent) is grok.
+    const merged = {
+      ...buildDefaultTerminalOptions(),
+      ...buildTerminalKeyboardProtocolOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe',
+        executionHostId: 'local',
+        tuiAgent: 'grok'
+      })
+    }
+
+    expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
+  })
+
   it('keeps the advertised kitty keyboard default for SSH and macOS/Linux panes', () => {
     for (const context of [
       {
