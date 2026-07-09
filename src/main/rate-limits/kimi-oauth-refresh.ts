@@ -36,7 +36,13 @@ function applyRefreshedCredentials(
   if (typeof response.access_token !== 'string' || response.access_token.length === 0) {
     return null
   }
-  if (typeof response.expires_in !== 'number' || !Number.isFinite(response.expires_in)) {
+  // Why: match isAccessTokenFresh's 5s skew. Zero/negative/tiny TTLs would be
+  // persisted as a "successful" refresh but still fail the freshness check.
+  if (
+    typeof response.expires_in !== 'number' ||
+    !Number.isFinite(response.expires_in) ||
+    response.expires_in <= 5
+  ) {
     return null
   }
   const refreshToken =
