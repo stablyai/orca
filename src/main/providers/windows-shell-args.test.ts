@@ -58,6 +58,22 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
+  it('keeps quoted cmd.exe startup commands on stdin delivery', () => {
+    // Regression: embedding a quoted `cmd /d /s /c "..."` resume command in the
+    // `/K` arg let node-pty's C-runtime argv escaping emit \"-escaped quotes
+    // that cmd.exe rejects with "is not recognized as an internal or external
+    // command". Quote-carrying commands must route to stdin delivery instead.
+    const result = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\Users\\alice\\repo',
+      'C:\\Users\\alice',
+      undefined,
+      'cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude ""--resume"" ""session one"""'
+    )
+    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
   it('keeps large cmd.exe startup commands on stdin delivery', () => {
     const result = resolveWindowsShellLaunchArgs(
       'cmd.exe',
