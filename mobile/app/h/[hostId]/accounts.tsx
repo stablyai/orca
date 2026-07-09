@@ -22,6 +22,7 @@ import {
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getResetSummary,
   getUsageBarState,
   hasActiveProviderUsage,
   UsageBar
@@ -39,6 +40,14 @@ export default function AccountsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
+
+  // Why: the reset countdown must stay fresh while the screen sits open —
+  // snapshot pushes only arrive when the desktop's rate-limit poll completes.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (!hostId) {
@@ -136,6 +145,7 @@ export default function AccountsScreen() {
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
     const activeSessionBar = getUsageBarState(activeUsage, 'session')
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
+    const activeResetSummary = getResetSummary(activeUsage, now)
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     return (
       <View style={styles.section}>
@@ -172,6 +182,11 @@ export default function AccountsScreen() {
                   />
                 </View>
               ) : null}
+              {state.activeAccountId === null && activeResetSummary ? (
+                <Text style={styles.resetText} numberOfLines={1}>
+                  {activeResetSummary}
+                </Text>
+              ) : null}
             </View>
             <View style={styles.rowTrailing}>
               {state.activeAccountId === null ? (
@@ -193,6 +208,7 @@ export default function AccountsScreen() {
               (!isActive && inactiveEntry?.isFetching === true)
             const sessionBar = getUsageBarState(usage, 'session', isFetching)
             const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
+            const resetSummary = getResetSummary(usage, now)
             return (
               <View key={account.id}>
                 <View style={styles.separator} />
@@ -219,6 +235,11 @@ export default function AccountsScreen() {
                         loading={weeklyBar.loading}
                       />
                     </View>
+                    {resetSummary ? (
+                      <Text style={styles.resetText} numberOfLines={1}>
+                        {resetSummary}
+                      </Text>
+                    ) : null}
                     {usage?.error ? (
                       <Text style={styles.errorText} numberOfLines={1}>
                         {usage.error}

@@ -117,6 +117,43 @@ export function getUsageBarState(
   }
 }
 
+// Why: mirrors desktop status-bar tooltip.tsx duration formatting so the
+// countdown copy matches across surfaces ("3h 54m", "6d 7h"). Duplicated
+// because the mobile bundle must not import renderer code.
+function formatResetPhrase(ms: number): string {
+  if (ms <= 0) {
+    return 'now'
+  }
+  const totalMins = Math.floor(ms / 60_000)
+  if (totalMins < 60) {
+    return `in ${totalMins}m`
+  }
+  const hours = Math.floor(totalMins / 60)
+  const mins = totalMins % 60
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24)
+    const remHours = hours % 24
+    return remHours > 0 ? `in ${days}d ${remHours}h` : `in ${days}d`
+  }
+  return mins > 0 ? `in ${hours}h ${mins}m` : `in ${hours}h`
+}
+
+// Why: reuses the bar labels ("5h"/"7d") instead of desktop's
+// "Session"/"Weekly" headings so the line reads against the bars above it.
+// `now` is a parameter so the function stays pure and unit-testable.
+export function getResetSummary(limits: ProviderRateLimits | null, now: number): string | null {
+  const parts: string[] = []
+  const sessionResetsAt = limits?.session?.resetsAt
+  if (sessionResetsAt != null) {
+    parts.push(`5h resets ${formatResetPhrase(sessionResetsAt - now)}`)
+  }
+  const weeklyResetsAt = limits?.weekly?.resetsAt
+  if (weeklyResetsAt != null) {
+    parts.push(`7d resets ${formatResetPhrase(weeklyResetsAt - now)}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 // Why: the usage UI must render for the system-default login, not only for
 // Orca-managed accounts. Show a provider when it has at least one managed
 // account OR active rate-limit data for the system-default target.

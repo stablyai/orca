@@ -16,6 +16,7 @@ export type {
 export {
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getResetSummary,
   getUsageBarState,
   hasActiveProviderUsage,
   hasRenderableUsage

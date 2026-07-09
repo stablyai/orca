@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getInactiveProviderUsage,
+  getResetSummary,
   getUsageBarState,
   hasActiveProviderUsage,
   hasRenderableUsage,
@@ -114,6 +115,56 @@ describe('getInactiveProviderUsage', () => {
     })
 
     expect(getInactiveProviderUsage(snapshot, 'claude', 'account-1')?.rateLimits).toBe(limits)
+  })
+})
+
+describe('getResetSummary', () => {
+  const now = 1_700_000_000_000
+  const min = 60_000
+  const hour = 60 * min
+  const day = 24 * hour
+
+  function makeWindow(resetsAt: number | null): ProviderRateLimits['session'] {
+    return { usedPercent: 13, windowMinutes: 300, resetsAt, resetDescription: null }
+  }
+
+  it('is null when there are no limits or no window has a reset timestamp', () => {
+    expect(getResetSummary(null, now)).toBe(null)
+    expect(getResetSummary(makeLimits({ status: 'ok' }), now)).toBe(null)
+    expect(
+      getResetSummary(
+        makeLimits({ status: 'ok', session: makeWindow(null), weekly: makeWindow(null) }),
+        now
+      )
+    ).toBe(null)
+  })
+
+  it('formats a single session window', () => {
+    const limits = makeLimits({ session: makeWindow(now + 3 * hour + 54 * min) })
+    expect(getResetSummary(limits, now)).toBe('5h resets in 3h 54m')
+  })
+
+  it('joins session and weekly windows', () => {
+    const limits = makeLimits({
+      session: makeWindow(now + 47 * min),
+      weekly: makeWindow(now + 6 * day + 7 * hour)
+    })
+    expect(getResetSummary(limits, now)).toBe('5h resets in 47m · 7d resets in 6d 7h')
+  })
+
+  it('formats exact hours and exact days without a zero remainder', () => {
+    expect(getResetSummary(makeLimits({ session: makeWindow(now + 2 * hour) }), now)).toBe(
+      '5h resets in 2h'
+    )
+    expect(getResetSummary(makeLimits({ weekly: makeWindow(now + 7 * day) }), now)).toBe(
+      '7d resets in 7d'
+    )
+  })
+
+  it('reports "now" for a reset timestamp in the past', () => {
+    expect(getResetSummary(makeLimits({ session: makeWindow(now - min) }), now)).toBe(
+      '5h resets now'
+    )
   })
 })
 

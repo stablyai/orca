@@ -112,6 +112,10 @@ export const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     color: colors.statusRed
   },
+  resetText: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted
+  },
   placeholder: {
     paddingVertical: spacing.xl * 2,
     alignItems: 'center',
