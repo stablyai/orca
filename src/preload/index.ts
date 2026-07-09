@@ -2559,6 +2559,8 @@ const api = {
     getVersion: () => ipcRenderer.invoke('updater:getVersion'),
     check: (options) => ipcRenderer.invoke('updater:check', options),
     download: () => ipcRenderer.invoke('updater:download'),
+    scheduleIdleInstall: () => ipcRenderer.invoke('updater:scheduleIdleInstall'),
+    cancelIdleInstall: () => ipcRenderer.invoke('updater:cancelIdleInstall'),
     dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
     quitAndInstall: async (): Promise<void> => {
       await prepareRendererForAppRestart({
@@ -2581,6 +2583,13 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('updater:clearDismissal', listener)
       return () => ipcRenderer.removeListener('updater:clearDismissal', listener)
+    },
+    // Why: fired by main when a deferred ("update when idle") install is ready to
+    // go — the renderer runs its full quitAndInstall flush in response.
+    onIdleInstallReady: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('updater:idleInstallReady', listener)
+      return () => ipcRenderer.removeListener('updater:idleInstallReady', listener)
     }
   } satisfies PreloadApi['updater'],
 

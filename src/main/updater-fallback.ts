@@ -1,4 +1,14 @@
-import type { UpdateStatus } from '../shared/types'
+import type { IdleInstallDecoration, UpdateStatus } from '../shared/types'
+
+export function idleInstallDecorationEqual(
+  left: IdleInstallDecoration | null | undefined,
+  right: IdleInstallDecoration | null | undefined
+): boolean {
+  if (!left || !right) {
+    return !left && !right
+  }
+  return left.phase === right.phase && left.activeAgentCount === right.activeAgentCount
+}
 
 export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean {
   switch (left.state) {
@@ -14,6 +24,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
         left.releaseUrl === right.releaseUrl &&
+        idleInstallDecorationEqual(left.idleInstall, right.idleInstall) &&
         // Why: fetchChangelog creates a fresh object each time, so reference
         // equality is always false. Compare by presence — since update-available
         // fires at most once per check cycle, this is sufficient.
@@ -24,6 +35,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         right.state === 'downloading' &&
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
+        idleInstallDecorationEqual(left.idleInstall, right.idleInstall) &&
         left.percent === right.percent
       )
     case 'downloaded':
@@ -31,6 +43,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         right.state === 'downloaded' &&
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
+        idleInstallDecorationEqual(left.idleInstall, right.idleInstall) &&
         left.releaseUrl === right.releaseUrl
       )
     case 'error':

@@ -2634,10 +2634,13 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
     getStatus: () => Promise.resolve({ state: 'idle' } as never),
     check: () => Promise.resolve(),
     download: () => Promise.resolve(),
+    scheduleIdleInstall: () => Promise.resolve(),
+    cancelIdleInstall: () => Promise.resolve(),
     quitAndInstall: () => Promise.resolve(),
     dismissNudge: () => Promise.resolve(),
     onStatus: () => noopUnsubscribe,
-    onClearDismissal: () => noopUnsubscribe
+    onClearDismissal: () => noopUnsubscribe,
+    onIdleInstallReady: () => noopUnsubscribe
   }
 }
 

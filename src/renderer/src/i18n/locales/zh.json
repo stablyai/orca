@@ -1792,7 +1792,10 @@
         "a726967bd3": "关闭",
         "d5253b54af": "错误",
         "7ffc08506e": "查看",
-        "522df222b9": "旋转器"
+        "522df222b9": "旋转器",
+        "7c8586ac71": "Your sessions are saved and will be restored automatically.",
+        "19aa0f36c8": "Update when idle",
+        "54f6c6c1ef": "Update now"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "手机",
@@ -2991,7 +2994,15 @@
             "248ee5d8ef": "Orca v{{value0}} 正在下载... {{value1}}%",
             "57a29c3b0e": "更新准备就绪",
             "fd1d3b3a1d": "更新下载，{{value0}}%。单击以展开。",
-            "9d13213a56": "Orca v{{value0}} 已准备好安装"
+            "9d13213a56": "Orca v{{value0}} 已准备好安装",
+            "41f54a9bb0": "Update queued",
+            "f3d85767f4": "{{value0}} still working; Orca v{{value1}} will update when idle",
+            "e57b707ccb": "{{value0}} still working. Update queued until agents are idle. Click to expand.",
+            "d87e814a1f": "Updating soon",
+            "90cc055edc": "Agents idle; Orca v{{value0}} will update shortly",
+            "ef64f04a82": "Agents idle. Update will install shortly. Click to expand.",
+            "0aa2610a61": "Orca v{{value0}} downloading; install will wait for idle agents",
+            "dfa7662691": "Update downloading. Install queued until agents are idle. Click to expand."
           },
           "WorkspaceSpaceCompactPanel": {
             "a471aa9c24": "已更新",

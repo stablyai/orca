@@ -251,20 +251,6 @@ describe('updateCardCollapsed', () => {
   })
 })
 
-// ── markUpdateReassuranceSeen ────────────────────────────────────────
-
-describe('markUpdateReassuranceSeen', () => {
-  it('persists reassurance-seen flag to disk', () => {
-    const store = createTestStore()
-    expect(store.getState().updateReassuranceSeen).toBe(false)
-
-    store.getState().markUpdateReassuranceSeen()
-
-    expect(store.getState().updateReassuranceSeen).toBe(true)
-    expect(window.api.ui.set).toHaveBeenCalledWith({ updateReassuranceSeen: true })
-  })
-})
-
 // ── hydratePersistedUI for update fields ─────────────────────────────
 
 describe('hydratePersistedUI update fields', () => {
@@ -277,28 +263,6 @@ describe('hydratePersistedUI update fields', () => {
     })
 
     expect(store.getState().dismissedUpdateVersion).toBe('1.1.0')
-  })
-
-  it('restores updateReassuranceSeen from persisted UI', () => {
-    const store = createTestStore()
-
-    store.getState().hydratePersistedUI({
-      ...getDefaultUIState(),
-      updateReassuranceSeen: true
-    })
-
-    expect(store.getState().updateReassuranceSeen).toBe(true)
-  })
-
-  it('defaults updateReassuranceSeen to false when absent from persisted UI', () => {
-    const store = createTestStore()
-
-    store.getState().hydratePersistedUI({
-      ...getDefaultUIState(),
-      updateReassuranceSeen: undefined as unknown as boolean
-    })
-
-    expect(store.getState().updateReassuranceSeen).toBe(false)
   })
 })
 

@@ -1792,7 +1792,10 @@
         "a726967bd3": "Descartar",
         "d5253b54af": "error",
         "7ffc08506e": "check",
-        "522df222b9": "spinner"
+        "522df222b9": "spinner",
+        "7c8586ac71": "Tus sesiones están guardadas y se restaurarán automáticamente.",
+        "19aa0f36c8": "Actualizar cuando esté inactivo",
+        "54f6c6c1ef": "Actualizar ahora"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Mover",
@@ -2991,7 +2994,15 @@
             "248ee5d8ef": "Orca v{{value0}} descargando… {{value1}}%",
             "57a29c3b0e": "Actualización lista",
             "fd1d3b3a1d": "Descargando actualización, {{value0}} por ciento. Haz clic para expandir.",
-            "9d13213a56": "Orca v{{value0}} lista para instalar"
+            "9d13213a56": "Orca v{{value0}} lista para instalar",
+            "41f54a9bb0": "Actualización en cola",
+            "f3d85767f4": "{{value0}} sigue trabajando; Orca v{{value1}} se actualizará cuando esté inactivo",
+            "e57b707ccb": "{{value0}} sigue trabajando. Actualización en cola hasta que los agentes estén inactivos. Haz clic para expandir.",
+            "d87e814a1f": "Actualizando pronto",
+            "90cc055edc": "Agentes inactivos; Orca v{{value0}} se actualizará pronto",
+            "ef64f04a82": "Agentes inactivos. La actualización se instalará pronto. Haz clic para expandir.",
+            "0aa2610a61": "Orca v{{value0}} descargándose; la instalación esperará a que los agentes estén inactivos",
+            "dfa7662691": "Actualización descargándose. Instalación en cola hasta que los agentes estén inactivos. Haz clic para expandir."
           },
           "WorkspaceSpaceCompactPanel": {
             "a471aa9c24": "Actualizado",

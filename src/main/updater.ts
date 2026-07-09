@@ -12,6 +12,8 @@ import {
   markMacQuitAndInstallInFlight
 } from './updater-mac-install'
 import { registerAutoUpdaterHandlers } from './updater-events'
+import { IdleInstallController } from './updater-idle-install'
+import type { AgentHookStatusChangeEntry } from './agent-hooks/server'
 import {
   compareVersions,
   isBenignCheckFailure,
@@ -110,6 +112,31 @@ let downloadInFlight = false
  *  while Squirrel's ShipIt is replacing the .app bundle. */
 let quittingForUpdate = false
 let autoUpdater: ElectronAutoUpdater | null = null
+// Why: wired in setupAutoUpdater from the agent hook server. Defaults to "no
+// agents" so the idle-install controller is inert until the server is attached.
+let getAgentStatusSnapshot: () => AgentHookStatusChangeEntry[] = () => []
+let idleInstallSubscribed = false
+
+// Why: side effects route back through this module's own functions so the
+// controller stays Electron-free and unit-testable.
+const idleInstallController = new IdleInstallController({
+  download: () => downloadUpdate(),
+  // Why: routes through the renderer so the idle path gets the same pre-quit
+  // flush (dirty editor save, terminal buffer capture) as "Update now". With no
+  // live renderer there are no renderer-held buffers to lose, so install
+  // directly rather than silently dropping the deferred update.
+  install: () => {
+    const win = mainWindowRef
+    if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.send('updater:idleInstallReady')
+    } else {
+      performQuitAndInstall()
+    }
+  },
+  getStatus: () => currentStatus,
+  getActiveAgentSnapshot: () => getAgentStatusSnapshot(),
+  onDecorationChange: () => rebroadcastUpdaterStatus()
+})
 
 function getAutoUpdater(): ElectronAutoUpdater {
   if (!autoUpdater) {
@@ -163,6 +190,45 @@ function decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
   return { ...status, activeNudgeId: activeUpdateNudgeId }
 }
 
+function decorateStatusWithIdleInstall(status: UpdateStatus): UpdateStatus {
+  // Why: idempotent so the rebroadcast path can recompute decorations off the
+  // already-committed status without compounding them.
+  if (
+    status.state !== 'available' &&
+    status.state !== 'downloading' &&
+    status.state !== 'downloaded'
+  ) {
+    return status
+  }
+  const decoration = idleInstallController.getDecoration()
+  if (!decoration) {
+    if (!status.idleInstall) {
+      return status
+    }
+    const next = { ...status }
+    delete next.idleInstall
+    return next
+  }
+  return { ...status, idleInstall: decoration }
+}
+
+function decorateStatus(status: UpdateStatus): UpdateStatus {
+  return decorateStatusWithIdleInstall(decorateStatusWithActiveNudge(status))
+}
+
+// Why: the idle-install controller can change phase/agent-count without a new
+// updater event (e.g. agents finish working). Re-decorate the committed status
+// and push if the decoration actually changed — keeps the card's "waiting"
+// copy honest without re-running the controller (avoids reentrancy).
+function rebroadcastUpdaterStatus(): void {
+  const redecorated = decorateStatus(currentStatus)
+  if (statusesEqual(currentStatus, redecorated)) {
+    return
+  }
+  currentStatus = redecorated
+  mainWindowRef?.webContents.send('updater:status', redecorated)
+}
+
 function sendStatus(status: UpdateStatus): void {
   const pendingUserInitiatedCheckVariant = pendingUserInitiatedCheckAfterInFlight
   const shouldLaunchPendingUserInitiatedCheck =
@@ -210,7 +276,7 @@ function sendStatus(status: UpdateStatus): void {
     }
   }
 
-  const decoratedStatus = decorateStatusWithActiveNudge(status)
+  const decoratedStatus = decorateStatus(status)
 
   if (isUpdateCheckResultState(status.state)) {
     finishActiveUpdateCheckAttempt()
@@ -243,6 +309,9 @@ function sendStatus(status: UpdateStatus): void {
   }
   currentStatus = decoratedStatus
   mainWindowRef?.webContents.send('updater:status', decoratedStatus)
+  // Why: runs after currentStatus is committed so the controller reads up-to-date
+  // state; its decoration changes re-enter via rebroadcastUpdaterStatus, not here.
+  idleInstallController.handleUpdaterStatus(decoratedStatus)
 }
 
 function getOptionsForUpdateCheckVariant(variant: UpdateCheckVariant): UpdateCheckOptions {
@@ -1158,6 +1227,17 @@ export function quitAndInstall(): void {
   }, QUIT_AND_INSTALL_DELAY_MS)
 }
 
+/** "Update when idle": download now, then restart once all agents are idle. */
+export function scheduleIdleInstall(): void {
+  idleInstallController.arm()
+}
+
+/** Stop waiting for idle (e.g. the user chose "Update now"). The download is
+ *  kept; only the deferred restart is cancelled. */
+export function cancelIdleInstall(): void {
+  idleInstallController.cancel()
+}
+
 async function checkForUpdateNudge(): Promise<void> {
   if (!app.isPackaged || is.dev) {
     return
@@ -1233,6 +1313,8 @@ export function setupAutoUpdater(
     getDismissedUpdateNudgeId?: () => string | null
     setPendingUpdateNudgeId?: (id: string | null) => void
     setDismissedUpdateNudgeId?: (id: string | null) => void
+    getActiveAgentStatuses?: () => AgentHookStatusChangeEntry[]
+    subscribeAgentStatusChanges?: (listener: () => void) => () => void
   }
 ): void {
   mainWindowRef = mainWindow
@@ -1243,6 +1325,17 @@ export function setupAutoUpdater(
   _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
   _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
   _setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
+
+  // Why: subscribe before the dev/packaged guards so the idle-install controller
+  // sees agent activity even though download/install themselves no-op in dev.
+  // Guarded so re-entry (macOS dock re-activation) doesn't stack listeners.
+  if (opts?.getActiveAgentStatuses) {
+    getAgentStatusSnapshot = opts.getActiveAgentStatuses
+  }
+  if (opts?.subscribeAgentStatusChanges && !idleInstallSubscribed) {
+    idleInstallSubscribed = true
+    opts.subscribeAgentStatusChanges(() => idleInstallController.onAgentStatusChange())
+  }
 
   if (!app.isPackaged && !is.dev) {
     return

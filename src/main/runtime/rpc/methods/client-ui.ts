@@ -209,7 +209,6 @@ const UiUpdate = z
     pendingUpdateNudgeId: NullableString.optional(),
     dismissedUpdateNudgeId: NullableString.optional(),
     notificationPermissionRequested: z.boolean().optional(),
-    updateReassuranceSeen: z.boolean().optional(),
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     browserDefaultUrl: NullableString.optional(),
     browserDefaultSearchEngine: z

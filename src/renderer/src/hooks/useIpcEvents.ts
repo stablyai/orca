@@ -1961,6 +1961,16 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      // Why: routes through quitAndInstall so the idle path gets the same
+      // pre-quit flush (dirty-file save + terminal buffer capture) as "Update now".
+      window.api.updater.onIdleInstallReady(() => {
+        void window.api.updater.quitAndInstall().catch((error) => {
+          console.error('[updater] idle install failed:', error)
+        })
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onFullscreenChanged((isFullScreen) => {
         useAppStore.getState().setIsFullScreen(isFullScreen)
       })

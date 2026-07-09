@@ -2200,6 +2200,18 @@ export type ChangelogData = {
   releasesBehind: number | null
 }
 
+// Why: present only while a deferred install ("Update when idle") is armed.
+// Absence means the normal immediate flow. The renderer reads these fields to
+// explain why the restart is waiting rather than guessing from agent state.
+export type IdleInstallDecoration = {
+  // 'downloading'      → payload still downloading; install waits for it to finish
+  // 'waiting-for-idle' → downloaded, but at least one agent is still working
+  // 'grace'            → downloaded and agents idle; restarting after a short settle
+  phase: 'downloading' | 'waiting-for-idle' | 'grace'
+  /** Count of agents currently `working` that are holding the restart back. */
+  activeAgentCount: number
+}
+
 export type UpdateCheckOptions = {
   includePrerelease?: boolean
   includePerfPrerelease?: boolean
@@ -2223,10 +2235,23 @@ export type UpdateStatus =
       // three-state ambiguity (undefined vs null vs present) and makes exhaustive
       // checks straightforward.
       changelog: ChangelogData | null
+      idleInstall?: IdleInstallDecoration
     }
   | { state: 'not-available'; userInitiated?: boolean }
-  | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
-  | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
+  | {
+      state: 'downloading'
+      percent: number
+      version: string
+      activeNudgeId?: string
+      idleInstall?: IdleInstallDecoration
+    }
+  | {
+      state: 'downloaded'
+      version: string
+      releaseUrl?: string
+      activeNudgeId?: string
+      idleInstall?: IdleInstallDecoration
+    }
   | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
 
 // ─── Settings ────────────────────────────────────────────────────────

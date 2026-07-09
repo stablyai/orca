@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentHookStatusChangeEntry } from './agent-hooks/server'
 
 const {
   appMock,
@@ -1209,6 +1210,94 @@ describe('updater', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it('scheduleIdleInstall starts the download and publishes idle-install status', async () => {
+    autoUpdaterMock.downloadUpdate.mockResolvedValue([])
+    let agents: AgentHookStatusChangeEntry[] = [
+      {
+        state: 'working',
+        receivedAt: Date.now(),
+        observedInCurrentRuntime: true
+      }
+    ]
+    const statusListeners: (() => void)[] = []
+    const mainWindow = {
+      isDestroyed: vi.fn(() => false),
+      webContents: { send: vi.fn(), isDestroyed: vi.fn(() => false) }
+    }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu, scheduleIdleInstall, getUpdateStatus } =
+      await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getActiveAgentStatuses: () => agents,
+      subscribeAgentStatusChanges: (listener) => {
+        statusListeners.push(listener)
+        return vi.fn()
+      }
+    })
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1))
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await vi.waitFor(() => expect(getUpdateStatus().state).toBe('available'))
+
+    scheduleIdleInstall()
+
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(getUpdateStatus()).toMatchObject({
+      state: 'available',
+      idleInstall: { phase: 'downloading', activeAgentCount: 1 }
+    })
+
+    agents = []
+    statusListeners[0]?.()
+
+    expect(getUpdateStatus()).toMatchObject({
+      state: 'available',
+      idleInstall: { phase: 'downloading', activeAgentCount: 0 }
+    })
+  })
+
+  it('routes idle install readiness through the renderer flush path', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    autoUpdaterMock.downloadUpdate.mockResolvedValue([])
+    const mainWindow = {
+      isDestroyed: vi.fn(() => false),
+      webContents: { send: vi.fn(), isDestroyed: vi.fn(() => false) }
+    }
+
+    const { IDLE_INSTALL_GRACE_MS } = await import('./updater-idle-install')
+    const { setupAutoUpdater, checkForUpdatesFromMenu, scheduleIdleInstall, getUpdateStatus } =
+      await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getActiveAgentStatuses: () => [],
+      subscribeAgentStatusChanges: () => vi.fn()
+    })
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1))
+    autoUpdaterMock.emit('checking-for-update')
+    autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+    await vi.waitFor(() => expect(getUpdateStatus().state).toBe('available'))
+
+    scheduleIdleInstall()
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    await vi.waitFor(() =>
+      expect(getUpdateStatus()).toMatchObject({
+        state: 'downloaded',
+        idleInstall: { phase: 'grace', activeAgentCount: 0 }
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(IDLE_INSTALL_GRACE_MS)
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('updater:idleInstallReady')
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
   })
 
   it('ignores duplicate quitAndInstall requests while async pre-quit cleanup is running', async () => {

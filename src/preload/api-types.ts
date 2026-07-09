@@ -2234,10 +2234,13 @@ export type PreloadApi = {
     getStatus: () => Promise<UpdateStatus>
     check: (options?: UpdateCheckOptions) => Promise<void>
     download: () => Promise<void>
+    scheduleIdleInstall: () => Promise<void>
+    cancelIdleInstall: () => Promise<void>
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
     onClearDismissal: (callback: () => void) => () => void
+    onIdleInstallReady: (callback: () => void) => () => void
   }
   notebook: {
     runPythonCell: (args: {

@@ -8,6 +8,7 @@ import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
 import { AlertCircle, Check, Loader2, Minus, Network, RotateCw, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import type { ChangelogData } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -193,6 +194,12 @@ export function UpdateCard() {
     return () => clearTimeout(timer)
   }, [shouldAutoDismissLatest])
 
+  const runQuitAndInstall = () => {
+    void window.api.updater.quitAndInstall().catch((error) => {
+      setInstallError(String((error as Error)?.message ?? error))
+    })
+  }
+
   // Why: quitAndInstall is a side effect that must not run during render —
   // React StrictMode double-invokes render functions, which would call
   // quitAndInstall twice. useEffect with a state guard is the safe path.
@@ -200,9 +207,7 @@ export function UpdateCard() {
   // auto-restart the app — the user expects to click "Restart" in Settings.
   useEffect(() => {
     if (status.state === 'downloaded' && hasStartedDownload.current) {
-      void window.api.updater.quitAndInstall().catch((error) => {
-        setInstallError(String((error as Error)?.message ?? error))
-      })
+      runQuitAndInstall()
     }
   }, [status.state])
 
@@ -294,11 +299,6 @@ export function UpdateCard() {
 
   const handleUpdate = () => {
     hasStartedDownload.current = true
-    // Why: clicking "Update" implies the user is not worried about interruption,
-    // so dismiss the reassurance tip permanently.
-    if (!reassuranceSeen) {
-      markReassuranceSeen()
-    }
     void window.api.updater.download()
   }
 
@@ -318,9 +318,7 @@ export function UpdateCard() {
   }
 
   const handleInstallRetry = () => {
-    void window.api.updater.quitAndInstall().catch((error) => {
-      setInstallError(String((error as Error)?.message ?? error))
-    })
+    runQuitAndInstall()
   }
 
   const handleEnableHttp1Compatibility = () => {
@@ -425,6 +423,37 @@ export function UpdateCard() {
     }, 150)
   }
 
+  // Why: deliberately does NOT set hasStartedDownload — that flag drives the
+  // auto-install-on-'downloaded' effect, which would restart immediately
+  // instead of waiting for agents to go idle.
+  const handleUpdateWhenIdle = () => {
+    void window.api.updater
+      .scheduleIdleInstall()
+      .catch((error) => console.error('[updater] scheduleIdleInstall failed:', error))
+  }
+
+  // Why: set hasStartedDownload so the auto-install effect fires when the
+  // payload reaches 'downloaded', overriding the deferral.
+  const handleInstallNow = () => {
+    hasStartedDownload.current = true
+    void window.api.updater
+      .cancelIdleInstall()
+      .catch((error) => console.error('[updater] cancelIdleInstall failed:', error))
+    if (status.state === 'downloaded') {
+      runQuitAndInstall()
+    } else {
+      void window.api.updater.download()
+    }
+  }
+
+  // Why: cancelling only stops the deferred restart; the downloaded payload is kept.
+  const handleCancelIdleInstall = () => {
+    void window.api.updater
+      .cancelIdleInstall()
+      .catch((error) => console.error('[updater] cancelIdleInstall failed:', error))
+    handleCollapseWithAnimation()
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Escape') {
       return
@@ -443,8 +472,10 @@ export function UpdateCard() {
 
   // ── Dynamic aria-label ────────────────────────────────────────────
 
-  const ariaLabel =
-    status.state === 'checking'
+  const hasIdleInstall = 'idleInstall' in status && Boolean(status.idleInstall)
+  const ariaLabel = hasIdleInstall
+    ? 'Update scheduled'
+    : status.state === 'checking'
       ? 'Checking for updates'
       : status.state === 'not-available'
         ? "You're on the latest version"
@@ -499,6 +530,24 @@ export function UpdateCard() {
           variant={errorCard.variant}
           primaryAction={errorCard.primaryAction}
           onClose={handleCollapseWithAnimation}
+        />
+      )
+    }
+
+    // ── Deferred "update when idle" (armed) ──────────────────────────
+    // Why: takes precedence over the downloading/downloaded branches so the
+    // card explains why the restart is waiting instead of showing progress or
+    // a "Restart to Update" prompt.
+    // Why: the `in` check narrows away the 'error' variant (it has no
+    // idleInstall) — `errorCard` truthiness alone doesn't tell TS that.
+    if ('idleInstall' in status && status.idleInstall) {
+      return (
+        <IdleInstallContent
+          version={status.version}
+          phase={status.idleInstall.phase}
+          activeAgentCount={status.idleInstall.activeAgentCount}
+          onInstallNow={handleInstallNow}
+          onCancel={handleCancelIdleInstall}
         />
       )
     }
@@ -563,7 +612,8 @@ export function UpdateCard() {
           mediaLoaded={mediaLoaded}
           onMediaError={() => setMediaFailed(true)}
           onMediaLoad={() => setMediaLoaded(true)}
-          onUpdate={handleUpdate}
+          onUpdateWhenIdle={handleUpdateWhenIdle}
+          onUpdateNow={handleUpdate}
           onClose={handleDismissWithAnimation}
         />
       )
@@ -573,15 +623,15 @@ export function UpdateCard() {
       <SimpleCardContent
         version={status.version}
         releaseUrl={releaseUrl}
-        onUpdate={handleUpdate}
+        onUpdateWhenIdle={handleUpdateWhenIdle}
+        onUpdateNow={handleUpdate}
         onClose={handleDismissWithAnimation}
       />
     )
   })()
 
   // Why: show a one-time reassurance tip above the card so first-time users
-  // know updating won't kill their running terminals. Once seen, persisted
-  // to disk so it never reappears.
+  // know updating will preserve their running terminal sessions.
   const showReassurance =
     !reassuranceSeen && (status.state === 'available' || status.state === 'downloading')
 
@@ -620,7 +670,7 @@ export function UpdateCard() {
         aria-live="polite"
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`py-0 gap-0 ${animationClass}`}
+        className={cn('py-0 gap-0', animationClass)}
       >
         {cardContent}
       </Card>
@@ -638,7 +688,8 @@ function RichCardContent({
   mediaLoaded,
   onMediaError,
   onMediaLoad,
-  onUpdate,
+  onUpdateWhenIdle,
+  onUpdateNow,
   onClose
 }: {
   release: NonNullable<ChangelogData['release']>
@@ -648,7 +699,8 @@ function RichCardContent({
   mediaLoaded: boolean
   onMediaError: () => void
   onMediaLoad: () => void
-  onUpdate: () => void
+  onUpdateWhenIdle: () => void
+  onUpdateNow: () => void
   onClose: () => void
 }) {
   const showMedia =
@@ -719,9 +771,7 @@ function RichCardContent({
         {translate('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
       </button>
 
-      <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
-        {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
-      </Button>
+      <UpdateActionButtons onUpdateWhenIdle={onUpdateWhenIdle} onUpdateNow={onUpdateNow} />
     </div>
   )
 }
@@ -731,12 +781,14 @@ function RichCardContent({
 function SimpleCardContent({
   version,
   releaseUrl,
-  onUpdate,
+  onUpdateWhenIdle,
+  onUpdateNow,
   onClose
 }: {
   version: string
   releaseUrl: string
-  onUpdate: () => void
+  onUpdateWhenIdle: () => void
+  onUpdateNow: () => void
   onClose: () => void
 }) {
   return (
@@ -763,7 +815,10 @@ function SimpleCardContent({
       </p>
 
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {translate('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
+        {translate(
+          'auto.components.UpdateCard.7c8586ac71',
+          'Your sessions are saved and will be restored automatically.'
+        )}
       </p>
 
       <button
@@ -773,13 +828,38 @@ function SimpleCardContent({
         {translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
       </button>
 
+      <UpdateActionButtons
+        className="mt-0.5"
+        onUpdateWhenIdle={onUpdateWhenIdle}
+        onUpdateNow={onUpdateNow}
+      />
+    </div>
+  )
+}
+
+// Why: the "available" card offers two paths — the safe, non-disruptive default
+// (wait for agents to finish) is primary; "Update now" is the explicit override.
+function UpdateActionButtons({
+  className,
+  onUpdateWhenIdle,
+  onUpdateNow
+}: {
+  className?: string
+  onUpdateWhenIdle: () => void
+  onUpdateNow: () => void
+}) {
+  return (
+    <div className={cn('flex flex-col gap-2', className)}>
       <Button
         variant="default"
         size="sm"
-        onClick={onUpdate}
-        className="mt-0.5 w-full cursor-pointer"
+        onClick={onUpdateWhenIdle}
+        className="w-full cursor-pointer"
       >
-        {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
+        {translate('auto.components.UpdateCard.19aa0f36c8', 'Update when idle')}
+      </Button>
+      <Button variant="secondary" size="sm" onClick={onUpdateNow} className="w-full cursor-pointer">
+        {translate('auto.components.UpdateCard.54f6c6c1ef', 'Update now')}
       </Button>
     </div>
   )
@@ -1023,6 +1103,61 @@ function ReadyToInstallContent({
 
       <Button variant="default" size="sm" onClick={onRestart} className="w-full">
         {translate('auto.components.UpdateCard.68b235d264', 'Restart to Update')}
+      </Button>
+    </div>
+  )
+}
+
+// ── Deferred "update when idle" content ──────────────────────────────
+
+function IdleInstallContent({
+  version,
+  phase,
+  activeAgentCount,
+  onInstallNow,
+  onCancel
+}: {
+  version: string
+  phase: 'downloading' | 'waiting-for-idle' | 'grace'
+  activeAgentCount: number
+  onInstallNow: () => void
+  onCancel: () => void
+}) {
+  const agentLabel = `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'}`
+  const message =
+    phase === 'downloading'
+      ? `Downloading v${version}. Orca will update once your agents are idle.`
+      : phase === 'waiting-for-idle'
+        ? `${agentLabel} still working. Orca will update once they finish.`
+        : 'Agents are idle — updating shortly…'
+
+  return (
+    <div className="flex flex-col gap-2.5 p-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold">Update Scheduled</h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
+          onClick={onCancel}
+          aria-label="Stop waiting and minimize"
+        >
+          <Minus className="size-3.5" />
+        </Button>
+      </div>
+
+      <div className="flex items-start gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 shrink-0 mt-0.5 animate-spin" aria-hidden />
+        <p className="leading-relaxed">{message}</p>
+      </div>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onInstallNow}
+        className="mt-0.5 w-full cursor-pointer"
+      >
+        Update now
       </Button>
     </div>
   )
