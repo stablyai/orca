@@ -89,6 +89,13 @@ import { TERMINAL_METHODS } from './rpc/methods/terminal'
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
 
+async function waitForMobileSessionTabsEvents(
+  events: RuntimeMobileSessionTabsResult[],
+  count: number
+): Promise<void> {
+  await vi.waitFor(() => expect(events).toHaveLength(count))
+}
+
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
     configurable: true,
@@ -11336,6 +11343,7 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('laptop-created-pty', '\x1b]0;⠴ - Thinking - grok\x07', 101)
     runtime.onPtyData('laptop-created-pty', '\x1b]0;⠙ - Responding - grok\x07', 102)
 
+    await waitForMobileSessionTabsEvents(events, 1)
     expect(events).toHaveLength(1)
     expect(events[0]?.tabs[0]).toEqual(
       expect.objectContaining({
@@ -11375,6 +11383,7 @@ describe('OrcaRuntimeService', () => {
       100
     )
 
+    await waitForMobileSessionTabsEvents(events, 1)
     expect(events).toHaveLength(1)
     expect(events[0]?.tabs[0]).toEqual(
       expect.objectContaining({
@@ -11393,6 +11402,7 @@ describe('OrcaRuntimeService', () => {
       101
     )
 
+    await waitForMobileSessionTabsEvents(events, 2)
     expect(events).toHaveLength(2)
     expect(events[1]?.tabs[0]?.type === 'terminal' && events[1].tabs[0].agentStatus).toEqual(
       expect.objectContaining({ state: 'waiting' })
@@ -11424,6 +11434,7 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('hook-ping-pty', payload, 101)
     runtime.onPtyData('hook-ping-pty', payload, 102)
 
+    await waitForMobileSessionTabsEvents(events, 1)
     expect(events).toHaveLength(1)
 
     unsubscribe()
@@ -11456,6 +11467,7 @@ describe('OrcaRuntimeService', () => {
     // The stuck-spinner guard (#1437) must win over the retained hook row.
     runtime.onPtyData('hook-exit-pty', '\x1b]0;zsh\x07', 101)
 
+    await waitForMobileSessionTabsEvents(events, 1)
     const last = events.at(-1)?.tabs[0]
     expect(last?.type).toBe('terminal')
     expect(last?.type === 'terminal' ? last.agentStatus : null).toBeFalsy()
@@ -13681,6 +13693,7 @@ describe('OrcaRuntimeService', () => {
 
     foregroundProcess.resolve('omp')
     await new Promise<void>((resolve) => setImmediate(resolve))
+    await waitForMobileSessionTabsEvents(events, 1)
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -13731,6 +13744,7 @@ describe('OrcaRuntimeService', () => {
 
     foregroundProcess.resolve('omp')
     await new Promise<void>((resolve) => setImmediate(resolve))
+    await waitForMobileSessionTabsEvents(events, 1)
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -13792,6 +13806,7 @@ describe('OrcaRuntimeService', () => {
 
     freshForegroundProcess.resolve('omp')
     await new Promise<void>((resolve) => setImmediate(resolve))
+    await waitForMobileSessionTabsEvents(events, 1)
 
     expect(getForegroundProcess).toHaveBeenCalledTimes(2)
     expect(events).toEqual([
@@ -13856,6 +13871,7 @@ describe('OrcaRuntimeService', () => {
 
     freshForegroundProcess.resolve('omp')
     await new Promise<void>((resolve) => setImmediate(resolve))
+    await waitForMobileSessionTabsEvents(events, 1)
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -15942,19 +15958,8 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 123)
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude waiting for permission\x07', 124)
 
+    await waitForMobileSessionTabsEvents(events, 1)
     expect(events).toEqual([
-      expect.objectContaining({
-        tabs: [
-          expect.objectContaining({
-            type: 'terminal',
-            title: 'Claude working',
-            agentStatus: expect.objectContaining({
-              state: 'working',
-              terminalHandle: laptopTerminal.handle
-            })
-          })
-        ]
-      }),
       expect.objectContaining({
         tabs: [
           expect.objectContaining({
@@ -15967,7 +15972,6 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     ])
-    expect(events[1]!.snapshotVersion).toBeGreaterThan(events[0]!.snapshotVersion)
 
     unsubscribe()
   })
@@ -15993,19 +15997,14 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 123)
     runtime.onPtyData('laptop-created-pty', '\x1b]0;claude agents\x07', 124)
 
+    await waitForMobileSessionTabsEvents(events, 1)
     expect(events[0]?.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        agentStatus: expect.objectContaining({ state: 'working' })
-      })
-    )
-    expect(events[1]?.tabs[0]).toEqual(
       expect.objectContaining({
         type: 'terminal',
         title: 'claude agents'
       })
     )
-    expect(events[1]?.tabs[0]).not.toHaveProperty('agentStatus')
+    expect(events[0]?.tabs[0]).not.toHaveProperty('agentStatus')
 
     unsubscribe()
   })
@@ -17624,6 +17623,7 @@ describe('OrcaRuntimeService', () => {
     events.length = 0
     runtime.onPtyData('headless-pty-2', '\x1b]0;tab-other running\x07', 200)
 
+    await waitForMobileSessionTabsEvents(events, 1)
     const afterPtyData = events.at(-1)
     expect(afterPtyData?.activeTabId).toBe(`tab-other::${SECOND_LEAF}`)
     expect(afterPtyData?.activeTabType).toBe('terminal')

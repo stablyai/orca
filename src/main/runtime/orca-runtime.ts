@@ -3543,7 +3543,10 @@ export class OrcaRuntimeService {
     this.notifyMobileSessionTabsChanged(worktreeId)
   }
 
-  private touchMobileSessionSnapshotsForPty(ptyId: string): void {
+  private touchMobileSessionSnapshotsForPty(
+    ptyId: string,
+    options: { immediate?: boolean } = {}
+  ): void {
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       const hasPtyBackedTab = snapshot.tabs.some(
         (tab) =>
@@ -3557,10 +3560,15 @@ export class OrcaRuntimeService {
         ...snapshot,
         snapshotVersion: snapshot.snapshotVersion + 1
       })
-      // Why: title/status flips several times a second under spinner-in-title
-      // agents. Coalesce the emit (trailing-edge) instead of fanning out — and
-      // per-client JSON.stringifying — every intermediate version.
-      this.mobileSessionTabsNotifyCoalescer.schedule(worktreeId)
+      if (options.immediate) {
+        // Why: readiness/lifecycle changes are structural and must not wait
+        // behind the title/status coalescing window.
+        this.notifyMobileSessionTabsChanged(worktreeId)
+      } else {
+        // Why: title/status flips several times a second under spinner-in-title
+        // agents. Coalesce the emit instead of fanning out every version.
+        this.mobileSessionTabsNotifyCoalescer.schedule(worktreeId)
+      }
     }
   }
 
@@ -7257,7 +7265,7 @@ export class OrcaRuntimeService {
       pty.lastExitCode = exitCode
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
-      this.touchMobileSessionSnapshotsForPty(ptyId)
+      this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     }
 
     for (const leaf of this.getLeavesForPty(ptyId)) {
