@@ -3198,6 +3198,19 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
+          },
+          "GitBranchStatusSegment": {
+            "action_failed": "Git action failed",
+            "aria_label": "Current branch and remote sync status",
+            "detached_head": "Detached HEAD — no branch to sync",
+            "no_upstream": "No upstream branch set",
+            "in_sync": "Up to date with remote",
+            "ahead_behind": "{{value0}} ahead, {{value1}} behind",
+            "sync": "Sync (Pull then Push)",
+            "fetch": "Fetch",
+            "pull": "Pull",
+            "push": "Push",
+            "open_source_control": "Open Source Control…"
           }
         }
       },
@@ -12877,7 +12890,7 @@
         "pastedImageLabel": "붙여넣은 이미지",
         "imagePasteFailed": "이미지 붙여넣기 실패.",
         "worktreeNotReady": "워크트리가 준비되지 않았습니다 — 잠시 후 다시 시도하세요.",
-        "uploadingAttachments": "{{value0}}개 파일을 원격으로 업로드 중…"
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "실행 중…",
